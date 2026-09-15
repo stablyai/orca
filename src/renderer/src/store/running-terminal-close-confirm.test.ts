@@ -11,6 +11,7 @@ function advancePastGuard(): void {
 
 function drainRequests(): void {
   const store = useRunningTerminalCloseConfirmStore.getState()
+
   while (useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm) {
     advancePastGuard()
     store.dismissRunningTerminalClose()

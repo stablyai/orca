@@ -32,6 +32,7 @@ export async function connectDockerSshRelayTarget(
   options: DockerSshRelayConnectionOptions = {}
 ): Promise<ConnectedDockerSshRelayTarget> {
   const viaProxyJump = options.viaProxyJump ?? false
+
   return connectSshTestTarget(
     page,
     {
@@ -75,16 +76,21 @@ async function performDockerSshRelayReconnect(
   await page.evaluate(
     async ({ targetId, disconnectFirst }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       if (disconnectFirst) {
         await window.api.ssh.disconnect({ targetId })
       }
+
       const state = await window.api.ssh.connect({ targetId })
+
       if (!state || state.status !== 'connected') {
         throw new Error(`SSH target did not reconnect: ${JSON.stringify(state)}`)
       }
+
       store.getState().setSshConnectionState(targetId, state)
     },
     { targetId, disconnectFirst }
@@ -109,6 +115,7 @@ export async function recoverDockerSshRelayAfterFault(
 ): Promise<void> {
   const readAuthority = () =>
     page.evaluate((id) => window.__store?.getState().sshConnectionStates.get(id), targetId)
+
   const before = await readAuthority()
   expect(before).toMatchObject({
     status: 'connected',
@@ -121,6 +128,7 @@ export async function recoverDockerSshRelayAfterFault(
     .poll(
       async () => {
         const after = await readAuthority()
+
         return (
           after?.status === 'connected' &&
           (after.providerEpoch !== before?.providerEpoch ||

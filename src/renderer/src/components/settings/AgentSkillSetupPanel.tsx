@@ -56,9 +56,11 @@ export function AgentSkillSetupPanel({
   const resolvedInstallLabel =
     installLabel ??
     translate('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+
   const resolvedInstalledInstallLabel =
     installedInstallLabel ??
     translate('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalSnapshot, setTerminalSnapshot] = useState<SkillTerminalSnapshot | null>(null)
   const [terminalAttempt, setTerminalAttempt] = useState(0)
@@ -66,14 +68,18 @@ export function AgentSkillSetupPanel({
   const [setupAttemptRunning, setSetupAttemptRunning] = useState(false)
   const [setupCommandFailedCode, setSetupCommandFailedCode] = useState<number | null>(null)
   const setupAttemptRunningRef = useRef(false)
+
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
     Boolean(preInstallNotice && !installed)
   )
+
   const mountedRef = useMountedRef()
+
   const readPrerequisiteStatus = useCallback(
     () => (getPrerequisiteStatus ?? window.api.cli.getInstallStatus)(),
     [getPrerequisiteStatus]
   )
+
   const activeCommand = installed ? (installedCommand ?? command) : command
   // Why: the inline terminal auto-inserts when its command changes, so keep the
   // already-open terminal pinned to the command and runtime selected at click.
@@ -83,13 +89,17 @@ export function AgentSkillSetupPanel({
     if (terminalOpening || setupAttemptRunning) {
       return
     }
+
     const nextSnapshot = createTerminalSnapshot(activeCommand, shellOverride, runtime)
     setTerminalOpening(true)
+
     if (setupCommandFailedCode !== null) {
       setTerminalOpen(false)
     }
+
     void (async () => {
       let shouldOpenTerminal = false
+
       try {
         await onBeforeOpenTerminal?.()
         await refreshPreInstallNotice()
@@ -99,6 +109,7 @@ export function AgentSkillSetupPanel({
       } finally {
         if (mountedRef.current) {
           setTerminalOpening(false)
+
           if (shouldOpenTerminal) {
             setTerminalSnapshot(nextSnapshot)
             setTerminalAttempt((attempt) => attempt + 1)
@@ -118,11 +129,14 @@ export function AgentSkillSetupPanel({
       if (!setupAttemptRunningRef.current) {
         return
       }
+
       setupAttemptRunningRef.current = false
       setSetupAttemptRunning(false)
+
       if (bestEffortExitCode !== null) {
         setSetupCommandFailedCode(bestEffortExitCode === 0 ? null : bestEffortExitCode)
       }
+
       recheckSurfacesAfterAgentSkillTerminal(onRecheck, freshnessSkillName)
     },
     [freshnessSkillName, onRecheck]
@@ -130,24 +144,29 @@ export function AgentSkillSetupPanel({
 
   const handleTerminalExit = useCallback((): void => {
     const shouldRecheck = setupAttemptRunningRef.current
+
     if (mountedRef.current) {
       setupAttemptRunningRef.current = false
       setTerminalOpen(false)
       setSetupAttemptRunning(false)
     }
+
     void (shouldRecheck && recheckSurfacesAfterAgentSkillTerminal(onRecheck, freshnessSkillName))
   }, [freshnessSkillName, mountedRef, onRecheck])
 
   useEffect(() => {
     if (!preInstallNotice) {
       setPreInstallNoticeVisible(false)
+
       return
     }
 
     let canceled = false
+
     const refreshCliNotice = async (): Promise<void> => {
       try {
         const status = await readPrerequisiteStatus()
+
         if (!canceled) {
           setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
         }
@@ -160,6 +179,7 @@ export function AgentSkillSetupPanel({
 
     void refreshCliNotice()
     window.addEventListener('focus', refreshCliNotice)
+
     return () => {
       canceled = true
       window.removeEventListener('focus', refreshCliNotice)
@@ -170,8 +190,10 @@ export function AgentSkillSetupPanel({
     if (!preInstallNotice) {
       return
     }
+
     try {
       const status = await readPrerequisiteStatus()
+
       if (mountedRef.current) {
         setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
       }
@@ -231,8 +253,10 @@ export function AgentSkillSetupPanel({
           onClick={() => {
             if (setupCommandFailedCode !== null) {
               openSetupTerminal()
+
               return
             }
+
             void Promise.resolve(onRecheck()).then(() => {
               syncSurfacesAfterAgentSkillRecheck(freshnessSkillName)
             })

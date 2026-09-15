@@ -28,16 +28,21 @@ export function resolveGitMetadataPath(
 ): string | null {
   const platform = options.platform ?? process.platform
   const value = rawPath.trim()
+
   if (!value) {
     return null
   }
+
   if (GUEST_ROOTED_PATH.test(value)) {
     const translated = translateGuestPointer(value, basePath, platform, options.wslDistro)
+
     if (translated) {
       return translated
     }
   }
+
   const host = platform === 'win32' ? win32 : posix
+
   return host.isAbsolute(value) ? value : host.resolve(basePath, value)
 }
 
@@ -56,12 +61,15 @@ function translateGuestPointer(
   wslDistro: string | undefined
 ): string | null {
   const baseDistro = parseWslUncPath(basePath)?.distro
+
   if (baseDistro) {
     return toWindowsWslPath(value, baseDistro)
   }
+
   if (platform !== 'win32') {
     return null
   }
+
   return wslDistro ? toWindowsWslPath(value, wslDistro) : toWindowsWslDrivePath(value)
 }
 
@@ -80,5 +88,6 @@ export function resolveWorktreeHostPath(
   options: GitMetadataPathOptions = {}
 ): string | null {
   const resolved = resolveGitMetadataPath('', worktreePath, options)
+
   return resolved === worktreePath.trim() ? worktreePath : resolved
 }

@@ -12,9 +12,11 @@ describe('OrcaRuntimeService', () => {
   it('preserves OSC 9999 parser state for rendererless background PTYs', async () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -26,8 +28,10 @@ describe('OrcaRuntimeService', () => {
       command: 'codex',
       title: 'worker'
     })
+
     const spawnedEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+
     const paneKey = expectStablePaneKeyEnv(spawnedEnv)
 
     runtime.onPtyData('pty-bg', 'before\x1b]999', 123)
@@ -54,14 +58,17 @@ describe('OrcaRuntimeService', () => {
   it('continues terminal agent status fanout when a callback throws', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       onTerminalAgentStatus: (event) => {
         statuses.push(event)
+
         if (statuses.length === 1) {
           throw new Error('status listener failed')
         }
       }
     })
+
     const leafId = '11111111-1111-4111-8111-111111111111'
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
@@ -111,6 +118,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -154,6 +162,7 @@ describe('OrcaRuntimeService', () => {
       text: 'continue',
       enter: true
     })
+
     expect(send).toMatchObject({
       handle: terminal.handle,
       accepted: true
@@ -339,6 +348,7 @@ describe('OrcaRuntimeService', () => {
   it('maps fresh explicit waiting hook state to permission over a working title', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -354,6 +364,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -394,6 +405,7 @@ describe('OrcaRuntimeService', () => {
   it('does not treat a restored-unconfirmed hook row as live terminal status', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -410,6 +422,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -450,6 +463,7 @@ describe('OrcaRuntimeService', () => {
   it('does not let stale wait text override a fresh explicit working state', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -465,6 +479,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -507,6 +522,7 @@ describe('OrcaRuntimeService', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -522,6 +538,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -564,6 +581,7 @@ describe('OrcaRuntimeService', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -579,6 +597,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,

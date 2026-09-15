@@ -58,6 +58,7 @@ describe('diff Monaco model disposal', () => {
   it('disposes only exact-path models that are no longer attached to an editor', () => {
     const detachedOriginalDispose = vi.fn()
     const attachedModifiedDispose = vi.fn()
+
     const models = new Map([
       [
         'diff:original:file.ts',
@@ -65,6 +66,7 @@ describe('diff Monaco model disposal', () => {
       ],
       ['diff:modified:file.ts', createModel('diff:modified:file.ts', true, attachedModifiedDispose)]
     ])
+
     const monacoRegistry = createRegistry(models)
 
     disposeUnattachedDiffViewerMonacoModels(monacoRegistry, {
@@ -80,6 +82,7 @@ describe('diff Monaco model disposal', () => {
     const originalDispose = vi.fn()
     const modifiedDispose = vi.fn()
     const unrelatedDispose = vi.fn()
+
     const models = new Map([
       [
         'diff-section:review:abc:0:original',
@@ -94,6 +97,7 @@ describe('diff Monaco model disposal', () => {
         createModel('diff-section:review:abc:1:modified', false, unrelatedDispose)
       ]
     ])
+
     const monacoRegistry = createRegistry(models)
 
     disposeUnattachedMonacoModelPaths(monacoRegistry, [
@@ -112,15 +116,19 @@ describe('diff Monaco model disposal', () => {
     const siblingDispose = vi.fn()
     const attachedDispose = vi.fn()
     const ownedPaths = getDiffViewerMonacoModelPaths({ modelKey: 'tab-1', generationSuffix: '' })
+
     const generatedPaths = getDiffViewerMonacoModelPaths({
       modelKey: 'tab-1',
       generationSuffix: ':large-diff-generation:2'
     })
+
     const attachedGeneratedPaths = getDiffViewerMonacoModelPaths({
       modelKey: 'tab-1',
       generationSuffix: ':large-diff-generation:3'
     })
+
     const siblingPaths = getDiffViewerMonacoModelPaths({ modelKey: 'tab-10', generationSuffix: '' })
+
     const models = new Map([
       [ownedPaths.originalModelPath, createModel(ownedPaths.originalModelPath, false, baseDispose)],
       [
@@ -136,6 +144,7 @@ describe('diff Monaco model disposal', () => {
         createModel(attachedGeneratedPaths.originalModelPath, true, attachedDispose)
       ]
     ])
+
     const monacoRegistry = createRegistry(models)
     const { originalModelPathPrefix } = getDiffViewerMonacoModelPathPrefixes('tab-1')
 
@@ -150,15 +159,18 @@ describe('diff Monaco model disposal', () => {
   it('does not dispose colon-suffixed sibling tab models by prefix', () => {
     const ownedDispose = vi.fn()
     const siblingDispose = vi.fn()
+
     const ownedPaths = getDiffViewerMonacoModelPaths({
       modelKey: 'foo',
       originalModelKey: 'foo:bar',
       generationSuffix: ''
     })
+
     const siblingPaths = getDiffViewerMonacoModelPaths({
       modelKey: 'foo:bar',
       generationSuffix: ''
     })
+
     const models = new Map([
       [
         ownedPaths.originalModelPath,
@@ -174,6 +186,7 @@ describe('diff Monaco model disposal', () => {
         )
       ]
     ])
+
     const monacoRegistry = createRegistry(models)
     const { originalModelPathPrefix } = getDiffViewerMonacoModelPathPrefixes('foo')
 

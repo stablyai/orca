@@ -83,8 +83,10 @@ export function CustomAddressDialog({
     if (!parsed.ok || submitting) {
       return
     }
+
     setSubmitting(true)
     setConfirmationFailed(false)
+
     try {
       if ((await onConfirm(parsed.value)) !== false) {
         close()

@@ -38,6 +38,7 @@ describe('plugin language pack loading', () => {
       locale: 'pt-BR',
       catalog: { greeting: 'Olá' }
     }
+
     const second = {
       id: 'plugin:second',
       resourceLanguage: pluginLanguageResourceId('plugin:second'),
@@ -45,6 +46,7 @@ describe('plugin language pack loading', () => {
       locale: 'de',
       catalog: {}
     }
+
     vi.stubGlobal('window', {
       api: {
         plugins: {
@@ -90,6 +92,7 @@ describe('plugin language pack loading', () => {
     const id = 'plugin:cyclic' as const
     const catalog: Record<string, unknown> = { greeting: 'Hello' }
     catalog.self = catalog
+
     const response = structuredClone([
       {
         id,
@@ -99,6 +102,7 @@ describe('plugin language pack loading', () => {
         catalog
       }
     ])
+
     vi.stubGlobal('window', {
       api: { plugins: { listLanguagePacks: vi.fn().mockResolvedValue(response) } }
     })
@@ -129,6 +133,7 @@ describe('plugin language pack loading', () => {
 
     await usePluginLanguagePackStore.getState().fetchPacks()
     setRendererPluginLanguagePacks(usePluginLanguagePackStore.getState().packs)
+
     const removeResourceBundle = vi
       .spyOn(i18n, 'removeResourceBundle')
       .mockImplementation((language) => {
@@ -171,6 +176,7 @@ describe('plugin language pack loading', () => {
       locale: 'de',
       catalog: {}
     }
+
     const latest = {
       id: 'plugin:latest',
       resourceLanguage: pluginLanguageResourceId('plugin:latest'),
@@ -178,10 +184,13 @@ describe('plugin language pack loading', () => {
       locale: 'fr',
       catalog: {}
     }
+
     let resolveOlder!: (value: unknown[]) => void
+
     const olderResponse = new Promise<unknown[]>((resolve) => {
       resolveOlder = resolve
     })
+
     vi.stubGlobal('window', {
       api: {
         plugins: {

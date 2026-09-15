@@ -40,10 +40,12 @@ describe('AgentAwakeService status array ownership', () => {
 function createBlocker() {
   const startedIds = new Set<number>()
   let nextId = 1
+
   return {
     start: vi.fn(() => {
       const id = nextId++
       startedIds.add(id)
+
       return id
     }),
     stop: vi.fn((id: number) => {

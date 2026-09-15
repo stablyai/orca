@@ -19,6 +19,7 @@ export function readWsFallbackPort(userDataPath: string): number | undefined {
   try {
     const raw = readFileSync(join(userDataPath, FALLBACK_PORT_FILE), 'utf8')
     const parsed: unknown = JSON.parse(raw)
+
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
@@ -29,6 +30,7 @@ export function readWsFallbackPort(userDataPath: string): number | undefined {
   } catch {
     // Missing or corrupt file — treated as "no previous fallback".
   }
+
   return undefined
 }
 
@@ -36,6 +38,7 @@ export function writeWsFallbackPort(userDataPath: string, port: number): void {
   if (!isValidPort(port)) {
     return
   }
+
   try {
     writeFileSync(join(userDataPath, FALLBACK_PORT_FILE), JSON.stringify({ port }), 'utf8')
   } catch {

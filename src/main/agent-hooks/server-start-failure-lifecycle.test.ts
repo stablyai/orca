@@ -13,10 +13,12 @@ const { createServerMock, getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
 vi.mock('node:http', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeHttp>()
   createServerMock.mockImplementation(actual.createServer)
+
   return { ...actual, createServer: createServerMock }
 })
 
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
 
 import { AgentHookServer, _internals } from './server'
@@ -65,20 +67,24 @@ describe('AgentHookServer startup failure lifecycle', () => {
 
     try {
       let startupErrorListener: ((error: Error) => void) | null = null
+
       const failedServer = {
         once: vi.fn((event: string, listener: (error: Error) => void) => {
           if (event === 'error') {
             startupErrorListener = listener
           }
+
           return failedServer
         }),
         off: vi.fn(() => failedServer),
         listen: vi.fn(() => {
           startupErrorListener?.(new Error('listener unavailable'))
+
           return failedServer
         }),
         close: vi.fn(() => failedServer)
       }
+
       createServerMock.mockImplementationOnce(() => failedServer)
 
       await expect(server.start({ env: 'production', userDataPath })).rejects.toThrow(
@@ -99,6 +105,7 @@ describe('AgentHookServer startup failure lifecycle', () => {
         },
         'ssh-lifecycle'
       )
+
       const duplicateOsc = {
         paneKey: PANE,
         tabId: 'tab-lifecycle',
@@ -106,6 +113,7 @@ describe('AgentHookServer startup failure lifecycle', () => {
         connectionId: 'ssh-lifecycle',
         payload: { state: 'working' as const, prompt: 'newer in-process state', agentType: 'codex' }
       }
+
       server.ingestTerminalStatus(duplicateOsc)
 
       expect(rendererListener).toHaveBeenCalledTimes(1)

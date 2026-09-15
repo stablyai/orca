@@ -28,11 +28,15 @@ import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
+
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
+
 // Why: leftward drags (negative translateX) pull the panel past its docked edge;
 // damp them with a rubber-band factor so the drawer resists over-pulling inward.
 const RUBBER_BAND_FACTOR = 0.25
+
 const SHOW_DURATION = 180
+
 const HIDE_DURATION = 150
 
 type Props = {
@@ -111,10 +115,13 @@ function MountedRightDrawer({
     if (!visible) {
       return
     }
+
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       onClose()
+
       return true
     })
+
     return () => sub.remove()
   }, [visible, onClose])
 
@@ -127,6 +134,7 @@ function MountedRightDrawer({
   })
 
   const scrollGesture = Gesture.Native()
+
   // Why: swipe-from-right (positive translationX) dismisses; the horizontal
   // activeOffset lets the inner vertical ScrollView keep its gestures.
   const panGesture = Gesture.Pan()
@@ -165,6 +173,7 @@ function MountedRightDrawer({
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateX.value, [0, panelWidth], [1, 0], Extrapolation.CLAMP)
+
     return { opacity: progress.value * dragFade }
   })
 

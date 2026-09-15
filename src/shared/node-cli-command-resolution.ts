@@ -46,6 +46,7 @@ function compareVersionDesc(left: string, right: string): number {
 
   for (let index = 0; index < length; index += 1) {
     const delta = (rightParts[index] ?? 0) - (leftParts[index] ?? 0)
+
     if (delta !== 0) {
       return delta
     }
@@ -62,6 +63,7 @@ function findFirstExecutable(
   for (const directory of directories) {
     for (const executableName of executableNames) {
       const candidate = join(directory, executableName)
+
       if (isRunnableCommand(platform, candidate)) {
         return candidate
       }
@@ -74,15 +76,19 @@ function findFirstExecutable(
 function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolean {
   try {
     const stats = statSync(candidate)
+
     if (!stats.isFile()) {
       return false
     }
+
     if (platform === 'win32') {
       return true
     }
+
     // Why: GUI fallback probing should skip placeholders/directories so spawn
     // can continue to a runnable CLI instead of failing later with EACCES/EISDIR.
     accessSync(candidate, constants.X_OK)
+
     return true
   } catch {
     return false
@@ -108,6 +114,7 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
     directories.push(join(homePath, 'AppData', 'Local', 'Yarn', 'bin'))
   } else {
     directories.push(join(homePath, '.local', 'bin'))
+
     // Why: pnpm uses platform-specific global bin directories that differ from
     // npm's ~/.local/bin.
     if (platform === 'darwin') {
@@ -115,10 +122,12 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
     } else {
       directories.push(join(homePath, '.local', 'share', 'pnpm'))
     }
+
     directories.push(join(homePath, '.yarn', 'bin'))
   }
 
   directories.push(join(homePath, '.bun', 'bin'))
+
   return directories
 }
 
@@ -135,25 +144,32 @@ function resolveNvmDefaultVersion(nvmVersionsDir: string, installed: string[]): 
   const aliasDir = join(nvmVersionsDir, '..', '..', 'alias')
   let token = readNvmAlias(join(aliasDir, 'default'))
   const seen = new Set<string>()
+
   for (let hop = 0; token && hop < NVM_ALIAS_CHAIN_LIMIT; hop += 1) {
     if (seen.has(token)) {
       return null
     }
+
     seen.add(token)
     const next = readNvmAlias(join(aliasDir, token))
+
     if (!next) {
       break
     }
+
     token = next
   }
+
   if (!token) {
     return null
   }
+
   // Why: `system` selects the OS node, so nvm owns nothing to prefer here.
   // `node`/`stable` mean newest, which is the ordering we already produce.
   if (token === 'system' || token === 'node' || token === 'stable') {
     return null
   }
+
   return matchNvmVersion(token, installed)
 }
 
@@ -166,11 +182,14 @@ function readNvmAlias(aliasPath: string): string | null {
   if (aliasPath.includes('..')) {
     return null
   }
+
   try {
     if (!statSync(aliasPath).isFile()) {
       return null
     }
+
     const value = readFileSync(aliasPath, 'utf8').trim()
+
     return value.length > 0 ? value : null
   } catch {
     return null
@@ -192,21 +211,27 @@ function matchNvmVersion(token: string, installed: string[]): string | null {
   if (!/^v?(0|[1-9]\d*)(\.(0|[1-9]\d*))*$/.test(token)) {
     return null
   }
+
   const wanted = parseVersionSegment(token)
+
   const matches = installed.filter((entry) => {
     const parts = parseVersionSegment(entry)
+
     return wanted.every((segment, index) => parts[index] === segment)
   })
+
   return matches.sort(compareVersionDesc)[0] ?? null
 }
 
 function getNvmVersionDirectories(homePath: string): string[] {
   const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
+
   if (!existsSync(nvmVersionsDir)) {
     return []
   }
 
   let installed: string[]
+
   try {
     installed = readdirSync(nvmVersionsDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -223,9 +248,11 @@ function getNvmVersionDirectories(homePath: string): string[] {
   // (stablyai/orca#10932). The rest stay behind it as fallbacks, so a CLI
   // installed outside the default version is still reachable.
   const preferred = resolveNvmDefaultVersion(nvmVersionsDir, installed)
+
   const ordered = preferred
     ? [preferred, ...installed.filter((entry) => entry !== preferred)]
     : installed
+
   return ordered.map((entry) => join(nvmVersionsDir, entry, 'bin'))
 }
 
@@ -235,14 +262,17 @@ function getVersionManagerDirectories(
   executableNames: string[]
 ): string[] {
   const directories = getBaseVersionManagerDirectories(platform, homePath)
+
   const firstNvmMatch = findFirstExecutable(
     platform,
     getNvmVersionDirectories(homePath),
     executableNames
   )
+
   if (firstNvmMatch) {
     directories.unshift(dirname(firstNvmMatch))
   }
+
   return directories
 }
 
@@ -265,16 +295,19 @@ export function resolveCliCommand(
   const executableNames = getExecutableNames(platform, commandName)
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   const pathCandidate = findFirstExecutable(platform, splitPath(pathEnv), executableNames)
+
   if (pathCandidate) {
     return pathCandidate
   }
 
   const homePath = options.homePath ?? homedir()
+
   const installCandidate = findFirstExecutable(
     platform,
     getCliInstallDirectories(platform, homePath),
     executableNames
   )
+
   return installCandidate ?? commandName
 }
 
@@ -292,8 +325,10 @@ export function resolveCliCommands(
   for (const commandName of new Set(commandNames)) {
     const executableNames = getExecutableNames(platform, commandName)
     const pathCandidate = findFirstExecutable(platform, pathDirectories, executableNames)
+
     const installCandidate =
       pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
+
     resolved.set(commandName, installCandidate ?? commandName)
   }
 
@@ -320,6 +355,7 @@ function firstWindowsPathEnvKey(env: NodeJS.ProcessEnv): string {
       return key
     }
   }
+
   return 'Path'
 }
 
@@ -343,23 +379,31 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   options: Pick<ResolveCommandOptions, 'platform'> = {}
 ): T {
   const platform = options.platform ?? process.platform
+
   if (!isAbsolute(commandPath)) {
     return env
   }
+
   const commandDirectory = dirname(commandPath)
+
   if (!findFirstExecutable(platform, [commandDirectory], getExecutableNames(platform, 'node'))) {
     return env
   }
+
   const pathKey = platform === 'win32' ? firstWindowsPathEnvKey(env) : 'PATH'
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
   const segments = splitPath(env[pathKey], pathDelimiter)
+
   if (segments[0] === commandDirectory) {
     return env
   }
+
   const next = [commandDirectory, ...segments.filter((entry) => entry !== commandDirectory)].join(
     pathDelimiter
   )
+
   const paired = { ...env, [pathKey]: next }
+
   if (platform === 'win32') {
     // Why: the spread is case-sensitive while Windows env lookup is not, so a
     // differently-cased twin would keep shadowing the value we just wrote.
@@ -369,6 +413,7 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
       }
     }
   }
+
   return paired as T
 }
 
@@ -377,5 +422,6 @@ export function getVersionManagerBinPaths(options: ResolveCommandOptions = {}): 
   const platform = options.platform ?? process.platform
   const homePath = options.homePath ?? homedir()
   const nodeNames = getExecutableNames(platform, 'node')
+
   return getVersionManagerDirectories(platform, homePath, nodeNames)
 }

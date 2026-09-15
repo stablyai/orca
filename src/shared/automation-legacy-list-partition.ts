@@ -55,16 +55,21 @@ function classify(
   ) {
     return { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere }
   }
+
   if (automation.executionTargetType === 'ssh') {
     const targetId = automation.executionTargetId?.trim()
+
     return targetId
       ? { kind: 'ssh', targetId }
       : { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.malformed }
   }
+
   if (automation.executionTargetType !== 'local') {
     return { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.malformed }
   }
+
   const connectionId = context.repoConnectionId(getAutomationRunRepoId(automation))
+
   if (connectionId === undefined) {
     return {
       kind: 'orphan',
@@ -73,6 +78,7 @@ function classify(
         : AUTOMATION_ORPHAN_ISSUES.projectUnverified
     }
   }
+
   return connectionId
     ? { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.malformed }
     : { kind: 'self' }
@@ -86,5 +92,6 @@ export function partitionLegacyAutomationList(
     automation,
     selector: classify(automation, context)
   }))
+
   return { rows, orphanCount: rows.filter((row) => row.selector.kind === 'orphan').length }
 }

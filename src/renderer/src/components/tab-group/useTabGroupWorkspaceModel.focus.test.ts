@@ -41,6 +41,7 @@ const storeBox = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useCallback: <T>(callback: T) => callback,
@@ -59,6 +60,7 @@ vi.mock('../../store', () => {
       getState: () => storeBox.state ?? {}
     }
   )
+
   return { useAppStore }
 })
 
@@ -120,6 +122,7 @@ function resetStore(): void {
     sortOrder: 0,
     createdAt: 0
   }
+
   const unifiedTab = {
     id: 'unified-terminal-1',
     entityId: terminalTab.id,
@@ -132,6 +135,7 @@ function resetStore(): void {
     sortOrder: 0,
     createdAt: 0
   }
+
   storeBox.state = {
     activeWorktreeId: 'wt-1',
     browserTabsByWorktree: {},
@@ -190,6 +194,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     resetStore()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     vi.stubGlobal('window', {
@@ -228,6 +233,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       sortOrder: 0,
       createdAt: 1
     }
+
     storeBox.state = {
       ...storeBox.state,
       tabsByWorktree: { 'wt-1': [] },
@@ -330,6 +336,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       sortOrder: 1,
       createdAt: 1
     }
+
     const secondUnified = {
       id: 'unified-terminal-2',
       entityId: secondTerminal.id,
@@ -342,10 +349,12 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       sortOrder: 1,
       createdAt: 1
     }
+
     const currentState = storeBox.state as {
       tabsByWorktree: Record<string, unknown[]>
       unifiedTabsByWorktree: Record<string, { id: string }[]>
     }
+
     const firstUnified = currentState.unifiedTabsByWorktree['wt-1'][0]
     storeBox.state = {
       ...storeBox.state,
@@ -414,6 +423,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       sortOrder: 1,
       createdAt: 1
     }
+
     storeBox.state = {
       ...storeBox.state,
       groupsByWorktree: {
@@ -445,6 +455,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
   it('closes client-local browser fallback tabs locally in remote workspaces', async () => {
     mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+
     const browserTab = {
       id: 'browser-workspace-1',
       worktreeId: 'wt-1',
@@ -460,6 +471,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       loadError: null,
       createdAt: 1
     }
+
     storeBox.state = {
       ...storeBox.state,
       browserPagesByWorkspace: {
@@ -597,12 +609,15 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
 
     mocks.closeWebRuntimeSessionTab.mockClear()
+
     const browserPagesByWorkspace = storeBox.state.browserPagesByWorkspace as Record<
       string,
       Record<string, unknown>[]
     >
+
     const remoteBrowserPageHandlesByPageId = storeBox.state
       .remoteBrowserPageHandlesByPageId as Record<string, unknown>
+
     storeBox.state = {
       ...storeBox.state,
       browserPagesByWorkspace: {

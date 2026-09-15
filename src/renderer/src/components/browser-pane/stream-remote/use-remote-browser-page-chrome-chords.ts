@@ -40,7 +40,9 @@ export function useRemoteBrowserPageChromeChords({
     if (chromeShortcutScope === 'inactive') {
       return
     }
+
     const shortcutPlatform = getShortcutPlatform()
+
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (
         chromeShortcutScope === 'owned-target' &&
@@ -48,6 +50,7 @@ export function useRemoteBrowserPageChromeChords({
       ) {
         return
       }
+
       // Why: Cmd+F should open find even from the address bar (Chrome/Safari do), but reload must
       // not fire while the user is typing a URL.
       if (keybindingMatchesAction('browser.find', event, shortcutPlatform, keybindings)) {
@@ -69,9 +72,11 @@ export function useRemoteBrowserPageChromeChords({
                 )
               }
         )
+
         if (findNoticeTimerRef.current !== null) {
           clearTimeout(findNoticeTimerRef.current)
         }
+
         findNoticeTimerRef.current = setTimeout(() => {
           findNoticeTimerRef.current = null
           // Only retract our own notice; anything raised since then owns the slot.
@@ -79,35 +84,44 @@ export function useRemoteBrowserPageChromeChords({
             current?.id === REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID ? null : current
           )
         }, FIND_UNAVAILABLE_NOTICE_MS)
+
         return
       }
+
       const isHardReload = keybindingMatchesAction(
         'browser.hardReload',
         event,
         shortcutPlatform,
         keybindings
       )
+
       const isReload = keybindingMatchesAction(
         'browser.reload',
         event,
         shortcutPlatform,
         keybindings
       )
+
       if (!isHardReload && !isReload) {
         return
       }
+
       if (isEditableKeyboardTarget(event.target)) {
         return
       }
+
       event.preventDefault()
       event.stopImmediatePropagation()
       // Why: the runtime exposes one reload; a hard reload would need a wire change, so both
       // chords land on it rather than one of them silently doing nothing.
       void runRemoteNavigation('browser.reload')
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true)
+
       if (findNoticeTimerRef.current !== null) {
         clearTimeout(findNoticeTimerRef.current)
         findNoticeTimerRef.current = null

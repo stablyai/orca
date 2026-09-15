@@ -27,15 +27,19 @@ export async function listCleanupGitWorktrees(
   signal?: AbortSignal
 ): Promise<{ route: WorkspaceCleanupGitRoute; gitWorktrees: GitWorktreeInfo[] }> {
   const route = resolveWorkspaceCleanupRepoGitRoute(repo)
+
   if (repoIsFolder) {
     return { route, gitWorktrees: [createFolderWorktree(repo)] }
   }
+
   if (route.kind === 'ssh') {
     if (!route.provider) {
       // Why: cleanup should reflect only workspaces Orca can currently inspect.
       return { route, gitWorktrees: [] }
     }
+
     const provider = route.provider
+
     return {
       route,
       gitWorktrees: await withWorkspaceCleanupTimeout(
@@ -46,7 +50,9 @@ export async function listCleanupGitWorktrees(
       )
     }
   }
+
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+
   return {
     route,
     gitWorktrees: await withWorkspaceCleanupTimeout(
@@ -66,18 +72,22 @@ export function handleRepoWorktreeListError(args: {
   onErrors?: (errors: WorkspaceCleanupScanError[]) => void
 }): WorkspaceCleanupScanResult {
   const { repo, targeted, scannedAt, error, onErrors } = args
+
   if (error instanceof ExecutionHostNotDispatchableError) {
     // Routine for a runtime host, whose cleanup belongs to that environment's own server.
     console.warn('Workspace cleanup skipped a host this process does not execute', error.hostId)
   } else {
     console.error('Workspace cleanup repo scan failed', error)
   }
+
   if (isRemoteWorkspaceCleanupHost(repo) && !targeted) {
     // Why: broad cleanup only shows remote workspaces Orca can inspect now.
     // A remote repo that fails mid-scan is omitted, not bannered.
     return { scannedAt, candidates: [], errors: [] }
   }
+
   const errors = [createWorkspaceCleanupScanError(repo, toSafeWorkspaceCleanupRepoScanError(error))]
   onErrors?.(errors)
+
   return { scannedAt, candidates: [], errors }
 }

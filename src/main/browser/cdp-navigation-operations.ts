@@ -8,7 +8,9 @@ export class CdpNavigationOperations {
       entries: { id: number; url: string }[]
       currentIndex: number
     }
+
     const current = entries[currentIndex]
+
     return current ? `${current.id}:${current.url}` : 'unknown'
   }
 
@@ -17,9 +19,11 @@ export class CdpNavigationOperations {
       entries: { id: number }[]
       currentIndex: number
     }
+
     if (currentIndex <= 0) {
       throw new BrowserError('browser_navigation_failed', 'No previous history entry.')
     }
+
     return entries[currentIndex - 1].id
   }
 
@@ -38,12 +42,15 @@ export class CdpNavigationOperations {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timeout)
+
         if (pollTimer) {
           clearTimeout(pollTimer)
           pollTimer = null
         }
+
         callback()
       }
 
@@ -55,14 +62,17 @@ export class CdpNavigationOperations {
         if (settled) {
           return
         }
+
         try {
           const { result } = (await sender('Runtime.evaluate', {
             expression: 'document.readyState',
             returnByValue: true
           })) as { result: { value: string } }
+
           if (settled) {
             return
           }
+
           if (result.value === 'complete') {
             finish(resolve)
           } else {
@@ -75,14 +85,17 @@ export class CdpNavigationOperations {
           finish(resolve)
         }
       }
+
       void check()
     })
 
     // Phase 2: wait for network idle
     const remaining = TIMEOUT_MS - (Date.now() - startedAt)
+
     if (remaining <= 0) {
       return
     }
+
     await this.waitForNetworkIdle(guest, Math.min(remaining, 5000), IDLE_MS)
   }
 
@@ -97,11 +110,14 @@ export class CdpNavigationOperations {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(overallTimeout)
+
         if (idleTimer) {
           clearTimeout(idleTimer)
         }
+
         guest.debugger.removeListener('message', onMessage)
         resolve()
       }
@@ -111,6 +127,7 @@ export class CdpNavigationOperations {
           if (idleTimer) {
             clearTimeout(idleTimer)
           }
+
           idleTimer = setTimeout(done, idleMs)
         }
       }
@@ -118,6 +135,7 @@ export class CdpNavigationOperations {
       function onMessage(_event: unknown, method: string): void {
         if (method === 'Network.requestWillBeSent') {
           pending++
+
           if (idleTimer) {
             clearTimeout(idleTimer)
             idleTimer = null

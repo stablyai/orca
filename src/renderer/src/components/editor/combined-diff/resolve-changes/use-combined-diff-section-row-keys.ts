@@ -38,8 +38,10 @@ function scanCombinedDiffSectionRowKeys(
   if (previous !== null && previous.sections === sections && previous.generation === generation) {
     return previous
   }
+
   if (sections.length === 0) {
     const value = previous?.value.rowKeys.length === 0 ? previous.value : EMPTY_ROW_KEYS
+
     return { collapsedCount: 0, generation, sections, value }
   }
 
@@ -49,25 +51,32 @@ function scanCombinedDiffSectionRowKeys(
     previous !== null &&
     previous.generation === generation &&
     previous.value.rowKeys.length === sections.length
+
   const previousCache = patchable ? previous! : null
   const previousRowKeys = previousCache?.value.rowKeys ?? null
   const rowKeys: string[] = Array.from({ length: sections.length })
   let collapsedCount = previousCache?.collapsedCount ?? 0
   let changed = previousCache === null
+
   for (let index = 0; index < sections.length; index += 1) {
     const section = sections[index]!
+
     if (previousCache !== null && previousCache.sections[index] === section) {
       rowKeys[index] = previousRowKeys![index]!
       continue
     }
+
     if (previousCache?.sections[index]?.collapsed === true) {
       collapsedCount -= 1
     }
+
     if (section.collapsed) {
       collapsedCount += 1
     }
+
     const rowKey = buildCombinedDiffSectionRowKey(section, generation)
     rowKeys[index] = rowKey
+
     if (rowKey !== previousRowKeys?.[index]) {
       changed = true
     }
@@ -76,6 +85,7 @@ function scanCombinedDiffSectionRowKeys(
   if (!changed && previousCache !== null) {
     return { collapsedCount, generation, sections, value: previousCache.value }
   }
+
   return {
     collapsedCount,
     generation,
@@ -104,6 +114,7 @@ export function useCombinedDiffSectionRowKeys({
   sections: readonly DiffSection[]
 }): CombinedDiffSectionRowKeys {
   const cacheRef = useRef<CombinedDiffSectionRowKeyCache | null>(null)
+
   const cache = useMemo(
     () => scanCombinedDiffSectionRowKeys(cacheRef.current, generation, sections),
     [generation, sections]

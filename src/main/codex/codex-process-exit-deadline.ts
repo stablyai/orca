@@ -3,9 +3,11 @@ export async function waitForProcessExitUntil(
   timeoutMs: number
 ): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const timeout = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, timeoutMs)
   })
+
   try {
     await Promise.race([exitPromise, timeout])
   } finally {

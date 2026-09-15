@@ -14,6 +14,7 @@ afterEach(async () => {
 async function tempPluginsDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-discovery-'))
   roots.push(root)
+
   return root
 }
 
@@ -98,15 +99,18 @@ describe('instructional plugin discovery identity', () => {
       recipePath,
       JSON.stringify({ schemaVersion: 1, id: 'cloud', name: 'Cloud', create: 'create-v1' })
     )
+
     const [first] = await discoverPlugins({
       pluginsDir,
       devPluginPaths: [devRoot],
       hostVersion: '1.4.0'
     })
+
     await writeFile(
       recipePath,
       JSON.stringify({ schemaVersion: 1, id: 'cloud', name: 'Cloud', create: 'create-v2' })
     )
+
     const [second] = await discoverPlugins({
       pluginsDir,
       devPluginPaths: [devRoot],
@@ -115,6 +119,7 @@ describe('instructional plugin discovery identity', () => {
 
     expect(first && !isInvalidDiscoveredPlugin(first)).toBe(true)
     expect(second && !isInvalidDiscoveredPlugin(second)).toBe(true)
+
     if (
       !first ||
       !second ||
@@ -123,6 +128,7 @@ describe('instructional plugin discovery identity', () => {
     ) {
       return
     }
+
     expect(second.consentContentHash).not.toBe(first.consentContentHash)
     expect(second.consentFingerprint).not.toBe(first.consentFingerprint)
   })

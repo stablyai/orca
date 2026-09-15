@@ -56,7 +56,9 @@ type ForbiddenAuthorityField = Extract<
   | 'authorityRuntimeId'
   | 'webContentsId'
 >
+
 const noPersistedAuthority: [ForbiddenAuthorityField] extends [never] ? true : never = true
+
 void noPersistedAuthority
 
 export const CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION = 1

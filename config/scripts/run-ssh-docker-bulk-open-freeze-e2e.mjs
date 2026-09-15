@@ -2,7 +2,9 @@ import { spawnSync } from 'node:child_process'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 const extraArgs = process.argv.slice(2)
+
 const { command: pnpm, prefixArgs: pnpmPrefix, shell } = resolvePnpmCliInvocation()
+
 const env = {
   ...process.env,
   ORCA_E2E_SSH_DOCKER: '1'

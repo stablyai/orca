@@ -30,6 +30,7 @@ export type AutomationListResponseValidation =
 
 const UNSUPPORTED_HOST_SCOPE_MESSAGE =
   'This host does not support per-host automation lists. Update the Orca server to filter by host.'
+
 const INVALID_RESPONSE_MESSAGE = 'This host returned an automation list Orca could not read.'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -56,10 +57,13 @@ function parseUsageSummary(value: unknown): AutomationUsageSummary | null {
   if (!isRecord(value)) {
     return null
   }
+
   if (!USAGE_SUMMARY_FIELDS.every((field) => typeof value[field] === 'number')) {
     return null
   }
+
   const cost = value.estimatedCostUsd
+
   return cost === null || typeof cost === 'number' ? (value as AutomationUsageSummary) : null
 }
 
@@ -67,12 +71,15 @@ function parseSelector(value: unknown): AutomationListItemSelector | null {
   if (!isRecord(value)) {
     return null
   }
+
   if (value.kind === 'self') {
     return { kind: 'self' }
   }
+
   if (value.kind === 'orphan') {
     return { kind: 'orphan', issue: typeof value.issue === 'string' ? value.issue : '' }
   }
+
   if (
     value.kind !== 'ssh' ||
     typeof value.targetId !== 'string' ||
@@ -81,6 +88,7 @@ function parseSelector(value: unknown): AutomationListItemSelector | null {
   ) {
     return null
   }
+
   return {
     kind: 'ssh',
     targetId: value.targetId,
@@ -94,16 +102,20 @@ function parseItems(raw: readonly unknown[]): ParsedItems {
   const byId = new Map<string, AutomationListItem>()
   const duplicated = new Set<string>()
   let invalidRows = 0
+
   for (const entry of raw) {
     const selector = isRecord(entry) ? parseSelector(entry.selector) : null
+
     const automationId =
       isRecord(entry) && typeof entry.automationId === 'string' && entry.automationId.length > 0
         ? entry.automationId
         : null
+
     if (!selector || !automationId) {
       invalidRows++
       continue
     }
+
     if (byId.has(automationId) || duplicated.has(automationId)) {
       // A second item for one ID makes both unusable: neither can be trusted as the row's owner.
       byId.delete(automationId)
@@ -111,12 +123,14 @@ function parseItems(raw: readonly unknown[]): ParsedItems {
       invalidRows++
       continue
     }
+
     byId.set(automationId, {
       automationId,
       selector,
       usageSummary: parseUsageSummary((entry as { usageSummary?: unknown }).usageSummary)
     })
   }
+
   return { byId, invalidRows }
 }
 
@@ -140,33 +154,42 @@ export function validateAutomationListResponse(
   if (!isRecord(raw) || !Array.isArray(raw.automations)) {
     return failure('invalid_response')
   }
+
   if (raw.items === undefined || raw.items === null) {
     return failure('unsupported_host_scope')
   }
+
   if (!Array.isArray(raw.items)) {
     return failure('invalid_response')
   }
+
   const orphanCount = typeof raw.orphanCount === 'number' ? raw.orphanCount : undefined
+
   if (
     raw.orphanCount !== undefined &&
     (orphanCount === undefined || !Number.isSafeInteger(orphanCount) || orphanCount < 0)
   ) {
     return failure('invalid_response')
   }
+
   const parsedItems = parseItems(raw.items)
   let invalidRows = parsedItems.invalidRows
   const automations: Automation[] = []
   const items: AutomationListItem[] = []
+
   for (const entry of raw.automations) {
     const automation = parseAutomation(entry)
     const item = automation ? parsedItems.byId.get(automation.id) : undefined
+
     if (!automation || !item || !automationSelectorMatchesScope(item.selector, scope)) {
       invalidRows++
       continue
     }
+
     automations.push(automation)
     items.push(item)
   }
+
   return {
     ok: true,
     // Omitted rather than defaulted: a host is allowed not to report, and "not

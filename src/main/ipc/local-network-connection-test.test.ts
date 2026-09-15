@@ -35,6 +35,7 @@ describe('testLocalNetworkConnection', () => {
       server.listen(0, '127.0.0.1', resolve)
     })
     const address = server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('Expected a TCP listener address')
     }

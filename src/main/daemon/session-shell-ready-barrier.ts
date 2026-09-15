@@ -20,6 +20,7 @@ import { basename } from 'node:path'
 import type { ShellReadyState } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
+
 export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 
 export type SessionShellReadyBarrierDeps = {
@@ -89,6 +90,7 @@ export class SessionShellReadyBarrier {
     if (this._state !== 'pending') {
       return
     }
+
     this.promptReadinessProbe = createShellPromptReadinessProbe({
       slavePath: this.deps.subprocess.slavePath,
       shellPath: this.deps.subprocess.shellPath,
@@ -104,18 +106,23 @@ export class SessionShellReadyBarrier {
     if (!this.isGatingWrites) {
       return false
     }
+
     this.preReadyStdinQueue.push(data)
+
     return true
   }
 
   ingestSubprocessData(data: string): void {
     let releaseStartupDeviceAttributes = false
+
     if (this._state === 'pending' && this.scanState) {
       const scanned = scanShellStartupOutput(this.scanState, data)
       data = scanned.output
+
       if (scanned.shellPid) {
         this.shellStartupPid = scanned.shellPid
       }
+
       if (scanned.ready) {
         this.transitionToReady(scanned.postMarkerBytesObserved)
         releaseStartupDeviceAttributes = true
@@ -125,9 +132,11 @@ export class SessionShellReadyBarrier {
     }
 
     this.deps.acceptStartupIngress(data)
+
     if (this._state === 'pending' && data.length > 0) {
       this.promptReadinessProbe?.notifyOutput(data)
     }
+
     if (releaseStartupDeviceAttributes) {
       this.releaseDeviceAttributes()
     }
@@ -137,10 +146,12 @@ export class SessionShellReadyBarrier {
     if (!this.scanState) {
       return ''
     }
+
     const heldBytes = drainShellStartupOutputScanState(this.scanState)
     this.scanState = null
     // Why: scanning strips marker bytes before fan-out; if readiness never completes, release any held prefix before timeout/exit discards it.
     this.deps.acceptStartupIngress(heldBytes)
+
     return heldBytes
   }
 
@@ -185,9 +196,11 @@ export class SessionShellReadyBarrier {
     this.scanState = null
     this.disposePromptReadinessProbe()
     this.clearReadyTimer()
+
     if (this.preReadyStdinQueue.length === 0) {
       return
     }
+
     this.postReadyFlushGate.arm(postMarkerBytesObserved)
   }
 
@@ -196,6 +209,7 @@ export class SessionShellReadyBarrier {
    *  the daemon's session lifecycle events, so it is only correlation here. */
   private reportReadiness(event: string, details: Record<string, unknown>): void {
     const shellPath = this.deps.subprocess.shellPath
+
     try {
       this.deps.reportReadinessEvent?.(event, {
         sessionId: this.deps.sessionId,
@@ -212,9 +226,11 @@ export class SessionShellReadyBarrier {
 
   private onShellReadyTimeout(): void {
     this.readyTimer = null
+
     if (this._state !== 'pending') {
       return
     }
+
     // Why report: this path costs every startup command the full timeout, and it
     // used to fail silently -- a wrapper that never emits the marker looks
     // identical to a slow shell. Name the shell so the next report can be
@@ -233,6 +249,7 @@ export class SessionShellReadyBarrier {
     if (this._state !== 'pending') {
       return
     }
+
     // Same sink as the timeout above: console goes nowhere in the detached daemon.
     this.reportReadiness('shell-ready-wrapper-replaced', {})
     this.releaseHeldBytes()
@@ -243,6 +260,7 @@ export class SessionShellReadyBarrier {
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
+
     for (const data of queued) {
       this.deps.subprocess.write(data)
     }

@@ -39,9 +39,11 @@ export async function createBlankWorkspace(args: {
         ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),
         ...agentLaunchCreateFields(args.createdWithAgentId)
       }
+
       if (args.comment) {
         params.comment = args.comment
       }
+
       return params
     }
   })

@@ -22,20 +22,25 @@ export function getFolderLineageCandidateRepos(
   folder: LineageFolder
 ): Repo[] {
   let groupIds = context.groupSubtreeIdsByRoot.get(folder.projectGroupId)
+
   if (!groupIds) {
     groupIds = getProjectGroupSubtreeIds(context.groups, folder.projectGroupId)
     context.groupSubtreeIdsByRoot.set(folder.projectGroupId, groupIds)
   }
+
   const grouped = context.repos.filter(
     (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
   )
+
   const pathRepos = context.repos.filter(
     (repo) =>
       !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
       isPathInsideOrEqual(folder.folderPath, repo.path)
   )
+
   const group = context.groupsById.get(folder.projectGroupId)?.[0]
   const connectionId = folder.connectionId ?? group?.connectionId ?? null
+
   return connectionId
     ? [...grouped, ...pathRepos.filter((repo) => (repo.connectionId ?? null) === connectionId)]
     : grouped.length > 0
@@ -55,48 +60,67 @@ export function resolveFolderLineageOwner(
   folderWorkspaceId: string
 ): LineageOwner {
   const cached = context.folderOwners.get(folderWorkspaceId)
+
   if (cached) {
     return cached
   }
+
   const remember = (owner: LineageOwner): LineageOwner => {
     context.folderOwners.set(folderWorkspaceId, owner)
+
     return owner
   }
+
   const folders = context.foldersById.get(folderWorkspaceId) ?? []
+
   if (folders.length !== 1) {
     return remember({ status: 'ambiguous' })
   }
+
   const folder = folders[0]
   const groups = context.groupsById.get(folder.projectGroupId) ?? []
+
   if (groups.length !== 1) {
     return remember({ status: 'ambiguous' })
   }
+
   const group = groups[0]
   const hosts = new Set<ExecutionHostId>()
+
   if (folder.connectionId) {
     hosts.add(`ssh:${encodeURIComponent(folder.connectionId)}`)
   }
+
   if (group.connectionId) {
     hosts.add(`ssh:${encodeURIComponent(group.connectionId)}`)
   }
+
   if (group.executionHostId) {
     const parsed = parseExecutionHostId(group.executionHostId)
+
     if (!parsed) {
       return remember({ status: 'ambiguous' })
     }
+
     hosts.add(parsed.id)
   }
+
   for (const repo of getFolderLineageCandidateRepos(context, folder)) {
     const owner = resolveRepoLineageOwner(repo)
+
     if (owner.status !== 'owned') {
       return remember(owner)
     }
+
     hosts.add(owner.hostId)
   }
+
   if (hosts.size > 1) {
     return remember({ status: 'contradictory' })
   }
+
   const hostId = [...hosts][0] ?? LOCAL_EXECUTION_HOST_ID
+
   return remember(
     parseExecutionHostId(hostId)?.kind === 'runtime'
       ? { status: 'runtime' }
@@ -109,16 +133,21 @@ export function resolveWorkspaceLineageOwner(
   workspaceKey: string
 ): LineageOwner {
   const cached = context.workspaceOwners.get(workspaceKey)
+
   if (cached) {
     return cached
   }
+
   const workspace = parseWorkspaceKey(workspaceKey)
+
   const owner = !workspace
     ? { status: 'ambiguous' as const }
     : workspace.type === 'worktree'
       ? resolveWorktreeLineageOwner(context, workspace.worktreeId)
       : resolveFolderLineageOwner(context, workspace.folderWorkspaceId)
+
   context.workspaceOwners.set(workspaceKey, owner)
+
   return owner
 }
 
@@ -132,15 +161,19 @@ export function filterLineageForHost(
   const context = createLineageResolutionContext(store)
   const worktreeLineageById: Record<string, WorktreeLineage> = {}
   const workspaceLineageByChildKey: Record<string, WorkspaceLineage> = {}
+
   for (const [worktreeId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
     const child = resolveWorktreeLineageOwner(context, worktreeId)
     const parent = resolveWorktreeLineageOwner(context, lineage.parentWorktreeId)
+
     if (child.status === 'ambiguous' || child.status === 'contradictory') {
       return null
     }
+
     if (parent.status === 'ambiguous' || parent.status === 'contradictory') {
       return null
     }
+
     if (
       child.status === 'owned' &&
       parent.status === 'owned' &&
@@ -156,15 +189,19 @@ export function filterLineageForHost(
       return null
     }
   }
+
   for (const [childKey, lineage] of Object.entries(store.getAllWorkspaceLineage())) {
     const child = resolveWorkspaceLineageOwner(context, childKey)
     const parent = resolveWorkspaceLineageOwner(context, lineage.parentWorkspaceKey)
+
     if (child.status === 'ambiguous' || child.status === 'contradictory') {
       return null
     }
+
     if (parent.status === 'ambiguous' || parent.status === 'contradictory') {
       return null
     }
+
     if (
       child.status === 'owned' &&
       parent.status === 'owned' &&
@@ -180,5 +217,6 @@ export function filterLineageForHost(
       return null
     }
   }
+
   return { worktreeLineageById, workspaceLineageByChildKey }
 }

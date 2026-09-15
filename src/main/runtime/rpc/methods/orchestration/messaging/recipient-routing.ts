@@ -14,9 +14,11 @@ const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatc
  */
 export function assertDispatchMailboxDeliverable(db: OrchestrationDb, dispatchId: string): void {
   const dispatch = db.getDispatchContextById(dispatchId)
+
   if (!dispatch || ACTIVE_DISPATCH_STATUSES.includes(dispatch.status)) {
     return
   }
+
   throw new OrchestrationError(
     'dispatch_inactive',
     `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${dispatch.run_id} instead, or start a new Dispatch for follow-up work.`
@@ -58,34 +60,42 @@ export function resolveBareOrchestrationRecipient(params: {
   const { runtime, db, handle } = params
   const paneKey = runtime.getLiveTerminalPaneKey(handle) ?? undefined
   const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+
   if (boundRun) {
     const mismatch = runMismatch(handle, boundRun.id, params.explicitRunId)
+
     return mismatch ?? { ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }
   }
 
   const dispatches = db.getActiveDispatchMailboxOwners(handle, paneKey)
   const dispatch = selectDispatch(dispatches, params.explicitRunId)
+
   if (dispatches.length > 0 && !dispatch) {
     return ambiguous(
       handle,
       dispatches.map((candidate) => `dispatch:${candidate.id}`)
     )
   }
+
   if (dispatch) {
     const mismatch = runMismatch(handle, dispatch.run_id, params.explicitRunId)
+
     return mismatch ?? { ok: true, to: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
   }
 
   const ownerRunIds = db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner)
   const selectedRunId = selectHistoricalRun(ownerRunIds, params)
+
   if (ownerRunIds.length > 0 && !selectedRunId) {
     return ambiguous(
       handle,
       ownerRunIds.map((runId) => `run:${runId}`)
     )
   }
+
   if (selectedRunId) {
     const mismatch = runMismatch(handle, selectedRunId, params.explicitRunId)
+
     return mismatch ?? { ok: true, to: `run:${selectedRunId}`, runId: selectedRunId }
   }
 
@@ -103,6 +113,7 @@ export function resolveBareOrchestrationRecipient(params: {
   }
 
   const message = `Terminal ${handle} has no live pane or durable Run/Dispatch mailbox.`
+
   return {
     ok: false,
     code: 'terminal_not_found',
@@ -118,10 +129,13 @@ function selectDispatch(
   if (dispatches.length === 1) {
     return dispatches[0]
   }
+
   if (!explicitRunId) {
     return undefined
   }
+
   const matches = dispatches.filter((dispatch) => dispatch.run_id === explicitRunId)
+
   return matches.length === 1 ? matches[0] : undefined
 }
 
@@ -132,14 +146,17 @@ function selectHistoricalRun(
   if (params.explicitRunId && ownerRunIds.includes(params.explicitRunId)) {
     return params.explicitRunId
   }
+
   if (params.senderRunId && ownerRunIds.includes(params.senderRunId)) {
     return params.senderRunId
   }
+
   return ownerRunIds.length === 1 ? ownerRunIds[0] : undefined
 }
 
 function ambiguous(handle: string, addresses: string[]): BareRecipientResolution {
   const message = `${handle} resolves to multiple durable mailboxes (${addresses.join(', ')}). Use an explicit canonical address.`
+
   return {
     ok: false,
     code: 'recipient_ambiguous',
@@ -156,7 +173,9 @@ function runMismatch(
   if (!explicitRunId || explicitRunId === resolvedRunId) {
     return undefined
   }
+
   const message = `${handle} belongs to Run ${resolvedRunId}, not explicitly requested Run ${explicitRunId}.`
+
   return {
     ok: false,
     code: 'recipient_run_mismatch',

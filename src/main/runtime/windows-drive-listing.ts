@@ -17,6 +17,7 @@ export function isServerDriveListRequest(
 }
 
 const DRIVE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
 const EXPECTED_UNAVAILABLE_DRIVE_CODES = new Set(['EACCES', 'ENOENT', 'ENOTDIR', 'EPERM'])
 
 export async function listWindowsDrives(
@@ -27,17 +28,21 @@ export async function listWindowsDrives(
     [...DRIVE_LETTERS].map(async (letter) => {
       const root = `${letter}:\\`
       let stats: Stats
+
       try {
         stats = await statPath(root)
       } catch (error) {
         if (!isExpectedUnavailableDriveError(error)) {
           console.warn('[windows-drive-listing] Failed to stat drive', { root, error })
         }
+
         return null
       }
+
       return stats.isDirectory() ? root : null
     })
   )
+
   return {
     resolvedPath: '/',
     pathFlavor: 'win32',

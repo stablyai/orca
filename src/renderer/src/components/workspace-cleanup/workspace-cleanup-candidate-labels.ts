@@ -90,6 +90,7 @@ export function formatWorkspaceCleanupGitStatusLabel(label: string): string {
     case 'Unknown':
       return translate('auto.components.workspace.cleanup.candidateRow.gitUnknown', 'Git unknown')
   }
+
   return translate('auto.components.workspace.cleanup.candidateRow.gitUnknown', 'Git unknown')
 }
 

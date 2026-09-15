@@ -23,6 +23,7 @@ describe('hosted review RPC methods', () => {
         mergeable: 'MERGEABLE'
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -54,6 +55,7 @@ describe('hosted review RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
 
     await dispatcher.dispatch(
@@ -76,6 +78,7 @@ describe('hosted review RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
 
     await dispatcher.dispatch(
@@ -106,6 +109,7 @@ describe('hosted review RPC methods', () => {
         title: 'Create PR'
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -152,6 +156,7 @@ describe('hosted review RPC methods', () => {
         url: 'https://github.com/acme/orca/pull/51'
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -194,6 +199,7 @@ describe('hosted review RPC methods', () => {
         parentReview: { number: 51, url: 'https://github.com/acme/orca/pull/51' }
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
 
     const response = await dispatcher.dispatch(

@@ -23,6 +23,7 @@ vi.mock('../windows-process-tree-kill', () => ({
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
+
   return {
     ...actual,
     spawn: vi.fn(actual.spawn)
@@ -46,8 +47,10 @@ describe('generateCommitMessageFromContext', () => {
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
+
     spawnMock.mockImplementation(() => {
       const listeners = new Map<string, (value: unknown) => void>()
+
       const child = {
         pid: 123 + children.length,
         kill: vi.fn(),
@@ -56,7 +59,9 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
+
       children.push({ pid: child.pid, kill: child.kill, listeners })
+
       return child as never
     })
 
@@ -76,6 +81,7 @@ describe('generateCommitMessageFromContext', () => {
         cwd: '/repo'
       }
     )
+
     const pullRequest = generatePullRequestFieldsFromContext(
       {
         branch: 'feature/pr-fields',
@@ -136,8 +142,10 @@ describe('generateCommitMessageFromContext', () => {
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
+
     spawnMock.mockImplementation(() => {
       const listeners = new Map<string, (value: unknown) => void>()
+
       const child = {
         pid: 123 + children.length,
         kill: vi.fn(),
@@ -146,7 +154,9 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
+
       children.push({ pid: child.pid, kill: child.kill, listeners })
+
       return child as never
     })
 
@@ -166,6 +176,7 @@ describe('generateCommitMessageFromContext', () => {
         cwd: '/repo'
       }
     )
+
     const pullRequest = generatePullRequestFieldsFromContext(
       {
         branch: 'feature/pr-fields',
@@ -214,6 +225,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('reports branch changes when pull request generation is canceled', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -222,6 +234,7 @@ describe('generateCommitMessageFromContext', () => {
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pullRequest = generatePullRequestFieldsFromContext(
@@ -261,13 +274,16 @@ describe('generateCommitMessageFromContext', () => {
 
   it('settles local commit-message cancellation even when the killed child does not close', async () => {
     vi.useFakeTimers()
+
     try {
       const listeners = new Map<string, (value: unknown) => void>()
+
       const removeListener = (key: string, callback: (value: unknown) => void): void => {
         if (listeners.get(key) === callback) {
           listeners.delete(key)
         }
       }
+
       const child = {
         pid: 123,
         kill: vi.fn(),
@@ -283,6 +299,7 @@ describe('generateCommitMessageFromContext', () => {
         on: vi.fn((event, callback) => listeners.set(event, callback)),
         off: vi.fn((event, callback) => removeListener(event, callback))
       }
+
       spawnMock.mockReturnValue(child as never)
 
       const pending = generateCommitMessageFromContext(
@@ -301,6 +318,7 @@ describe('generateCommitMessageFromContext', () => {
           cwd: '/repo'
         }
       )
+
       const outcomePromise = pending.then((result) =>
         !result.success && result.canceled ? 'canceled' : 'other'
       )
@@ -336,6 +354,7 @@ describe('generateCommitMessageFromContext', () => {
       cwd: '/repo',
       env
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     cancelGenerateCommitMessageLocal('/repo')
 
@@ -351,6 +370,7 @@ describe('generateCommitMessageFromContext', () => {
       cwd: '/repo-2',
       env
     })
+
     await Promise.resolve()
     expect(spawnMock).toHaveBeenCalledTimes(1)
 
@@ -374,6 +394,7 @@ describe('generateCommitMessageFromContext', () => {
       cwd: '/descendant-repo',
       env
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     cancelGenerateCommitMessageLocal('/descendant-repo')
     await expect(first).resolves.toMatchObject({ canceled: true })
@@ -388,6 +409,7 @@ describe('generateCommitMessageFromContext', () => {
       cwd: '/descendant-repo-2',
       env
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     secondChild.stdout.emit('data', Buffer.from('Update README\n'))
     secondChild.emit('close', 0)
@@ -416,6 +438,7 @@ describe('generateCommitMessageFromContext', () => {
         cwd: 'C:\\repo',
         env
       })
+
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
       cancelGenerateCommitMessageLocal('C:\\repo')
       await expect(first).resolves.toMatchObject({ canceled: true })
@@ -425,6 +448,7 @@ describe('generateCommitMessageFromContext', () => {
         cwd: 'C:\\repo-2',
         env
       })
+
       firstChild.emit('close', null)
       await Promise.resolve()
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -452,6 +476,7 @@ describe('generateCommitMessageFromContext', () => {
       { agentId: 'codex', model: 'gpt-5.5' },
       { kind: 'local', cwd: '/queued-repo', env }
     )
+
     cancelGenerateCommitMessageLocal('/queued-repo')
 
     await expect(queued).resolves.toEqual({
@@ -473,6 +498,7 @@ describe('generateCommitMessageFromContext', () => {
       { agentId: 'codex', model: 'gpt-5.5' },
       { kind: 'local', cwd: '/later-repo', env }
     )
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     laterChild.stdout.emit('data', Buffer.from('Update later\n'))
     laterChild.emit('close', 0)

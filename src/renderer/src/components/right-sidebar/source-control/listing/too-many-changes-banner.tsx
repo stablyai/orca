@@ -19,6 +19,7 @@ export function TooManyChangesBanner({
   const isMountedRef = useRef(false)
   useEffect(() => {
     isMountedRef.current = true
+
     return () => {
       isMountedRef.current = false
       retryControllerRef.current?.abort()
@@ -27,9 +28,12 @@ export function TooManyChangesBanner({
   useEffect(() => {
     if (!isRetrying) {
       setShowSpinner(false)
+
       return
     }
+
     const timer = window.setTimeout(() => setShowSpinner(true), 1_000)
+
     return () => window.clearTimeout(timer)
   }, [isRetrying])
 
@@ -37,16 +41,19 @@ export function TooManyChangesBanner({
     if (isRetrying) {
       return
     }
+
     const controller = new AbortController()
     retryControllerRef.current = controller
     const timeout = window.setTimeout(() => controller.abort(), CAPPED_STATUS_RETRY_TIMEOUT_MS)
     setIsRetrying(true)
+
     try {
       await onRetry(controller.signal)
     } catch (error) {
       if (!isMountedRef.current) {
         return
       }
+
       // Why: a failed local/SSH retry must leave the capped warning usable
       // instead of becoming an unhandled click rejection.
       console.warn('[SourceControl] capped status retry failed', error)
@@ -58,9 +65,11 @@ export function TooManyChangesBanner({
       )
     } finally {
       window.clearTimeout(timeout)
+
       if (retryControllerRef.current === controller) {
         retryControllerRef.current = null
       }
+
       if (isMountedRef.current) {
         setIsRetrying(false)
       }

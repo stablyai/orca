@@ -60,15 +60,19 @@ async function resolveIngress(
       fetcher: dependencies.fetcher
     })
   }
+
   if (request.ingress.kind === 'staged-upload') {
     if (!dependencies.resolveStagedUpload) {
       throw new Error('skill-install-staged-upload-unsupported')
     }
+
     return dependencies.resolveStagedUpload(request.ingress.uploadId, request.package)
   }
+
   if (!dependencies.allowTrustedLocalFile || !isAbsolute(request.ingress.path)) {
     throw new Error('skill-install-local-ingress-rejected')
   }
+
   return { archivePath: request.ingress.path, cleanup: async () => undefined }
 }
 
@@ -78,9 +82,11 @@ export async function executeSkillInstallRequest(
 ): Promise<SkillInstallResult> {
   const request = SkillInstallRequestSchema.parse(input)
   const operation = startSkillInstallOperation(request)
+
   try {
     const result = await executeParsedSkillInstallRequest(request, dependencies)
     operation.complete(result)
+
     return result
   } catch (error) {
     operation.fail(error)
@@ -96,16 +102,21 @@ async function executeParsedSkillInstallRequest(
     request.destination,
     dependencies.authority
   )
+
   let ingress: StagedSkillPackage | null = null
+
   try {
     ingress = await resolveIngress(request, dependencies)
+
     const detectedProviders = selectedOrDetectedSkillProviders(
       destination.wslDistro
         ? await detectSkillProvidersInWsl(destination.wslDistro)
         : await dependencies.detectProviders(),
       request.providers
     )
+
     const providerRootOverrides = await dependencies.resolveProviderRootOverrides?.(destination)
+
     const filesystem = destination.wslDistro
       ? createWslSkillInstallFilesystem({
           distro: destination.wslDistro,
@@ -114,6 +125,7 @@ async function executeParsedSkillInstallRequest(
           providerRootOverrides
         })
       : undefined
+
     return await installSharedSkill({
       operationId: request.operationId,
       archivePath: ingress.archivePath,
@@ -136,9 +148,11 @@ async function executeParsedSkillInstallRequest(
     })
   } catch (error) {
     const failure = skillInstallFailureFromError(error)
+
     if (failure?.category !== 'cancelled') {
       throw error
     }
+
     return {
       operationId: request.operationId,
       status: 'cancelled',

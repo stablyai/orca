@@ -38,5 +38,6 @@ export function selectRuntimeAgentOrchestrationBatch(
   if (worktreeIds.length === 0) {
     return EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX
   }
+
   return selectWorktreeAgentOrchestrationIndex(state)
 }

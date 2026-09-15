@@ -41,35 +41,46 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     taskUiReady,
     tasksSupported
   } = model
+
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
     }
+
     const statusResponse = await client.sendRequest('linear.status')
+
     if (!isSuccess(statusResponse)) {
       throw new Error(statusResponse.error.message)
     }
+
     const status = statusResponse.result as LinearStatusResponse
     setLinearConnected(status.connected === true)
+
     if (status.connected !== true) {
       setLinearWorkspaces([])
       setLinearTeams([])
       setSelectedLinearTeamIds(new Set())
       setSelectedLinearWorkspaceId(null)
+
       return
     }
+
     const workspaces = status.workspaces ?? []
+
     const workspaceId =
       status.selectedWorkspaceId ?? status.activeWorkspaceId ?? workspaces[0]?.id ?? null
+
     setLinearWorkspaces(workspaces)
     setSelectedLinearWorkspaceId(workspaceId)
 
     const teamsResponse = await client.sendRequest('linear.listTeams', {
       workspaceId: workspaceId ?? undefined
     })
+
     if (!isSuccess(teamsResponse)) {
       throw new Error(teamsResponse.error.message)
     }
+
     const teams = teamsResponse.result as LinearTeam[]
     setLinearTeams(teams)
     setSelectedLinearTeamIds(reconcileTeamSelection(teams, defaultLinearTeamSelectionRef.current))
@@ -80,6 +91,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
       if (!client || !taskUiReady) {
         return
       }
+
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
       void client
@@ -114,15 +126,18 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
               before
             })
+
             if (!isSuccess(response)) {
               throw new Error(response.error.message)
             }
+
             const envelope = response.result as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources
               errors?: { issues?: { message: string } }
               issueSourceFellBack?: true
             }
+
             return {
               items: envelope.items.map((item) => createGitHubTask(repo, item)),
               sources: envelope.sources,
@@ -138,6 +153,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               repo.id,
               isExpectedSshSkip && err instanceof Error ? err.message : err
             )
+
             return {
               items: [] as Array<Extract<TaskItem, { provider: 'github' }>>,
               repoId: repo.id,
@@ -150,13 +166,16 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
       const sourcesByRepoId: Record<string, GitHubRepoSources> = {}
       const sourceErrors: GitHubIssueSourceError[] = []
       const sourceFallbacks: GitHubIssueSourceFallback[] = []
+
       for (const result of results) {
         if (result.sources) {
           sourcesByRepoId[result.repoId] = result.sources
         }
+
         if (result.sourceError) {
           sourceErrors.push(result.sourceError)
         }
+
         if (result.sourceFallback) {
           sourceFallbacks.push(result.sourceFallback)
         }
@@ -191,9 +210,11 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               },
               { timeoutMs: 30_000 }
             )
+
             if (!isSuccess(response)) {
               throw new Error(response.error.message)
             }
+
             return typeof response.result === 'number' ? response.result : 0
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
@@ -203,14 +224,17 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               repo.id,
               isExpectedSshSkip && err instanceof Error ? err.message : err
             )
+
             return 0
           }
         }
       )
+
       return counts.reduce((sum, count) => sum + count, 0)
     },
     [appliedQuery, githubKind]
   )
+
   return Object.assign(model, {
     loadLinearContext,
     persistLinearTeamSelection,

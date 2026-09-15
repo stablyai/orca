@@ -11,8 +11,11 @@ import { sessionSearchReadDecision } from './session-search-read-decision'
 import { SessionSearchStore } from './session-search-store'
 
 const LARGE_ID = 25_614_222_884_620_952
+
 let index: SessionSearchIndexFile
+
 let store: SessionSearchStore
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -79,6 +82,7 @@ it.each([
       consumer.beginRead({ candidate: replaced, mode: 'append', previousByteOffset: 8192 })
     ).toBeNull()
   }
+
   expect(errors).toEqual([])
 })
 

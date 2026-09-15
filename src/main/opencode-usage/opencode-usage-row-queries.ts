@@ -43,12 +43,15 @@ function getAssistantSessionMessageCount(db: Database.Database): number {
   if (!tableExists(db, 'session_message')) {
     return 0
   }
+
   const assistantPredicate = columnExists(db, 'session_message', 'type')
     ? "type = 'assistant' AND json_extract(data, '$.tokens.input') IS NOT NULL"
     : "json_extract(data, '$.tokens.input') IS NOT NULL"
+
   const row = db
     .prepare(`SELECT COUNT(*) AS count FROM session_message WHERE ${assistantPredicate}`)
     .get() as { count?: number } | undefined
+
   return row?.count ?? 0
 }
 
@@ -56,6 +59,7 @@ function canReadSessionUsageRows(db: Database.Database): boolean {
   if (!tableExists(db, 'session')) {
     return false
   }
+
   return ['cost', 'tokens_input', 'tokens_output', 'tokens_reasoning', 'tokens_cache_read'].every(
     (columnName) => columnExists(db, 'session', columnName)
   )
@@ -65,6 +69,7 @@ function getSessionUsageRowCount(db: Database.Database): number {
   if (!canReadSessionUsageRows(db)) {
     return 0
   }
+
   const row = db
     .prepare(
       `SELECT COUNT(*) AS count
@@ -72,12 +77,14 @@ function getSessionUsageRowCount(db: Database.Database): number {
        WHERE tokens_input + tokens_output + tokens_reasoning + tokens_cache_read > 0`
     )
     .get() as { count?: number } | undefined
+
   return row?.count ?? 0
 }
 
 function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   const projectJoin = getProjectJoin(db)
   const sessionModelSelect = getSessionModelSelect(db)
+
   const rows = db
     .prepare(
       `SELECT s.id, s.id AS session_id, s.time_created, s.time_updated,
@@ -133,6 +140,7 @@ export function selectUsageRows(db: Database.Database): OpenCodeUsageRow[] {
     const assistantPredicate = columnExists(db, 'session_message', 'type')
       ? "sm.type = 'assistant'"
       : "json_extract(sm.data, '$.tokens.input') IS NOT NULL"
+
     return db
       .prepare(
         `SELECT sm.id, sm.session_id, sm.time_created, sm.time_updated, sm.data,

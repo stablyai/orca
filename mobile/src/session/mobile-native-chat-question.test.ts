@@ -12,6 +12,7 @@ describe('parseAgentQuestion', () => {
     const text = ['Which database should I use?', '1. PostgreSQL', '2. MySQL', '3. SQLite'].join(
       '\n'
     )
+
     const q = parseAgentQuestion(text)
     expect(q).not.toBeNull()
     expect(q?.question).toBe('Which database should I use?')
@@ -121,6 +122,7 @@ describe('formatQuestionAnswer', () => {
       multiSelect: false,
       optionTokens: [null, null]
     }
+
     expect(formatQuestionAnswer(bullets, ['Merge'])).toBe('Merge')
   })
 
@@ -131,6 +133,7 @@ describe('formatQuestionAnswer', () => {
       multiSelect: false,
       optionTokens: ['a', 'b']
     }
+
     expect(formatQuestionAnswer(lettered, ['Beta'])).toBe('b')
   })
 
@@ -158,6 +161,7 @@ describe('mobileChatQuestionKey', () => {
       multiSelect: true,
       optionTokens: ['1', '2']
     }
+
     expect(mobileChatQuestionKey({ ...first, options: ['A', 'C'] })).not.toBe(
       mobileChatQuestionKey(first)
     )

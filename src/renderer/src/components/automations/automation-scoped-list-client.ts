@@ -26,8 +26,10 @@ import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
 } from '../../../../shared/automation-owner-ref'
+
 /** The one classifier every client shares; re-exported so call sites keep importing it from here. */
 export { matchAutomationOwnerConflict } from '../../../../shared/automation-owner-conflict'
+
 import type {
   AutomationDestination,
   AutomationOwnerPrecondition
@@ -117,11 +119,13 @@ async function callAuthority<TResult>(
 
 function validated(raw: unknown, selector: AutomationListScopeSelector): ScopedAutomationList {
   const validation = validateAutomationListResponse(raw, selector)
+
   if (!validation.ok) {
     throw validation.error.code === 'unsupported_host_scope'
       ? new AutomationHostScopeUnsupportedError(validation.error.message)
       : new AutomationListResponseError(validation.error.message)
   }
+
   return { ...validation.result, invalidRows: validation.invalidRows }
 }
 
@@ -136,6 +140,7 @@ export async function listScopedAutomations(
     AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
     AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE
   )
+
   return validated(await callAuthority(authority, 'automation.list', { selector }), selector)
 }
 
@@ -151,11 +156,14 @@ export async function listLegacyAutomations(
     // Desktop storage ships the scoped contract in-process, so it never degrades.
     throw new AutomationListResponseError('The desktop authority always supports scoped lists.')
   }
+
   const raw = await callAuthority<unknown>(authority, 'automation.list', null)
   const automations = (raw as { automations?: unknown } | null)?.automations
+
   if (!Array.isArray(automations)) {
     throw new AutomationListResponseError('The host returned an unreadable automation list.')
   }
+
   return automations as Automation[]
 }
 
@@ -182,6 +190,7 @@ async function listRunsFenced(
     expectedOwner,
     ...options
   })
+
   return result.runs
 }
 
@@ -202,6 +211,7 @@ export async function listAutomationRunsPageForOwner(
     'automation.runs',
     { automationId, expectedOwner: ownerPrecondition(owner), ...options }
   )
+
   return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
@@ -218,12 +228,14 @@ async function updateFenced(
   destination?: AutomationDestination
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
+
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
     updates: toRuntimeAutomationUpdateInput(updates),
     expectedOwner,
     destination
   })
+
   return result.automation
 }
 
@@ -295,6 +307,7 @@ export async function listOrphanAutomationRunsPage(
     'automation.runs',
     { automationId, expectedOwner: ORPHAN_OWNER_PRECONDITION, ...options }
   )
+
   return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
@@ -304,10 +317,12 @@ export async function runAutomationNowForOwner(
 ): Promise<AutomationRun> {
   await assertOwnerFencingSupported(owner.authority)
   const expectedOwner = ownerPrecondition(owner)
+
   const result = await callAuthority<{ run: AutomationRun }>(owner.authority, 'automation.runNow', {
     id,
     expectedOwner
   })
+
   return result.run
 }
 
@@ -319,10 +334,13 @@ export async function createAutomationForDestination(
   if (input.creationKey) {
     await assertAutomationCreateIdempotencySupported(authority)
   }
+
   await assertOwnerFencingSupported(authority)
+
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
     ...toRuntimeAutomationCreateInput(input),
     destination
   })
+
   return result.automation
 }

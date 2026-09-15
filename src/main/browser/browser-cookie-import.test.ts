@@ -33,12 +33,15 @@ vi.mock('./browser-session-registry', () => ({
 vi.mock('../../shared/child-process/run-process', () => ({
   runProcessSync: runProcessSyncMock
 }))
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
       copyFileSyncMock(...args)
+
       return actual.copyFileSync(...args)
     }
   }
@@ -50,6 +53,7 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: dialogShowOpenDialogMock },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -146,11 +150,13 @@ function buildSafariBinaryCookies(cookieCount: number): Buffer {
   const page = Buffer.alloc(pageSize)
   page.writeUInt32BE(0x00000100, 0)
   page.writeUInt32LE(cookieCount, 4)
+
   for (let index = 0; index < offsets.length; index += 1) {
     page.writeUInt32LE(offsets[index], 8 + index * 4)
   }
 
   let cookieOffset = 8 + cookieCount * 4
+
   for (const cookie of cookies) {
     cookie.copy(page, cookieOffset)
     cookieOffset += cookie.length
@@ -161,6 +167,7 @@ function buildSafariBinaryCookies(cookieCount: number): Buffer {
   file.writeUInt32BE(1, 4)
   file.writeUInt32BE(page.length, 8)
   page.copy(file, 12)
+
   return file
 }
 
@@ -172,9 +179,11 @@ function buildExpiredSafariCookie(index: number): Buffer {
   const strings = [domain, name, path, value]
   const headerSize = 48
   let cursor = headerSize
+
   const offsets = strings.map((text) => {
     const offset = cursor
     cursor += Buffer.byteLength(text) + 1
+
     return offset
   })
 
@@ -185,9 +194,11 @@ function buildExpiredSafariCookie(index: number): Buffer {
   cookie.writeUInt32LE(offsets[2], 24)
   cookie.writeUInt32LE(offsets[3], 28)
   cookie.writeDoubleLE(1, 40)
+
   for (let index = 0; index < strings.length; index += 1) {
     cookie.write(strings[index], offsets[index], 'utf8')
   }
+
   return cookie
 }
 
@@ -221,6 +232,7 @@ describe('importCookiesFromFile', () => {
   function writeCookieFile(cookies: unknown[]): string {
     const filePath = join(tmpDir, 'cookies.json')
     writeFileSync(filePath, JSON.stringify(cookies))
+
     return filePath
   }
 
@@ -248,6 +260,7 @@ describe('importCookiesFromFile', () => {
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
@@ -286,6 +299,7 @@ describe('importCookiesFromFile', () => {
     const hostCall = cookieWriteMock.mock.calls
       .map((c) => c[0])
       .find((c) => c.name === '__Host-user_session_same_site')
+
     // __Host- prefix requires no Domain attribute and path=/, or Chromium drops it. hostOnly is how
     // the identity says "omit domain"; cdpSetCookieParamsFromIdentity drops it on the wire.
     expect(hostCall.hostOnly).toBe(true)
@@ -294,6 +308,7 @@ describe('importCookiesFromFile', () => {
     const normalCall = cookieWriteMock.mock.calls
       .map((c) => c[0])
       .find((c) => c.name === '_gh_sess')
+
     expect(normalCall.hostOnly).toBe(false)
     expect(normalCall.domain).toBe('.github.com')
     expect(normalCall.path).toBe('/settings')
@@ -305,9 +320,11 @@ describe('importCookiesFromFile', () => {
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
     expect(result.ok).toBe(false)
+
     if (result.ok) {
       return
     }
+
     expect(result.reason).toContain('not valid JSON')
   })
 
@@ -317,9 +334,11 @@ describe('importCookiesFromFile', () => {
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
     expect(result.ok).toBe(false)
+
     if (result.ok) {
       return
     }
+
     expect(result.reason).toContain('JSON array')
   })
 
@@ -327,9 +346,11 @@ describe('importCookiesFromFile', () => {
     const filePath = writeCookieFile([])
     const result = await importCookiesFromFile(filePath, 'persist:test')
     expect(result.ok).toBe(false)
+
     if (result.ok) {
       return
     }
+
     expect(result.reason).toContain('empty')
   })
 
@@ -345,6 +366,7 @@ describe('importCookiesFromFile', () => {
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
@@ -361,9 +383,11 @@ describe('importCookiesFromFile', () => {
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
     expect(result.ok).toBe(false)
+
     if (result.ok) {
       return
     }
+
     expect(result.reason).toContain('No valid cookies')
     expect(result.reason).toContain('2 entries were skipped')
   })
@@ -371,9 +395,11 @@ describe('importCookiesFromFile', () => {
   it('handles file read errors', async () => {
     const result = await importCookiesFromFile('/nonexistent/path.json', 'persist:test')
     expect(result.ok).toBe(false)
+
     if (result.ok) {
       return
     }
+
     expect(result.reason).toContain('Could not read')
   })
 
@@ -445,6 +471,7 @@ describe('importCookiesFromBrowser Safari', () => {
   it('reports expired cookies from large Safari binary cookie pages', async () => {
     const cookiesPath = join(tmpDir, 'Cookies.binarycookies')
     writeFileSync(cookiesPath, buildSafariBinaryCookies(LARGE_SAFARI_COOKIE_COUNT))
+
     const browser: DetectedBrowser = {
       family: 'safari',
       label: 'Safari',
@@ -506,6 +533,7 @@ describe('importCookiesFromBrowser Chromium', () => {
   it('imports from a live Chromium source DB into a Network/Cookies target profile', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+
     // Why: keeping the writer open leaves the committed row in WAL, matching a
     // running Chromium profile whose latest auth cookies are not checkpointed.
     const sourceDb = createChromiumCookieTestDatabase(
@@ -513,13 +541,16 @@ describe('importCookiesFromBrowser Chromium', () => {
       [{ name: 'sid', value: 'source-value' }],
       { journalMode: 'wal' }
     )
+
     createChromiumCookieTestDatabase(targetCookiesPath, [
       { name: 'old', value: 'target-value' }
     ]).close()
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       expect(existsSync(`${sourceCookiesPath}-wal`)).toBe(true)
+
       const sourceFilesBefore = ['', '-wal', '-shm'].map((suffix) =>
         readFileSync(sourceCookiesPath + suffix)
       )
@@ -639,6 +670,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     })
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),
@@ -669,6 +701,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     writeFileSync(targetCookiesPath, 'not a sqlite database')
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),
@@ -701,6 +734,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),
@@ -743,6 +777,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),
@@ -772,6 +807,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     createChromiumCookieTestDatabase(targetCookiesPath, []).close()
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),
@@ -799,6 +835,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),
@@ -820,10 +857,12 @@ describe('detectInstalledBrowsers', () => {
   it('returns an array of detected browsers', () => {
     const browsers = detectInstalledBrowsers()
     expect(Array.isArray(browsers)).toBe(true)
+
     for (const browser of browsers) {
       expect(browser).toHaveProperty('family')
       expect(browser).toHaveProperty('label')
       expect(browser).toHaveProperty('cookiesPath')
+
       // keychainService/keychainAccount are only present for Chromium-based browsers
       if (['chrome', 'edge', 'arc', 'chromium'].includes(browser.family)) {
         expect(browser).toHaveProperty('keychainService')
@@ -834,6 +873,7 @@ describe('detectInstalledBrowsers', () => {
 
   it('each detected browser has a valid family', () => {
     const browsers = detectInstalledBrowsers()
+
     const validFamilies = [
       'chrome',
       'edge',
@@ -844,6 +884,7 @@ describe('detectInstalledBrowsers', () => {
       'comet',
       'helium'
     ]
+
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }
@@ -853,6 +894,7 @@ describe('detectInstalledBrowsers', () => {
 describe('buildChromiumCookieInsertParams', () => {
   it('fills target-only NOT NULL Chromium cookie columns instead of inserting null', () => {
     const decryptedValue = Buffer.from('decrypted-cookie-value')
+
     const columns: ChromiumCookieColumnInfo[] = [
       { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
       { name: 'host_key', type: 'TEXT', notnull: 1 },
@@ -864,6 +906,7 @@ describe('buildChromiumCookieInsertParams', () => {
       { name: 'last_update_utc', type: 'INTEGER', notnull: 1 },
       { name: 'has_cross_site_ancestor', type: 'INTEGER', notnull: 1, dflt_value: '0' }
     ]
+
     const sourceRow = {
       creation_utc: 133_000_000_000_000n,
       host_key: '.example.com',
@@ -887,6 +930,7 @@ describe('buildChromiumCookieInsertParams', () => {
 
   it('preserves null for nullable columns without defaults', () => {
     const decryptedValue = Buffer.from('decrypted-cookie-value')
+
     const columns: ChromiumCookieColumnInfo[] = [
       { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
       { name: 'host_key', type: 'TEXT', notnull: 1 },
@@ -894,6 +938,7 @@ describe('buildChromiumCookieInsertParams', () => {
       { name: 'target_only_nullable_metadata', type: 'TEXT', notnull: 0 },
       { name: 'last_update_utc', type: 'INTEGER', notnull: 1 }
     ]
+
     const sourceRow = {
       creation_utc: 133_000_000_000_000n,
       host_key: '.example.com',

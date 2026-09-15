@@ -67,11 +67,13 @@ const {
 
     on(event: string, cb: (...args: unknown[]) => void): this {
       ;(this.handlers[event] ||= []).push(cb)
+
       return this
     }
 
     once(event: string, cb: (...args: unknown[]) => void): this {
       ;(this.onceHandlers[event] ||= []).push(cb)
+
       return this
     }
 
@@ -79,6 +81,7 @@ const {
       for (const cb of this.handlers[event] ?? []) {
         cb(...args)
       }
+
       for (const cb of this.onceHandlers[event] ?? []) {
         cb(...args)
       }
@@ -129,7 +132,9 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('@electron-toolkit/utils', () => ({ is: isMock }))
+
 vi.mock('../ipc/ui', () => ({ sendToTrustedUIRenderer: sendToTrustedUIRendererMock }))
+
 vi.mock('./privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: installNavigationPolicyMock
 }))
@@ -153,11 +158,13 @@ function makeStore(ui: Record<string, unknown> = {}): {
 } {
   const listeners: ((next: Record<string, unknown>) => void)[] = []
   const uiChangeUnsubscribe = vi.fn()
+
   return {
     getUI: () => ui,
     updateUI: vi.fn(),
     onUIChanged: vi.fn((listener: (next: Record<string, unknown>) => void) => {
       listeners.push(listener)
+
       return uiChangeUnsubscribe
     }),
     emitUIChanged: (next) => {
@@ -177,6 +184,7 @@ beforeEach(() => {
   vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
   vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
 })
+
 afterEach(() => vi.unstubAllEnvs())
 
 describe('createOrFocusDashboardPopout', () => {
@@ -300,6 +308,7 @@ describe('createOrFocusDashboardPopout', () => {
     const store = makeStore({
       dashboardPopoutBounds: { x: 200, y: 150, width: 1000, height: 800 }
     })
+
     createOrFocusDashboardPopout(store as never)
     const opts = instances[0].options
     expect(opts.x).toBe(200)
@@ -311,9 +320,11 @@ describe('createOrFocusDashboardPopout', () => {
   it('discards off-screen persisted bounds and falls back to defaults', () => {
     // Display does not overlap the saved rect at all.
     getAllDisplaysMock.mockReturnValue([{ workArea: { x: 0, y: 0, width: 800, height: 600 } }])
+
     const store = makeStore({
       dashboardPopoutBounds: { x: 5000, y: 5000, width: 1000, height: 800 }
     })
+
     createOrFocusDashboardPopout(store as never)
     const opts = instances[0].options
     expect(opts.x).toBeUndefined()
@@ -324,6 +335,7 @@ describe('createOrFocusDashboardPopout', () => {
 
   it('persists bounds on resize after the debounce, guarding near-minimum sizes', () => {
     vi.useFakeTimers()
+
     try {
       const store = makeStore()
       const win = createOrFocusDashboardPopout(store as never) as unknown as FakeWindow
@@ -401,6 +413,7 @@ describe('createOrFocusDashboardPopout', () => {
   it('handles the zoom-in chord via before-input-event and ignores other keys', () => {
     const store = makeStore()
     const win = createOrFocusDashboardPopout(store as never) as unknown as FakeWindow
+
     const mod =
       process.platform === 'darwin'
         ? { meta: true, control: false }
@@ -452,6 +465,7 @@ describe('createOrFocusDashboardPopout', () => {
         'zoom.out': []
       })
     }) as unknown as FakeWindow
+
     const mod =
       process.platform === 'darwin'
         ? { meta: true, control: false }

@@ -9,9 +9,11 @@ import {
 } from './native-chat-disclosure-store'
 
 vi.mock('./NativeChatDiffCard', () => ({ NativeChatDiffCard: () => null }))
+
 vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))
 
 const disclosureWrite = vi.fn()
+
 const capturedDisclosures = {
   read: (_key: string) => undefined,
   write: (key: string, open: boolean) => disclosureWrite(key, open)
@@ -33,6 +35,7 @@ const shell: NativeChatToolCallBlock = {
 
 function ToolRunDisclosureHarness({ expandOverride }: { expandOverride: boolean }) {
   const disclosures = useNativeChatDisclosures()
+
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatToolRun
@@ -65,6 +68,7 @@ describe('inline tool annotations', () => {
     const { rerender } = render(
       <NativeChatToolRun blocks={[shell]} expandSignal={false} activeTurnIsWorking={false} />
     )
+
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('false')
 
     rerender(<NativeChatToolRun blocks={[shell]} expandSignal activeTurnIsWorking={false} />)
@@ -77,6 +81,7 @@ describe('inline tool annotations', () => {
       { ...shell, callId: 'call-a' },
       { ...shell, callId: 'call-b' }
     ]
+
     render(
       <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
         <NativeChatToolRun blocks={blocks} expandSignal disclosureId="message-1" />
@@ -161,6 +166,7 @@ describe('inline tool annotations', () => {
   })
   it('reveals safe result links only inside row disclosure and routes clicks through chat', () => {
     const onLinkClick = vi.fn((event) => event.preventDefault())
+
     const block: NativeChatToolCallBlock = {
       type: 'tool-call',
       name: 'web_search',
@@ -168,6 +174,7 @@ describe('inline tool annotations', () => {
       state: 'completed',
       webSearchResults: [{ title: 'Reference docs', url: 'https://example.com/docs' }]
     }
+
     render(
       <NativeChatToolRun
         blocks={[block]}

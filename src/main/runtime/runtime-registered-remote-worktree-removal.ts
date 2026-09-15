@@ -35,6 +35,7 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   const gate = await args.acquireWatcherRemoval(registeredWorktree.path, connectionId)
   let rawResult: RemoveWorktreeResult | undefined
   let completed = false
+
   try {
     await args.stopPtys()
     rawResult = await (Object.keys(removeOptions).length > 0
@@ -44,6 +45,7 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   } finally {
     await gate.finish(completed)
   }
+
   const result = args.preserveBranchHead(rawResult, registeredWorktree.head)
   await cleanupUnusedWorktreePushTargetRemoteSsh(
     provider,
@@ -54,5 +56,6 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   )
   await args.deleteHistory()
   args.finishRemoval(result)
+
   return result
 }

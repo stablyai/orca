@@ -30,8 +30,10 @@ export function planLaunchAgentStartupPrompt(args: {
 }): LaunchAgentStartupPromptPlan {
   const { base, prompt, promptDelivery, isFollowupPath } = args
   const hasPrompt = prompt.length > 0
+
   const launchEmpty = (): AgentStartupPlan | null =>
     buildAgentStartupPlan({ ...base, prompt: '', allowEmptyPromptLaunch: true })
+
   const pasteAfterReady = (submit: boolean): LaunchAgentStartupPromptPlan => ({
     startupPlan: launchEmpty(),
     pasteDraftAfterLaunch: prompt,
@@ -42,11 +44,14 @@ export function planLaunchAgentStartupPrompt(args: {
     // Why: multi-line generated prompts are too large for a shell argv, so launch clean then paste+submit in the TUI.
     return pasteAfterReady(true)
   }
+
   if (hasPrompt && promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({ ...base, draft: prompt })
+
     if (!draftLaunchPlan) {
       return pasteAfterReady(false)
     }
+
     return {
       startupPlan: {
         agent: draftLaunchPlan.agent,
@@ -66,9 +71,11 @@ export function planLaunchAgentStartupPrompt(args: {
       submitPastedPrompt: false
     }
   }
+
   if (hasPrompt && isFollowupPath) {
     return pasteAfterReady(false)
   }
+
   return {
     startupPlan: buildAgentStartupPlan({
       ...base,

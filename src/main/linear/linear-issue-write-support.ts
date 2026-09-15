@@ -56,12 +56,14 @@ export type LinearAttachmentWriteRecord = {
   url: string
   issue: { id: string; identifier: string; url: string }
 }
+
 export function linearWriteMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
 function isDuplicateIdError(error: unknown): boolean {
   const message = linearWriteMessage(error).toLowerCase()
+
   return (
     message.includes('duplicate') ||
     message.includes('already exists') ||
@@ -74,11 +76,15 @@ function errorCauseCode(error: unknown): string {
   if (!error || typeof error !== 'object') {
     return ''
   }
+
   const cause = (error as { cause?: unknown }).cause
+
   if (!cause || typeof cause !== 'object') {
     return ''
   }
+
   const code = (cause as { code?: unknown }).code
+
   return typeof code === 'string' ? code.toLowerCase() : ''
 }
 
@@ -86,12 +92,15 @@ export function classifyLinearWriteFailure(error: unknown): LinearWriteFailure {
   if (error instanceof LinearWriteFailure) {
     return error
   }
+
   if (isDuplicateIdError(error)) {
     return new LinearWriteFailure('duplicate_id', linearWriteMessage(error), error)
   }
+
   const message = linearWriteMessage(error)
   const lower = message.toLowerCase()
   const code = errorCauseCode(error)
+
   if (
     lower.includes('enotfound') ||
     lower.includes('econnrefused') ||
@@ -100,6 +109,7 @@ export function classifyLinearWriteFailure(error: unknown): LinearWriteFailure {
   ) {
     return new LinearWriteFailure('network', message, error)
   }
+
   if (
     lower.includes('abort') ||
     lower.includes('timeout') ||
@@ -111,6 +121,7 @@ export function classifyLinearWriteFailure(error: unknown): LinearWriteFailure {
   ) {
     return new LinearWriteFailure('unconfirmed', message, error)
   }
+
   return new LinearWriteFailure('failed', message, error)
 }
 
@@ -120,19 +131,23 @@ export async function runLinearWrite<T>(
   write: (client: LinearClient) => Promise<T>
 ): Promise<T> {
   await acquire()
+
   try {
     const client = signal
       ? new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal })
       : entry.client
+
     return await write(client)
   } catch (error) {
     if (error instanceof LinearWriteFailure) {
       throw error
     }
+
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
       throw error
     }
+
     throw classifyLinearWriteFailure(error)
   } finally {
     release()
@@ -144,6 +159,7 @@ export async function runLinearLookup<T>(
   lookup: () => Promise<T>
 ): Promise<T | null> {
   await acquire()
+
   try {
     return await lookup()
   } catch (error) {
@@ -151,9 +167,11 @@ export async function runLinearLookup<T>(
       clearToken(entry.workspace.id)
       throw error
     }
+
     if (isLinearLookupMiss(error)) {
       return null
     }
+
     throw error
   } finally {
     release()
@@ -162,6 +180,7 @@ export async function runLinearLookup<T>(
 
 export function isLinearLookupMiss(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
+
   // Why: Linear throws for direct entity lookups that miss; write-id probes
   // need the same null shape as GraphQL nullable data, not a failed write.
   return message.includes('Entity not found:') && message.includes('Could not find referenced')
@@ -182,10 +201,13 @@ export function mapRawCommentWriteRecord(
   comment: NonNullable<LinearCommentByUuidResponse['comment']>
 ): LinearCommentWriteRecord | null {
   const issue = comment.issue
+
   if (!issue?.id || !issue.identifier || !issue.url) {
     return null
   }
+
   const parentId = comment.parent?.id ?? null
+
   return {
     id: comment.id,
     url: comment.url ?? null,
@@ -204,9 +226,11 @@ export function mapRawAttachmentWriteRecord(
   attachment: NonNullable<LinearAttachmentByUuidResponse['attachment']>
 ): LinearAttachmentWriteRecord | null {
   const issue = attachment.issue
+
   if (!issue?.id || !issue.identifier || !issue.url || !attachment.url) {
     return null
   }
+
   return {
     id: attachment.id,
     title: attachment.title ?? attachment.url,

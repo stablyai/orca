@@ -18,7 +18,9 @@ function stallingScan(): {
   fail: () => void
 } {
   let settle: (result: RetirementScanResult) => void = () => {}
+
   let reject: (error: unknown) => void = () => {}
+
   return {
     run: () =>
       new Promise<RetirementScanResult>((resolve, rejectScan) => {
@@ -38,6 +40,7 @@ async function stallPastDeadline(store: object, scanKey: string) {
   const settled = expect(pending).rejects.toThrow(/exceeded/)
   await vi.advanceTimersByTimeAsync(RETIREMENT_BACKFILL_SCAN_TIMEOUT_MS)
   await settled
+
   return scan
 }
 

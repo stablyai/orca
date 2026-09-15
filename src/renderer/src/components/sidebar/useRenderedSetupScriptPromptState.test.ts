@@ -20,6 +20,7 @@ function prompt(repoId: string, hostId: string): SetupScriptPromptState {
 describe('useRenderedSetupScriptPromptState', () => {
   it('preserves a committed same-host prompt without leaking it to another host', () => {
     const local = prompt('repo-1', 'local')
+
     const { result, rerender } = renderHook(
       ({ hostIdentity, promptState }) =>
         useRenderedSetupScriptPromptState({

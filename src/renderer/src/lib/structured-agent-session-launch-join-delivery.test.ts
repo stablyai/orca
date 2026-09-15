@@ -19,6 +19,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 vi.mock('@/lib/launch-structured-agent-session', () => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
@@ -31,6 +32,7 @@ vi.mock('@/lib/structured-agent-session-launch-recovery', async () => {
   const actual = await vi.importActual<typeof RecoveryModule>(
     '@/lib/structured-agent-session-launch-recovery'
   )
+
   return { ...actual, launchAndReconcile: vi.fn(actual.launchAndReconcile) }
 })
 
@@ -53,6 +55,7 @@ vi.mock('@/store', () => ({
       listener: (state: { unifiedTabsByWorktree: Record<string, unknown[]> }) => void
     ) => {
       mocks.listeners.add(listener)
+
       return () => mocks.listeners.delete(listener)
     }
   }
@@ -150,6 +153,7 @@ describe('coalesced launch delivery mode', () => {
     const joiner = startStructuredAgentLaunch(args.worktreeId, 'codex', args.joining)
     resolveLaunch({ sessionId: intent.sessionId, fence: 1 })
     await flushLaunchSettlement()
+
     return { intent, joiner }
   }
 

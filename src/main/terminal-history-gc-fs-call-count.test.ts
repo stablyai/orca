@@ -25,12 +25,15 @@ vi.mock('./host-tree-removal', () => ({ removeHostTree: removeHostTreeMock }))
 // requests one GC pass issues, so every call has to still hit the disk it is counting.
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+
   const call = (name: 'readdir' | 'stat', fn: unknown) => {
     return (...args: unknown[]): unknown => {
       fsCalls[name].push(String(args[0]))
+
       return (fn as (...a: unknown[]) => unknown)(...args)
     }
   }
+
   return { ...actual, readdir: call('readdir', actual.readdir), stat: call('stat', actual.stat) }
 })
 
@@ -42,50 +45,67 @@ import {
 import { cancelHistoryGc, runHistoryGc } from './terminal-history-gc'
 
 const GC_MIN_AGE_MS = 5 * 60 * 1000
+
 const PENDING_DELETE_DIR_NAME = '.pending-delete'
+
 const LIVE_WORKTREE_ID = 'repo-1::/path/live-wt'
+
 const DEAD_WORKTREE_ID = 'repo-1::/path/dead-wt'
+
 const DIR_COUNT = 50
+
 const ORPHAN_EVERY = 5
 
 let userDataDir: string
+
 let historyRoot: string
+
 let originalXdgDataHome: string | undefined
 
 /** The pre-dirent decision logic, verbatim apart from reporting names instead of deleting. */
 function referencePruneDecisions(root: string, liveWorktreeIds: Set<string>): string[] {
   const decisions: string[] = []
   const now = Date.now()
+
   for (const entry of readdirSync(root)) {
     if (entry === PENDING_DELETE_DIR_NAME) {
       continue
     }
+
     const entryPath = join(root, entry)
+
     try {
       if (!statSync(entryPath).isDirectory()) {
         continue
       }
+
       const meta = readHistoryMeta(entryPath)
+
       if (!meta?.worktreeId || liveWorktreeIds.has(meta.worktreeId)) {
         continue
       }
+
       if (meta.createdAt && now - new Date(meta.createdAt).getTime() < GC_MIN_AGE_MS) {
         continue
       }
+
       decisions.push(entry)
     } catch {
       // Skip individual entries that fail, as the walk under test does.
     }
   }
+
   return decisions
 }
 
 function seedDir(name: string, files: Record<string, string>): string {
   const dir = join(historyRoot, name)
   mkdirSync(dir, { recursive: true })
+
   for (const [file, contents] of Object.entries(files)) {
     writeFileSync(join(dir, file), contents)
   }
+
   return dir
 }
 
@@ -148,11 +168,13 @@ afterEach(async () => {
   cancelHistoryGc()
   await flushPendingWorktreeHistoryDeletions()
   cancelPendingHistoryTreeRemovalRetries()
+
   if (originalXdgDataHome === undefined) {
     delete process.env.XDG_DATA_HOME
   } else {
     process.env.XDG_DATA_HOME = originalXdgDataHome
   }
+
   rmSync(userDataDir, { recursive: true, force: true })
 })
 
@@ -189,6 +211,7 @@ describe('history GC filesystem request count', () => {
     const liveTarget = join(userDataDir, 'linked-live')
     mkdirSync(liveTarget, { recursive: true })
     writeFileSync(join(liveTarget, 'meta.json'), meta(LIVE_WORKTREE_ID))
+
     try {
       symlinkSync(orphanTarget, join(historyRoot, 'link-orphan'), 'dir')
       symlinkSync(liveTarget, join(historyRoot, 'link-live'), 'dir')
@@ -197,6 +220,7 @@ describe('history GC filesystem request count', () => {
       // Unprivileged Windows cannot create symlinks; the dirent path is covered above.
       return
     }
+
     seedDir('plain-orphan', { 'meta.json': meta(`${DEAD_WORKTREE_ID}-plain`) })
 
     await runHistoryGc(new Set([LIVE_WORKTREE_ID]))

@@ -74,6 +74,7 @@ describe('createSparsePresetsSlice', () => {
     const store = createTestStore()
     const preset = makePreset({ id: 'preset-1', repoId: 'repo-1', name: 'Web' })
     let resolveList: (presets: SparsePreset[]) => void = () => {}
+
     mockApi.sparsePresets.list.mockReturnValueOnce(
       new Promise<SparsePreset[]>((resolve) => {
         resolveList = resolve
@@ -97,6 +98,7 @@ describe('createSparsePresetsSlice', () => {
   it('does not refetch while a repo bucket is loading or already loaded', async () => {
     const store = createTestStore()
     let resolveList: (presets: SparsePreset[]) => void = () => {}
+
     mockApi.sparsePresets.list.mockReturnValueOnce(
       new Promise<SparsePreset[]>((resolve) => {
         resolveList = resolve

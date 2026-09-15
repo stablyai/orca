@@ -14,14 +14,17 @@ export class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateCh
       ) {
         return
       }
+
       // Why: promotion is a renderer reload of the same graph owner, not a new
       // runtime; stale handles must transition before the real window publishes.
       this.persistWindowlessPtyBindingsForDesktopAttach()
       this.pendingHeadlessPromotionWindowId = windowId
       this.authoritativeWindowId = windowId
       this.beginGraphReload(windowId)
+
       return
     }
+
     if (this.authoritativeWindowId === null) {
       // Why: a promoted serve can close and later reopen its window while new
       // background PTYs keep arriving; every windowless gap needs this handoff.
@@ -34,28 +37,36 @@ export class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateCh
     if (!this.store?.getWorkspaceSession || !this.store.setWorkspaceSession) {
       return
     }
+
     const partitions = new Map<
       ExecutionHostId,
       { session: WorkspaceSessionState; ptys: RuntimePtyWorktreeRecord[] }
     >()
+
     for (const pty of this.ptysById.values()) {
       if (!pty.connected || !pty.tabId) {
         continue
       }
+
       const hostId = this.getWorkspaceSessionHostIdForWorktree(pty.worktreeId)
       const session = this.store.getWorkspaceSession(hostId)
+
       const tab = session.tabsByWorktree[pty.worktreeId]?.find(
         (candidate) => candidate.id === pty.tabId
       )
+
       if (!tab) {
         continue
       }
+
       const layoutPtyIds = Object.values(
         session.terminalLayoutsByTabId[pty.tabId]?.ptyIdsByLeafId ?? {}
       )
+
       if (tab.ptyId !== pty.ptyId && !layoutPtyIds.includes(pty.ptyId)) {
         continue
       }
+
       const partition = partitions.get(hostId) ?? { session, ptys: [] }
       partition.ptys.push(pty)
       partitions.set(hostId, partition)
@@ -69,6 +80,7 @@ export class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateCh
           ...ptys.map((pty) => pty.worktreeId)
         ])
       ]
+
       const activeConnectionIdsAtShutdown = [
         ...new Set([
           ...(session.activeConnectionIdsAtShutdown ?? []),
@@ -77,7 +89,9 @@ export class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateCh
             .filter((connectionId): connectionId is string => connectionId !== null)
         ])
       ]
+
       const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
+
       for (const pty of ptys) {
         if (pty.connectionId && pty.tabId) {
           remoteSessionIdsByTabId[pty.tabId] = pty.ptyId

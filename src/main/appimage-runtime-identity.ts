@@ -11,7 +11,9 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 const APPIMAGE_HEADER_LENGTH = 11
+
 const ORCA_PACKAGE_MARKER_MAX_BYTES = 1_024
+
 const PACKAGE_TYPE_MARKER_MAX_BYTES = 32
 
 export type AppImageRuntimeIdentity = {
@@ -32,13 +34,17 @@ function isAbsolutePath(value: unknown): value is string {
 function readExact(fd: number, length: number): Buffer | null {
   const bytes = Buffer.alloc(length)
   let offset = 0
+
   while (offset < length) {
     const count = readSync(fd, bytes, offset, length - offset, offset)
+
     if (count === 0) {
       return null
     }
+
     offset += count
   }
+
   return bytes
 }
 
@@ -47,9 +53,11 @@ function inspectRegularFile<T>(
   inspect: (fd: number, stats: Stats) => T
 ): T | null {
   let fd: number | undefined
+
   try {
     fd = openSync(filePath, constants.O_RDONLY | constants.O_NONBLOCK)
     const stats = fstatSync(fd)
+
     return stats.isFile() ? inspect(fd, stats) : null
   } catch {
     return null
@@ -64,6 +72,7 @@ function hasAppImageHeader(appImagePath: string): boolean {
   return (
     inspectRegularFile(appImagePath, (fd, stats) => {
       const header = readExact(fd, APPIMAGE_HEADER_LENGTH)
+
       return (
         (stats.mode & 0o111) !== 0 &&
         header?.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) === true &&
@@ -75,6 +84,7 @@ function hasAppImageHeader(appImagePath: string): boolean {
 
 function isInside(rootPath: string, candidatePath: string): boolean {
   const candidateRelative = relative(rootPath, candidatePath)
+
   return (
     candidateRelative.length > 0 &&
     candidateRelative !== '..' &&
@@ -87,6 +97,7 @@ function isExecutablePayloadFile(runtimeRoot: string, filePath: string): boolean
   try {
     const canonicalPath = realpathSync(filePath)
     const stats = statSync(canonicalPath)
+
     return stats.isFile() && (stats.mode & 0o111) !== 0 && isInside(runtimeRoot, canonicalPath)
   } catch {
     return false
@@ -100,9 +111,11 @@ function readPayloadMarker(
 ): string | null {
   try {
     const canonicalPath = realpathSync(markerPath)
+
     if (!isInside(runtimeRoot, canonicalPath)) {
       return null
     }
+
     return inspectRegularFile(canonicalPath, (fd, stats) =>
       stats.size === 0 || stats.size > maxBytes
         ? null
@@ -119,6 +132,7 @@ function hasAppImagePackageEvidence(runtimeRoot: string, resourcesPath: string):
     join(resourcesPath, 'package-type'),
     PACKAGE_TYPE_MARKER_MAX_BYTES
   )
+
   if (packageType === 'AppImage') {
     return true
   }
@@ -128,8 +142,10 @@ function hasAppImagePackageEvidence(runtimeRoot: string, resourcesPath: string):
     join(resourcesPath, 'app.asar.unpacked', 'out', 'package.json'),
     ORCA_PACKAGE_MARKER_MAX_BYTES
   )
+
   try {
     const marker: unknown = JSON.parse(content ?? '')
+
     return (
       typeof marker === 'object' &&
       marker !== null &&
@@ -160,6 +176,7 @@ export function resolveAppImageRuntimeIdentity(
   const appDirPath = environment.APPDIR
   const execPath = input.execPath ?? process.execPath
   const resourcesPath = input.resourcesPath ?? process.resourcesPath
+
   if (
     !isAbsolutePath(appImagePath) ||
     !isAbsolutePath(appDirPath) ||
@@ -170,6 +187,7 @@ export function resolveAppImageRuntimeIdentity(
   }
 
   const runtimeRoot = resolve(appDirPath)
+
   if (
     resolve(dirname(execPath)) !== runtimeRoot ||
     resolve(resourcesPath) !== resolve(join(runtimeRoot, 'resources')) ||
@@ -180,6 +198,7 @@ export function resolveAppImageRuntimeIdentity(
 
   try {
     const realRuntimeRoot = realpathSync(runtimeRoot)
+
     if (
       realpathSync(resourcesPath) !== join(realRuntimeRoot, 'resources') ||
       !isExecutablePayloadFile(realRuntimeRoot, execPath) ||

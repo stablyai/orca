@@ -36,8 +36,10 @@ export function fetchCombinedDiffSection({
     file.filePath,
     entry.path
   )
+
   const state = useAppStore.getState()
   const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
+
   if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {
     return withDiffSectionLoadTimeout(
       getRuntimeGitBranchDiff(
@@ -60,6 +62,7 @@ export function fetchCombinedDiffSection({
       )
     )
   }
+
   if (isCommitMode && commitCompare) {
     return withDiffSectionLoadTimeout(
       getRuntimeGitCommitDiff(
@@ -78,6 +81,7 @@ export function fetchCombinedDiffSection({
       )
     )
   }
+
   return withDiffSectionLoadTimeout(
     getRuntimeGitDiff(
       {

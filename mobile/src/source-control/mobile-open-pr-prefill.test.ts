@@ -12,6 +12,7 @@ describe('readFreshGitStatus', () => {
       entries: [],
       upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
     }
+
     const send = vi.fn(async () => fresh)
     const out = await readFreshGitStatus('w', fallback, send as never)
     expect(out?.branch).toBe('feat')
@@ -29,6 +30,7 @@ describe('readFreshGitStatus', () => {
     const send = vi.fn(async () => {
       throw new Error('transport closed')
     })
+
     const out = await readFreshGitStatus('w', fallback, send as never)
     expect(out).toBe(fallback)
   })

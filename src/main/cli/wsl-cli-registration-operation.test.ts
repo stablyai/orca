@@ -5,6 +5,7 @@ describe('runSerializedWslCliRegistrationOperation', () => {
   it('serializes operations for distro names with different casing', async () => {
     let releaseFirst!: () => void
     const events: string[] = []
+
     const first = runSerializedWslCliRegistrationOperation('Ubuntu', async () => {
       events.push('first-start')
       await new Promise<void>((resolve) => {
@@ -14,9 +15,11 @@ describe('runSerializedWslCliRegistrationOperation', () => {
     })
 
     await vi.waitFor(() => expect(events).toEqual(['first-start']))
+
     const second = runSerializedWslCliRegistrationOperation(' ubuntu ', async () => {
       events.push('second')
     })
+
     await Promise.resolve()
     expect(events).toEqual(['first-start'])
 
@@ -28,12 +31,14 @@ describe('runSerializedWslCliRegistrationOperation', () => {
   it('allows different distros to progress independently', async () => {
     let releaseUbuntu!: () => void
     const events: string[] = []
+
     const ubuntu = runSerializedWslCliRegistrationOperation('Ubuntu', async () => {
       events.push('ubuntu-start')
       await new Promise<void>((resolve) => {
         releaseUbuntu = resolve
       })
     })
+
     const debian = runSerializedWslCliRegistrationOperation('Debian', async () => {
       events.push('debian')
     })

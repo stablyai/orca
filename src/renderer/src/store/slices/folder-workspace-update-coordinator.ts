@@ -11,9 +11,11 @@ export class FolderWorkspaceUpdateCoordinator<TField extends string> {
 
   begin(folderWorkspaceId: string, fields: readonly TField[]): FolderWorkspaceUpdateTicket<TField> {
     const generation = ++this.nextGeneration
+
     for (const field of fields) {
       this.generationByField.set(this.fieldKey(folderWorkspaceId, field), generation)
     }
+
     return {
       fields,
       generation,
@@ -37,6 +39,7 @@ export class FolderWorkspaceUpdateCoordinator<TField extends string> {
   finish(folderWorkspaceId: string, ticket: FolderWorkspaceUpdateTicket<TField>): void {
     for (const field of ticket.fields) {
       const key = this.fieldKey(folderWorkspaceId, field)
+
       if (this.generationByField.get(key) === ticket.generation) {
         this.generationByField.delete(key)
       }

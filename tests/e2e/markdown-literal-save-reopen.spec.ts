@@ -19,6 +19,7 @@ import {
 import { waitForPairedClientWorktree } from './helpers/paired-client-host-session'
 
 const SOURCE = '# Compatibility\n\n[[]] [[a|]]\n\n[**Bold**](https://example.com)\n\nEnd\n'
+
 const TYPED = '[typed](./target.md)'
 
 for (const workspace of ['git', 'folder', 'paired remote'] as const) {
@@ -29,6 +30,7 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
     test.setTimeout(180_000)
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+
     if (workspace === 'folder') {
       const folder = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-markdown-folder-')))
       registerPostElectronShutdownCleanup(async () =>
@@ -36,6 +38,7 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
       )
       await orcaPage.evaluate(async (folderPath) => {
         const repo = await window.__store!.getState().addNonGitFolder(folderPath)
+
         if (!repo) {
           throw new Error('Could not add folder workspace')
         }
@@ -44,7 +47,9 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
         .poll(async () => (await getActiveWorktreeContext(orcaPage)).rootPath)
         .toBe(folder)
     }
+
     const context = await getActiveWorktreeContext(orcaPage)
+
     const filePath = await createMarkdownFixture(
       context,
       'markdown-compatibility',
@@ -52,7 +57,9 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
       testInfo.workerIndex,
       SOURCE
     )
+
     let client: PairedElectronClient | undefined
+
     try {
       if (workspace === 'paired remote') {
         client = await launchPairedElectronClient(
@@ -68,17 +75,21 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
           { worktreeId: context.worktreeId, environmentId: client.environmentId }
         )
       }
+
       const page = client?.page ?? orcaPage
       await openMarkdownFixture(page, context, filePath)
+
       if (client) {
         expect(
           await page.evaluate(() => {
             const state = window.__store!.getState()
+
             return state.openFiles.find((file) => file.id === state.activeFileId)
               ?.runtimeEnvironmentId
           })
         ).toBe(client.environmentId)
       }
+
       const editor = await waitForRichMarkdownEditor(page)
       await expect(editor).toContainText('[[]] [[a|]]')
       await expect(editor.locator('a strong')).toHaveText('Bold')
@@ -96,10 +107,12 @@ for (const workspace of ['git', 'folder', 'paired remote'] as const) {
       expect(saved).toContain('[**Bold**](https://example.com)')
       await testInfo.attach('saved-markdown', { body: saved, contentType: 'text/markdown' })
       await closeActiveEditorTab(page, filePath)
+
       // Closing a folder's only tab intentionally returns to the landing screen.
       if (workspace === 'folder') {
         await switchToWorktree(page, context.worktreeId)
       }
+
       await openMarkdownFixture(page, context, filePath)
       const reopened = await waitForRichMarkdownEditor(page)
       await expect(reopened).toContainText(TYPED)

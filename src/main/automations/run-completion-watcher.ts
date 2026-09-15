@@ -27,6 +27,7 @@ export function describeStrandedAutomationRun(run: AutomationRun): string {
   if (run.status === 'dispatching') {
     return 'Orca stopped before this run reported that its agent started.'
   }
+
   return 'Orca lost the terminal for this run before it reported completion.'
 }
 
@@ -35,6 +36,7 @@ export function describeStrandedAutomationRun(run: AutomationRun): string {
  *  history row is user copy. The token stays in the log, where it is useful. */
 function describeObservationError(error: unknown): string {
   console.error('[automations] run completion observation failed:', error)
+
   return 'Orca stopped watching this run before it reported completion.'
 }
 
@@ -58,6 +60,7 @@ export class AutomationRunCompletionWatcher {
       attach: (run) => this.attachRetainedRun(run),
       stillRetained: (run) => {
         const current = this.readRun(run.automationId, run.id)
+
         return Boolean(current && !isFinalAutomationRunStatus(current.status))
       },
       strand: (run) => {
@@ -77,7 +80,9 @@ export class AutomationRunCompletionWatcher {
     if (this.disposed || this.watching.has(run.id)) {
       return
     }
+
     const handle = this.observer.resolveRunTerminal(run)
+
     if (handle) {
       this.startWatch(run, handle)
     }
@@ -87,14 +92,19 @@ export class AutomationRunCompletionWatcher {
     if (this.disposed) {
       return false
     }
+
     if (this.watching.has(run.id)) {
       return true
     }
+
     const handle = this.observer.resolveRunTerminal(run)
+
     if (!handle) {
       return false
     }
+
     this.startWatch(run, handle)
+
     return true
   }
 
@@ -114,14 +124,17 @@ export class AutomationRunCompletionWatcher {
     controller: AbortController
   ): Promise<void> {
     let observation: AutomationRunCompletionObservation
+
     try {
       observation = await this.observer.observeCompletion(handle, { signal: controller.signal })
     } catch (error) {
       if (controller.signal.aborted) {
         return
       }
+
       observation = { status: 'dispatch_failed', error: describeObservationError(error) }
     }
+
     try {
       await this.finalize(run, observation)
     } catch (error) {
@@ -152,9 +165,11 @@ export class AutomationRunCompletionWatcher {
   dispose(): void {
     this.disposed = true
     this.reconciler.dispose()
+
     for (const controller of this.watching.values()) {
       controller.abort()
     }
+
     this.watching.clear()
   }
 
@@ -165,9 +180,11 @@ export class AutomationRunCompletionWatcher {
     // Why: the renderer's dispatch observer races this watcher for the same run;
     // re-reading immediately before the write keeps the terminal status single.
     const current = this.readRun(run.automationId, run.id)
+
     if (!current || isFinalAutomationRunStatus(current.status)) {
       return
     }
+
     await this.markDispatchResult({
       runId: run.id,
       status: observation.status,

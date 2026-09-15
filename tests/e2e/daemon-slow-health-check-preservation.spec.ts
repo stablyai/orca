@@ -26,10 +26,13 @@ function readDaemonPid(userDataDir: string): number {
     path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`),
     'utf8'
   )
+
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number') {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
@@ -38,8 +41,10 @@ test.describe.configure({ mode: 'serial' })
 test('preserves a live daemon PTY when the daemon is too slow for the startup health check', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
@@ -70,6 +75,7 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     firstApp = null
 
     const stderrLines: string[] = []
+
     // Why: force the failed-health branch without SIGSTOP. Stopping the daemon
     // also blocks listSessions, so the preserve guard races a fixed SIGCONT
     // timer under CI load and often takes the healthy path (or misses logs).
@@ -88,6 +94,7 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
       },
       onStderr: (chunk) => stderrLines.push(chunk)
     })
+
     secondApp = secondLaunch.app
 
     await waitForSessionReady(secondLaunch.page)
@@ -119,9 +126,11 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

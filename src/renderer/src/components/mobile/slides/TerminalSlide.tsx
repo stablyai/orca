@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+
 export function TerminalSlide(): React.JSX.Element {
   return (
     <div className="mp-device-screen">

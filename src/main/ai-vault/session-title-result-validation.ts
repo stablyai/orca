@@ -8,10 +8,13 @@ export function parseAiVaultSessionTitlesResult(value: unknown): AiVaultSessionT
   if (!value || typeof value !== 'object') {
     throw new Error('expected an object')
   }
+
   const titles = (value as { titles?: unknown }).titles
+
   if (!Array.isArray(titles) || titles.length > AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT) {
     throw new Error('expected a bounded titles array')
   }
+
   return { titles: titles.map(parseTitle) }
 }
 
@@ -19,7 +22,9 @@ function parseTitle(value: unknown): AiVaultSessionTitle {
   if (!value || typeof value !== 'object') {
     throw new Error('expected a title object')
   }
+
   const record = value as Record<string, unknown>
+
   if (
     (record.agent !== 'claude' && record.agent !== 'codex') ||
     typeof record.sessionId !== 'string' ||
@@ -31,6 +36,7 @@ function parseTitle(value: unknown): AiVaultSessionTitle {
   ) {
     throw new Error('invalid session title')
   }
+
   return {
     agent: record.agent,
     sessionId: record.sessionId,

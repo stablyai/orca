@@ -2,6 +2,7 @@ import type { EventProps } from './telemetry-events'
 import type { SetupScriptImportCandidate } from './setup-script-imports'
 
 type SetupScriptPromptTelemetry = Omit<EventProps<'setup_script_prompt_shown'>, 'nth_repo_added'>
+
 type SetupScriptPromptActionTelemetry = Omit<
   EventProps<'setup_script_prompt_action'>,
   'nth_repo_added'
@@ -52,11 +53,14 @@ function bucketSetupScriptCount(count: number): SetupScriptPromptTelemetry['file
   if (count <= 0) {
     return '0'
   }
+
   if (count === 1) {
     return '1'
   }
+
   if (count <= 3) {
     return '2-3'
   }
+
   return '4+'
 }

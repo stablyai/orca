@@ -31,9 +31,11 @@ export function buildPaletteFilterOptionSearchText(label: string, detail: string
 
 function compareByPopularity(a: PaletteFilterOption, b: PaletteFilterOption): number {
   const countDelta = b.count - a.count
+
   if (countDelta !== 0) {
     return countDelta
   }
+
   return a.label.localeCompare(b.label) || a.id.localeCompare(b.id)
 }
 
@@ -56,13 +58,16 @@ export function rankPaletteFilterOptions({
 }): RankedPaletteFilterOptions {
   const selected: PaletteFilterOption[] = []
   const unselected: PaletteFilterOption[] = []
+
   for (const option of options) {
     const isSelected = selectedIds.has(option.id)
+
     // Why: selected rows stay visible past a search mismatch so they can still
     // be unchecked without clearing the whole field or hunting through chips.
     if (!isSelected && query && !option.searchText.includes(query)) {
       continue
     }
+
     if (isSelected) {
       selected.push(option)
     } else {
@@ -77,6 +82,7 @@ export function rankPaletteFilterOptions({
   // registry: keep input order within each partition (hosts stay local-first)
 
   const selectedCollapsed = selected.length > FILTER_OPTION_MAX_PINNED_SELECTED
+
   return {
     ordered: selectedCollapsed || selected.length === 0 ? unselected : [...selected, ...unselected],
     selectedCount: selected.length,

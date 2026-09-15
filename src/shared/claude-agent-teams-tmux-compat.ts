@@ -19,15 +19,19 @@ export function splitTmuxCommand(argv: string[]): ParsedTmuxCommand {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] ?? ''
+
     if (arg === '--') {
       break
     }
+
     if (!arg.startsWith('-') || arg === '-') {
       return { command: arg.toLowerCase(), args: argv.slice(i + 1) }
     }
+
     if (globalBoolFlags.has(arg)) {
       return { command: arg, args: [] }
     }
+
     if (globalValueFlags.has(arg)) {
       i += 1
     }
@@ -50,14 +54,17 @@ export function parseTmuxArgs(
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i] ?? ''
+
     if (pastTerminator) {
       positional.push(arg)
       continue
     }
+
     if (arg === '--') {
       pastTerminator = true
       continue
     }
+
     if (!arg.startsWith('-') || arg === '-' || arg.startsWith('--')) {
       positional.push(arg)
       continue
@@ -66,14 +73,17 @@ export function parseTmuxArgs(
     const cluster = arg.slice(1)
     let cursor = 0
     let recognized = false
+
     while (cursor < cluster.length) {
       const flag = `-${cluster[cursor]}`
+
       if (boolSet.has(flag)) {
         flags.add(flag)
         cursor += 1
         recognized = true
         continue
       }
+
       if (valueSet.has(flag)) {
         const remainder = cluster.slice(cursor + 1)
         const value = remainder || args[++i] || ''
@@ -82,9 +92,11 @@ export function parseTmuxArgs(
         cursor = cluster.length
         continue
       }
+
       recognized = false
       break
     }
+
     if (!recognized) {
       positional.push(arg)
     }
@@ -105,11 +117,15 @@ export function renderTmuxFormat(
   if (!format) {
     return fallback
   }
+
   let rendered = format
+
   for (const [key, value] of Object.entries(context)) {
     rendered = rendered.replaceAll(`#{${key}}`, value)
   }
+
   rendered = rendered.replace(TMUX_FORMAT_VAR_RE, '').trim()
+
   return rendered || fallback
 }
 
@@ -117,21 +133,27 @@ export function tmuxSendKeysText(tokens: string[], literal: boolean): string {
   if (literal) {
     return tokens.join(' ')
   }
+
   let result = ''
   let pendingSpace = false
+
   for (const token of tokens) {
     const special = tmuxSpecialKeyText(token)
+
     if (special !== null) {
       result += special
       pendingSpace = false
       continue
     }
+
     if (pendingSpace) {
       result += ' '
     }
+
     result += token
     pendingSpace = true
   }
+
   return result
 }
 
@@ -168,13 +190,17 @@ function tmuxSpecialKeyText(token: string): string | null {
 
 export function isDirectClaudeCommand(command: string | undefined): boolean {
   const trimmed = command?.trim() ?? ''
+
   if (!trimmed) {
     return false
   }
+
   if (/[;&|<>`]/.test(trimmed)) {
     return false
   }
+
   const first = trimmed.match(/^\S+/)?.[0] ?? ''
+
   return first === 'claude' || first.endsWith('/claude')
 }
 
@@ -182,6 +208,7 @@ export function addClaudeTeammateModeAuto(command: string): string {
   if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
     return command
   }
+
   return command.replace(/^(\S+)/, '$1 --teammate-mode auto')
 }
 
@@ -189,5 +216,6 @@ export function addClaudeTeammateModeInProcess(command: string): string {
   if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
     return command
   }
+
   return command.replace(/^(\S+)/, '$1 --teammate-mode in-process')
 }

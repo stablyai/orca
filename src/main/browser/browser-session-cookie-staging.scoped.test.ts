@@ -35,6 +35,7 @@ function insertCookie(database: DatabaseSync, domain: string, name: string, valu
 
 function readCookies(databasePath: string): CookieRow[] {
   const database = new DatabaseSync(databasePath, { readOnly: true })
+
   try {
     return database
       .prepare('SELECT host_key, name, value FROM cookies ORDER BY host_key, name')
@@ -83,6 +84,7 @@ describe('scoped pending browser cookie imports', () => {
   function createScopedStage(): void {
     copyFileSync(livePath, stagedPath)
     const staged = new DatabaseSync(stagedPath)
+
     try {
       prepareStagedCookiesForImport(staged, importedDomainScope(['a.example.com']))
       insertCookie(staged, '.a.example.com', 'new-a', 'imported')

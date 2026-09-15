@@ -32,6 +32,7 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   mocks.resolvePRRepositoryCandidatesMock.mockReset()
   mocks.resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
     const origin = await mocks.getOwnerRepoMock(repoPath, connectionId)
+
     return { candidates: origin ? [origin] : [], headRepo: origin }
   })
   mocks.getRemoteUrlForRepoMock.mockReset()
@@ -76,6 +77,7 @@ export function resetGraphQLRateLimitGuardMocks(mocks: GitHubClientMocks): void 
   mocks.resolvePRRepositoryCandidatesMock.mockReset()
   mocks.resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
     const origin = await mocks.getOwnerRepoMock(repoPath, connectionId)
+
     return { candidates: origin ? [origin] : [], headRepo: origin }
   })
   mocks.getRemoteUrlForRepoMock.mockReset()

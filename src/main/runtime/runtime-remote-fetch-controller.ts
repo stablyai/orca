@@ -20,8 +20,10 @@ type GitOptions = { wslDistro?: string }
 
 // Why: reuse recent fetches across create and drift probes without hiding remote changes for long.
 const FETCH_FRESHNESS_MS = 30_000
+
 // Why: a credential-manager prompt must not wedge worktree creation indefinitely.
 const REMOTE_FETCH_TIMEOUT_MS = 60_000
+
 const REMOTE_FETCH_CACHE_MAX = 512
 
 export class RuntimeRemoteFetchController {
@@ -51,12 +53,16 @@ export class RuntimeRemoteFetchController {
     const runtimeKey = gitOptions.wslDistro ? `wsl:${gitOptions.wslDistro}` : 'local'
     const cacheKey = `${runtimeKey}::${repoPath}::${remote}`
     const cached = this.canonicalFetchKeyCache.get(cacheKey)
+
     if (cached !== undefined) {
       setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, cached, REMOTE_FETCH_CACHE_MAX)
+
       return cached
     }
+
     const resolved = `${await this.getCanonicalRepoKey(repoPath, gitOptions)}::${remote}`
     setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, resolved, REMOTE_FETCH_CACHE_MAX)
+
     return resolved
   }
 
@@ -82,11 +88,13 @@ export class RuntimeRemoteFetchController {
 
   private hasInflightFetchForRepo(repoKey: string): boolean {
     const prefix = `${repoKey}::`
+
     for (const key of this.fetchInflight.keys()) {
       if (key.startsWith(prefix)) {
         return true
       }
     }
+
     return false
   }
 
@@ -102,19 +110,25 @@ export class RuntimeRemoteFetchController {
         this.remoteFetchQueueTail.delete(remoteKey)
       }
     })
+
     return promise
   }
 
   private getFreshFetchCompletedAt(key: string): number | null {
     const lastAt = this.fetchLastCompletedAt.get(key)
+
     if (lastAt === undefined) {
       return null
     }
+
     if (Date.now() - lastAt < FETCH_FRESHNESS_MS) {
       setBoundedMapEntry(this.fetchLastCompletedAt, key, lastAt, REMOTE_FETCH_CACHE_MAX)
+
       return lastAt
     }
+
     this.fetchLastCompletedAt.delete(key)
+
     return null
   }
 
@@ -128,13 +142,17 @@ export class RuntimeRemoteFetchController {
     gitOptions: GitOptions = {}
   ): Promise<RemoteFetchResult> {
     const key = await this.getCanonicalFetchKey(repoPath, remote, gitOptions)
+
     if (this.getFreshFetchCompletedAt(key) !== null) {
       return { ok: true }
     }
+
     const existing = this.fetchInflight.get(key)
+
     if (existing) {
       return existing
     }
+
     const promise = this.enqueueRemoteFetch(key, () =>
       gitExecFileAsync(['fetch', remote], {
         cwd: repoPath,
@@ -143,17 +161,21 @@ export class RuntimeRemoteFetchController {
       })
         .then((): RemoteFetchResult => {
           this.rememberFreshFetchCompletedAt(key)
+
           return { ok: true }
         })
         .catch((err): RemoteFetchResult => {
           console.warn(`[fetchRemoteWithCache] ${remote} fetch failed for ${repoPath}:`, err)
+
           return { ok: false, errorKind: 'git_error' }
         })
     ).finally(() => {
       this.fetchInflight.delete(key)
       this.armRefMaintenance(repoPath, gitOptions)
     })
+
     this.fetchInflight.set(key, promise)
+
     return promise
   }
 
@@ -163,22 +185,28 @@ export class RuntimeRemoteFetchController {
     gitOptions: GitOptions = {}
   ): Promise<RemoteFetchResult> {
     const remoteKey = await this.getCanonicalFetchKey(repoPath, base.remote, gitOptions)
+
     const key = await this.getCanonicalFetchKey(
       repoPath,
       `base:${base.remote}:${base.branch}`,
       gitOptions
     )
+
     if (this.getFreshFetchCompletedAt(key) !== null) {
       return { ok: true }
     }
+
     const existing = this.fetchInflight.get(key)
+
     if (existing) {
       return existing
     }
+
     const promise = this.enqueueRemoteFetch(remoteKey, async () => {
       if (this.getFreshFetchCompletedAt(key) !== null) {
         return { ok: true }
       }
+
       return gitExecFileAsync(
         [
           ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
@@ -196,6 +224,7 @@ export class RuntimeRemoteFetchController {
       )
         .then((): RemoteFetchResult => {
           this.rememberFreshFetchCompletedAt(key)
+
           return { ok: true }
         })
         .catch((err): RemoteFetchResult => {
@@ -203,13 +232,16 @@ export class RuntimeRemoteFetchController {
             `[refreshRemoteTrackingBase] ${base.base} refresh failed for ${repoPath}:`,
             err
           )
+
           return { ok: false, errorKind: 'git_error' }
         })
     }).finally(() => {
       this.fetchInflight.delete(key)
       this.armRefMaintenance(repoPath, gitOptions)
     })
+
     this.fetchInflight.set(key, promise)
+
     return promise
   }
 
@@ -227,14 +259,18 @@ export class RuntimeRemoteFetchController {
     gitOptions: GitOptions = {}
   ): Promise<RemoteTrackingBase | null> {
     const remoteRefPrefix = 'refs/remotes/'
+
     const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
       ? baseBranch.slice(remoteRefPrefix.length)
       : baseBranch
+
     // A remote-tracking base needs both a configured remote and a branch component.
     if (shortBaseBranch.indexOf('/') <= 0 || shortBaseBranch.endsWith('/')) {
       return null
     }
+
     let remotes: string[]
+
     try {
       const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath, ...gitOptions })
       remotes = stdout
@@ -244,16 +280,21 @@ export class RuntimeRemoteFetchController {
     } catch {
       return null
     }
+
     const remote = remotes
       .filter((candidate) => shortBaseBranch.startsWith(`${candidate}/`))
       .sort((a, b) => b.length - a.length)[0]
+
     if (!remote) {
       return null
     }
+
     const branch = shortBaseBranch.slice(remote.length + 1)
+
     if (!branch) {
       return null
     }
+
     return {
       remote,
       branch,
@@ -272,6 +313,7 @@ export class RuntimeRemoteFetchController {
         cwd: repoPath,
         ...gitOptions
       })
+
       return true
     } catch {
       return false

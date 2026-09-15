@@ -21,8 +21,10 @@ export type SecurePathHardeningReport = {
 const consoleReporter = (entry: SecurePathHardeningReport): void => {
   if (entry.stage === 'recovered') {
     console.info('[secure-path.windows-acl] path hardening recovered', entry)
+
     return
   }
+
   console.warn('[secure-path.windows-acl] failed to restrict path', entry)
 }
 

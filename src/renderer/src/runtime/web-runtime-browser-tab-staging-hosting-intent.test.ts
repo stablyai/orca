@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../store', () => ({ useAppStore: { getState: mocks.getState } }))
 
 const ENVIRONMENT_ID = 'web-env-1'
+
 const REMOTE_PAGE_ID = 'remote-page-1'
+
 const STAGED: StagedWebRuntimeBrowserTab = {
   workspaceId: 'workspace-1',
   pageId: 'page-1',

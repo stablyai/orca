@@ -23,6 +23,7 @@ function readFunctionName(node: ts.Node): string | null {
   if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name) {
     return node.name.text
   }
+
   if (
     ts.isArrowFunction(node) &&
     ts.isVariableDeclaration(node.parent) &&
@@ -30,6 +31,7 @@ function readFunctionName(node: ts.Node): string | null {
   ) {
     return node.parent.name.text
   }
+
   return null
 }
 
@@ -37,12 +39,14 @@ function readHookName(node: ts.CallExpression): string | null {
   if (ts.isIdentifier(node.expression) && /^use[A-Z]/.test(node.expression.text)) {
     return node.expression.text
   }
+
   if (
     ts.isPropertyAccessExpression(node.expression) &&
     /^use[A-Z]/.test(node.expression.name.text)
   ) {
     return node.expression.name.text
   }
+
   return null
 }
 
@@ -59,6 +63,7 @@ export function readHookDefinitions(
   includesDefinition: (name: string) => boolean
 ): HookDefinitions {
   const definitions = new Map<string, HookDefinition>()
+
   for (const { relativePath, source } of sources) {
     const sourceFile = ts.createSourceFile(
       relativePath,
@@ -67,6 +72,7 @@ export function readHookDefinitions(
       true,
       relativePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
     )
+
     const visit = (node: ts.Node): void => {
       if (
         (ts.isFunctionDeclaration(node) ||
@@ -75,14 +81,18 @@ export function readHookDefinitions(
         node.body
       ) {
         const name = readFunctionName(node)
+
         if (name && includesDefinition(name)) {
           definitions.set(name, { body: node.body, sourceFile })
         }
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(sourceFile)
   }
+
   return definitions
 }
 
@@ -92,14 +102,18 @@ export function readFlattenedHookFacts(
 ): HookContractFact[] {
   const flatten = (name: string, active: ReadonlySet<string>): HookContractFact[] => {
     const definition = definitions.get(name)
+
     if (!definition || active.has(name)) {
       throw new Error(`Invalid hook stage: ${name}`)
     }
+
     const facts: HookContractFact[] = []
     const nextActive = new Set([...active, name])
+
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node)) {
         const hookName = readHookName(node)
+
         if (hookName) {
           if (definitions.has(hookName)) {
             facts.push(...flatten(hookName, nextActive))
@@ -107,6 +121,7 @@ export function readFlattenedHookFacts(
             const dependencyArray = [...node.arguments]
               .toReversed()
               .find((argument) => ts.isArrayLiteralExpression(argument))
+
             facts.push({
               dependencies: dependencyArray
                 ? [...dependencyArray.elements].map((element) =>
@@ -118,9 +133,12 @@ export function readFlattenedHookFacts(
           }
         }
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(definition.body)
+
     return facts
   }
 
@@ -144,20 +162,26 @@ export function projectDependencyContract(
   const dependencyFacts = facts.filter(
     (fact): fact is HookContractFact & { dependencies: string[] } => fact.dependencies !== null
   )
+
   for (const ordinal of Object.keys(allowedAdditions).map(Number)) {
     if (!Number.isInteger(ordinal) || ordinal < 0 || ordinal >= dependencyFacts.length) {
       throw new Error(`Invalid dependency-array ordinal: ${ordinal}`)
     }
   }
+
   return dependencyFacts.map(({ dependencies, name }, ordinal) => {
     const projected = [...dependencies]
+
     for (const addition of allowedAdditions[ordinal] ?? []) {
       const index = projected.indexOf(addition)
+
       if (index === -1) {
         throw new Error(`Missing allowed dependency addition at ${ordinal}: ${addition}`)
       }
+
       projected.splice(index, 1)
     }
+
     return `${name}|[${projected.join(',')}]`
   })
 }

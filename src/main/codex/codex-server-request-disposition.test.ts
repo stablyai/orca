@@ -33,6 +33,7 @@ describe('Codex blocking server request dispositions', () => {
     CODEX_USER_INPUT_METHOD
   ])('routes %s to the durable prompt registry', (method) => {
     const { registry, connection } = harness()
+
     const result = disposeCodexServerRequest(registry, connection, {
       id: 1,
       method,

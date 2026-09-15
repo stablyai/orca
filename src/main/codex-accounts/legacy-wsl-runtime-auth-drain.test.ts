@@ -14,7 +14,9 @@ import {
 import { readWslCodexAuths } from './wsl-codex-auth-batch-reader'
 
 const SOURCE_AUTH = '{"tokens":{"expires_at":2000}}\n'
+
 const STALE_AUTH = '{"tokens":{"expires_at":1000}}\n'
+
 const NEWER_AUTH = '{"tokens":{"expires_at":3000}}\n'
 
 function inspection(auth: string, credentials?: string): string {
@@ -45,10 +47,12 @@ describe('legacy WSL runtime auth drain', () => {
     runWslProcessMock
       .mockResolvedValueOnce(result(0, inspection(SOURCE_AUTH)))
       .mockResolvedValueOnce(result(0))
+
     const resolveDestination = vi.fn(() => ({
       authContents: STALE_AUTH,
       linuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-1/home'
     }))
+
     await drainLegacyWslRuntimeAuth({
       distro: 'Ubuntu',
       guestHomeLinuxPath: '/home/alice',
@@ -231,6 +235,7 @@ describe('legacy WSL runtime auth drain', () => {
 
   it('coalesces concurrent drain triggers instead of queueing every poll', async () => {
     runWslProcessMock.mockImplementation(() => new Promise(() => {}))
+
     const options = {
       distro: 'Ubuntu',
       guestHomeLinuxPath: '/home/alice',
@@ -253,6 +258,7 @@ describe('legacy WSL runtime auth drain', () => {
           : result(0)
       )
     )
+
     const options = {
       distro: 'Ubuntu',
       guestHomeLinuxPath: '/home/alice',
@@ -273,6 +279,7 @@ describe('legacy WSL runtime auth drain', () => {
     const applyCalls = runWslProcessMock.mock.calls.filter(
       ([call]) => call.script === _internals.applyLegacyAuthScript
     )
+
     expect(applyCalls).toHaveLength(3)
     expect(applyCalls.map(([call]) => call.args.at(-1))).toEqual(['full', 'recent', 'full'])
     expect(applyCalls.map(([call]) => call.timeoutMs)).toEqual([30_000, 5_000, 30_000])

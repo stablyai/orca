@@ -21,12 +21,14 @@ type AppIconSelectorProps = {
 
 function getAppIconOptionIndex(value: AppIconId): number {
   const index = APP_ICON_OPTIONS.findIndex((option) => option.id === value)
+
   return Math.max(index, 0)
 }
 
 function getOffsetIcon(value: AppIconId, offset: -1 | 1): AppIconId {
   const index = getAppIconOptionIndex(value)
   const next = (index + offset + APP_ICON_OPTIONS.length) % APP_ICON_OPTIONS.length
+
   return APP_ICON_OPTIONS[next].id
 }
 

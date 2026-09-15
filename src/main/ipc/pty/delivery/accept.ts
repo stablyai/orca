@@ -33,6 +33,7 @@ export function markHiddenRendererResizeOutputDelivered(id: string): void {
   if (!pendingHiddenRendererResizeOutputPtys.delete(id)) {
     return
   }
+
   deliveredHiddenRendererResizeOutputPtys.add(id)
 }
 
@@ -60,14 +61,17 @@ export function acceptPtyDataForRenderer(
   const preservesSeq = !payload.transformed && rawLength === payload.data.length
   const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
   const projectionId = projection?.identity.projectionSemanticsId
+
   if (session.mainWindow.isDestroyed()) {
     if (projectionId) {
       session.sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
     }
+
     if (session.flushTimer) {
       clearTimeout(session.flushTimer)
       session.flushTimer = null
     }
+
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()
     session.clearPendingPtyData()
@@ -75,41 +79,55 @@ export function acceptPtyDataForRenderer(
     session.rendererDeliveryAccountingByPty.clear()
     session.rendererInFlightTotalChars = 0
     session.clearDispatcherReadyWatchdog()
+
     return
   }
+
   if (session.rendererExitingPtyIds.has(payload.id)) {
     if (projectionId) {
       session.sshOutputIntake?.transferProjections([projectionId], 'pty-exiting')
     }
+
     return
   }
+
   if (shouldDropHiddenRendererPtyData(payload.id, session.getSettings?.())) {
     if (projectionId) {
       session.sshOutputIntake?.transferProjections([projectionId], 'hidden-drop')
     }
+
     const droppedChars = projection ? rawLength : payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)
     warnIfDroppingHiddenBytesForVisiblePty(session, payload.id, droppedChars)
+
     if (drop.shouldEmitRestoreMarker) {
       sendModelRestoreNeededMarker(session, payload.id, 'hidden-drop', outputSeq)
     }
+
     return
   }
+
   if (payload.data.length === 0 && !payload.transformed) {
     if (projectionId) {
       session.sshOutputIntake?.transferProjections([projectionId], 'empty-projection')
     }
+
     return
   }
+
   const containsBackgroundOutput =
     rendererPtyIsKnownHidden(payload.id) || ptyHasHiddenRendererResizeOutput(payload.id)
+
   if (containsBackgroundOutput) {
     markHiddenRendererResizeOutputDelivered(payload.id)
   }
+
   const overflowMarkedBeforeAppend = session.pendingOverflowMarkedPtys.has(payload.id)
+
   if (projection?.desktopSpan) {
     session.sourceCreditPendingPtys.add(payload.id)
   }
+
   const pending = appendPendingPtyData(
     session,
     payload.id,
@@ -122,32 +140,43 @@ export function acceptPtyDataForRenderer(
     payload.transformed === true,
     projectionId
   )
+
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
     !overflowMarkedBeforeAppend &&
     session.pendingOverflowMarkedPtys.has(payload.id)
+
   const nextData = pending.data + getDroppedMode2031RendererData(pending)
+
   const isInteractiveOutput = shouldSendInteractiveOutputNow(
     payload.id,
     nextData,
     performance.now()
   )
+
   if (isInteractiveOutput && session.rendererPtyDispatcherReady) {
     if (!session.canSendPtyDataToRenderer(payload.id, { interactive: true })) {
       session.setPendingPtyData(payload.id, pending)
+
       if (shouldEmitPendingCapRestoreMarker) {
         sendModelRestoreNeededMarker(session, payload.id, 'pending-cap', outputSeq)
       }
+
       session.updateProducerFlowControl(payload.id)
       requestDeliveryResyncForGatedPty(session)
+
       return
     }
+
     session.deletePendingPtyData(payload.id)
     clearFlushTimerIfIdle(session)
+
     if (shouldEmitPendingCapRestoreMarker) {
       sendModelRestoreNeededMarker(session, payload.id, 'pending-cap', outputSeq)
     }
+
     session.pendingOverflowMarkedPtys.delete(payload.id)
+
     try {
       sendPtyDataToRenderer(
         session,
@@ -170,13 +199,18 @@ export function acceptPtyDataForRenderer(
     } finally {
       session.updateProducerFlowControl(payload.id)
     }
+
     return
   }
+
   session.setPendingPtyData(payload.id, pending)
+
   if (shouldEmitPendingCapRestoreMarker) {
     sendModelRestoreNeededMarker(session, payload.id, 'pending-cap', outputSeq)
   }
+
   session.updateProducerFlowControl(payload.id)
+
   if (
     !session.canSendPtyDataToRenderer(payload.id, {
       interactive: activeRendererPtys.has(payload.id)
@@ -184,6 +218,7 @@ export function acceptPtyDataForRenderer(
   ) {
     requestDeliveryResyncForGatedPty(session)
   }
+
   if (!session.flushTimer) {
     session.schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
   }

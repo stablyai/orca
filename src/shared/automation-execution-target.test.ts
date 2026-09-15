@@ -175,6 +175,7 @@ describe('applyAutomationExecutionTarget', () => {
       { ...storedSsh, name: 'keep me' },
       { executionTargetType: 'local', executionTargetId: 'local' }
     )
+
     expect(next).toEqual({
       executionTargetType: 'local',
       executionTargetId: 'local',
@@ -190,6 +191,7 @@ describe('applyAutomationExecutionTarget', () => {
       { executionTargetType: 'local', executionTargetId: 'local' },
       { targetId: 'ssh-1', generation: undefined }
     )
+
     expect(next.executionTargetGeneration).toBe(4)
   })
 })

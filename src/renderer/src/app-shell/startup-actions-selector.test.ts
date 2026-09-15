@@ -72,12 +72,15 @@ describe('startup action selector', () => {
     let publicationCount = 0
     let projectionChangeCount = 0
     let previousProjection = selectStartupActions(store.getState())
+
     const unsubscribe = store.subscribe((state) => {
       publicationCount += 1
       const projection = selectStartupActions(state)
+
       if (projection !== previousProjection) {
         projectionChangeCount += 1
       }
+
       previousProjection = projection
     })
 

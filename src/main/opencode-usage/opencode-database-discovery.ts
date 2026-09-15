@@ -12,12 +12,15 @@ type OpenCodeDatabaseOverride = {
 
 function getOpenCodeDatabaseOverride(dataDirectory: string): OpenCodeDatabaseOverride {
   const raw = process.env.OPENCODE_DB?.trim()
+
   if (!raw) {
     return { isConfigured: false, path: null }
   }
+
   if (raw === ':memory:') {
     return { isConfigured: true, path: null }
   }
+
   return {
     isConfigured: true,
     path: isAbsolute(raw) ? raw : join(dataDirectory, raw)
@@ -34,28 +37,33 @@ export async function listOpenCodeDatabases(
 ): Promise<string[]> {
   const dataDirectory = resolveOpenCodeDataDirectory()
   const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory)
+
   if (databaseOverride.isConfigured) {
     if (!databaseOverride.path) {
       return []
     }
+
     try {
       return (await wslGatedStat(databaseOverride.path, 'scan')).isFile()
         ? [databaseOverride.path]
         : []
     } catch (error) {
       reportRefusal(databaseOverride.path, error, onRefusal)
+
       return []
     }
   }
 
   try {
     const entries = await wslGatedReaddir(dataDirectory, 'scan')
+
     return entries
       .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
       .map((entry) => join(dataDirectory, entry.name))
       .sort()
   } catch (error) {
     reportRefusal(dataDirectory, error, onRefusal)
+
     return []
   }
 }
@@ -76,9 +84,11 @@ export function compareOpenCodeClaimPriority(left: string, right: string): numbe
   // path order so ownership is deterministic across rescans.
   const leftRank = basename(left).toLowerCase() === 'opencode.db' ? 0 : 1
   const rightRank = basename(right).toLowerCase() === 'opencode.db' ? 0 : 1
+
   if (leftRank !== rightRank) {
     return leftRank - rightRank
   }
+
   return left < right ? -1 : left > right ? 1 : 0
 }
 
@@ -86,6 +96,7 @@ export async function getProcessedDatabaseInfo(
   dbPath: string
 ): Promise<OpenCodeUsageProcessedDatabase> {
   const dbStat = await stat(dbPath)
+
   return {
     path: dbPath,
     mtimeMs: dbStat.mtimeMs,

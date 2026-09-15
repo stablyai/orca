@@ -5,14 +5,21 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnSync } = vi.hoisted(() => ({ spawnSync: vi.fn() }))
+
 vi.mock('node:child_process', () => ({ spawnSync }))
 
 let directory
+
 let artifact
+
 let originalArgv
+
 let originalExitCode
+
 const commands = () => spawnSync.mock.calls.map(([, args]) => args)
+
 const signalRuns = () => commands().filter((args) => ['INT', 'TERM'].includes(args.at(-1)))
+
 const succeeded = { status: 0, stdout: '', stderr: '' }
 
 async function run(...options) {
@@ -43,17 +50,21 @@ describe('packaged shutdown matrix', () => {
   it('shares extraction but isolates every entrypoint and signal', async () => {
     await run('--all-entrypoints')
     expect(commands().filter((args) => args[0] === 'build')).toHaveLength(1)
+
     const startup = commands().filter((args) =>
       args.includes('/usr/local/bin/run-appimage-desktop-startup-case')
     )
+
     const extraction = commands().filter((args) =>
       args.some((arg) => arg.includes('120s /input/orca.AppImage --appimage-extract'))
     )
+
     expect(startup).toHaveLength(1)
     expect(extraction).toHaveLength(1)
     expect(commands().indexOf(startup[0])).toBeLessThan(commands().indexOf(extraction[0]))
     expect(signalRuns()).toHaveLength(6)
     const names = new Set()
+
     for (const [index, args] of signalRuns().entries()) {
       const entrypoint = ['app', 'launcher', 'appimage'][Math.floor(index / 2)]
       expect(args).toContain(`ORCA_TEST_ENTRYPOINT=${entrypoint}`)
@@ -69,11 +80,14 @@ describe('packaged shutdown matrix', () => {
       expect(args).toContain('--rm')
       names.add(args[args.indexOf('--name') + 1])
     }
+
     expect(names.size).toBe(6)
+
     const evidence = console.log.mock.calls
       .map(([line]) => line)
       .filter((line) => line.startsWith('{'))
       .map(JSON.parse)
+
     expect(evidence).toHaveLength(3)
     expect(
       evidence.every(

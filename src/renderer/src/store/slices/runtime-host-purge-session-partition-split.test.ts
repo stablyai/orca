@@ -29,6 +29,7 @@ globalThis.window = { api: {} }
 import { createTestStore, seedStore, makeWorktree, TEST_REPO } from './store-test-helpers'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
+
 const WT_A = 'repoA::/wt-a'
 
 function seedRuntimeRow(store: ReturnType<typeof createTestStore>): void {
@@ -67,11 +68,13 @@ describe('purge stops routing session writes to the removed runtime partition', 
   it('patchWorkspaceSessionByHost no longer writes the runtime partition after purge', async () => {
     const store = createTestStore()
     seedRuntimeRow(store)
+
     const api = {
       get: vi.fn().mockResolvedValue({}),
       patch: vi.fn().mockResolvedValue(undefined),
       setSync: vi.fn()
     }
+
     const patch = { activeWorktreeIdsOnShutdown: [WT_A] } as unknown as WorkspaceSessionPatch
 
     await patchWorkspaceSessionByHost(api, patch, store.getState() as HostPersistenceState)

@@ -29,10 +29,12 @@ describe('screencast ghost-subscriber delivery state', () => {
   it('evicts only after the limit is reached by a subscriber that has been reached once', () => {
     const atLimit = replay([true, ...refusals(BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT)])
     expect(screencastSubscriberIsGhost(atLimit)).toBe(true)
+
     const belowLimit = replay([
       true,
       ...refusals(BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT - 1)
     ])
+
     expect(screencastSubscriberIsGhost(belowLimit)).toBe(false)
   })
 
@@ -50,6 +52,7 @@ describe('screencast ghost-subscriber delivery state', () => {
   // never accumulate toward eviction across the recovery.
   it('never reaches the limit while deliveries keep interleaving', () => {
     let state = INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY
+
     for (let frame = 0; frame < BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT * 4; frame += 1) {
       state = recordScreencastSubscriberSend(state, frame % 3 === 0)
       expect(screencastSubscriberIsGhost(state)).toBe(false)

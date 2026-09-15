@@ -38,8 +38,10 @@ export async function probeDirectWrite(
   for (const input of buildSettledShellProbeInputSequence(`echo ${marker}\r`)) {
     await sendToTerminal(page, ptyId, input)
   }
+
   try {
     await waitForTerminalOutput(page, marker, timeoutMs)
+
     return true
   } catch {
     return false
@@ -55,10 +57,12 @@ export async function probeKeyboardType(
   await page.locator('.xterm:visible').first().click()
   await page.keyboard.type(`echo ${marker}`, { delay: 20 })
   await page.keyboard.press('Enter')
+
   try {
     // Any appearance of the marker proves the roundtrip: xterm does not local-
     // echo, so typed characters only render after the PTY echoes them back.
     await waitForTerminalOutput(page, marker, timeoutMs)
+
     return true
   } catch {
     return false
@@ -73,15 +77,18 @@ export async function probeOwnershipRebuildRevival(
   await page.evaluate(async () => {
     await window.api.pty.listSessions()
   })
+
   return probeDirectWrite(page, ptyId, marker)
 }
 
 export async function getStorePtyIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return []
     }
+
     return Object.values(store.getState().ptyIdsByTabId).flat()
   })
 }
@@ -94,9 +101,11 @@ async function mainRendererEval<T>(
 ): Promise<T> {
   return electronApp.evaluate(async ({ BrowserWindow }, expr) => {
     const win = BrowserWindow.getAllWindows()[0]
+
     if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
       throw new Error('no live window for executeJavaScript probe')
     }
+
     return (await win.webContents.executeJavaScript(expr, true)) as T
   }, expression) as Promise<T>
 }
@@ -191,6 +200,7 @@ async function mainWaitForMarker(
         timeout: timeoutMs
       })
       .toBe(true)
+
     return true
   } catch {
     return false
@@ -211,6 +221,7 @@ export async function mainProbeTransportPaste(
 ): Promise<boolean> {
   try {
     const inputs = buildSettledShellProbeInputSequence(`echo ${marker}\r`)
+
     const fed = await mainRendererEval<boolean>(
       electronApp,
       `(() => {
@@ -228,12 +239,14 @@ export async function mainProbeTransportPaste(
         return false
       })()`
     )
+
     if (!fed) {
       return false
     }
   } catch {
     return false
   }
+
   return mainWaitForMarker(electronApp, marker, timeoutMs)
 }
 
@@ -252,6 +265,7 @@ export async function mainProbeDirectWrite(
   } catch {
     return false
   }
+
   return mainWaitForMarker(electronApp, marker, timeoutMs)
 }
 
@@ -265,6 +279,7 @@ export async function mainProbeOwnershipRebuildRevival(
   } catch {
     return false
   }
+
   return mainProbeDirectWrite(electronApp, ptyId, marker)
 }
 

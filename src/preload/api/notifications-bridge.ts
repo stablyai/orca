@@ -16,7 +16,9 @@ let cachedNotificationSound: {
   blobUrl: string
   audio: HTMLAudioElement
 } | null = null
+
 let isNotificationSoundPlaying = false
+
 // Why: audio.play() can reject before ended/error fires; cleanup prevents leaked listeners.
 let cleanupNotificationSoundPlayback: (() => void) | null = null
 
@@ -61,22 +63,28 @@ export const notificationsApi = {
       const resolved = (await ipcRenderer.invoke(
         'notifications:resolveSoundPath'
       )) as NotificationSoundPathResult
+
       if (!resolved.ok) {
         if (cachedNotificationSound) {
           disposeCachedNotificationSound()
         }
+
         return { played: false, reason: resolved.reason }
       }
 
       let entry = cachedNotificationSound
+
       if (!entry || entry.path !== resolved.path) {
         const sound = (await ipcRenderer.invoke(
           'notifications:loadSound'
         )) as NotificationSoundDataResult
+
         if (!sound.ok) {
           disposeCachedNotificationSound()
+
           return { played: false, reason: sound.reason }
         }
+
         const arrayBuffer = new ArrayBuffer(sound.data.byteLength)
         new Uint8Array(arrayBuffer).set(sound.data)
         const blob = new Blob([arrayBuffer], { type: sound.mimeType })
@@ -89,34 +97,45 @@ export const notificationsApi = {
       const audio = entry.audio
       // Why: restart from zero on each play so bursts replay instead of stacking copies (GNOME canberra / VS Code signal service).
       audio.currentTime = 0
+
       if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
         audio.volume = Math.min(1, Math.max(0, options.volume / 100))
       }
+
       isNotificationSoundPlaying = true
       cleanupNotificationSoundPlayback?.()
+
       const release = (): void => {
         cleanup()
+
         if (cleanupNotificationSoundPlayback === cleanup) {
           cleanupNotificationSoundPlayback = null
         }
+
         isNotificationSoundPlaying = false
       }
+
       const cleanup = (): void => {
         audio.removeEventListener('ended', release)
         audio.removeEventListener('error', release)
       }
+
       cleanupNotificationSoundPlayback = cleanup
       audio.addEventListener('ended', release)
       audio.addEventListener('error', release)
+
       try {
         await audio.play()
       } catch {
         release()
+
         return { played: false, reason: 'playback-failed' }
       }
+
       return { played: true }
     } catch {
       clearNotificationSoundPlaybackState()
+
       return { played: false, reason: 'playback-failed' }
     }
   }

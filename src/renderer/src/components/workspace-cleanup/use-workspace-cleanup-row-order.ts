@@ -35,6 +35,7 @@ export function arrangeWorkspaceCleanupRowsByFrozenOrder<Row extends OrderedRow>
 ): Row[] {
   const known: Row[] = []
   const fresh: Row[] = []
+
   for (const row of sortedRows) {
     if (order.positions.has(row.worktreeId)) {
       known.push(row)
@@ -42,10 +43,12 @@ export function arrangeWorkspaceCleanupRowsByFrozenOrder<Row extends OrderedRow>
       fresh.push(row)
     }
   }
+
   known.sort(
     (left, right) =>
       (order.positions.get(left.worktreeId) ?? 0) - (order.positions.get(right.worktreeId) ?? 0)
   )
+
   return [...known, ...fresh]
 }
 
@@ -54,15 +57,19 @@ export function extendWorkspaceCleanupFrozenRowOrder(
   order: WorkspaceCleanupFrozenRowOrder
 ): WorkspaceCleanupFrozenRowOrder {
   let positions: Map<string, number> | null = null
+
   for (const row of rows) {
     if (order.positions.has(row.worktreeId)) {
       continue
     }
+
     positions ??= new Map(order.positions)
+
     if (!positions.has(row.worktreeId)) {
       positions.set(row.worktreeId, positions.size)
     }
   }
+
   return positions === null ? order : { ...order, positions }
 }
 
@@ -88,8 +95,10 @@ export function useWorkspaceCleanupRowOrder<Row extends OrderedRow>({
   // because it is only read and written inside the commit effect.
   const [frozenOrder, setFrozenOrder] =
     useState<WorkspaceCleanupFrozenRowOrder>(UNCOMMITTED_ROW_ORDER)
+
   const idleOrderRef = useRef<WorkspaceCleanupFrozenRowOrder>(UNCOMMITTED_ROW_ORDER)
   const sortSignature = `${sort.field}:${sort.direction}`
+
   const orderedRows = useMemo(
     () =>
       !streaming || frozenOrder.sortSignature !== sortSignature
@@ -97,6 +106,7 @@ export function useWorkspaceCleanupRowOrder<Row extends OrderedRow>({
         : arrangeWorkspaceCleanupRowsByFrozenOrder(rows, frozenOrder),
     [frozenOrder, rows, sortSignature, streaming]
   )
+
   const commitFrozenOrder = useEffectEvent(() => {
     // Why: only committed renders may advance the order a later stream holds.
     if (!streaming) {
@@ -104,8 +114,10 @@ export function useWorkspaceCleanupRowOrder<Row extends OrderedRow>({
       setFrozenOrder((current) =>
         current === UNCOMMITTED_ROW_ORDER ? current : UNCOMMITTED_ROW_ORDER
       )
+
       return
     }
+
     setFrozenOrder((current) => {
       const base =
         current !== UNCOMMITTED_ROW_ORDER && current.sortSignature === sortSignature
@@ -113,11 +125,14 @@ export function useWorkspaceCleanupRowOrder<Row extends OrderedRow>({
           : idleOrderRef.current.sortSignature === sortSignature
             ? idleOrderRef.current
             : createWorkspaceCleanupFrozenRowOrder(rows, sortSignature)
+
       return extendWorkspaceCleanupFrozenRowOrder(rows, base)
     })
   })
+
   useEffect(() => {
     commitFrozenOrder()
   }, [rows, sortSignature, streaming])
+
   return orderedRows
 }

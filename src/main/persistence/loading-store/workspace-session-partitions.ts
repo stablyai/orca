@@ -28,15 +28,20 @@ export function parseWorkspaceSessionsByHostId(
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { partitions: {}, repaired: raw !== undefined }
   }
+
   let repaired = false
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
+
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
+
     // Why: 'local' lives in workspaceSession; a local/invalid key here is legacy noise that must not shadow the canonical partition.
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue
     }
+
     const result = parseWorkspaceSessionSalvaging(value)
+
     if (!result.ok) {
       repaired = true
       console.error(
@@ -45,6 +50,7 @@ export function parseWorkspaceSessionsByHostId(
       )
       continue
     }
+
     if (result.droppedCount > 0) {
       console.warn(
         `[persistence] Salvaged workspace session for host ${hostId}; dropped corrupt entries:`,
@@ -52,6 +58,7 @@ export function parseWorkspaceSessionsByHostId(
       )
       repaired = true
     }
+
     // Runs before the defaults spread, so a field the type requires comes back at its default
     // rather than going missing.
     partitions[hostId] = {
@@ -59,5 +66,6 @@ export function parseWorkspaceSessionsByHostId(
       ...withoutRedundantGlobalFields(result.value, localSession)
     }
   }
+
   return { partitions, repaired }
 }

@@ -32,6 +32,7 @@ export function findRepoForHost<T extends RepoIdentityParts>(
   } = {}
 ): T | null {
   const matchingRepos = repos.filter((repo) => repo.id === repoId)
+
   if (matchingRepos.length === 0) {
     return null
   }
@@ -45,9 +46,11 @@ export function findRepoForHost<T extends RepoIdentityParts>(
   }
 
   const focusedHostId = getSettingsFocusedExecutionHostId(options.settings)
+
   const focusedMatches = matchingRepos.filter(
     (repo) => getRepoExecutionHostId(repo) === focusedHostId
   )
+
   // Why: when duplicate ids exist even within the focused host, mutating by bare
   // id would be ambiguous. Let callers surface no owner instead of guessing.
   return focusedMatches.length === 1 ? focusedMatches[0] : null

@@ -8,6 +8,7 @@ import type { ZoomLevelChangedEventDetail } from '@/lib/zoom-events'
 // Radix portal layering, click-outside detection, or focus management
 // used by dropdowns, context menus, and dialogs elsewhere in the app.
 const DISPLAY_MS = 1500
+
 const FADE_MS = 300
 
 export function ZoomOverlay(): React.JSX.Element | null {
@@ -36,6 +37,7 @@ export function ZoomOverlay(): React.JSX.Element | null {
     }
 
     window.addEventListener(ZOOM_LEVEL_CHANGED_EVENT, onZoomLevelChanged)
+
     return () => {
       window.removeEventListener(ZOOM_LEVEL_CHANGED_EVENT, onZoomLevelChanged)
       window.clearTimeout(hideTimerRef.current)

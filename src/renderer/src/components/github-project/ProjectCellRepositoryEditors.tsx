@@ -26,6 +26,7 @@ export function ProjectAssigneesCell({
   const assignees = row.content.assignees
   const [open, setOpen] = useState(false)
   const [owner, repo] = (row.content.repository ?? '').split('/')
+
   const seedKey = useMemo(
     () =>
       assignees
@@ -34,6 +35,7 @@ export function ProjectAssigneesCell({
         .join(','),
     [assignees]
   )
+
   const metadata = useRepoAssigneesBySlug(
     open ? owner : null,
     open ? repo : null,
@@ -41,10 +43,12 @@ export function ProjectAssigneesCell({
     sourceSettings,
     sourceHost
   )
+
   const content =
     assignees.length === 0
       ? null
       : assignees.map((user) => <ProjectUserChip key={user.login} user={user} />)
+
   if (!editable) {
     return (
       <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -52,6 +56,7 @@ export function ProjectAssigneesCell({
       </div>
     )
   }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -75,6 +80,7 @@ export function ProjectAssigneesCell({
         {owner && repo && !metadata.loading
           ? metadata.data.map((user) => {
               const selected = assignees.some((assignee) => assignee.login === user.login)
+
               return (
                 <button
                   key={user.login}
@@ -112,19 +118,23 @@ export function ProjectLabelsCell({
   const labels = row.content.labels
   const [open, setOpen] = useState(false)
   const [owner, repo] = (row.content.repository ?? '').split('/')
+
   const metadata = useRepoLabelsBySlug(
     open ? owner : null,
     open ? repo : null,
     sourceSettings,
     sourceHost
   )
+
   const content =
     labels.length === 0
       ? null
       : labels.map((label) => <ProjectLabelChip key={label.name} label={label} />)
+
   if (!editable) {
     return <div className="flex flex-wrap items-center gap-1">{content}</div>
   }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -156,6 +166,7 @@ export function ProjectLabelsCell({
         {owner && repo && !metadata.loading
           ? metadata.data.map((name) => {
               const selected = labels.some((label) => label.name === name)
+
               return (
                 <button
                   key={name}
@@ -195,6 +206,7 @@ function RepositoryEditorState({
       </div>
     )
   }
+
   return loading ? (
     <div className="px-2 py-1 text-xs text-muted-foreground">
       {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}

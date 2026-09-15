@@ -28,8 +28,11 @@ const NATIVE: AgentSessionExecutionLocation = {
   workspaceId: 'workspace-1',
   workspaceKind: 'git-worktree'
 }
+
 const WSL: AgentSessionExecutionLocation = { ...NATIVE, wslDistro: 'Ubuntu-22.04' }
+
 const SSH: AgentSessionExecutionLocation = { ...NATIVE, executionHostId: 'ssh:build-box' }
+
 const FOLDER: AgentSessionExecutionLocation = {
   ...NATIVE,
   workspaceId: 'workspace-2',
@@ -37,9 +40,13 @@ const FOLDER: AgentSessionExecutionLocation = {
 }
 
 const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
+
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
+
 const UNUSED: AgentSessionOwnerProbe = { outcome: 'reservation-unused' }
+
 const BAD_OP_STORE = '{"schemaVersion":0,"hostId":"","records":{},"operations":{"x":0}}'
+
 const BAD_KEY_STORE =
   '{"schemaVersion":1,"hostId":"","records":{},"operations":{},"retiredClaimKeys":[0]}'
 
@@ -47,6 +54,7 @@ let counter = 0
 
 function operationId(now = NOW): string {
   counter += 1
+
   return `${now}-${String(counter)
     .padStart(32, '0')
     .replaceAll(/[^0-9a-f]/g, '0')}`
@@ -117,6 +125,7 @@ async function establishOwner(
     process: processIdentity({ spawnToken: reserved.record.lease.reservedSpawnToken ?? 'spawn-a' }),
     now: NOW
   })
+
   return store.proveOwner({
     sessionId,
     fence,
@@ -157,12 +166,14 @@ describe('acquisition path', () => {
       process: processIdentity(),
       now: NOW
     })
+
     const proved = await store.proveOwner({
       sessionId: 'session-alpha',
       fence: 1,
       link: handleLink(),
       now: NOW
     })
+
     expect(proved.lease).toMatchObject({
       claimStatus: 'live',
       handoffStage: null,
@@ -269,6 +280,7 @@ describe('acquisition path', () => {
 describe('concurrent claims', () => {
   it('lets only one store instance reserve a session from the same disk snapshot', async () => {
     const [first, second] = await Promise.all([open(), open()])
+
     const results = await Promise.allSettled([
       first.reserveOwner(reserveRequest()),
       second.reserveOwner(reserveRequest())
@@ -286,6 +298,7 @@ describe('concurrent claims', () => {
   it('lets exactly one of two concurrent reservations win and never spawns the loser', async () => {
     const store = await open()
     await establishOwner(store)
+
     const request = () =>
       reserveRequest({
         expectedFence: 1,
@@ -293,10 +306,12 @@ describe('concurrent claims', () => {
         spawnToken: 'spawn-b',
         operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
       })
+
     const results = await Promise.allSettled([
       store.reserveOwner(request()),
       store.reserveOwner(request())
     ])
+
     const granted = results.filter((result) => result.status === 'fulfilled')
     expect(granted).toHaveLength(1)
     const refused = results.find((result) => result.status === 'rejected')
@@ -306,10 +321,12 @@ describe('concurrent claims', () => {
 
   it('serializes concurrent creates of the same session id', async () => {
     const store = await open()
+
     const results = await Promise.allSettled([
       store.reserveOwner(reserveRequest()),
       store.reserveOwner(reserveRequest())
     ])
+
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(1)
   })
@@ -377,6 +394,7 @@ describe('expiry is not eviction', () => {
     const store = await open()
     const owned = await establishOwner(store)
     const wellPastDeadline = owned.lease.leaseDeadlineAt + 60 * 60 * 1000
+
     for (const probe of [INDETERMINATE, MATCHED] as const) {
       await expect(
         store.reserveOwner(
@@ -393,6 +411,7 @@ describe('expiry is not eviction', () => {
         )
       ).rejects.toThrow(/agent_session_(ownership_unknown|conflict)/)
     }
+
     expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(1)
 
     // Only proof of death moves it.
@@ -402,6 +421,7 @@ describe('expiry is not eviction', () => {
       probe: { outcome: 'pid-absent' },
       now: wellPastDeadline
     })
+
     expect(evicted.lease).toMatchObject({ runtimeFence: 2, claimStatus: 'released' })
     expect(evicted.lease.deathEvidence?.kind).toBe('pid-absent')
   })
@@ -422,12 +442,14 @@ describe('expiry is not eviction', () => {
   it('stops renewing a lease it can no longer vouch for', async () => {
     const store = await open()
     await establishOwner(store)
+
     const renewed = await store.renewLease({
       sessionId: 'session-alpha',
       fence: 1,
       childProbe: MATCHED,
       now: NOW + 5_000
     })
+
     expect(renewed.lease.lastRenewedAt).toBe(NOW + 5_000)
     await expect(
       store.renewLease({
@@ -490,9 +512,11 @@ describe('restart reconciliation', () => {
     let markProbeStarted!: () => void
     const probeStarted = new Promise<void>((resolve) => (markProbeStarted = resolve))
     const probeResult = new Promise<AgentSessionOwnerProbe>((resolve) => (releaseProbe = resolve))
+
     const reconciliation = reconciler.reconcileOnRestart({
       probe: async () => {
         markProbeStarted()
+
         return probeResult
       },
       now: NOW + 1_000
@@ -505,6 +529,7 @@ describe('restart reconciliation', () => {
       probe: { outcome: 'pid-absent' },
       now: NOW + 100
     })
+
     const replacement = await writer.reserveOwner(
       reserveRequest({
         expectedFence: 2,
@@ -518,6 +543,7 @@ describe('restart reconciliation', () => {
         now: NOW + 200
       })
     )
+
     await writer.commitProcessIdentity({
       sessionId: 'session-alpha',
       fence: replacement.record.lease.runtimeFence,
@@ -570,6 +596,7 @@ describe('restart reconciliation', () => {
         now: NOW + 1_000
       })
     )
+
     expect(reacquired.record.lease.runtimeFence).toBe(afterRestart + 1)
 
     const third = await open()
@@ -641,6 +668,7 @@ describe('restart reconciliation', () => {
       handoffStage: null,
       deathEvidence: { kind: 'pid-absent' }
     })
+
     const reacquired = await reopened.reserveOwner(
       reserveRequest({
         expectedFence: lease?.runtimeFence ?? null,
@@ -648,6 +676,7 @@ describe('restart reconciliation', () => {
         operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
       })
     )
+
     expect(reacquired.disposition).toBe('reserved')
   })
 
@@ -772,12 +801,14 @@ describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
         now: NOW
       })
     ).rejects.toThrow('agent_session_checkpoint_stale')
+
     const advanced = await store.setJournalCheckpoint({
       sessionId: 'session-alpha',
       fence: 1,
       checkpoint: { epoch: 3, sequence: 0 },
       now: NOW
     })
+
     expect(advanced.lease.journalCheckpoint).toEqual({ epoch: 3, sequence: 0 })
   })
 
@@ -858,9 +889,11 @@ describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
   ])('fails closed when the store is %s', async (_name, copies) => {
     const filePath = agentSessionStorePath(directory)
     await writeFile(filePath, copies[0])
+
     if (copies[1]) {
       await writeFile(`${filePath}.bak`, copies[1])
     }
+
     await expect(open()).rejects.toThrow('agent_session_store_corrupt')
   })
 

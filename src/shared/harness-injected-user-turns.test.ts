@@ -31,6 +31,7 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
       '<bash-stderr>err</bash-stderr>',
       '<user-prompt-submit-hook>hook context</user-prompt-submit-hook>'
     ]
+
     for (const text of injected) {
       expect(isKnownHarnessInjectedUserTurnText(text), text).toBe(true)
     }

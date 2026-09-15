@@ -10,10 +10,12 @@ import {
 function deferred<T = void>() {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -26,10 +28,13 @@ describe('withCodexHomeProcessLock', () => {
       events.push('first:start')
       await firstGate.promise
       events.push('first:end')
+
       return 1
     })
+
     const second = withCodexHomeProcessLock('home-a', async () => {
       events.push('second:start')
+
       return 2
     })
 
@@ -50,6 +55,7 @@ describe('withCodexHomeProcessLock', () => {
       events.push('a:start')
       await firstGate.promise
     })
+
     const second = withCodexHomeProcessLock('home-b', async () => {
       events.push('b:start')
     })
@@ -72,13 +78,16 @@ describe('withCodexHomeProcessLock', () => {
 
   it('does not release a running lock based on elapsed time', async () => {
     vi.useFakeTimers()
+
     try {
       const events: string[] = []
       const gate = deferred()
+
       const first = withCodexHomeProcessLock('home-long-running', async () => {
         events.push('first:start')
         await gate.promise
       })
+
       const second = withCodexHomeProcessLock('home-long-running', async () => {
         events.push('second:start')
       })
@@ -97,6 +106,7 @@ describe('withCodexHomeProcessLock', () => {
   it('keys explicit and default host homes consistently', () => {
     const previousCodexHome = process.env.CODEX_HOME
     delete process.env.CODEX_HOME
+
     try {
       const defaultKey = resolveCodexHomeProcessLockKey(null)
       expect(resolveCodexHomeProcessLockKey(join(homedir(), '.codex'))).toBe(defaultKey)
@@ -112,6 +122,7 @@ describe('withCodexHomeProcessLock', () => {
   it('keys a stripped child env to the real default home, not ambient CODEX_HOME', () => {
     const previousCodexHome = process.env.CODEX_HOME
     process.env.CODEX_HOME = '/nested-orca/managed-home'
+
     try {
       expect(resolveCodexHomeProcessLockKeyForSpawnEnv({ PATH: process.env.PATH })).toBe(
         resolveCodexHomeProcessLockKey(join(homedir(), '.codex'))
@@ -130,21 +141,25 @@ describe('withCodexHomeProcessLock', () => {
 
   it('keys a WSL UNC probe home and a WSL spawn env to the same lock', () => {
     const probeKey = resolveCodexHomeProcessLockKey('\\\\wsl$\\Ubuntu\\home\\user\\.codex')
+
     const spawnKey = resolveCodexHomeProcessLockKeyForSpawnEnv(
       { CODEX_HOME: '/home/user/.codex' },
       'Ubuntu'
     )
+
     expect(spawnKey).toBe(probeKey)
   })
 
   it('uses the WSL default sentinel when launcher filtering strips an ambient home', () => {
     const previousCodexHome = process.env.CODEX_HOME
     process.env.CODEX_HOME = '/host-only/codex-home'
+
     try {
       const inheritedKey = resolveCodexHomeProcessLockKeyForSpawnEnv(
         { CODEX_HOME: '/host-only/codex-home' },
         'Ubuntu'
       )
+
       const strippedKey = resolveCodexHomeProcessLockKeyForSpawnEnv({}, 'Ubuntu')
       expect(inheritedKey).toBe(strippedKey)
     } finally {

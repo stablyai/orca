@@ -30,16 +30,19 @@ export default function GitLabItemDialog({
   const itemId = item?.id ?? null
   const state = useGitLabItemDialogState(itemId)
   const { setRefreshNonce } = state
+
   const repoSelector = useMemo<GitLabDialogRepoSelector | null>(() => {
     if (!repoPath) {
       return null
     }
+
     return {
       repoPath,
       ...(repoId ? { repoId } : {}),
       ...(sourceContext ? { sourceContext } : {})
     }
   }, [repoId, repoPath, sourceContext])
+
   const updateCommentDraft = state.updateCommentDraft
 
   useGitLabItemDetailsEffect(item, repoSelector, state)
@@ -48,6 +51,7 @@ export default function GitLabItemDialog({
   const handleRefresh = useCallback(() => {
     setRefreshNonce((n) => n + 1)
   }, [setRefreshNonce])
+
   const detailsEditing = useGitLabDetailsEditing(item, repoSelector, state)
   const pipelineActions = useGitLabPipelineActions(item, repoSelector, state, handleRefresh)
   const reviewActions = useGitLabReviewActions(item, repoSelector, state)

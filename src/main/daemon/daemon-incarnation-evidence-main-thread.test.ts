@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ExactDaemonIncarnation } from './daemon-incarnation-evidence-types'
 
 const LINUX_BOOT_TIME_SECONDS = 1_699_000_000
+
 const LINUX_START_TICKS = 1_234
+
 const LINUX_CLOCK_TICKS_PER_SECOND = 100
 
 const { execFileMock, execFileSyncMock, readFileMock } = vi.hoisted(() => ({
@@ -41,9 +43,11 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 const { probeDaemonProcessIdentity } = await import('./daemon-incarnation-evidence')
 
 const endpoint = { socketPath: '/runtime/daemon.sock', tokenPath: '/runtime/daemon.token' }
+
 const exactIncarnation: ExactDaemonIncarnation = {
   identity: { pid: 42, startedAtMs: 1_700_000_000_000, launchNonce: 'launch-a' }
 }
+
 const daemonCommandLine = `node daemon-entry --socket ${endpoint.socketPath} --token ${endpoint.tokenPath}`
 
 describe('daemon audit evidence main-thread cost', () => {

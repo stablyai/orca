@@ -43,7 +43,9 @@ function pruneLayoutNodeForGroups(
     if (!validGroupIds.has(root.groupId) || placedGroupIds.has(root.groupId)) {
       return null
     }
+
     placedGroupIds.add(root.groupId)
+
     return root
   }
 
@@ -53,9 +55,11 @@ function pruneLayoutNodeForGroups(
   if (first === null) {
     return second
   }
+
   if (second === null) {
     return first
   }
+
   if (first === root.first && second === root.second) {
     return root
   }
@@ -78,25 +82,31 @@ function hydrateUnifiedFormat(
     if (!validWorktreeIds.has(worktreeId)) {
       continue
     }
+
     if (tabs.length === 0) {
       continue
     }
+
     const persistedEditFileIds = persistedEditFileIdsByWorktree[worktreeId] ?? new Set<string>()
+
     const generatedTitleByTerminalId = new Map(
       (session.tabsByWorktree[worktreeId] ?? [])
         .filter((tab) => tab.generatedTitle?.trim())
         .map((tab) => [tab.id, tab.generatedTitle!.trim()])
     )
+
     const quickCommandLabelByTerminalId = new Map(
       (session.tabsByWorktree[worktreeId] ?? [])
         .filter((tab) => tab.quickCommandLabel?.trim())
         .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
     )
+
     const aiVaultTitleByTerminalId = new Map(
       (session.tabsByWorktree[worktreeId] ?? [])
         .filter((tab) => tab.aiVaultTitle)
         .map((tab) => [tab.id, tab.aiVaultTitle!])
     )
+
     const hydratedTabs = [...tabs]
       .map((tab) => ({
         ...tab,
@@ -106,11 +116,14 @@ function hydrateUnifiedFormat(
         if (tab.contentType !== 'terminal') {
           return tab
         }
+
         const quickCommandLabel = tab.quickCommandLabel?.trim()
           ? tab.quickCommandLabel.trim()
           : quickCommandLabelByTerminalId.get(tab.entityId)
+
         const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
         const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.entityId)
+
         return {
           ...tab,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
@@ -124,6 +137,7 @@ function hydrateUnifiedFormat(
           // containing "::"; those are invalid pane-key tab ids.
           return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
         }
+
         // Why dropped rather than converted: a preview used to be an editor tab whose id encoded
         // the document, and its document was never persisted — so this chrome has always come back
         // naming a file no restore produces, which is the empty pane the surface was reported for.
@@ -133,15 +147,18 @@ function hydrateUnifiedFormat(
         if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
           return false
         }
+
         if (!isTransientEditorContentType(tab.contentType)) {
           return true
         }
+
         // Why: restore skips backing editor state for transient diff/conflict
         // items. Hydration must drop their tab chrome too or the split group
         // comes back pointing at a document that no longer exists.
         return persistedEditFileIds.has(tab.entityId)
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+
     // Why after the sort: the surviving record is the one the strip renders first.
     const deduped = dedupeEditorTabsWithinGroups(hydratedTabs)
     tabsByWorktree[worktreeId] = deduped.tabs
@@ -152,6 +169,7 @@ function hydrateUnifiedFormat(
     if (!validWorktreeIds.has(worktreeId)) {
       continue
     }
+
     if (groups.length === 0) {
       continue
     }
@@ -159,29 +177,36 @@ function hydrateUnifiedFormat(
     const hydratedTabsForWorktree = tabsByWorktree[worktreeId] ?? []
     const tabIdAliasesByGroup = tabIdAliasesByWorktree[worktreeId]
     const tabOwners = resolveTabGroupOwners(hydratedTabsForWorktree, groups, tabIdAliasesByGroup)
+
     const validatedGroups = appendOwnedTabIdsToGroups(groups, tabOwners).map((g) => {
       const tabIdAliases = tabIdAliasesByGroup?.get(g.id)
       const canonicalTabId = (tabId: string): string => tabIdAliases?.get(tabId) ?? tabId
+
       // Why: persisted tabOrder can contain duplicates from older buggy
       // writes. Deduping during hydration restores the store invariant before
       // later group operations branch on tab counts or neighbors.
       const tabOrder = dedupeTabOrder(
         g.tabOrder.map(canonicalTabId).filter((tid) => tabOwners.get(tid) === g.id)
       )
+
       const canonicalActiveTabId = g.activeTabId ? canonicalTabId(g.activeTabId) : null
+
       const activeTabId =
         canonicalActiveTabId && tabOwners.get(canonicalActiveTabId) === g.id
           ? canonicalActiveTabId
           : null
+
       // Why: persisted MRU may reference tabs that no longer exist. Sanitize
       // against the live tabOrder, then ensure the current active tab sits at
       // the tail so the first close after restore jumps back to the previous
       // tab rather than falling through to neighbor selection.
       const sanitizedRecent = sanitizeRecentTabIds(g.recentTabIds?.map(canonicalTabId), tabOrder)
+
       const recentTabIds =
         activeTabId && sanitizedRecent.at(-1) !== activeTabId
           ? [...sanitizedRecent.filter((id) => id !== activeTabId), activeTabId]
           : sanitizedRecent
+
       return {
         ...g,
         tabOrder,
@@ -189,35 +214,46 @@ function hydrateUnifiedFormat(
         recentTabIds
       }
     })
+
     const hydratedGroups = validatedGroups.filter((group, index) => {
       const hadTabsBeforeHydration = groups[index]?.tabOrder.length > 0
+
       if (group.tabOrder.length > 0) {
         return true
       }
+
       if (hadTabsBeforeHydration) {
         return false
       }
+
       return validatedGroups.every((candidate) => candidate.tabOrder.length === 0)
     })
+
     if (hydratedGroups.length === 0) {
       if ((tabsByWorktree[worktreeId] ?? []).length === 0) {
         delete tabsByWorktree[worktreeId]
       }
+
       continue
     }
 
     groupsByWorktree[worktreeId] = hydratedGroups
+
     const activeGroupId = selectHydratedActiveGroupId(
       hydratedGroups,
       session.activeGroupIdByWorktree?.[worktreeId]
     )
+
     if (activeGroupId) {
       activeGroupIdByWorktree[worktreeId] = activeGroupId
     }
+
     const hydratedGroupIds = new Set(hydratedGroups.map((group) => group.id))
+
     const hydratedLayout = session.tabGroupLayouts?.[worktreeId]
       ? pruneTabGroupLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
       : null
+
     // A partial layout must still render every surviving group.
     layoutByWorktree[worktreeId] = layoutSpanningGroups(hydratedGroups, hydratedLayout)
   }
@@ -245,6 +281,7 @@ function hydrateLegacyFormat(
     const terminalTabs = (session.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
       isValidTerminalTabId(tab.id)
     )
+
     const editorFiles = session.openFilesByWorktree?.[worktreeId] ?? []
 
     if (terminalTabs.length === 0 && editorFiles.length === 0) {
@@ -295,6 +332,7 @@ function hydrateLegacyFormat(
 
     const activeTabType = session.activeTabTypeByWorktree?.[worktreeId] ?? 'terminal'
     let activeTabId: string | null = null
+
     if (activeTabType === 'editor') {
       activeTabId = session.activeFileIdByWorktree?.[worktreeId] ?? null
     } else {
@@ -303,12 +341,14 @@ function hydrateLegacyFormat(
       // worktree's tab, so using it here reset every other worktree to its
       // first terminal on restart.
       const rememberedTabId = session.activeTabIdByWorktree?.[worktreeId]
+
       if (rememberedTabId && terminalTabs.some((t) => t.id === rememberedTabId)) {
         activeTabId = rememberedTabId
       } else if (session.activeTabId && terminalTabs.some((t) => t.id === session.activeTabId)) {
         activeTabId = session.activeTabId
       }
     }
+
     if (activeTabId && !tabs.some((t) => t.id === activeTabId)) {
       activeTabId = tabs[0]?.id ?? null
     }
@@ -345,5 +385,6 @@ export function buildHydratedTabState(
   if (session.unifiedTabs && session.tabGroups) {
     return hydrateUnifiedFormat(session, validWorktreeIds)
   }
+
   return hydrateLegacyFormat(session, validWorktreeIds)
 }

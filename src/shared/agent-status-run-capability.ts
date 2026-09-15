@@ -1,10 +1,13 @@
 export const AGENT_STATUS_RUNS_RUNTIME_CAPABILITY = 'agent-status.runs.v1' as const
 
 export const AGENT_STATUS_CAPABILITIES = [AGENT_STATUS_RUNS_RUNTIME_CAPABILITY] as const
+
 export type AgentStatusCapability = (typeof AGENT_STATUS_CAPABILITIES)[number]
 
 const AGENT_STATUS_CAPABILITY_SET: ReadonlySet<string> = new Set(AGENT_STATUS_CAPABILITIES)
+
 const MAX_CAPABILITIES = 256
+
 const MAX_CAPABILITY_LENGTH = 128
 
 /** Encode the status capabilities independently from advertising them on any transport. */
@@ -30,12 +33,15 @@ export function deserializeAgentStatusCapabilities(
   ) {
     return null
   }
+
   const capabilities = new Set<AgentStatusCapability>()
+
   for (const capability of value) {
     if (capability === AGENT_STATUS_RUNS_RUNTIME_CAPABILITY) {
       capabilities.add(capability)
     }
   }
+
   return capabilities
 }
 

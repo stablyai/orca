@@ -18,6 +18,7 @@ describe('check log excerpt byte-cap work', () => {
 
     expect(countedUnits).toBeLessThanOrEqual(PR_CHECK_LOG_TAIL_BYTES)
     expect(Buffer.byteLength(output)).toBe(PR_CHECK_LOG_TAIL_BYTES)
+
     if (position === 'recent') {
       expect(output).toBe('x'.repeat(PR_CHECK_LOG_TAIL_BYTES))
     } else {
@@ -30,6 +31,7 @@ describe('check log excerpt byte-cap work', () => {
     'preserves byte boundaries for %j',
     (unit) => {
       const width = Buffer.byteLength(unit)
+
       for (const delta of [-1, 0, 1]) {
         const count = Math.floor(PR_CHECK_LOG_TAIL_BYTES / width) + delta
         const input = unit.repeat(count)

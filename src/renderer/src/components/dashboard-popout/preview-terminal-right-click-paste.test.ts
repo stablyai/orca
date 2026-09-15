@@ -22,6 +22,7 @@ describe('installPreviewTerminalRightClickPaste', () => {
   const rightClick = (init: MouseEventInit = {}): MouseEvent => {
     const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, ...init })
     container.dispatchEvent(event)
+
     return event
   }
 
@@ -85,6 +86,7 @@ describe('installPreviewTerminalRightClickPaste', () => {
       isRightClickToPasteEnabled: () => true,
       pasteClipboardText
     })
+
     expect(rightClick().defaultPrevented).toBe(false)
     dispose()
 

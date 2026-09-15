@@ -31,6 +31,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
   'orchestration check': async ({ flags, client, cwd, json }) => {
     const wait = flags.has('wait')
     const peek = flags.has('peek')
+
     // Why: older runtimes strip unknown peek and run --unread --peek as destructive mark-read.
     if ([flags.has('unread'), peek, flags.has('all')].filter(Boolean).length > 1) {
       throw new RuntimeClientError(
@@ -38,11 +39,13 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         'Choose at most one message read mode: --unread, --peek, or --all.'
       )
     }
+
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
+
     try {
       result = await callOrchestrationMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
@@ -63,15 +66,18 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     } finally {
       stopKeepalive?.()
     }
+
     if (peek) {
       result = filterLegacyPeekResult(result, wait)
     }
+
     result = {
       ...result,
       result: prepareOrchestrationCheckOutput(result.result, terminal, flags.has('format'))
     }
     printResult(result, json, (value) => formatOrchestrationCheckText(value, terminal))
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
+
     if (compatibilityAck && compatibilityAck.length > 0) {
       await flushOrchestrationStdout()
       await client.call('orchestration.check', {
@@ -95,6 +101,7 @@ function filterLegacyPeekResult(
   const rawRowCount = result.result.messages.length
   const unreadOnly = result.result.messages.filter((message) => message.read !== 1)
   const removedReadRows = unreadOnly.length !== rawRowCount
+
   // Why: read rows prove a pre-peek runtime cannot honor wait, so fail instead of returning early.
   if (wait && removedReadRows && unreadOnly.length === 0) {
     throw new RuntimeClientError(
@@ -102,11 +109,13 @@ function filterLegacyPeekResult(
       'The connected runtime does not support --peek with --wait; upgrade the runtime or use --wait without --peek.'
     )
   }
+
   if (removedReadRows && rawRowCount >= 100) {
     console.error(
       'Warning: this runtime returned only its newest 100 messages for --peek; older unread messages may be missing. Upgrade the runtime for exact peek results.'
     )
   }
+
   return {
     ...result,
     result: {

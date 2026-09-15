@@ -271,8 +271,10 @@ describe('runtime file client', () => {
     let ownerChanged = false
     fsUploadExternalFileToRuntime.mockImplementation(async () => {
       ownerChanged = true
+
       return { byteLength: 40 * 1024 * 1024 }
     })
+
     const assertCurrent = vi.fn(() => {
       if (ownerChanged) {
         throw new Error('runtime owner generation changed')

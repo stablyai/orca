@@ -39,11 +39,14 @@ export function parseClaudeOAuthCredentialsJson(
 ): ClaudeOAuthCredentialReadResult {
   try {
     const oauth = (JSON.parse(raw) as ClaudeCredentials)?.claudeAiOauth
+
     const hasRefreshableCredentials =
       typeof oauth?.refreshToken === 'string' && oauth.refreshToken.trim() !== ''
+
     if (!oauth?.accessToken || typeof oauth.accessToken !== 'string') {
       return { token: null, hasRefreshableCredentials, source }
     }
+
     // Why: expiresAt is not authoritative for the usage endpoint; let the server decide.
     return { token: oauth.accessToken, hasRefreshableCredentials, source }
   } catch {
@@ -71,21 +74,26 @@ async function readFromKeychain(configDir?: string): Promise<ClaudeOAuthCredenti
 
   if (configDir) {
     const scoped = await readClaudeCredentialsFromStrictKeychain(configDir, 'scoped-keychain')
+
     if (scoped.token) {
       return scoped
     }
 
     const legacy = await readClaudeCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
+
     // Why: a real access token must not be shadowed by scoped refresh-only credentials.
     if (legacy.token) {
       return legacy
     }
+
     if (scoped.hasRefreshableCredentials) {
       return scoped
     }
+
     if (legacy.hasRefreshableCredentials) {
       return legacy
     }
+
     return scoped.keychainUnavailable || legacy.keychainUnavailable
       ? unavailableKeychainResult()
       : legacy
@@ -93,6 +101,7 @@ async function readFromKeychain(configDir?: string): Promise<ClaudeOAuthCredenti
 
   try {
     const credentials = await readActiveClaudeKeychainCredentials(configDir)
+
     return credentials
       ? parseClaudeOAuthCredentialsJson(credentials, 'legacy-keychain')
       : emptyClaudeOAuthCredentialReadResult()
@@ -107,6 +116,7 @@ export async function readClaudeCredentialsFromStrictKeychain(
 ): Promise<ClaudeOAuthCredentialReadResult> {
   try {
     const credentials = await readActiveClaudeKeychainCredentialsStrict(configDir)
+
     return credentials
       ? parseClaudeOAuthCredentialsJson(credentials, source)
       : emptyClaudeOAuthCredentialReadResult()
@@ -122,6 +132,7 @@ async function readFromCredentialsFile(
     configDir ?? path.join(homedir(), '.claude'),
     '.credentials.json'
   )
+
   try {
     return parseClaudeOAuthCredentialsJson(
       await readFile(credentialPath, 'utf-8'),
@@ -136,14 +147,17 @@ export async function readClaudeOAuthCredentials(
   options?: ClaudeOAuthCredentialReadOptions
 ): Promise<ClaudeOAuthCredentialReadResult> {
   const keychain = await readFromKeychain(options?.keychainConfigDir)
+
   if (keychain.token || keychain.hasRefreshableCredentials) {
     return keychain
   }
 
   const file = await readFromCredentialsFile(options?.credentialsFileConfigDir)
+
   if (file.token || file.hasRefreshableCredentials) {
     return file
   }
+
   return keychain.keychainUnavailable ? keychain : emptyClaudeOAuthCredentialReadResult()
 }
 
@@ -153,6 +167,7 @@ export function resolveClaudeOAuthCredentialReadOptions(
   if (!authPreparation) {
     return undefined
   }
+
   return {
     credentialsFileConfigDir: authPreparation.configDir,
     keychainConfigDir: authPreparation.configDir

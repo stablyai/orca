@@ -13,6 +13,7 @@ import {
 
 // Native chat (terminal⇄chat toggle) adoption; view-mode enum mirrors `Tab.viewMode` in shared/types.ts.
 export const nativeChatViewModeSchema = z.enum(['terminal', 'chat'])
+
 export const nativeChatToggledSchema = z
   .object({
     from_mode: nativeChatViewModeSchema,
@@ -20,24 +21,31 @@ export const nativeChatToggledSchema = z
     agent_kind: agentKindSchema
   })
   .strict()
+
 // `runtime`: local vs SSH/remote agent PTY; `'unknown'` when unresolved at send time.
 export const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
+
 export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
+
 export const nativeChatMessageSentSchema = z
   .object({
     agent_kind: agentKindSchema,
     runtime: nativeChatRuntimeSchema
   })
   .strict()
+
 export const nativeChatPickerOpenedSchema = z
   .object({ agent_kind: agentKindSchema, prefix: z.enum(['slash', 'dollar']) })
   .strict()
+
 export const nativeChatPickerItemAcceptedSchema = z
   .object({ agent_kind: agentKindSchema, item_kind: z.enum(['command', 'skill']) })
   .strict()
+
 export const nativeChatSendClassifiedSchema = z
   .object({ agent_kind: agentKindSchema, outcome: z.enum(['chat', 'command', 'unknown-token']) })
   .strict()
+
 export const nativeChatSkillDiscoverySchema = z
   .object({
     agent_kind: agentKindSchema,
@@ -47,21 +55,25 @@ export const nativeChatSkillDiscoverySchema = z
   .strict()
 
 export const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
+
 export const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 
 export const orcaCliFeatureTipSourceSchema = z.enum(['app_open', 'manual'])
+
 export const orcaCliFeatureTipShownSchema = z
   .object({
     source: orcaCliFeatureTipSourceSchema,
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
 export const orcaCliFeatureTipSetupClickedSchema = z
   .object({
     source: orcaCliFeatureTipSourceSchema,
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
 export const orcaCliFeatureTipSetupResultSchema = z
   .object({
     source: orcaCliFeatureTipSourceSchema,
@@ -76,6 +88,7 @@ export const cmdJPaletteFeatureTipShownSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
 export const cmdJPaletteFeatureTipAcknowledgedSchema = z
   .object({
     source: orcaCliFeatureTipSourceSchema,
@@ -88,6 +101,7 @@ export const featureWallOpenedSchema = z
     source: featureWallOpenSourceSchema
   })
   .strict()
+
 export const featureWallClosedSchema = z
   .object({
     dwell_ms: z.number().int().min(0).max(FEATURE_WALL_MAX_DWELL_MS),
@@ -101,22 +115,26 @@ export const featureWallClosedSchema = z
     completed_substep_count: z.number().int().min(0).max(9).optional()
   })
   .strict()
+
 export const featureWallTileFocusedSchema = z
   .object({
     tile_id: featureWallTileIdSchema
   })
   .strict()
+
 export const featureWallTileClickedSchema = z
   .object({
     tile_id: featureWallTileIdSchema
   })
   .strict()
+
 export const featureWallGroupSelectedSchema = z
   .object({
     group_id: featureWallWorkflowIdSchema,
     source: featureWallOpenSourceSchema
   })
   .strict()
+
 export const featureWallFeatureSelectedSchema = z
   .object({
     group_id: featureWallWorkflowIdSchema,
@@ -124,6 +142,7 @@ export const featureWallFeatureSelectedSchema = z
     source: featureWallOpenSourceSchema
   })
   .strict()
+
 export const featureWallDocsClickedSchema = z
   .object({
     group_id: featureWallWorkflowIdSchema,

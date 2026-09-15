@@ -19,16 +19,25 @@ import {
 } from '../../../shared/protocol-version'
 
 type RuntimeSubscribeArgs = Parameters<typeof window.api.runtimeEnvironments.subscribe>[0]
+
 type RuntimeSubscribeCallbacks = Parameters<typeof window.api.runtimeEnvironments.subscribe>[1]
 
 const jiraSearchIssuesLocal = vi.fn()
+
 const jiraListAssignableUsersLocal = vi.fn()
+
 const jiraSearchUsersLocal = vi.fn()
+
 const jiraCreateIssueLocal = vi.fn()
+
 const jiraReadStatusLocal = vi.fn()
+
 const jiraLookupIssueSummaryLocal = vi.fn()
+
 const jiraCancelIssueSummaryLocal = vi.fn()
+
 const runtimeCall = vi.fn()
+
 const runtimeSubscribe = vi.fn()
 
 beforeEach(() => {
@@ -68,12 +77,15 @@ afterEach(() => {
 describe('runtime Jira client search bounds', () => {
   function createRuntimeStatusWithoutJiraUserFieldsCapability() {
     const status = createCompatibleRuntimeStatusResponse()
+
     if (!status.ok) {
       throw new Error('Expected a successful compatibility fixture.')
     }
+
     status.result.capabilities = status.result.capabilities?.filter(
       (capability) => capability !== JIRA_USER_FIELDS_RUNTIME_CAPABILITY
     )
+
     return status
   }
 
@@ -84,16 +96,19 @@ describe('runtime Jira client search bounds', () => {
       projectId: 'project-1',
       hostId: 'local' as const
     }
+
     const runtimeContext = {
       ...localContext,
       hostId: 'runtime:env-1' as const
     }
+
     jiraReadStatusLocal.mockResolvedValue({ connected: true, viewer: null })
     jiraLookupIssueSummaryLocal.mockResolvedValue({ key: 'ORCA-1' })
     runtimeCall.mockImplementation(async (args: { method: string }) => {
       if (args.method === 'status.get') {
         return createCompatibleRuntimeStatusResponse()
       }
+
       return {
         id: 'rpc-1',
         ok: true,
@@ -137,6 +152,7 @@ describe('runtime Jira client search bounds', () => {
       projectId: 'project-1',
       hostId: 'local' as const
     }
+
     let rejectLookup: ((error: Error) => void) | undefined
     jiraLookupIssueSummaryLocal.mockReturnValue(
       new Promise((_resolve, reject) => {
@@ -164,6 +180,7 @@ describe('runtime Jira client search bounds', () => {
       projectId: 'project-1',
       hostId: 'ssh:server-1' as const
     }
+
     jiraReadStatusLocal.mockResolvedValue({ connected: false, viewer: null })
 
     await expect(jiraReadStatus(sshContext)).resolves.toMatchObject({ connected: false })
@@ -209,6 +226,7 @@ describe('runtime Jira client search bounds', () => {
       if (args.method === 'status.get') {
         return createCompatibleRuntimeStatusResponse()
       }
+
       return {
         id: 'rpc-1',
         ok: true,
@@ -271,6 +289,7 @@ describe('runtime Jira client search bounds', () => {
       if (args.method === 'status.get') {
         return createRuntimeStatusWithoutJiraUserFieldsCapability()
       }
+
       return {
         id: 'rpc-1',
         ok: true,
@@ -295,6 +314,7 @@ describe('runtime Jira client search bounds', () => {
       if (args.method === 'status.get') {
         return createCompatibleRuntimeStatusResponse()
       }
+
       return {
         id: 'rpc-1',
         ok: true,
@@ -339,6 +359,7 @@ describe('runtime Jira client search bounds', () => {
           args.method === 'jira.getIssueStream'
             ? { key: 'ORCA-1', description: '![shot](data:image/png;base64,abc)' }
             : [{ id: 'comment-1', body: '![shot](data:image/png;base64,abc)' }]
+
         callbacks.onResponse({
           id: 'rpc-1',
           ok: true,
@@ -351,6 +372,7 @@ describe('runtime Jira client search bounds', () => {
           result: { type: 'end' },
           _meta: { runtimeId: 'runtime-1' }
         })
+
         return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
       }
     )

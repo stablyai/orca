@@ -21,25 +21,32 @@ export class DaemonSessionBackgroundRouting {
     })
     const changed = this.options.transientFactRelay.setSessionBackground(sessionId, background)
     this.options.streamDataBatcher.refreshSessionDroppability(sessionId)
+
     if (!changed) {
       return {}
     }
+
     if (background) {
       this.options.transientFactRelay.seedSessionScanState(
         sessionId,
         this.options.host.getPartialEscapeTailAnsi(sessionId)
       )
     }
+
     const streamClientId = this.options.attachments.clientIdForSession(sessionId)
+
     if (!streamClientId) {
       return {}
     }
+
     const mode2031State = this.options.transientFactRelay.getMode2031ReplyScanState(sessionId)
+
     const scanSeedAnsi = background
       ? ''
       : mode2031State.pendingSubscribe
         ? mode2031State.tail
         : this.options.host.getPartialEscapeTailAnsi(sessionId)
+
     this.options.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
       type: 'event',
       event: 'sessionBackgroundMarker',
@@ -50,6 +57,7 @@ export class DaemonSessionBackgroundRouting {
         ...(mode2031State.pendingSubscribe ? { mode2031PendingSubscribe: true as const } : {})
       }
     })
+
     return {}
   }
 }

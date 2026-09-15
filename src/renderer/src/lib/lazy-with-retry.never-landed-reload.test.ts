@@ -16,6 +16,7 @@ import {
 } from './lazy-with-retry'
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+
 const RELOAD_SETTLE_GRACE_MS = 10_000
 
 // The dominant crash-time message across the shipped bundles (7/9 reports).
@@ -25,6 +26,7 @@ type Breadcrumb = { name: string; data: Record<string, unknown> }
 
 function installBreadcrumbSink(): Breadcrumb[] {
   const breadcrumbs: Breadcrumb[] = []
+
   ;(window as unknown as { api: unknown }).api = {
     crashReports: {
       recordBreadcrumb: (crumb: Breadcrumb) => {
@@ -32,6 +34,7 @@ function installBreadcrumbSink(): Breadcrumb[] {
       }
     }
   }
+
   return breadcrumbs
 }
 
@@ -55,6 +58,7 @@ describe('loadLazyWithRetry when the recovery reload never lands', () => {
 
   it('surfaces a recognizable LazyChunkLoadError so the boundary can contain it', async () => {
     const breadcrumbs = installBreadcrumbSink()
+
     const settled = loadLazyWithRetry(() => Promise.reject(CORRUPT_CHUNK_ERROR()), {
       retries: 0,
       reloadKey: 'right-sidebar'
@@ -79,6 +83,7 @@ describe('loadLazyWithRetry when the recovery reload never lands', () => {
 
   it('does not strand a sibling lazy import that fails while a reload is pending', async () => {
     installBreadcrumbSink()
+
     const first = loadLazyWithRetry(() => Promise.reject(CORRUPT_CHUNK_ERROR()), {
       retries: 0,
       reloadKey: 'app.root'
@@ -109,6 +114,7 @@ describe('loadLazyWithRetry when the recovery reload never lands', () => {
     const settled = loadLazyWithRetry(() => Promise.reject(CORRUPT_CHUNK_ERROR()), {
       retries: 0
     }).catch((error: unknown) => error)
+
     await vi.advanceTimersByTimeAsync(0)
 
     const vetoed = breadcrumbs.find((crumb) => crumb.name === 'lazy_chunk_reload_vetoed')
@@ -119,9 +125,11 @@ describe('loadLazyWithRetry when the recovery reload never lands', () => {
 
   it('leaves no guard behind that would block a later document from recovering', async () => {
     installBreadcrumbSink()
+
     const settled = loadLazyWithRetry(() => Promise.reject(CORRUPT_CHUNK_ERROR()), {
       retries: 0
     }).catch((error: unknown) => error)
+
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(RELOAD_SETTLE_GRACE_MS + 1)
 
@@ -131,9 +139,11 @@ describe('loadLazyWithRetry when the recovery reload never lands', () => {
 
   it('still surfaces ordinary evaluation bugs after a never-landed reload attempt', async () => {
     const error = new Error('render bug from lazy module evaluation')
+
     const settled = loadLazyWithRetry(() => Promise.reject(error), { retries: 0 }).catch(
       (rejection: unknown) => rejection
     )
+
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(RELOAD_SETTLE_GRACE_MS + 1)
 

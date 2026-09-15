@@ -22,12 +22,16 @@ export async function persistVisibilityAwareSettings(args: {
     shouldPublish = () => true,
     set
   } = args
+
   const target = getActiveRuntimeTarget(currentSettings)
+
   if ('worktreeVisibilityDefaults' in normalizedUpdates && target.kind === 'environment') {
     const { worktreeVisibilityDefaults, ...localUpdates } = normalizedUpdates
+
     if (target.environmentId !== supportedRuntimeEnvironmentId) {
       throw new Error('Update this server to configure visibility defaults.')
     }
+
     if (
       worktreeVisibilityDefaults &&
       target.environmentId !== sourceDefaultsSupportedRuntimeEnvironmentId &&
@@ -36,13 +40,17 @@ export async function persistVisibilityAwareSettings(args: {
     ) {
       throw new Error('Update this server to configure source defaults.')
     }
+
     const localSettings =
       Object.keys(localUpdates).length > 0
         ? ((await window.api.settings.set(localUpdates)) as GlobalSettings)
         : currentSettings
+
     let nextSettings = localSettings
+
     if (target.environmentId === supportedRuntimeEnvironmentId) {
       let result: { settings: Partial<GlobalSettings> }
+
       try {
         result = await callRuntimeRpc<{ settings: Partial<GlobalSettings> }>(
           target,
@@ -54,13 +62,16 @@ export async function persistVisibilityAwareSettings(args: {
         if (localSettings && shouldPublish()) {
           set((state) => {
             const currentTarget = getActiveRuntimeTarget(state.settings)
+
             const stillFocused =
               currentTarget.kind === 'environment' &&
               currentTarget.environmentId === target.environmentId
+
             const defaults =
               state.worktreeVisibilityDefaultsByHost[
                 toRuntimeExecutionHostId(target.environmentId)
               ] ?? currentSettings?.worktreeVisibilityDefaults
+
             return {
               settings:
                 stillFocused && defaults
@@ -69,20 +80,26 @@ export async function persistVisibilityAwareSettings(args: {
             }
           })
         }
+
         throw error
       }
+
       nextSettings = {
         ...localSettings,
         worktreeVisibilityDefaults: result.settings.worktreeVisibilityDefaults
       } as GlobalSettings
     }
+
     if (!shouldPublish()) {
       return
     }
+
     set((state) => {
       const currentTarget = getActiveRuntimeTarget(state.settings)
+
       const stillFocused =
         currentTarget.kind === 'environment' && currentTarget.environmentId === target.environmentId
+
       return {
         settings: stillFocused ? nextSettings : state.settings,
         worktreeVisibilityDefaultsByHost:
@@ -96,21 +113,28 @@ export async function persistVisibilityAwareSettings(args: {
             : state.worktreeVisibilityDefaultsByHost
       }
     })
+
     return
   }
+
   const nextSettings = await window.api.settings.set(normalizedUpdates)
+
   if (!shouldPublish()) {
     return
   }
+
   set((state) => ({
     settings: (() => {
       const persisted = (nextSettings as GlobalSettings | undefined) ?? state.settings
+
       if (!persisted || target.kind !== 'environment') {
         return persisted
       }
+
       const defaults =
         state.worktreeVisibilityDefaultsByHost[toRuntimeExecutionHostId(target.environmentId)] ??
         currentSettings?.worktreeVisibilityDefaults
+
       if (
         target.environmentId ===
           (state.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId ??
@@ -119,7 +143,9 @@ export async function persistVisibilityAwareSettings(args: {
       ) {
         return { ...persisted, worktreeVisibilityDefaults: defaults }
       }
+
       const { worktreeVisibilityDefaults: _unsupported, ...settingsWithoutDefaults } = persisted
+
       return settingsWithoutDefaults as GlobalSettings
     })(),
     ...('worktreeVisibilityDefaults' in normalizedUpdates

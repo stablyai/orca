@@ -61,9 +61,11 @@ export function registerDashboardPopoutHandlers(
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
+
     if (view !== undefined && view !== 'board' && view !== 'map') {
       return
     }
+
     createOrFocusDashboardPopout(store, view, {
       getKeybindings: () => keybindings?.getOverrides()
     })
@@ -74,16 +76,21 @@ export function registerDashboardPopoutHandlers(
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
+
     const admitted = admitDashboardSnapshot(snapshot)
+
     // Why: silently dropping left the pop-out replaying a stale board with no
     // trace of why it stopped updating.
     if (!admitted) {
       console.warn('[dashboard] rejected malformed snapshot; pop-out keeps its previous board')
+
       return
     }
+
     if (admitted.droppedCardCount > 0) {
       console.warn(`[dashboard] dropped ${admitted.droppedCardCount} invalid card(s) from snapshot`)
     }
+
     // The renderer omits repoIconsByRepoId once it is unchanged, so carry the
     // last map into the cache — a popout mounting mid-session is replayed this
     // and has no icons of its own to retain. The live popout does, so what is
@@ -101,9 +108,11 @@ export function registerDashboardPopoutHandlers(
     if (!isDashboardPopoutRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
+
     if (lastSnapshot) {
       event.sender.send('dashboard:snapshot', lastSnapshot)
     }
+
     sendToTrustedUIRenderer('dashboard:snapshotRequested', null)
   })
 
@@ -125,6 +134,7 @@ export function registerDashboardPopoutHandlers(
     ) {
       return
     }
+
     sendToTrustedUIRenderer('ui:ackDashboardAgent', (args as { paneKey: string }).paneKey)
   })
 
@@ -137,12 +147,16 @@ export function registerDashboardPopoutHandlers(
     ) {
       return
     }
+
     const mainWindow = getTrustedUIRendererWindow()
+
     if (!mainWindow) {
       return
     }
+
     safelyRevealWindow(mainWindow)
     mainWindow.webContents.send('ui:revealDashboardAgent', args)
+
     if (!isBackgroundLaunch()) {
       try {
         app.focus({ steal: true })
@@ -160,6 +174,7 @@ export function registerDashboardPopoutHandlers(
     ) {
       return
     }
+
     sendToTrustedUIRenderer('ui:spawnDashboardAgent', args)
   })
 
@@ -171,6 +186,7 @@ export function registerDashboardPopoutHandlers(
     ) {
       return
     }
+
     sendToTrustedUIRenderer('ui:sleepDashboardWorkspace', args)
   })
 }

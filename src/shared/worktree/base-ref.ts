@@ -38,15 +38,20 @@ export function worktreeBaseRefFamily(qualifiedRef: string): string | null {
   if (qualifiedRef.startsWith('refs/heads/')) {
     return qualifiedRef.slice('refs/heads/'.length) || null
   }
+
   if (qualifiedRef.startsWith('refs/remotes/')) {
     const withoutRemote = qualifiedRef.slice('refs/remotes/'.length)
     const separator = withoutRemote.indexOf('/')
+
     if (separator <= 0) {
       return null
     }
+
     const branch = withoutRemote.slice(separator + 1)
+
     // `refs/remotes/<remote>/HEAD` is a symbolic pointer, not a branch identity.
     return branch && branch !== 'HEAD' ? branch : null
   }
+
   return null
 }

@@ -11,6 +11,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 
 describe('operator-closed SSH lease tombstones', () => {
@@ -61,6 +62,7 @@ describe('operator-closed SSH lease tombstones', () => {
         }
       }
     })
+
     return store
   }
 
@@ -131,9 +133,11 @@ describe('operator-closed SSH lease tombstones', () => {
 
   it('retires every unreachable tombstone for the target, not only the one just closed', async () => {
     const store = await createStore()
+
     for (const ptyId of ['remote-pty-1', 'remote-pty-2', 'remote-pty-3']) {
       store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId, state: 'terminated' })
     }
+
     store.upsertSshRemotePtyLease({ targetId: 'ssh-2', ptyId: 'other-pty', state: 'terminated' })
     expect(store.getSshRemotePtyLeases()).toHaveLength(4)
 

@@ -8,7 +8,9 @@ import { PROTOCOL_VERSION } from './daemon-protocol-version'
 // repeats are re-sent only as an occasional heartbeat — the shared per-session telemetry
 // ceiling is 1,000 events for the whole app and audit data must not crowd it out.
 const REPEATED_OBSERVATION_INTERVAL_MS = 5 * 60_000
+
 const INCARNATION_CORRELATION_DOMAIN = 'orca:daemon-audit-eligibility:incarnation:v1'
+
 type AuditEligibilityCommonProperties = Omit<
   Extract<EventProps<'daemon_audit_eligibility'>, { exact_incarnation: 'unavailable' }>,
   'exact_incarnation'
@@ -30,6 +32,7 @@ export function createDaemonAuditEligibilityTracker(
   let lastProperties: string | null = null
   let lastTrackedAtMs = 0
   const correlateLaunchNonce = createLaunchNonceCorrelationCache()
+
   return (observation) => {
     // Why: the rate-limit bookkeeping runs inside the daemon's inventory path, so it is guarded
     // together with the emit — audit telemetry cannot affect daemon availability.
@@ -38,6 +41,7 @@ export function createDaemonAuditEligibilityTracker(
       const properties = JSON.stringify(eventProperties)
       const observedAtMs = monotonicNowMs()
       const elapsedMs = observedAtMs - lastTrackedAtMs
+
       if (
         properties === lastProperties &&
         elapsedMs >= 0 &&
@@ -45,6 +49,7 @@ export function createDaemonAuditEligibilityTracker(
       ) {
         return
       }
+
       lastProperties = properties
       lastTrackedAtMs = observedAtMs
       track('daemon_audit_eligibility', eventProperties)
@@ -59,6 +64,7 @@ function auditEligibilityProperties(
   correlateLaunchNonce: (launchNonce: string) => string
 ): EventProps<'daemon_audit_eligibility'> {
   const generationRole = generationRoleForProtocol(observation.context.protocolGeneration)
+
   const commonProperties: AuditEligibilityCommonProperties = {
     state: observation.state,
     reason: observation.reason,
@@ -75,9 +81,11 @@ function auditEligibilityProperties(
     process_reason: observation.processReason,
     endpoint_state: observation.endpointState
   }
+
   if (!observation.exactIncarnation) {
     return { ...commonProperties, exact_incarnation: 'unavailable' }
   }
+
   return {
     ...commonProperties,
     exact_incarnation: exactIncarnationKind(observation.exactIncarnation),
@@ -91,9 +99,11 @@ function generationRoleForProtocol(protocolGeneration: number): 'current' | 'leg
   if (protocolGeneration === PROTOCOL_VERSION) {
     return 'current'
   }
+
   if (protocolGeneration > 0 && protocolGeneration < PROTOCOL_VERSION) {
     return 'legacy'
   }
+
   throw new Error('unsupported_daemon_audit_protocol_generation')
 }
 
@@ -108,11 +118,13 @@ function exactIncarnationKind(
 function createLaunchNonceCorrelationCache(): (launchNonce: string) => string {
   let cachedNonce: string | null = null
   let cachedCorrelation = ''
+
   return (launchNonce) => {
     if (launchNonce !== cachedNonce) {
       cachedNonce = launchNonce
       cachedCorrelation = hashLaunchNonce(launchNonce)
     }
+
     return cachedCorrelation
   }
 }
@@ -123,5 +135,6 @@ function hashLaunchNonce(launchNonce: string): string {
     .update('\0')
     .update(launchNonce)
     .digest('hex')
+
   return `v1:${digest.slice(0, 32)}`
 }

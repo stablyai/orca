@@ -6,6 +6,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = makePaneKey('tab-1', LEAF)
 
 let dir: string
@@ -21,6 +22,7 @@ afterEach(() => {
 async function startServer(): Promise<AgentHookServer> {
   const server = new AgentHookServer()
   await server.start({ env: 'production', userDataPath: dir })
+
   return server
 }
 
@@ -61,6 +63,7 @@ function paneState(server: AgentHookServer): string {
 describe('reconcileEndedProcessForPaneKeys', () => {
   it('retires a working row whose process is certifiably dead', async () => {
     const server = await startServer()
+
     try {
       claudeRow(server, 'working')
       expect(paneState(server)).toBe('working')
@@ -75,6 +78,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
   it('retires a waiting row — a wait whose owner is dead is not a wait', async () => {
     const server = await startServer()
+
     try {
       claudeRow(server, 'waiting')
 
@@ -90,6 +94,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
     // An interrupted lead suppresses the gate while leaving the latch set, so a row can read `done`
     // with a latch that would re-gate `working` on the pane's very next event.
     const server = await startServer()
+
     try {
       claudeRow(server, 'done')
       server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.add(PANE)
@@ -106,6 +111,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
   it('is a no-op for a pane with nothing to retire', async () => {
     const server = await startServer()
+
     try {
       expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(0)
     } finally {
@@ -119,6 +125,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
     // pane `working` — and the pane's PTY is still there to resume into, so retiring the pane's live
     // claims must not take it. Without the option it goes with everything else.
     const server = await startServer()
+
     try {
       resumableClaudeRow(server)
       server.dropStatusEntry(PANE)
@@ -151,6 +158,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
   it('takes the resume identity too on a certified PTY exit, where no pane is left to resume into', async () => {
     const server = await startServer()
+
     try {
       resumableClaudeRow(server)
       server.dropStatusEntry(PANE)
@@ -165,6 +173,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
   it('drops the session owner so a rebound pane is not read as a session replacement', async () => {
     const server = await startServer()
+
     try {
       claudeRow(server, 'working')
       server._getStateForTests().claudeSessionOwnerByPaneKey.set(PANE, 'session-a')

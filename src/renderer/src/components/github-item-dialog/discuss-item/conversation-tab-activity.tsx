@@ -78,6 +78,7 @@ export function ConversationTabActivity({
         <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
           {getPrCommentAudienceFilters().map((filter) => {
             const isActive = commentFilter === filter.value
+
             return (
               <button
                 key={filter.value}

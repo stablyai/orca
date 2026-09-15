@@ -54,6 +54,7 @@ export const CheckParams = z
       params.peek === true,
       params.all === true || (params.unread === false && params.peek !== true)
     ].filter(Boolean)
+
     if (modes.length > 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -144,6 +145,7 @@ export const ResetParams = z
     const selectedScopeCount = [params.all, params.tasks, params.messages].filter(
       (scope) => scope === true
     ).length
+
     if (selectedScopeCount !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

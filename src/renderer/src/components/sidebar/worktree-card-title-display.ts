@@ -9,17 +9,21 @@ type WorktreeCardTitleDisplayInput = {
 
 function normalizeComparableTitle(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }
 
 function normalizeTitle(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   if (!trimmed) {
     return null
   }
+
   if (/^(Loading .+|.+ details unavailable)$/i.test(trimmed)) {
     return null
   }
+
   return trimmed
 }
 

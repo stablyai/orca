@@ -36,23 +36,29 @@ export function RepositoryWorktreeDefaultsSection({
   forceVisible
 }: RepositoryWorktreeDefaultsSectionProps): React.JSX.Element {
   const isLegacyRepo = isLegacyRepoForExternalWorktreeVisibility(repo)
+
   const globalVisibility =
     settings?.worktreeVisibilityDefaults?.external ?? (isLegacyRepo ? 'show' : 'hide')
+
   const effectiveVisibility = effectiveExternalWorktreeVisibility(
     repo,
     isLegacyRepo,
     settings?.worktreeVisibilityDefaults
   )
+
   const updateVisibility = async (value: string): Promise<void> => {
     const visibility = value === 'global' ? null : value === 'show' ? 'show' : 'hide'
     let updated = await updateRepo(repo.id, { externalWorktreeVisibility: visibility })
+
     if (updated === false && visibility === null) {
       updated = await updateRepo(repo.id, { externalWorktreeVisibility: effectiveVisibility })
     }
+
     if (updated !== false) {
       await refreshRepo(repo.id)
     }
   }
+
   return (
     <>
       <SearchableSetting
@@ -186,11 +192,13 @@ export function RepositoryWorktreeDefaultsSection({
           onTextChange={() => {}}
           onBlur={(e) => {
             const worktreeBasePath = e.currentTarget.value.trim() || undefined
+
             // Why: even an unchanged worktreeBasePath update asks main to
             // prepare the root, which can touch the filesystem.
             if (worktreeBasePath === (repo.worktreeBasePath?.trim() || undefined)) {
               return
             }
+
             updateRepo(repo.id, { worktreeBasePath })
           }}
           className="h-9 text-sm"

@@ -29,10 +29,12 @@ export function useNativeChatPaneFileDropClaim(claim: NativeChatPaneDropClaim): 
     claimRef.current = claim
   })
   const { scopeKey, disabled } = claim
+
   const registration = useMemo<NativeChatPaneDropRegistration>(
     () => ({ getClaim: () => claimRef.current, scopeKey }),
     [scopeKey]
   )
+
   // A guard transition ends the current hover before the next paint.
   useLayoutEffect(() => register?.(registration), [disabled, register, registration])
 }
@@ -46,9 +48,11 @@ export function NativeChatPaneFileDropSurface({
 }): React.JSX.Element {
   const [registration, setRegistration] = useState<NativeChatPaneDropRegistration | null>(null)
   const [isDragActive, setIsDragActive] = useState(false)
+
   const register = useMemo<RegisterPaneDropClaim>(
     () => (next) => {
       setRegistration(next)
+
       return () => {
         setRegistration((current) => (current === next ? null : current))
         setIsDragActive(false)
@@ -56,6 +60,7 @@ export function NativeChatPaneFileDropSurface({
     },
     []
   )
+
   const handlers = useMemo(
     () =>
       makeNativeChatPaneFileDropHandlers({
@@ -64,14 +69,17 @@ export function NativeChatPaneFileDropSurface({
       }),
     [registration]
   )
+
   // Subscribe before hover renders: preload can consume a drop before that commit.
   useLayoutEffect(() => {
     if (!registration) {
       return
     }
+
     const clear = (): void => setIsDragActive(false)
     document.addEventListener('drop', clear, true)
     document.addEventListener('dragend', clear, true)
+
     return () => {
       document.removeEventListener('drop', clear, true)
       document.removeEventListener('dragend', clear, true)

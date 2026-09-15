@@ -28,18 +28,23 @@ export function resolveAutomationAuthorityHealth(
   if (!input.compatible) {
     return 'incompatible'
   }
+
   if (!input.reachable) {
     return 'unavailable'
   }
+
   if (input.queryState === 'error') {
     return 'stale-error'
   }
+
   if (input.queryState === 'refreshing') {
     return 'refreshing'
   }
+
   if (input.queryState === 'loading') {
     return input.hasData ? 'refreshing' : 'loading'
   }
+
   // Why: idle with nothing cached has not produced a list yet, so it is still loading.
   return input.hasData ? 'fresh' : 'loading'
 }
@@ -72,10 +77,13 @@ export function resolveSshExecutionHealth(
   if (catalogState === 'removed') {
     return 'unavailable'
   }
+
   if (catalogState === 'unhydrated') {
     return 'unknown'
   }
+
   const effective = status ?? missingStatus
+
   return effective ? executionHealthForStatus(effective) : 'unknown'
 }
 

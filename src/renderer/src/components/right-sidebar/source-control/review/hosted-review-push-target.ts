@@ -17,6 +17,7 @@ export function hasUsableHostedReviewPushTarget(args: {
       args.upstreamStatus.upstreamName === getPublishTargetDisplayName(args.pushTarget)
     )
   }
+
   if (args.hasResolvableHostedReviewPushTargetLink) {
     // Why: a same-repo review's head is the checked-out branch, so a real
     // upstream tracking it is safe before the resolver hydrates. Fork/cross-repo
@@ -29,6 +30,7 @@ export function hasUsableHostedReviewPushTarget(args: {
       gitRefTargetsBranchName(args.upstreamStatus.upstreamName, args.branchName)
     )
   }
+
   return args.upstreamStatus?.hasConfiguredPushTarget === true
 }
 
@@ -83,6 +85,7 @@ export function resolveHostedReviewActionUpstreamStatus(args: {
     args.isHostedReviewStateLoading ||
     args.hostedReviewState === 'open' ||
     args.hostedReviewState === 'draft'
+
   if (
     args.hasHostedReviewLink &&
     hostedReviewMayStillNeedItsOwnTarget &&
@@ -92,6 +95,7 @@ export function resolveHostedReviewActionUpstreamStatus(args: {
     // push/status actions must not use that upstream until the review target is known.
     return { hasUpstream: false, ahead: 0, behind: 0 }
   }
+
   return args.upstreamStatus
 }
 
@@ -102,6 +106,7 @@ export function resolveHostedReviewStateForActions(args: {
   if (args.hostedReviewState) {
     return args.hostedReviewState
   }
+
   // Why: SSH-backed linked reviews may not have live review state, but Publish
   // Branch is unsafe until the linked review target is usable.
   return args.hasResolvableHostedReviewPushTargetLink ? 'open' : null

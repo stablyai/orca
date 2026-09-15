@@ -30,6 +30,7 @@ export function evaluateCompat(input: {
       requiredMobileVersion: requiredMobile
     }
   }
+
   if (desktopVersion < MIN_COMPATIBLE_DESKTOP_VERSION) {
     return {
       kind: 'blocked',
@@ -38,5 +39,6 @@ export function evaluateCompat(input: {
       requiredDesktopVersion: MIN_COMPATIBLE_DESKTOP_VERSION
     }
   }
+
   return { kind: 'ok' }
 }

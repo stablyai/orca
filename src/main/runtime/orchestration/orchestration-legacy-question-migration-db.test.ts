@@ -10,6 +10,7 @@ describe('OrchestrationDb legacy question migration', () => {
 
   afterEach(() => {
     db?.close()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -40,9 +41,11 @@ describe('OrchestrationDb legacy question migration', () => {
         dispatchId: created.fixture.legacyDispatchId
       })
     })
+
     if (readAndAcknowledge) {
       db.markAsRead([questionId])
     }
+
     const coordinator = db.commitLegacyCompatibilityPrincipal({
       runId: adoptedRunId,
       role: 'coordinator',
@@ -52,6 +55,7 @@ describe('OrchestrationDb legacy question migration', () => {
       launchTokenHash: 'coord_launch_hash',
       processIncarnation: 'process_coord'
     }).principal
+
     if (readAndAcknowledge) {
       const recovery = db.getLegacyMailPage({ principalId: coordinator.id })
       expect(recovery.messages.map((message) => message.id)).toContain(questionId)
@@ -60,6 +64,7 @@ describe('OrchestrationDb legacy question migration', () => {
         messageIds: recovery.messages.map((message) => message.id)
       })
     }
+
     db.bindRun({
       runId: adoptedRunId,
       coordinatorHandle: 'term_current_coord',
@@ -78,6 +83,7 @@ describe('OrchestrationDb legacy question migration', () => {
     raw.exec('DROP TABLE question_threads')
     raw.pragma('user_version = 19')
     raw.close()
+
     return { dbPath: created.fixture.dbPath, adoptedRunId, questionId }
   }
 

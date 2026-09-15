@@ -111,6 +111,7 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   setClearBackgroundedDeliverySyncForPty((id: string) => {
     session.backgroundedDeliverySyncByPty.delete(id)
   })
+
   if (session.runtime) {
     session.runtime.onRemoteTerminalViewPresenceChanged = (id) =>
       session.syncPtyBackgroundedDelivery(id, 'remote-view')
@@ -135,9 +136,11 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()
     session.deliveryResyncUnansweredWarnLogged = false
+
     for (const id of session.rendererDeliveryAccountingByPty.keys()) {
       session.sshOutputIntake?.transferPtyProjections(id, 'renderer-lifecycle-reset')
     }
+
     session.rendererDeliveryAccountingByPty.clear()
     session.rendererInFlightTotalChars = 0
     session.clearPendingPtyData()

@@ -33,6 +33,7 @@ describe('applyMobileWorkspaceLineage', () => {
       displayName: 'parent',
       worktreeInstanceId: 'parent-instance'
     })
+
     const child = worktree({
       worktreeId: 'child',
       displayName: 'child',
@@ -85,6 +86,7 @@ describe('applyMobileWorkspaceLineage', () => {
 
   it('does not nest stale lineage when instance ids no longer match', () => {
     const parent = worktree({ worktreeId: 'parent', worktreeInstanceId: 'new-parent-instance' })
+
     const child = worktree({
       worktreeId: 'child',
       parentWorktreeId: 'parent',

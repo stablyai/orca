@@ -18,6 +18,7 @@ export const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> =
   ['.aac', 'audio/aac'],
   ['.flac', 'audio/flac']
 ])
+
 const BUILT_IN_NOTIFICATION_SOUNDS: ReadonlyMap<string, string> = new Map([
   ['two-tone', twoToneSoundPath],
   ['bong', bongSoundPath],
@@ -29,6 +30,7 @@ const BUILT_IN_NOTIFICATION_SOUNDS: ReadonlyMap<string, string> = new Map([
   ['clack', clackSoundPath],
   ['beep', beepSoundPath]
 ])
+
 type NotificationSoundId = NotificationSettings['customSoundId']
 
 export function getEffectiveNotificationSoundId(
@@ -42,22 +44,30 @@ export function getSelectedNotificationSoundPath(settings: NotificationSettings)
   reason?: 'missing-path' | 'invalid-path' | 'unsupported-type'
 } {
   const customSoundId = getEffectiveNotificationSoundId(settings)
+
   if (customSoundId === 'system') {
     return { path: null, reason: 'missing-path' }
   }
+
   if (customSoundId !== 'custom') {
     const builtInPath = BUILT_IN_NOTIFICATION_SOUNDS.get(customSoundId)
+
     return builtInPath ? { path: builtInPath } : { path: null, reason: 'missing-path' }
   }
+
   if (!settings.customSoundPath) {
     return { path: null, reason: 'missing-path' }
   }
+
   const normalizedPath = normalize(settings.customSoundPath)
+
   if (!isAbsolute(normalizedPath)) {
     return { path: null, reason: 'invalid-path' }
   }
+
   if (!NOTIFICATION_SOUND_MIME_BY_EXTENSION.has(extname(normalizedPath).toLowerCase())) {
     return { path: null, reason: 'unsupported-type' }
   }
+
   return { path: normalizedPath }
 }

@@ -81,6 +81,7 @@ export function cloneClaudeSessionParseState(
 export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: string): void {
   const { accumulator } = state
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
@@ -88,25 +89,30 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
     accumulator.sessionId = record.sessionId.trim()
   }
+
   updateTimeline(accumulator, extractString(record.timestamp))
   updateLatestLocation(accumulator, record)
 
   if (record.type === 'custom-title') {
     accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')
+
     return
   }
 
   if (record.type === 'ai-title') {
     const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
+
     if (title) {
       // Claude can revise generated names; AI Vault should mirror the current one.
       state.generatedTitle = title
     }
+
     return
   }
 
   if (record.type === 'agent-name' && !state.generatedTitle) {
     state.metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
+
     return
   }
 
@@ -123,29 +129,35 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
     } else if (record.operation === 'remove' || record.operation === 'dequeue') {
       accumulator.queuedMessageCount = Math.max(0, accumulator.queuedMessageCount - 1)
     }
+
     return
   }
 
   if (record.type === 'last-prompt') {
     const prompt = normalizePromptField(record.lastPrompt)
+
     if (prompt) {
       accumulator.lastUserPrompt = prompt
     }
+
     return
   }
 
   if (record.type === 'user') {
     accumulator.messageCount++
     const title = extractMessageText(record.message)
+
     // Meta prompts (injected context) only seed the last-resort title. Some
     // injected turns (task notifications) carry no isMeta, so also gate on
     // the known-tag classifier — a real prompt pasting a custom `<my-element>`
     // must seed the primary title, not be demoted as machinery.
     const isMetaUserTurn =
       record.isMeta === true || (title != null && isKnownHarnessInjectedUserTurnText(title))
+
     addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
       seedFirstUserPrompt: !isMetaUserTurn
     })
+
     if (title) {
       if (isMetaUserTurn) {
         state.metaTitle ??= title
@@ -153,6 +165,7 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
         state.firstUserTitle ??= title
       }
     }
+
     return
   }
 
@@ -161,9 +174,11 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
     const message = asRecord(record.message)
     addPreviewContent(accumulator, 'assistant', message?.content, record.timestamp)
     const model = extractString(message?.model)
+
     if (model) {
       accumulator.model = model
     }
+
     accumulator.totalTokens += claudeUsageTotal(message?.usage)
   }
 }
@@ -180,6 +195,7 @@ export async function finalizeClaudeSessionParseState(
   // session name (ai-title) should outrank the raw first prompt when present.
   snapshot.accumulator.fallbackTitle =
     snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
+
   // Every session's sibling subagent transcripts are counted (one readdir):
   // the row UI shows the count without expanding details, and for zero-turn
   // transcripts it doubles as the recoverable-content signal. The sibling dir
@@ -189,11 +205,13 @@ export async function finalizeClaudeSessionParseState(
   // already covered by the undefined-executionHostId branch.
   const ownsTranscriptDisk =
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
+
   if (ownsTranscriptDisk) {
     snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
       snapshot.accumulator.filePath
     )
   }
+
   return finalizeSession(snapshot.accumulator, platform, options)
 }
 
@@ -227,6 +245,7 @@ export async function parseClaudeSessionFile(
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
+
   return parseClaudeSessionLines({ file, lines, platform, messages })
 }
 
@@ -253,8 +272,10 @@ async function parseClaudeSessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createClaudeSessionParseState(args.file, args.messages)
+
   for await (const line of args.lines) {
     consumeClaudeSessionLine(state, line)
   }
+
   return finalizeClaudeSessionParseState(state, args.platform, args.options)
 }

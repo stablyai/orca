@@ -10,7 +10,9 @@ export async function resolveCompareRef(
     const { stdout } = await gitExecFileAsync(['branch', '--show-current'], {
       ...gitOptionsForWorktree(worktreePath, options)
     })
+
     const branch = stdout.trim()
+
     return branch || 'HEAD'
   } catch {
     return 'HEAD'
@@ -25,6 +27,7 @@ export async function resolveRefOid(
   const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', '--end-of-options', ref], {
     ...gitOptionsForWorktree(worktreePath, options)
   })
+
   return stdout.trim()
 }
 
@@ -37,6 +40,7 @@ export async function resolveMergeBase(
   const { stdout } = await gitExecFileAsync(['merge-base', baseOid, headOid], {
     ...gitOptionsForWorktree(worktreePath, options)
   })
+
   return stdout.trim()
 }
 
@@ -52,7 +56,9 @@ export async function countCompareDivergence(
     ['rev-list', '--left-right', '--count', `${baseOid}...${headOid}`],
     { ...gitOptionsForWorktree(worktreePath, options) }
   )
+
   const [behind = '', ahead = ''] = stdout.trim().split(/\s+/)
+
   return {
     ahead: Number.parseInt(ahead, 10) || 0,
     behind: Number.parseInt(behind, 10) || 0

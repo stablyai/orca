@@ -27,11 +27,13 @@ type VisibilityHarness = {
 function createVisibilityHarness(initiallyVisible = true): VisibilityHarness {
   let visible = initiallyVisible
   let listener: (() => void) | null = null
+
   return {
     source: {
       isWindowVisible: () => visible,
       onWindowBecameVisible: (nextListener) => {
         listener = nextListener
+
         return () => {
           if (listener === nextListener) {
             listener = null
@@ -60,6 +62,7 @@ function makeTarget(
     nestWorkspaces: false,
     ...config
   }
+
   return {
     key: `${kind}:local:${path}`,
     kind,
@@ -80,6 +83,7 @@ async function waitForEvents(
     },
     { timeout: 5_000, interval: 20 }
   )
+
   return events.flat()
 }
 
@@ -93,6 +97,7 @@ describe('worktree base directory poller', () => {
   async function makeRoot(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'orca-base-poller-'))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
+
     // Why: macOS tmpdir lives behind the /var -> /private/var symlink and
     // native watcher events report resolved paths; production targets are
     // realpath'd the same way (canonicalizeExistingPath).
@@ -103,12 +108,14 @@ describe('worktree base directory poller', () => {
     const root = await makeRoot()
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('base', root)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     const worktree = join(root, 'external-1')
@@ -118,6 +125,7 @@ describe('worktree base directory poller', () => {
     const afterCreate = await waitForEvents(received, (flat) =>
       flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
     )
+
     expect(
       afterCreate.filter((event) => event.type === 'create' && event.path.endsWith('.git'))
     ).toHaveLength(1)
@@ -132,12 +140,14 @@ describe('worktree base directory poller', () => {
     const root = await makeRoot()
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('base', root)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     const worktree = join(root, 'external-2')
@@ -156,12 +166,14 @@ describe('worktree base directory poller', () => {
     const root = await makeRoot()
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('base', root, { nestWorkspaces: true })
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     const worktree = join(root, 'project', 'external-3')
@@ -182,12 +194,14 @@ describe('worktree base directory poller', () => {
     const received: WorktreeBasePollEvent[][] = []
     const fullScans: number[] = []
     const target = makeTarget('base', root)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS, onFullScan: () => fullScans.push(Date.now()) }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     // ~8 idle ticks: under the backstop cadence, so the gate should skip
@@ -220,6 +234,7 @@ describe('worktree base directory poller', () => {
     let writeMarkerOnNextProbe = false
     const pendingMarkerMaxTicks = WORKTREE_BASE_BACKSTOP_TICKS * 2
     const markerCreationTick = pendingMarkerMaxTicks * 2 + WORKTREE_BASE_BACKSTOP_TICKS * 4
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
@@ -229,12 +244,14 @@ describe('worktree base directory poller', () => {
         pendingMarkerMaxTicks,
         onFullScan: () => {
           fullScans += 1
+
           if (fullScans * WORKTREE_BASE_BACKSTOP_TICKS === markerCreationTick) {
             writeFileSync(markerPath, 'gitdir: elsewhere')
           }
         },
         onPendingMarkerProbe: (path) => {
           pendingMarkerProbes += 1
+
           if (writeMarkerOnNextProbe && path === markerPath) {
             writeMarkerOnNextProbe = false
             writeFileSync(markerPath, 'gitdir: elsewhere')
@@ -242,6 +259,7 @@ describe('worktree base directory poller', () => {
         }
       }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     await waitForEvents(received, (flat) =>
@@ -254,6 +272,7 @@ describe('worktree base directory poller', () => {
     )
     writeMarkerOnNextProbe = true
     await mkdir(ordinaryFolder)
+
     const events = await waitForEvents(
       received,
       (flat) =>
@@ -273,6 +292,7 @@ describe('worktree base directory poller', () => {
     const target = makeTarget('base', root)
     const snapshotTicks: number[] = []
     let raced = false
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
@@ -281,15 +301,18 @@ describe('worktree base directory poller', () => {
         pollIntervalMs: 0,
         onSnapshotTaken: (tick) => {
           snapshotTicks.push(tick)
+
           if (raced) {
             return
           }
+
           raced = true
           mkdirSync(worktree)
           writeFileSync(join(worktree, '.git'), 'gitdir: elsewhere')
         }
       }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     await waitForEvents(received, (flat) =>
@@ -310,6 +333,7 @@ describe('worktree base directory poller', () => {
     const received: WorktreeBasePollEvent[][] = []
     const fullScans: number[] = []
     const target = makeTarget('base', root)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
@@ -320,6 +344,7 @@ describe('worktree base directory poller', () => {
         onFullScan: () => fullScans.push(Date.now())
       }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     visibility.hide()
@@ -344,12 +369,14 @@ describe('worktree base directory poller', () => {
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('base', root)
     const visibility = createWorktreePollerWindowVisibility(() => null)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS, visibility }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     const worktree = join(root, 'headless-add')
@@ -375,17 +402,20 @@ describe('worktree base directory poller', () => {
       isVisible: () => false,
       isMinimized: () => false
     }))
+
     expect(visibility.isWindowVisible()).toBe(true)
     expect(visibility.isWindowVisible()).toBe(true)
   })
 
   it('parks only after the window has been shown at least once', () => {
     let visible = true
+
     const visibility = createWorktreePollerWindowVisibility(() => ({
       isDestroyed: () => false,
       isVisible: () => visible,
       isMinimized: () => false
     }))
+
     // Shown at least once: a later reveal will fire the visibility signal to resume.
     expect(visibility.isWindowVisible()).toBe(true)
     // Now hidden — a previously-shown window parks (its show/restore will resume it).
@@ -397,6 +427,7 @@ describe('worktree base directory poller', () => {
     const commonDir = await makeRoot()
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('git-common', commonDir)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
@@ -404,6 +435,7 @@ describe('worktree base directory poller', () => {
       // Force the non-darwin poll path so this test is deterministic on all CI.
       { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     const entry = join(commonDir, 'worktrees', 'external-4')
@@ -438,12 +470,14 @@ describe('worktree base directory poller', () => {
 
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('git-common', commonDir)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     // Why: rewriting an existing HEAD in place changes only the file's own metadata, never the
@@ -465,12 +499,14 @@ describe('worktree base directory poller', () => {
 
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('git-common', commonDir)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     // commit --amend appends to the reflog inside logs/ — the entry dir mtime
@@ -490,12 +526,14 @@ describe('worktree base directory poller', () => {
 
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('git-common', commonDir)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     // An in-place rewrite leaves the entry-dir signature untouched, so only
@@ -514,12 +552,14 @@ describe('worktree base directory poller', () => {
 
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('git-common', commonDir)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -535,6 +575,7 @@ describe('worktree base directory poller', () => {
     const commonDir = await makeRoot()
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('git-common', commonDir)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
@@ -542,6 +583,7 @@ describe('worktree base directory poller', () => {
       // Force the non-darwin poll path so this test is deterministic on all CI.
       { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     const headFile = join(commonDir, 'HEAD')
@@ -566,6 +608,7 @@ describe('worktree base directory poller', () => {
     const received: WorktreeBasePollEvent[][] = []
     const fullScans: number[] = []
     const target = makeTarget('git-common', commonDir)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
@@ -577,6 +620,7 @@ describe('worktree base directory poller', () => {
         onFullScan: () => fullScans.push(Date.now())
       }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     visibility.hide()
@@ -602,12 +646,14 @@ describe('worktree base directory poller', () => {
 
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('base', root)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       (events) => received.push(events),
       { pollIntervalMs: POLL_MS }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     await rm(root, { recursive: true, force: true })
@@ -622,12 +668,14 @@ describe('worktree base directory poller', () => {
       await mkdir(join(commonDir, 'worktrees'))
       const received: WorktreeBasePollEvent[][] = []
       const target = makeTarget('git-common', commonDir)
+
       const poller = await startWorktreeBaseDirectoryPoller(
         target,
         () => target.repos,
         (events) => received.push(events),
         { pollIntervalMs: POLL_MS, platform: 'darwin' }
       )
+
       cleanups.push(() => poller.unsubscribe())
 
       const entry = join(commonDir, 'worktrees', 'wt-a')
@@ -649,6 +697,7 @@ describe('worktree base directory poller', () => {
       const commonDir = await makeRoot()
       const received: WorktreeBasePollEvent[][] = []
       const visibility = createWorktreePollerWindowVisibility(() => null)
+
       const poller = await startGitCommonPrimaryPolling(
         commonDir,
         () => [],
@@ -656,6 +705,7 @@ describe('worktree base directory poller', () => {
         POLL_MS,
         visibility
       )
+
       cleanups.push(() => poller.unsubscribe())
 
       const headFile = join(commonDir, 'HEAD')
@@ -674,12 +724,14 @@ describe('worktree base directory poller', () => {
       const commonDir = await makeRoot()
       const received: WorktreeBasePollEvent[][] = []
       const target = makeTarget('git-common', commonDir)
+
       const poller = await startWorktreeBaseDirectoryPoller(
         target,
         () => target.repos,
         (events) => received.push(events),
         { pollIntervalMs: POLL_MS, platform: 'darwin' }
       )
+
       cleanups.push(() => poller.unsubscribe())
 
       const worktreesDir = join(commonDir, 'worktrees')
@@ -700,12 +752,14 @@ describe('worktree base directory poller', () => {
       await mkdir(join(commonDir, 'worktrees'))
       const received: WorktreeBasePollEvent[][] = []
       const target = makeTarget('git-common', commonDir)
+
       const poller = await startWorktreeBaseDirectoryPoller(
         target,
         () => target.repos,
         (events) => received.push(events),
         { pollIntervalMs: POLL_MS, platform: 'darwin' }
       )
+
       cleanups.push(() => poller.unsubscribe())
 
       // Simulate `git worktree prune` removing the empty dir, then a new add

@@ -11,6 +11,7 @@ describe('TerminalHost attach-only sessions', () => {
   beforeEach(() => {
     spawnSubprocess = vi.fn<SpawnSubprocess>(() => {
       let onExit: ((code: number) => void) | undefined
+
       return {
         pid: 99999,
         getForegroundProcess: vi.fn(() => null),

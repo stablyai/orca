@@ -7,6 +7,7 @@ describe('parseSshConfig host pattern filtering', () => {
 Host prod !prod-admin
   HostName prod.example.com
 `
+
     expect(parseSshConfig(config)).toEqual([{ host: 'prod', hostname: 'prod.example.com' }])
   })
 
@@ -15,6 +16,7 @@ Host prod !prod-admin
 Host !legacy *.corp prod
   HostName prod.example.com
 `
+
     expect(parseSshConfig(config)).toEqual([{ host: 'prod', hostname: 'prod.example.com' }])
   })
 
@@ -23,6 +25,7 @@ Host !legacy *.corp prod
 Host prod stage # shared production aliases
   HostName prod.example.com
 `
+
     expect(parseSshConfig(config)).toEqual([
       { host: 'prod', hostname: 'prod.example.com' },
       { host: 'stage', hostname: 'prod.example.com' }
@@ -34,6 +37,7 @@ Host prod stage # shared production aliases
 Host !legacy *.corp ??
   HostName ignored.example.com
 `
+
     expect(parseSshConfig(config)).toEqual([])
   })
 })

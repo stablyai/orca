@@ -33,9 +33,11 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
   session.writeRestoreUnavailableWarning = function (): void {
     // The reset must parse before both the warning and any foreground drain.
     session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+
     if (!shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
       return
     }
+
     writeTerminalOutput(session.pane.terminal, HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING, {
       foreground: true,
       beforeWrite: session.beforeTerminalOutputWrite
@@ -57,20 +59,24 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
   }): Promise<void> {
     const restorePtyId = session.transport.getPtyId()
     const restoreGeneration = session.hiddenOutputRestoreGeneration
+
     if (session.hiddenOutputSnapshotScrollRestore) {
       session.cancelSnapshotScrollRestore()
     }
+
     const scrollRestore = {
       ptyId: restorePtyId,
       generation: restoreGeneration,
       valid: true,
       started: false
     }
+
     session.hiddenOutputSnapshotScrollRestore = scrollRestore
     const colsBeforeReplay = session.pane.terminal.cols
     const rowsBeforeReplay = session.pane.terminal.rows
     const hasSnapshotDimensions = hasPositiveTerminalDimensions(snapshot.cols, snapshot.rows)
     let skippedAltFrame = false
+
     try {
       await session.structuralReplayCoordinator.run(
         async () => {
@@ -82,7 +88,9 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           ) {
             return
           }
+
           scrollRestore.started = true
+
           if (typeof snapshot.seq === 'number') {
             session.hiddenOutputRestoreReplayingSnapshot = {
               seq: snapshot.seq,
@@ -92,7 +100,9 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                 : {})
             }
           }
+
           discardTerminalOutput(session.pane.terminal)
+
           if (
             hasSnapshotDimensions &&
             (session.pane.terminal.cols !== snapshot.cols ||
@@ -100,12 +110,14 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           ) {
             // Why: xterm parses writes later; hold snapshot dimensions until the FIFO sentinel completes so serialized wraps stay exact.
             session.suppressStructuralReplayPtyResize = true
+
             try {
               session.pane.terminal.resize(snapshot.cols, snapshot.rows)
             } finally {
               session.suppressStructuralReplayPtyResize = false
             }
           }
+
           // Why here and not from the writes below: the mirror tracks what the
           // APPLICATION negotiated, so it must see the snapshot's own bytes
           // before adopting the flags main proved for this boundary.
@@ -126,9 +138,11 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               snapshot.cols,
               readProposedTerminalCols(session.pane)
             )
+
           // Why: an imageless success is not proof the pane is empty; normal replay clears screen and scrollback.
           const snapshotCarriesNoImage =
             snapshot.alternateScreen !== true && snapshot.data === '' && !snapshot.scrollbackAnsi
+
           if (snapshotCarriesNoImage) {
             // Why still ground: a restore only runs because bytes were dropped, so
             // the gap's pen outlives a snapshot that cannot repaint over it. The
@@ -143,7 +157,9 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               session.writeReplayData(replayChunk)
             }
           }
+
           const hasLiveAgent = session.hasLiveAgentReattachStatusOrTitleSignal()
+
           // Why the pane-local fallback: every owner-publishing host also fills
           // alternateScreen, but the reattach site falls back to pane state for
           // an absent flag and this site must not drift from it (?1049l on a
@@ -156,15 +172,19 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               : hasLiveAgent
                 ? POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
                 : POST_REPLAY_LIVE_SNAPSHOT_RESET
+
           session.writeReplayData(postReplayReset)
+
           if (snapshot.pendingEscapeTailAnsi) {
             // Why last: snapshot taken mid-escape; re-arm as the FINAL replay write (any later ESC aborts it) so the live tail completes it, not render literally (Bug E / #7329).
             session.writeReplayData(snapshot.pendingEscapeTailAnsi)
           }
+
           session.hiddenRendererStateDirty = false
           session.recordRendererOrderedSeq(snapshot)
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
+
           if (session.deps.isVisibleRef.current) {
             presentPaneViewportPreservingSynchronizedOutput(session.pane)
             recordTerminalFreezeBreadcrumb('stale-pixel-restore-present', {
@@ -184,20 +204,27 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               !session.disposed &&
               session.transport.getPtyId() === scrollRestore.ptyId &&
               session.hiddenOutputRestoreGeneration === scrollRestore.generation
+
             if (!isCurrentRestore()) {
               return
             }
+
             const currentPtyId = session.transport.getPtyId()
+
             if (!currentPtyId) {
               return
             }
+
             if (getFitOverrideForPty(currentPtyId)) {
               safeFit(session.pane)
+
               if (skippedAltFrame && !isRemoteRuntimePtyId(currentPtyId)) {
                 window.api.pty.signal(currentPtyId, 'SIGWINCH')
               }
+
               return
             }
+
             const fit = safeFitAndThen(
               session.pane,
               'hidden-snapshot-pty-resize',
@@ -205,17 +232,22 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                 if (!isCurrentRestore() || session.transport.getPtyId() !== currentPtyId) {
                   return
                 }
+
                 const replayChangedDimensions = hasSnapshotDimensions
                   ? session.pane.terminal.cols !== snapshot.cols ||
                     session.pane.terminal.rows !== snapshot.rows
                   : session.pane.terminal.cols !== colsBeforeReplay ||
                     session.pane.terminal.rows !== rowsBeforeReplay
+
                 if (skippedAltFrame) {
                   session.pulseVisibleLocalPtySizeForTuiRepaint(currentPtyId)
+
                   return
                 }
+
                 if (replayChangedDimensions && session.isRendererPtyResizeAuthoritative()) {
                   session.transport.resize(session.pane.terminal.cols, session.pane.terminal.rows)
+
                   if (!isRemoteRuntimePtyId(currentPtyId)) {
                     // Why: redundant SIGWINCH makes alt-screen TUIs rebuild their scroll viewport to the top on tab return.
                     window.api.pty.signal(currentPtyId, 'SIGWINCH')
@@ -230,7 +262,9 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                 deferIfHidden: true
               }
             )
+
             session.pendingHiddenSnapshotFit = fit
+
             try {
               await fit.completion
             } finally {
@@ -238,6 +272,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                 session.pendingHiddenSnapshotFit = null
               }
             }
+
             if (isCurrentRestore()) {
               session.scheduleReattachIdleAgentCursorReset()
             }

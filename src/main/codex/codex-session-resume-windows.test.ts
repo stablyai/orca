@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
 
 const windowsIt = process.platform === 'win32' ? it : it.skip
+
 const cleanupPaths: string[] = []
 
 afterEach(() => {
@@ -17,6 +18,7 @@ describe('Codex session resume on native Windows', () => {
   windowsIt('resumes an extended-length rollout from its ordinary trusted home', async () => {
     const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-'))
     cleanupPaths.push(homePath)
+
     const rolloutPath = join(
       homePath,
       'sessions',
@@ -25,6 +27,7 @@ describe('Codex session resume on native Windows', () => {
       '20',
       'rollout-019f81b9-19a9-7651-a8d1-352d9420bd11.jsonl'
     )
+
     mkdirSync(dirname(rolloutPath), { recursive: true })
     writeFileSync(rolloutPath, '{"type":"session_meta"}\n')
     const transcriptPath = toNamespacedPath(rolloutPath)

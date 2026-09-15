@@ -13,23 +13,29 @@ export function createTerminalPaneHandleRegistry<THandle>(): TerminalPaneHandleR
 
   const getRefCallback = (tabId: string): ((handle: THandle | null) => void) => {
     const cached = refCallbacks.get(tabId)
+
     if (cached) {
       return cached
     }
+
     const register = (handle: THandle | null): void => {
       if (handle) {
         handles.set(tabId, handle)
         // Re-arm: a remount (generation bump / StrictMode) can attach through a callback that
         // retainOnly already pruned, and the next render must reuse it rather than mint a new one.
         refCallbacks.set(tabId, register)
+
         return
       }
+
       // Detach drops the handle only. Dropping the callback here would delete the entry the current
       // render just wrote, so every later render would mint a fresh identity and force React to
       // detach/re-attach the pane — the exact churn this cache exists to prevent.
       handles.delete(tabId)
     }
+
     refCallbacks.set(tabId, register)
+
     return register
   }
 
@@ -38,11 +44,13 @@ export function createTerminalPaneHandleRegistry<THandle>(): TerminalPaneHandleR
     getRefCallback,
     retainOnly: (liveTabIds) => {
       const live = new Set(liveTabIds)
+
       for (const tabId of refCallbacks.keys()) {
         if (!live.has(tabId)) {
           refCallbacks.delete(tabId)
         }
       }
+
       for (const tabId of handles.keys()) {
         if (!live.has(tabId)) {
           handles.delete(tabId)

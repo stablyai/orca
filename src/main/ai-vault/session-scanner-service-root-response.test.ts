@@ -9,16 +9,20 @@ it('answers root requests freshly without forwarding another settings change', a
   const child = new AiVaultServiceTestChild()
   Object.assign(child, { connected: true })
   const roots = { additionalCodexSessionsDirs: ['/late'] }
+
   const resolveSessionSearchRoots = vi
     .fn()
     .mockResolvedValueOnce(roots)
     .mockRejectedValueOnce(new Error('offline'))
+
   const client = new AiVaultScannerServiceClient({
     processFactory: () => child.asChildProcess(),
     init: () => ({ sessionSearch: null, sessionParseCache: null }),
     resolveSessionSearchRoots
   })
+
   const status = client.request({ type: 'request', operation: 'searchStatus' })
+
   try {
     readyAiVaultServiceChild(child)
     await Promise.resolve()
@@ -44,11 +48,13 @@ it('does not deliver a delayed snapshot after the child is disposed', async () =
   Object.assign(child, { connected: true })
   const pending = Promise.withResolvers<{}>()
   const resolveSessionSearchRoots = vi.fn(() => pending.promise)
+
   const client = new AiVaultScannerServiceClient({
     processFactory: () => child.asChildProcess(),
     init: () => ({ sessionSearch: null, sessionParseCache: null }),
     resolveSessionSearchRoots
   })
+
   const status = client.request({ type: 'request', operation: 'searchStatus' })
   readyAiVaultServiceChild(child)
   await Promise.resolve()

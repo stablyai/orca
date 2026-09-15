@@ -7,6 +7,7 @@ export default function MobileFileExplorerScreen() {
     worktreeId: string
     name?: string
   }>()
+
   return (
     <MobileFileExplorerPanel hostId={hostId} worktreeId={worktreeId} name={name} embedded={false} />
   )

@@ -69,6 +69,7 @@ function selectActiveDashboardWorkspaces(
   cache: DashboardBucketCountsCache | undefined
 ): ActiveDashboardWorkspace[] {
   const memo = cache?.activeWorkspaces
+
   if (
     memo &&
     memo.repos === state.repos &&
@@ -78,7 +79,9 @@ function selectActiveDashboardWorkspaces(
   ) {
     return memo.workspaces
   }
+
   const workspaces = collectActiveDashboardWorkspaces(state, false)
+
   if (cache) {
     cache.activeWorkspaces = {
       repos: state.repos,
@@ -88,6 +91,7 @@ function selectActiveDashboardWorkspaces(
       workspaces
     }
   }
+
   return workspaces
 }
 
@@ -116,6 +120,7 @@ function tallyWorktreeRows(
   cache: DashboardBucketCountsCache | undefined
 ): Record<DashboardBucket, number> {
   const memo = cache?.tallyByWorktree.get(worktreeId)
+
   if (
     memo &&
     memo.rows === rows &&
@@ -123,21 +128,26 @@ function tallyWorktreeRows(
   ) {
     return memo.tally
   }
+
   const tally = { attention: 0, working: 0, done: 0, idle: 0 } satisfies Record<
     DashboardBucket,
     number
   >
+
   for (const row of rows) {
     if (row.rowSource === 'subagent') {
       continue
     }
+
     tally[dashboardRowBucketProjection(row, acknowledgedAgentsByPaneKey).bucket] += 1
   }
+
   cache?.tallyByWorktree.set(worktreeId, {
     rows,
     acknowledgedAgentsByPaneKey,
     tally
   })
+
   return tally
 }
 
@@ -164,17 +174,21 @@ export function buildDashboardBucketCounts(
     done: 0,
     idle: 0
   } satisfies Record<DashboardBucket, number>
+
   const activeWorktrees = selectActiveDashboardWorkspaces(state, cache)
+
   const { singletonOrchestration, orchestrationByWorktree } = selectDashboardOrchestration(
     state,
     activeWorktrees
   )
+
   if (cache) {
     startWorktreeAgentRowsCachePass(cache)
   }
 
   for (const { worktree } of activeWorktrees) {
     const worktreeId = worktree.id
+
     const rows = selectWorktreeAgentRowsCached({
       state,
       worktreeId,
@@ -186,6 +200,7 @@ export function buildDashboardBucketCounts(
       generation,
       cache
     })
+
     const tally = tallyWorktreeRows(rows, state.acknowledgedAgentsByPaneKey, worktreeId, cache)
     counts.attention += tally.attention
     counts.working += tally.working
@@ -199,6 +214,7 @@ export function buildDashboardBucketCounts(
         cache.tallyByWorktree.delete(worktreeId)
       }
     }
+
     finishWorktreeAgentRowsCachePass(cache)
   }
 
@@ -206,14 +222,18 @@ export function buildDashboardBucketCounts(
     counts.attention === 0 && counts.working === 0 && counts.done === 0 && counts.idle === 0
       ? EMPTY_COUNTS
       : counts
+
   if (!cache) {
     return totals
   }
+
   // Why: most recomputes are triggered by agent traffic that leaves all four
   // totals where they were; a fresh object there would re-render the sidebar
   // entry and miss every downstream memo keyed on this result.
   const stable =
     cache.lastCounts && countsEqual(cache.lastCounts, totals) ? cache.lastCounts : totals
+
   cache.lastCounts = stable
+
   return stable
 }

@@ -28,6 +28,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -55,7 +56,9 @@ import {
 } from './agent-pane-authority'
 
 const WT = 'repo1::/path/wt1'
+
 const TAB = 'tab-1'
+
 const PANE = `${TAB}:leaf-a`
 
 function liveEntry(paneKey: string): AgentStatusEntry {

@@ -11,12 +11,14 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 const { ensureRetiredWorktreeNamesBackfilled } = await import('./worktree-name-retirement')
+
 const { RETIREMENT_BACKFILL_RETRY_AFTER_FAILURE_MS, RETIREMENT_BACKFILL_SCAN_TIMEOUT_MS } =
   await import('./worktree-retirement-backfill-scan')
 
 /** A `readdir` the test releases by hand, standing in for a wedged NFS/SMB/WSL mount. */
 function stalledReaddir(): { install: () => void; release: () => void } {
   let release: () => void = () => {}
+
   return {
     install: () =>
       readdirMock.mockImplementation(
@@ -33,14 +35,17 @@ const repo = {
   badgeColor: '',
   addedAt: 0
 } as Repo
+
 const settings = { workspaceDir: '/workspaces', nestWorkspaces: false }
 
 function backfillStore(): { merged: string[]; mergeRetiredWorktreeNames: () => boolean } {
   const merged: string[] = []
+
   return {
     merged,
     mergeRetiredWorktreeNames: (...args: unknown[]) => {
       merged.push(...(args[1] as Iterable<string>))
+
       return true
     }
   } as never

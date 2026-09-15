@@ -15,6 +15,7 @@ import {
 
 function markStateFamilyDirty(repoId: string, itemId: string): void {
   const queryKey = getTaskPageGitHubMutationQueryKey()
+
   if (queryKey !== null) {
     markTaskPageGitHubFamiliesDirty(queryKey, taskPageGitHubItemKey(repoId, itemId), ['state'])
   }
@@ -35,24 +36,30 @@ export function assertTaskPageGitHubDialogStateAuthority(args: {
 }): { revert: () => boolean } {
   const sourceScope =
     args.sourceContext?.provider === 'github' ? getTaskSourceCacheScope(args.sourceContext) : null
+
   const previous = getLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state')
   setLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state', args.state)
   markStateFamilyDirty(args.repoId, args.itemId)
   notifyTaskPageGitHubMutationRegistry()
+
   return {
     revert: () => {
       const current = getLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state')
+
       // A matching search adopt or newer mutation owns the state now.
       if (current !== args.state) {
         return false
       }
+
       if (previous === undefined) {
         deleteLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state')
       } else {
         setLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state', previous)
       }
+
       markStateFamilyDirty(args.repoId, args.itemId)
       notifyTaskPageGitHubMutationRegistry()
+
       return true
     }
   }

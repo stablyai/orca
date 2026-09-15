@@ -16,19 +16,23 @@ describe('federated fleet snapshots', () => {
       { length: 101 },
       (_, index) => `dispatch-${String(index).padStart(3, '0')}`
     )
+
     const dispatches = new Map(
       dispatchIds.map((dispatchId) => [
         dispatchId,
         federatedDispatch(dispatchId, 'peer-a', 'epoch-a')
       ])
     )
+
     const db = {
       listFederatedDispatchesByIds: (ids: readonly string[]) =>
         ids.flatMap((id) => (dispatches.get(id) ? [dispatches.get(id)!] : [])),
       updateFederatedDispatchRuntimeEpoch: vi.fn(),
       ...observationFenceMethods()
     } as unknown as OrchestrationDb
+
     const fleetBatchSizes: number[] = []
+
     const runtime = {
       resolveOrchestrationWorkerServer: () => ({
         environmentId: 'environment-repointed',
@@ -41,8 +45,10 @@ describe('federated fleet snapshots', () => {
           if (method === 'status.get') {
             return runtimeStatus('epoch-a')
           }
+
           const batch = (params as { dispatchIds: string[] }).dispatchIds
           fleetBatchSizes.push(batch.length)
+
           return {
             runtimeEpoch: 'epoch-a',
             items: batch.map((dispatchId) => ({
@@ -63,12 +69,15 @@ describe('federated fleet snapshots', () => {
 
   it('asks the snapshot method directly instead of probing status.get', async () => {
     const dispatch = federatedDispatch('dispatch-optimistic', 'peer-optimistic', 'epoch-a')
+
     const db = {
       listFederatedDispatchesByIds: (ids: readonly string[]) => ids.map(() => dispatch),
       updateFederatedDispatchRuntimeEpoch: vi.fn(),
       ...observationFenceMethods()
     } as unknown as OrchestrationDb
+
     const methods: string[] = []
+
     const runtime = {
       resolveOrchestrationWorkerServer: () => ({
         environmentId: dispatch.environment_id,
@@ -78,6 +87,7 @@ describe('federated fleet snapshots', () => {
       }),
       callOrchestrationWorkerServer: vi.fn(async (_environmentId: string, method: string) => {
         methods.push(method)
+
         return {
           runtimeEpoch: 'epoch-a',
           items: [
@@ -107,6 +117,7 @@ describe('federated fleet snapshots', () => {
     // Five distinct peers exceed the host concurrency, so the last one only starts after the
     // first wave has already spent the whole fleet budget.
     const dispatchIds = Array.from({ length: 5 }, (_, index) => `dispatch-expired-${index}`)
+
     const dispatches = new Map(
       dispatchIds.map((dispatchId) => [
         dispatchId,
@@ -116,14 +127,17 @@ describe('federated fleet snapshots', () => {
         }
       ])
     )
+
     const db = {
       listFederatedDispatchesByIds: (ids: readonly string[]) =>
         ids.flatMap((id) => (dispatches.get(id) ? [dispatches.get(id)!] : [])),
       updateFederatedDispatchRuntimeEpoch: vi.fn(),
       ...observationFenceMethods()
     } as unknown as OrchestrationDb
+
     let now = 1_000
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
+
     const runtime = {
       resolveOrchestrationWorkerServer: (environmentId: string) => ({
         environmentId,
@@ -134,6 +148,7 @@ describe('federated fleet snapshots', () => {
       callOrchestrationWorkerServer: vi.fn(
         async (_environmentId: string, _method: string, params: unknown) => {
           now += 5_001
+
           return {
             runtimeEpoch: 'epoch-a',
             items: (params as { dispatchIds: string[] }).dispatchIds.map((dispatchId) => ({
@@ -164,20 +179,25 @@ describe('federated fleet snapshots', () => {
       ['dispatch-a', federatedDispatch('dispatch-a', 'peer-a', 'epoch-a')],
       ['dispatch-b', federatedDispatch('dispatch-b', 'peer-b', 'epoch-b')]
     ])
+
     const updateFederatedDispatchRuntimeEpoch = vi.fn()
+
     const db = {
       listFederatedDispatchesByIds: (ids: readonly string[]) =>
         ids.flatMap((id) => (dispatches.get(id) ? [dispatches.get(id)!] : [])),
       updateFederatedDispatchRuntimeEpoch,
       ...observationFenceMethods()
     } as unknown as OrchestrationDb
+
     const callOrchestrationWorkerServer = vi.fn(
       async (_environmentId: string, method: string, params: unknown) => {
         if (method === 'status.get') {
           return runtimeStatus('epoch-b')
         }
+
         expect(method).toBe('orchestration.federationFleetSnapshot')
         const dispatchIds = (params as { dispatchIds: string[] }).dispatchIds
+
         return {
           runtimeEpoch: 'epoch-b',
           items: dispatchIds.map((dispatchId) => ({
@@ -187,6 +207,7 @@ describe('federated fleet snapshots', () => {
         }
       }
     )
+
     const runtime = {
       resolveOrchestrationWorkerServer: () => ({
         environmentId: 'environment-repointed',
@@ -212,9 +233,11 @@ describe('federated fleet snapshots', () => {
     ])
     expect(result.observations.get('dispatch-a')).toBeUndefined()
     expect(result.observations.get('dispatch-b')).toEqual({ status: 'live', exactWorker: true })
+
     for (const call of callOrchestrationWorkerServer.mock.calls) {
       expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 42 })
     }
+
     expect(callOrchestrationWorkerServer).toHaveBeenCalledWith(
       'environment-repointed',
       'orchestration.federationFleetSnapshot',
@@ -280,6 +303,7 @@ describe('federated fleet snapshots', () => {
     const dispatch = federatedDispatch('dispatch-stale', 'peer-a', 'epoch-new')
     const updateFederatedDispatchRuntimeEpoch = vi.fn()
     const projectFederatedDispatchObservation = vi.fn().mockReturnValue(false)
+
     const db = {
       listFederatedDispatchesByIds: (ids: readonly string[]) => ids.map(() => dispatch),
       updateFederatedDispatchRuntimeEpoch,
@@ -287,6 +311,7 @@ describe('federated fleet snapshots', () => {
         new Map(ids.map((id) => [id, { dispatch_id: id }])),
       projectFederatedDispatchObservation
     } as unknown as OrchestrationDb
+
     const runtime = {
       resolveOrchestrationWorkerServer: () => ({
         environmentId: dispatch.environment_id,
@@ -323,11 +348,13 @@ describe('federated fleet snapshots', () => {
   it('records a method-not-found result at the pinned runtime epoch', async () => {
     const dispatch = federatedDispatch('dispatch-unsupported', 'peer-a', 'epoch-old')
     const updateFederatedDispatchRuntimeEpoch = vi.fn()
+
     const db = {
       listFederatedDispatchesByIds: (ids: readonly string[]) => ids.map(() => dispatch),
       updateFederatedDispatchRuntimeEpoch,
       ...observationFenceMethods()
     } as unknown as OrchestrationDb
+
     const runtime = {
       resolveOrchestrationWorkerServer: () => ({
         environmentId: dispatch.environment_id,
@@ -374,11 +401,13 @@ describe('federated fleet snapshots', () => {
 
     for (const scenario of scenarios) {
       const dispatch = federatedDispatch(scenario.dispatchId, 'peer-a', 'epoch-a')
+
       const db = {
         listFederatedDispatchesByIds: (ids: readonly string[]) => ids.map(() => dispatch),
         updateFederatedDispatchRuntimeEpoch: vi.fn(),
         ...observationFenceMethods()
       } as unknown as OrchestrationDb
+
       const runtime = {
         resolveOrchestrationWorkerServer: () => ({
           environmentId: dispatch.environment_id,
@@ -396,6 +425,7 @@ describe('federated fleet snapshots', () => {
         db,
         dispatchIds: [scenario.dispatchId]
       })
+
       const fleet = projectOrchestrationFleet({
         workers: [runningFederatedWorker(scenario.dispatchId)],
         statuses: [],
@@ -451,6 +481,7 @@ function observationFenceMethods() {
       new Map(dispatchIds.map((dispatchId) => [dispatchId, { dispatch_id: dispatchId }])),
     projectFederatedDispatchObservation: (_fence: unknown, projection: () => void) => {
       projection()
+
       return true
     }
   }

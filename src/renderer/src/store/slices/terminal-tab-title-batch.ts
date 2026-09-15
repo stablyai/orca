@@ -58,28 +58,36 @@ function getOwnerStage(
   worktreeId: string
 ): OwnerStage {
   const existing = stages.get(worktreeId)
+
   if (existing) {
     return existing
   }
+
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const tabIndexesById = new Map<string, number[]>()
+
   for (let index = 0; index < tabs.length; index += 1) {
     const tabId = tabs[index].id
     const indexes = tabIndexesById.get(tabId)
+
     if (indexes) {
       indexes.push(index)
     } else {
       tabIndexesById.set(tabId, [index])
     }
   }
+
   const unifiedIndexByTabId = new Map<string, number>()
+
   for (let index = 0; index < unifiedTabs.length; index += 1) {
     const tab = unifiedTabs[index]
+
     if (tab.contentType === 'terminal' && !unifiedIndexByTabId.has(tab.entityId)) {
       unifiedIndexByTabId.set(tab.entityId, index)
     }
   }
+
   const stage: OwnerStage = {
     tabs,
     tabsChanged: false,
@@ -88,7 +96,9 @@ function getOwnerStage(
     unifiedTabsChanged: false,
     unifiedIndexByTabId
   }
+
   stages.set(worktreeId, stage)
+
   return stage
 }
 
@@ -101,6 +111,7 @@ function updateStageTabs(
     stage.tabs = [...stage.tabs]
     stage.tabsChanged = true
   }
+
   for (const index of indexes) {
     stage.tabs[index] = update(stage.tabs[index])
   }
@@ -113,13 +124,16 @@ function updateStageUnifiedLabel(
   value: string
 ): void {
   const index = stage.unifiedIndexByTabId.get(tabId)
+
   if (index === undefined || stage.unifiedTabs[index]?.[key] === value) {
     return
   }
+
   if (!stage.unifiedTabsChanged) {
     stage.unifiedTabs = [...stage.unifiedTabs]
     stage.unifiedTabsChanged = true
   }
+
   stage.unifiedTabs[index] = { ...stage.unifiedTabs[index], [key]: value }
 }
 
@@ -130,27 +144,35 @@ function finishTitleStages(
 ): TitleUpdateResult {
   const tabsChanged = [...stages.values()].some((stage) => stage.tabsChanged)
   const unifiedTabsChanged = [...stages.values()].some((stage) => stage.unifiedTabsChanged)
+
   if (!tabsChanged && !unifiedTabsChanged) {
     return { patch: null, runtimeGraphChanged: false }
   }
+
   const patch: TitlePatch = {}
+
   if (tabsChanged) {
     patch.tabsByWorktree = { ...state.tabsByWorktree }
   }
+
   if (unifiedTabsChanged) {
     patch.unifiedTabsByWorktree = { ...state.unifiedTabsByWorktree }
   }
+
   for (const [worktreeId, stage] of stages) {
     if (stage.tabsChanged) {
       patch.tabsByWorktree![worktreeId] = stage.tabs
     }
+
     if (stage.unifiedTabsChanged) {
       patch.unifiedTabsByWorktree![worktreeId] = stage.unifiedTabs
     }
   }
+
   if (sortEpochIncrement > 0) {
     patch.sortEpoch = state.sortEpoch + sortEpochIncrement
   }
+
   if (patch.tabsByWorktree) {
     adoptTerminalTabOwnerMetadataOnlyBuckets(
       state.tabsByWorktree,
@@ -158,6 +180,7 @@ function finishTitleStages(
       stages.keys()
     )
   }
+
   return { patch, runtimeGraphChanged: tabsChanged }
 }
 
@@ -168,26 +191,35 @@ export function applyTerminalTabTitleUpdates(
   const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
   const stages = new Map<string, OwnerStage>()
   let sortEpochIncrement = 0
+
   for (const { tabId, title } of updates) {
     const ownerWorktreeId = ownerByTabId.get(tabId)
+
     if (!ownerWorktreeId) {
       continue
     }
+
     const stage = getOwnerStage(state, stages, ownerWorktreeId)
     const tabIndexes = stage.tabIndexesById.get(tabId)
     const currentTab = tabIndexes ? stage.tabs[tabIndexes[0]] : undefined
+
     if (!currentTab || !tabIndexes) {
       continue
     }
+
     const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
+
     if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
       updateStageUnifiedLabel(stage, tabId, 'label', currentTab.title)
       continue
     }
+
     updateStageUnifiedLabel(stage, tabId, 'label', nextTitle)
+
     if (currentTab.title === nextTitle) {
       continue
     }
+
     updateStageTabs(stage, tabIndexes, (tab) => ({
       ...tab,
       title: nextTitle,
@@ -196,10 +228,12 @@ export function applyTerminalTabTitleUpdates(
         (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
         (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
     }))
+
     if (ownerWorktreeId !== state.activeWorktreeId) {
       sortEpochIncrement += 1
     }
   }
+
   return finishTitleStages(state, stages, sortEpochIncrement)
 }
 
@@ -208,19 +242,25 @@ export function applyGeneratedTabTitleUpdates(
   updates: readonly GeneratedTabTitleUpdate[]
 ): TitleUpdateResult {
   const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
+
   if (state.settings?.tabAutoGenerateTitle !== true) {
     return { patch: null, runtimeGraphChanged: false }
   }
+
   const stages = new Map<string, OwnerStage>()
+
   for (const { paneKey, prompt, options } of updates) {
     const tabId = getTabIdFromPaneKey(paneKey)
     const ownerWorktreeId = tabId ? ownerByTabId.get(tabId) : undefined
+
     if (!tabId || !ownerWorktreeId || prompt.length === 0) {
       continue
     }
+
     const stage = getOwnerStage(state, stages, ownerWorktreeId)
     const tabIndexes = stage.tabIndexesById.get(tabId)
     const currentTab = tabIndexes ? stage.tabs[tabIndexes[0]] : undefined
+
     if (
       !currentTab ||
       !tabIndexes ||
@@ -229,16 +269,22 @@ export function applyGeneratedTabTitleUpdates(
     ) {
       continue
     }
+
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()
+
     if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
       continue
     }
+
     const generatedTitle = deriveGeneratedTabTitle(prompt)
+
     if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
       continue
     }
+
     updateStageTabs(stage, tabIndexes, (tab) => ({ ...tab, generatedTitle }))
     updateStageUnifiedLabel(stage, tabId, 'generatedLabel', generatedTitle)
   }
+
   return finishTitleStages(state, stages)
 }

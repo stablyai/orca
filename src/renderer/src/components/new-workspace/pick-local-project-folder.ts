@@ -5,6 +5,7 @@ export async function pickLocalProjectLocationFolder(
 ): Promise<void> {
   try {
     const path = await window.api.repos.pickFolder()
+
     if (path) {
       onPicked(path)
     }

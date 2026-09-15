@@ -7,6 +7,7 @@ import { renderMobileTasksProjectComments } from './mobile-tasks-project-comment
 
 export function renderMobileTasksProjectLoadedDetail(model: ConnectionPresentationModel) {
   const { projectRowDetailError, projectRowDetailLoading } = model
+
   return projectRowDetailLoading ? (
     <View style={styles.detailLoading}>
       <ActivityIndicator size="small" color={colors.textSecondary} />

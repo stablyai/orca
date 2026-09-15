@@ -39,11 +39,15 @@ export function resolveStructuredWorkerIdentity(
   if (!isStructuredWorkerHandle(handle)) {
     return null
   }
+
   const known = structuredWorkerIdentities.get(handle)
+
   if (known) {
     return known
   }
+
   const row = db?.getWorkerTerminalResourceByHandle?.(handle)
+
   return row ? structuredWorkerIdentities.rehydrate(row) : null
 }
 
@@ -53,10 +57,13 @@ export function resolveStructuredWorkerAuthority(
   db: OrchestrationDb | null | undefined
 ): StructuredWorkerAuthority | null {
   const identity = resolveStructuredWorkerIdentity(handle, db)
+
   if (!identity) {
     return null
   }
+
   const record = readStructuredAgentSessionRecord(identity.sessionId)
+
   return record && structuredWorkerRecordIsCurrent(record) ? { identity, record } : null
 }
 
@@ -102,6 +109,7 @@ export function observeStructuredWorker(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>
 ): StructuredWorkerObservation {
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     // Reading the persisted record store here would force-install the host, which is itself a side
     // effect; not being able to look is not evidence the child is gone.
@@ -110,22 +118,28 @@ export function observeStructuredWorker(
       reason: 'The structured agent-session host is not installed in this runtime generation.'
     }
   }
+
   const record = host.deps.store.getRecord(identity.sessionId)
+
   if (!record) {
     return { status: 'unverifiable', reason: 'No durable record backs this structured session.' }
   }
+
   if (record.lease.claimStatus === 'released' && record.lease.deathEvidence) {
     return { status: 'exited' }
   }
+
   if (record.lease.runtimeKind !== 'native') {
     return {
       status: 'unverifiable',
       reason: 'The session lease is held by a terminal owner, not this structured host.'
     }
   }
+
   if (host.hasSession(identity.sessionId) && record.lease.claimStatus === 'live') {
     return { status: 'live' }
   }
+
   return {
     status: 'unverifiable',
     reason: 'The session has no attached provider child in this runtime generation.'

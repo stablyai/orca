@@ -20,11 +20,13 @@ type Props = { selectedRepoIds: ReadonlySet<string> }
 
 export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JSX.Element {
   const tableState = useProjectViewTable(selectedRepoIds)
+
   const rowActions = useProjectRowActions({
     table: tableState.table,
     currentCacheKey: tableState.currentCacheKey,
     selectedRepoIds
   })
+
   const addRepo = useAppStore((state) => state.addRepo)
 
   return (
@@ -60,6 +62,7 @@ function ProjectViewBody({
   rowActions: ReturnType<typeof useProjectRowActions>
 }): React.JSX.Element | null {
   const { activeProject, error, loading, table, visibleTable } = tableState
+
   if (!activeProject) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
@@ -70,9 +73,11 @@ function ProjectViewBody({
       </div>
     )
   }
+
   if (loading && !table) {
     return <ProjectTableSkeleton />
   }
+
   if (error) {
     return (
       <ProjectViewErrorState
@@ -89,8 +94,10 @@ function ProjectViewBody({
       />
     )
   }
+
   if (visibleTable && rowActions.resolvedDialogRepoItem) {
     const dialogItem = rowActions.resolvedDialogRepoItem
+
     return (
       <GitHubItemDialog
         workItem={dialogItem.workItem}
@@ -121,9 +128,11 @@ function ProjectViewBody({
       />
     )
   }
+
   if (!visibleTable) {
     return null
   }
+
   const list = (
     <ProjectViewList
       table={visibleTable}
@@ -141,10 +150,12 @@ function ProjectViewBody({
       sourceSettings={tableState.settings}
     />
   )
+
   if (visibleTable.selectedView.layout === 'ROADMAP_LAYOUT') {
     return (
       <ProjectRoadmap table={visibleTable} onOpenDialog={rowActions.openDialog} fallback={list} />
     )
   }
+
   return list
 }

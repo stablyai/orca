@@ -109,6 +109,7 @@ function createProgress(
   const stepDone = Object.fromEntries(
     FEATURE_WALL_SETUP_STEP_IDS.map((stepId) => [stepId, doneOverrides[stepId] === true])
   ) as Record<FeatureWallSetupStepId, boolean>
+
   return {
     ready: true,
     stepDone,
@@ -119,6 +120,7 @@ function createProgress(
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>()
+
   return {
     get length() {
       return values.size

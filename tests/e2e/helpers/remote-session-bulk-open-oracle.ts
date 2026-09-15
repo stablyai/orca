@@ -10,9 +10,12 @@ import { waitForActivePanePtyId } from './terminal'
 
 /** Multi-worktree load: several agent-like streaming terminals per worktree. */
 export const BULK_OPEN_WORKTREE_COUNT = 3
+
 export const BULK_OPEN_TABS_PER_WORKTREE = 4
+
 /** Soft freeze signal — leaves CI room for one-off renderer scheduling stalls. */
 export const SOFT_FREEZE_LAG_MS = 2_500
+
 /** Hard freeze signal — matches trusted "screen fully frozen" reports. */
 export const HARD_FREEZE_LAG_MS = 5_000
 
@@ -40,9 +43,11 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -52,13 +57,16 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
 async function measureRendererInteractionMs(page: Page): Promise<number> {
   return page.evaluate(async () => {
     const started = performance.now()
+
     if (!window.__store) {
       throw new Error('store unavailable for interaction probe')
     }
+
     // A blocked renderer cannot service the input task or paint the following frames.
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
+
     return performance.now() - started
   })
 }
@@ -69,6 +77,7 @@ export async function seedBulkOpenRemoteSessions(
 ): Promise<{ sessions: BulkOpenSession[]; dispose: () => Promise<void> }> {
   const fixture = createRemoteSessionBulkOpenFixture()
   const sessions: BulkOpenSession[] = []
+
   const closeSessions = async (): Promise<void> => {
     try {
       await closeStreamingTerminals(
@@ -79,9 +88,11 @@ export async function seedBulkOpenRemoteSessions(
       fixture.dispose()
     }
   }
+
   try {
     for (let w = 0; w < BULK_OPEN_WORKTREE_COUNT; w += 1) {
       const marker = `BULK_WT_${w}_T0`
+
       const created = await callRuntime<{
         startupTerminal?: { handle?: string; tabId?: string }
         worktree: { id: string }
@@ -93,9 +104,11 @@ export async function seedBulkOpenRemoteSessions(
         noParent: true,
         startupCommand: fixture.command(marker)
       })
+
       if (!created.startupTerminal?.handle || !created.startupTerminal.tabId) {
         throw new Error(`Bulk-open worktree ${w} missing startup terminal`)
       }
+
       const worktreeId = created.worktree.id
       sessions.push({
         marker,
@@ -106,6 +119,7 @@ export async function seedBulkOpenRemoteSessions(
 
       for (let t = 1; t < BULK_OPEN_TABS_PER_WORKTREE; t += 1) {
         const tabMarker = `BULK_WT_${w}_T${t}`
+
         const result = await callRuntime<{
           tab: { parentTabId: string; terminal: string | null }
         }>(page, 'session.tabs.createTerminal', {
@@ -115,9 +129,11 @@ export async function seedBulkOpenRemoteSessions(
           select: false,
           navigation: 'caller'
         })
+
         if (!result.tab.terminal) {
           throw new Error(`Bulk-open terminal ${tabMarker} was not created`)
         }
+
         sessions.push({
           marker: tabMarker,
           tabId: toWebTerminalSurfaceTabId(result.tab.parentTabId),
@@ -138,10 +154,13 @@ export async function seedBulkOpenRemoteSessions(
                 'terminal.read',
                 { terminal: session.terminal, limit: 200 }
               )
+
               const text = result.terminal.tail.join('\n')
+
               return text.includes(`BG:${session.marker}:`)
             })
           )
+
           return ready.every(Boolean)
         },
         { timeout: 60_000 }
@@ -199,8 +218,10 @@ export async function runBulkOpenFreezeOracle(
   // Burst open remote sessions (worktree + tab activate).
   const openProbe = await startRendererLagProbe(page)
   const openStarted = Date.now()
+
   for (const worktreeId of worktreeIds) {
     const tabs = sessions.filter((session) => session.worktreeId === worktreeId)
+
     for (const tab of tabs) {
       await page.evaluate(
         ({ targetWorktreeId, tabId }) => {
@@ -213,13 +234,16 @@ export async function runBulkOpenFreezeOracle(
       )
     }
   }
+
   // One more full pass clicking visible tabs if present.
   for (const session of sessions) {
     const locator = page.locator(`[data-testid="sortable-tab"][data-tab-id="${session.tabId}"]`)
+
     if (await locator.isVisible().catch(() => false)) {
       await locator.click({ timeout: 2_000 }).catch(() => undefined)
     }
   }
+
   // Let the storm settle enough to measure residual lag.
   await page.waitForTimeout(3_000)
   const bulkOpenMaxLagMs = await openProbe.evaluate((probe) => probe.stop())
@@ -228,9 +252,11 @@ export async function runBulkOpenFreezeOracle(
 
   // Confirm last session is live after the storm (host PTYs survived).
   const last = sessions.at(-1)
+
   if (!last) {
     throw new Error('bulk-open freeze oracle requires at least one session')
   }
+
   await page.evaluate(
     ({ targetWorktreeId, tabId }) => {
       const state = window.__store?.getState()

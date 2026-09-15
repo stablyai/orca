@@ -85,6 +85,7 @@ function defaultIdentity(): string {
 function defaultProcessIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     return isErrorCode(error, 'EPERM')
@@ -98,13 +99,17 @@ function isErrorCode(error: unknown, code: string): boolean {
 function parseLockRecord(content: string): OrcadLockRecord | null {
   try {
     const parsed: unknown = JSON.parse(content)
+
     if (!parsed || typeof parsed !== 'object') {
       return null
     }
+
     const record = parsed as Partial<OrcadLockRecord>
+
     if (typeof record.pid !== 'number' || typeof record.identity !== 'string') {
       return null
     }
+
     return {
       pid: record.pid,
       startedAtMs: typeof record.startedAtMs === 'number' ? record.startedAtMs : null,
@@ -132,7 +137,9 @@ function assertDataRootIsPrivate(dataRoot: string): void {
   if (process.platform === 'win32') {
     return
   }
+
   let stats
+
   try {
     stats = statSync(dataRoot)
   } catch (error) {
@@ -141,7 +148,9 @@ function assertDataRootIsPrivate(dataRoot: string): void {
       `Cannot stat the orcad data root ${dataRoot}: ${(error as Error).message}`
     )
   }
+
   const uid = process.getuid?.()
+
   if (uid !== undefined && stats.uid !== uid) {
     throw new OrcadInstanceLockError(
       'orcad_data_root_wrong_owner',
@@ -149,15 +158,19 @@ function assertDataRootIsPrivate(dataRoot: string): void {
         'this process. Give orcad its own data root (ORCA_USER_DATA) or chown this one.'
     )
   }
+
   if ((stats.mode & 0o077) === 0) {
     return
   }
+
   try {
     chmodSync(dataRoot, 0o700)
   } catch {
     // Fall through to the re-stat, which produces the actionable message.
   }
+
   let mode: number
+
   try {
     mode = statSync(dataRoot).mode
   } catch (error) {
@@ -166,6 +179,7 @@ function assertDataRootIsPrivate(dataRoot: string): void {
       `Cannot stat the orcad data root ${dataRoot}: ${(error as Error).message}`
     )
   }
+
   if ((mode & 0o077) !== 0) {
     throw new OrcadInstanceLockError(
       'orcad_data_root_shared',
@@ -200,9 +214,11 @@ export function acquireOrcadInstanceLock(
       `Cannot create the orcad data root ${dataRoot}: ${(error as Error).message}`
     )
   }
+
   assertDataRootIsPrivate(dataRoot)
 
   const lockPath = join(dataRoot, ORCAD_LOCK_FILE_NAME)
+
   const record: OrcadLockRecord = {
     pid: process.pid,
     startedAtMs: readStartedAt(process.pid),
@@ -211,16 +227,19 @@ export function acquireOrcadInstanceLock(
     acquiredAt: (hooks.now ?? (() => new Date()))().toISOString(),
     nonce: randomUUID()
   }
+
   const serialized = JSON.stringify(record)
 
   const publish = (): boolean => {
     try {
       writeFileSync(lockPath, serialized, { flag: 'wx', mode: 0o600 })
+
       return true
     } catch (error) {
       if (isErrorCode(error, 'EEXIST')) {
         return false
       }
+
       throw new OrcadInstanceLockError(
         'orcad_data_root_unusable',
         `Cannot write the orcad instance lock ${lockPath}: ${(error as Error).message}`
@@ -233,6 +252,7 @@ export function acquireOrcadInstanceLock(
   }
 
   const existing = parseLockRecord(safeRead(lockPath) ?? '')
+
   if (existing && existing.identity !== identity) {
     throw new OrcadInstanceLockError(
       'orcad_instance_lock_foreign_identity',
@@ -241,6 +261,7 @@ export function acquireOrcadInstanceLock(
         'root corrupts it. Give each its own ORCA_USER_DATA.'
     )
   }
+
   if (existing && isAlive(existing.pid) && matchesStartTime(existing.pid, existing.startedAtMs)) {
     throw new OrcadInstanceLockError(
       'orcad_instance_lock_held',
@@ -249,6 +270,7 @@ export function acquireOrcadInstanceLock(
         'ORCA_USER_DATA.'
     )
   }
+
   if (!existing) {
     console.warn(
       `[orcad] The instance lock at ${lockPath} is unreadable; reclaiming it. If another orcad ` +
@@ -260,6 +282,7 @@ export function acquireOrcadInstanceLock(
   // directory entry, so a replacement written between our read and our write stays at the
   // canonical path and wins — we never delete a record we did not inspect.
   const claimPath = `${lockPath}.stale-${process.pid}-${randomUUID()}`
+
   try {
     renameSync(lockPath, claimPath)
   } catch {
@@ -269,6 +292,7 @@ export function acquireOrcadInstanceLock(
         'holding it. Retry, or stop the other orcad.'
     )
   }
+
   if (!publish()) {
     // Someone else claimed it first. Their record is authoritative; ours is not.
     try {
@@ -276,16 +300,19 @@ export function acquireOrcadInstanceLock(
     } catch {
       // A uniquely named claim is inert.
     }
+
     throw new OrcadInstanceLockError(
       'orcad_instance_lock_held',
       `Another orcad took the data root ${dataRoot} while this one was reclaiming a stale lock.`
     )
   }
+
   try {
     unlinkSync(claimPath)
   } catch {
     // The canonical record is authoritative; the claim is inert.
   }
+
   return makeLock(lockPath, record)
 }
 
@@ -299,6 +326,7 @@ function safeRead(path: string): string | null {
 
 function makeLock(lockPath: string, record: OrcadLockRecord): OrcadInstanceLock {
   let released = false
+
   return {
     path: lockPath,
     record,
@@ -306,14 +334,17 @@ function makeLock(lockPath: string, record: OrcadLockRecord): OrcadInstanceLock 
       if (released) {
         return
       }
+
       released = true
       // Why re-read before unlinking: a reclaim by a later orcad (after, say, a SIGKILL that
       // this process somehow survived enough to run handlers) leaves a record that is not
       // ours. Deleting it would unlock a live runtime.
       const current = parseLockRecord(safeRead(lockPath) ?? '')
+
       if (!current || current.nonce !== record.nonce) {
         return
       }
+
       try {
         unlinkSync(lockPath)
       } catch {

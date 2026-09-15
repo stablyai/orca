@@ -20,6 +20,7 @@ const {
 
 vi.mock('./runtime-client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
+
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -37,6 +38,7 @@ vi.mock('./runtime/environments', () => ({
 
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
+
   return createChildProcessModuleMock(spawnMock)
 })
 
@@ -181,6 +183,7 @@ describe('orca cli worktree awareness', () => {
         parentWorkspace: 'worktree:repo-1::/tmp/repo/parent'
       }
     ]
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -337,6 +340,7 @@ describe('orca cli worktree awareness', () => {
       repoId: 'folder-workspace:group-1',
       displayName: 'Folder'
     }
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
 

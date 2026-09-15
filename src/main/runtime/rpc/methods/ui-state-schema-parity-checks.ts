@@ -19,10 +19,12 @@ type MainOwnedUIState =
   | 'starNagCompleted'
   | 'starNagDeferredUntil'
   | 'starNagAgentValueMomentAppVersion'
+
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.infer<UiUpdateFieldsSchema>
 > = true
+
 void _uiUpdateParity
 
 // Why: key parity is blind to enum drift, which is how 'cli' and three
@@ -34,6 +36,7 @@ const _uiUpdateValueParity: AssertNoMissingValues<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.input<UiUpdateFieldsSchema>
 > = true
+
 void _uiUpdateValueParity
 
 // Why a nested pair: the guards above only walk PersistedUIState's OWN keys, and
@@ -41,13 +44,17 @@ void _uiUpdateValueParity
 // to workspaceCleanup (e.g. `browse`) and never added to its `.strict()` schema
 // would keep both green while every paired client's ui.set payload is rejected.
 type WorkspaceCleanupSchema = NonNullable<z.input<UiUpdateFieldsSchema>['workspaceCleanup']>
+
 const _workspaceCleanupParity: AssertNoMissingKeys<
   WorkspaceCleanupUIState,
   WorkspaceCleanupSchema
 > = true
+
 void _workspaceCleanupParity
+
 const _workspaceCleanupValueParity: AssertNoMissingValues<
   WorkspaceCleanupUIState,
   WorkspaceCleanupSchema
 > = true
+
 void _workspaceCleanupValueParity

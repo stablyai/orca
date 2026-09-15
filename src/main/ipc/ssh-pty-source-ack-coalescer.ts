@@ -5,7 +5,9 @@ import {
 import type { SshPtySourceAckPublication } from './ssh-pty-source-obligation-contract'
 
 export const SSH_PTY_ACK_FLUSH_MS = 8
+
 export const SSH_PTY_ACK_EAGER_ADVANCE_SU = 64 * 1024
+
 const ACK_PUBLICATION_WATERMARK_LIMIT = 1024
 
 type AckSettlement = { ok: true } | { ok: false; error: Error }
@@ -33,6 +35,7 @@ export type SshPtySourceAckCoalescerOptions = {
 
 function ackKey(publication: SshPtySourceAckPublication): string {
   const { identity } = publication
+
   return `${identity.providerGeneration}\0${identity.clientGeneration}\0${identity.ownerGeneration}\0${identity.id}\0${identity.ptyIncarnation}\0${identity.deliveryToken}`
 }
 
@@ -54,18 +57,23 @@ export class SshPtySourceAckCoalescer {
   enqueue(publication: SshPtySourceAckPublication): void {
     if (this.disposed) {
       publication.onSettled({ ok: false, error: new Error('SSH PTY ACK coalescer disposed') })
+
       return
     }
+
     const key = ackKey(publication)
     const current = this.pending.get(key)
+
     if (!current) {
       this.pending.set(key, { publication, members: [publication] })
     } else {
       current.members.push(publication)
+
       if (publication.ack.creditedEndSu > current.publication.ack.creditedEndSu) {
         current.publication = publication
       }
     }
+
     const lastPublished = this.lastPublishedEndByToken.get(key) ?? 0
     const eager = publication.ack.creditedEndSu - lastPublished >= SSH_PTY_ACK_EAGER_ADVANCE_SU
     this.requestFlush(eager ? 0 : SSH_PTY_ACK_FLUSH_MS)
@@ -75,32 +83,42 @@ export class SshPtySourceAckCoalescer {
     if (this.disposed || this.inFlight || this.pending.size === 0) {
       return
     }
+
     if (this.timer) {
       this.cancelSchedule(this.timer)
       this.timer = null
       this.timerDelayMs = null
     }
+
     const providerGeneration = this.pending.values().next().value!.publication
       .identity.providerGeneration
+
     const selected: [string, CoalescedEntry][] = []
+
     for (const pair of this.pending) {
       if (pair[1].publication.identity.providerGeneration !== providerGeneration) {
         continue
       }
+
       selected.push(pair)
+
       if (selected.length === MAX_PTY_ACK_ENTRIES) {
         break
       }
     }
+
     for (const [key] of selected) {
       this.pending.delete(key)
     }
+
     const batch: InFlightBatch = {
       entries: selected.map(([, entry]) => entry),
       settled: false
     }
+
     this.inFlight = batch
     const settle = (result: AckSettlement): void => this.settleBatch(batch, result)
+
     try {
       this.options.publish(
         providerGeneration,
@@ -121,21 +139,28 @@ export class SshPtySourceAckCoalescer {
     if (this.disposed) {
       return
     }
+
     this.disposed = true
+
     if (this.timer) {
       this.cancelSchedule(this.timer)
       this.timer = null
       this.timerDelayMs = null
     }
+
     const result = { ok: false as const, error: new Error(reason) }
+
     for (const entry of this.pending.values()) {
       this.settleMembers(entry, result)
     }
+
     this.pending.clear()
+
     if (this.inFlight && !this.inFlight.settled) {
       const batch = this.inFlight
       batch.settled = true
       this.inFlight = null
+
       for (const entry of batch.entries) {
         this.settleMembers(entry, result)
       }
@@ -144,15 +169,19 @@ export class SshPtySourceAckCoalescer {
 
   cancelGeneration(providerGeneration: number, reason: string): void {
     const result = { ok: false as const, error: new Error(reason) }
+
     for (const [key, entry] of this.pending) {
       if (entry.publication.identity.providerGeneration === providerGeneration) {
         this.pending.delete(key)
         this.settleMembers(entry, result)
       }
     }
+
     const batch = this.inFlight
+
     if (batch && !batch.settled) {
       const retained: CoalescedEntry[] = []
+
       for (const entry of batch.entries) {
         if (entry.publication.identity.providerGeneration === providerGeneration) {
           this.settleMembers(entry, result)
@@ -160,18 +189,23 @@ export class SshPtySourceAckCoalescer {
           retained.push(entry)
         }
       }
+
       batch.entries = retained
+
       if (retained.length === 0) {
         batch.settled = true
         this.inFlight = null
       }
     }
+
     const prefix = `${providerGeneration}\0`
+
     for (const key of this.lastPublishedEndByToken.keys()) {
       if (key.startsWith(prefix)) {
         this.lastPublishedEndByToken.delete(key)
       }
     }
+
     if (!this.inFlight && this.pending.size === 0 && this.timer) {
       this.cancelSchedule(this.timer)
       this.timer = null
@@ -189,21 +223,27 @@ export class SshPtySourceAckCoalescer {
     if (batch.settled) {
       return
     }
+
     batch.settled = true
+
     if (this.inFlight === batch) {
       this.inFlight = null
     }
+
     for (const entry of batch.entries) {
       if (result.ok) {
         const key = ackKey(entry.publication)
         this.lastPublishedEndByToken.delete(key)
         this.lastPublishedEndByToken.set(key, entry.publication.ack.creditedEndSu)
+
         while (this.lastPublishedEndByToken.size > ACK_PUBLICATION_WATERMARK_LIMIT) {
           this.lastPublishedEndByToken.delete(this.lastPublishedEndByToken.keys().next().value!)
         }
       }
+
       this.settleMembers(entry, result)
     }
+
     if (this.pending.size > 0) {
       this.requestFlush(0)
     }
@@ -219,13 +259,16 @@ export class SshPtySourceAckCoalescer {
     if (this.inFlight || this.disposed) {
       return
     }
+
     if (this.timer) {
       if (this.timerDelayMs !== null && this.timerDelayMs <= delayMs) {
         return
       }
+
       this.cancelSchedule(this.timer)
       this.timer = null
     }
+
     this.timerDelayMs = delayMs
     this.timer = this.schedule(() => {
       this.timer = null

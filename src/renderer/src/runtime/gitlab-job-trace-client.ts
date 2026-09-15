@@ -29,13 +29,17 @@ export async function loadGitLabJobLogDetails(args: {
   projectRef?: GitLabProjectRef | null
 }): Promise<PRCheckRunDetails | null> {
   const jobId = args.check.gitlabJobId
+
   if (!jobId) {
     return null
   }
+
   if (!gitLabJobCanHaveTrace(args.check)) {
     return gitLabJobTraceToCheckRunDetails(args.check, '', emptyTraceStrings())
   }
+
   const target = getActiveRuntimeTarget(args.settings)
+
   const result =
     target.kind === 'environment'
       ? await callRuntimeRpc<GitLabJobTraceResult>(
@@ -58,6 +62,7 @@ export async function loadGitLabJobLogDetails(args: {
             logExcerpt: true
           })
         )
+
   if (!result?.ok) {
     throw new Error(
       result?.error?.trim() ||
@@ -67,6 +72,7 @@ export async function loadGitLabJobLogDetails(args: {
         )
     )
   }
+
   return gitLabJobTraceToCheckRunDetails(args.check, result.trace, emptyTraceStrings())
 }
 

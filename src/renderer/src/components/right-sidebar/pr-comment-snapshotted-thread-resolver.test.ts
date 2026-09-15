@@ -25,6 +25,7 @@ describe('buildSnapshottedThreadResolver', () => {
   it('resolves a GitHub thread against the snapshotted PR, passing prRepo when known', async () => {
     const resolveReviewThread = vi.fn().mockResolvedValue(true)
     const onResolvedOptimistically = vi.fn()
+
     const resolve = buildSnapshottedThreadResolver(
       deps({
         githubResolveTarget: {
@@ -61,6 +62,7 @@ describe('buildSnapshottedThreadResolver', () => {
   it('resolves a GitLab discussion against the snapshotted MR iid', async () => {
     const resolveGitLabDiscussion = vi.fn().mockResolvedValue({ ok: true })
     const resolveReviewThread = vi.fn()
+
     const resolve = buildSnapshottedThreadResolver(
       deps({
         provider: 'gitlab',
@@ -86,6 +88,7 @@ describe('buildSnapshottedThreadResolver', () => {
     const resolveReviewThread = vi.fn()
     const resolveGitLabDiscussion = vi.fn()
     const onResolveFailed = vi.fn()
+
     const resolve = buildSnapshottedThreadResolver(
       deps({
         provider: 'bitbucket',
@@ -104,6 +107,7 @@ describe('buildSnapshottedThreadResolver', () => {
 
   it('fails when the snapshotted target is missing', async () => {
     const resolveGithub = buildSnapshottedThreadResolver(deps({ githubResolveTarget: undefined }))
+
     const resolveGitlab = buildSnapshottedThreadResolver(
       deps({ provider: 'gitlab', githubResolveTarget: undefined, gitlabTarget: undefined })
     )
@@ -115,6 +119,7 @@ describe('buildSnapshottedThreadResolver', () => {
   it('surfaces the GitLab host error instead of swallowing it', async () => {
     const onResolveFailed = vi.fn()
     const onResolvedOptimistically = vi.fn()
+
     const resolve = buildSnapshottedThreadResolver(
       deps({
         provider: 'gitlab',
@@ -134,6 +139,7 @@ describe('buildSnapshottedThreadResolver', () => {
   // Why: one rejected host call must not abort the bulk ack pool.
   it('reports a rejected host call as a failure', async () => {
     const onResolveFailed = vi.fn()
+
     const resolve = buildSnapshottedThreadResolver(
       deps({
         resolveReviewThread: vi.fn().mockRejectedValue(new Error('socket closed')),
@@ -147,6 +153,7 @@ describe('buildSnapshottedThreadResolver', () => {
 
   it('skips the optimistic update when the resolve failed', async () => {
     const onResolvedOptimistically = vi.fn()
+
     const resolve = buildSnapshottedThreadResolver(
       deps({
         resolveReviewThread: vi.fn().mockResolvedValue(false),
@@ -163,6 +170,7 @@ describe('buildSnapshottedThreadResolver', () => {
   it('still resolves on the host but skips the optimistic update after the panel moved', async () => {
     const resolveReviewThread = vi.fn().mockResolvedValue(true)
     const onResolvedOptimistically = vi.fn()
+
     const resolve = buildSnapshottedThreadResolver(
       deps({
         resolveReviewThread,

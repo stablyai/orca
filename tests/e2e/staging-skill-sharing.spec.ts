@@ -22,16 +22,23 @@ import {
 } from './helpers/staging-skill-ssh-target'
 
 const RUN_STAGING = process.env.ORCA_E2E_SKILL_STAGING === '1'
+
 const AUTH_TOKEN = process.env.ORCA_CLOUD_AUTH_TOKEN?.trim()
+
 const PHYSICAL_HOST_PAIRING_URL = process.env.ORCA_E2E_SKILL_PHYSICAL_PAIRING_URL?.trim()
+
 const RUN_HEADLESS_PAIRED = process.env.ORCA_E2E_SKILL_PAIRED_HEADLESS === '1'
+
 const PHYSICAL_WSL_DISTRO = 'Ubuntu-24.04'
+
 const SKILL_NAME = `orca-staging-${randomUUID().slice(0, 8)}`
+
 const SSH_TARGET = RUN_STAGING ? stagingSkillSshTargetFromEnvironment() : null
 
 if (RUN_STAGING && !AUTH_TOKEN) {
   throw new Error('ORCA_CLOUD_AUTH_TOKEN is required for the noninteractive staging journey.')
 }
+
 if (PHYSICAL_HOST_PAIRING_URL && RUN_HEADLESS_PAIRED) {
   throw new Error('staging physical pairing and headless pairing are mutually exclusive')
 }
@@ -47,6 +54,7 @@ test.use({
 })
 
 test.skip(!RUN_STAGING, 'Set ORCA_E2E_SKILL_STAGING=1 to run the live staging journey.')
+
 test.describe.configure({ mode: 'serial' })
 
 test('publishes, updates, revokes, and deletes without losing local state', async ({
@@ -62,6 +70,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
   let physicalEnvironmentId: string | null = null
   let pairedHost: HeadlessPairedRuntimeHost | null = null
   let sshTargetId: string | null = null
+
   try {
     if (RUN_HEADLESS_PAIRED) {
       pairedHost = await launchHeadlessPairedRuntimeHost()
@@ -69,11 +78,14 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
     } else if (PHYSICAL_HOST_PAIRING_URL) {
       physicalEnvironmentId = await addPhysicalHost(orcaPage, PHYSICAL_HOST_PAIRING_URL)
     }
+
     if (SSH_TARGET) {
       sshTargetId = await connectStagingSkillSshTarget(orcaPage, SSH_TARGET)
     }
+
     mkdirSync(source, { recursive: true })
     writeSkill(source, 'v1')
+
     const first = await publish(
       orcaPage,
       sourceRoot,
@@ -83,6 +95,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         packageId = preview.packageId
       }
     )
+
     for (const target of externalTargets(physicalEnvironmentId, sshTargetId)) {
       const remoteFirst = await installVersion(
         orcaPage,
@@ -91,21 +104,25 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         undefined,
         target.installEnvironmentId
       )
+
       expectPhysicalInstall(remoteFirst, first.published, target.kind)
       expect(existsSync(globalSkill)).toBe(false)
     }
+
     const firstInstall = await installVersion(orcaPage, first.published, { scope: 'global' })
     expectBundleOutcome(firstInstall, 'complete', 'installed')
     expect(readFileSync(join(globalSkill, 'SKILL.md'), 'utf8')).toContain('version: v1')
 
     writeSkill(globalSkill, 'local')
     writeSkill(source, 'v2')
+
     const second = await publish(
       orcaPage,
       sourceRoot,
       'Second immutable version',
       first.preview.packageId
     )
+
     for (const target of externalTargets(physicalEnvironmentId, sshTargetId)) {
       const remoteUpdate = await installVersion(
         orcaPage,
@@ -114,9 +131,11 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         'replace-unmodified',
         target.installEnvironmentId
       )
+
       expectBundleOutcome(remoteUpdate, 'complete', 'updated')
       await expectManagedRemoteVersion(orcaPage, target, second.published.version.versionId)
     }
+
     const conflict = await installVersion(orcaPage, second.published, { scope: 'global' })
     expectBundleOutcome(conflict, 'partial', 'kept-local', 'modified')
     expect(readFileSync(join(globalSkill, 'SKILL.md'), 'utf8')).toContain('version: local')
@@ -127,6 +146,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
       { scope: 'global' },
       'replace-and-discard-local'
     )
+
     expectBundleOutcome(update, 'complete', 'updated')
     expect(readFileSync(join(globalSkill, 'SKILL.md'), 'utf8')).toContain('version: v2')
 
@@ -136,6 +156,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
       { scope: 'global' },
       'replace-unmodified'
     )
+
     expectBundleOutcome(rollback, 'complete', 'updated')
     expect(readFileSync(join(globalSkill, 'SKILL.md'), 'utf8')).toContain('version: v1')
 
@@ -147,6 +168,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         'replace-unmodified',
         target.installEnvironmentId
       )
+
       expectBundleOutcome(remoteRollback, 'complete', 'updated')
       await expectManagedRemoteVersion(orcaPage, target, first.published.version.versionId)
     }
@@ -157,6 +179,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         first.published.share.id
       )
     ).toMatchObject({ status: 'ok' })
+
     const revokedInstall = await orcaPage.evaluate(
       async ({ shareId, skillId, versionId }) => {
         try {
@@ -176,6 +199,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         versionId: first.published.version.versionId
       }
     )
+
     expect(revokedInstall.status).toBe('rejected')
     expect(readFileSync(join(globalSkill, 'SKILL.md'), 'utf8')).toContain('version: v1')
 
@@ -202,6 +226,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
       (name) => window.api.skills.removeInstall({ name, destination: { scope: 'global' } }),
       SKILL_NAME
     )
+
     expect(removed).toMatchObject({ status: 'ok', value: { status: 'removed' } })
     expect(existsSync(globalSkill)).toBe(false)
     expect(
@@ -230,9 +255,11 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         )
         .catch(() => undefined)
     }
+
     if (sshTargetId) {
       await removeStagingSkillSshTarget(orcaPage, sshTargetId).catch(() => undefined)
     }
+
     if (physicalEnvironmentId) {
       await orcaPage
         .evaluate(
@@ -241,12 +268,15 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
         )
         .catch(() => undefined)
     }
+
     await pairedHost?.dispose().catch(() => undefined)
+
     if (packageId) {
       await orcaPage
         .evaluate((id) => window.api.skills.deletePackage(id), packageId)
         .catch(() => undefined)
     }
+
     rmSync(globalSkill, { recursive: true, force: true })
     rmSync(sourceRoot, { recursive: true, force: true })
   }
@@ -267,6 +297,7 @@ async function publish(
   onPrepared?: (preview: SkillSharePreview) => void
 ): Promise<{ preview: SkillSharePreview; published: SkillCloudPublishResult }> {
   const sourceDirectory = join(cwd, '.agents', 'skills', SKILL_NAME)
+
   const skill = await page.evaluate(
     async ({ cwd, sourceDirectory }) =>
       (await window.api.skills.discover({ cwd })).skills.find(
@@ -274,9 +305,11 @@ async function publish(
       ),
     { cwd, sourceDirectory }
   )
+
   if (!skill) {
     throw new Error('staging skill source was not discovered')
   }
+
   const preview = await page.evaluate(
     ({ skillId, bundleName, cwd, packageId }) =>
       window.api.skills.prepareShare({
@@ -287,16 +320,21 @@ async function publish(
       }),
     { skillId: skill.id, bundleName: SKILL_NAME, cwd, packageId }
   )
+
   onPrepared?.(preview)
+
   const operation = await page.evaluate(
     ({ preparationId, releaseNotes }) =>
       window.api.skills.publishShare({ preparationId, releaseNotes }),
     { preparationId: preview.preparationId, releaseNotes }
   )
+
   expect(operation.status).toBe('ok')
+
   if (operation.status !== 'ok') {
     throw new Error(`staging publish failed: ${operation.status}`)
   }
+
   return { preview, published: operation.value }
 }
 
@@ -308,6 +346,7 @@ function installVersion(
   environmentId?: string
 ) {
   const skillId = bundleSkillId(published)
+
   return page.evaluate(
     ({ packageId, versionId, skillId, destination, conflictResolution, environmentId }) =>
       window.api.skills.installBundlePackageVersion({
@@ -334,17 +373,22 @@ function installVersion(
 async function addPhysicalHost(page: Page, pairingUrl: string): Promise<string> {
   return page.evaluate(async (pairingCode) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('staging client store is unavailable')
     }
+
     const result = await window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Skill staging physical host',
       pairingCode
     })
+
     store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+
     if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
       throw new Error('physical staging host is unreachable')
     }
+
     return result.environment.id
   }, pairingUrl)
 }
@@ -410,11 +454,14 @@ function expectPhysicalInstall(
   target: ExternalTarget['kind']
 ): void {
   expectBundleOutcome(operation, 'complete', 'installed')
+
   if (operation.status !== 'ok') {
     throw new Error('physical host install failed')
   }
+
   const skill = operation.value.skills[0]
   expect(skill?.digest).toBe(bundleSkillDigest(published))
+
   if (target === 'windows') {
     expect(skill?.canonicalPath).toMatch(/^[A-Za-z]:[\\/]/)
     expect(skill?.canonicalPath).toContain(`.agents\\skills\\${SKILL_NAME}`)
@@ -436,13 +483,16 @@ async function expectManagedRemoteVersion(
     (id) => window.api.skills.listManagedInstalls(id),
     target.managedEnvironmentId
   )
+
   if (installs.status !== 'ok') {
     throw new Error(`physical host managed-install listing failed: ${installs.status}`)
   }
+
   const install = installs.value.find((candidate) => {
     if (target.kind === 'windows' || target.kind === 'paired-posix') {
       return candidate.destination.scope === 'global' && !candidate.destination.executionTarget
     }
+
     if (target.kind === 'wsl') {
       return (
         candidate.destination.scope === 'global' &&
@@ -450,6 +500,7 @@ async function expectManagedRemoteVersion(
         candidate.destination.executionTarget.distro === PHYSICAL_WSL_DISTRO
       )
     }
+
     return (
       candidate.destination.scope === 'global' &&
       candidate.destination.executionTarget?.kind === 'ssh' &&
@@ -457,6 +508,7 @@ async function expectManagedRemoteVersion(
         target.destination.executionTarget?.connectionId
     )
   })
+
   expect(install).toMatchObject({
     name: SKILL_NAME,
     versionId,
@@ -468,17 +520,21 @@ async function expectManagedRemoteVersion(
 
 function bundleSkillId(published: SkillCloudPublishResult): string {
   const manifest = published.version.manifest
+
   if (!('skills' in manifest) || manifest.skills.length !== 1) {
     throw new Error('staging publish did not return the expected one-skill bundle')
   }
+
   return manifest.skills[0].id
 }
 
 function bundleSkillDigest(published: SkillCloudPublishResult): string {
   const manifest = published.version.manifest
+
   if (!('skills' in manifest) || manifest.skills.length !== 1) {
     throw new Error('staging publish did not return the expected one-skill bundle')
   }
+
   return manifest.skills[0].digest
 }
 
@@ -491,6 +547,7 @@ function expectBundleOutcome(
   if (operation.status !== 'ok') {
     throw new Error(`staging bundle install operation failed: ${operation.status}`)
   }
+
   const diagnostic = JSON.stringify({
     status: operation.value.status,
     skills: operation.value.skills.map((skill) => ({
@@ -500,6 +557,7 @@ function expectBundleOutcome(
       conflict: skill.conflict?.kind
     }))
   })
+
   expect(operation.value.status, diagnostic).toBe(expectedStatus)
   expect(operation.value.skills, diagnostic).toHaveLength(1)
   expect(operation.value.skills[0]?.status, diagnostic).toBe(expectedSkillStatus)

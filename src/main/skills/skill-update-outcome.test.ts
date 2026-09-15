@@ -192,6 +192,7 @@ describe('skillUpdateFailedNames over a real inventory', () => {
       join(skillDir, 'SKILL.md'),
       Buffer.concat([current, Buffer.from('\nUpstream edit published after this build.\n')])
     )
+
     return { homeDir, installedTreeSha: (await observeSkillPackage(skillDir)).observedGitTreeSha }
   }
 
@@ -221,6 +222,7 @@ describe('skillUpdateFailedNames over a real inventory', () => {
       resourceRoot: join(repoRoot, 'resources'),
       repos: []
     })
+
     const locks = await readGloballyUpdatableSkillLocks({ homeDir })
 
     // Guard the premise: no snapshot knows these bytes, so recognition can only
@@ -229,6 +231,7 @@ describe('skillUpdateFailedNames over a real inventory', () => {
     const canonical = inventory.installations.filter(
       (entry) => entry.name === 'orca-cli' && entry.topology === 'canonical-copy'
     )
+
     expect(canonical).toHaveLength(1)
     expect(canonical[0].status).toBe('newer-known')
     expect(canonical[0].installedReleaseRevision).toBeNull()
@@ -246,6 +249,7 @@ describe('skillUpdateFailedNames over a real inventory', () => {
       resourceRoot: join(repoRoot, 'resources'),
       repos: []
     })
+
     const locks = await readGloballyUpdatableSkillLocks({ homeDir })
 
     expect(skillUpdateFailedNames(['orca-cli'], inventory.installations, locks)).toEqual([

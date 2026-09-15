@@ -155,6 +155,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
       if (this.mobileSessionTabListeners.size > 0) {
         this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
       }
+
       if (!changed) {
         this.touchMobileSessionSnapshotsForPty(ptyId)
       }
@@ -233,6 +234,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
       getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
       getPaneKeyForHandle: (handle) => {
         const record = this.handles.get(handle)
+
         return record ? `${record.tabId}:${record.leafId}` : undefined
       },
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),

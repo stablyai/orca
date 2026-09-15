@@ -9,9 +9,11 @@ let originalApiDescriptor: PropertyDescriptor | undefined
 
 beforeEach(() => {
   originalApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
+
   const ui = {
     onFileDrop: vi.fn<Window['api']['ui']['onFileDrop']>()
   } satisfies Pick<Window['api']['ui'], 'onFileDrop'>
+
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: { ui }
@@ -20,6 +22,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+
   if (originalApiDescriptor) {
     Object.defineProperty(window, 'api', originalApiDescriptor)
   } else {
@@ -35,6 +38,7 @@ describe('useComposerDropListener', () => {
       listeners.push(listener)
       const unsubscribe = vi.fn()
       unsubscribes.push(unsubscribe)
+
       return unsubscribe
     })
     const firstApply = vi.fn()

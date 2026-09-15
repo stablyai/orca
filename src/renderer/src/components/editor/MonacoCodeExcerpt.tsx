@@ -11,6 +11,7 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
   if (language !== 'python') {
     return
   }
+
   pythonLanguageRegistrationPromise ??=
     import('monaco-editor/esm/vs/basic-languages/python/python.js').then(
       ({ conf, language: pythonTokens }) => {
@@ -23,6 +24,7 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
             aliases: ['Python', 'py']
           })
         }
+
         monaco.languages.setLanguageConfiguration('python', conf)
         monaco.languages.setMonarchTokensProvider('python', pythonTokens)
       }
@@ -47,10 +49,12 @@ export default function MonacoCodeExcerpt({
 }: MonacoCodeExcerptProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+
   const editorFontSize = computeEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+
   const fontFamily = resolveEditorFontFamily(settings)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const code = useMemo(() => lines.join('\n'), [lines])
@@ -63,6 +67,7 @@ export default function MonacoCodeExcerpt({
   useEffect(() => {
     if (lines.length === 0) {
       setHtmlLines([])
+
       return
     }
 
@@ -77,6 +82,7 @@ export default function MonacoCodeExcerpt({
         if (cancelled) {
           return
         }
+
         const nextLines = html.split('<br/>').slice(0, lines.length)
         setHtmlLines(nextLines)
       })
@@ -93,9 +99,12 @@ export default function MonacoCodeExcerpt({
     >
       {lines.map((codeLine, index) => {
         const lineNumber = firstLineNumber + index
+
         const isCommentedLine =
           lineNumber >= highlightedStartLine && lineNumber <= highlightedEndLine
+
         const html = htmlLines[index] || (codeLine ? undefined : '&nbsp;')
+
         return (
           <div
             key={lineNumber}

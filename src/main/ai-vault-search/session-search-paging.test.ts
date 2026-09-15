@@ -22,11 +22,13 @@ afterEach(async () => {
 
 async function open(name: string, options = {}): Promise<SessionSearchHarness> {
   harness = await openSessionSearchHarness(name, options)
+
   return harness
 }
 
 async function withSessions(count: number, options = {}): Promise<SessionSearchHarness> {
   harness = await openSessionSearchHarness('ss-engine-paging', options)
+
   for (let id = 1; id <= count; id++) {
     addSyntheticSession(harness.db, {
       id,
@@ -34,6 +36,7 @@ async function withSessions(count: number, options = {}): Promise<SessionSearchH
       updatedAt: `2026-09-${String(id).padStart(2, '0')}T00:00:00.000Z`
     })
   }
+
   return harness
 }
 
@@ -44,6 +47,7 @@ describe('a cursor walks one ranked list', () => {
     const seen: string[] = []
     let cursor: string | null = null
     let pages = 0
+
     do {
       const page = engine.search(cursor ? { ...request, cursor } : request)
       seen.push(...page.hits.map((hit) => hit.sessionId))
@@ -79,9 +83,11 @@ describe('a cursor walks one ranked list', () => {
     // Same text, same timestamp: every ranking key is equal, which is exactly
     // where an unstable sort would hand one session out twice and lose another.
     harness = await openSessionSearchHarness('ss-engine-ties')
+
     for (let id = 1; id <= 6; id++) {
       addSyntheticSession(harness.db, { id, text: 'needle', updatedAt: '2026-09-01T00:00:00.000Z' })
     }
+
     const first = harness.engine.search({ query: 'needle', limit: 3 })
     const second = harness.engine.search({ query: 'needle', limit: 3, cursor: first.page.cursor! })
     const seen = [...first.hits, ...second.hits].map((hit) => hit.sessionId)
@@ -100,6 +106,7 @@ describe('a cursor is refused rather than reinterpreted', () => {
     expect(() => engine.search({ query: 'needle', limit: 10, cursor: first.page.cursor! })).toThrow(
       SessionSearchCursorError
     )
+
     try {
       engine.search({ query: 'needle', limit: 10, cursor: first.page.cursor! })
       expect.unreachable('a stale cursor must not be silently re-run')
@@ -133,6 +140,7 @@ describe('a cursor is refused rather than reinterpreted', () => {
   it('rejects a cursor carried over to a different query', async () => {
     const { engine } = await withSessions(25)
     const first = engine.search({ query: 'needle', limit: 10 })
+
     try {
       engine.search({ query: 'padding', limit: 10, cursor: first.page.cursor! })
       expect.unreachable('a cursor indexes into one ranked list, not any list')
@@ -144,6 +152,7 @@ describe('a cursor is refused rather than reinterpreted', () => {
   it('rejects a cursor whose filters changed, which reranks the list', async () => {
     const { engine } = await withSessions(25)
     const first = engine.search({ query: 'needle', limit: 10 })
+
     try {
       engine.search({
         query: 'needle',
@@ -169,14 +178,17 @@ describe('a cursor is refused rather than reinterpreted', () => {
     ['since', { filters: { since: '2026-09-01T00:00:00.000Z' } }]
   ])('rejects a cursor presented with a different %s', async (_field, changed) => {
     const { engine } = await withSessions(25)
+
     const request: SessionSearchRequest = {
       query: 'needle',
       limit: 10,
       scope: 'all',
       filters: { sort: 'relevance', agents: ['claude'], scopePaths: ['/'], since: undefined }
     }
+
     const first = engine.search(request)
     expect(first.page.cursor).not.toBeNull()
+
     try {
       engine.search({
         ...request,
@@ -192,6 +204,7 @@ describe('a cursor is refused rather than reinterpreted', () => {
 
   it('rejects a cursor that is not one of ours', async () => {
     const { engine } = await withSessions(3)
+
     try {
       engine.search({ query: 'needle', cursor: 'not-a-cursor' })
       expect.unreachable('a malformed cursor is not an empty one')
@@ -287,6 +300,7 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
     // the ceiling to be what ends it. The only match is the oldest session.
     const deep = 600
     const { db, engine } = await open('ss-engine-sparse-deep', { sessionCandidateLimit: 2 })
+
     for (let id = 1; id <= deep; id++) {
       addSyntheticSession(db, {
         id,
@@ -294,6 +308,7 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
         updatedAt: new Date(Date.UTC(2026, 8, 9) - id * 60_000).toISOString()
       })
     }
+
     const result = engine.search({ query: 'repo:needleonly' })
     expect(result.hits).toHaveLength(0)
     expect(result.truncated.candidates).toBe(true)
@@ -322,19 +337,24 @@ describe('the response carries the snapshot it was built from', () => {
 
 it.each([false, true])('rejects a write during page assembly (cursor: %s)', async (withCursor) => {
   const { db, engine, store } = await open('ss-concurrent-page')
+
   for (let id = 1; id <= 3; id++) {
     addSyntheticSession(db, { id, text: 'needle' })
   }
+
   const first = engine.search({ query: 'needle', limit: 1 })
   const prepare = db.prepare.bind(db)
   let committed = false
+
   const hook = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
     if (!committed && sql.includes('SELECT DISTINCT session_row_id FROM files')) {
       committed = true
       store.removeFile('/synthetic/1.jsonl')
     }
+
     return prepare(sql)
   })
+
   try {
     expect(() =>
       engine.search({

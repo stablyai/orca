@@ -9,6 +9,7 @@ let tempDirs: string[] = []
 async function tempRoot(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'orca-nested-repos-'))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -35,9 +36,11 @@ function posixTestFilesystem(args: {
       })),
     readTextFile: async (path: string) => {
       const content = args.files?.get(path)
+
       if (content === undefined) {
         throw new Error('not found')
       }
+
       return content
     },
     joinPath: (parentPath: string, childName: string) => `${parentPath}/${childName}`,
@@ -220,6 +223,7 @@ describe('scanNestedRepos', () => {
         )
       ]
     ])
+
     const gitRepos = new Set([
       '/workspace/z-web-client',
       ...Array.from(
@@ -247,6 +251,7 @@ describe('scanNestedRepos', () => {
       ['/workspace/gamma-folder', ['a-gamma-child']],
       ['/workspace/alpha-folder/alpha-nested', ['a-alpha-grandchild']]
     ])
+
     const gitRepos = new Set([
       '/workspace/beta-root',
       '/workspace/omega-root',
@@ -255,6 +260,7 @@ describe('scanNestedRepos', () => {
       '/workspace/gamma-folder/a-gamma-child',
       '/workspace/alpha-folder/alpha-nested/a-alpha-grandchild'
     ])
+
     const readOrder: string[] = []
 
     const result = await scanNestedRepos({
@@ -263,6 +269,7 @@ describe('scanNestedRepos', () => {
         ...posixTestFilesystem({ directories, gitRepos }),
         readDirectory: async (dirPath) => {
           readOrder.push(dirPath)
+
           return (directories.get(dirPath) ?? []).map((name) => ({ name, isDirectory: true }))
         }
       }
@@ -291,6 +298,7 @@ describe('scanNestedRepos', () => {
       ['/workspace/active', ['repo']],
       ['/workspace/ignored', ['repo']]
     ])
+
     const files = new Map([['/workspace/.gitignore', 'ignored/\n']])
     const gitRepos = new Set(['/workspace/active/repo', '/workspace/ignored/repo'])
 
@@ -309,6 +317,7 @@ describe('scanNestedRepos', () => {
       ['/workspace/active/ignored', ['repo']],
       ['/workspace/ignored', ['repo']]
     ])
+
     const files = new Map([['/workspace/.gitignore', '/ignored\n']])
     const gitRepos = new Set(['/workspace/active/ignored/repo', '/workspace/ignored/repo'])
 
@@ -336,6 +345,7 @@ describe('scanNestedRepos', () => {
       ['/workspace', ['repo']],
       ['/workspace/repo', []]
     ])
+
     const gitRepos = new Set(['/workspace/repo'])
     const selectedPathChecks: string[] = []
 
@@ -345,6 +355,7 @@ describe('scanNestedRepos', () => {
         ...posixTestFilesystem({ directories, gitRepos }),
         isSelectedPathGitRepo: (path) => {
           selectedPathChecks.push(path)
+
           return false
         }
       }

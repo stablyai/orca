@@ -24,6 +24,7 @@ export class JournalItemAppender {
     options: ItemAppendOptions
   ): Promise<JournalAppendResult> {
     const itemId = agentJournalItemKey(identity)
+
     return this.deps
       .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options))
       .then((row) => ({

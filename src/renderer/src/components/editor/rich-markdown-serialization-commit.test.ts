@@ -17,6 +17,7 @@ function fakeCanonicalize(md: string): string {
     .replace(/_([^_]+)_/g, '*$1*')
     .replace(/\n+$/, '')
 }
+
 const roundTrip = (md: string): string => fakeCanonicalize(md)
 
 function refs(originalSource: string, baseCanonical: string): RichMarkdownReconcileRefs {
@@ -69,6 +70,7 @@ describe('commitRichMarkdownSerialization (shared disk-bound serialize chokepoin
   it('does not crash when getMarkdown throws (editor destroyed mid-flush)', () => {
     const r = refs('src', 'src')
     r.lastCommittedMarkdownRef.current = 'safe'
+
     const editor = fakeEditor(() => {
       throw new Error('editor destroyed')
     })
@@ -83,6 +85,7 @@ describe('commitRichMarkdownSerialization (shared disk-bound serialize chokepoin
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const r = refs('# 이전\r\n\r\n_강조_\r\n', '# 이전\n\n*강조*')
     const editor = fakeEditor(() => '# 변경\n\n*강조*')
+
     const throwingRoundTrip = vi.fn(() => {
       throw new Error('round-trip failed')
     })
@@ -134,6 +137,7 @@ describe('handleRichMarkdownSaveShortcut (Cmd/Ctrl+S persistence site)', () => {
     const onSave = vi.fn()
     const onContentChange = vi.fn()
     const flush = vi.fn()
+
     const ctx = {
       editorRef: { current: editor },
       originalSourceRef: { current: '# Title\n\n_word_\n' },
@@ -144,6 +148,7 @@ describe('handleRichMarkdownSaveShortcut (Cmd/Ctrl+S persistence site)', () => {
       onSaveRef: { current: onSave },
       flushPendingSerialization: flush
     } as unknown as KeyHandlerContext
+
     return { ctx, onSave, onContentChange, flush }
   }
 
@@ -165,6 +170,7 @@ describe('handleRichMarkdownSaveShortcut (Cmd/Ctrl+S persistence site)', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const editor = fakeEditor(() => '# Title!\n\n*word*')
     const { ctx, onSave, flush } = saveContext(editor)
+
     const event = { ...saveEvent(), key: 'a', code: 'KeyA' } as KeyboardEvent & {
       preventDefault: ReturnType<typeof vi.fn>
     }

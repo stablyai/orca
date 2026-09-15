@@ -17,14 +17,23 @@ const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
+
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
+
 vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
+
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
+
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
+
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
+
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
+
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
@@ -42,6 +51,7 @@ describe('NativeChatStructuredSession', () => {
       text: 'PR #19423 — review this change',
       createdAt: Date.now()
     }
+
     useAppStore.getState().seedNativeChatLaunchDraft(draft)
     render(
       <NativeChatStructuredSession
@@ -75,6 +85,7 @@ describe('NativeChatStructuredSession', () => {
       text: 'PR #19423 — review this change',
       createdAt: Date.now()
     }
+
     useAppStore.getState().seedNativeChatLaunchDraft(draft)
     mocks.status = 'idle'
     mocks.messages = [
@@ -86,6 +97,7 @@ describe('NativeChatStructuredSession', () => {
         blocks: [{ type: 'text', text: draft.text }]
       }
     ]
+
     const { rerender } = render(
       <NativeChatStructuredSession
         isVisible
@@ -96,6 +108,7 @@ describe('NativeChatStructuredSession', () => {
         agent="codex"
       />
     )
+
     expect(mocks.composerProps?.launchSeed).toMatchObject({
       launchDraft: draft,
       launchDraftResolved: false
@@ -159,6 +172,7 @@ describe('NativeChatStructuredSession', () => {
     mocks.isWorking = true
     mocks.turnId = 'turn-question'
     mocks.promptItems = legacySingleQuestionPromptItems
+
     const view = () => (
       <NativeChatStructuredSession
         isVisible
@@ -169,6 +183,7 @@ describe('NativeChatStructuredSession', () => {
         agent="codex"
       />
     )
+
     const { rerender } = render(view())
 
     expect(mocks.messageListProps).toMatchObject({
@@ -224,6 +239,7 @@ describe('NativeChatStructuredSession', () => {
         }
       }
     ]
+
     mocks.isWorking = true
     mocks.turnId = 'turn-approval'
     mocks.promptItems = approvalItems
@@ -289,9 +305,11 @@ describe('NativeChatStructuredSession', () => {
     const disclosure = screen.getByRole('button', { name: '1 agent · 1 shell' })
     const status = disclosure.closest('[data-native-chat-background-tasks="true"]')
     const composer = screen.getByTestId('structured-composer')
+
     if (!status) {
       throw new Error('background task status was not rendered')
     }
+
     expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(mocks.composerProps?.isWorking).toBe(false)
     expect(screen.queryByRole('list', { name: 'Agents' })).toBeNull()
@@ -334,9 +352,11 @@ describe('NativeChatStructuredSession', () => {
     render(claudeSessionView('structured-tab-midturn', 'session-midturn'))
 
     const status = document.querySelector('[data-native-chat-background-tasks="true"]')
+
     if (!status) {
       throw new Error('background task status was not rendered during a running turn')
     }
+
     expect(mocks.composerProps?.isWorking).toBe(true)
     // Dimmed monitor amber is the turn-owns-the-voice treatment.
     expect(status.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500/40')
@@ -447,6 +467,7 @@ describe('NativeChatStructuredSession', () => {
         agent="codex"
       />
     )
+
     const dispatchCommand = mocks.composerProps?.structuredTransport?.dispatchCommand as
       | ((text: string) => Promise<{ accepted: boolean }>)
       | undefined
@@ -476,9 +497,11 @@ describe('NativeChatStructuredSession', () => {
     )
 
     const card = mocks.questionCardProps
+
     if (!card) {
       throw new Error('question card was not rendered')
     }
+
     expect(card.prompt.questions).toHaveLength(2)
     expect(card.prompt.questions[0]).toMatchObject({
       question: 'Which targets?',
@@ -513,9 +536,11 @@ describe('NativeChatStructuredSession', () => {
     )
 
     const card = mocks.questionCardProps
+
     if (!card) {
       throw new Error('question card was not rendered')
     }
+
     expect(card.prompt.questions).toEqual([
       {
         question: 'Pick a library',

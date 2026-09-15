@@ -21,6 +21,7 @@ import type { DetectedWorktree, Worktree } from '../../../../shared/worktree/typ
 import type { Row } from './worktree-list/grouping/row-types'
 
 const SSH_HOST_ID: ExecutionHostId = 'ssh:openclaw-target'
+
 const ENV_HOST_ID: ExecutionHostId = 'runtime:openclaw-env'
 
 /** Both twins display the same label: the reporting account's shape. */
@@ -36,6 +37,7 @@ const sshTwin: Repo = {
   path: '/home/brennan/orca',
   connectionId: 'openclaw-target'
 }
+
 const envTwin: Repo = {
   ...repo,
   id: 'repo-env-twin',
@@ -121,6 +123,7 @@ function noticeRows(args: {
     [],
     HOST_LABELS
   )
+
   return rows.filter((row) => row.type === 'new-external-worktrees-inbox')
 }
 
@@ -194,6 +197,7 @@ describe('discovery notice rows on a multi-host project', () => {
         index,
         HOST_LABELS
       )
+
       expect([...(labels?.keys() ?? [])]).toEqual(eligible)
     }
   })
@@ -202,6 +206,7 @@ describe('discovery notice rows on a multi-host project', () => {
     // Regression pin: guards a future implementation that counts records
     // instead of distinct host ids.
     const secondLocal: Repo = { ...repo, id: 'repo-local-2', path: '/tmp/orca-second' }
+
     const rows = noticeRows({
       eligibleRepoIds: [repo.id],
       repoMap: new Map([

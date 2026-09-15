@@ -66,6 +66,7 @@ describe('client-hosted relaunch wait', () => {
       ),
       'runtime-old'
     )
+
     expect(pending).toBeNull()
   })
 

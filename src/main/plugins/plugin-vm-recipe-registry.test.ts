@@ -26,6 +26,7 @@ async function recipePlugin(
       writeFile(join(rootDir, artifact.path), JSON.stringify(artifact.recipe), 'utf8')
     )
   )
+
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id,
@@ -37,10 +38,13 @@ async function recipePlugin(
     contributes: { vmRecipes: artifacts.map((artifact) => ({ path: artifact.path })) },
     capabilities: []
   })
+
   const content = await hashPluginTree(rootDir)
+
   if (!content.ok) {
     throw new Error(content.error)
   }
+
   return {
     pluginKey: `orca-samples.${id}`,
     rootDir,
@@ -77,6 +81,7 @@ describe('PluginVmRecipeRegistry', () => {
     const plugin = await recipePlugin('recipes', [
       { path: 'recipes/cloud.json', recipe: artifact('cloud') }
     ])
+
     const registry = new PluginVmRecipeRegistry()
 
     await registry.reconcile([plugin], () => false)
@@ -97,10 +102,12 @@ describe('PluginVmRecipeRegistry', () => {
         recipe: { schemaVersion: 1, id: 'bad', name: 'Bad', create: 'create', suspend: 'stop' }
       }
     ])
+
     const duplicate = await recipePlugin('duplicate', [
       { path: 'recipes/one.json', recipe: artifact('same') },
       { path: 'recipes/two.json', recipe: artifact('same') }
     ])
+
     const registry = new PluginVmRecipeRegistry()
 
     await registry.reconcile([malformed, duplicate], () => true)
@@ -114,9 +121,11 @@ describe('PluginVmRecipeRegistry', () => {
     const first = await recipePlugin('first', [
       { path: 'recipes/shared.json', recipe: artifact('shared') }
     ])
+
     const second = await recipePlugin('second', [
       { path: 'recipes/shared.json', recipe: artifact('shared') }
     ])
+
     const registry = new PluginVmRecipeRegistry()
 
     await registry.reconcile([first, second], () => true)
@@ -130,6 +139,7 @@ describe('PluginVmRecipeRegistry', () => {
     const plugin = await recipePlugin('lifecycle', [
       { path: 'recipes/cloud.json', recipe: artifact('cloud') }
     ])
+
     const registry = new PluginVmRecipeRegistry()
 
     await registry.reconcile([plugin], () => true)
@@ -148,6 +158,7 @@ describe('PluginVmRecipeRegistry', () => {
     const plugin = await recipePlugin('mutable', [
       { path: 'recipes/cloud.json', recipe: artifact('cloud') }
     ])
+
     // Exercise the installed-tree identity as well as mutable dev previews.
     plugin.contentHash = plugin.consentContentHash ?? null
     const registry = new PluginVmRecipeRegistry()

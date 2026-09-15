@@ -10,16 +10,20 @@ export function isUsableRestStackMetadata(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const stack = value as {
     number?: unknown
     position?: unknown
     size?: unknown
     base?: unknown
   }
+
   if (!stack.base || typeof stack.base !== 'object' || Array.isArray(stack.base)) {
     return false
   }
+
   const base = stack.base as { ref?: unknown; sha?: unknown }
+
   return (
     isPositiveSafeInteger(stack.number) &&
     isPositiveSafeInteger(stack.position) &&

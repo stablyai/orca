@@ -66,15 +66,20 @@ function snapshotWithUnmappedHostGroup(): ReturnType<typeof makeSnapshot> {
 
 function collectLeafGroupIds(layout: unknown, out: string[] = []): string[] {
   const node = layout as { type: string; groupId?: string; first?: unknown; second?: unknown }
+
   if (!node) {
     return out
   }
+
   if (node.type === 'leaf') {
     out.push(node.groupId!)
+
     return out
   }
+
   collectLeafGroupIds(node.first, out)
   collectLeafGroupIds(node.second, out)
+
   return out
 }
 
@@ -92,19 +97,23 @@ describe('applyWebSessionTabsSnapshot layout composition', () => {
     const leaves = collectLeafGroupIds(
       patch.layoutByWorktree?.[WT] ?? { type: 'leaf', groupId: LOCAL_GROUP_ID }
     )
+
     expect(leaves).toEqual([LOCAL_GROUP_ID])
   })
 
   it('does not grow the layout when the same snapshot is applied twice', () => {
     let state = stateWithLocalGroup()
+
     for (let i = 0; i < 3; i++) {
       resetWebSessionTabsSyncTestState()
+
       const patch = applyWebSessionTabsSnapshot(
         state,
         snapshotWithUnmappedHostGroup(),
         ENV,
         NOW
       ) as Partial<WebSessionTabsSyncState>
+
       state = { ...state, ...patch }
     }
 

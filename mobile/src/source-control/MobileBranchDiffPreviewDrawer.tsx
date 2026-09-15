@@ -16,7 +16,9 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
   if (!branchDiffPreview) {
     return null
   }
+
   const entry = branchDiffPreview.entry
+
   return (
     <BottomDrawer
       visible={branchDiffPreview !== null}

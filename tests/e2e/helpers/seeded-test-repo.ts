@@ -66,5 +66,6 @@ export function createSeededTestRepo(options: { publishPath?: boolean } = {}): s
   if (options.publishPath !== false) {
     writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
   }
+
   return testRepoDir
 }

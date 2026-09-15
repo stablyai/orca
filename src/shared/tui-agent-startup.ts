@@ -57,6 +57,7 @@ export function buildAgentStartupPlan(args: {
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
   const usesQuery = config.promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
+
   const baseCommand = resolveAgentLaunchCommand({
     agent,
     cmdOverrides,
@@ -67,9 +68,11 @@ export function buildAgentStartupPlan(args: {
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote
   })
+
   if (!baseCommand.ok) {
     return null
   }
+
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     // Why: picker flags are a one-time launch choice; a resumed provider
@@ -81,6 +84,7 @@ export function buildAgentStartupPlan(args: {
     if (!allowEmptyPromptLaunch) {
       return null
     }
+
     return {
       agent,
       launchCommand: baseCommand.command,
@@ -96,6 +100,7 @@ export function buildAgentStartupPlan(args: {
 
   if (config.promptInjectionMode === 'argv') {
     const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
+
     return {
       agent,
       launchCommand: `${baseCommand.command}${promptSeparator} ${quotedPrompt}`,
@@ -130,9 +135,11 @@ export function buildAgentStartupPlan(args: {
       shell,
       isRemote: args.isRemote
     })
+
     if (!queryPlan) {
       return null
     }
+
     return {
       agent,
       // Why: Hermes owns readiness and submission for `chat --query`; Orca
@@ -207,9 +214,11 @@ export function buildAgentDraftLaunchPlan(args: {
   const shell = resolveStartupShell(platform, args.shell)
   const config = TUI_AGENT_CONFIG[agent]
   const trimmed = draft.trim()
+
   if (!trimmed) {
     return null
   }
+
   const baseCommand = resolveAgentLaunchCommand({
     agent,
     cmdOverrides,
@@ -219,15 +228,19 @@ export function buildAgentDraftLaunchPlan(args: {
     sessionOptions: args.sessionOptions,
     isRemote: args.isRemote
   })
+
   if (!baseCommand.ok) {
     return null
   }
+
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     // Why: see the new-session path above — resume must not replay picker flags.
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
+
   let plan: AgentDraftLaunchPlan | null = null
+
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
     plan = {
@@ -251,20 +264,24 @@ export function buildAgentDraftLaunchPlan(args: {
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
+
   if (
     !plan ||
     !inlineAgentDraftFitsPlatform({ command: plan.launchCommand, env: plan.env, platform })
   ) {
     return null
   }
+
   return plan
 }
 
 export { isShellProcess }
+
 export {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix,
   quoteStartupArg,
   resolveStartupShell
 } from './tui-agent-startup-shell'
+
 export type { AgentCliArgsPlan, AgentStartupShell } from './tui-agent-startup-shell'

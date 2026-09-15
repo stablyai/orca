@@ -22,6 +22,7 @@ export function resolveWorktreeCreateIdempotencySupport(
   if (advertisedDedupeTtlMs === undefined) {
     return { dedupeTtlMs: 0 }
   }
+
   if (
     typeof advertisedDedupeTtlMs !== 'number' ||
     !Number.isSafeInteger(advertisedDedupeTtlMs) ||
@@ -30,6 +31,7 @@ export function resolveWorktreeCreateIdempotencySupport(
     // Truthy support preserves immediate cutover retries while disabling ambiguous replay.
     return { dedupeTtlMs: 0 }
   }
+
   return {
     dedupeTtlMs: Math.min(advertisedDedupeTtlMs, WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS)
   }

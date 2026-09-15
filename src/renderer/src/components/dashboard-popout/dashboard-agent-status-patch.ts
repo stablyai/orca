@@ -20,6 +20,7 @@ function patchedSubagents(
   if (event.subagents === undefined) {
     return card.subagents
   }
+
   return event.subagents.map((subagent) => ({
     id: `${card.paneKey}\u0000subagent:${subagent.id}`,
     name: subagent.description || subagent.agentType || 'unknown',
@@ -35,11 +36,15 @@ export function patchDashboardSnapshotFromAgentStatus(
   if (event.providerSessionOnly) {
     return { matched: true, snapshot }
   }
+
   const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
+
   if (index === -1) {
     return { matched: false, snapshot }
   }
+
   const card = snapshot.cards[index]
+
   if (
     event.receivedAt <= (card.statusUpdatedAt ?? 0) ||
     (event.worktreeId !== undefined && event.worktreeId !== card.worktreeId)
@@ -50,11 +55,14 @@ export function patchDashboardSnapshotFromAgentStatus(
   const stateChanged = event.stateStartedAt > card.stateChangedAt
   const unseen = stateChanged ? card.startedAt !== 0 : card.unseen
   const dotState = event.state
+
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
+
   const bucket = dashboardBucketForDotState(
     dashboardCardDisplayState({ dotState, workingMode, unseen })
   )
+
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
@@ -80,8 +88,10 @@ export function patchDashboardSnapshotFromAgentStatus(
         : undefined,
     subagents: patchedSubagents(card, event)
   }
+
   const cards = snapshot.cards.slice()
   cards[index] = nextCard
+
   return {
     matched: true,
     snapshot: { ...snapshot, generatedAt: Math.max(snapshot.generatedAt, event.receivedAt), cards }

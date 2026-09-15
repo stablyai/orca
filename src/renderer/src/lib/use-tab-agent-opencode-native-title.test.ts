@@ -15,10 +15,15 @@ import { useTabAgent } from './use-tab-agent'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const initialAppState = useAppStore.getInitialState()
+
 const FOCUSED_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 let latestAgent: TuiAgent | null | undefined
+
 let root: Root | null = null
+
 const identityScenarios: [
   string,
   { isRemote: boolean; title?: string; siblingHookAgent?: TuiAgent }
@@ -31,6 +36,7 @@ const identityScenarios: [
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
   latestAgent = useTabAgent(tab)
+
   return null
 }
 
@@ -65,6 +71,7 @@ describe('OpenCode native title tab identity', () => {
   const originalApi = window.api
   const getForegroundProcess = vi.fn()
   const clearTabLaunchAgent = vi.fn()
+
   const staleClaudeTab: TerminalTab = {
     id: 'opencode-tab',
     ptyId: 'pty-opencode',
@@ -103,6 +110,7 @@ describe('OpenCode native title tab identity', () => {
       act(() => root?.unmount())
       root = null
     }
+
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
     window.api = originalApi
@@ -132,10 +140,13 @@ describe('OpenCode native title tab identity', () => {
       tabsByWorktree: { 'worktree-1': [staleClaudeTab] },
       terminalLayoutsByTabId: {}
     })
+
     expect(parsed.ok).toBe(true)
+
     if (!parsed.ok) {
       return
     }
+
     const restoredTab = parsed.value.tabsByWorktree['worktree-1']![0]!
 
     expect(
@@ -203,6 +214,7 @@ describe('OpenCode native title tab identity', () => {
 
   it('keeps restored split-pane ownership over an SSH/tmux title replay', () => {
     const paneKey = makePaneKey('opencode-tab', FOCUSED_LEAF_ID)
+
     const parsed = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'worktree-1',
@@ -213,10 +225,13 @@ describe('OpenCode native title tab identity', () => {
       terminalLayoutsByTabId: { 'opencode-tab': splitLayout() },
       sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingClaudeRecord(paneKey) }
     })
+
     expect(parsed.ok).toBe(true)
+
     if (!parsed.ok) {
       return
     }
+
     const restoredTab = parsed.value.tabsByWorktree['worktree-1']![0]!
     const restoredSleeping = parsed.value.sleepingAgentSessionsByPaneKey?.[paneKey]
 

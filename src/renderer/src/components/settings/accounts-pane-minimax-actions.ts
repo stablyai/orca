@@ -30,16 +30,21 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     setMiniMaxCredentialBusy,
     recordFeatureInteraction
   } = context
+
   const saveMiniMaxCookie = async (): Promise<void> => {
     if (!miniMaxCookieDraft.trim()) {
       toast.error(
         translate('auto.components.settings.AccountsPane.2f24f244a4', 'MiniMax cookie is required.')
       )
+
       return
     }
+
     setMiniMaxCredentialBusy(true)
+
     try {
       const status = await window.api.minimaxCredentials.saveCookie(miniMaxCookieDraft.trim())
+
       if (!status.cookieConfigured) {
         throw new Error(
           translate(
@@ -48,6 +53,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
           )
         )
       }
+
       setMiniMaxConfigured(status.cookieConfigured)
       setMiniMaxCookieDraft('')
       recordFeatureInteraction('usage-tracking')
@@ -69,6 +75,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
 
   const clearMiniMaxCookie = async (): Promise<void> => {
     setMiniMaxCredentialBusy(true)
+
     try {
       const status = await window.api.minimaxCredentials.clearCookie()
       setMiniMaxConfigured(status.cookieConfigured)
@@ -95,11 +102,15 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
           'MiniMax API key is required.'
         )
       )
+
       return
     }
+
     setMiniMaxCredentialBusy(true)
+
     try {
       const status = await window.api.minimaxCredentials.saveApiKey(miniMaxApiKeyDraft.trim())
+
       if (!status.apiKeyConfigured) {
         throw new Error(
           translate(
@@ -108,6 +119,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
           )
         )
       }
+
       setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
       setMiniMaxApiKeyDraft('')
       recordFeatureInteraction('usage-tracking')
@@ -129,6 +141,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
 
   const clearMiniMaxApiKey = async (): Promise<void> => {
     setMiniMaxCredentialBusy(true)
+
     try {
       const status = await window.api.minimaxCredentials.clearApiKey()
       setMiniMaxApiKeyConfigured(status.apiKeyConfigured)

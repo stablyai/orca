@@ -45,11 +45,13 @@ describe('deleteWslFishHistoryFile', () => {
     // Why: the GC sweep and an explicit worktree delete can queue the same
     // tombstone, and one wsl.exe launch per cleanup is enough.
     let settle!: () => void
+
     const run = vi.fn().mockReturnValue(
       new Promise((resolve) => {
         settle = () => resolve(okResult)
       })
     )
+
     const session = 'orca_0123456789abcdef'
 
     const first = deleteWslFishHistoryFile('Ubuntu', session, run)
@@ -77,6 +79,7 @@ describe('deleteWslFishHistoryFile', () => {
       .fn()
       .mockRejectedValueOnce(new Error('distro offline'))
       .mockResolvedValue(okResult)
+
     const session = 'orca_0123456789abcdef'
 
     await expect(deleteWslFishHistoryFile('Ubuntu', session, run)).rejects.toThrow('distro offline')

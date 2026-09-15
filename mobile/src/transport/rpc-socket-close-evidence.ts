@@ -27,6 +27,7 @@ export class RpcSynthesizedCloseIndex {
   ): boolean {
     const synthesizedAtGeneration = this.authenticationBySocket.get(socket)
     this.authenticationBySocket.delete(socket)
+
     return (
       closeCode === unauthorizedCloseCode && synthesizedAtGeneration === authenticationGeneration
     )
@@ -43,7 +44,9 @@ export function isStaleRpcSocketEvent(
   if (current === opening) {
     return false
   }
+
   console.log('[net] stale ws event ignored', { eventName, state, attempt })
+
   return true
 }
 
@@ -66,5 +69,6 @@ export function logRpcSocketClose(options: SocketCloseLogOptions): number | unde
     eventKeys: closeEvent.keys,
     eventStr: closeEvent.json
   })
+
   return event?.code
 }

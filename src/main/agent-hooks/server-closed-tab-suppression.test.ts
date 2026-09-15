@@ -38,6 +38,7 @@ afterEach(() => {
 describe('AgentHookServer listener replay', () => {
   it('drops cached statuses and pane-scoped listener caches under one tab prefix', () => {
     vi.useFakeTimers()
+
     try {
       const server = new AgentHookServer()
       const internals = server as unknown as AgentHookServerCacheInternals
@@ -131,6 +132,7 @@ describe('AgentHookServer listener replay', () => {
   it('suppresses late writes for a closed tab for the rest of the server session', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
@@ -203,8 +205,10 @@ describe('AgentHookServer listener replay', () => {
   it('suppresses local HTTP hook writes for a recently closed tab', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postHook = (prompt: string): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -232,8 +236,10 @@ describe('AgentHookServer listener replay', () => {
   it('accepts a new local prompt after launch authority retires in a reusable pane', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -274,8 +280,10 @@ describe('AgentHookServer listener replay', () => {
     it(`re-attaching a retired ${kind} pane restores status without needing a new turn`, async () => {
       const server = new AgentHookServer()
       await server.start({ env: 'production' })
+
       try {
         const env = server.buildPtyEnv()
+
         const postHook = (payload: Record<string, unknown>): Promise<Response> =>
           fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/${kind}`, {
             method: 'POST',
@@ -309,8 +317,10 @@ describe('AgentHookServer listener replay', () => {
   it('re-attaching a retired pane while idle re-opens it for a much later first turn', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -345,8 +355,10 @@ describe('AgentHookServer listener replay', () => {
   it('re-attach does not lift a closed-tab tombstone', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -378,9 +390,11 @@ describe('AgentHookServer listener replay', () => {
   it('re-attaching a detached pane accepts hooks on the pane key its process launched under', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -412,9 +426,11 @@ describe('AgentHookServer listener replay', () => {
   it('re-attaching restores a legacy numeric pane key alias', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const legacyPane = 'tab-1:0'
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -448,9 +464,11 @@ describe('AgentHookServer listener replay', () => {
   it('does not rebuild a detached pane alias into a closed tab', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -482,9 +500,11 @@ describe('AgentHookServer listener replay', () => {
   it('re-opens the original pane instead of rebuilding an alias into a closed tab', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -524,9 +544,11 @@ describe('AgentHookServer listener replay', () => {
   it('leaves a closed tab pane fenced once its tab id is evicted', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
+
       const postHook = (
         payload: Record<string, unknown>,
         overrides: Record<string, unknown> = {}
@@ -574,10 +596,12 @@ describe('AgentHookServer listener replay', () => {
   it('keeps a legacy alias fenced when its own tab closed but the owner tab did not', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const legacyPane = 'tab-1:0'
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -609,10 +633,12 @@ describe('AgentHookServer listener replay', () => {
   it('does not clobber a newer alias when replaying a retired fence', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const legacyPane = 'tab-1:0'
       const reboundPane = makePaneKey('tab-1', LEAF_3)
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
@@ -643,8 +669,10 @@ describe('AgentHookServer listener replay', () => {
   it('accepts a resumed-session SessionStart after launch authority retires in a reusable pane', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -727,12 +755,14 @@ describe('AgentHookServer listener replay', () => {
 describe('AgentHookServer closed-tab suppression bound', () => {
   it('bounds closedAgentStatusTabIds with LRU eviction as tabs close', () => {
     const server = new AgentHookServer()
+
     const internals = server as unknown as {
       markTabClosedForAgentStatus: (tabId: string) => void
       closedAgentStatusTabIds: Set<string>
     }
 
     const total = CLOSED_AGENT_STATUS_TAB_IDS_MAX + 200
+
     for (let i = 0; i < total; i += 1) {
       internals.markTabClosedForAgentStatus(`closed-tab-${i}`)
     }

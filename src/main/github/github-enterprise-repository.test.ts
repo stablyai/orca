@@ -34,6 +34,7 @@ function mockOriginRemote(url: string): void {
     if (args[0] === 'remote' && args[1] === 'get-url') {
       return { stdout: `${url}\n`, stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
 }
@@ -428,6 +429,7 @@ describe('isGitHubHostAuthenticated', () => {
       })
 
     registerSshGitProvider(connectionId, {} as never)
+
     try {
       await expect(
         isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
@@ -444,6 +446,7 @@ describe('isGitHubHostAuthenticated', () => {
     } finally {
       unregisterSshGitProvider(connectionId)
     }
+
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
@@ -468,6 +471,7 @@ describe('isGitHubHostAuthenticated', () => {
       })
 
     registerSshGitProvider(connectionId, {} as never)
+
     try {
       const oldProbe = isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
       registerSshGitProvider(connectionId, {} as never)
@@ -505,6 +509,7 @@ describe('isGitHubHostAuthenticated', () => {
           isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
         ).resolves.toBe(expected[index])
       }
+
       expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     }
   )
@@ -547,6 +552,7 @@ describe('isGitHubHostAuthenticated', () => {
       for (const [host, expected] of requests) {
         await expect(isGitHubHostAuthenticated(host, '/repo')).resolves.toBe(expected)
       }
+
       expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     }
   )

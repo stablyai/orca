@@ -8,21 +8,25 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
 describe('TerminalFocusNavigationCoalescer', () => {
   it('runs a single job to completion', async () => {
     const coalescer = new TerminalFocusNavigationCoalescer<string>()
+
     const result = await coalescer.run({
       key: 'term_a',
       run: async () => 'full-a',
       resolveSuperseded: () => 'superseded-a'
     })
+
     expect(result).toBe('full-a')
     expect(coalescer.getState()).toMatchObject({
       running: false,
@@ -39,11 +43,14 @@ describe('TerminalFocusNavigationCoalescer', () => {
     const runA = vi.fn(async (ctx: { isCurrent: () => boolean }) => {
       aStarted = true
       await aGate.promise
+
       if (!ctx.isCurrent()) {
         return 'obsolete-a'
       }
+
       return 'full-a'
     })
+
     const runB = vi.fn(async () => 'full-b')
     const runC = vi.fn(async () => 'full-c')
     const superB = vi.fn(() => 'super-b')
@@ -53,6 +60,7 @@ describe('TerminalFocusNavigationCoalescer', () => {
       run: runA,
       resolveSuperseded: (completed) => completed ?? 'super-a'
     })
+
     await vi.waitFor(() => {
       expect(aStarted).toBe(true)
     })
@@ -62,6 +70,7 @@ describe('TerminalFocusNavigationCoalescer', () => {
       run: runB,
       resolveSuperseded: superB
     })
+
     const pC = coalescer.run({
       key: 'term_c',
       run: runC,
@@ -91,14 +100,17 @@ describe('TerminalFocusNavigationCoalescer', () => {
           if (!ctx.isCurrent()) {
             return -1
           }
+
           inFlight += 1
           maxInFlight = Math.max(maxInFlight, inFlight)
           fullRuns += 1
           await new Promise((r) => setTimeout(r, 5))
           inFlight -= 1
+
           if (!ctx.isCurrent()) {
             return -1
           }
+
           return fullRuns
         },
         resolveSuperseded: () => -1
@@ -123,10 +135,12 @@ describe('TerminalFocusNavigationCoalescer', () => {
       run: async (ctx) => {
         aStarted = true
         await aGate.promise
+
         return { id: 'a', navigated: ctx.isCurrent() }
       },
       resolveSuperseded: () => ({ id: 'a', navigated: false })
     })
+
     await vi.waitFor(() => {
       expect(aStarted).toBe(true)
     })
@@ -147,6 +161,7 @@ describe('TerminalFocusNavigationCoalescer', () => {
       id: string
       navigated: boolean
     }>()
+
     let latest!: Promise<{ id: string; navigated: boolean }>
 
     const first = coalescer.run({
@@ -157,6 +172,7 @@ describe('TerminalFocusNavigationCoalescer', () => {
           run: async () => ({ id: 'b', navigated: true }),
           resolveSuperseded: () => ({ id: 'b', navigated: false })
         })
+
         return { id: 'a', navigated: true }
       },
       resolveSuperseded: (completed) => ({
@@ -183,6 +199,7 @@ describe('TerminalFocusNavigationCoalescer', () => {
       },
       resolveSuperseded: () => 'super-a'
     })
+
     await vi.waitFor(() => {
       expect(aStarted).toBe(true)
     })

@@ -50,15 +50,18 @@ export async function parseRovoSessionFile(
   const metadata = asRecord(
     JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
   )
+
   if (!metadata) {
     return null
   }
+
   const accumulator = createAccumulator({
     agent: 'rovo',
     file,
     sessionId: basename(dirname(file.path)),
     messages
   })
+
   accumulator.title = firstString(metadata, ['title', 'name', 'summary'])
   accumulator.cwd = firstString(metadata, [
     'workspace_path',
@@ -81,6 +84,7 @@ export async function parseRovoSessionFile(
 
   const contextPath = join(dirname(file.path), 'session_context.json')
   const context = await readJsonObjectIfExists(contextPath)
+
   if (context) {
     consumeRovoSessionContext(accumulator, context)
   }
@@ -95,12 +99,15 @@ export function consumeRovoSessionContext(
   for (const message of arrayValue(context.messages)) {
     const record = asRecord(message)
     const role = extractString(record?.role)
+
     if (role === 'user' || role === 'assistant') {
       accumulator.messageCount++
       updateTimeline(accumulator, extractString(record?.timestamp))
+
       if (role === 'user') {
         accumulator.title ??= extractContentText(record?.content)
       }
+
       addPreviewContent(accumulator, role, record?.content, record?.timestamp)
     }
   }
@@ -117,19 +124,26 @@ export function consumeRovoHistoryEntry(
   if (!record) {
     return
   }
+
   updateTimeline(accumulator, extractString(record.timestamp))
   const role = extractString(record.role) ?? rovoRoleFromKind(record.kind)
+
   if (role !== 'user' && role !== 'assistant') {
     return
   }
+
   const text = rovoPartsText(arrayValue(record.parts), role)
+
   if (!text) {
     return
   }
+
   accumulator.messageCount++
+
   if (role === 'user') {
     accumulator.title ??= text
   }
+
   addPreviewMessage(accumulator, {
     role,
     text,
@@ -141,36 +155,46 @@ export function rovoRoleFromKind(value: unknown): 'user' | 'assistant' | null {
   if (value === 'request') {
     return 'user'
   }
+
   if (value === 'response') {
     return 'assistant'
   }
+
   return null
 }
 
 export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): string | null {
   const textParts: string[] = []
+
   for (const part of parts) {
     const record = asRecord(part)
+
     if (!record) {
       continue
     }
+
     const kind = extractString(record.part_kind)
+
     if (role === 'user' && kind !== 'user-prompt' && kind !== 'text') {
       continue
     }
+
     if (role === 'assistant' && kind !== 'text') {
       continue
     }
+
     const text =
       typeof record.content === 'string'
         ? record.content
         : typeof record.text === 'string'
           ? record.text
           : null
+
     if (text !== null) {
       textParts.push(text)
     }
   }
+
   return extractContentText(textParts)
 }
 
@@ -187,6 +211,7 @@ export async function parseMessageGraphSessionFile(
 ): Promise<AiVaultSession | null> {
   const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
+
   try {
     return await parseMessageGraphSessionLines({ agent, file, lines, platform, messages })
   } finally {
@@ -222,38 +247,52 @@ type MessageGraphParseState = {
 function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: string): void {
   const { accumulator } = state
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
+
   updateTimeline(accumulator, extractString(record.timestamp))
+
   if (accumulator.agent === 'omp') {
     state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
+
     if (state.ompTitle) {
       accumulator.title = state.ompTitle.title
     }
   }
+
   if (record.type === 'session') {
     const sessionId = extractString(record.id)
+
     if (sessionId) {
       accumulator.sessionId = sessionId
     }
+
     accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
+
     return
   }
+
   if (record.type === 'model_change') {
     // Pi writes `modelId`; OMP writes `model`. Prefer either so an in-progress
     // session shows its model before the first assistant reply lands.
     accumulator.model =
       extractString(record.modelId) ?? extractString(record.model) ?? accumulator.model
+
     return
   }
+
   if (record.type !== 'message') {
     return
   }
+
   const message = asRecord(record.message)
   const role = extractString(message?.role)
+
   if (role === 'user' || role === 'assistant') {
     accumulator.messageCount++
+
     if (role === 'user') {
       if (accumulator.agent === 'omp') {
         accumulator.fallbackTitle ??= extractMessageText(message)
@@ -264,6 +303,7 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
       accumulator.model = extractString(message?.model) ?? accumulator.model
       accumulator.totalTokens += tokenTotal(message?.usage)
     }
+
     addPreviewContent(accumulator, role, message?.content, record.timestamp)
   }
 }
@@ -282,6 +322,7 @@ export function createMessageGraphSessionResumeState(
     }),
     ompTitle: null
   })
+
   // Why: only OMP materializes task-subagent transcripts beside its sessions
   // (in the same-named artifact dir); the row UI shows the count without
   // expanding details. Pi/OpenClaw/Prime Agent have no such layout — skip the readdir.
@@ -314,8 +355,10 @@ async function parseMessageGraphSessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createMessageGraphSessionResumeState(args.agent, args.file, args.messages)
+
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
+
   return state.finalize(args.platform, args.options)
 }

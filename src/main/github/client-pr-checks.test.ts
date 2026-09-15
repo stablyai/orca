@@ -22,11 +22,13 @@ const {
   extractExecErrorMock: vi.fn((err: unknown) => {
     if (err && typeof err === 'object') {
       const e = err as { stderr?: unknown; stdout?: unknown; message?: unknown }
+
       return {
         stderr: typeof e.stderr === 'string' ? e.stderr : String(e.message ?? err),
         stdout: typeof e.stdout === 'string' ? e.stdout : ''
       }
     }
+
     return { stderr: String(err), stdout: '' }
   }),
   getRateLimitMock: vi.fn(),
@@ -140,6 +142,7 @@ function graphQLCheckRun(
 ): Record<string, unknown> {
   const checkSuiteId = overrides.checkSuiteId ?? 1000
   const workflowRunId = overrides.workflowRunId ?? 1
+
   return {
     __typename: 'CheckRun',
     databaseId: overrides.databaseId ?? 88,
@@ -180,6 +183,7 @@ function graphQLCheckSuite(
   }> = {}
 ): Record<string, unknown> {
   const databaseId = overrides.databaseId ?? 1001
+
   return {
     databaseId,
     status: overrides.status ?? 'COMPLETED',
@@ -197,11 +201,13 @@ function expectGraphQLRollupCall(callIndex = 1, noCache = false): void {
   expect(args).toEqual(
     expect.arrayContaining(['-f', 'owner=acme', '-f', 'repo=widgets', '-F', 'pr=42'])
   )
+
   if (noCache) {
     expect(args).not.toContain('--cache')
   } else {
     expect(args).toEqual(expect.arrayContaining(['--cache', '60s']))
   }
+
   const queryArg = args.find((arg) => arg.startsWith('query='))
   expect(queryArg).toContain('statusCheckRollup')
   expect(queryArg).toContain('checkSuites')

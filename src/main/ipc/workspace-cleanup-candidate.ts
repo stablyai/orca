@@ -35,14 +35,17 @@ export async function buildWorkspaceCleanupCandidate(args: {
   if (worktree.isMainWorktree) {
     blockers.push('main-worktree')
   }
+
   if (repoIsFolder) {
     blockers.push('folder-repo')
   }
+
   if (worktree.isPinned) {
     blockers.push('pinned')
   }
 
   const localContext = buildWorkspaceCleanupLocalContext(worktree)
+
   const shouldReadGit = shouldReadWorkspaceCleanupGitEvidence({
     repoIsFolder,
     blockers,
@@ -54,6 +57,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
     : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal)
+
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
@@ -151,15 +155,19 @@ export function getNewestWorkspaceCleanupDiffCommentAt(
   if (!diffComments || diffComments.length === 0) {
     return null
   }
+
   // Why: persisted diff notes can grow large enough for spread-based Math.max
   // to exceed the JavaScript argument limit during cleanup scans.
   let newest = diffComments[0]?.createdAt ?? null
+
   for (let index = 1; index < diffComments.length; index += 1) {
     const createdAt = diffComments[index]?.createdAt
+
     if (createdAt !== undefined && (newest === null || createdAt > newest)) {
       newest = createdAt
     }
   }
+
   return newest
 }
 
@@ -189,9 +197,11 @@ function shouldReadWorkspaceCleanupGitEvidence(args: {
   forceGitCheck: boolean
 }): boolean {
   const { repoIsFolder, blockers, worktree, skipGit, forceGitCheck } = args
+
   if ((skipGit && !forceGitCheck) || repoIsFolder || worktree.isMainWorktree) {
     return false
   }
+
   // Why pinned sits with the cost skips and not the refusals: a pinned workspace is
   // still queueable (`pinned` is not a queue blocker), so it can reach removal -- and
   // removal forces whenever git is unknown. Skipping its git read on a broad scan is a
@@ -201,6 +211,7 @@ function shouldReadWorkspaceCleanupGitEvidence(args: {
   if (blockers.includes('pinned') && !forceGitCheck) {
     return false
   }
+
   if (blockers.includes('main-worktree') || blockers.includes('folder-repo')) {
     return false
   }

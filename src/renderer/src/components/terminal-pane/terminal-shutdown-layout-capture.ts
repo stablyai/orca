@@ -36,9 +36,11 @@ function omitClearedLeafState(
   if (!record || !clearedLeafIds || clearedLeafIds.size === 0) {
     return record
   }
+
   const next = Object.fromEntries(
     Object.entries(record).filter(([leafId]) => !clearedLeafIds.has(leafId))
   )
+
   return Object.keys(next).length > 0 ? next : undefined
 }
 
@@ -61,6 +63,7 @@ function serializeWithinSessionScrollbackByteLimit(
   let fitRows = 0
   let fitBytes = 0
   let best: string | null = null
+
   // Why the extra probes before the first fit: returning '' would drop the whole pane, and those
   // probes shrink geometrically, so they cost less in total than a bisection's upper-half passes.
   for (let probe = 0; probe < MAX_SCROLLBACK_FIT_PROBES || best === null; probe += 1) {
@@ -71,12 +74,15 @@ function serializeWithinSessionScrollbackByteLimit(
     const estimate = Math.floor((anchorRows * MAX_BUFFER_BYTES) / Math.max(anchorBytes, 1))
     const midpoint = Math.floor((fitRows + overRows) / 2)
     const rows = Math.min(Math.max(Math.min(estimate, midpoint), fitRows + 1), overRows - 1)
+
     if (rows <= fitRows || rows >= overRows) {
       break
     }
+
     const attempt = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
       scrollback: rows
     })
+
     if (fitsSessionScrollbackByteLimit(attempt)) {
       best = attempt
       fitRows = rows
@@ -86,6 +92,7 @@ function serializeWithinSessionScrollbackByteLimit(
       overBytes = getUtf8ByteLength(attempt)
     }
   }
+
   return best ?? ''
 }
 
@@ -110,17 +117,20 @@ export function captureTerminalShutdownLayout({
         flushTerminalOutput(pane.terminal)
         const leafId = pane.leafId
         let scrollback = pane.terminal.options.scrollback ?? 10_000
+
         // Why serializeWithAbsoluteCursor: these buffers replay into fresh
         // xterms on session restore, and SerializeAddon's relative cursor
         // restore lands one column short after a wrap-pending final row.
         let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
           scrollback
         })
+
         // Why: SSH sleep keeps this string in session JSON; cap by UTF-8
         // bytes so non-ASCII scrollback cannot bypass the intended bound.
         if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
           serialized = serializeWithinSessionScrollbackByteLimit(pane, serialized, scrollback)
         }
+
         if (serialized.length > 0) {
           buffers[leafId] = serialized
         }
@@ -131,23 +141,29 @@ export function captureTerminalShutdownLayout({
   }
 
   const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
+
   const layout = serializeTerminalLayout(
     container,
     activePaneId,
     expandedPaneId,
     new Map(panes.map((pane) => [pane.id, pane.leafId]))
   )
+
   const currentLeafIds = new Set(panes.map((p) => p.leafId))
   const livePtyIdsByLeafId: Record<string, string> = {}
   const preservedPtyIdsByLeafId: Record<string, string> = {}
+
   for (const pane of panes) {
     const transport = paneTransports.get(pane.id)
     const livePtyId = transport?.getPtyId() ?? null
+
     if (livePtyId) {
       livePtyIdsByLeafId[pane.leafId] = livePtyId
       continue
     }
+
     const priorPtyId = existingLayout?.ptyIdsByLeafId?.[pane.leafId]
+
     if (transport && priorPtyId) {
       // Why: shutdown can capture during the post-remount attach gap where
       // each pane has a transport but the deferred PTY ID is still null.
@@ -162,11 +178,13 @@ export function captureTerminalShutdownLayout({
         currentLeafIds
       })
     : {}
+
   const mergedScrollbackRefs = mergeCapturedLeafState({
     prior: omitClearedLeafState(existingLayout?.scrollbackRefsByLeafId, clearedScrollbackLeafIds),
     fresh: {},
     currentLeafIds
   })
+
   const ptyIdsByLeafId = { ...preservedPtyIdsByLeafId, ...livePtyIdsByLeafId }
   // Why: shutdown snapshots can otherwise persist focus on a mounted pane whose
   // transport was already cleared during PTY exit/reconnect cleanup. Unlike
@@ -176,12 +194,15 @@ export function captureTerminalShutdownLayout({
     activeLeafId: layout.activeLeafId,
     ptyIdsByLeafId
   })
+
   if (Object.keys(mergedBuffers).length > 0) {
     layout.buffersByLeafId = mergedBuffers
   }
+
   if (Object.keys(mergedScrollbackRefs).length > 0) {
     layout.scrollbackRefsByLeafId = mergedScrollbackRefs
   }
+
   if (Object.keys(ptyIdsByLeafId).length > 0) {
     layout.ptyIdsByLeafId = ptyIdsByLeafId
   }
@@ -189,6 +210,7 @@ export function captureTerminalShutdownLayout({
   const titleEntries = panes
     .filter((p) => paneTitlesByPaneId[p.id])
     .map((p) => [p.leafId, paneTitlesByPaneId[p.id]] as const)
+
   if (titleEntries.length > 0) {
     layout.titlesByLeafId = Object.fromEntries(titleEntries)
   }

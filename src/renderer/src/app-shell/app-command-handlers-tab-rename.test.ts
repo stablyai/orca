@@ -31,9 +31,13 @@ vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
 import { createAppCommandHandlers } from './app-command-handlers'
 
 const WORKTREE_ID = 'repo::/feature'
+
 const GROUP_ID = 'group-1'
+
 const TERMINAL_ENTITY_ID = 'terminal-1'
+
 const TERMINAL_UNIFIED_ID = 'unified-terminal'
+
 const CHAT_UNIFIED_ID = 'unified-chat'
 
 function unifiedTab(overrides: Partial<Tab> & Pick<Tab, 'id' | 'entityId' | 'contentType'>): Tab {
@@ -64,6 +68,7 @@ function storeForActiveTab(activeGroupTabId: string): AppState {
       tabOrder: [TERMINAL_UNIFIED_ID, CHAT_UNIFIED_ID]
     }
   ]
+
   const rawState = {
     activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
@@ -89,12 +94,15 @@ function storeForActiveTab(activeGroupTabId: string): AppState {
       ]
     }
   } as unknown as AppState
+
   const store = {
     ...rawState,
     ...buildActiveSurfacePatch(rawState, WORKTREE_ID)
   } as AppState
+
   const noopSet = (() => {}) as unknown as TabsSliceSet
   store.getActiveTab = createTabsFocusActions(noopSet, (() => store) as TabsSliceGet).getActiveTab
+
   return store
 }
 

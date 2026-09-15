@@ -12,9 +12,11 @@ import { resolveOrcaCliInvocation } from './live-remote-freeze-rpc.mjs'
 export function startStatusWatchdog(opts = {}) {
   const intervalMs = opts.intervalMs ?? 2000
   const timeoutMs = opts.timeoutMs ?? 30_000
+
   const cliInvocation = opts.cliCommand
     ? { command: opts.cliCommand, prefixArgs: [] }
     : resolveOrcaCliInvocation()
+
   const samples = new BoundedLiveFreezeHistory(opts.sampleHistoryLimit ?? 240)
   const statusSlowMs = opts.statusSlowMs ?? 15_000
   let stopped = false
@@ -29,16 +31,21 @@ export function startStatusWatchdog(opts = {}) {
   const record = (sample) => {
     samples.add(sample)
     maxStatusMs = Math.max(maxStatusMs, sample.ms || 0)
+
     if (sample.infrastructureError) {
       infrastructureErrorCount += 1
     }
+
     const unhealthy =
       !sample.infrastructureError &&
       (Boolean(sample.hang) || sample.ok === false || (sample.ms || 0) >= statusSlowMs)
+
     if (!unhealthy) {
       runStartMs = null
+
       return
     }
+
     unhealthySampleCount += 1
     runStartMs ??= sample.tMs ?? 0
     longestUnhealthyWindowMs = Math.max(
@@ -58,6 +65,7 @@ export function startStatusWatchdog(opts = {}) {
   const probe = () =>
     new Promise((resolve) => {
       const t0 = performance.now()
+
       const child = spawn(
         cliInvocation.command,
         [...cliInvocation.prefixArgs, 'status', '--json'],
@@ -66,14 +74,18 @@ export function startStatusWatchdog(opts = {}) {
           stdio: ['ignore', 'pipe', 'pipe']
         }
       )
+
       let settled = false
+
       const finish = (result) => {
         if (settled) {
           return
         }
+
         settled = true
         resolve(result)
       }
+
       const timer = setTimeout(() => {
         child.kill('SIGKILL')
         finish({
@@ -83,6 +95,7 @@ export function startStatusWatchdog(opts = {}) {
           hang: true
         })
       }, timeoutMs)
+
       child.stdout.on('data', () => {})
       child.stderr.on('data', () => {})
       child.on('error', (error) => {
@@ -111,7 +124,9 @@ export function startStatusWatchdog(opts = {}) {
     if ((!force && stopped) || inFlight) {
       return
     }
+
     inFlight = true
+
     try {
       const sample = await probe()
       record(sample)
@@ -123,6 +138,7 @@ export function startStatusWatchdog(opts = {}) {
   const interval = setInterval(() => {
     void tick()
   }, intervalMs)
+
   void tick()
 
   return {
@@ -131,10 +147,13 @@ export function startStatusWatchdog(opts = {}) {
       clearInterval(interval)
       // Wait for in-flight probe, then force one final sample.
       const deadline = performance.now() + timeoutMs + 1000
+
       while (inFlight && performance.now() < deadline) {
         await new Promise((r) => setTimeout(r, 20))
       }
+
       await tick({ force: true })
+
       return {
         samples: samples.values(),
         ...summary(),

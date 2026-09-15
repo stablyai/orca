@@ -25,10 +25,12 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
     },
     getCwd: async (id: string): Promise<string> => {
       const result = await mux.request('pty.getCwd', { id: toRelayPtyId(id) })
+
       return result as string
     },
     getInitialCwd: async (id: string): Promise<string> => {
       const result = await mux.request('pty.getInitialCwd', { id: toRelayPtyId(id) })
+
       return result as string
     },
     clearBuffer: async (id: string): Promise<void> => {
@@ -38,6 +40,7 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
       const result = (await mux.request('pty.closeStartupQueryAuthority', {
         id: toRelayPtyId(id)
       })) as { appliedSeq?: number }
+
       return result.appliedSeq ?? 0
     },
     acknowledgeDataEvent: (id: string, charCount: number): void => {
@@ -45,10 +48,12 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
     },
     hasChildProcesses: async (id: string): Promise<boolean> => {
       const result = await mux.request('pty.hasChildProcesses', { id: toRelayPtyId(id) })
+
       return result as boolean
     },
     getForegroundProcess: async (id: string): Promise<string | null> => {
       const result = await mux.request('pty.getForegroundProcess', { id: toRelayPtyId(id) })
+
       return result as string | null
     },
     // Do NOT in-flight coalesce this the way the sibling git reads are: the host mints one
@@ -72,6 +77,7 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
       const result = await mux.request('pty.serialize', {
         ids: ids.map((id) => toRelayPtyId(id))
       })
+
       return result as string
     },
     revive: async (state: string): Promise<void> => {
@@ -79,10 +85,12 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
     },
     getDefaultShell: async (): Promise<string> => {
       const result = await mux.request('pty.getDefaultShell')
+
       return result as string
     },
     getProfiles: async (): Promise<{ name: string; path: string }[]> => {
       const result = await mux.request('pty.getProfiles')
+
       return result as { name: string; path: string }[]
     }
   }

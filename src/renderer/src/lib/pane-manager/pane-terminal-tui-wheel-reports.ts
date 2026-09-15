@@ -1,21 +1,37 @@
 const DOM_DELTA_PIXEL = 0
+
 const DOM_DELTA_LINE = 1
+
 const DOM_DELTA_PAGE = 2
+
 const DISCRETE_PIXEL_WHEEL_DELTA_MIN = 50
+
 const LEGACY_MOUSE_WHEEL_DELTA_MIN = 100
+
 const LEGACY_MOUSE_WHEEL_DELTA_UNIT = 120
+
 const DEFAULT_TERMINAL_CELL_HEIGHT = 16
+
 const TUI_WHEEL_ACCELERATED_DISTANCE_GAIN = 1.6
+
 const TUI_WHEEL_BURST_FULL_INTERVAL_MS = 16
+
 const TUI_WHEEL_BURST_MAX_INTERVAL_MS = 45
+
 const TUI_WHEEL_BURST_MAX_BONUS_ROWS = 3
+
 const TUI_WHEEL_BURST_RAMP_EVENTS = 4
+
 const TUI_WHEEL_MOMENTUM_TAIL_DECAY_RATIO = 0.85
+
 const TUI_WHEEL_COMPRESSED_MAX_DISTANCE_ROWS_PER_EVENT = 6
+
 const TUI_WHEEL_BURST_MAX_DISTANCE_ROWS_PER_EVENT = 9
 
 export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER = 1
+
 export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MIN = 1
+
 export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MAX = 10
 
 type WheelEventWithLegacyDelta = WheelEvent & {
@@ -58,17 +74,21 @@ export function resolveTerminalWheelDirection(event: Pick<WheelEvent, 'deltaY'>)
 
 function legacyVerticalWheelDelta(event: TerminalTuiWheelEventInput): number | null {
   const wheelEvent = event as WheelEventWithLegacyDelta
+
   if (typeof wheelEvent.wheelDeltaY === 'number' && Number.isFinite(wheelEvent.wheelDeltaY)) {
     return wheelEvent.wheelDeltaY
   }
+
   if (typeof wheelEvent.wheelDelta === 'number' && Number.isFinite(wheelEvent.wheelDelta)) {
     return wheelEvent.wheelDelta
   }
+
   return null
 }
 
 function hasDiscreteLegacyWheelDelta(event: TerminalTuiWheelEventInput): boolean {
   const legacyDelta = legacyVerticalWheelDelta(event)
+
   return legacyDelta !== null && Math.abs(legacyDelta) >= LEGACY_MOUSE_WHEEL_DELTA_MIN
 }
 
@@ -102,6 +122,7 @@ function wheelInputTime(event: TerminalTuiWheelEventInput): number | null {
   if (typeof event.timeStamp === 'number' && Number.isFinite(event.timeStamp)) {
     return event.timeStamp
   }
+
   return null
 }
 
@@ -109,6 +130,7 @@ function normalizeCellHeight(cellHeight: number | undefined): number {
   if (typeof cellHeight === 'number' && Number.isFinite(cellHeight) && cellHeight > 0) {
     return cellHeight
   }
+
   return DEFAULT_TERMINAL_CELL_HEIGHT
 }
 
@@ -118,15 +140,19 @@ function resolveWheelDistanceRows(
 ): number {
   const deltaMode = event.deltaMode ?? DOM_DELTA_PIXEL
   const deltaY = Math.abs(event.deltaY)
+
   const rowsFromDelta =
     deltaMode === DOM_DELTA_LINE
       ? deltaY
       : deltaMode === DOM_DELTA_PAGE
         ? deltaY * Math.max(1, metrics.rows ?? 1)
         : deltaY / normalizeCellHeight(metrics.cellHeight)
+
   const legacyDelta = legacyVerticalWheelDelta(event)
+
   const rowsFromLegacy =
     legacyDelta === null ? 0 : Math.abs(legacyDelta) / LEGACY_MOUSE_WHEEL_DELTA_UNIT
+
   const rows = Math.max(rowsFromDelta, rowsFromLegacy)
 
   return isDiscreteTerminalTuiWheelEvent(event) ? Math.max(1, rows) : rows
@@ -152,21 +178,26 @@ function resolveBurstWheelDistanceRows(
     state.fastStreak = 0
     state.lastDistanceRows = null
     state.lastInputAt = null
+
     return 0
   }
 
   const currentInputAt = wheelInputTime(event)
+
   if (currentInputAt === null) {
     state.fastStreak = 0
     state.lastDistanceRows = null
     state.lastInputAt = null
+
     return 0
   }
 
   const elapsedMs = state.lastInputAt === null ? null : currentInputAt - state.lastInputAt
+
   const isMomentumTail =
     state.lastDistanceRows !== null &&
     distanceRows < state.lastDistanceRows * TUI_WHEEL_MOMENTUM_TAIL_DECAY_RATIO
+
   state.lastDistanceRows = distanceRows
   state.lastInputAt = currentInputAt
 
@@ -177,6 +208,7 @@ function resolveBurstWheelDistanceRows(
     elapsedMs > TUI_WHEEL_BURST_MAX_INTERVAL_MS
   ) {
     state.fastStreak = 0
+
     return 0
   }
 
@@ -185,6 +217,7 @@ function resolveBurstWheelDistanceRows(
       ? 1
       : (TUI_WHEEL_BURST_MAX_INTERVAL_MS - elapsedMs) /
         (TUI_WHEEL_BURST_MAX_INTERVAL_MS - TUI_WHEEL_BURST_FULL_INTERVAL_MS)
+
   state.fastStreak = Math.min(TUI_WHEEL_BURST_RAMP_EVENTS, state.fastStreak + 1)
 
   return TUI_WHEEL_BURST_MAX_BONUS_ROWS * cadence * (state.fastStreak / TUI_WHEEL_BURST_RAMP_EVENTS)
@@ -207,6 +240,7 @@ function resolveTrackpadPixelWheelReportCount(
   const totalRows = state.pendingRows + distanceRows
   const reports = Math.trunc(totalRows)
   state.pendingRows = totalRows - reports
+
   return reports
 }
 
@@ -214,6 +248,7 @@ export function normalizeTerminalTuiMouseWheelMultiplier(value: number | undefin
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER
   }
+
   return Math.round(
     Math.min(
       TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MAX,
@@ -229,16 +264,19 @@ export function resolveTerminalTuiMouseWheelReportCount(
   metrics: TerminalTuiMouseWheelMetrics = {}
 ): number {
   const direction = resolveTerminalWheelDirection(event)
+
   if (state.pendingDirection !== 0 && state.pendingDirection !== direction) {
     state.fastStreak = 0
     state.lastDistanceRows = null
     state.lastInputAt = null
     state.pendingRows = 0
   }
+
   state.pendingDirection = direction
 
   const distanceRows = resolveWheelDistanceRows(event, metrics)
   const trackpadReportCount = resolveTrackpadPixelWheelReportCount(event, state, distanceRows)
+
   if (trackpadReportCount !== null) {
     return trackpadReportCount
   }
@@ -249,8 +287,10 @@ export function resolveTerminalTuiMouseWheelReportCount(
       compressWheelDistanceRows(distanceRows) +
         resolveBurstWheelDistanceRows(event, state, distanceRows)
     ) * normalizeTerminalTuiMouseWheelMultiplier(multiplier)
+
   const totalRows = state.pendingRows + rows
   const reports = Math.trunc(totalRows)
   state.pendingRows = totalRows - reports
+
   return reports
 }

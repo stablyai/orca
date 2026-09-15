@@ -16,6 +16,7 @@ export function persistWorktreeSortOrderByHost(
 ): void {
   for (const group of splitWorktreeSortOrderByHost(state, orderedIds)) {
     const parsed = parseExecutionHostId(group.hostId)
+
     if (parsed?.kind === 'runtime') {
       ignoreSortOrderPersistenceFailure(
         callRuntimeRpc(

@@ -19,7 +19,9 @@ import {
 // the acts below read the host's own record instead of inferring routing from a <webview>.
 
 const PANE_PATH = '/remote-pane'
+
 const LINK_PATH = '/remote-link-target'
+
 const LINK_MARKER = 'remote link target'
 
 type LinkFixtureServer = {
@@ -31,8 +33,10 @@ type LinkFixtureServer = {
 
 async function startLinkFixtureServer(): Promise<LinkFixtureServer> {
   let linkLoadCount = 0
+
   const server: Server = createServer((request: IncomingMessage, response: ServerResponse) => {
     const requestPath = request.url ?? '/'
+
     if (requestPath.startsWith(LINK_PATH)) {
       linkLoadCount += 1
       response.writeHead(200, {
@@ -40,8 +44,10 @@ async function startLinkFixtureServer(): Promise<LinkFixtureServer> {
         'content-type': 'text/html; charset=utf-8'
       })
       response.end(`<!doctype html><html><body><h1>${LINK_MARKER}</h1></body></html>`)
+
       return
     }
+
     if (requestPath.startsWith(PANE_PATH)) {
       response.writeHead(200, {
         'cache-control': 'no-store',
@@ -53,11 +59,14 @@ async function startLinkFixtureServer(): Promise<LinkFixtureServer> {
       response.end(
         `<!doctype html><html><body style="margin:0"><a href="${LINK_PATH}" style="position:fixed;inset:0;display:block;background:#fff;color:#000;font:24px sans-serif">open me</a></body></html>`
       )
+
       return
     }
+
     response.writeHead(404, { 'content-type': 'text/plain' })
     response.end('not found')
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -67,6 +76,7 @@ async function startLinkFixtureServer(): Promise<LinkFixtureServer> {
   })
   const { port } = server.address() as AddressInfo
   const origin = `http://127.0.0.1:${port}`
+
   return {
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -96,6 +106,7 @@ async function readHostServerPlacedBrowserUrls(
     { worktree: `id:${worktreeId}` },
     { timeoutMs: 15_000 }
   )
+
   return response.result.tabs.filter((tab) => tab.type === 'browser').map((tab) => tab.url ?? '')
 }
 
@@ -112,6 +123,7 @@ async function readRemotePaneUrls(page: Page, worktreeId: string): Promise<strin
   return page.evaluate((worktreeId) => {
     const state = window.__store?.getState()
     const workspaces = state?.browserTabsByWorktree[worktreeId] ?? []
+
     return workspaces
       .flatMap((workspace) => state?.browserPagesByWorkspace[workspace.id] ?? [])
       .filter(
@@ -133,10 +145,12 @@ async function findMirroredPage(
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (browserPage.url.startsWith(url)) {
             const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
             return {
               handleEnvironmentId: handle?.environmentId ?? null,
               pageId: browserPage.id
@@ -144,6 +158,7 @@ async function findMirroredPage(
           }
         }
       }
+
       return null
     },
     { url, worktreeId }
@@ -183,8 +198,10 @@ async function closeBrowserTabsExceptPane(
   await page.evaluate(
     ({ paneUrl, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         const pages = state?.browserPagesByWorkspace[workspace.id] ?? []
+
         if (!pages.some((browserPage) => browserPage.url.startsWith(paneUrl))) {
           state?.closeBrowserTab(workspace.id)
         }
@@ -204,8 +221,10 @@ async function readLinkOpenOutcome(
   if ((await readOwnedPageUrls(client.app, linkUrl)).length > 0) {
     return 'opened on this machine'
   }
+
   const notice = client.page.getByTestId('remote-browser-stream-error')
   const text = (await notice.count()) > 0 ? ((await notice.first().textContent()) ?? '') : ''
+
   return text.includes('Unable to open URL.') ? 'refused' : 'pending'
 }
 
@@ -241,9 +260,11 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
         message: 'paired client never saw a host worktree'
       })
       .toBeGreaterThan(0)
+
     const worktreeId = await page.evaluate(
       () => window.__store?.getState().allWorktrees()[0]?.id ?? null
     )
+
     if (!worktreeId) {
       throw new Error('paired client did not receive the host worktree')
     }
@@ -271,9 +292,11 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
       })
       .not.toBeNull()
     const pane = await findMirroredPage(page, worktreeId, fixture.paneUrl)
+
     if (!pane) {
       throw new Error('mirrored host browser page disappeared')
     }
+
     expect(pane.handleEnvironmentId).toBe(environmentId)
     await focusMirroredPage(page, worktreeId, pane.pageId)
     const paneCountBeforeOpen = await page.getByTestId('remote-browser-pane').count()
@@ -423,6 +446,7 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
     if (client) {
       await client.dispose()
     }
+
     await host.dispose()
     await fixture.close()
   }

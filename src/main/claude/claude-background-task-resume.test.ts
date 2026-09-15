@@ -6,7 +6,9 @@ const agent = {
   task_type: 'local_agent',
   description: 'Long proof writer'
 }
+
 const shell = { task_id: 'bcl6x3ixf', task_type: 'local_bash', description: 'sleep 150' }
+
 const sibling = { task_id: 'sibling', task_type: 'local_agent' }
 
 function system(subtype: string, fields: Record<string, unknown>) {
@@ -17,8 +19,10 @@ describe('Claude background task pause/resume ownership', () => {
   it('moves a retained child back to live ownership across eviction, outcome, and auto-resume', () => {
     let now = 100
     const tracker = new ClaudeBackgroundTaskTracker(() => now)
+
     const roster = (tasks: unknown[]) =>
       tracker.observe(system('background_tasks_changed', { tasks }))
+
     roster([agent, sibling, shell])
     tracker.observe(
       system('task_progress', { task_id: agent.task_id, usage: { total_tokens: 18000 } })
@@ -76,9 +80,11 @@ describe('Claude background task pause/resume ownership', () => {
 
   it('reconciles an edge-only resume without keeping its earlier settled copy', () => {
     const tracker = new ClaudeBackgroundTaskTracker(() => 100)
+
     for (const task of [agent, sibling]) {
       tracker.observe(system('task_started', { ...task, is_backgrounded: true }))
     }
+
     tracker.observe(system('task_notification', { task_id: agent.task_id, status: 'completed' }))
     tracker.observe(
       system('task_updated', {

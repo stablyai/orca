@@ -34,12 +34,15 @@ export type SshTargetGenerationHighWaterInput = {
 
 function highest(values: Iterable<number | null | undefined>, seed: number): number {
   let result = seed
+
   for (const value of values) {
     const sanitized = sanitizeSshTargetGeneration(value)
+
     if (sanitized !== undefined && sanitized > result) {
       result = sanitized
     }
   }
+
   return result
 }
 
@@ -48,10 +51,12 @@ export function resolveSshTargetGenerationHighWaterMark(
   input: SshTargetGenerationHighWaterInput
 ): number {
   const seed = sanitizeSshTargetGeneration(input.persistedCounter) ?? 0
+
   return highest(input.capturedGenerations, highest(input.targetGenerations, seed))
 }
 
 export function nextSshTargetGeneration(highWaterMark: number): number {
   const sanitized = sanitizeSshTargetGeneration(highWaterMark) ?? 0
+
   return sanitized + 1
 }

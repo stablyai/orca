@@ -12,6 +12,7 @@ import { nativeChatPaneDragKind } from './native-chat-pane-file-drop'
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 const OVERLAY = '[data-native-chat-drop-overlay="true"]'
+
 const IGNORE_DRAG = (): void => {}
 
 class DropDataTransfer {
@@ -32,12 +33,14 @@ class DropDataTransfer {
 function workspaceDrag(): DropDataTransfer {
   const transfer = new DropDataTransfer()
   transfer.setData(WORKSPACE_FILE_PATH_MIME, '/repo/a.ts')
+
   return transfer
 }
 
 function osDrag(): DropDataTransfer {
   const transfer = new DropDataTransfer()
   transfer.setData('Files', '')
+
   return transfer
 }
 
@@ -57,6 +60,7 @@ function ClaimingComposer({
     onDragOverCapture,
     onDropCapture
   })
+
   return <div data-testid="composer" />
 }
 
@@ -69,6 +73,7 @@ function renderPane(composer: React.ReactNode) {
       </NativeChatPaneFileDropSurface>
     </div>
   )
+
   return { ...result, transcript: screen.getByTestId('transcript') }
 }
 
@@ -133,9 +138,11 @@ describe('NativeChatPaneFileDropSurface', () => {
 
   it('does not invite a drop the guarded composer will refuse', () => {
     const onDragOverCapture = vi.fn()
+
     const { transcript, container } = renderPane(
       <ClaimingComposer disabled onDragOverCapture={onDragOverCapture} />
     )
+
     fireDrag(transcript, 'dragover', workspaceDrag())
     expect(container.querySelector(OVERLAY)).toBeNull()
     // The composer still answers for the drag: that refusal is what keeps it
@@ -158,6 +165,7 @@ describe('NativeChatPaneFileDropSurface', () => {
         <ClaimingComposer disabled={disabled} />
       </NativeChatPaneFileDropSurface>
     )
+
     const { container, rerender } = render(pane(false))
     fireDrag(screen.getByTestId('composer'), 'dragover', workspaceDrag())
     expect(container.querySelector(OVERLAY)).not.toBeNull()
@@ -199,6 +207,7 @@ describe('NativeChatPaneFileDropSurface', () => {
   it('observes a native drop that ends before the hover render commits', () => {
     const consumeDrop = (event: Event): void => event.stopPropagation()
     document.addEventListener('drop', consumeDrop, true)
+
     try {
       const { transcript, container } = renderPane(<ClaimingComposer />)
       act(() => {
@@ -214,19 +223,24 @@ describe('NativeChatPaneFileDropSurface', () => {
   it('keeps end listeners stable across drags and removes them with the composer', () => {
     const add = vi.spyOn(document, 'addEventListener')
     const remove = vi.spyOn(document, 'removeEventListener')
+
     try {
       const { transcript, unmount } = renderPane(<ClaimingComposer />)
+
       const ends = (): number =>
         add.mock.calls.filter(([type]) => type === 'drop' || type === 'dragend').length
+
       expect(ends()).toBe(2)
       fireDrag(transcript, 'dragover', osDrag())
       fireDrag(transcript, 'drop', osDrag())
       fireDrag(transcript, 'dragover', osDrag())
       expect(ends()).toBe(2)
       unmount()
+
       const removedEnds = remove.mock.calls.filter(
         ([type]) => type === 'drop' || type === 'dragend'
       )
+
       expect(removedEnds).toHaveLength(2)
     } finally {
       add.mockRestore()

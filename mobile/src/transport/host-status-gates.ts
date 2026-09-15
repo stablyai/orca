@@ -37,20 +37,26 @@ export function useHostStatusGates(args: {
   useEffect(() => {
     if (connState !== 'connected' || !client) {
       setUnverified(true)
+
       return
     }
+
     let cancelled = false
     const requestClient = client
+
     const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
       setLoaded({ hostId, client: requestClient, ...gates })
       setUnverified(false)
     }
+
     void (async () => {
       try {
         const response = await requestClient.sendRequest('status.get')
+
         if (cancelled) {
           return
         }
+
         if (!response.ok) {
           settle({
             hostCapabilities: [],
@@ -58,25 +64,32 @@ export function useHostStatusGates(args: {
             desktopAppVersion: null,
             compatVerdict: { kind: 'ok' }
           })
+
           return
         }
+
         const status = (response as RpcSuccess).result as DesktopStatus & {
           capabilities?: string[]
         }
+
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,
           desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
         })
+
         const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+
         if (hostId && desktopAppVersion) {
           void recordHostAppVersion(hostId, desktopAppVersion)
         }
+
         settle({
           hostCapabilities: status.capabilities ?? [],
           floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
           desktopAppVersion,
           compatVerdict: verdict
         })
+
         if (verdict.kind === 'blocked') {
           // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
           console.warn('[protocol-compat] blocked', {
@@ -98,6 +111,7 @@ export function useHostStatusGates(args: {
         }
       }
     })()
+
     return () => {
       cancelled = true
     }
@@ -105,6 +119,7 @@ export function useHostStatusGates(args: {
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
   const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
+
   if (!proven) {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,
@@ -114,6 +129,7 @@ export function useHostStatusGates(args: {
       statusPending: connState === 'connected' && client !== null
     }
   }
+
   return {
     hostCapabilities: proven.hostCapabilities,
     floatingWorkspaceEnabled: proven.floatingWorkspaceEnabled,

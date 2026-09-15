@@ -89,6 +89,7 @@ export function safetyBlockerState(
   reason: NonNullable<HostedReviewCreationBlockedReason>
 ): ChecksPanelReviewState {
   const { reviewLabel } = input
+
   if (reason === 'existing_review') {
     // Same family as positive evidence — offer trusted Open Review, never Create.
     return {
@@ -109,8 +110,10 @@ export function safetyBlockerState(
       openReviewUrl: input.openReviewUrl
     }
   }
+
   const copy = SAFETY_COPY[reason as keyof typeof SAFETY_COPY] ?? SAFETY_COPY.unsupported_provider
   const vars = { reviewLabel, reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
+
   return {
     renderReview: false,
     title: translate(copy.title.key, copy.title.fallback, vars),
@@ -172,10 +175,12 @@ export function branchBlockerState(
   // beneath the blocker (Create/Push & Create stay suppressed). Retry is offered
   // whenever a concurrent lookup failure produced a detail sentence.
   const canOpenReview = input.reviewLookup === 'positive_unresolved' && Boolean(input.openReviewUrl)
+
   const lookupRecovery: ChecksPanelRecoveryAction[] = [
     ...(canOpenReview ? (['open_review'] as ChecksPanelRecoveryAction[]) : []),
     ...(detail ? (['retry'] as ChecksPanelRecoveryAction[]) : [])
   ]
+
   const openReviewUrl = canOpenReview ? input.openReviewUrl : undefined
   const vars = { reviewLabel, provider: providerName }
 
@@ -185,6 +190,7 @@ export function branchBlockerState(
       input.reviewLookup === 'positive_unresolved' ||
       isHardRefreshError(input.refresh) ||
       !input.confirmedReadiness
+
     return {
       renderReview: false,
       title: translate(
@@ -206,6 +212,7 @@ export function branchBlockerState(
   }
 
   const copy = BRANCH_BLOCKER_COPY[reason as keyof typeof BRANCH_BLOCKER_COPY]
+
   return {
     renderReview: false,
     title: translate(copy.title.key, copy.title.fallback, vars),

@@ -40,10 +40,12 @@ export function usePullRequestDetails(args: {
     issueSourcePreference,
     canUseDetailsRepoContext
   } = args
+
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !effectiveRepoId || !canUseDetailsRepoContext) {
       return null
     }
+
     return getWorkItemDetailsCacheKey({
       repoPath: repoPath ?? '',
       repoId: effectiveRepoId,
@@ -83,21 +85,27 @@ export function usePullRequestDetails(args: {
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
     const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current
+
     if (!cachedDetails) {
       // Why: on a cold open details may still be loading; surface optimistic comments via a minimal shell so a just-posted comment isn't held invisibly in the ref.
       if (opt.length > 0 && workItem) {
         return { item: workItem, body: '', comments: [...opt] }
       }
+
       return null
     }
+
     if (opt.length === 0) {
       return cachedDetails
     }
+
     const ids = new Set(cachedDetails.comments.map((c) => c.id))
     const missing = opt.filter((c) => !ids.has(c.id))
+
     if (missing.length === 0) {
       return cachedDetails
     }
+
     return {
       ...cachedDetails,
       comments: [...cachedDetails.comments, ...missing]
@@ -122,10 +130,12 @@ export function usePullRequestDetails(args: {
     if (!workItem || !effectiveRepoId || !detailsCacheKey || !canUseDetailsRepoContext) {
       return
     }
+
     // Why: only clear optimistic comments on a genuine item switch; on reopen gh's 60s cache omits the just-posted comment, so preserve the ref for re-merge.
     if (workItem.id !== prevItemIdRef.current) {
       optimisticCommentsRef.current = []
     }
+
     prevItemIdRef.current = workItem.id
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
@@ -163,10 +173,12 @@ export function usePullRequestDetails(args: {
       .then((result) => {
         const invalidatedMidFlight = workItemDetailsCacheGeneration.current !== launchedAtGeneration
         const prev = workItemDetailsCache.get(detailsCacheKey)
+
         if (invalidatedMidFlight && prev?.pending !== inflight) {
           // Why: entry was deliberately dropped (or later repopulated) — don't recreate or clobber it.
           return
         }
+
         // Why: null means unavailable/not found, not loaded empty content.
         if (result === null && prev?.details) {
           touchWorkItemDetailsCache(detailsCacheKey, {
@@ -192,9 +204,11 @@ export function usePullRequestDetails(args: {
         const message = err instanceof Error ? err.message : 'Failed to load details'
         const invalidatedMidFlight = workItemDetailsCacheGeneration.current !== launchedAtGeneration
         const prev = workItemDetailsCache.get(detailsCacheKey)
+
         if (invalidatedMidFlight && prev?.pending !== inflight) {
           return
         }
+
         // Why: stale-on-error — keep cached data, drop the pending promise so next open retries; surface the error only when nothing is cached.
         touchWorkItemDetailsCache(detailsCacheKey, {
           details: prev?.details ?? null,
@@ -216,11 +230,14 @@ export function usePullRequestDetails(args: {
     (comment: PRComment) => {
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data that would overwrite the optimistic comment.
       optimisticCommentsRef.current.push(comment)
+
       // Why: write through the shared cache so subscribers re-render; fetchedAt=0 forces a background refresh next open for server-side fields.
       if (detailsCacheKey) {
         const prev = workItemDetailsCache.get(detailsCacheKey)
+
         if (prev?.details) {
           const ids = new Set(prev.details.comments.map((c) => c.id))
+
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
               details: {
@@ -230,10 +247,12 @@ export function usePullRequestDetails(args: {
               fetchedAt: 0,
               error: undefined
             })
+
             return
           }
         }
       }
+
       // Why: cache empty (still loading) so no write/notify above; bump local state so the memo re-runs and surfaces the optimistic comment.
       setOptimisticTick((n) => n + 1)
     },

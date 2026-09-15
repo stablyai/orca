@@ -38,15 +38,18 @@ export class SessionScannerServiceSearch {
     if (!sessionSearchSqliteAvailable()) {
       return
     }
+
     if (this.instance && this.databasePath !== init.databasePath) {
       // A data root cannot move under a running process, so this is a caller bug
       // rather than a case to support: close the old one before it writes there.
       this.close()
     }
+
     if (this.instance && this.roots && !sameSessionSearchRoots(this.roots, init.roots)) {
       // Explicit init-root changes replace the fallback used by callers without a resolver.
       this.close()
     }
+
     this.databasePath = init.databasePath
     this.roots = init.roots
     this.instance ??= new SessionSearchInstance({
@@ -67,16 +70,20 @@ export class SessionScannerServiceSearch {
 
   async execute(request: SearchOperation): Promise<AiVaultServiceResultValue> {
     const instance = this.instance
+
     if (request.operation === 'searchStatus') {
       return {
         operation: 'searchStatus',
         value: instance?.status() ?? unavailableSessionSearchStatus()
       }
     }
+
     if (request.operation === 'searchReconcile') {
       await instance?.reconcile()
+
       return { operation: 'searchReconcile', value: null }
     }
+
     return {
       operation: 'searchSessions',
       value: instance

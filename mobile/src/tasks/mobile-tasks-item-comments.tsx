@@ -10,12 +10,15 @@ export function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'github') {
     return item.source.type === 'pr' ? 'Pull request' : 'Issue'
   }
+
   if (item.provider === 'gitlab') {
     return item.source.type === 'mr' ? 'Merge request' : 'Issue'
   }
+
   if (item.provider === 'gitlabTodo') {
     return `${gitLabTodoTargetLabel(item.source)} todo`
   }
+
   return 'Linear ticket'
 }
 
@@ -23,9 +26,11 @@ export function taskExternalOpenLabel(item: TaskItem): string {
   if (item.provider === 'github') {
     return 'Open in GitHub'
   }
+
   if (item.provider === 'gitlab' || item.provider === 'gitlabTodo') {
     return 'Open in GitLab'
   }
+
   return 'Open in Linear'
 }
 
@@ -36,6 +41,7 @@ export function taskStatusActionLabel(item: TaskItem): string {
         ? 'Reopen'
         : 'Close'
       : ''
+
   return verb ? `${verb} ${taskKindLabel(item).toLowerCase()}` : ''
 }
 
@@ -51,7 +57,9 @@ export function commentDate(value: string | undefined): string {
   if (!value) {
     return ''
   }
+
   const time = Date.parse(value)
+
   return Number.isFinite(time) ? new Date(time).toLocaleDateString() : ''
 }
 
@@ -59,10 +67,13 @@ export function formatDurationSeconds(value: number | null | undefined): string 
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return ''
   }
+
   const seconds = Math.max(0, Math.floor(value))
+
   if (seconds >= 60) {
     return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
   }
+
   return `${seconds}s`
 }
 
@@ -74,12 +85,16 @@ export function commentSourceLabel(comment: DetailComment): string {
           ? `${comment.startLine}-${comment.line}`
           : String(comment.line)
         : ''
+
     const location = line ? `${comment.path}:${line}` : comment.path
+
     return `${comment.isResolved ? 'Resolved review' : 'Review'} · ${location}`
   }
+
   if (comment.threadId) {
     return comment.isResolved ? 'Resolved review thread' : 'Review thread'
   }
+
   return 'Top-level comment'
 }
 
@@ -92,7 +107,9 @@ export function groupDetailComments(comments: DetailComment[]): DetailCommentGro
     if (!comment.threadId) {
       continue
     }
+
     const existing = threads.get(comment.threadId)
+
     if (existing) {
       existing.replies.push(comment)
     } else {
@@ -105,11 +122,14 @@ export function groupDetailComments(comments: DetailComment[]): DetailCommentGro
       groups.push({ kind: 'standalone', comment })
       continue
     }
+
     if (emittedThreads.has(comment.threadId)) {
       continue
     }
+
     emittedThreads.add(comment.threadId)
     const thread = threads.get(comment.threadId)
+
     if (thread) {
       groups.push({ kind: 'thread', threadId: comment.threadId, ...thread })
     }
@@ -138,14 +158,17 @@ export function discussionSummary(count: number): string {
   if (count === 0) {
     return 'No comments yet'
   }
+
   return `${count} ${count === 1 ? 'comment' : 'comments'}`
 }
 
 export function renderCommentReactions(comment: DetailComment): ReactNode {
   const reactions = (comment.reactions ?? []).filter((reaction) => reaction.count > 0)
+
   if (reactions.length === 0) {
     return null
   }
+
   return (
     <View style={styles.reactionRow}>
       {reactions.map((reaction) => (

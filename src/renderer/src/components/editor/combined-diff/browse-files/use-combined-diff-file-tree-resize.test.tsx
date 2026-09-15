@@ -5,6 +5,7 @@ import { render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 let storedWidth = 420
+
 const setStoredWidth = vi.fn((width: number) => {
   storedWidth = width
 })
@@ -21,6 +22,7 @@ const { useCombinedDiffFileTreeResize } = await import('./use-combined-diff-file
 
 function TreeHarness({ collapsed }: { collapsed: boolean }): React.JSX.Element {
   const { treeRef } = useCombinedDiffFileTreeResize(collapsed)
+
   return (
     <div>
       {collapsed ? null : (

@@ -9,23 +9,28 @@ import {
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 
 const tempHomes: string[] = []
+
 const tempRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
 
 async function createTempHome(): Promise<string> {
   // Why: mkdir-p probes ancestors; macOS's per-user temp directory can contain hundreds of thousands of entries.
   const home = await mkdtemp(join(tempRoot, 'orca-managed-hooks-'))
   tempHomes.push(home)
+
   return home
 }
 
 async function listFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true })
+
   const nested = await Promise.all(
     entries.map(async (entry) => {
       const path = join(root, entry.name)
+
       return entry.isDirectory() ? await listFiles(path) : [path]
     })
   )
+
   return nested.flat()
 }
 
@@ -37,6 +42,7 @@ describe('managed-hook local filesystem', () => {
   it('supports cold and warm aggregate installs without SFTP or temp-file residue', async () => {
     const home = await createTempHome()
     const filesystem = createManagedHookLocalFilesystem()
+
     const options = {
       grokHomeDir: join(home, '.grok'),
       agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -53,6 +59,7 @@ describe('managed-hook local filesystem', () => {
     expect(files.filter((path) => path.endsWith('.tmp'))).toEqual([])
     const scripts = files.filter((path) => path.includes(join('.orca', 'agent-hooks')))
     expect(scripts.length).toBeGreaterThanOrEqual(10)
+
     if (process.platform !== 'win32') {
       for (const script of scripts) {
         expect((await stat(script)).mode & 0o777).toBe(0o755)

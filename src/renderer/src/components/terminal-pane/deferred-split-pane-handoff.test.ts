@@ -19,6 +19,7 @@ import {
 } from './deferred-split-pane-handoff'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 
 describe('deferred split pane handoff', () => {
@@ -139,19 +140,23 @@ describe('deferred split pane handoff', () => {
   it('retains input within the shared preconnect entry and code-unit caps', () => {
     const entryKey = makePaneKey('tab-entries', LEAF_1)
     const entryHandle = beginDeferredSplitPaneHandoff(entryKey, Promise.resolve('/entries'))
+
     for (let index = 0; index < PTY_PRECONNECT_INPUT_MAX_ENTRIES; index += 1) {
       appendDeferredSplitPaneInput(entryHandle, { data: '', kind: 'ordinary' })
     }
+
     appendDeferredSplitPaneInput(entryHandle, { data: 'overflow', kind: 'ordinary' })
     expect(claimDeferredSplitPaneHandoff(entryKey)?.preconnectInput).toHaveLength(
       PTY_PRECONNECT_INPUT_MAX_ENTRIES
     )
 
     const codeUnitKey = makePaneKey('tab-code-units', LEAF_1)
+
     const codeUnitHandle = beginDeferredSplitPaneHandoff(
       codeUnitKey,
       Promise.resolve('/code-units')
     )
+
     appendDeferredSplitPaneInput(codeUnitHandle, {
       data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS),
       kind: 'ordinary'
@@ -181,6 +186,7 @@ describe('deferred split pane handoff', () => {
     const keys = Array.from({ length: DEFERRED_SPLIT_PANE_HANDOFF_MAX_RECORDS + 1 }, (_, index) =>
       makePaneKey(`tab-${index}`, LEAF_1)
     )
+
     for (const key of keys) {
       beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
     }
@@ -192,6 +198,7 @@ describe('deferred split pane handoff', () => {
 
   it('expires an abandoned handoff after the bounded remount window', () => {
     vi.useFakeTimers()
+
     try {
       const key = makePaneKey('tab-1', LEAF_1)
       beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))

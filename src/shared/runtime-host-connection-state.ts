@@ -26,6 +26,7 @@ export function runtimeHostConnectionState({
   if (!hasStatusEntry) {
     return 'checking'
   }
+
   const transportState =
     remoteControl?.state === 'ready'
       ? 'connected'
@@ -36,25 +37,33 @@ export function runtimeHostConnectionState({
         : remoteControl?.state === 'closed'
           ? 'disconnected'
           : transportStatus
+
   const statusRemoteControl = status?.remoteControl ?? remoteControl
+
   if (statusRemoteControl?.state === 'reconnecting') {
     return 'reconnecting'
   }
+
   if (!status) {
     if (transportState === 'connected') {
       return 'runtime-unavailable'
     }
+
     return transportState === 'checking' ? 'checking' : 'disconnected'
   }
+
   if (statusRemoteControl?.state === 'closed') {
     return 'disconnected'
   }
+
   if (statusRemoteControl && statusRemoteControl.state !== 'ready') {
     return 'checking'
   }
+
   if (isRuntimeWorkspaceWindowClosed(status)) {
     return 'workspace-window-closed'
   }
+
   return 'connected'
 }
 

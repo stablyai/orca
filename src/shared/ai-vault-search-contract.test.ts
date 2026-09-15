@@ -36,6 +36,7 @@ describe('session search public contract', () => {
     ]) {
       expect(AiVaultSearchResponseSchema.parse(response)).toEqual(response)
     }
+
     expect(AiVaultSearchStatusSchema.parse(unavailableSessionSearchStatus())).toEqual(
       unavailableSessionSearchStatus()
     )
@@ -45,10 +46,12 @@ describe('session search public contract', () => {
     const legacy = searchResults()
     expect(AiVaultSearchResponseSchema.parse(legacy)).toEqual(legacy)
     expect(legacy.hits[0]).not.toHaveProperty('executionHostId')
+
     const attributed = {
       ...searchResults(),
       hits: [{ ...searchHit(), executionHostId: 'runtime:env-1' }]
     }
+
     expect(AiVaultSearchResponseSchema.parse(attributed)).toEqual(attributed)
     expect(
       AiVaultSearchResponseSchema.safeParse({
@@ -72,12 +75,14 @@ describe('session search public contract', () => {
       const result = redactForTransport(hit, transport)
       expect(hit).toEqual(original)
       expect(result.cwd).toBe('/host/folder')
+
       if (transport === 'relay') {
         expect(result.source).toEqual({ presence: 'present' })
         expect(result).not.toHaveProperty('resumeCommand')
       } else {
         expect(result).toEqual(hit)
       }
+
       for (const presence of ['unverifiable', 'missing'] as const) {
         expect(
           redactForTransport({ ...hit, source: { ...hit.source, presence } }, transport)
@@ -92,6 +97,7 @@ describe('session search public contract', () => {
         ...unavailableSessionSearchStatus(),
         degradedRoots: [{ root: '/host/projects', reason: 'could not be listed' }]
       }
+
       const original = structuredClone(status)
       const result = redactStatusForTransport(status, transport)
       expect(status).toEqual(original)
@@ -112,6 +118,7 @@ describe('session search public contract', () => {
       ...unavailableSessionSearchStatus(),
       degradedRoots: [{ root: '/host/private/path', reason }]
     }
+
     const result = redactStatusForTransport(status, 'relay')
     expect(result.degradedRoots).toHaveLength(1)
     expect(JSON.stringify(result)).not.toContain('/host/private/path')

@@ -22,6 +22,7 @@ export async function stopSupersededCodexAcquisition(input: {
     if (input.previous) {
       input.registry.restoreIfCurrent(input.sessionId, input.replacement, input.previous)
     }
+
     throw error
   }
 }
@@ -36,7 +37,9 @@ export async function closeFailedCodexAcquisition(input: {
   if (isCodexAppServerHandshakeExitUnprovenError(input.cause)) {
     input.attempt.window.connection = input.cause.connection
   }
+
   input.dispose()
+
   try {
     if (!(await input.registry.closeFailedAttempt(input.sessionId, input.attempt))) {
       throw new AgentSessionAcquisitionExitUnprovenError(input.cause)
@@ -45,9 +48,11 @@ export async function closeFailedCodexAcquisition(input: {
     if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
       throw cleanupError
     }
+
     throw new AgentSessionAcquisitionExitUnprovenError(
       new AggregateError([input.cause, cleanupError], 'codex acquisition cleanup failed')
     )
   }
+
   throw input.cause
 }

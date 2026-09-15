@@ -9,6 +9,7 @@ import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
+
 const CLAUDE_AUTH_DENIED_PATTERN =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
@@ -41,21 +42,25 @@ export function runClaudeCommandProcess(
       configDir.wslDistro === null &&
       args[0] === 'auth' &&
       args[1] === 'login'
+
     // Why lazy: the WSL branch runs `claude` inside the distro, so resolving a
     // host binary there would be wasted filesystem probing for a path never used.
     let cachedHostClaudeCommand: string | null = null
     const hostClaudeCommand = (): string => (cachedHostClaudeCommand ??= resolveClaudeCommand())
+
     // The native login needs its own visible console, so it runs behind a
     // start /wait wrapper that relays the real login PID back for termination.
     const interactiveLogin = isWindowsHostInteractiveLogin
       ? buildWindowsHostInteractiveLoginSpawn(hostClaudeCommand(), args)
       : null
+
     const spawnConfig = resolveClaudeInvocation(
       args,
       configDir,
       interactiveLogin,
       hostClaudeCommand
     )
+
     const child = spawnProcess({
       program: spawnConfig.command,
       args: spawnConfig.args,
@@ -69,22 +74,28 @@ export function runClaudeCommandProcess(
       detached: process.platform !== 'win32',
       windowsVerbatimArguments: spawnConfig.windowsVerbatimArguments
     })
+
     const stdout = child.stdout
     const stderr = child.stderr
+
     if (!interactiveLogin && (!stdout || !stderr)) {
       if (options?.keepStdinOpen) {
         child.stdin?.destroy()
       }
+
       child.kill()
       rejectPromise(new Error('Claude command failed to open output streams.'))
+
       return
     }
+
     const completesOnExit =
       process.platform === 'win32' &&
       configDir.linuxPath === null &&
       configDir.wslDistro === null &&
       args[0] === 'auth' &&
       args[1] === 'login'
+
     const completionEvent = completesOnExit ? 'exit' : 'close'
     let settled = false
     let output = ''
@@ -96,63 +107,79 @@ export function runClaudeCommandProcess(
         clearTimeout(timeout)
         timeout = null
       }
+
       stdout?.off('data', appendOutput)
       stderr?.off('data', appendOutput)
       child.off('error', onError)
       child.off(completionEvent, onDone)
       options?.signal?.removeEventListener('abort', onAbort)
       interactiveLogin?.cleanup?.()
+
       if (options?.keepStdinOpen) {
         child.stdin?.destroy()
       }
+
       if (completesOnExit) {
         stdout?.destroy()
         stderr?.destroy()
       }
     }
+
     const settle = (callback: () => void): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanupListeners()
       callback()
     }
+
     const killChild = (afterKill: () => void): void => {
       if (terminationPending || settled) {
         return
       }
+
       terminationPending = true
       terminateClaudeProcess(child, interactiveLogin, afterKill)
     }
+
     const appendOutput = (chunk: Buffer): void => {
       output = `${output}${chunk.toString()}`
+
       if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
         output = output.slice(-MAX_COMMAND_OUTPUT_CHARS)
       }
+
       if (CLAUDE_AUTH_DENIED_PATTERN.test(output)) {
         killChild(() =>
           settle(() => rejectPromise(new Error('Claude sign-in was denied. Please try again.')))
         )
       }
     }
+
     const onAbort = (): void => {
       killChild(() => settle(() => rejectPromise(new Error('Claude sign-in was cancelled.'))))
     }
+
     const onError = (error: Error): void => {
       if (!terminationPending) {
         settle(() => rejectPromise(error))
       }
     }
+
     const onDone = (code: number | null): void => {
       if (terminationPending) {
         return
       }
+
       settle(() => {
         if (code === 0 || options?.allowFailure) {
           resolvePromise(output)
+
           return
         }
+
         const trimmedOutput = output.trim()
         rejectPromise(
           new Error(
@@ -173,6 +200,7 @@ export function runClaudeCommandProcess(
     stderr?.on('data', appendOutput)
     child.on('error', onError)
     child.on(completionEvent, onDone)
+
     if (options?.signal?.aborted) {
       onAbort()
     } else {
@@ -243,5 +271,6 @@ function resolveClaudeInvocation(
             }),
             windowsVerbatimArguments: false
           }
+
   return spawnConfig
 }

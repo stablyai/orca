@@ -71,14 +71,17 @@ describe('Windows terminal capability owner key', () => {
       .fn()
       .mockResolvedValueOnce(args.firstAvailable)
       .mockResolvedValueOnce(args.secondAvailable)
+
     const wslListDistros = vi
       .fn()
       .mockResolvedValueOnce(args.firstDistros)
       .mockResolvedValueOnce(args.secondDistros)
+
     const runtimeGetStatus = vi
       .fn()
       .mockResolvedValueOnce({ hostPlatform: args.firstPlatform })
       .mockResolvedValueOnce({ hostPlatform: args.secondPlatform })
+
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable, listDistros: wslListDistros },
@@ -91,6 +94,7 @@ describe('Windows terminal capability owner key', () => {
     function Probe(): null {
       const ownerKey = useWindowsTerminalCapabilityOwnerKey(null)
       latest = useLocalWindowsTerminalCapabilities(true, false, ownerKey)
+
       return null
     }
 
@@ -123,20 +127,24 @@ describe('Windows terminal capability owner key', () => {
 
   it('changes ownership for same-id re-pair and reconnect generations', () => {
     const environment = { id: 'paired-a', createdAt: 1, pairingRevision: 2 }
+
     const base = {
       activeRuntimeEnvironmentId: null,
       isWebClient: true,
       runtimeEnvironments: [environment]
     }
+
     const first = resolveWindowsTerminalCapabilityOwnerKey({
       ...base,
       runtimeStatusByEnvironmentId: new Map([['paired-a', { connectionGeneration: 1 }]])
     })
+
     const repaired = resolveWindowsTerminalCapabilityOwnerKey({
       ...base,
       runtimeEnvironments: [{ ...environment, pairingRevision: 3 }],
       runtimeStatusByEnvironmentId: new Map([['paired-a', { connectionGeneration: 1 }]])
     })
+
     const reconnected = resolveWindowsTerminalCapabilityOwnerKey({
       ...base,
       runtimeStatusByEnvironmentId: new Map([['paired-a', { connectionGeneration: 2 }]])

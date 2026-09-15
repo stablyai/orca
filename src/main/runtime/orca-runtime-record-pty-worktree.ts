@@ -34,18 +34,22 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     > = {}
   ): RuntimePtyWorktreeRecord {
     let pty = this.ptysById.get(ptyId)
+
     if (!pty) {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null
       const connectionId = state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null
       const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+
       const fallbackWslDistro =
         process.platform === 'win32' && connectionId === null && worktreePath
           ? parseWslUncPath(worktreePath)?.distro
           : undefined
+
       const wslDistro =
         connectionId === null
           ? (state.wslDistro ?? this.wslDistroByPtyId.get(ptyId) ?? fallbackWslDistro ?? null)
           : null
+
       pty = {
         ptyId,
         incarnationId: state.incarnationId ?? null,
@@ -90,22 +94,28 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         preview: state.preview ?? '',
         waitBlockedAt: null
       }
+
       if (state.title) {
         this.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)
       }
+
       this.ptysById.set(ptyId, pty)
+
       if (wslDistro) {
         this.wslDistroByPtyId.set(ptyId, wslDistro)
       } else if (connectionId !== null) {
         // Why: restored SSH IDs can collide with stale local parser state; connection ownership must win before their first output is parsed.
         this.wslDistroByPtyId.delete(ptyId)
       }
+
       // Why: restored/controller-discovered PTYs learn their worktree here without registerPty(), so URL enrichment must bind at this source.
       advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+
       return pty
     }
 
     pty.worktreeId = worktreeId
+
     if (
       state.incarnationId !== undefined &&
       pty.incarnationId !== null &&
@@ -113,60 +123,77 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     ) {
       pty.agentSessionOwners = []
     }
+
     if (state.incarnationId !== undefined) {
       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
         this.invalidatePtyIncarnationHandle(ptyId)
       }
+
       pty.incarnationId = state.incarnationId
     }
+
     if (state.agentSessionOwners !== undefined) {
       pty.agentSessionOwners = state.agentSessionOwners.map(cloneAgentSessionOwnerBinding)
     }
+
     if (state.connectionId !== undefined) {
       pty.connectionId = state.connectionId
+
       if (state.connectionId !== null) {
         pty.wslDistro = null
         this.wslDistroByPtyId.delete(ptyId)
       }
     }
+
     if (state.runtimeSessionOwned !== undefined) {
       pty.runtimeSessionOwned = state.runtimeSessionOwned
     }
+
     if (state.isWsl !== undefined) {
       pty.isWsl = state.isWsl
     }
+
     if (state.wslDistro !== undefined) {
       pty.wslDistro = state.wslDistro
+
       if (state.wslDistro) {
         this.wslDistroByPtyId.set(ptyId, state.wslDistro)
       } else {
         this.wslDistroByPtyId.delete(ptyId)
       }
     }
+
     if (state.tabId !== undefined) {
       pty.tabId = state.tabId
     }
+
     if (state.paneKey !== undefined) {
       pty.paneKey = state.paneKey
     }
+
     if (state.connected !== undefined) {
       pty.connected = state.connected
       pty.disconnectedAt = state.connected ? null : (pty.disconnectedAt ?? Date.now())
     }
+
     if (state.lastOutputAt !== undefined) {
       pty.lastOutputAt = maxTimestamp(pty.lastOutputAt, state.lastOutputAt)
     }
+
     if (state.preview !== undefined && state.preview.length > 0) {
       pty.preview = state.preview
     }
+
     if (state.title !== undefined && state.title !== null && state.title.length > 0) {
       const observedAt = this.nextTitleObservationSequence()
       pty.title = state.title
       pty.titleUpdatedAt = observedAt
       this.setPtyManagementTitleFromObservedTitle(pty, state.title, observedAt)
     }
+
     // Why: recordPtyWorktree is the common lifecycle point for every path that resolves a PTY's worktree (renderer restore, controller list).
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+
     return pty
   }
 
@@ -180,13 +207,17 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
 
   protected getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {
     const existing = this.ptysById.get(ptyId)
+
     if (existing) {
       return existing
     }
+
     const inferredWorktreeId = inferWorktreeIdFromPtyId(ptyId)
+
     if (!inferredWorktreeId) {
       return null
     }
+
     // Why: daemon-backed PTY session IDs are prefixed with the worktree ID so mobile summaries survive renderer graph gaps and reloads.
     return this.recordPtyWorktree(ptyId, inferredWorktreeId)
   }

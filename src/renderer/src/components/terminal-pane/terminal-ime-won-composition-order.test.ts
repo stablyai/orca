@@ -11,6 +11,7 @@ function nextEventLoop(): Promise<void> {
 function compositionEvent(type: string, data = ''): CompositionEvent {
   const event = new CompositionEvent(type, { data, bubbles: true })
   Object.defineProperty(event, 'data', { value: data })
+
   return event
 }
 
@@ -26,6 +27,7 @@ function keyboardEvent(
     keyCode: { value: keyCode },
     which: { value: type === 'keypress' ? key.charCodeAt(0) : keyCode }
   })
+
   return event
 }
 
@@ -42,16 +44,19 @@ async function typeHangulThenWon(
   terminal.open(container)
   const textarea = terminal.textarea
   const terminalElement = terminal.element
+
   if (!textarea || !terminalElement) {
     throw new Error('xterm input elements were not created')
   }
 
   const tracker = installTerminalImeCompositionTracker(terminalElement)
+
   const forwarder = installTerminalImeNativeTextForwarder({
     terminalElement,
     isComposing: tracker.isActive,
     sendInput: (data) => terminal.input(data)
   })
+
   terminal.attachCustomKeyEventHandler((event) => !forwarder.claimKeyEvent(event))
 
   const emitted: string[] = []
@@ -64,6 +69,7 @@ async function typeHangulThenWon(
 
   textarea.dispatchEvent(compositionEvent('compositionend', '한'))
   options.beforeWon?.(textarea)
+
   for (const [index, committedWonText] of committedWonTexts.entries()) {
     textarea.dispatchEvent(keyboardEvent('keydown', '₩'))
     textarea.dispatchEvent(keyboardEvent('keypress', committedWonText))
@@ -75,6 +81,7 @@ async function typeHangulThenWon(
         bubbles: true
       })
     )
+
     if (index === 0 && options.duplicateFirstInput) {
       textarea.dispatchEvent(
         new InputEvent('input', {
@@ -84,13 +91,16 @@ async function typeHangulThenWon(
         })
       )
     }
+
     textarea.dispatchEvent(keyboardEvent('keyup', '₩'))
   }
+
   await nextEventLoop()
 
   forwarder.dispose()
   tracker.dispose()
   terminal.dispose()
+
   return emitted.join('')
 }
 
@@ -101,16 +111,19 @@ async function typeHangulThenRepeatedStaleEndsThenWon(): Promise<string> {
   terminal.open(container)
   const textarea = terminal.textarea
   const terminalElement = terminal.element
+
   if (!textarea || !terminalElement) {
     throw new Error('xterm input elements were not created')
   }
 
   const tracker = installTerminalImeCompositionTracker(terminalElement)
+
   const forwarder = installTerminalImeNativeTextForwarder({
     terminalElement,
     isComposing: tracker.isActive,
     sendInput: (data) => terminal.input(data)
   })
+
   terminal.attachCustomKeyEventHandler((event) => !forwarder.claimKeyEvent(event))
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
@@ -123,9 +136,11 @@ async function typeHangulThenRepeatedStaleEndsThenWon(): Promise<string> {
   await nextEventLoop()
 
   textarea.value = ''
+
   for (let index = 0; index < 3; index++) {
     textarea.dispatchEvent(compositionEvent('compositionend', '한'))
   }
+
   textarea.dispatchEvent(keyboardEvent('keydown', '₩'))
   textarea.dispatchEvent(keyboardEvent('keypress', '`'))
   textarea.value = '`'
@@ -138,6 +153,7 @@ async function typeHangulThenRepeatedStaleEndsThenWon(): Promise<string> {
   forwarder.dispose()
   tracker.dispose()
   terminal.dispose()
+
   return emitted.join('')
 }
 

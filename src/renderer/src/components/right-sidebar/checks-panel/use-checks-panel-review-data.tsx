@@ -43,6 +43,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     setComments,
     setCommentsLoading
   } = model
+
   // Fetch comments once when PR changes (no polling — comments change infrequently).
   const fetchComments = useCallback(
     async ({
@@ -56,10 +57,13 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     } = {}) => {
       const targetPRNumber = prNumberOverride ?? prNumber
       const targetPRRepo = prRepoOverride ?? pr?.prRepo
+
       if (!repo || !targetPRNumber) {
         return
       }
+
       setCommentsLoading(true)
+
       try {
         const requestKey = checksPanelAsyncResultKey(
           prCacheKey,
@@ -68,14 +72,17 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
           targetPRRepo,
           pr?.headSha
         )
+
         const result = await fetchPRComments(repo.path, targetPRNumber, {
           force,
           repoId: repo.id,
           prRepo: targetPRRepo
         })
+
         if (!isCurrentAsyncResult(requestKey)) {
           return
         }
+
         setComments(result)
       } catch (err) {
         if (
@@ -85,6 +92,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         ) {
           return
         }
+
         console.warn('Failed to fetch PR comments:', err)
         setComments([])
       } finally {
@@ -116,6 +124,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       if (!repo) {
         return Promise.resolve(null)
       }
+
       if (check.gitlabJobId) {
         // Why: `settings` (not ownerSettings) is what fetched the job list, so the
         // job id and its trace always resolve against the same host.
@@ -127,6 +136,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
           projectRef: gitLabProjectRefRef.current
         })
       }
+
       return fetchPRCheckDetails(
         repo.path,
         {
@@ -149,11 +159,15 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     if (activeGitLabReview) {
       return
     }
+
     if (!repo || !prNumber || !isPanelVisible) {
       setComments([])
+
       return
     }
+
     let cancelled = false
+
     const requestKey = checksPanelAsyncResultKey(
       prCacheKey,
       branch,
@@ -161,6 +175,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       pr?.prRepo,
       pr?.headSha
     )
+
     setCommentsLoading(true)
     void fetchPRComments(repo.path, prNumber, { repoId: repo.id, prRepo: pr?.prRepo }).then(
       (result) => {
@@ -176,6 +191,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         }
       }
     )
+
     return () => {
       cancelled = true
     }
@@ -198,15 +214,19 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     if (activeGitLabReview || !repo || !prNumber || !isPanelVisible) {
       return undefined
     }
+
     return window.api.gh.onWorkItemMutated((payload) => {
       const sameRepo =
         payload.repoId != null ? payload.repoId === repo.id : payload.repoPath === repo.path
+
       if (!sameRepo || payload.type !== 'pr' || payload.number !== prNumber) {
         return
       }
+
       void fetchComments({ force: true })
     })
   }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
+
   return { fetchComments, handleLoadCheckDetails, getGitLabProjectRef }
 }
 

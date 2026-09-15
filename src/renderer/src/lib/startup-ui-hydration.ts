@@ -20,6 +20,7 @@ export function hydratePersistedUIAfterStartupRead({
   }
 
   hydratePersistedUI(persistedUI, 'startup')
+
   return true
 }
 

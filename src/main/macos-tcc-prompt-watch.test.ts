@@ -96,14 +96,17 @@ function createFakeLogStream(): {
 } {
   const stdout = new PassThrough()
   const killed: string[] = []
+
   const child = Object.assign(new EventEmitter(), {
     stdout,
     stderr: new PassThrough(),
     kill: (signal?: string) => {
       killed.push(signal ?? 'SIGTERM')
+
       return true
     }
   }) as unknown as LogStreamChild
+
   return { child, stdout, killed }
 }
 
@@ -168,15 +171,18 @@ describe('MacosTccPromptWatch', () => {
   it('restarts once after an unexpected termination without creating a retry loop', async () => {
     const first = createFakeLogStream()
     const second = createFakeLogStream()
+
     const spawnLogStream = vi
       .fn<() => LogStreamChild>()
       .mockReturnValueOnce(first.child)
       .mockReturnValueOnce(second.child)
+
     const watch = new MacosTccPromptWatch({
       onPrompt: vi.fn(),
       spawnLogStream,
       restartDelayMs: 0
     })
+
     watch.start()
 
     first.child.emit('error', new Error('logd restarted'))
@@ -193,11 +199,13 @@ describe('MacosTccPromptWatch', () => {
   it('cancels a pending restart when stopped', async () => {
     const first = createFakeLogStream()
     const spawnLogStream = vi.fn(() => first.child)
+
     const watch = new MacosTccPromptWatch({
       onPrompt: vi.fn(),
       spawnLogStream,
       restartDelayMs: 0
     })
+
     watch.start()
     first.child.emit('exit', 1)
     watch.stop()
@@ -210,14 +218,17 @@ describe('MacosTccPromptWatch', () => {
     const spawnLogStream = vi.fn(() => {
       throw new Error('log binary unavailable')
     })
+
     const watch = new MacosTccPromptWatch({ onPrompt: vi.fn(), spawnLogStream })
     expect(() => watch.start()).not.toThrow()
 
     const { child } = createFakeLogStream()
+
     const afterStop = new MacosTccPromptWatch({
       onPrompt: vi.fn(),
       spawnLogStream: () => child
     })
+
     afterStop.stop()
     afterStop.start()
     // Why: quit ordering can call stop() before start(); it must not leave a live child behind.

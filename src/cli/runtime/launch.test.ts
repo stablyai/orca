@@ -42,11 +42,17 @@ const RECIPE_JSON = JSON.stringify({
   }),
   projectRoot: '/workspace/repo'
 })
+
 const SERVE_INSTALL_STATUS = '[serve] orca CLI install: installed'
+
 const SSH_PRIVATE_KEY = 'TOP-SECRET-PRIVATE-KEY'
+
 const SSH_AUTHORIZATION = 'Bearer TOP-SECRET-AUTHORIZATION'
+
 const SSH_PASSPHRASE = 'TOP-SECRET-PASSPHRASE'
+
 const SSH_COOKIE = 'session=TOP-SECRET-COOKIE'
+
 const SSH_RECIPE_JSON = JSON.stringify({
   schemaVersion: 1,
   connection: {
@@ -68,7 +74,9 @@ const SSH_RECIPE_JSON = JSON.stringify({
     }
   }
 })
+
 const INVALID_SSH_RECIPE_JSON = SSH_RECIPE_JSON.replace('/workspace/repo', 'relative/repo')
+
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 
 function startRecipeJsonServer() {
@@ -76,10 +84,12 @@ function startRecipeJsonServer() {
   spawnMock.mockReturnValue(child)
   const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
   const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
   const result = serveOrcaApp({
     recipeJson: true,
     projectRoot: '/workspace/repo'
   })
+
   return { child, result, stdoutSpy, stderrSpy }
 }
 
@@ -97,6 +107,7 @@ describe('serveOrcaApp', () => {
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
     delete process.env.ORCA_USER_DATA_PATH
+
     return Promise.all(
       temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true }))
     )
@@ -125,10 +136,13 @@ describe('serveOrcaApp', () => {
       replacementOwner.pid = 4102
       spawnMock.mockReturnValueOnce(oldOwner).mockReturnValueOnce(replacementOwner)
       let supervisorExited = false
+
       const supervisor = serveOrcaApp({ json: true }).then((code) => {
         supervisorExited = true
+
         return code
       })
+
       const childEnv = spawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv | undefined
       const handoffPath = childEnv?.ORCA_SERVE_UPDATE_HANDOFF_PATH
       expect(handoffPath).toBeTruthy()
@@ -336,10 +350,12 @@ describe('serveOrcaApp', () => {
           if (event === 'exit') {
             queueMicrotask(() => handler(0, null))
           }
+
           return child
         }
       )
     }
+
     spawnMock.mockReturnValue(child)
 
     await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
@@ -361,10 +377,12 @@ describe('serveOrcaApp', () => {
           if (event === 'exit') {
             queueMicrotask(() => handler(0, null))
           }
+
           return child
         }
       )
     }
+
     spawnMock.mockReturnValue(child)
 
     await expect(
@@ -396,6 +414,7 @@ describe('serveOrcaApp', () => {
   it('passes the app root before serve flags for dev Electron executables', async () => {
     process.env.ORCA_APP_EXECUTABLE = '/repo/node_modules/.bin/electron'
     process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'
+
     const child = {
       kill: vi.fn(),
       once: vi.fn(
@@ -403,10 +422,12 @@ describe('serveOrcaApp', () => {
           if (event === 'exit') {
             queueMicrotask(() => handler(0, null))
           }
+
           return child
         }
       )
     }
+
     spawnMock.mockReturnValue(child)
 
     await expect(serveOrcaApp({ json: true, port: '6768' })).resolves.toBe(0)
@@ -471,6 +492,7 @@ describe('serveOrcaApp', () => {
         if (platformDescriptor) {
           Object.defineProperty(process, 'platform', platformDescriptor)
         }
+
         if (getuidDescriptor) {
           Object.defineProperty(process, 'getuid', getuidDescriptor)
         } else {
@@ -490,6 +512,7 @@ describe('serveOrcaApp', () => {
       recipeJson: true,
       projectRoot: '/workspace/repo'
     })
+
     queueMicrotask(() => {
       child.stdout.emit('data', `${RECIPE_JSON}\n`)
     })
@@ -531,9 +554,11 @@ describe('serveOrcaApp', () => {
     expect(stderrSpy).toHaveBeenNthCalledWith(1, `${IGNORED_NON_RECIPE_STDOUT}\n`)
     expect(stderrSpy).toHaveBeenNthCalledWith(2, `${IGNORED_NON_RECIPE_STDOUT}\n`)
     expect(stderrSpy).toHaveBeenNthCalledWith(3, `${IGNORED_NON_RECIPE_STDOUT}\n`)
+
     for (const secret of [SSH_PRIVATE_KEY, SSH_AUTHORIZATION, SSH_PASSPHRASE, SSH_COOKIE]) {
       expect(stderrSpy).not.toHaveBeenCalledWith(expect.stringContaining(secret))
     }
+
     expect(stdoutSpy).toHaveBeenCalledTimes(1)
     expect(stdoutSpy).toHaveBeenCalledWith(`${RECIPE_JSON}\n`)
     expect(child.unref).toHaveBeenCalledOnce()
@@ -558,6 +583,7 @@ describe('serveOrcaApp', () => {
   it('rejects when the server exits without valid recipe JSON', async () => {
     const { child, result, stdoutSpy, stderrSpy } = startRecipeJsonServer()
     const secrets = ['UPPER-SECRET', 'SLASH-SECRET', 'LEGACY-SECRET', 'PRIVATE-SECRET']
+
     const untrustedLines = [
       'ORCA://pair?code=UPPER-SECRET',
       'orca://pair/?code=SLASH-SECRET',
@@ -565,6 +591,7 @@ describe('serveOrcaApp', () => {
       '"embedded privateKey PRIVATE-SECRET"',
       '{privateKey:"PRIVATE-SECRET"}'
     ].join('\n')
+
     queueMicrotask(() => {
       child.stdout.emit('data', `${untrustedLines}\n`)
       child.emit('exit', 0, null)
@@ -578,9 +605,11 @@ describe('serveOrcaApp', () => {
     expect(stdoutSpy).not.toHaveBeenCalled()
     expect(stderrSpy).toHaveBeenCalledTimes(5)
     expect(stderrSpy).toHaveBeenCalledWith(`${IGNORED_NON_RECIPE_STDOUT}\n`)
+
     for (const secret of secrets) {
       expect(stderrSpy).not.toHaveBeenCalledWith(expect.stringContaining(secret))
     }
+
     expect(child.unref).not.toHaveBeenCalled()
   })
 
@@ -602,6 +631,7 @@ describe('serveOrcaApp', () => {
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
     process.env.ORCA_APP_EXECUTABLE = 'C:\\repo\\node_modules\\.bin\\electron.cmd'
+
     const child = {
       kill: vi.fn(),
       once: vi.fn(
@@ -609,10 +639,12 @@ describe('serveOrcaApp', () => {
           if (event === 'exit') {
             queueMicrotask(() => handler(0, null))
           }
+
           return child
         }
       )
     }
+
     spawnMock.mockReturnValue(child)
 
     try {
@@ -692,9 +724,11 @@ describe('launchOrcaApp', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
       delete process.env.ELECTRON_RUN_AS_NODE
+
       if (platformDescriptor) {
         Object.defineProperty(process, 'platform', platformDescriptor)
       }
+
       if (getuidDescriptor) {
         Object.defineProperty(process, 'getuid', getuidDescriptor)
       } else {

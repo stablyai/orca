@@ -33,6 +33,7 @@ describe('worktree RPC methods', () => {
         .fn()
         .mockResolvedValue({ repoId: 'repo-1', worktreeId: 'wt-1', activated: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -58,6 +59,7 @@ describe('worktree RPC methods', () => {
         .fn()
         .mockResolvedValue({ repoId: 'repo-1', worktreeId: 'wt-1', activated: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     // The mobile WebSocket path always uses dispatchStreaming, which threads the
@@ -83,6 +85,7 @@ describe('worktree RPC methods', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatch(
@@ -154,6 +157,7 @@ describe('worktree RPC methods', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-cli' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatch(
@@ -176,6 +180,7 @@ describe('worktree RPC methods', () => {
 
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-1', 'run-1')
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -204,6 +209,7 @@ describe('worktree RPC methods', () => {
       ]),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -220,6 +226,7 @@ describe('worktree RPC methods', () => {
     )
 
     expect(response).toMatchObject({ ok: true })
+
     const replay = await dispatcher.dispatch(
       makeRequest('worktree.create', {
         repo: 'repo-1',
@@ -257,6 +264,7 @@ describe('worktree RPC methods', () => {
 
   it('stamps automation provenance with the persisted runtime host from run context', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-runtime', 'run-runtime')
+
     const runtimeLocalRepo = {
       id: 'repo-runtime',
       path: '/workspace/repo',
@@ -265,6 +273,7 @@ describe('worktree RPC methods', () => {
       addedAt: 1,
       kind: 'git' as const
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -293,6 +302,7 @@ describe('worktree RPC methods', () => {
       ]),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-runtime' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -323,6 +333,7 @@ describe('worktree RPC methods', () => {
 
   it('validates and stamps automation provenance from the dispatching run snapshot', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-edited', 'run-edited')
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -356,6 +367,7 @@ describe('worktree RPC methods', () => {
       ]),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-edited' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -387,6 +399,7 @@ describe('worktree RPC methods', () => {
 
   it('allows the same automation provenance request to retry after a failed create attempt', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-retry', 'run-retry')
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -413,7 +426,9 @@ describe('worktree RPC methods', () => {
         .mockRejectedValueOnce(new Error('Branch "automation-workspace" already exists.'))
         .mockResolvedValueOnce({ worktree: { id: 'wt-retry' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
     const automationProvenanceRequest = {
       automationId: 'automation-retry',
       automationRunId: 'run-retry',
@@ -428,6 +443,7 @@ describe('worktree RPC methods', () => {
         automationProvenanceRequest
       })
     )
+
     const retryResponse = await dispatcher.dispatch(
       makeRequest('worktree.create', {
         repo: 'repo-1',
@@ -474,6 +490,7 @@ describe('worktree RPC methods', () => {
       ]),
       createManagedWorktree: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -503,6 +520,7 @@ describe('worktree RPC methods', () => {
         startupTerminal: { spawned: true, handle: 'term_agent' }
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -554,6 +572,7 @@ describe('worktree RPC methods', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -589,6 +608,7 @@ describe('worktree RPC methods', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatch(
@@ -619,6 +639,7 @@ describe('worktree RPC methods', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       prefetchManagedWorktreeCreateBase: vi.fn().mockResolvedValue(undefined)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -642,6 +663,7 @@ describe('worktree RPC methods', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -668,6 +690,7 @@ describe('worktree RPC methods', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       createManagedWorktree: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -695,6 +718,7 @@ describe('worktree RPC methods', () => {
         pushTarget: { remoteName: 'origin', branchName: 'feature/pr-head' }
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -729,6 +753,7 @@ describe('worktree RPC methods', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       resolveManagedMrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/mr-head' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -755,6 +780,7 @@ describe('worktree RPC methods', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -783,6 +809,7 @@ describe('worktree RPC methods', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -809,6 +836,7 @@ describe('worktree RPC methods', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       updateManagedWorktreeMeta: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -836,12 +864,14 @@ describe('worktree RPC methods', () => {
         createdAt: 1
       }
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
       listWorktreeLineage: vi.fn().mockResolvedValue(lineage),
       listWorkspaceLineage: vi.fn().mockResolvedValue({})
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('worktree.lineageList'))
@@ -857,6 +887,7 @@ describe('worktree RPC methods', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       persistManagedWorktreeSortOrder: vi.fn().mockReturnValue({ updated: 2 })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(

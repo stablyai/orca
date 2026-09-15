@@ -28,10 +28,13 @@ export function cancelPendingWatcherSubscribe({
   if (!record.pendingSubscribe || !records.delete(record.id)) {
     return
   }
+
   const pending = takePendingSubscribe(record)
+
   if (!pending) {
     return
   }
+
   if (!child?.connected) {
     // Why: disconnect starts physical termination before cancellation sees the
     // child; destructive callers must join that exact termination generation.
@@ -42,8 +45,10 @@ export function cancelPendingWatcherSubscribe({
           terminationError instanceof Error ? terminationError : new Error(String(terminationError))
         )
     )
+
     return
   }
+
   // Why: only the child knows whether native setup is queued, active, or
   // resolved, so its physical teardown must precede caller settlement.
   cancelledSubscribes.begin(record.id, child, error, pending.reject, () => restartChild(child))

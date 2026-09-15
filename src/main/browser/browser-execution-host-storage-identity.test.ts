@@ -8,6 +8,7 @@ import {
 import { browserNetworkExecutionHostKey } from './browser-network-execution-route'
 
 const storageKey = 'a'.repeat(64)
+
 const otherStorageKey = 'b'.repeat(64)
 
 describe('browserNetworkExecutionHostStorageIdentity', () => {

@@ -40,6 +40,7 @@ export function WorkspaceDirectorySetting({
     'auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e',
     'Client default'
   )
+
   const choices = buildHostScopeChoices(hostOptions, clientDefaultLabel)
   // Why: if the selected host disappears (removed/disconnected), fall back to the
   // client default so the control never edits a stale host.
@@ -49,6 +50,7 @@ export function WorkspaceDirectorySetting({
   const hostOverride = editingHost
     ? getHostSettingOverride(settings, activeScope, 'defaultWorktreeLocation')
     : undefined
+
   const hasOverride = editingHost && hostOverride !== undefined
 
   // For a host scope, show its override or — as a hint — the inherited client
@@ -61,6 +63,7 @@ export function WorkspaceDirectorySetting({
         settings.workspaceDir
       )
     : settings.workspaceDir
+
   // Why: settings:set prepares the workspace root with mkdir; committing each
   // keystroke would create every typed path prefix as a real directory.
   const [draftValue, setDraftValue] = useState(value)
@@ -80,8 +83,10 @@ export function WorkspaceDirectorySetting({
   const writeValue = (next: string): void => {
     if (!editingHost) {
       updateSettings({ workspaceDir: next })
+
       return
     }
+
     updateSettings({
       hostSettingOverrides: setHostSettingOverride(
         settings,
@@ -94,17 +99,21 @@ export function WorkspaceDirectorySetting({
 
   const commitDraftValue = (): void => {
     const next = draftValueRef.current
+
     if (next === value) {
       return
     }
+
     writeValue(next)
   }
 
   const handleBlur = (): void => {
     if (skipNextBlurCommitRef.current) {
       skipNextBlurCommitRef.current = false
+
       return
     }
+
     commitDraftValue()
   }
 
@@ -116,6 +125,7 @@ export function WorkspaceDirectorySetting({
     if (!editingHost) {
       return
     }
+
     updateSettings({
       hostSettingOverrides: clearHostSettingOverride(
         settings,
@@ -128,11 +138,14 @@ export function WorkspaceDirectorySetting({
   const handleBrowse = async (): Promise<void> => {
     try {
       const path = await window.api.repos.pickFolder()
+
       if (path) {
         setDraft(path)
         writeValue(path)
+
         return
       }
+
       resetDraftValue()
     } finally {
       skipNextBlurCommitRef.current = false
@@ -203,12 +216,15 @@ export function WorkspaceDirectorySetting({
             if (isImeCompositionKeyDown(e)) {
               return
             }
+
             if (e.key === 'Enter') {
               skipNextBlurCommitRef.current = true
               commitDraftValue()
               e.currentTarget.blur()
+
               return
             }
+
             if (e.key === 'Escape') {
               skipNextBlurCommitRef.current = true
               resetDraftValue()

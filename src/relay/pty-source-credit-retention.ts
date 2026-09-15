@@ -29,6 +29,7 @@ export class PtySourceCreditRetention {
 
   trackMutation<T>(record: DeliveryRecord, mutate: () => T): T {
     const before = recordRetention(record)
+
     try {
       return mutate()
     } finally {

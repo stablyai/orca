@@ -24,6 +24,7 @@ export function createExactLatencySampleWindow(): ExactLatencySampleWindow {
 
 export function appendTypingLatencySample(values: number[], value: number): void {
   values.push(value)
+
   if (values.length > TYPING_LATENCY_SAMPLE_LIMIT) {
     values.shift()
   }

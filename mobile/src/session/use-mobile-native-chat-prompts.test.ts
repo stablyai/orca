@@ -19,6 +19,7 @@ function promptsFor(
   transcriptLoading = false
 ): ReturnType<typeof useMobileNativeChatPrompts> {
   let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
+
   function Probe(): null {
     captured = useMobileNativeChatPrompts({
       enabled: true,
@@ -26,11 +27,14 @@ function promptsFor(
       messages,
       transcriptLoading
     })
+
     return null
   }
+
   TestRenderer.act(() => {
     TestRenderer.create(createElement(Probe))
   })
+
   return captured!
 }
 
@@ -70,6 +74,7 @@ describe('useMobileNativeChatPrompts approval-envelope state gate', () => {
       interactivePrompt: APPROVAL,
       lastAssistantMessage: 'Allow this Bash command?\n1. Yes\n2. No'
     }) as { options: Array<{ label: string }> } | null
+
     expect(permission).toMatchObject({ title: 'Permission requested' })
     expect(permission?.options.map((o) => o.label)).toEqual(['Yes', 'No'])
   })
@@ -153,6 +158,7 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
         source: 'transcript'
       }
     ]
+
     expect(promptsFor({ state: 'done', interactivePrompt: ASK }, answered).ask).toBeNull()
     expect(promptsFor({ state: 'done' }, answered).ask).toBeNull()
   })

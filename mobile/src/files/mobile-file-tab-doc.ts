@@ -29,61 +29,79 @@ export async function resolveMobileFileTabDoc(
 ): Promise<MobileFileTabDoc> {
   const worktree = `id:${request.worktreeId}`
   const { relativePath } = request
+
   if (request.diffSource === 'staged' || request.diffSource === 'unstaged') {
     const response = await client.sendRequest('git.diff', {
       worktree,
       filePath: relativePath,
       staged: request.diffSource === 'staged'
     })
+
     if (!response.ok) {
       throw new Error((response as RpcFailure).error.message)
     }
+
     const result = (response as RpcSuccess).result as
       | { kind: 'text'; originalContent: string; modifiedContent: string }
       | MobileBinaryDiffResult
+
     if (result.kind !== 'text') {
       // Render image diffs (add/modify/delete) from the base64 the host already
       // sends; only non-previewable binaries stay unavailable.
       const dataUri = mobileDiffImageDataUri(result)
+
       if (!dataUri) {
         throw new Error('binary_file')
       }
+
       return { status: 'ready', kind: 'image', dataUri }
     }
+
     const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+
     return { status: 'ready', kind: 'diff', lines: diff.lines, truncated: diff.truncated }
   }
 
   const artifactKind = classifyMobileArtifact(relativePath)
+
   if (artifactKind === 'image') {
     const preview = await client.sendRequest('files.readPreview', { worktree, relativePath })
+
     if (!preview.ok) {
       throw new Error((preview as RpcFailure).error.message)
     }
+
     const result = (preview as RpcSuccess).result as {
       content: string
       isImage?: boolean
       mimeType?: string
     }
+
     const dataUri = result.isImage ? buildImageDataUri(result.mimeType, result.content) : null
+
     if (!dataUri) {
       throw new Error('binary_file')
     }
+
     return { status: 'ready', kind: 'image', dataUri }
   }
 
   const response = await client.sendRequest('files.read', { worktree, relativePath })
+
   if (!response.ok) {
     throw new Error((response as RpcFailure).error.message)
   }
+
   const result = (response as RpcSuccess).result as {
     content: string
     truncated: boolean
     byteLength: number
   }
+
   if (artifactKind === 'html') {
     return { status: 'ready', kind: 'html', content: result.content }
   }
+
   return {
     status: 'ready',
     kind: 'file',

@@ -49,10 +49,12 @@ function runtimeWithAccounts(claude: ClaudeManagedAccountGateSettings | null): O
   const runtime = claude
     ? new OrcaRuntimeService({ getSettings: () => claude } as never)
     : new OrcaRuntimeService()
+
   const internal = runtime as unknown as {
     resolveStructuredAgentSessionLocation: (selector: string) => Promise<unknown>
     ensureStructuredAgentSessionHost: () => Promise<void>
   }
+
   internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
     executionHostId: 'local',
     wslDistro: null,
@@ -65,6 +67,7 @@ function runtimeWithAccounts(claude: ClaudeManagedAccountGateSettings | null): O
   setStructuredAgentSessionHost({
     supportsCreate: () => true
   } as unknown as StructuredAgentSessionHost)
+
   return runtime
 }
 

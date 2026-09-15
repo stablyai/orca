@@ -28,6 +28,7 @@ export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
     (layer: FrameLayer, image: Image | null) => {
       browserImageRefs.current[layer] = image
       const currentFrameUri = frameUriRef.current
+
       if (image && currentFrameUri) {
         updateBrowserImageSource(image, currentFrameUri)
       }
@@ -47,14 +48,17 @@ export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
     (view: View | null) => setBrowserLayerRef(0, view),
     [setBrowserLayerRef]
   )
+
   const setBrowserLayer1Ref = useCallback(
     (view: View | null) => setBrowserLayerRef(1, view),
     [setBrowserLayerRef]
   )
+
   const setBrowserImageLayer0Ref = useCallback(
     (image: Image | null) => setBrowserImageRef(0, image),
     [setBrowserImageRef]
   )
+
   const setBrowserImageLayer1Ref = useCallback(
     (image: Image | null) => setBrowserImageRef(1, image),
     [setBrowserImageRef]
@@ -65,6 +69,7 @@ export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
       if (pendingFrameLayerRef.current !== layer) {
         return
       }
+
       pendingFrameLayerRef.current = null
       visibleFrameLayerRef.current = layer
       updateBrowserLayerVisibility(browserLayerRefs.current, layer)
@@ -76,6 +81,7 @@ export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
     () => handleBrowserImageLoad(0),
     [handleBrowserImageLoad]
   )
+
   const handleBrowserImageLayer1Load = useCallback(
     () => handleBrowserImageLoad(1),
     [handleBrowserImageLoad]
@@ -94,6 +100,7 @@ export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
     () => handleBrowserImageError(0),
     [handleBrowserImageError]
   )
+
   const handleBrowserImageLayer1Error = useCallback(
     () => handleBrowserImageError(1),
     [handleBrowserImageError]

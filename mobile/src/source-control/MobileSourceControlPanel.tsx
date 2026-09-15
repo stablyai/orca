@@ -46,10 +46,12 @@ export function MobileSourceControlPanel({
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
+
   // Track first visit so Changes/History stay mounted (keep scroll) after first open; PR still unmounts when inactive.
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
     () => new Set<SourceControlHubTab>([initialTab])
   )
+
   const [historyRefreshNonce, setHistoryRefreshNonce] = useState(0)
 
   // expo-router reuses the screen instance when only query params change, so adopt the new tab.
@@ -59,8 +61,10 @@ export function MobileSourceControlPanel({
       if (prev.has(initialTab)) {
         return prev
       }
+
       const next = new Set(prev)
       next.add(initialTab)
+
       return next
     })
   }, [initialTab])
@@ -71,11 +75,14 @@ export function MobileSourceControlPanel({
       if (prev.has(tab)) {
         return prev
       }
+
       const next = new Set(prev)
       next.add(tab)
+
       return next
     })
   }, [])
+
   const openHistoryTab = useCallback(() => selectTab('history'), [selectTab])
   const openPrTab = useCallback(() => selectTab('pr'), [selectTab])
 
@@ -90,7 +97,9 @@ export function MobileSourceControlPanel({
     onOpenedFileDiff,
     onOpenHistory: openHistoryTab
   })
+
   const actionSheetActions = useMobileSourceControlActionSheet(state)
+
   const {
     client,
     connState,
@@ -113,6 +122,7 @@ export function MobileSourceControlPanel({
     branchEntries,
     abortConflictOperation
   } = state
+
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
   const ready = screenState.kind === 'ready'
 
@@ -130,12 +140,14 @@ export function MobileSourceControlPanel({
     if (statusBranch) {
       lastPrBranchRef.current = statusBranch
     }
+
     if (statusHead) {
       lastPrHeadRef.current = statusHead
     }
   }, [statusBranch, statusHead])
   const prBranch = statusBranch ?? lastPrBranchRef.current
   const prHeadSha = statusHead ?? lastPrHeadRef.current
+
   const prController = useMobilePrSidebarController({
     client,
     connState,
@@ -143,6 +155,7 @@ export function MobileSourceControlPanel({
     branch: prBranch,
     headSha: prHeadSha
   })
+
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
   const refetchPr = prController.refetchPRSidebar
@@ -158,6 +171,7 @@ export function MobileSourceControlPanel({
     if (activeTab === 'pr') {
       return
     }
+
     if (prBranch && isHostedRepo && prSidebarKind === 'hidden') {
       void refetchPrRef.current({ includeDetails: false })
     }
@@ -175,10 +189,13 @@ export function MobileSourceControlPanel({
     if (activeTab !== 'pr' || !isHostedRepo || !prBranch) {
       return
     }
+
     if (prSidebarKind === 'hidden') {
       void refetchPrRef.current({ includeDetails: true })
+
       return
     }
+
     if (prDetailsMissingFor != null) {
       void ensurePrDetailsRef.current()
     }
@@ -189,33 +206,42 @@ export function MobileSourceControlPanel({
     if (!isHostedRepo || !prBranch) {
       return null
     }
+
     const commentCount =
       prController.prSidebarState.kind === 'ready'
         ? countUnresolvedReviewThreads(prController.prSidebarState.data.details?.comments)
         : null
+
     return buildMobilePrChipSummary(prController.prSidebarState, commentCount)
   }, [isHostedRepo, prBranch, prController.prSidebarState])
 
   // Refresh the active segment plus git.status (branch card stays honest on History); preserve ready on failure so the PR chip isn't wiped.
   const onRefresh = useCallback(() => {
     void loadStatus({ preserveReadyOnFailure: true })
+
     if (activeTab === 'history') {
       setHistoryRefreshNonce((n) => n + 1)
+
       return
     }
+
     if (!isHostedRepo) {
       return
     }
+
     if (activeTab === 'pr') {
       void refetchPr({ includeDetails: true })
+
       return
     }
+
     // Changes: light chip refresh so the branch card stays current without comments.
     void refetchPr({ includeDetails: false })
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
 
   // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip safe-area chrome (the dock column owns it).
   const onBack = embedded ? (onRequestClose ?? (() => router.back())) : () => router.back()
+
   // Chromeless PR body has no header, so surface open-on-web on the hub chrome while the PR segment is active.
   const prWebUrl =
     activeTab === 'pr' &&
@@ -223,8 +249,10 @@ export function MobileSourceControlPanel({
     prController.prSidebarState.data.pr.url
       ? prController.prSidebarState.data.pr.url
       : null
+
   const prWebNumber =
     prController.prSidebarState.kind === 'ready' ? prController.prSidebarState.data.pr.number : null
+
   const header = (
     <MobileSourceControlHeader
       embedded={embedded}
@@ -255,8 +283,10 @@ export function MobileSourceControlPanel({
               // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
               if (connState !== 'connected' && hostId) {
                 void forceReconnect(hostId)
+
                 return
               }
+
               void loadStatus()
             }}
           >

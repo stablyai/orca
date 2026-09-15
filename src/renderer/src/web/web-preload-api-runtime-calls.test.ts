@@ -28,6 +28,7 @@ describe('web preload runtime calls', () => {
               _meta: { runtimeId: 'runtime-failure' }
             })
           }
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -90,6 +91,7 @@ describe('web preload runtime calls', () => {
     installWebPreloadApi()
 
     let rejection: unknown
+
     try {
       await globals.window.api.repos.list()
     } catch (error) {
@@ -99,9 +101,11 @@ describe('web preload runtime calls', () => {
     expect(rejection).toEqual(
       Object.assign(new Error('Repository catalog is unavailable'), { code: 'repo_unavailable' })
     )
+
     if (!(rejection instanceof Error)) {
       throw new Error('Expected a domain Error rejection')
     }
+
     expect(Reflect.get(rejection, 'code')).toBe('repo_unavailable')
     expect(
       JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
@@ -110,6 +114,7 @@ describe('web preload runtime calls', () => {
 
   it('surfaces per-environment queue overload without invoking the client', async () => {
     let release!: () => void
+
     const blocked = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
       release = () =>
         resolve({
@@ -119,6 +124,7 @@ describe('web preload runtime calls', () => {
           _meta: { runtimeId: 'runtime-a' }
         })
     })
+
     const call = vi.fn(() => blocked)
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -134,6 +140,7 @@ describe('web preload runtime calls', () => {
     const accepted = Array.from({ length: 264 }, (_, index) =>
       globals.window.api.runtime.call({ method: `runtime.blocked.${index}` })
     )
+
     const overloaded = globals.window.api.runtime.call({ method: 'runtime.overloaded' })
 
     await expect(overloaded).rejects.toMatchObject({
@@ -148,6 +155,7 @@ describe('web preload runtime calls', () => {
   it('does not spend a selected call timeout while queued and forwards it unchanged', async () => {
     vi.useFakeTimers()
     let release!: () => void
+
     const blocked = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
       release = () =>
         resolve({
@@ -157,10 +165,12 @@ describe('web preload runtime calls', () => {
           _meta: { runtimeId: 'runtime-a' }
         })
     })
+
     const call = vi.fn((method: string): Promise<RuntimeRpcResponse<unknown>> => {
       if (method.startsWith('runtime.blocker')) {
         return blocked
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -168,6 +178,7 @@ describe('web preload runtime calls', () => {
         _meta: { runtimeId: 'runtime-a' }
       })
     })
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call = call
@@ -182,11 +193,13 @@ describe('web preload runtime calls', () => {
     const blockers = Array.from({ length: 8 }, (_, index) =>
       globals.window.api.runtime.call({ method: `runtime.blocker.${index}` })
     )
+
     const queued = globals.window.api.runtimeEnvironments.call({
       selector: 'web-server-a',
       method: 'runtime.queued-timeout',
       timeoutMs: 25
     })
+
     let settled = false
     void queued.then(
       () => {

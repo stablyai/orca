@@ -2,7 +2,9 @@
 // Any pane connect that runs while the marker is set waits here, and the clear
 // that marks the workspace awake resumes every waiting connect.
 const sleepingWorktreeIds = new Set<string>()
+
 const tearingDownWorktreeIds = new Set<string>()
+
 const wakeListenersByWorktreeId = new Map<string, Set<() => void>>()
 
 export function markWorktreeSleepIntent(worktreeId: string): void {
@@ -19,6 +21,7 @@ export async function withWorktreeSleepTeardown<T>(
   teardown: () => Promise<T>
 ): Promise<T> {
   tearingDownWorktreeIds.add(worktreeId)
+
   try {
     return await teardown()
   } finally {
@@ -30,11 +33,14 @@ export function clearWorktreeSleepIntent(worktreeId: string | null): void {
   if (!worktreeId || tearingDownWorktreeIds.has(worktreeId)) {
     return
   }
+
   if (!sleepingWorktreeIds.delete(worktreeId)) {
     return
   }
+
   const listeners = wakeListenersByWorktreeId.get(worktreeId)
   wakeListenersByWorktreeId.delete(worktreeId)
+
   for (const listener of listeners ?? []) {
     try {
       listener()
@@ -60,8 +66,10 @@ export function onWorktreeSleepIntentCleared(worktreeId: string, listener: () =>
   const listeners = wakeListenersByWorktreeId.get(worktreeId) ?? new Set<() => void>()
   listeners.add(listener)
   wakeListenersByWorktreeId.set(worktreeId, listeners)
+
   return () => {
     listeners.delete(listener)
+
     if (listeners.size === 0 && wakeListenersByWorktreeId.get(worktreeId) === listeners) {
       wakeListenersByWorktreeId.delete(worktreeId)
     }

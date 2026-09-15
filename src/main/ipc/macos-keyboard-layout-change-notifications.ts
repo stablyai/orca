@@ -16,6 +16,7 @@ export function registerMacKeyboardLayoutChangeNotifications(): () => void {
   let disposed = false
   let subscriptionId: number
   let generation = 0
+
   const broadcast = (event: KeyboardLayoutChangeEvent): void => {
     for (const window of BrowserWindow.getAllWindows()) {
       try {
@@ -27,8 +28,10 @@ export function registerMacKeyboardLayoutChangeNotifications(): () => void {
       }
     }
   }
+
   const refreshAfterCurrentRead = async (nextGeneration: number): Promise<void> => {
     await waitForMacKeyboardLayoutSnapshotIdle()
+
     if (!disposed && nextGeneration === generation) {
       broadcast({ phase: 'refresh', generation: nextGeneration })
     }
@@ -41,6 +44,7 @@ export function registerMacKeyboardLayoutChangeNotifications(): () => void {
         if (disposed) {
           return
         }
+
         const nextGeneration = ++generation
         broadcast({ phase: 'invalidated', generation: nextGeneration })
         void refreshAfterCurrentRead(nextGeneration)
@@ -54,15 +58,19 @@ export function registerMacKeyboardLayoutChangeNotifications(): () => void {
     if (disposed) {
       return
     }
+
     disposed = true
     app.removeListener('will-quit', dispose)
+
     try {
       systemPreferences.unsubscribeNotification(subscriptionId)
     } catch {
       // Native notification teardown is best-effort during process exit.
     }
   }
+
   app.once('will-quit', dispose)
+
   return dispose
 }
 

@@ -36,12 +36,14 @@ export async function scanRuntimeAiVaultSessions(args: {
 }): Promise<AiVaultListResult> {
   const { signal, ...scannerOptions } = args.options ?? {}
   throwIfAiVaultScanCancelled(signal)
+
   if (!args.scanner) {
     return runtimeScanIssueResult(
       args.hostInfo,
       'Agent Session History is not available for this execution host.'
     )
   }
+
   try {
     return await abandonRemoteSessionScanOnCancel(
       args.scanner(args.hostInfo.environmentId, runtimeScanArgs(args.hostInfo, args.listArgs), {
@@ -54,6 +56,7 @@ export async function scanRuntimeAiVaultSessions(args: {
     if (isAiVaultScanCancelledError(error)) {
       throw error
     }
+
     return runtimeScanIssueResult(
       args.hostInfo,
       error instanceof Error ? error.message : 'Remote Orca server is unavailable.'
@@ -68,18 +71,23 @@ function runtimeScanArgs(
   listArgs: AiVaultListArgs | undefined
 ): AiVaultListArgs {
   const scanArgs: AiVaultListArgs = { executionHostScope: hostInfo.executionHostId }
+
   if (listArgs?.limit !== undefined) {
     scanArgs.limit = listArgs.limit
   }
+
   if (listArgs?.unlimited !== undefined) {
     scanArgs.unlimited = listArgs.unlimited
   }
+
   if (listArgs?.force !== undefined) {
     scanArgs.force = listArgs.force
   }
+
   if (listArgs?.scopePaths !== undefined) {
     scanArgs.scopePaths = listArgs.scopePaths
   }
+
   return scanArgs
 }
 

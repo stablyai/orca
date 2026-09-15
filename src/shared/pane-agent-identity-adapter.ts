@@ -124,9 +124,11 @@ export const PANE_AGENT_SOURCE_RANK = SOURCE_RANK
 /** Reject an unrecognised source instead of silently dropping it from the ranking loop. */
 function sourceRankIndex(source: PaneAgentEvidenceSource): number {
   const index = SOURCE_RANK.indexOf(source)
+
   if (index === -1) {
     throw new Error(`Unknown pane-agent evidence source: ${String(source)}`)
   }
+
   return index
 }
 
@@ -149,31 +151,41 @@ export function resolveCanonicalPaneAgentEvidence<A extends string = TuiAgent>(
 ): PaneAgentIdentity<A> {
   const superseded: PaneAgentEvidenceSource[] = []
   const floor = input.minimumSource ? sourceRankIndex(input.minimumSource) : Number.MAX_SAFE_INTEGER
+
   const eligible = input.evidence.filter((item) => {
     if (item.source === 'sibling' && input.allowSibling !== true) {
       return false
     }
+
     if (sourceRankIndex(item.source) > floor) {
       return false
     }
+
     if (isPaneAgentRunEligible(item.run, input.currentRun)) {
       return true
     }
+
     superseded.push(item.source)
+
     return false
   })
 
   for (const source of SOURCE_RANK) {
     const matches = eligible.filter((item) => item.source === source)
+
     if (matches.length === 0) {
       continue
     }
+
     const agents = new Set(matches.map((item) => item.agent))
+
     if (agents.size > 1) {
       return { agent: null, source: null, ambiguousAt: source, supersededSources: superseded }
     }
+
     return { agent: matches[0].agent, source, supersededSources: superseded }
   }
+
   return { agent: null, source: null, supersededSources: superseded }
 }
 
@@ -193,12 +205,15 @@ function processEvidenceFromProof(
   input: CanonicalPaneAgentIdentityInput
 ): PaneAgentEvidence<TuiAgent> | null {
   const proof = input.processProof
+
   if (!proof || !isForegroundProcessProofFresh(proof)) {
     return null
   }
+
   if (input.foregroundAgent && input.foregroundAgent !== proof.agent) {
     return null
   }
+
   return { source: 'process', agent: proof.agent }
 }
 
@@ -206,6 +221,7 @@ export function resolveCanonicalPaneAgentIdentity(
   input: CanonicalPaneAgentIdentityInput
 ): CanonicalPaneAgentIdentity {
   const processEvidence = processEvidenceFromProof(input)
+
   // Coverage comes from authority-bearing sources that are still eligible for this run. A stale
   // hook/launch row can remain in the input after a pane is replaced; it must not make a title-only
   // answer look covered to a future action consumer.
@@ -217,6 +233,7 @@ export function resolveCanonicalPaneAgentIdentity(
     (input.launchAgent && isPaneAgentRunEligible(input.launchRun, input.currentRun)) ||
     (input.sleepingSessionAgent && isPaneAgentRunEligible(input.sleepingRun, input.currentRun))
   )
+
   // Keep stale evidence in the resolver so diagnostics still report which source was superseded,
   // even when it no longer qualifies the pane as covered.
   const hasAuthorityEvidence = Boolean(
@@ -226,12 +243,14 @@ export function resolveCanonicalPaneAgentIdentity(
     input.launchAgent ||
     input.sleepingSessionAgent
   )
+
   const titleEvidence = input.title ? collectAgentTitleEvidence(input.title) : null
   const titleAgent = titleEvidence?.agent ?? null
 
   if (!hasAuthorityEvidence) {
     if (input.uncoveredFallback) {
       const agent = input.uncoveredFallback.agent
+
       // A legacy title parser may have picked the first token from an ambiguous or
       // free-text-only title. Do not let that compatibility value bypass the canonical
       // ambiguity fence when the caller marks it as title-only evidence.
@@ -241,6 +260,7 @@ export function resolveCanonicalPaneAgentIdentity(
           (titleEvidence.freeTextNames?.length ?? 0) > 1) ||
           titleEvidence?.reason === 'conflicting-anchored-names' ||
           titleEvidence?.reason === 'conflicting-vendor-markers')
+
       if (rejectTitleFallback) {
         return {
           agent: null,
@@ -251,8 +271,10 @@ export function resolveCanonicalPaneAgentIdentity(
           supersededSources: []
         }
       }
+
       const titleOnly =
         input.uncoveredFallback.titleOnly ?? (agent !== null && agent === titleAgent)
+
       return {
         agent,
         source: agent === null ? null : titleOnly ? 'title' : null,
@@ -261,16 +283,19 @@ export function resolveCanonicalPaneAgentIdentity(
         supersededSources: []
       }
     }
+
     const siblingEvidence = [
       ...(input.siblingAgent ? [{ source: 'sibling' as const, agent: input.siblingAgent }] : []),
       ...(input.siblingAgents?.map((agent) => ({ source: 'sibling' as const, agent })) ?? []),
       ...(titleAgent ? [{ source: 'title' as const, agent: titleAgent }] : [])
     ]
+
     const siblingResolved = resolveCanonicalPaneAgentEvidence<TuiAgent>({
       evidence: siblingEvidence,
       allowSibling: input.allowSibling,
       minimumSource: input.minimumSource
     })
+
     return {
       agent: siblingResolved.agent,
       source: siblingResolved.source,
@@ -328,6 +353,7 @@ export function resolveCanonicalPaneAgentIdentity(
     minimumSource: input.minimumSource,
     allowSibling: input.allowSibling
   })
+
   return {
     agent: resolved.agent,
     source: resolved.source,
@@ -349,6 +375,7 @@ export function buildPaneAgentIdentityEvidenceWire(
   if (identity.agent === null || identity.source === null) {
     return undefined
   }
+
   return {
     source: identity.source,
     coverage: identity.coverage,

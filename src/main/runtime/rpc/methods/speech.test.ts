@@ -14,6 +14,7 @@ describe('speech RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       feedMobileDictation: vi.fn().mockReturnValue({ dictationId: 'dict-1' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -39,6 +40,7 @@ describe('speech RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       feedMobileDictation: vi.fn().mockReturnValue({ dictationId: 'dict-1' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -58,6 +60,7 @@ describe('speech RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       feedMobileDictation: vi.fn().mockReturnValue({ dictationId: 'dict-1' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -79,6 +82,7 @@ describe('speech RPC methods', () => {
         .fn()
         .mockResolvedValue({ enabled: false, selectedModelId: '', models: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('speech.models.list', null))
@@ -92,6 +96,7 @@ describe('speech RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       downloadMobileSpeechModel: vi.fn().mockResolvedValue({ started: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -104,10 +109,12 @@ describe('speech RPC methods', () => {
 
   it('deletes a speech model and returns refreshed setup', async () => {
     const setup = { enabled: true, selectedModelId: '', dictationMode: 'toggle', models: [] }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       deleteMobileSpeechModel: vi.fn().mockResolvedValue(setup)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -123,6 +130,7 @@ describe('speech RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       deleteMobileSpeechModel: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('speech.models.delete', {}))
@@ -138,6 +146,7 @@ describe('speech RPC methods', () => {
         .fn()
         .mockResolvedValue({ enabled: true, selectedModelId: 'm1', models: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(

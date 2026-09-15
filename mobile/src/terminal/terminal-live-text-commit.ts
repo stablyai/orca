@@ -33,6 +33,7 @@ export function getTerminalLiveSpecialKeyDecision({
   sentText
 }: TerminalLiveSpecialKeyDecisionInput): TerminalLiveSpecialKeyDecision {
   const bytes = getTerminalLiveSpecialKeyBytes(key)
+
   if (bytes === null) {
     return { kind: 'ignore' }
   }
@@ -82,5 +83,6 @@ export function getTerminalLiveAccessoryLocalEditText({
 
   const end = fieldText.length
   const width = end > 1 && readUtf8CodePointAt(fieldText, end - 2) > 0xffff ? 2 : 1
+
   return fieldText.slice(0, -width)
 }

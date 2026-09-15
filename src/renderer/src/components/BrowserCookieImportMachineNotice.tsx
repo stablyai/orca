@@ -8,11 +8,14 @@ import { translate } from '@/i18n/i18n'
 // screen. Renders nothing while browser settings target the local host.
 export function BrowserCookieImportMachineNotice(): React.JSX.Element | null {
   const detectedBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
+
   if (!detectedBrowsersHost) {
     return null
   }
+
   const clientHosted = detectedBrowsersHost.machine === 'client'
   const hostLabel = detectedBrowsersHost.hostLabel
+
   return (
     <>
       <DropdownMenuLabel>

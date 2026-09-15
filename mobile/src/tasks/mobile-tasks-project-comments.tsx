@@ -47,9 +47,11 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
     toggleProjectGitHubReviewThread,
     updateProjectRowComment
   } = model
+
   if (!projectRowItem) {
     return null
   }
+
   return projectRowDetail?.provider === 'github' ? (
     <View style={styles.detailSection}>
       <View style={styles.detailSectionHeader}>
@@ -65,8 +67,10 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
           const groupId = detailCommentGroupId(group)
           const root = detailCommentGroupRoot(group)
           const count = detailCommentGroupCount(group)
+
           const isCollapsedResolved =
             isResolvedDetailCommentGroup(group) && !expandedResolvedCommentGroups.has(groupId)
+
           if (isCollapsedResolved) {
             return (
               <Pressable
@@ -76,6 +80,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                   setExpandedResolvedCommentGroups((current) => {
                     const next = new Set(current)
                     next.add(groupId)
+
                     return next
                   })
                 }
@@ -96,8 +101,10 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
             options: { nested?: boolean } = {}
           ): ReactNode => {
             const commentId = String(comment.id)
+
             const isEditingComment =
               SHOW_MOBILE_COMMENT_THREAD_TOOLS && projectEditingCommentId === commentId
+
             return (
               <View
                 key={commentId}

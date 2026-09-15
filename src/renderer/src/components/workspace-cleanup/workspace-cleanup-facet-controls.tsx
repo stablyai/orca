@@ -50,11 +50,13 @@ export function FacetToggleList<T extends string>({
   onChange: (next: T[]) => void
 }): React.JSX.Element {
   const selectedSet = new Set(selected)
+
   return (
     <FacetField label={label}>
       <div className="flex flex-wrap gap-1">
         {values.map((value) => {
           const active = selectedSet.has(value)
+
           return (
             <button
               key={value}
@@ -194,6 +196,7 @@ export function FacetCheckbox({
   onChange: (next: boolean) => void
 }): React.JSX.Element {
   const checkboxId = `workspace-cleanup-facet-${id}`
+
   return (
     <div className="flex items-center gap-2">
       <Checkbox
@@ -219,6 +222,7 @@ function FacetField({
   if (!label) {
     return <>{children}</>
   }
+
   return (
     <div className="space-y-1">
       <div className="text-[11px] text-muted-foreground">{label}</div>

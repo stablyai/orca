@@ -81,9 +81,11 @@ export function ActivityThreadOptionsMenu({
   const skipCloseAutoFocusRef = React.useRef(false)
   const scopeFilterActive = useActivityScopeFilterActive()
   const scopeFilterItemsVisible = useActivityScopeFilterMenuItemsVisible()
+
   const hasFilters = Boolean(
     onUnreadOnlyChange || onShowChildAgentsChange || scopeFilterItemsVisible
   )
+
   const optionsLabel = scopeFilterActive
     ? translate(
         'auto.components.activity.ActivityPrototypePage.threadListOptionsFiltered',

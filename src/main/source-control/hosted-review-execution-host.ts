@@ -25,9 +25,11 @@ import {
  */
 export function hostedReviewSshConnectionId(executionHostId: ExecutionHostId): string | null {
   const route = resolveGitRouteForHost(executionHostId)
+
   if (route.kind === 'runtime') {
     throw new ExecutionHostNotDispatchableError(route.hostId)
   }
+
   return route.kind === 'ssh' ? route.connectionId : null
 }
 
@@ -45,5 +47,6 @@ export function getRepoHostedReviewExecutionHostId(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): ExecutionHostId {
   const hostId = getRepoExecutionHostId(repo)
+
   return getSshTargetIdForExecutionHost(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID
 }

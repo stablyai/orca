@@ -66,6 +66,7 @@ describe('captured owner availability', () => {
       { owner: DESKTOP_SELF, selector: { kind: 'self' } },
       'run'
     )
+
     expect(availability).toEqual({
       kind: 'owned',
       owner: DESKTOP_SELF,
@@ -118,6 +119,7 @@ describe('captured owner availability', () => {
         })
       }
     ])
+
     expect(captured.get('row|desktop|a-1')?.owner).toEqual(DESKTOP_SELF)
     expect(captured.get('row|desktop|a-2')?.owner).toBeNull()
   })
@@ -130,6 +132,7 @@ describe('captured owner availability', () => {
         row: row({ automation: automation({ id: 'a-1' }), owner: RUNTIME_SELF })
       }
     ])
+
     expect(captured.get('row|desktop|a-1')?.owner).toEqual(DESKTOP_SELF)
     expect(captured.get('row|runtime|a-1')?.owner).toEqual(RUNTIME_SELF)
   })

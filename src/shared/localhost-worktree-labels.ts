@@ -1,4 +1,5 @@
 const HOST_LABEL_MAX_LENGTH = 48
+
 const TRAILING_MAIN_PATTERN = /(?:^|[-_\s/])main$/i
 
 export const LOOPBACK_LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '::'])
@@ -11,17 +12,21 @@ export function normalizeLocalhostHostname(hostname: string): string {
 // scanned workspace port and labeled; everything else stays as-is.
 export function parseLoopbackUrlWithPort(rawUrl: string): URL | null {
   let url: URL
+
   try {
     url = new URL(rawUrl)
   } catch {
     return null
   }
+
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return null
   }
+
   if (!url.port || !LOOPBACK_LOCALHOST_HOSTS.has(normalizeLocalhostHostname(url.hostname))) {
     return null
   }
+
   return url
 }
 
@@ -30,12 +35,15 @@ export function parseLoopbackUrlWithPort(rawUrl: string): URL | null {
 // matching loopback before using the host as a proxy target.
 export function connectableLoopbackHost(hostname: string): string {
   const bare = normalizeLocalhostHostname(hostname)
+
   if (bare === '0.0.0.0') {
     return '127.0.0.1'
   }
+
   if (bare === '::') {
     return '::1'
   }
+
   return hostname
 }
 
@@ -70,6 +78,7 @@ export function slugifyLocalhostWorktreeLabel(value: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, HOST_LABEL_MAX_LENGTH)
     .replace(/-+$/g, '')
+
   return normalized || 'workspace'
 }
 
@@ -77,10 +86,12 @@ export function getLocalhostWorktreeHostLabel(input: LocalhostWorktreeLabelInput
   const projectSlug = slugifyLocalhostWorktreeLabel(input.projectName)
   const shortWorktreeName = getLocalhostWorktreeShortName(input.worktreePath ?? input.worktreeName)
   const worktreeSlug = slugifyLocalhostWorktreeLabel(shortWorktreeName)
+
   // Why: primary worktrees need project context so every project does not collapse into "main".
   if (worktreeSlug === 'main' || TRAILING_MAIN_PATTERN.test(input.worktreeName)) {
     return slugifyLocalhostWorktreeLabel(`${projectSlug}-main`)
   }
+
   return worktreeSlug
 }
 
@@ -97,8 +108,10 @@ export function getLocalhostWorktreeRouteKey(route: LocalhostWorktreeLabelRoute)
   if (route.worktreeId) {
     return `worktree:${route.worktreeId}:${route.targetUrl}`
   }
+
   if (route.repoId) {
     return `repo:${route.repoId}:${route.worktreeName}:${route.targetUrl}`
   }
+
   return `${route.projectName}:${route.worktreeName}:${route.targetUrl}`
 }

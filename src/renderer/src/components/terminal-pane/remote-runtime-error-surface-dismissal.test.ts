@@ -17,6 +17,7 @@ describe('remote runtime error surface dismissal', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: { onResponse: (response: unknown) => void }) => {
         queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -39,8 +40,10 @@ describe('remote runtime error surface dismissal', () => {
       if (request.method === 'terminal.send') {
         throw new Error(FATAL_ERROR)
       }
+
       return { ok: true, result: {} }
     })
+
     return transport
   }
 

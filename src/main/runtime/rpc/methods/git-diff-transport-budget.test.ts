@@ -61,6 +61,7 @@ function stubRuntime(runtimeMethod: string): OrcaRuntimeService {
     getRuntimeId: () => 'test-runtime',
     [runtimeMethod]: vi.fn(async (...args: unknown[]) => {
       const maxContentBytes = args.at(-1)
+
       return assertGitDiffWithinTransportBudget(
         OVERSIZED_DIFF,
         typeof maxContentBytes === 'number' ? maxContentBytes : undefined
@@ -71,6 +72,7 @@ function stubRuntime(runtimeMethod: string): OrcaRuntimeService {
 
 function budgetArgument(runtime: OrcaRuntimeService, runtimeMethod: string): unknown {
   const spy = (runtime as unknown as Record<string, ReturnType<typeof vi.fn>>)[runtimeMethod]!
+
   return spy.mock.calls[0]!.at(-1)
 }
 
@@ -89,6 +91,7 @@ async function dispatchRemote(
   await dispatcher.dispatchStreaming(makeRequest(method, params), (reply) => replies.push(reply), {
     clientKind
   })
+
   return JSON.parse(replies[0]!) as RpcResponse
 }
 
@@ -158,6 +161,7 @@ describe('remote git diff transport budget', () => {
     sshMocks.getSshGitProvider.mockReturnValue({
       getDiff: vi.fn().mockResolvedValue(OVERSIZED_DIFF)
     })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: { id: 'wt-1', path: '/remote/repo' } as unknown as ResolvedRuntimeGitWorktree,
@@ -165,6 +169,7 @@ describe('remote git diff transport budget', () => {
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
+
     const runtime = Object.assign(commands, {
       getRuntimeId: () => 'test-runtime'
     }) as unknown as OrcaRuntimeService

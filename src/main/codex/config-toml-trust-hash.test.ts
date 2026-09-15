@@ -3,6 +3,7 @@ import { computeTrustedHash, type CodexTrustEntry } from './config-toml-trust'
 
 // Why: captured from a real Codex 0.129 `/hooks` approval; fails loudly if Codex's serialization drifts.
 const REAL_APPROVED_COMMAND = '/bin/sh "/tmp/orca-case-b-mCmCe6/agent-hooks/codex-hook.sh"'
+
 const REAL_APPROVED_HASH = 'sha256:bc013489dba495431d3790fda62ee5a7d907a7c491e29ad26238c3a5d6d2b163'
 
 describe('computeTrustedHash', () => {
@@ -26,6 +27,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     const b = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -33,6 +35,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'bar'
     })
+
     expect(a).not.toBe(b)
   })
 
@@ -44,6 +47,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     const b = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'post_tool_use',
@@ -51,6 +55,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     expect(a).not.toBe(b)
   })
 
@@ -62,6 +67,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     const b = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -69,6 +75,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 99,
       command: 'foo'
     })
+
     expect(a).toBe(b)
   })
 
@@ -80,6 +87,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     const b = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -88,6 +96,7 @@ describe('computeTrustedHash', () => {
       command: 'foo',
       matcher: undefined
     })
+
     expect(a).toBe(b)
   })
 
@@ -99,6 +108,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     const b = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -107,6 +117,7 @@ describe('computeTrustedHash', () => {
       command: 'foo',
       matcher: 'foo'
     })
+
     expect(a).not.toBe(b)
   })
 
@@ -120,6 +131,7 @@ describe('computeTrustedHash', () => {
         handlerIndex: 0,
         command: 'foo'
       }
+
       const bare = computeTrustedHash(base)
       expect(computeTrustedHash({ ...base, matcher: '' })).toBe(bare)
       expect(computeTrustedHash({ ...base, matcher: 'anything' })).toBe(bare)
@@ -148,6 +160,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     const b = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -156,6 +169,7 @@ describe('computeTrustedHash', () => {
       command: 'foo',
       statusMessage: 'msg'
     })
+
     expect(a).not.toBe(b)
   })
 
@@ -168,6 +182,7 @@ describe('computeTrustedHash', () => {
       command: 'foo',
       async: false
     })
+
     const b = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -176,6 +191,7 @@ describe('computeTrustedHash', () => {
       command: 'foo',
       async: true
     })
+
     expect(a).not.toBe(b)
   })
 
@@ -188,6 +204,7 @@ describe('computeTrustedHash', () => {
       command: 'foo',
       timeoutSec: 0
     })
+
     const one = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -196,6 +213,7 @@ describe('computeTrustedHash', () => {
       command: 'foo',
       timeoutSec: 1
     })
+
     const unset = computeTrustedHash({
       sourcePath: '/x/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -203,6 +221,7 @@ describe('computeTrustedHash', () => {
       handlerIndex: 0,
       command: 'foo'
     })
+
     expect(zero).toBe(one)
     expect(zero).not.toBe(unset)
   })

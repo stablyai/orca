@@ -9,14 +9,21 @@ import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const fetchLinearIssue = vi.fn()
+
 const openModal = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['pr']
+
 let hostedReviewCache: Record<string, unknown> = {}
+
 let prCache: Record<string, unknown> = {}
+
 let settings: Partial<GlobalSettings> | null = null
 
 vi.mock('@/store', () => ({

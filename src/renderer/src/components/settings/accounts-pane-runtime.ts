@@ -27,12 +27,14 @@ export function getCodexSystemDefaultSubtitle(
   if (identity?.authKind === 'oauth' && identity.email) {
     return identity.email
   }
+
   if (identity?.authKind === 'api-key') {
     return translate(
       'auto.components.settings.AccountsPane.codexSystemDefaultCustomProvider',
       'Custom provider — no usage tracked.'
     )
   }
+
   return translate(
     'auto.components.settings.AccountsPane.fcc4093fc1',
     'Use your current {{value0}} Codex login.',
@@ -47,6 +49,7 @@ export function getClaudeAccountLabel(
   if (accountId == null) {
     return 'System default'
   }
+
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Claude account'
 }
 
@@ -57,6 +60,7 @@ export function getCodexAccountRuntimeLabel(
   if (account.managedHomeRuntime === 'wsl') {
     return account.wslDistro ? `WSL ${account.wslDistro}` : 'WSL'
   }
+
   return hostLabel
 }
 
@@ -67,6 +71,7 @@ export function getClaudeAccountRuntimeLabel(
   if (account.managedAuthRuntime === 'wsl') {
     return account.wslDistro ? `WSL ${account.wslDistro}` : 'WSL'
   }
+
   return hostLabel
 }
 
@@ -79,6 +84,7 @@ export function getSelectedAccountRuntime(
 ): LocalAccountRuntime {
   // Why: the two-option control displays the concrete target behind the persisted auto policy.
   const resolvedRuntime = resolveLocalAccountRuntimeTarget(settings, getRendererAppPlatform())
+
   if (wslSupportedPlatform && resolvedRuntime.runtime === 'wsl') {
     if (!wslAvailable && !wslCapabilitiesLoading) {
       return {
@@ -86,11 +92,14 @@ export function getSelectedAccountRuntime(
         label: translate('auto.components.settings.AccountsPane.8619f9afa9', 'WSL')
       }
     }
+
     const configuredDistro = resolvedRuntime.wslDistro?.trim() || null
+
     const selectedDistro =
       configuredDistro && (wslCapabilitiesLoading || wslDistros.includes(configuredDistro))
         ? configuredDistro
         : null
+
     return {
       runtime: 'wsl',
       wslDistro: selectedDistro,
@@ -99,6 +108,7 @@ export function getSelectedAccountRuntime(
         : translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL default')
     }
   }
+
   return { runtime: 'host', label: getHostRuntimeLabel() }
 }
 

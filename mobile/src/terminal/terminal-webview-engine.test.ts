@@ -12,19 +12,23 @@ const terminalHtmlSource = readTerminalWebViewHtmlSource()
 
 function createWebglRecoveryHarness(failSecondAttach = false) {
   const variablesStart = terminalHtmlSource.indexOf('  var webglAddon = null;')
+
   const variablesEnd = terminalHtmlSource.indexOf(
     '\n',
     terminalHtmlSource.indexOf('  var webglRecoveryTimer = null;')
   )
+
   expect(variablesStart).toBeGreaterThanOrEqual(0)
   expect(variablesEnd).toBeGreaterThan(variablesStart)
 
   const timers: Array<() => void> = []
+
   const addons: Array<{
     clearTextureAtlas: ReturnType<typeof vi.fn>
     dispose: ReturnType<typeof vi.fn>
     fireContextLoss: () => void
   }> = []
+
   const term = {
     rows: 24,
     refresh: vi.fn(),
@@ -34,21 +38,27 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
       }
     })
   }
+
   function WebglAddon() {
     let contextLoss = () => {}
+
     const addon = {
       clearTextureAtlas: vi.fn(),
       dispose: vi.fn(),
       fireContextLoss: () => contextLoss()
     }
+
     addons.push(addon)
+
     return Object.assign(addon, {
       onContextLoss: (listener: () => void) => {
         contextLoss = listener
       }
     })
   }
+
   let visibilityChange = () => {}
+
   const document = {
     addEventListener: vi.fn((eventName: string, listener: () => void) => {
       if (eventName === 'visibilitychange') {
@@ -57,9 +67,11 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
     }),
     visibilityState: 'hidden'
   }
+
   const applyTerminalTheme = vi.fn()
   const flog = vi.fn()
   const terminalThemeInput = { mode: 'dark' }
+
   const context = {
     applyTerminalTheme,
     clearTimeout: vi.fn(),
@@ -67,6 +79,7 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
     flog,
     setTimeout: (callback: () => void) => {
       timers.push(callback)
+
       return timers.length
     },
     term,
@@ -74,9 +87,11 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
     terminalThemeInput,
     window: { WebglAddon: { WebglAddon } }
   }
+
   new Script(`${terminalHtmlSource.slice(variablesStart, variablesEnd)}
 ${TERMINAL_WEBGL_RECOVERY_JS}
 attachWebglAddon(true);`).runInNewContext(context)
+
   return {
     addons,
     applyTerminalTheme,
@@ -107,7 +122,9 @@ describe('terminal WebView bundled engine', () => {
   // which are the linchpin of the old-WebView support (esbuild lowers syntax only).
   it('exposes the xterm globals and installs the old-WebView runtime shims', () => {
     const window: Record<string, unknown> = {}
+
     class ElementStub {}
+
     const context = {
       window,
       self: window,

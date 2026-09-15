@@ -30,9 +30,11 @@ function result(ids: string[]): RecipeListResult {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -45,12 +47,14 @@ function installApi(listRecipes: ReturnType<typeof vi.fn>): {
     plugins: {
       onChanged: vi.fn((nextListener) => {
         listener = nextListener
+
         return () => {
           listener = null
         }
       })
     }
   } as never
+
   return {
     emit: (contentPacksChanged = true) => listener?.({ contentPacksChanged })
   }
@@ -76,6 +80,7 @@ function Harness({
     projectGroupTarget: false,
     initialRecipeId
   })
+
   return (
     <div>
       <span data-testid="repo">{repoId}</span>
@@ -94,6 +99,7 @@ async function render(
   const root = createRoot(container)
   roots.push(root)
   await act(async () => root.render(element))
+
   return { root, container }
 }
 
@@ -104,6 +110,7 @@ describe('useEphemeralVmRecipeOptions', () => {
       .mockResolvedValueOnce(result(['repo', 'plugin']))
       .mockResolvedValueOnce(result(['repo', 'plugin', 'new-plugin']))
       .mockResolvedValueOnce(result(['repo']))
+
     const changes = installApi(listRecipes)
     const { container } = await render(<Harness repoId="repo-1" initialRecipeId="plugin" />)
     await vi.waitFor(() =>
@@ -158,6 +165,7 @@ describe('useEphemeralVmRecipeOptions', () => {
       recipes: [],
       message: 'Repo not found: repo-runtime'
     })
+
     installApi(listRecipes)
 
     const { container } = await render(

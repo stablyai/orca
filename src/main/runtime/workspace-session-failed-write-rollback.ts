@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 const MISSING = Symbol('missing')
+
 type RollbackValue = unknown
 
 function isRecord(value: RollbackValue): value is Record<string, unknown> {
@@ -22,14 +23,18 @@ function rollbackValue(
   if (isDeepStrictEqual(original, staged)) {
     return current
   }
+
   if (isDeepStrictEqual(current, staged)) {
     return original
   }
+
   if (!isRecord(original) || !isRecord(staged) || !isRecord(current)) {
     return current
   }
+
   let changed = false
   const next: Record<string, unknown> = { ...current }
+
   for (const key of new Set([
     ...Object.keys(original),
     ...Object.keys(staged),
@@ -40,6 +45,7 @@ function rollbackValue(
       Object.hasOwn(staged, key) ? staged[key] : MISSING,
       Object.hasOwn(current, key) ? current[key] : MISSING
     )
+
     if (value === MISSING) {
       if (Object.hasOwn(next, key)) {
         delete next[key]
@@ -50,6 +56,7 @@ function rollbackValue(
       changed = true
     }
   }
+
   return changed ? next : current
 }
 

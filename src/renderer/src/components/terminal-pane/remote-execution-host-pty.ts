@@ -10,5 +10,6 @@ export function isRemoteExecutionHostPtyId(ptyId: string | null | undefined): bo
   if (typeof ptyId !== 'string') {
     return false
   }
+
   return isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId) !== null
 }

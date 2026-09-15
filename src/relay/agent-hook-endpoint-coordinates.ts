@@ -11,6 +11,7 @@ import {
 
 // Why: relay's userData equivalent under $HOME so each user on a shared dev box gets their own 0o700 dir.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
+
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
 
 export function defaultEndpointDir(): string {
@@ -34,6 +35,7 @@ export function endpointDirForRelaySocket(sockPath: string): string {
   if (isWindowsNamedPipePath(sockPath)) {
     return join(defaultEndpointDir(), windowsNamedPipeEndpointName(sockPath))
   }
+
   return join(dirname(sockPath), RELAY_HOOKS_SUBDIR, basename(sockPath))
 }
 
@@ -48,6 +50,7 @@ export function buildRelayHookPtyEnv(coordinates: {
   if (coordinates.port <= 0 || !coordinates.token) {
     return {}
   }
+
   const env: Record<string, string> = {
     ORCA_AGENT_HOOK_PORT: String(coordinates.port),
     ORCA_AGENT_HOOK_TOKEN: coordinates.token,
@@ -55,8 +58,10 @@ export function buildRelayHookPtyEnv(coordinates: {
     ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
     ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
   }
+
   if (coordinates.endpointFileWritten) {
     env.ORCA_AGENT_HOOK_ENDPOINT = coordinates.endpointFilePath
   }
+
   return env
 }

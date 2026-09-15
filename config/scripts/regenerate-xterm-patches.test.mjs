@@ -39,7 +39,9 @@ function generatedHunks(patchText, generatedPaths) {
 }
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
+
 const MANIFEST_PATH = path.join(REPO_ROOT, 'config', 'patches', 'xterm-upstream.json')
+
 const temporaryDirectories = []
 
 afterEach(async () => {
@@ -53,6 +55,7 @@ afterEach(async () => {
 async function createDirectory() {
   const directory = await mkdtemp(path.join(tmpdir(), 'orca-xterm-patch-'))
   temporaryDirectories.push(directory)
+
   return directory
 }
 
@@ -67,6 +70,7 @@ async function writeTree(root, files) {
 /** The three exported diff pieces, composed the way the generator composes them. */
 function diffFolders(folderA, folderB) {
   let stdout
+
   try {
     stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, folderA, folderB], {
       encoding: 'utf8',
@@ -77,8 +81,10 @@ function diffFolders(folderA, folderB) {
     if (error.status !== 1) {
       throw error
     }
+
     stdout = error.stdout
   }
+
   return normalizePnpmDiff(stdout, folderA, folderB)
 }
 
@@ -156,6 +162,7 @@ describe('pnpm diff format', () => {
       'diff --git a/lib/x.js b/lib/x.js\n',
       '@@ -1 +1 @@\n-a\n+b\n'
     ].join('')
+
     expect(normalizePnpmDiff(withJunk, '/a', '/b')).toBe(
       'diff --git a/lib/x.js b/lib/x.js\n@@ -1 +1 @@\n-a\n+b\n'
     )
@@ -259,6 +266,7 @@ describe('source derivation agreement', () => {
     '+  handleCompositionInput(data: string): boolean;',
     ''
   ].join('\n')
+
   const unpublishedEntry = [
     'diff --git a/src/browser/TestUtils.test.ts b/src/browser/TestUtils.test.ts',
     'index 3333333..4444444 100644',
@@ -269,6 +277,7 @@ describe('source derivation agreement', () => {
     '+  public handleCompositionInput(): boolean { return false; }',
     ''
   ].join('\n')
+
   it('fails when the source patch carries a file the emitted patch cannot', () => {
     expect(() =>
       assertSourceDerivationsAgree(publishedEntry + unpublishedEntry, publishedEntry)
@@ -338,6 +347,7 @@ describe('manifest guards', () => {
         }
       ]
     }
+
     expect(() => assertBuildStepsAllowed(manifest)).toThrow(/`npm run setup` is forbidden/)
   })
 
@@ -408,6 +418,7 @@ describe('lockfile coupling', () => {
 
   it('reports a lockfile stale in its resolution keys alone', () => {
     const key = '@xterm/xterm@6.1.0-beta.287'
+
     const halfUpdated = lockfile.replace(
       `'@xterm/xterm@6.1.0-beta.287': ${'0'.repeat(64)}`,
       `'@xterm/xterm@6.1.0-beta.287': ${'a'.repeat(64)}`
@@ -440,6 +451,7 @@ describe('check-mode reporting', () => {
       committed: 'diff --git a/lib/x.js b/lib/x.js\n@@ -1 +1 @@\n-a\n+b\n',
       regenerated: 'diff --git a/lib/x.js b/lib/x.js\n@@ -1 +1 @@\n-a\n+c\n'
     })
+
     expect(message).toContain('Do not edit them')
     expect(message).toContain('--write')
     expect(message).toContain('docs/reference/xterm-patch-regeneration.md')
@@ -460,6 +472,7 @@ describe('committed xterm patch artifacts', () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     const webgl = manifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
     const patch = await readFile(path.join(REPO_ROOT, webgl.patch), 'utf8')
+
     // The ESM and CJS bundles mangle locals differently, so anchor on the global the
     // renderer diagnostics read; a copy missing it reports a font mismatch as a repaint bug.
     for (const file of ['src/TextureAtlas.ts', 'lib/addon-webgl.js', 'lib/addon-webgl.mjs']) {
@@ -467,6 +480,7 @@ describe('committed xterm patch artifacts', () => {
       expect(stanza, file).not.toBe('')
       expect(stanza, file).toContain('__orcaAtlasFontProbe')
     }
+
     // The probe must compare the rasterized weight against the requested one; comparing
     // against a literal '400' would call every non-default weight a mismatch.
     expect(sourceHunks(patch)).toContain('actual === desired')
@@ -475,6 +489,7 @@ describe('committed xterm patch artifacts', () => {
   it('records the lockfile hash pnpm derives from the patch file', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     const lockfile = await readFile(path.join(REPO_ROOT, 'pnpm-lock.yaml'), 'utf8')
+
     for (const packageEntry of manifest.packages) {
       const patch = await readFile(path.join(REPO_ROOT, packageEntry.patch), 'utf8')
       const key = `${packageEntry.name}@${packageEntry.version}`
@@ -484,6 +499,7 @@ describe('committed xterm patch artifacts', () => {
 
   it('keeps the source patch and the full patch equal on every source file', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
+
     for (const packageEntry of manifest.packages) {
       const patch = await readFile(path.join(REPO_ROOT, packageEntry.patch), 'utf8')
       const source = await readFile(path.join(REPO_ROOT, packageEntry.sourcePatch), 'utf8')

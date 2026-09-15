@@ -34,6 +34,7 @@ function sharesPrefix(
       return false
     }
   }
+
   return true
 }
 
@@ -49,18 +50,24 @@ export function useNativeChatAssembledMessages(args: {
 
   const assembly = useMemo<AssemblyCache>(() => {
     const committed = committedCacheRef.current
+
     const transcript =
       appended.length > 0 ? [...baseMessages, ...appended] : (baseMessages as NativeChatMessage[])
+
     const baseSignature = `${agent}\u0000${sessionId ?? ''}`
+
     const baseChanged =
       !committed ||
       baseSignature !== committed.baseSignature ||
       baseMessages !== committed.baseMessages
+
     const applied = committed?.transcript ?? []
+
     const isSuffixExtension =
       !baseChanged &&
       transcript.length >= applied.length &&
       sharesPrefix(transcript, applied, applied.length)
+
     // A discarded render must not mutate the last committed assembler.
     const assembler = baseChanged
       ? createIncrementalAssembler()
@@ -71,6 +78,7 @@ export function useNativeChatAssembledMessages(args: {
         ? applyAppends(assembler, transcript.slice(applied.length))
         : assembler.messages
       : resetAssembler(assembler, transcript)
+
     return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
   }, [agent, appended, baseMessages, sessionId])
 
@@ -82,5 +90,6 @@ export function useNativeChatAssembledMessages(args: {
     () => prepareNativeChatLiveMessages(assembly.assembledMessages, agent),
     [agent, assembly.assembledMessages]
   )
+
   return { assembledMessages: assembly.assembledMessages, normalizedMessages }
 }

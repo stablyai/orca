@@ -22,16 +22,21 @@ export function createProjectGroupCatalogActions(
         const target = getActiveRuntimeTarget(
           settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
         )
+
         const fence = claimHostCatalogFence(get, 'project-groups', target)
         const catalog = await fetchProjectGroupCatalogForTarget(target)
+
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
+
         set((current) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
             return current
           }
+
           const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, current.projectGroups)
+
           return {
             projectGroups,
             ...(arrayElementsUnchanged(projectGroups, current.projectGroups)
@@ -50,11 +55,14 @@ export function createProjectGroupCatalogActions(
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
+
         set((s) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
             return s
           }
+
           const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, s.projectGroups)
+
           return {
             projectGroups,
             ...(arrayElementsUnchanged(projectGroups, s.projectGroups)
@@ -71,6 +79,7 @@ export function createProjectGroupCatalogActions(
       } catch (err) {
         console.error('Failed to fetch local project groups for all-host load:', err)
       }
+
       if (options?.remoteHosts === 'skip') {
         return
       }
@@ -82,7 +91,9 @@ export function createProjectGroupCatalogActions(
             kind: 'environment' as const,
             environmentId: environment.id
           }
+
           const fence = claimHostCatalogFence(get, 'project-groups', target)
+
           try {
             applyCatalog(await fetchProjectGroupCatalogForTarget(target), fence)
           } catch (err) {

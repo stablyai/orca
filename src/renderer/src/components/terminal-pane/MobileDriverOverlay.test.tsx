@@ -24,6 +24,7 @@ const hookRuntime = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -31,27 +32,33 @@ vi.mock('react', async () => {
     },
     useId(): string {
       hookRuntime.id += 1
+
       return `test-id-${hookRuntime.id}`
     },
     useRef<T>(initial: T) {
       const refIndex = hookRuntime.refIndex++
+
       if (!(refIndex in hookRuntime.refs)) {
         hookRuntime.refs[refIndex] = { current: initial }
       }
+
       return hookRuntime.refs[refIndex] as { current: T }
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = hookRuntime.stateIndex++
+
       if (!(stateIndex in hookRuntime.states)) {
         hookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         hookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(hookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [hookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -63,6 +70,7 @@ function renderOverlay(
 ): OverlayElement {
   hookRuntime.stateIndex = 0
   hookRuntime.refIndex = 0
+
   return MobileDriverOverlay({
     driver: { kind: 'mobile', clientId: 'phone-1' } as never,
     hasFitOverride: false,
@@ -82,6 +90,7 @@ describe('MobileDriverOverlay', () => {
 
   it('clears stale pending action state when the overlay root reattaches', async () => {
     let currentRootRef: OverlayProps['rootRef'] | null = null
+
     const onAction = vi.fn(async () => {
       currentRootRef?.(null)
     })

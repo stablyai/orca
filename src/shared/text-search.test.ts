@@ -90,12 +90,14 @@ describe('ingestRgJsonLine', () => {
 
   it('populates accumulator for a match', () => {
     const acc = createAccumulator()
+
     const verdict = ingestRgJsonLine(
       makeMatch('/root/src/a.ts', 2, [{ start: 0, end: 3 }]),
       '/root',
       acc,
       100
     )
+
     expect(verdict).toBe('continue')
     expect(acc.totalMatches).toBe(1)
     const files = Array.from(acc.fileMap.values())
@@ -120,6 +122,7 @@ describe('ingestRgJsonLine', () => {
   it('rejects excessive nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
     const acc = createAccumulator()
+
     try {
       const amplified = `${'['.repeat(SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1)}0${']'.repeat(
         SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1
@@ -153,6 +156,7 @@ describe('ingestRgJsonLine', () => {
 
   it('stops at maxResults and sets truncated synchronously', () => {
     const acc = createAccumulator()
+
     const verdict = ingestRgJsonLine(
       makeMatch('/root/a.ts', 1, [
         { start: 0, end: 1 },
@@ -163,6 +167,7 @@ describe('ingestRgJsonLine', () => {
       acc,
       2
     )
+
     expect(verdict).toBe('stop')
     expect(acc.truncated).toBe(true)
     expect(acc.totalMatches).toBe(2)
@@ -196,10 +201,12 @@ describe('ingestRgJsonLine', () => {
     // Extracted column should still align with NEEDLE inside the snippet.
     const displayColumn = match.displayColumn ?? match.column
     const displayMatchLength = match.displayMatchLength ?? match.matchLength
+
     const sliced = match.lineContent.slice(
       displayColumn - 1,
       displayColumn - 1 + displayMatchLength
     )
+
     expect(sliced).toBe('NEEDLE')
   })
 
@@ -283,6 +290,7 @@ describe('buildSubmatchRegex', () => {
 describe('ingestGitGrepLine', () => {
   it('parses actual git grep null-delimited output from the current git binary', () => {
     const rootPath = mkdtempSync(join(tmpdir(), 'orca-search-git-'))
+
     try {
       execFileSync('git', ['init'], { cwd: rootPath, stdio: 'ignore' })
       mkdirSync(join(rootPath, 'src'))
@@ -300,8 +308,10 @@ describe('ingestGitGrepLine', () => {
         buildGitGrepArgs('reportError(', { caseSensitive: false, useRegex: false }),
         { cwd: rootPath, encoding: 'utf8' }
       )
+
       const acc = createAccumulator()
       const re = buildSubmatchRegex('reportError(', {})
+
       for (const line of stdout.split('\n')) {
         ingestGitGrepLine(line, rootPath, re, acc, 100)
       }

@@ -47,6 +47,7 @@ type MockWindow = {
 function makeMockWindow(initial: LayoutMapLike | null): MockWindow {
   const focusListeners = new Set<EventListener>()
   let current = initial
+
   return {
     navigator: {
       keyboard: current
@@ -87,6 +88,7 @@ describe('createOptionAsAltProbe', () => {
       inputSourceId: 'com.apple.keylayout.ABC',
       keyCharacters: {}
     }))
+
     const getKeyboardInputSourceId = vi.fn(async () => 'com.apple.keylayout.US')
     vi.stubGlobal('window', {
       api: { app: { getKeyboardLayoutSnapshot, getKeyboardInputSourceId } }
@@ -162,13 +164,16 @@ describe('createOptionAsAltProbe', () => {
     let activeInputSourceId = 'com.apple.keylayout.US'
     let notifyLayoutChanged: (() => void) | undefined
     const unsubscribe = vi.fn()
+
     const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
       readInputSourceId: async () => activeInputSourceId,
       subscribeKeyboardLayoutChanged: (callback) => {
         notifyLayoutChanged = callback
+
         return unsubscribe
       }
     })
+
     await probe.refresh()
     expect(probe.getCurrent()).toBe('us')
 
@@ -186,17 +191,21 @@ describe('createOptionAsAltProbe', () => {
   it('fences an in-flight probe until the matching refresh phase', async () => {
     let notifyLayoutChanged: ((event: KeyboardLayoutChangeEvent) => void) | undefined
     let finishOldRead!: (inputSourceId: string) => void
+
     const oldRead = new Promise<string>((resolve) => {
       finishOldRead = resolve
     })
+
     const readInputSourceId = vi
       .fn<() => Promise<string>>()
       .mockReturnValueOnce(oldRead)
       .mockResolvedValue('com.apple.keylayout.ABC')
+
     const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
       readInputSourceId,
       subscribeKeyboardLayoutChanged: (callback) => {
         notifyLayoutChanged = callback
+
         return vi.fn()
       }
     })
@@ -218,13 +227,16 @@ describe('createOptionAsAltProbe', () => {
     let notifyLayoutChanged: ((event: KeyboardLayoutChangeEvent) => void) | undefined
     const readInputSourceId = vi.fn(async () => 'com.apple.keylayout.US')
     const win = makeMockWindow(US_MAP)
+
     const probe = createOptionAsAltProbe(win as unknown as Window, {
       readInputSourceId,
       subscribeKeyboardLayoutChanged: (callback) => {
         notifyLayoutChanged = callback
+
         return vi.fn()
       }
     })
+
     await probe.refresh()
     const readsBeforeInvalidation = readInputSourceId.mock.calls.length
 
@@ -287,9 +299,11 @@ describe('createOptionAsAltProbe', () => {
     // composition (Option+A → å on ABC, ą on Polish Pro).
     for (const id of ['com.apple.keylayout.ABC', 'com.apple.keylayout.PolishPro']) {
       const win = makeMockWindow(US_MAP)
+
       const probe = createOptionAsAltProbe(win as unknown as Window, {
         readInputSourceId: async () => id
       })
+
       await probe.refresh()
       expect(probe.getCurrent()).toBe('non-us')
       probe.dispose()
@@ -298,9 +312,11 @@ describe('createOptionAsAltProbe', () => {
 
   it('resolves to us when the input source ID is plain US (allowlist match)', async () => {
     const win = makeMockWindow(US_MAP)
+
     const probe = createOptionAsAltProbe(win as unknown as Window, {
       readInputSourceId: async () => 'com.apple.keylayout.US'
     })
+
     await probe.refresh()
     expect(probe.getCurrent()).toBe('us')
     probe.dispose()
@@ -312,9 +328,11 @@ describe('createOptionAsAltProbe', () => {
     // several keys) plus any US-like fingerprint flipped
     // macOptionIsMeta=true. Now the ID overrides.
     const win = makeMockWindow(US_MAP)
+
     const probe = createOptionAsAltProbe(win as unknown as Window, {
       readInputSourceId: async () => 'com.apple.keylayout.German'
     })
+
     await probe.refresh()
     expect(probe.getCurrent()).toBe('non-us')
     probe.dispose()
@@ -322,9 +340,11 @@ describe('createOptionAsAltProbe', () => {
 
   it('falls back to the fingerprint when the input-source reader returns null (non-Darwin)', async () => {
     const win = makeMockWindow(US_MAP)
+
     const probe = createOptionAsAltProbe(win as unknown as Window, {
       readInputSourceId: async () => null
     })
+
     await probe.refresh()
     expect(probe.getCurrent()).toBe('us')
     probe.dispose()
@@ -332,11 +352,13 @@ describe('createOptionAsAltProbe', () => {
 
   it('falls back to the fingerprint when the input-source reader throws', async () => {
     const win = makeMockWindow(TURKISH_MAP)
+
     const probe = createOptionAsAltProbe(win as unknown as Window, {
       readInputSourceId: async () => {
         throw new Error('ipc unavailable')
       }
     })
+
     await probe.refresh()
     expect(probe.getCurrent()).toBe('non-us')
     probe.dispose()
@@ -348,9 +370,11 @@ describe('createOptionAsAltProbe', () => {
     // input-source override is what notices the switch.
     let activeInputSourceId: string | null = 'com.apple.keylayout.US'
     const win = makeMockWindow(US_MAP)
+
     const probe = createOptionAsAltProbe(win as unknown as Window, {
       readInputSourceId: async () => activeInputSourceId
     })
+
     await probe.refresh()
     expect(probe.getCurrent()).toBe('us')
 
@@ -367,19 +391,24 @@ describe('createOptionAsAltProbe', () => {
   it('does not let an older probe overwrite a newer input source', async () => {
     let resolveOld!: (value: string | null) => void
     let resolveNew!: (value: string | null) => void
+
     const oldRead = new Promise<string | null>((resolve) => {
       resolveOld = resolve
     })
+
     const newRead = new Promise<string | null>((resolve) => {
       resolveNew = resolve
     })
+
     const readInputSourceId = vi
       .fn<() => Promise<string | null>>()
       .mockReturnValueOnce(oldRead)
       .mockReturnValueOnce(newRead)
+
     const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
       readInputSourceId
     })
+
     const newestProbe = probe.refresh()
 
     resolveNew('com.apple.keylayout.ABC')

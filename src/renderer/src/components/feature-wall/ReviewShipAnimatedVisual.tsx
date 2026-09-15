@@ -26,7 +26,9 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
     if (reducedMotion) {
       return
     }
+
     const root = rootRef.current
+
     if (!root) {
       return
     }
@@ -42,6 +44,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
     const prBodyHostMaybe = root.querySelector<HTMLDivElement>('[data-pr-body]')
     const prBodyTypedMaybe = root.querySelector<HTMLSpanElement>('[data-pr-body-typed]')
     const prCreateMaybe = root.querySelector<HTMLButtonElement>('[data-pr-create-btn]')
+
     if (
       !cursorMaybe ||
       !sparkleMaybe ||
@@ -57,6 +60,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
     ) {
       return
     }
+
     const rootEl: HTMLDivElement = root
     const cursor: HTMLDivElement = cursorMaybe
     const sparkle: HTMLButtonElement = sparkleMaybe
@@ -73,6 +77,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
 
     let cancelled = false
     const timers: number[] = []
+
     const wait = (ms: number): Promise<void> =>
       new Promise((resolve) => {
         const id = window.setTimeout(() => resolve(), ms)
@@ -90,19 +95,24 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
       typed.textContent = ''
       sparkle.classList.remove('is-scanning')
       prGen.classList.remove('is-scanning')
+
       if (prTitlePh) {
         prTitlePh.style.display = ''
       }
+
       if (prBodyPh) {
         prBodyPh.style.display = ''
       }
+
       prTitleTyped.textContent = ''
       prBodyTyped.textContent = ''
       prCreate.classList.remove('is-flash', 'is-ready')
       const splitEl = rootEl.querySelector<HTMLDivElement>('[data-sc-split]')
+
       if (splitEl) {
         splitEl.classList.remove('is-ready')
       }
+
       fileRows.forEach((row) => row.classList.remove('is-reading'))
       cursor.classList.remove('is-visible', 'is-clicking')
       cursor.style.transition = 'none'
@@ -119,15 +129,19 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
         if (cancelled) {
           return
         }
+
         fileRows[i].classList.add('is-reading')
         await wait(220)
+
         if (i < fileRows.length - 1) {
           fileRows[i].classList.remove('is-reading')
         }
       }
+
       if (holdLastMs > 0) {
         await wait(holdLastMs)
       }
+
       fileRows.forEach((row) => row.classList.remove('is-reading'))
     }
 
@@ -135,6 +149,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
       while (!cancelled) {
         resetState()
         await wait(520)
+
         if (cancelled) {
           return
         }
@@ -142,21 +157,25 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
         cursor.classList.add('is-visible')
         moveCursor(sparkle, 6, 6)
         await wait(620)
+
         if (cancelled) {
           return
         }
 
         cursor.classList.add('is-clicking')
         await wait(220)
+
         if (cancelled) {
           return
         }
+
         cursor.classList.remove('is-clicking')
         sparkle.classList.add('is-scanning')
         placeholder.style.display = 'none'
         moveCursor(ta, 200, 10)
         const scanPromise = pulseFileRows(120)
         await wait(380)
+
         if (cancelled) {
           return
         }
@@ -165,42 +184,53 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
           if (cancelled) {
             return
           }
+
           typed.textContent = (typed.textContent ?? '') + ch
           await wait(ch === '\n' ? 80 : 16)
         }
+
         await scanPromise
         sparkle.classList.remove('is-scanning')
         // Why: brief green flash on the Commit button signals "ready to
         // commit" without leaving a persistent tint that would compete with
         // the next beat (PR generation). Fade out before moving on.
         const splitEl = rootEl.querySelector<HTMLDivElement>('[data-sc-split]')
+
         if (splitEl) {
           splitEl.classList.add('is-ready')
         }
+
         await wait(540)
+
         if (splitEl) {
           splitEl.classList.remove('is-ready')
         }
+
         if (cancelled) {
           return
         }
 
         moveCursor(prGen, 11, 11)
         await wait(540)
+
         if (cancelled) {
           return
         }
+
         cursor.classList.add('is-clicking')
         await wait(220)
+
         if (cancelled) {
           return
         }
+
         cursor.classList.remove('is-clicking')
         prGen.classList.add('is-scanning')
         // Why: the PR phase does not re-pulse the SC file rows — the commit
         // phase already showed the read→write tie to the diff. Reusing the
         // pulse here would double-signal and read as confused state.
         await wait(420)
+
         if (cancelled) {
           return
         }
@@ -208,34 +238,43 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
         if (prTitlePh) {
           prTitlePh.style.display = 'none'
         }
+
         for (const ch of PR_TITLE) {
           if (cancelled) {
             return
           }
+
           prTitleTyped.textContent = (prTitleTyped.textContent ?? '') + ch
           await wait(20)
         }
+
         if (prBodyPh) {
           prBodyPh.style.display = 'none'
         }
+
         for (const ch of PR_BODY) {
           if (cancelled) {
             return
           }
+
           prBodyTyped.textContent = (prBodyTyped.textContent ?? '') + ch
           await wait(ch === '\n' ? 60 : 10)
         }
+
         prGen.classList.remove('is-scanning')
         // Why: same green flash as Commit, on the Create PR button once both
         // fields are filled — keeps the two beats visually parallel.
         prCreate.classList.add('is-ready')
         await wait(540)
+
         if (cancelled) {
           return
         }
+
         prCreate.classList.remove('is-ready')
 
         await wait(2200)
+
         if (cancelled) {
           return
         }

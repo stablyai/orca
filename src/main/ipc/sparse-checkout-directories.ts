@@ -6,6 +6,7 @@ function isAbsoluteSparseDirectoryPath(entry: string): boolean {
 
 export function normalizeSparseDirectories(directories: string[]): string[] {
   const seen = new Set<string>()
+
   return directories
     .map((entry) => entry.trim())
     .map((entry) => {
@@ -13,6 +14,7 @@ export function normalizeSparseDirectories(directories: string[]): string[] {
       if (isAbsoluteSparseDirectoryPath(entry)) {
         throw new Error('Sparse checkout directories must be repo-relative paths.')
       }
+
       return entry.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
     })
     .filter((entry) => entry.length > 0 && entry !== '.')
@@ -20,10 +22,13 @@ export function normalizeSparseDirectories(directories: string[]): string[] {
       if (entry.split('/').includes('..')) {
         throw new Error('Sparse checkout directories must be repo-relative paths.')
       }
+
       if (seen.has(entry)) {
         return false
       }
+
       seen.add(entry)
+
       return true
     })
 }

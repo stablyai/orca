@@ -33,6 +33,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id)
   }
+
   const runtime = new OrcaRuntimeService(store as never)
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveWorktreeSelector').mockResolvedValue({
@@ -48,6 +49,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
   const markTrusted = vi.fn(async () => {})
   vi.spyOn(internals, 'markWorkspaceTrustedForAgent').mockImplementation(markTrusted)
   vi.spyOn(internals, 'createTerminal').mockResolvedValue({ id: 'pty-1' })
+
   return { runtime, markTrusted }
 }
 

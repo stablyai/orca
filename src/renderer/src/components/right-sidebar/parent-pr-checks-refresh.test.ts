@@ -63,23 +63,28 @@ function makeReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo
 describe('parent PR checks refresh', () => {
   it('caps concurrency while refreshing candidates', async () => {
     const repo = makeRepo()
+
     const worktrees = Array.from({ length: 5 }, (_, index) =>
       makeWorktree({
         id: `repo-1::/${index}`,
         displayName: `Worktree ${index}`
       })
     )
+
     const candidates = getParentPrChecksRefreshCandidates({
       worktrees,
       repos: [repo]
     })
+
     let active = 0
     let maxActive = 0
+
     const fetchHostedReviewForBranch = vi.fn(async () => {
       active += 1
       maxActive = Math.max(maxActive, active)
       await new Promise((resolve) => setTimeout(resolve, 5))
       active -= 1
+
       return makeReview()
     })
 
@@ -96,6 +101,7 @@ describe('parent PR checks refresh', () => {
   it('uses non-forced refreshes by default', async () => {
     const repo = makeRepo()
     const worktree = makeWorktree({ id: 'repo-1::/default-force' })
+
     const fetchHostedReviewForBranch = vi.fn(
       async (_repoPath: string, _branch: string, _options: Record<string, unknown>) => makeReview()
     )
@@ -110,10 +116,12 @@ describe('parent PR checks refresh', () => {
 
   it('prioritizes linked reviews and passes SSH-safe repo/provider context', async () => {
     const repo = makeRepo()
+
     const unlinked = makeWorktree({
       id: 'repo-1::/unlinked',
       displayName: 'A unlinked'
     })
+
     const linked = makeWorktree({
       id: 'repo-1::/linked',
       displayName: 'Z linked',
@@ -123,10 +131,12 @@ describe('parent PR checks refresh', () => {
       linkedAzureDevOpsPR: 11,
       linkedGiteaPR: 12
     })
+
     const candidates = getParentPrChecksRefreshCandidates({
       worktrees: [unlinked, linked],
       repos: [repo]
     })
+
     const githubRepository = { owner: 'upstream', repo: 'project' }
     const fetchHostedReviewForBranch = vi.fn(async () => makeReview({ githubRepository }))
     const fetchPRChecks = vi.fn(async () => [])
@@ -163,6 +173,7 @@ describe('parent PR checks refresh', () => {
     const repo = makeRepo()
     const unlinked = makeWorktree({ id: 'repo-1::/unlinked' })
     const linked = makeWorktree({ id: 'repo-1::/linked', linkedGitLabMR: 5 })
+
     const ambiguousNull = await runLimitedParentPrChecksRefreshes({
       candidates: getParentPrChecksRefreshCandidates({
         worktrees: [unlinked],
@@ -170,6 +181,7 @@ describe('parent PR checks refresh', () => {
       }),
       fetchHostedReviewForBranch: vi.fn(async () => null)
     })
+
     const failed = await runLimitedParentPrChecksRefreshes({
       candidates: getParentPrChecksRefreshCandidates({
         worktrees: [linked],

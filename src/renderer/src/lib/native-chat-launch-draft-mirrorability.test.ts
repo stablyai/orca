@@ -16,6 +16,7 @@ import { decideInitialAgentTabViewMode } from './native-chat-initial-view-mode'
 import { AGENT_TUI_CLEAR_MAX_LINES } from '../../../shared/agent-tui-input-clear'
 
 const maxLineDraft = Array.from({ length: AGENT_TUI_CLEAR_MAX_LINES }, () => 'line').join('\n')
+
 const overMaxLineDraft = `${maxLineDraft}\nline`
 
 /**
@@ -54,6 +55,7 @@ function opensInChat(text: string): boolean {
 function seedsTheComposer(text: string): boolean {
   mocks.seedNativeChatLaunchDraft.mockClear()
   seedNativeChatLaunchDraftForAgentTab({ tabId: 'tab-1', agent: 'claude', text })
+
   return mocks.seedNativeChatLaunchDraft.mock.calls.length > 0
 }
 

@@ -30,6 +30,7 @@ describe('agent hook spool', () => {
     const spoolLine = buildPosixHookSpoolLines('codex').find((line) =>
       line.includes('>> "$spool_file"')
     )
+
     expect(spoolLine).toBeDefined()
     expect(spoolLine!.match(/printf/g)).toHaveLength(1)
     expect(spoolLine).toContain('"$spool_now" "$payload"')
@@ -50,19 +51,23 @@ describe('agent hook spool', () => {
     const spool = join(dir, 'spool')
     mkdirSync(spool)
     const file = join(spool, 'pane-live.jsonl')
+
     const record = JSON.stringify({
       paneKey: 'tab:live',
       source: 'codex',
       receivedAt: Date.now(),
       payload: { state: 'done' }
     })
+
     writeFileSync(file, record)
     const ingested: SpoolRecord[] = []
+
     const options = {
       endpointDir: dir,
       getPersistedLaunchTokenHash: () => undefined,
       ingest: (value: SpoolRecord) => ingested.push(value)
     }
+
     expect(readSpoolRecords(file)).toHaveLength(0)
     expect(drainAgentHookSpool(options)).toBe(0)
     expect(readFileSync(file, 'utf8')).toBe(record)
@@ -77,9 +82,11 @@ describe('agent hook spool', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-spool-empty-files-'))
     const spool = join(dir, 'spool')
     mkdirSync(spool)
+
     for (let index = 0; index < AGENT_HOOK_SPOOL_MAX_FILES; index += 1) {
       writeFileSync(join(spool, `pane-empty-${index}.jsonl`), '')
     }
+
     const live = join(spool, 'pane-live.jsonl')
     writeFileSync(
       live,
@@ -141,11 +148,13 @@ describe('agent hook spool', () => {
     const launchToken = 'generation-token'
     const first = new AgentHookServer()
     await first.start({ env: 'production', userDataPath })
+
     const started = _internals.normalizeHookPayload(
       'codex',
       buildBody({ hook_event_name: 'SubagentStart', agent_id: 'child-spooled' }),
       'production'
     )!
+
     first.ingestRemote(
       {
         paneKey,
@@ -167,6 +176,7 @@ describe('agent hook spool', () => {
     )
     const restarted = new AgentHookServer()
     await restarted.start({ env: 'production', userDataPath })
+
     try {
       const snapshot = restarted.getStatusSnapshot()
       expect(snapshot).toHaveLength(1)
@@ -183,6 +193,7 @@ describe('agent hook spool', () => {
     const paneKey = makePaneKey('tab-remote-fence', '00000000-0000-4000-8000-000000000003')
     const first = new AgentHookServer()
     const second = new AgentHookServer()
+
     try {
       await first.start({ env: 'production', userDataPath })
       first.ingestRemote(
@@ -255,11 +266,13 @@ describe('agent hook spool', () => {
     const launchToken = 'observed-generation'
     const first = new AgentHookServer()
     await first.start({ env: 'production', userDataPath })
+
     const started = _internals.normalizeHookPayload(
       'codex',
       buildBody({ hook_event_name: 'SubagentStart', agent_id: 'child-observed' }),
       'production'
     )!
+
     first.ingestRemote(
       {
         paneKey,
@@ -280,6 +293,7 @@ describe('agent hook spool', () => {
     )
     const restarted = new AgentHookServer()
     await restarted.start({ env: 'production', userDataPath })
+
     try {
       expect(restarted.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {

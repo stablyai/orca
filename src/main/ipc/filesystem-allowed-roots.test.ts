@@ -21,11 +21,13 @@ import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 
 vi.mock('../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
+
   return { ...actual, listRepoWorktreeGraph: vi.fn(async () => []) }
 })
 
 vi.mock('../../shared/project-groups', async () => {
   const actual = await vi.importActual<typeof ProjectGroupsModule>('../../shared/project-groups')
+
   return {
     ...actual,
     buildProjectGroupChildIndex: vi.fn(actual.buildProjectGroupChildIndex),
@@ -37,6 +39,7 @@ vi.mock('../../shared/cross-platform-path', async () => {
   const actual = await vi.importActual<typeof CrossPlatformPathModule>(
     '../../shared/cross-platform-path'
   )
+
   return { ...actual, isPathInsideOrEqual: vi.fn(actual.isPathInsideOrEqual) }
 })
 
@@ -62,26 +65,32 @@ function makeCountingStore(fixture: StoreFixture): { store: Store; counts: Store
     getProjectGroups: 0,
     getFolderWorkspaces: 0
   }
+
   const store = {
     getRepos: () => {
       counts.getRepos += 1
+
       // Match the real store, which rehydrates fresh repo objects on every read.
       return fixture.repos.map((repo) => ({ ...repo }))
     },
     getProjects: () => {
       counts.getProjects += 1
+
       return fixture.projects.map((project) => ({ ...project }))
     },
     getProjectGroups: () => {
       counts.getProjectGroups += 1
+
       return fixture.projectGroups.map((group) => ({ ...group }))
     },
     getFolderWorkspaces: () => {
       counts.getFolderWorkspaces += 1
+
       return fixture.folderWorkspaces.map((workspace) => ({ ...workspace }))
     },
     getSettings: () => ({ nestWorkspaces: false, workspaceDir: fixture.workspaceDir ?? '' })
   } as unknown as Store
+
   return { store, counts }
 }
 
@@ -96,11 +105,13 @@ function referenceAllowedRoots(store: Store): string[] {
     getFolderWorkspaces?: () => FolderWorkspace[]
     getSettings: () => { workspaceDir?: string; nestWorkspaces?: boolean }
   }
+
   const localRepos = scopeStore.getRepos().filter((repo) => !repo.connectionId)
   const settings = scopeStore.getSettings()
 
   const scopeRepos = scopeStore.getRepos()
   const projectGroups = scopeStore.getProjectGroups?.() ?? []
+
   const isRemoteOnly = (
     folderPath: string,
     projectGroupId: string,
@@ -109,31 +120,39 @@ function referenceAllowedRoots(store: Store): string[] {
     if (connectionId) {
       return true
     }
+
     const groupIds = getProjectGroupSubtreeIds(projectGroups, projectGroupId)
+
     const candidates = scopeRepos.filter(
       (repo) =>
         (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
         isPathInsideOrEqual(folderPath, repo.path)
     )
+
     return candidates.length > 0 && candidates.every((repo) => Boolean(repo.connectionId))
   }
+
   const folderScopeRoots: string[] = []
+
   for (const group of projectGroups) {
     if (group.parentPath && !isRemoteOnly(group.parentPath, group.id, group.connectionId)) {
       folderScopeRoots.push(resolve(group.parentPath))
     }
   }
+
   for (const workspace of scopeStore.getFolderWorkspaces?.() ?? []) {
     const connectionId =
       workspace.connectionId ??
       projectGroups.find((group) => group.id === workspace.projectGroupId)?.connectionId ??
       null
+
     if (!isRemoteOnly(workspace.folderPath, workspace.projectGroupId, connectionId)) {
       folderScopeRoots.push(resolve(workspace.folderPath))
     }
   }
 
   const roots = [...localRepos.map((repo) => resolve(repo.path)), ...folderScopeRoots]
+
   if (settings.workspaceDir) {
     if (localRepos.length === 0) {
       roots.push(resolve(settings.workspaceDir))
@@ -150,6 +169,7 @@ function referenceAllowedRoots(store: Store): string[] {
       }
     }
   }
+
   return roots
 }
 
@@ -210,6 +230,7 @@ function makeMixedFixture(): StoreFixture {
       projectGroupId: 'group-remote'
     })
   ]
+
   const projectGroups = [
     makeGroup({ id: 'group-root', parentPath: '/folders/root' }),
     makeGroup({ id: 'group-child', parentGroupId: 'group-root', parentPath: '/folders/child' }),
@@ -217,6 +238,7 @@ function makeMixedFixture(): StoreFixture {
     makeGroup({ id: 'group-remote', parentPath: '/remote/scope' }),
     makeGroup({ id: 'group-connection', parentPath: '/remote/via-group', connectionId: 'ssh-1' })
   ]
+
   const folderWorkspaces = [
     makeWorkspace({ id: 'ws-git', folderPath: '/folders/root/feature' }),
     // Not a git worktree: a plain folder workspace under a folder-kind repo.
@@ -237,6 +259,7 @@ function makeMixedFixture(): StoreFixture {
       projectGroupId: 'group-orphan'
     })
   ]
+
   const projects: Project[] = [
     {
       id: 'project-1',
@@ -255,6 +278,7 @@ function makeMixedFixture(): StoreFixture {
       updatedAt: 1
     }
   ]
+
   return { repos, projects, projectGroups, folderWorkspaces, workspaceDir: '/workspaces' }
 }
 
@@ -276,6 +300,7 @@ describe('getAllowedRoots', () => {
         makeWorkspace({ id: `folder-${index}`, folderPath: '/folders/root' })
       )
     }
+
     const { store } = makeCountingStore(fixture)
     vi.mocked(isPathInsideOrEqual).mockClear()
     const actual = getAllowedRoots(store)
@@ -294,6 +319,7 @@ describe('getAllowedRoots', () => {
         projectGroupId: 'group-remote'
       })
     )
+
     for (let index = 0; index < fixture.repos.length; index += 1) {
       fixture.repos.push(fixture.repos.shift()!)
       const { store } = makeCountingStore(fixture)

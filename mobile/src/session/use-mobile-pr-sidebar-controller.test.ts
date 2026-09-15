@@ -21,6 +21,7 @@ import { buildMobilePrSidebarIdentity } from './use-mobile-pr-sidebar-controller
 function ok<T>(result: T): GitHubPrReadOutcome<T> {
   return { ok: true, result }
 }
+
 function fail<T>(error: string): GitHubPrReadOutcome<T> {
   return { ok: false, error }
 }
@@ -36,7 +37,9 @@ const PR: PRInfo = {
   reviewDecision: null,
   headSha: 'sha-pr'
 } as unknown as PRInfo
+
 const DETAILS = { item: { number: 7 }, checks: [] } as unknown as GitHubWorkItemDetails
+
 const CHECKS: PRCheckDetail[] = [
   { name: 'ci', status: 'completed', conclusion: 'success', url: null }
 ]
@@ -83,11 +86,13 @@ describe('loadPrSidebarData', () => {
 
   it('phase 1 loads pr + checks into ready with details=null (comments deferred)', async () => {
     const d = deps()
+
     const out = await loadPrSidebarData(d, {
       worktreeId: 'w',
       branch: 'feat',
       headSha: 'sha-status'
     })
+
     expect(out).toEqual({ kind: 'ready', data: { pr: PR, details: null, checks: CHECKS } })
     // Details (heavy comments payload) are NOT fetched on the critical path.
     expect(d.fetchWorkItemDetails).not.toHaveBeenCalled()
@@ -109,11 +114,13 @@ describe('loadPrSidebarData', () => {
 
   it('falls back to the worktree linkedPR when forBranch has no open PR (closed/merged)', async () => {
     const merged = { ...PR, number: 42, state: 'merged' } as unknown as PRInfo
+
     const d = deps({
       fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(null)),
       fetchWorktreeLinkedPR: vi.fn(async () => 42),
       fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(merged))
     })
+
     const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 42 })
     expect(out).toEqual({ kind: 'ready', data: { pr: merged, details: null, checks: CHECKS } })
@@ -132,6 +139,7 @@ describe('loadPrSidebarData', () => {
       ),
       fetchWorktreeLinkedPR: vi.fn(async () => null)
     })
+
     await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: null })
   })
@@ -147,6 +155,7 @@ describe('loadPrSidebarData', () => {
       deps({ fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(null)) }),
       { worktreeId: 'w', branch: 'feat' }
     )
+
     expect(out).toEqual({ kind: 'none' })
   })
 
@@ -155,6 +164,7 @@ describe('loadPrSidebarData', () => {
       deps({ fetchPRChecks: vi.fn(async () => fail<PRCheckDetail[]>('403 forbidden')) }),
       { worktreeId: 'w', branch: 'feat' }
     )
+
     expect(out.kind).toBe('blocked')
   })
 
@@ -164,6 +174,7 @@ describe('loadPrSidebarData', () => {
         throw new Error('transport closed')
       })
     })
+
     const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
     expect(out).toEqual({ kind: 'error', message: 'transport closed' })
   })
@@ -189,6 +200,7 @@ describe('loadPrSidebarDetails (phase 2)', () => {
     const d = deps({
       fetchWorkItemDetails: vi.fn(async () => fail<GitHubWorkItemDetails | null>('network down'))
     })
+
     expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
   })
 
@@ -198,6 +210,7 @@ describe('loadPrSidebarDetails (phase 2)', () => {
         throw new Error('transport closed')
       })
     })
+
     expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
   })
 })
@@ -240,6 +253,7 @@ describe('resolvePrSidebarDetailsAfterPhase2', () => {
       prior: null,
       pr: PR
     })
+
     expect(empty.body).toBe('')
     expect(empty.comments).toEqual([])
     expect(empty.item.number).toBe(7)

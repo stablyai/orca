@@ -45,6 +45,7 @@ export function getResponsiveScrollPath(
   measurement: ScrollMeasurementLike
 ): ResponsiveScrollPath | null {
   let best: ResponsiveScrollPath | null = null
+
   const recordCandidate = (candidate: ResponsiveScrollPath): void => {
     if (!best || candidate.latencyMs < best.latencyMs) {
       best = candidate
@@ -52,21 +53,25 @@ export function getResponsiveScrollPath(
   }
 
   const cdpWheel = measurement.attempts.find((attempt) => attempt.name === 'cdpWheel')
+
   if (cdpWheel && cdpWheel.afterViewportY < cdpWheel.beforeViewportY) {
     recordCandidate({
       name: cdpWheel.name,
       latencyMs: measurement.scrollLatencyMs
     })
   }
+
   for (const attempt of measurement.attempts) {
     if (attempt.name === 'cdpWheel' || attempt.afterViewportY >= attempt.beforeViewportY) {
       continue
     }
+
     recordCandidate({
       name: attempt.name,
       latencyMs: attempt.actionMs + attempt.observeMs
     })
   }
+
   return best
 }
 

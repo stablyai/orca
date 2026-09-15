@@ -17,6 +17,7 @@ describe('nested worker depth', () => {
   function coordinatorDispatchesWorker(maxDepth = UNCAPPED) {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'root task' })
+
     const worker = db.createDispatchContext({
       taskId: task.id,
       assigneeHandle: 'term_worker',
@@ -24,6 +25,7 @@ describe('nested worker depth', () => {
       creator: SYSTEM,
       maxDepth
     })
+
     return worker
   }
 
@@ -65,6 +67,7 @@ describe('nested worker depth', () => {
   it('permits one more generation when the cap is raised, and records depth 2', () => {
     coordinatorDispatchesWorker()
     const nested = db.createTask({ runId: 'run_legacy_local', spec: 'nested task' })
+
     const sub = db.createDispatchContext({
       taskId: nested.id,
       assigneeHandle: 'term_sub',
@@ -72,6 +75,7 @@ describe('nested worker depth', () => {
       creator: { kind: 'terminal', handle: 'term_worker', paneKey: 'tab_worker:leaf_worker' },
       maxDepth: 2
     })
+
     expect(sub.depth).toBe(2)
   })
 
@@ -79,11 +83,13 @@ describe('nested worker depth', () => {
     // The old fence keyed off Run binding, so a worker that created its own Run
     // walked straight through. Depth comes from the creator's dispatch instead.
     coordinatorDispatchesWorker()
+
     const ownRun = db.createRun({
       objective: 'worker-owned run',
       coordinatorHandle: 'term_worker',
       coordinatorPaneKey: 'tab_worker:leaf_worker'
     })
+
     const nested = db.createTask({ spec: 'nested task', runId: ownRun.id })
     expect(() =>
       db.createDispatchContext({
@@ -182,10 +188,12 @@ describe('nested worker depth', () => {
     it('takes the maximum when a process holds both a local and a remote role', () => {
       // Query order must not decide the answer: the deeper role governs.
       db = new OrchestrationDb(':memory:')
+
       const task = db.createTask({
         runId: 'run_legacy_local',
         spec: 'local role'
       })
+
       db.createDispatchContext({
         taskId: task.id,
         assigneeHandle: 'term_both',
@@ -223,19 +231,23 @@ describe('nested worker depth', () => {
 
     it('stamps depth 1 for a root coordinator', () => {
       db = new OrchestrationDb(':memory:')
+
       const task = db.createTask({
         runId: 'run_legacy_local',
         spec: 'root work'
       })
+
       expect(startWorker(task.id, SYSTEM, UNCAPPED).dispatch.depth).toBe(1)
     })
 
     it('refuses a worker starting a sub-worker at the default cap', () => {
       coordinatorDispatchesWorker()
+
       const nested = db.createTask({
         runId: 'run_legacy_local',
         spec: 'nested work'
       })
+
       expect(() =>
         startWorker(
           nested.id,
@@ -247,10 +259,12 @@ describe('nested worker depth', () => {
 
     it('refuses a worker retrying into a sub-worker at the default cap', () => {
       coordinatorDispatchesWorker()
+
       const nested = db.createTask({
         runId: 'run_legacy_local',
         spec: 'nested retry work'
       })
+
       const first = startWorker(nested.id, SYSTEM, UNCAPPED)
       db.failWorkerStart(first.dispatch.id, 'accepted', 'first attempt failed')
       expect(() =>
@@ -269,10 +283,12 @@ describe('nested worker depth', () => {
     // Context-only dispatch stores null on purpose; requiring an incarnation
     // locally would silently drop real parents and fail open.
     db = new OrchestrationDb(':memory:')
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'context only'
     })
+
     const row = db.createDispatchContext({
       taskId: task.id,
       assigneeHandle: 'term_ctx',
@@ -280,6 +296,7 @@ describe('nested worker depth', () => {
       creator: { kind: 'system' },
       maxDepth: UNCAPPED
     })
+
     expect(row.process_incarnation).toBeNull()
     expect(db.resolveCreatorDepth({ kind: 'terminal', handle: 'term_ctx' })).toBe(1)
   })

@@ -66,9 +66,11 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
   const prepareFullSubmit = useCallback(
     async (smartGitHubResolution: PendingSmartGitHubSubmitResolution) => {
       const source = prepareFullSubmitSource(smartGitHubResolution)
+
       if (!source) {
         return null
       }
+
       const {
         submitLinkedWorkItem,
         submitTitleName,
@@ -129,9 +131,11 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
             ),
             isSubmissionCancelled
           )
+
           if (issueCommandSettlement.status === 'cancelled') {
             return null
           }
+
           const confirmed = issueCommandSettlement.value
           issueCommandTrustDecision = confirmed.trustDecision
           confirmedIssueCommandTemplate = confirmed.template

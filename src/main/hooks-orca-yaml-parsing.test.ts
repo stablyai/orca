@@ -55,6 +55,7 @@ describe('parseOrcaYaml', () => {
       '    echo "archive"',
       '    rm -rf node_modules'
     ].join('\n')
+
     const result = parseOrcaYaml(yaml)
     expect(result).toEqual({
       scripts: {
@@ -115,6 +116,7 @@ describe('parseOrcaYaml', () => {
       '  claude -p "Read issue #{{issue}}"',
       '  codex exec "Review docs/design-{{issue}}.md"'
     ].join('\n')
+
     const result = parseOrcaYaml(yaml)
     expect(result).toEqual({
       scripts: {},
@@ -131,6 +133,7 @@ describe('parseOrcaYaml', () => {
       'issueCommand: |',
       '  claude -p "Read issue #{{issue}}"'
     ].join('\n')
+
     const result = parseOrcaYaml(yaml)
     expect(result).toEqual({
       scripts: {

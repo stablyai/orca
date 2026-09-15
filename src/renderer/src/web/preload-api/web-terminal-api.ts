@@ -107,18 +107,22 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       if (!requireActiveEnvironmentOrNull()) {
         return []
       }
+
       const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>(
         'ssh.listTargetSummaries'
       )
+
       return targets
     },
     listRemovedTargetLabels: async () => {
       if (!requireActiveEnvironmentOrNull()) {
         return {}
       }
+
       const { labels } = await callRuntimeResult<{ labels: Record<string, string> }>(
         'ssh.listRemovedTargetLabels'
       )
+
       return labels
     },
     addTarget: () =>
@@ -141,6 +145,7 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
         'ssh.connect',
         { targetId: args.targetId }
       )
+
       return state
     },
     disconnect: () => Promise.resolve(),
@@ -150,10 +155,12 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       if (!requireActiveEnvironmentOrNull()) {
         return null
       }
+
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.getState',
         { targetId: args.targetId }
       )
+
       return state
     },
     needsPassphrasePrompt: () => Promise.resolve(false),

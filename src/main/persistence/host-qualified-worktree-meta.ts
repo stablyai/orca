@@ -28,15 +28,19 @@ export function readAllWorktreeMetaForHost(
   executionHostId: ExecutionHostId
 ): Record<string, WorktreeMeta> {
   const qualified = store.getAllWorktreeMetaForHost?.(executionHostId)
+
   if (qualified) {
     return qualified
   }
+
   const projected: Record<string, WorktreeMeta> = {}
+
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     if (!meta.hostId || meta.hostId === executionHostId) {
       projected[worktreeId] = meta
     }
   }
+
   return projected
 }
 

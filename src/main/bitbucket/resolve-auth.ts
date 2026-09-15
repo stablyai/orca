@@ -25,6 +25,7 @@ export function storedAuthConfig(
   const authMode = secret.authMode ?? metadata?.authMode ?? null
   const email = secret.authMode ? (secret.email ?? null) : (metadata?.email ?? null)
   const baseUrl = secret.authMode ? (secret.baseUrl ?? null) : (metadata?.baseUrl ?? null)
+
   return {
     // Why: an explicit ORCA_BITBUCKET_API_BASE_URL still wins even when the
     // credential itself is stored — env precedence is per-setting, not all-or-nothing.
@@ -40,11 +41,14 @@ export function storedAuthConfig(
 // real API call — never on a status read.
 export function resolveBitbucketAuthConfig(): BitbucketAuthConfig {
   const env = getEnvAuthConfig()
+
   if (hasAuth(env)) {
     return env
   }
+
   try {
     const secret = loadStoredBitbucketSecret({ force: true })
+
     return secret ? storedAuthConfig(getStoredBitbucketMetadata(), secret) : env
   } catch {
     // Decryption denied or unavailable: fall through as unauthenticated.

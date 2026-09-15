@@ -9,6 +9,7 @@ function sourceBetween(startPattern: string, endPattern: string): string {
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 

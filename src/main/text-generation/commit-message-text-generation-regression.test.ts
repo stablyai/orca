@@ -5,6 +5,7 @@ describe('commit-message generation regressions', () => {
   it('renders the complete commit policy before handing execution to the owning host', async () => {
     let prompt = ''
     let operation = ''
+
     const result = await generateCommitMessageFromContext(
       {
         branch: 'feature/policy',
@@ -26,6 +27,7 @@ describe('commit-message generation regressions', () => {
         execute: async (plan, _cwd, _timeout, generationOperation) => {
           prompt = plan.stdinPayload ?? ''
           operation = generationOperation
+
           return {
             stdout: 'Preserve source-control policy\n',
             stderr: '',

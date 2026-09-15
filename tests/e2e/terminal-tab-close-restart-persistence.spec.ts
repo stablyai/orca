@@ -26,8 +26,10 @@ test.describe.configure({ mode: 'serial' })
 test('durable whole-tab close removes a split tab across restart', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns both Electron launches and intentionally opts out of the default app fixture.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
@@ -46,6 +48,7 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     const hasPaneManager = await waitForActiveTerminalManager(firstLaunch.page, 30_000)
       .then(() => true)
       .catch(() => false)
+
     test.skip(
       !hasPaneManager,
       'Electron automation in this environment never mounted the TerminalPane manager.'
@@ -53,9 +56,11 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     await waitForPaneCount(firstLaunch.page, 1, 30_000)
 
     const closedTabId = await getActiveTabId(firstLaunch.page)
+
     if (!closedTabId) {
       throw new Error('First launch did not expose an active terminal tab')
     }
+
     expect(await getWorktreeTabs(firstLaunch.page, worktreeId)).toHaveLength(1)
 
     const client = new RuntimeClient(session.userDataDir, 30_000)
@@ -66,11 +71,13 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
             const shown = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
               worktree: `id:${worktreeId}`
             })
+
             return shown.result.worktree.id
           } catch (error) {
             if (error instanceof RuntimeRpcFailureError && error.code === 'selector_not_found') {
               return null
             }
+
             throw error
           }
         },
@@ -84,28 +91,35 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
           const listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
             worktree: `id:${worktreeId}`
           })
+
           const matching = listed.result.terminals.filter(
             (terminal) => terminal.worktreeId === worktreeId && terminal.tabId === closedTabId
           )
+
           activeHandle = matching.length === 1 ? (matching[0]?.handle ?? null) : null
+
           return matching.length
         },
         { message: 'Closed-tab candidate did not become uniquely runtime-visible' }
       )
       .toBe(1)
+
     if (!activeHandle) {
       throw new Error('Closed-tab candidate became visible without a terminal handle')
     }
+
     const split = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
       terminal: activeHandle,
       direction: 'vertical'
     })
+
     expect(split.result.split.tabId).toBe(closedTabId)
     await waitForPaneCount(firstLaunch.page, 2, 30_000)
 
     const close = await client.call<{ close: RuntimeTerminalClose }>('terminal.closeTab', {
       terminal: split.result.split.handle
     })
+
     expect(close.result.close).toMatchObject({
       handle: split.result.split.handle,
       tabId: closedTabId,
@@ -123,6 +137,7 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
           const afterClose = await client.call<RuntimeTerminalListResult>('terminal.list', {
             worktree: `id:${worktreeId}`
           })
+
           return afterClose.result.terminals
             .filter((terminal) => terminal.tabId === closedTabId)
             .map((terminal) => terminal.handle)
@@ -149,6 +164,7 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     const afterRestart = await client.call<RuntimeTerminalListResult>('terminal.list', {
       worktree: `id:${worktreeId}`
     })
+
     expect(afterRestart.result.terminals).toEqual([])
 
     // Why: the tombstone only binds passive hydration. Clicking the sidebar row is the
@@ -166,9 +182,11 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     if (firstApp) {
       await session.close(firstApp)
     }
+
     if (secondApp) {
       await session.close(secondApp)
     }
+
     await session.dispose()
   }
 })

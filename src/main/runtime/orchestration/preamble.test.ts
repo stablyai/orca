@@ -28,11 +28,13 @@ function afterWorkerDoneSection(result: string) {
 function cliFence(result: string): string {
   const match = result.match(/=== CLI COMMANDS ===\n\n```sh\n([\s\S]*?)\n```/)
   expect(match).not.toBeNull()
+
   return match?.[1] ?? ''
 }
 
 function markdownBlocks(result: string) {
   const tree = unified().use(remarkParse).parse(result)
+
   return {
     headings: tree.children.filter((node) => node.type === 'heading'),
     codeBlocks: tree.children.filter((node) => node.type === 'code')
@@ -84,6 +86,7 @@ describe('buildDispatchPreamble', () => {
 
   it('renders every injected lifecycle command on one cross-shell-safe line', () => {
     const result = buildDispatchPreamble(baseParams({ dispatchCapability: 'dcap_secret' }))
+
     const commandLines = result
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
@@ -111,6 +114,7 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble(
       baseParams({ canDispatchSubWorkers: true, baseDrift: driftParams })
     )
+
     const { headings, codeBlocks } = markdownBlocks(result)
 
     expect(headings).toHaveLength(0)
@@ -257,6 +261,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('orca-dev orchestration check')
     expect(result).toContain('orca-dev orchestration ask')
     const fragments = result.split('orca-dev')
+
     for (const fragment of fragments) {
       expect(fragment).not.toMatch(/orca orchestration/)
     }
@@ -363,6 +368,7 @@ describe('buildDispatchPreamble', () => {
       coordinatorHandle: 'term_COORD',
       workerHandle: 'term_WORKER'
     })
+
     expect(result).toMatchSnapshot()
   })
 })

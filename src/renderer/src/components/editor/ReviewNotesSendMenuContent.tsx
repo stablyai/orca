@@ -68,8 +68,10 @@ export function ReviewNotesSendMenuContent({
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const agentRows = useWorktreeAgentRows(worktreeId)
   const now = useNow(30_000)
+
   const sendTargets = useMemo(() => {
     void agentStatusEpoch
+
     return deriveNotesSendAgentTargets(
       {
         agentStatusByPaneKey,
@@ -91,6 +93,7 @@ export function ReviewNotesSendMenuContent({
     ptyIdsByTabId,
     worktreeId
   ])
+
   const orderedSendTargets = useMemo(
     () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
     [agentRows, sendTargets]
@@ -119,6 +122,7 @@ export function ReviewNotesSendMenuContent({
                 'Notes sent.'
               )
             )
+
             return
           }
 
@@ -152,8 +156,10 @@ export function ReviewNotesSendMenuContent({
       }
 
       const currentEligibility = resolveCurrentSendTargetEligibility(target, worktreeId)
+
       if (currentEligibility.status !== 'eligible') {
         toast.message(currentEligibility.disabledReason)
+
         return
       }
 
@@ -217,9 +223,11 @@ function resolveCurrentSendTargetEligibility(
   worktreeId: string
 ): { status: 'eligible' } | { status: 'disabled'; disabledReason: string } {
   const state = useAppStore.getState()
+
   const currentTarget = deriveNotesSendAgentTargets(state, worktreeId).find(
     (candidate) => candidate.paneKey === target.paneKey
   )
+
   if (currentTarget) {
     return currentTarget.status === 'eligible'
       ? { status: 'eligible' }
@@ -249,11 +257,13 @@ function AgentTargetMenuItem({
   const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
+
   const secondaryParts = [
     agentStateLabel(state),
     ...(timeAgo ? [timeAgo] : []),
     ...(tabTitle ? [tabTitle] : [])
   ]
+
   return (
     <DropdownMenuItem
       disabled={disabled}
@@ -294,9 +304,11 @@ function orderSendTargetsByWorktreeAgentRows(
 
   for (const agent of agentRows) {
     const target = targetsByPaneKey.get(agent.paneKey)
+
     if (!target) {
       continue
     }
+
     ordered.push({ target: { ...target, agentType: agent.agentType }, agent })
     usedPaneKeys.add(target.paneKey)
   }
@@ -312,25 +324,34 @@ function orderSendTargetsByWorktreeAgentRows(
 
 function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): string | null {
   const doneAt = lastEnteredDoneAt(agent)
+
   if (doneAt !== null) {
     return `${formatTimeAgo(doneAt, now)}`
   }
+
   const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
+
   return startedAt > 0 ? `${formatTimeAgo(startedAt, now)}` : null
 }
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
+
   if (delta < 60_000) {
     return 'just now'
   }
+
   const minutes = Math.floor(delta / 60_000)
+
   if (minutes < 60) {
     return `${minutes}m ago`
   }
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) {
     return `${hours}h ago`
   }
+
   return `${Math.floor(hours / 24)}d ago`
 }

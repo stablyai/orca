@@ -7,11 +7,17 @@ import { pathToFileURL } from 'node:url'
 import { Worker } from 'node:worker_threads'
 
 const INTERNAL_ENV = 'ORCA_PACKAGED_WATCHDOG_SMOKE_INTERNAL'
+
 const ASAR_ENV = 'ORCA_PACKAGED_WATCHDOG_SMOKE_ASAR'
+
 const TIMEOUT_MS = 100
+
 const CHECK_INTERVAL_MS = 20
+
 const POLL_TIMEOUT_MS = 5_000
+
 const LAUNCH_TIMEOUT_MS = 30_000
+
 const SUCCESS_LINE = '[packaged-watchdog-smoke] app.asar worker detected and recovered a stall'
 
 function sleep(ms) {
@@ -20,15 +26,19 @@ function sleep(ms) {
 
 function readAppDirArg(argv) {
   const explicit = argv.find((arg) => arg.startsWith('--app-dir='))
+
   if (explicit) {
     return explicit.slice('--app-dir='.length)
   }
+
   if (process.platform === 'darwin') {
     return 'dist/mac-arm64/Orca.app'
   }
+
   if (process.platform === 'win32') {
     return 'dist/win-unpacked'
   }
+
   return 'dist/linux-unpacked'
 }
 
@@ -48,16 +58,21 @@ function readMarker(markerPath) {
 
 async function waitForMarker(markerPath, predicate, workerError) {
   const deadline = Date.now() + POLL_TIMEOUT_MS
+
   while (Date.now() < deadline) {
     if (workerError.current) {
       throw workerError.current
     }
+
     const marker = readMarker(markerPath)
+
     if (predicate(marker)) {
       return marker
     }
+
     await sleep(CHECK_INTERVAL_MS)
   }
+
   throw new Error(`Timed out waiting for packaged watchdog marker at ${markerPath}`)
 }
 
@@ -68,9 +83,11 @@ async function waitForExit(worker, workerError) {
       throw new Error('Timed out waiting for packaged watchdog worker to exit')
     })
   ])
+
   if (workerError.current) {
     throw workerError.current
   }
+
   if (exitCode !== 0) {
     throw new Error(`Packaged watchdog worker exited with code ${exitCode}`)
   }
@@ -78,19 +95,24 @@ async function waitForExit(worker, workerError) {
 
 async function runInternal() {
   const appAsar = process.env[ASAR_ENV]
+
   if (!appAsar) {
     throw new Error(`Missing ${ASAR_ENV}`)
   }
+
   const { app } = await import('electron')
   const tempRoot = mkdtempSync(join(tmpdir(), 'orca-packaged-watchdog-smoke-'))
   const markerPath = join(tempRoot, 'main-thread-hang.json')
   const entryPath = join(appAsar, 'out', 'main', 'main-thread-hang-watchdog-entry.js')
   let worker
+
   try {
     await app.whenReady()
+
     if (!existsSync(entryPath)) {
       throw new Error(`Packaged watchdog entry is missing from app.asar: ${entryPath}`)
     }
+
     const workerError = { current: null }
     worker = new Worker(entryPath, {
       workerData: {
@@ -119,9 +141,11 @@ async function runInternal() {
 function runSmoke() {
   const appDir = resolve(readAppDirArg(process.argv.slice(2)))
   const appAsar = join(getResourcesDir(appDir), 'app.asar')
+
   if (!existsSync(appAsar)) {
     throw new Error(`Packaged app archive is missing: ${appAsar}`)
   }
+
   const require = createRequire(import.meta.url)
   const executable = require('electron')
   const launcherDir = mkdtempSync(join(tmpdir(), 'orca-packaged-watchdog-launcher-'))
@@ -139,26 +163,31 @@ function runSmoke() {
   )
   const env = { ...process.env, [INTERNAL_ENV]: '1', [ASAR_ENV]: appAsar, NODE_PATH: '' }
   delete env.ELECTRON_RUN_AS_NODE
+
   try {
     const electronArgs =
       process.platform === 'linux' ? ['--no-sandbox', launcherDir] : [launcherDir]
+
     const result = spawnSync(executable, electronArgs, {
       env,
       encoding: 'utf8',
       timeout: LAUNCH_TIMEOUT_MS
     })
+
     if (result.status !== 0) {
       throw new Error(
         `Packaged watchdog smoke failed (${result.error?.message ?? result.signal ?? result.status}):\n` +
           `${result.stderr || result.stdout}`
       )
     }
+
     // Why: Electron discards process.exitCode, so status 0 alone can't prove the worker ran.
     if (!result.stdout.includes(SUCCESS_LINE)) {
       throw new Error(
         `Packaged watchdog smoke did not report success:\n${result.stderr || result.stdout}`
       )
     }
+
     process.stdout.write(result.stdout)
   } finally {
     rmSync(launcherDir, { recursive: true, force: true })
@@ -168,6 +197,7 @@ function runSmoke() {
 if (process.env[INTERNAL_ENV] === '1') {
   // Why: a graceful quit exits 0 regardless of process.exitCode; only app.exit propagates failure.
   const { app } = await import('electron')
+
   try {
     await runInternal()
     app.exit(0)

@@ -67,6 +67,7 @@ export class DesktopScriptProviderClient {
 
   async listApps(): Promise<ComputerListAppsResult> {
     const response = await this.callBridge({ tool: 'list_apps' })
+
     return {
       apps: (response.apps ?? []).map((app) => ({
         name: app.name,
@@ -85,16 +86,19 @@ export class DesktopScriptProviderClient {
 
   async listWindows(params: Record<string, unknown>): Promise<ComputerListWindowsResult> {
     const capabilities = await this.readCapabilities()
+
     if (!capabilities.supports.windows.list) {
       throw new RuntimeClientError(
         'unsupported_capability',
         `${capabilities.provider} does not support windows.list`
       )
     }
+
     const response = await this.callBridge({
       tool: 'list_windows',
       app: stringParam(params, 'app')
     })
+
     return {
       app: normalizeBridgeApp(response.app),
       windows: (response.windows ?? []).map((window) => ({
@@ -116,6 +120,7 @@ export class DesktopScriptProviderClient {
 
   async snapshot(params: Record<string, unknown>): Promise<ComputerSnapshotResult> {
     const app = stringParam(params, 'app')
+
     const response = await this.callBridge({
       tool: 'get_app_state',
       app,
@@ -124,6 +129,7 @@ export class DesktopScriptProviderClient {
       noScreenshot: params.noScreenshot === true,
       restoreWindow: params.restoreWindow === true
     })
+
     return this.rememberAndRender(app, response, params.noScreenshot === true, params)
   }
 
@@ -135,15 +141,18 @@ export class DesktopScriptProviderClient {
     const explicitWindowId = optionalNumberParam(params, 'windowId')
     const explicitWindowIndex = optionalNumberParam(params, 'windowIndex')
     const current = this.snapshotStore.current(app, explicitWindowId, params)
+
     const actionWindowTarget = desktopActionWindowTarget(
       explicitWindowId,
       explicitWindowIndex,
       current
     )
+
     const element = elementParam(current, optionalNumberParam(params, 'elementIndex'))
     const fromElement = elementParam(current, optionalNumberParam(params, 'fromElementIndex'))
     const toElement = elementParam(current, optionalNumberParam(params, 'toElementIndex'))
     await this.ensureActionSupported(method)
+
     const response = await this.callBridge({
       tool: bridgeTool(method),
       app,
@@ -170,6 +179,7 @@ export class DesktopScriptProviderClient {
       noScreenshot: params.noScreenshot === true,
       restoreWindow: params.restoreWindow === true
     })
+
     const action = verifyDesktopAction(
       desktopActionMetadataFromResponse(
         response.action,
@@ -183,9 +193,11 @@ export class DesktopScriptProviderClient {
       response.snapshot,
       element
     )
+
     if (isWindowChangedAction(action)) {
       this.snapshotStore.forgetWindowTarget(app, params, current)
     }
+
     return normalizeComputerActionResult({
       ...this.rememberAndRender(
         app,
@@ -200,6 +212,7 @@ export class DesktopScriptProviderClient {
   private async ensureActionSupported(method: NativeActionMethod): Promise<void> {
     const capabilities = await this.readCapabilities()
     const actionKey = actionCapabilityKey(method)
+
     if (!capabilities.supports.actions[actionKey]) {
       throw new RuntimeClientError(
         'unsupported_capability',
@@ -210,6 +223,7 @@ export class DesktopScriptProviderClient {
 
   private async callBridge(request: BridgeRequest): Promise<BridgeResponse> {
     const host = this.runtimeHost
+
     if (host) {
       try {
         return checkedBridgeResponse(await host.request(request), '')
@@ -222,16 +236,19 @@ export class DesktopScriptProviderClient {
         }
       }
     }
+
     return await this.callOneShotBridge(request)
   }
 
   private async callOneShotBridge(request: BridgeRequest): Promise<BridgeResponse> {
     const operationDirectory = await mkdtemp(join(tmpdir(), 'orca-computer-use-'))
     const operationPath = join(operationDirectory, 'operation.json')
+
     try {
       await writeFile(operationPath, JSON.stringify(request), { encoding: 'utf8', mode: 0o600 })
       const { stdout, stderr } = await execBridge(this.platform, this.scriptPath, operationPath)
       let response: BridgeResponse
+
       try {
         response = JSON.parse(stdout) as BridgeResponse
       } catch (error) {
@@ -240,6 +257,7 @@ export class DesktopScriptProviderClient {
           `desktop provider returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`
         )
       }
+
       return checkedBridgeResponse(response, stderr)
     } finally {
       await rm(operationDirectory, { force: true, recursive: true })
@@ -250,14 +268,18 @@ export class DesktopScriptProviderClient {
     if (this.providerCapabilities) {
       return this.providerCapabilities
     }
+
     const response = await this.callBridge({ tool: 'handshake' })
+
     if (!response.capabilities) {
       throw new RuntimeClientError(
         'accessibility_error',
         'desktop provider returned no capabilities'
       )
     }
+
     this.providerCapabilities = response.capabilities
+
     return response.capabilities
   }
 
@@ -270,7 +292,9 @@ export class DesktopScriptProviderClient {
     if (!response.snapshot) {
       throw new RuntimeClientError('accessibility_error', 'desktop provider returned no snapshot')
     }
+
     this.snapshotStore.remember(app, response.snapshot, params)
+
     return renderSnapshot(response.snapshot, noScreenshot)
   }
 }
@@ -279,6 +303,7 @@ function checkedBridgeResponse(response: BridgeResponse, stderr: string): Bridge
   if (!response.ok) {
     throw mapBridgeError(response.error ?? stderr)
   }
+
   return response
 }
 
@@ -292,19 +317,23 @@ function defaultRuntimeHost(
 
 function requiredPlatform(): DesktopScriptPlatform {
   const platform = desktopScriptPlatform()
+
   if (!platform) {
     throw new RuntimeClientError('accessibility_error', 'desktop script provider is not available')
   }
+
   return platform
 }
 
 function requiredScriptPath(): string {
   const scriptPath = resolveDesktopScriptProviderPath()
+
   if (!scriptPath) {
     throw new RuntimeClientError(
       'accessibility_error',
       'desktop script provider script was not found'
     )
   }
+
   return scriptPath
 }

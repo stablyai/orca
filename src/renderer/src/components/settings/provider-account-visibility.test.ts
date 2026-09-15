@@ -143,6 +143,7 @@ describe('providerAccountIsActiveInView', () => {
         wsl: { Ubuntu: 'codex-wsl-old' }
       }
     }
+
     const after = {
       ...before,
       activeAccountIdsByRuntime: {
@@ -150,6 +151,7 @@ describe('providerAccountIsActiveInView', () => {
         wsl: { Ubuntu: 'codex-wsl' }
       }
     }
+
     const actionRuntime = getProviderAccountRuntime(codexWslAccount)
 
     // Why: AccountsPane's remote view is forced to host, but restart prompts

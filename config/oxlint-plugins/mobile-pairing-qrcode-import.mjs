@@ -5,6 +5,7 @@ function hasRuntimeImport(node) {
   if (node.importKind === 'type') {
     return false
   }
+
   return (
     node.specifiers.length === 0 ||
     node.specifiers.some((specifier) => specifier.importKind !== 'type')

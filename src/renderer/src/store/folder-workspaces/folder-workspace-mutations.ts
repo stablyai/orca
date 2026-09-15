@@ -45,11 +45,14 @@ export function getFolderWorkspaceUpdateCoordinator(
   get: RepoSliceGet
 ): FolderWorkspaceUpdateCoordinatorInstance {
   const existing = folderWorkspaceUpdateCoordinators.get(get)
+
   if (existing) {
     return existing
   }
+
   const created = new FolderWorkspaceUpdateCoordinator<FolderWorkspaceUpdateField>()
   folderWorkspaceUpdateCoordinators.set(get, created)
+
   return created
 }
 
@@ -64,6 +67,7 @@ export function createFolderWorkspaceMutationActions(
         const target = getActiveRuntimeTarget(
           getFolderWorkspacePathStatusRouteSettings(options, get().settings)
         )
+
         if (
           target.kind === 'environment' &&
           (args.linkedTask?.provider === 'jira' ||
@@ -75,6 +79,7 @@ export function createFolderWorkspaceMutationActions(
             'Update the remote runtime to link Jira'
           )
         }
+
         const workspace =
           target.kind === 'local'
             ? await window.api.folderWorkspaces.create(args)
@@ -86,15 +91,18 @@ export function createFolderWorkspaceMutationActions(
                   { timeoutMs: 15_000 }
                 )
               ).folderWorkspace
+
         const ownedWorkspace = folderWorkspaceWithFetchedOwner(
           workspace,
           target,
           get().projectGroups
         )
+
         set((s) => ({
           folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
           folderWorkspacePathStatuses: {}
         }))
+
         return ownedWorkspace
       } catch (err) {
         console.error('Failed to create folder workspace:', err)
@@ -106,23 +114,28 @@ export function createFolderWorkspaceMutationActions(
     updateFolderWorkspace: async (folderWorkspaceId, updates, options) => {
       const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
       const state = get()
+
       const executionHostId =
         options?.executionHostId ??
         (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
           ? (state.activeWorkspaceExecutionHostId ?? undefined)
           : undefined)
+
       if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
         return false
       }
+
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
         state,
         folderWorkspaceId,
         executionHostId
       )
+
       // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
       const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
       const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
       const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
+
       // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
       if (
         target.kind === 'environment' &&
@@ -135,10 +148,12 @@ export function createFolderWorkspaceMutationActions(
           'Update the remote runtime to link Jira'
         )
       }
+
       const updateTicket = folderWorkspaceUpdates.begin(
         updateIdentity,
         Object.keys(updates) as FolderWorkspaceUpdateField[]
       )
+
       try {
         const updated =
           target.kind === 'local'
@@ -151,6 +166,7 @@ export function createFolderWorkspaceMutationActions(
                   { timeoutMs: 15_000 }
                 )
               ).folderWorkspace
+
         if (!updated) {
           await reconcileFailedFolderWorkspaceUpdate({
             target,
@@ -162,8 +178,10 @@ export function createFolderWorkspaceMutationActions(
             set,
             get
           })
+
           return false
         }
+
         if (updates.diffComments !== undefined && updated.diffComments === undefined) {
           // Why: older paired runtimes strip this optional field; reconcile instead of showing an unsaved note.
           await reconcileFailedFolderWorkspaceUpdate({
@@ -176,10 +194,13 @@ export function createFolderWorkspaceMutationActions(
             set,
             get
           })
+
           return false
         }
+
         const latestFields = folderWorkspaceUpdates.latestFields(updateIdentity, updateTicket)
         const catalogChanged = folderWorkspaceUpdates.catalogChanged(updateIdentity, updateTicket)
+
         if (latestFields.length > 0) {
           set((s) => ({
             folderWorkspaces: s.folderWorkspaces.map((workspace) =>
@@ -195,6 +216,7 @@ export function createFolderWorkspaceMutationActions(
               : {})
           }))
         }
+
         return true
       } catch (err) {
         console.error('Failed to update folder workspace:', err)
@@ -208,6 +230,7 @@ export function createFolderWorkspaceMutationActions(
           set,
           get
         })
+
         return false
       } finally {
         folderWorkspaceUpdates.finish(updateIdentity, updateTicket)
@@ -217,22 +240,27 @@ export function createFolderWorkspaceMutationActions(
     deleteFolderWorkspace: async (folderWorkspaceId, options) => {
       const state = get()
       const executionHostId = options?.executionHostId
+
       if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
         return false
       }
+
       const ownerHostId = getExecutionHostIdForFolderWorkspace(
         state,
         folderWorkspaceId,
         executionHostId
       )
+
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
         state,
         folderWorkspaceId,
         executionHostId
       )
+
       try {
         // Why: deletion targets the folder's owner; focus may be on a different host.
         const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
+
         const deleted =
           target.kind === 'local'
             ? await window.api.folderWorkspaces.delete({ folderWorkspaceId })
@@ -244,9 +272,11 @@ export function createFolderWorkspaceMutationActions(
                   { timeoutMs: 15_000 }
                 )
               ).deleted
+
         if (!deleted) {
           return false
         }
+
         const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.filter(
@@ -256,15 +286,18 @@ export function createFolderWorkspaceMutationActions(
           ),
           folderWorkspacePathStatuses: {}
         }))
+
         if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
           // Folder workspaces use the same browser registry key as worktrees;
           // tear down Chromium guests before purging the remaining renderer state.
           await get().shutdownWorktreeBrowsers(workspaceKey)
           get().purgeWorktreeTerminalState([workspaceKey])
         }
+
         return true
       } catch (err) {
         console.error('Failed to delete folder workspace:', err)
+
         return false
       }
     }

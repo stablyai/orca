@@ -57,6 +57,7 @@ function state(
   runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext>
 ): DashboardSnapshotState {
   const worktrees = Array.from({ length: worktreeCount }, (_, index) => worktree(index))
+
   return {
     repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000' }],
     worktreesByRepo: { r1: worktrees },
@@ -86,29 +87,35 @@ describe('buildDashboardSnapshot orchestration routing', () => {
     let runtimeValueReads = 0
     let contextVisits = 0
     const runtimeRecords: Record<string, AgentStatusOrchestrationContext> = {}
+
     for (let index = 0; index < contextCount; index += 1) {
       const paneKey = makePaneKey(
         'tab-0',
         `88888888-8888-4888-8888-${index.toString(16).padStart(12, '0')}`
       )
+
       runtimeRecords[paneKey] = {
         taskId: `task-${index}`,
         dispatchId: `dispatch-${index}`,
         get parentPaneKey() {
           contextVisits += 1
+
           return undefined
         }
       }
     }
+
     const runtime = new Proxy(runtimeRecords, {
       ownKeys(target) {
         runtimeEnumerations += 1
+
         return Reflect.ownKeys(target)
       },
       get(target, key, receiver) {
         if (typeof key === 'string' && Object.hasOwn(target, key)) {
           runtimeValueReads += 1
         }
+
         return Reflect.get(target, key, receiver)
       }
     })

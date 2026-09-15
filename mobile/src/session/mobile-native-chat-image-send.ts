@@ -51,22 +51,26 @@ export async function pasteMobileNativeChatImagePaths({
   const mobileClient: MobileTerminalClient | null = deviceToken
     ? { id: deviceToken, type: 'mobile' }
     : null
+
   const clientField = mobileClient ? { client: mobileClient } : {}
   // Why: this is a sequential loop, so a per-write budget multiplies by the number
   // of images — the composer stays `sending` the whole time. Budget the sequence
   // once and let each write draw from what's left.
   const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
+
   for (const text of [
     clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
     ...imagePasteWritesFollowedByText(imagePaths.map(buildMobileImagePastePayload), followedByText)
   ]) {
     const remainingMs = deadline - Date.now()
+
     // Why: the budget is the whole sequence's — starting a write it can't fund would
     // let a multi-image paste overrun before the text body even begins its own send.
     // Abort instead; the caller reports the failure and can retry.
     if (remainingMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
       return false
     }
+
     const response = await client.sendRequest(
       'terminal.send',
       {
@@ -79,9 +83,11 @@ export async function pasteMobileNativeChatImagePaths({
       // clock here would let one write outlast the whole sequence's ceiling.
       { timeoutMs: remainingMs, budgetSpansConnect: true }
     )
+
     if (!isTerminalSendRpcAccepted(response)) {
       return false
     }
   }
+
   return true
 }

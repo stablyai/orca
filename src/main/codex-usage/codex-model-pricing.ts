@@ -1,4 +1,5 @@
 export type TieredPrice = { threshold: number; price: number }
+
 export type CodexModelPricing = {
   input: number
   cachedInput: number
@@ -84,25 +85,33 @@ const REASONING_TIER_SUFFIXES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'a
 
 function stripParenthesizedReasoningTier(model: string): string | null {
   const match = model.match(/^(.*)\(([^()]*)\)$/)
+
   if (!match) {
     return model
   }
+
   const tier = match[2].trim().toLowerCase()
+
   if (!REASONING_TIER_SUFFIXES.includes(tier)) {
     return null
   }
+
   return match[1]
 }
 
 function stripDashReasoningTiers(model: string): string {
   let current = model
+
   for (let index = 0; index < 4; index++) {
     const suffix = REASONING_TIER_SUFFIXES.find((tier) => current.endsWith(`-${tier}`))
+
     if (!suffix) {
       return current
     }
+
     current = current.slice(0, -suffix.length - 1)
   }
+
   return current
 }
 
@@ -112,70 +121,91 @@ export function normalizeModelForPricing(model: string | null): string | null {
   }
 
   const lower = stripParenthesizedReasoningTier(model.toLowerCase().trim())
+
   if (!lower) {
     return null
   }
 
   const normalized = stripDashReasoningTiers(lower)
+
   if (normalized === 'gpt-5' || normalized === 'gpt-5-codex') {
     return 'gpt-5'
   }
+
   if (normalized === 'gpt-5.1-codex-max' || normalized.startsWith('gpt-5.1-codex-max-')) {
     return 'gpt-5.1-codex-max'
   }
+
   if (normalized === 'gpt-5.1-codex' || normalized.startsWith('gpt-5.1-codex-')) {
     return 'gpt-5.1-codex'
   }
+
   if (normalized === 'gpt-5.1' || normalized.startsWith('gpt-5.1-')) {
     return 'gpt-5.1'
   }
+
   if (normalized === 'gpt-5.2-codex' || normalized.startsWith('gpt-5.2-codex-')) {
     return 'gpt-5.2-codex'
   }
+
   if (normalized === 'gpt-5.2' || normalized.startsWith('gpt-5.2-')) {
     return 'gpt-5.2'
   }
+
   if (normalized === 'gpt-5.3-codex-spark' || normalized.startsWith('gpt-5.3-codex-spark-')) {
     return 'gpt-5.3-codex-spark'
   }
+
   if (normalized === 'gpt-5.3-codex' || normalized.startsWith('gpt-5.3-codex-')) {
     return 'gpt-5.3-codex'
   }
+
   if (normalized === 'gpt-5.3' || normalized.startsWith('gpt-5.3-')) {
     return 'gpt-5.3'
   }
+
   if (normalized === 'gpt-5.4-mini' || normalized.startsWith('gpt-5.4-mini-')) {
     return 'gpt-5.4-mini'
   }
+
   if (normalized === 'gpt-5.4-nano' || normalized.startsWith('gpt-5.4-nano-')) {
     return 'gpt-5.4-nano'
   }
+
   if (normalized === 'gpt-5.4-pro' || normalized.startsWith('gpt-5.4-pro-')) {
     return 'gpt-5.4-pro'
   }
+
   if (normalized === 'gpt-5.4' || normalized.startsWith('gpt-5.4-')) {
     return 'gpt-5.4'
   }
+
   if (normalized === 'gpt-5.5-pro' || normalized.startsWith('gpt-5.5-pro-')) {
     return 'gpt-5.5-pro'
   }
+
   if (normalized === 'gpt-5.5' || normalized.startsWith('gpt-5.5-')) {
     return 'gpt-5.5'
   }
+
   if (normalized === 'gpt-5.6-sol' || normalized.startsWith('gpt-5.6-sol-')) {
     return 'gpt-5.6-sol'
   }
+
   if (normalized === 'gpt-5.6-terra' || normalized.startsWith('gpt-5.6-terra-')) {
     return 'gpt-5.6-terra'
   }
+
   if (normalized === 'gpt-5.6-luna' || normalized.startsWith('gpt-5.6-luna-')) {
     return 'gpt-5.6-luna'
   }
+
   // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
   // `gpt-5.6-` prefix match would swallow the tier IDs above and any future
   // cheaper variant.
   if (normalized === 'gpt-5.6') {
     return 'gpt-5.6-sol'
   }
+
   return null
 }

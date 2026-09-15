@@ -6,12 +6,15 @@ const LEADING_INDENT = /^(\t| {1,2})/
 
 function findCodeBlockAtCursor(editor: Editor): { text: string; start: number } | null {
   const { $from } = editor.state.selection
+
   for (let depth = $from.depth; depth > 0; depth--) {
     const node = $from.node(depth)
+
     if (node.type.name === 'codeBlock') {
       return { text: node.textContent, start: $from.start(depth) }
     }
   }
+
   return null
 }
 
@@ -21,6 +24,7 @@ function findCodeBlockAtCursor(editor: Editor): { text: string; start: number } 
  */
 export function outdentRichMarkdownCodeBlock(editor: Editor): boolean {
   const codeBlock = findCodeBlockAtCursor(editor)
+
   if (!codeBlock) {
     return false
   }
@@ -33,15 +37,19 @@ export function outdentRichMarkdownCodeBlock(editor: Editor): boolean {
     const lineEnd = lineStart + line.length
     const isTouched = lineEnd >= from && lineStart <= to
     const indent = isTouched ? LEADING_INDENT.exec(line) : null
+
     if (indent) {
       tr.delete(tr.mapping.map(lineStart), tr.mapping.map(lineStart + indent[0].length))
     }
+
     lineStart = lineEnd + 1
   }
 
   if (!tr.docChanged) {
     return false
   }
+
   editor.view.dispatch(tr)
+
   return true
 }

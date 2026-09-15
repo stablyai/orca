@@ -34,6 +34,7 @@ import { scheduleSave } from './write-scheduling'
 type SshProfileOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
 
 const sshProfileOperationsContext = Symbol('SshProfileOperations')
+
 type SshProfileOperationsContext = {
   runtime: SshProfileOperationsRuntime
   scheduling: WriteSchedulingOperations
@@ -75,6 +76,7 @@ export class SshProfileOperations {
 
   allocateSshTargetGeneration(): number {
     const context = this[sshProfileOperationsContext]
+
     return allocateSshTargetGenerationOperation(context.runtime.state, () =>
       scheduleSave(context.scheduling)
     )
@@ -132,6 +134,7 @@ export class SshProfileOperations {
         syncProjectHostSetupCompatibilityState(this[sshProfileOperationsContext].repos),
       scheduleSave: () => scheduleSave(this[sshProfileOperationsContext].scheduling)
     }
+
     return reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
   }
 }

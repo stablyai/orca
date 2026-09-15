@@ -99,16 +99,19 @@ vi.mock('./ssh', () => ({
 import { registerRepoHandlers } from './repos'
 
 type CreateArgs = { parentPath: string; name: string; kind: 'git' | 'folder' }
+
 type CreateResult =
   | { repo: { id: string; path: string; kind: 'git' | 'folder' } }
   | { error: string }
 
 describe('repos:create', () => {
   const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
+
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   }
+
   const tmpPath = (...segments: string[]): string => join('/tmp', ...segments)
   const defaultProjectParent = join('/Users/alice', 'orca', 'projects')
   // The value a fresh install seeds Settings -> Workspace Directory with.
@@ -116,16 +119,21 @@ describe('repos:create', () => {
 
   const callCreate = (args: CreateArgs): Promise<CreateResult> => {
     const handler = handlers.get('repos:create')
+
     if (!handler) {
       throw new Error('repos:create handler was never registered')
     }
+
     return handler(null, args) as Promise<CreateResult>
   }
+
   const callDefaultCreateProjectParent = (): Promise<string> => {
     const handler = handlers.get('repos:getDefaultCreateProjectParent')
+
     if (!handler) {
       throw new Error('repos:getDefaultCreateProjectParent handler was never registered')
     }
+
     return Promise.resolve(handler(null, undefined)).then((value) => value as string)
   }
 
@@ -512,6 +520,7 @@ describe('repos:create', () => {
       kind: 'git',
       badgeColor: '#ef4444'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
 
     const result = await callCreate({ parentPath: '/tmp', name: 'dupe-color', kind: 'git' })

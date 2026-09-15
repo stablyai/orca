@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs'
 
 const MAX_ERROR_TEXT_LENGTH = 200
+
 // Absolute POSIX/Windows paths, which routinely appear inside cleanup error text.
 const ABSOLUTE_PATH = /(?:[A-Za-z]:\\|\/)[\w.\-\\/]{2,}/g
 
@@ -8,6 +9,7 @@ function redactText(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
+
   return value.replace(ABSOLUTE_PATH, '<path>').slice(0, MAX_ERROR_TEXT_LENGTH)
 }
 
@@ -15,6 +17,7 @@ function redactSamples(samples: unknown): unknown {
   if (!Array.isArray(samples)) {
     return samples
   }
+
   return samples.map((sample) =>
     sample && typeof sample === 'object' && 'cleanupError' in sample
       ? { ...sample, cleanupError: redactText((sample as { cleanupError: unknown }).cleanupError) }

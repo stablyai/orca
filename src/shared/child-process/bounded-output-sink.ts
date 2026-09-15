@@ -14,14 +14,18 @@ export function createOutputSink(maxBytes: number): {
 } {
   const chunks: Buffer[] = []
   let bytes = 0
+
   return {
     write(raw) {
       const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw)
       const remaining = maxBytes - bytes
+
       if (remaining <= 0) {
         bytes += chunk.length
+
         return
       }
+
       chunks.push(chunk.length > remaining ? chunk.subarray(0, remaining) : chunk)
       bytes += chunk.length
     },

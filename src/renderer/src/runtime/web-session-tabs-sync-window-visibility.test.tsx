@@ -21,6 +21,7 @@ vi.mock('./use-runtime-session-mirror-environment-key', () => ({
 
 vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
+
   return {
     ...actual,
     getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
@@ -33,6 +34,7 @@ vi.mock('./web-session-terminal-orphan-recovery', () => ({
 
 vi.mock('./web-runtime-session', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeSessionModule>()
+
   return { ...actual, createWebRuntimeSessionTerminal: mocks.createTerminal }
 })
 
@@ -56,14 +58,21 @@ import {
 } from './window-visibility-subscription-parking'
 
 const ENV_A = 'env-a'
+
 const ENV_B = 'env-b'
+
 const WORKTREE = 'repo-a::worktree-a'
+
 const REVISION_A = 101
+
 const REVISION_B = 201
+
 const MIRROR_KEY = `${ENV_A}\u0001runtime-a\u00010\u0001${REVISION_A}\u0000${ENV_B}\u0001runtime-b\u00010\u0001${REVISION_B}`
+
 const initialState = useAppStore.getInitialState()
 
 type RuntimeSubscribe = typeof window.api.runtimeEnvironments.subscribe
+
 type RuntimeSubscription = {
   request: Parameters<RuntimeSubscribe>[0]
   callbacks: Parameters<RuntimeSubscribe>[1]
@@ -76,6 +85,7 @@ type Deferred<T> = {
 }
 
 const subscriptions: RuntimeSubscription[] = []
+
 const runtimeCall = vi.fn(async (_args: { method: string }) => ({
   id: 'list-all',
   ok: true as const,
@@ -97,17 +107,21 @@ const EMPTY_INVENTORY_CALLS = [
   'terminal.list',
   'terminal.list'
 ]
+
 const runtimeSubscribe = vi.fn<RuntimeSubscribe>(async (request, callbacks) => {
   const unsubscribe = vi.fn()
   subscriptions.push({ request, callbacks, unsubscribe })
+
   return { unsubscribe, sendBinary: vi.fn() }
 })
 
 function createDeferred<T>(): Deferred<T> {
   let resolve = (_value: T): void => {}
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -167,10 +181,13 @@ function findSubscription(
   const matches = subscriptions.filter(
     ({ request }) => request.method === method && request.selector === selector
   )
+
   const subscription = matches[occurrence]
+
   if (!subscription) {
     throw new Error(`Missing ${method} subscription ${occurrence} for ${selector}`)
   }
+
   return subscription
 }
 
@@ -186,6 +203,7 @@ async function publish(
       result,
       _meta: { runtimeId: 'runtime-test' }
     }
+
     subscription.callbacks.onResponse(
       replayed ? tagRuntimeSubscriptionReplayResponse(response) : response
     )
@@ -198,6 +216,7 @@ function seedRemoteMirrorState(): void {
     { id: ENV_A, createdAt: 100, pairingRevision: REVISION_A },
     { id: ENV_B, createdAt: 200, pairingRevision: REVISION_B }
   ] as PublicKnownRuntimeEnvironment[]
+
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
   useAppStore.setState(
     {
@@ -594,10 +613,12 @@ describe('useWebSessionTabsSync window visibility', () => {
     })
 
     await parkAndReveal()
+
     const slowOtherSnapshot = {
       ...makeEmptySnapshot(),
       worktree: 'repo-a::other-worktree'
     }
+
     const slowInventoryRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
     const slowUpdateRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
     mocks.recoverSnapshot
@@ -736,6 +757,7 @@ describe('useWebSessionTabsSync window visibility', () => {
       ...makeEmptySnapshot(),
       worktree: 'repo-a::other-worktree'
     }
+
     const olderInventoryRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
     mocks.recoverSnapshot.mockImplementationOnce(() => olderInventoryRecovery.promise)
     const resumedGlobal = findSubscription('session.tabs.subscribeAll', ENV_A, 1)
@@ -779,6 +801,7 @@ describe('useWebSessionTabsSync window visibility', () => {
         ...makeEmptySnapshot(),
         worktree: 'repo-a::other-worktree'
       }
+
       const slowInventoryRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
       mocks.recoverSnapshot.mockImplementationOnce(() => slowInventoryRecovery.promise)
       await publish(

@@ -36,38 +36,50 @@ async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe>
   return page.evaluate((needle) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId ?? null
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? (state?.activeTabId ?? null)
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!tabId || !pane) {
       throw new Error('active terminal pane unavailable')
     }
+
     const terminal = pane.terminal
     const buffer = terminal.buffer.active
     let hit: { row: number; col: number } | null = null
+
     for (let row = 0; row < terminal.rows; row += 1) {
       const line = buffer.getLine(buffer.viewportY + row)
+
       if (!line) {
         continue
       }
+
       const idx = line.translateToString(true).indexOf(needle)
+
       if (idx !== -1) {
         hit = { row, col: idx }
         break
       }
     }
+
     if (!hit) {
       throw new Error('link text not visible in terminal viewport')
     }
+
     const screen = terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     if (!screen) {
       throw new Error('xterm-screen element unavailable')
     }
+
     // Aim at the middle of the link text so the pointer lands squarely inside
     // the link range regardless of rounding.
     return {
@@ -88,9 +100,11 @@ async function hoverAndReadActiveLinkText(page: Page, probe: HoverProbe): Promis
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     if (!pane || !screen) {
       throw new Error('xterm-screen element unavailable')
     }
+
     const rect = screen.getBoundingClientRect()
     const clientX = rect.left + (col + 0.5) * (rect.width / pane.terminal.cols)
     const clientY = rect.top + (row + 0.5) * (rect.height / pane.terminal.rows)
@@ -98,6 +112,7 @@ async function hoverAndReadActiveLinkText(page: Page, probe: HoverProbe): Promis
       new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX, clientY })
     )
   }, probe)
+
   return readActiveLinkText(page, probe.tabId)
 }
 
@@ -106,9 +121,11 @@ async function readActiveLinkText(page: Page, tabId: string): Promise<string | n
     ({ tabId }) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       const core = pane?.terminal as unknown as
         | { _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } } }
         | undefined
+
       return core?._core?.linkifier?.currentLink?.link?.text ?? null
     },
     { tabId }
@@ -120,6 +137,7 @@ async function readTerminalCursor(page: Page, tabId: string): Promise<string | n
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     return screen ? getComputedStyle(screen).cursor : null
   }, tabId)
 }
@@ -128,6 +146,7 @@ async function isTerminalSurfaceVisible(page: Page, tabId: string): Promise<bool
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return Boolean(pane?.container.isConnected && pane.container.getClientRects().length > 0)
   }, tabId)
 }
@@ -137,9 +156,11 @@ async function activateHoveredLink(page: Page, probe: HoverProbe): Promise<void>
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     if (!pane || !screen) {
       throw new Error('xterm-screen element unavailable')
     }
+
     const rect = screen.getBoundingClientRect()
     const clientX = rect.left + (col + 0.5) * (rect.width / pane.terminal.cols)
     const clientY = rect.top + (row + 0.5) * (rect.height / pane.terminal.rows)
@@ -184,6 +205,7 @@ async function activeWorktreePath(page: Page): Promise<string> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const id = state?.activeWorktreeId
+
     return (
       Object.values(state?.worktreesByRepo ?? {})
         .flat()
@@ -240,6 +262,7 @@ async function assertLinkRecoversAfterReturn(
   // The pointer cursor is the user-visible hover affordance; currentLink is
   // also checked above because it is the backing state xterm requires to click.
   await expect.poll(() => readTerminalCursor(page, probe.tabId)).toBe('pointer')
+
   return probe
 }
 
@@ -293,10 +316,13 @@ test.describe('Terminal link hover after worktree return', () => {
     orcaPage
   }) => {
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'link-hover repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -327,6 +353,7 @@ test.describe('Terminal link hover after worktree return', () => {
         needle,
         expectContains: fileName
       })
+
       await activateHoveredLink(orcaPage, probe)
       // The editor header is the user-visible result of a successful terminal
       // link activation; store state alone could pass with a blank editor.
@@ -336,6 +363,7 @@ test.describe('Terminal link hover after worktree return', () => {
     } finally {
       await orcaPage.evaluate((filePath) => {
         const state = window.__store?.getState()
+
         if (state?.openFiles.some((file) => file.filePath === filePath)) {
           state.closeFile(filePath)
         }
@@ -348,10 +376,13 @@ test.describe('Terminal link hover after worktree return', () => {
     orcaPage
   }) => {
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'link-hover repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }

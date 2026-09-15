@@ -7,6 +7,7 @@ export type HiddenPressureOutputMode = 'tui' | 'plain' | 'title' | 'latin' | 'ri
 export function pressureOutputScript(runId: string, mode: HiddenPressureOutputMode): string {
   const headerPrefix = mode === 'tui' || mode === 'rich-model' ? '\\x1b[0m' : ''
   const donePrefix = mode === 'tui' || mode === 'rich-model' ? '\\x1b[0m' : ''
+
   const chunkExpression =
     mode === 'plain'
       ? "'plain pressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\n'"
@@ -17,10 +18,12 @@ export function pressureOutputScript(runId: string, mode: HiddenPressureOutputMo
           : mode === 'rich-model'
             ? "'\\x1b[?2026h\\x1b[?1049h\\x1b[2J\\x1b[H\\x1b[?25l\\x1b[2;36m╭────────────────────────────────────────╮\\x1b[0m\\r\\n\\x1b[2;36m│ rich model pane=' + paneIndex + ' frame=' + frame + ' 😀 ███░ │\\x1b[0m\\r\\n\\x1b[2;36m│ ' + chunkBody + ' │\\x1b[0m\\r\\n\\x1b[2;36m╰────────────────────────────────────────╯\\x1b[0m\\x1b[6;4H\\x1b[?25h\\x1b[?2026l\\n'"
             : "'\\x1b[?2026h\\x1b[1;1Hpressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x1b[?2026l\\n'"
+
   // Why only rich-model: it is the one mode that enters the alternate screen, and an
   // alt-screen owner that exits is exactly the dead TUI main's recovery barrier
   // discards — frames and done marker with it. Scenario cleanup Ctrl-Cs the pane.
   const holdOpen = mode === 'rich-model' ? `\n${HOLD_ALTERNATE_SCREEN_OPEN}` : ''
+
   return `
 const paneIndex = process.argv[2] ?? '0'
 const targetChars = Number(process.argv[3] ?? '0')

@@ -51,6 +51,7 @@ import { AutomationListTableHeader } from './AutomationListTableHeader'
 import { AutomationListToolbar } from './AutomationListToolbar'
 
 const TEMPLATE_EMPTY_STATES: ReadonlySet<string> = new Set(['host-empty', 'all-hosts-empty'])
+
 const EMPTY_AUTOMATION_RUNS: ReadonlyMap<string, AutomationRun> = new Map()
 
 type AutomationsListPanelProps = {
@@ -166,24 +167,29 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     isRefreshing,
     onOpenRuns
   } = props
+
   const listRef = useRef<HTMLDivElement>(null)
   // Hosts moved into the Filters menu, so its toolbar row is the focus fallback now.
   const toolbarRef = useRef<HTMLDivElement>(null)
   const pendingKeyboardScrollRef = useRef(false)
+
   // Why: keyboard traversal and focus recovery read render order, which the sort owns.
   const rowKeys = React.useMemo(
     () => sortedListItems.filter((item) => item.kind === 'local').map((item) => item.id),
     [sortedListItems]
   )
+
   const visibleItems = React.useMemo(
     () => sortedListItems.map((item) => ({ kind: item.kind, id: item.id })),
     [sortedListItems]
   )
+
   useAutomationListFocusRecovery({
     rowKeys,
     containerRef: listRef,
     fallbackRef: toolbarRef
   })
+
   const handleSearchArrowNavigate = React.useCallback(
     (key: AutomationListArrowKey) => {
       const next = getAutomationListArrowNavigationTarget({
@@ -192,20 +198,26 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
         selectedExternalKey,
         key
       })
+
       if (!next) {
         return
       }
+
       const alreadySelected =
         next.kind === 'local'
           ? selectedExternalKey === null && selectedRowKey === next.id
           : selectedExternalKey === next.id
+
       if (alreadySelected) {
         listRef.current
           ?.querySelector('[data-current="true"]')
           ?.scrollIntoView({ block: 'nearest' })
+
         return
       }
+
       pendingKeyboardScrollRef.current = true
+
       if (next.kind === 'local') {
         selectExternalKey(null)
         selectAutomationRow(next.id)
@@ -224,6 +236,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
       visibleItems
     ]
   )
+
   const handleSearchEnter = createAutomationListEnterHandler({
     items: visibleItems,
     selectedId: selectedRowKey,
@@ -233,10 +246,12 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     setActivePaneTab,
     onOpenDetail
   })
+
   React.useEffect(() => {
     if (!pendingKeyboardScrollRef.current) {
       return
     }
+
     pendingKeyboardScrollRef.current = false
     listRef.current?.querySelector('[data-current="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [selectedExternalKey, selectedRowKey])
@@ -244,6 +259,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
   // A leftover single-host query scope from before hosts moved into the Filters menu.
   const legacyScopeStableKey = automationHostFilterStableKey(hostCatalog.resolution.effective)
   const menuHostKeys = listFilter.hostStableKeys ?? []
+
   const selectedHostLabel =
     menuHostKeys.length > 0
       ? menuHostKeys
@@ -256,12 +272,15 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
         ? null
         : (hostCatalog.resolution.entry?.label ??
           translate('auto.components.automations.hostPicker.loadingHost', 'Loading host…'))
+
   const emptyStateInput = {
     resolution: hostCatalog.resolution,
     ...searchCounts,
     filterActive: listFilterActive
   }
+
   const emptyState = resolveAutomationListEmptyState(emptyStateInput)
+
   const rowProps = {
     selectedRowKey,
     isSelectedLocal: selectedExternalKey === null,

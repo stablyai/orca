@@ -17,11 +17,13 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+
   return { ...actual, callRuntimeRpc: mockCallRuntimeRpc }
 })
 
@@ -41,17 +43,20 @@ function storeWithOnlyBrowserTab(): {
     activeWorktreeId: WT,
     activeTabType: 'terminal'
   })
+
   const workspace = store.getState().createBrowserTab(WT, 'about:blank', {
     activate: true,
     browserPageId: 'remote-page-1',
     browserRuntimeEnvironmentId: 'env-1'
   })
+
   const pageId = store.getState().browserPagesByWorkspace[workspace.id]?.[0]?.id ?? ''
   store.getState().setRemoteBrowserPageHandle(pageId, {
     environmentId: 'env-1',
     remotePageId: 'remote-page-1',
     staged: true
   })
+
   return { store, workspaceId: workspace.id, pageId }
 }
 
@@ -66,10 +71,12 @@ function storeWithThreeBrowserTabs(): {
     activeWorktreeId: WT,
     activeTabType: 'terminal'
   })
+
   const ids = [0, 1, 2].map(
     (index) =>
       store.getState().createBrowserTab(WT, `https://example.test/${index}`, { activate: true }).id
   )
+
   return { store, ids }
 }
 
@@ -173,16 +180,20 @@ describe('closeBrowserTab with reason cleanup', () => {
     const { store, workspaceId } = storeWithOnlyBrowserTab()
     const original = store.getState().browserPagesByWorkspace[workspaceId][0]
     let idReads = 0
+
     const pages = Array.from({ length: 1000 }, (_, index) => ({
       ...original,
       get id() {
         idReads++
+
         return `closed-${index}`
       }
     }))
+
     const unrelated = Object.fromEntries(
       Array.from({ length: 1000 }, (_, i) => [`other-${i}`, true as const])
     )
+
     store.setState({
       browserPagesByWorkspace: { [workspaceId]: pages },
       pendingAddressBarFocusByPageId: { ...unrelated, 'closed-999': true, [workspaceId]: true },

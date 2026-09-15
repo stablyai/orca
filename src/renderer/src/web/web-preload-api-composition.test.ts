@@ -83,10 +83,13 @@ describe('web preload API composition', () => {
 
   it('snapshots E2E config before runtime storage initialization', async () => {
     const evaluationOrder: string[] = []
+
     const createE2EConfig = vi.fn((config: unknown) => {
       evaluationOrder.push('e2e')
+
       return config
     })
+
     vi.doMock('../../../shared/e2e-config', () => ({ createE2EConfig }))
     vi.stubEnv('VITE_EXPOSE_STORE', 'true')
     const globals = installBrowserGlobals('Linux')
@@ -96,6 +99,7 @@ describe('web preload API composition', () => {
     const readStored = globals.storage.getItem.bind(globals.storage)
     vi.spyOn(globals.storage, 'getItem').mockImplementation((key) => {
       evaluationOrder.push(`storage:${key}`)
+
       return readStored(key)
     })
 

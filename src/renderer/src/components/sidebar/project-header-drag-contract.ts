@@ -61,7 +61,9 @@ export function isProjectHeaderDragHandleTarget(
   if (!(target instanceof Element)) {
     return false
   }
+
   const dragHandle = target.closest(REPO_HEADER_DRAG_HANDLE_SELECTOR)
+
   return dragHandle !== null && currentTarget.contains(dragHandle)
 }
 
@@ -74,5 +76,6 @@ export function isRepoHeaderActionTarget(
   if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
+
   return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null
 }

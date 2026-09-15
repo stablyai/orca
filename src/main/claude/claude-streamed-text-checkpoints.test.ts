@@ -9,17 +9,20 @@ function identityOf(uuid: string): AgentJournalItemIdentity {
 function checkpoints() {
   const rows: { uuid: string; text: string }[] = []
   let scheduled: (() => void) | null = null
+
   const store = createClaudeStreamedTextCheckpoints({
     persist: (identity, text) => {
       rows.push({ uuid: 'uuid' in identity ? identity.uuid : '', text })
     },
     schedule: (run) => {
       scheduled = run
+
       return () => {
         scheduled = null
       }
     }
   })
+
   return {
     store,
     rows,

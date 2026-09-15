@@ -132,6 +132,7 @@ async function installLinearPersistenceBackend(
       const workspaces = payload.multiWorkspace
         ? payload.fixture.workspaces
         : [payload.fixture.workspaces[0]]
+
       let activeWorkspaceId: string = workspaces[0].id
 
       const status = () => ({
@@ -148,6 +149,7 @@ async function installLinearPersistenceBackend(
             workspaces.some((workspace) => workspace.id === team.workspaceId)
           )
         }
+
         return payload.fixture.teams.filter((team) => team.workspaceId === workspaceId)
       }
 
@@ -157,6 +159,7 @@ async function installLinearPersistenceBackend(
             workspaces.some((workspace) => workspace.id === issue.workspaceId)
           )
         }
+
         return payload.fixture.issues.filter((issue) => issue.workspaceId === workspaceId)
       }
 
@@ -168,11 +171,13 @@ async function installLinearPersistenceBackend(
         'linear:selectWorkspace',
         async (_event, args: { workspaceId?: string } | undefined) => {
           const next = args?.workspaceId
+
           if (typeof next === 'string' && next.trim()) {
             if (next === 'all' || workspaces.some((workspace) => workspace.id === next)) {
               activeWorkspaceId = next
             }
           }
+
           return status()
         }
       )
@@ -196,9 +201,11 @@ async function installLinearPersistenceBackend(
       ipcMain.removeHandler('linear:teamStates')
       ipcMain.handle('linear:teamStates', async (_event, args: { teamId?: string } | undefined) => {
         const teamId = args?.teamId
+
         if (!teamId) {
           return []
         }
+
         return (payload.fixture.statesByTeamId as Record<string, (typeof STATE_A)[]>)[teamId] ?? []
       })
 
@@ -215,9 +222,11 @@ async function installLinearPersistenceBackend(
 async function openLinearTasks(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     await store.getState().checkLinearConnection(true)
     store.getState().openTaskPage({ taskSource: 'linear' })
   })
@@ -226,9 +235,11 @@ async function openLinearTasks(page: Page): Promise<void> {
 async function closeTasksPage(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     // Why: store close is locale-stable; the Close tasks label is localized.
     store.getState().closeTaskPage()
   })
@@ -250,9 +261,11 @@ async function waitForLinearIssuesChrome(page: Page, issueTitle: string): Promis
 async function openViewMenu(page: Page): Promise<void> {
   const viewButton = page.getByRole('button', { name: 'View', exact: true })
   await expect(viewButton).toBeVisible()
+
   if ((await page.getByRole('menuitemradio', { name: 'Board' }).count()) > 0) {
     return
   }
+
   await viewButton.click()
   await expect(page.getByRole('menuitemradio', { name: 'Board' })).toBeVisible()
 }
@@ -268,6 +281,7 @@ async function dismissOverlayChrome(page: Page): Promise<void> {
   ) {
     await page.keyboard.press('Escape')
   }
+
   await expect(page.getByRole('menuitemradio', { name: 'Board' })).toHaveCount(0)
   await expect(page.locator('[data-slot="popover-content"]')).toHaveCount(0)
 }
@@ -340,7 +354,9 @@ async function waitForLinearIssueViewPersisted(
           (key) => window.localStorage.getItem(key),
           LINEAR_ISSUE_VIEW_STORAGE_KEY
         )
+
         const view = stored ? (JSON.parse(stored) as LinearIssueViewResume) : undefined
+
         return predicate(view) ? 'ready' : 'pending'
       },
       {
@@ -376,6 +392,7 @@ async function switchLinearWorkspace(page: Page, organizationName: string): Prom
     .locator('button[role="combobox"]')
     .filter({ hasText: /All teams|Alpha|Beta|All workspaces/ })
     .first()
+
   await expect(trigger).toBeVisible({ timeout: 10_000 })
   await trigger.click()
   const popover = page.locator('[data-slot="popover-content"]')
@@ -387,7 +404,9 @@ function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
+
   return repoPath
 }
 
@@ -418,7 +437,9 @@ test.describe('Linear issue view persistence', () => {
       ) {
         return false
       }
+
       const filter = view.filtersByWorkspaceId?.[WORKSPACE_A.id]
+
       return Boolean(filter?.stateIds?.includes(STATE_A.id))
     })
 
@@ -453,6 +474,7 @@ test.describe('Linear issue view persistence', () => {
 
     await waitForLinearIssueViewPersisted(orcaPage, (view) => {
       const filter = view?.filtersByWorkspaceId?.[WORKSPACE_A.id]
+
       return Boolean(filter?.priorities?.includes(2))
     })
 
@@ -469,6 +491,7 @@ test.describe('Linear issue view persistence', () => {
     await waitForLinearIssueViewPersisted(orcaPage, (view) => {
       const a = view?.filtersByWorkspaceId?.[WORKSPACE_A.id]
       const b = view?.filtersByWorkspaceId?.[WORKSPACE_B.id]
+
       return Boolean(a?.priorities?.includes(2) && b?.priorities?.includes(4))
     })
 
@@ -522,6 +545,7 @@ test('restores Linear view preferences after an app restart', async (// oxlint-d
       ) {
         return false
       }
+
       return Boolean(view.filtersByWorkspaceId?.[WORKSPACE_A.id]?.stateIds?.includes(STATE_A.id))
     })
     await expectRestoredLinearView(first.page)
@@ -546,12 +570,14 @@ test('restores Linear view preferences after an app restart', async (// oxlint-d
       if (!app) {
         continue
       }
+
       try {
         await session.close(app)
       } catch {
         // best-effort cleanup
       }
     }
+
     await session.dispose()
   }
 })

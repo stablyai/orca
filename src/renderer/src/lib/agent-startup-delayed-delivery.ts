@@ -20,7 +20,9 @@ type PendingAgentStartupDelivery = {
 }
 
 const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()
+
 const staleStartupRecheckTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
+
 let unsubscribePendingAgentStartupDeliveries: (() => void) | null = null
 
 export function resolveAgentStartupTabId(
@@ -44,23 +46,31 @@ export function getAgentStartupTabPtyId(
   launchToken: string
 ): string | null {
   const livePtyIds = new Set(state.ptyIdsByTabId[tabId] ?? [])
+
   if (livePtyIds.size === 0) {
     return null
   }
+
   for (const [paneKey, entry] of Object.entries(state.agentLaunchConfigByPaneKey ?? {})) {
     const identity = entry.identity
+
     if (identity.tabId !== tabId || identity.launchToken !== launchToken) {
       continue
     }
+
     const leafId = identity.leafId ?? parsePaneKey(paneKey)?.leafId
+
     if (!leafId) {
       continue
     }
+
     const ptyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+
     if (ptyId && livePtyIds.has(ptyId)) {
       return ptyId
     }
   }
+
   return null
 }
 
@@ -90,6 +100,7 @@ function ensurePendingAgentStartupSubscription(): void {
   if (unsubscribePendingAgentStartupDeliveries) {
     return
   }
+
   const initial = useAppStore.getState()
   // Capture the individual references so the gate stays allocation-free and
   // remains correct even if a subscribe adapter reuses its state object.
@@ -111,6 +122,7 @@ function ensurePendingAgentStartupSubscription(): void {
     ) {
       return
     }
+
     // Update before flushing because delivery can synchronously write the store.
     previousTabs = state.tabsByWorktree
     previousPendingStartups = state.pendingStartupByTabId
@@ -125,15 +137,18 @@ function stopPendingAgentStartupSubscriptionIfIdle(): void {
   if (pendingAgentStartupDeliveries.size > 0 || !unsubscribePendingAgentStartupDeliveries) {
     return
   }
+
   unsubscribePendingAgentStartupDeliveries()
   unsubscribePendingAgentStartupDeliveries = null
 }
 
 export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDelivery): void {
   const key = deliveryKey(delivery)
+
   if (isAgentStartupDeliveryConsumed(key)) {
     return
   }
+
   pendingAgentStartupDeliveries.set(key, delivery)
   ensurePendingAgentStartupSubscription()
   flushPendingAgentStartupDeliveries()
@@ -142,9 +157,11 @@ export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDe
 export function resetAgentStartupDelayedDeliveryForTests(): void {
   pendingAgentStartupDeliveries.clear()
   clearConsumedAgentStartupDeliveriesForTests()
+
   for (const timer of staleStartupRecheckTimers.values()) {
     globalThis.clearTimeout(timer)
   }
+
   staleStartupRecheckTimers.clear()
   unsubscribePendingAgentStartupDeliveries?.()
   unsubscribePendingAgentStartupDeliveries = null
@@ -156,12 +173,15 @@ export function beginAgentStartupDeliveryAttempt(args: {
   launchToken: string
 }): boolean {
   const key = deliveryKey(args)
+
   if (isAgentStartupDeliveryConsumed(key)) {
     return false
   }
+
   markAgentStartupDeliveryConsumed(key)
   pendingAgentStartupDeliveries.delete(key)
   clearStaleStartupRecheck(key)
+
   return true
 }
 
@@ -175,27 +195,35 @@ export function releaseAgentStartupDeliveryAttempt(args: {
 
 function flushPendingAgentStartupDeliveries(): void {
   const state = useAppStore.getState()
+
   for (const [key, delivery] of pendingAgentStartupDeliveries) {
     const { tabId, launchToken } = delivery
+
     if (!worktreeStillOwnsStartupTab(state, delivery.worktreeId, tabId)) {
       pendingAgentStartupDeliveries.delete(key)
       continue
     }
+
     const queuedLaunchToken = getPendingStartupLaunchToken(state, tabId)
     const launchRegistered = hasRegisteredStartupLaunch(state, tabId, launchToken)
+
     if (queuedLaunchToken !== launchToken && !launchRegistered && queuedLaunchToken !== undefined) {
       pendingAgentStartupDeliveries.delete(key)
       clearStaleStartupRecheck(key)
       continue
     }
+
     if (queuedLaunchToken === undefined && !launchRegistered) {
       scheduleStaleStartupRecheck(key)
       continue
     }
+
     const ptyId = getAgentStartupTabPtyId(state, tabId, launchToken)
+
     if (!ptyId) {
       continue
     }
+
     // Why: once the launch-bound PTY exists, the bounded readiness/paste path
     // owns success or failure. Consume before awaiting so store churn cannot
     // duplicate a linked-work-item draft.
@@ -205,6 +233,7 @@ function flushPendingAgentStartupDeliveries(): void {
       })
     }
   }
+
   stopPendingAgentStartupSubscriptionIfIdle()
 }
 
@@ -212,17 +241,22 @@ function scheduleStaleStartupRecheck(key: string): void {
   if (staleStartupRecheckTimers.has(key)) {
     return
   }
+
   staleStartupRecheckTimers.set(
     key,
     globalThis.setTimeout(() => {
       staleStartupRecheckTimers.delete(key)
       const delivery = pendingAgentStartupDeliveries.get(key)
+
       if (!delivery) {
         stopPendingAgentStartupSubscriptionIfIdle()
+
         return
       }
+
       const state = useAppStore.getState()
       const queuedLaunchToken = getPendingStartupLaunchToken(state, delivery.tabId)
+
       if (
         queuedLaunchToken === undefined &&
         !hasRegisteredStartupLaunch(state, delivery.tabId, delivery.launchToken)
@@ -231,6 +265,7 @@ function scheduleStaleStartupRecheck(key: string): void {
       } else {
         flushPendingAgentStartupDeliveries()
       }
+
       stopPendingAgentStartupSubscriptionIfIdle()
     }, 1000)
   )
@@ -238,9 +273,11 @@ function scheduleStaleStartupRecheck(key: string): void {
 
 function clearStaleStartupRecheck(key: string): void {
   const timer = staleStartupRecheckTimers.get(key)
+
   if (!timer) {
     return
   }
+
   globalThis.clearTimeout(timer)
   staleStartupRecheckTimers.delete(key)
 }

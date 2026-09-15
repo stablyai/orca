@@ -4,6 +4,7 @@ import type { SessionFileDiscovery } from '../ai-vault/session-scanner-types'
 import { sameSessionSearchRoots, sessionSearchRootListings } from './session-search-scan-roots'
 
 const STATE = '/tmp/ss-roots/openclaw-state'
+
 const LEGACY = '/tmp/ss-roots/openclaw-legacy'
 
 function file(path: string): SessionFileDiscovery['files'][number] {
@@ -13,6 +14,7 @@ function file(path: string): SessionFileDiscovery['files'][number] {
 it('splits a merged discovery into the real directories behind it', () => {
   const current = join(STATE, 'agents')
   const legacy = join(LEGACY, 'agents')
+
   const listings = sessionSearchRootListings(
     { openclawStateDir: STATE, openclawLegacyStateDir: LEGACY },
     [
@@ -39,6 +41,7 @@ it('splits a merged discovery into the real directories behind it', () => {
 it('attributes a file by path segment, not by string prefix', () => {
   const agents = join(STATE, 'agents')
   const legacy = join(LEGACY, 'agents')
+
   const listings = sessionSearchRootListings(
     { openclawStateDir: STATE, openclawLegacyStateDir: LEGACY },
     [

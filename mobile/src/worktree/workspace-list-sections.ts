@@ -13,6 +13,7 @@ import { sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
+
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
 function makeSection(
@@ -23,6 +24,7 @@ function makeSection(
   collapsedGroups?: ReadonlySet<string>
 ): Section {
   const rows = collapsedGroups ? applyMobileWorkspaceLineage(data, collapsedGroups) : data
+
   return {
     key,
     title,
@@ -41,15 +43,19 @@ export function isWorktreeActive(w: Worktree): boolean {
   if (w.hasHostSidebarActivity !== undefined) {
     return w.hasHostSidebarActivity
   }
+
   if (w.unread) {
     return true
   }
+
   if (w.status) {
     return w.status !== 'inactive'
   }
+
   if (w.liveTerminalCount > 0) {
     return true
   }
+
   return false
 }
 
@@ -57,12 +63,15 @@ function isDefaultBranchWorkspace(w: Worktree): boolean {
   if (w.workspaceKind === 'folder-workspace') {
     return false
   }
+
   if (w.isMainWorktree !== undefined) {
     return w.isMainWorktree && w.branch.trim() !== ''
   }
+
   // Why: older hosts did not include isMainWorktree in worktree.ps, so keep the
   // legacy fallback until all paired runtimes carry the desktop predicate input.
   const branch = w.branch.replace(/^refs\/heads\//, '')
+
   return branch === 'main' || branch === 'master'
 }
 
@@ -76,14 +85,17 @@ function isSleepingSweepExempt(w: Worktree, alwaysShowDefaultBranch: boolean | u
   if (alwaysShowDefaultBranch === false) {
     return false
   }
+
   return w.isMainWorktree ?? (w.workspaceKind === 'folder-workspace' || isDefaultBranchWorkspace(w))
 }
 
 function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
+
   if (mainWorktrees.length === 0) {
     return worktrees
   }
+
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
@@ -93,17 +105,21 @@ export function filterWorktrees(
   search: string
 ): Worktree[] {
   let result = worktrees.filter((w) => !w.isArchived)
+
   if (filters.hideSleeping) {
     result = result.filter(
       (w) => isSleepingSweepExempt(w, filters.alwaysShowDefaultBranch) || isWorktreeActive(w)
     )
   }
+
   if (filters.hideDefaultBranch) {
     result = result.filter((w) => !isDefaultBranchWorkspace(w))
   }
+
   if (filters.filterRepoIds.size > 0) {
     result = result.filter((w) => filters.filterRepoIds.has(w.repoId))
   }
+
   if (search.trim()) {
     const q = search.toLowerCase()
     result = result.filter(
@@ -113,6 +129,7 @@ export function filterWorktrees(
         w.repo.toLowerCase().includes(q)
     )
   }
+
   return result
 }
 
@@ -140,6 +157,7 @@ export function buildSections(
   const canonicalGroupWorktrees = sorted
 
   const sections: Section[] = []
+
   if (pinned.length > 0) {
     sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
   }
@@ -150,31 +168,39 @@ export function buildSections(
     }
   } else if (groupMode === 'repo') {
     const byRepo = new Map<string, Worktree[]>()
+
     for (const w of canonicalGroupWorktrees) {
       const key = w.repo || 'Unknown'
       const list = byRepo.get(key)
+
       if (list) {
         list.push(w)
       } else {
         byRepo.set(key, [w])
       }
     }
+
     const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
     const query = search.trim().toLowerCase()
+
     for (const [displayName, id] of repoIdsByName) {
       if (representedRepoIds.has(id)) {
         continue
       }
+
       if (filters.filterRepoIds.size > 0 && !filters.filterRepoIds.has(id)) {
         continue
       }
+
       if (query && !displayName.toLowerCase().includes(query)) {
         continue
       }
+
       if (!byRepo.has(displayName)) {
         byRepo.set(displayName, [])
       }
     }
+
     for (const [repo, items] of byRepo) {
       const key = `repo:${repoIdsByName.get(repo) ?? repo}`
       sections.push(
@@ -184,17 +210,21 @@ export function buildSections(
   } else if (groupMode === 'workspaceStatus') {
     const renderableWorkspaceStatuses = coerceMobileWorkspaceStatuses(workspaceStatuses)
     const byStatus = new Map<string, Worktree[]>()
+
     for (const w of canonicalGroupWorktrees) {
       const key = getMobileWorkspaceStatus(w, renderableWorkspaceStatuses)
       const list = byStatus.get(key)
+
       if (list) {
         list.push(w)
       } else {
         byStatus.set(key, [w])
       }
     }
+
     for (const status of renderableWorkspaceStatuses) {
       const items = byStatus.get(status.id)
+
       if (items && items.length > 0) {
         sections.push(
           makeSection(
@@ -209,17 +239,21 @@ export function buildSections(
     }
   } else if (groupMode === 'prStatus') {
     const byGroup = new Map<string, Worktree[]>()
+
     for (const w of canonicalGroupWorktrees) {
       const key = getPRGroupKey(w)
       const list = byGroup.get(key)
+
       if (list) {
         list.push(w)
       } else {
         byGroup.set(key, [w])
       }
     }
+
     for (const groupKey of PR_GROUP_ORDER) {
       const items = byGroup.get(groupKey)
+
       if (items && items.length > 0) {
         sections.push(
           makeSection(

@@ -11,6 +11,7 @@ export async function runTerminalPasteOperationWithTimeout<T>(
   }
 
   let timerId: ReturnType<typeof setTimeout> | null = null
+
   try {
     return await Promise.race([
       Promise.resolve()

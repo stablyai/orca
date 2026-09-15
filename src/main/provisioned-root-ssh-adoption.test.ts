@@ -19,6 +19,7 @@ import {
 import { adoptProvisionedRootSshCheckout } from './provisioned-root-ssh-adoption'
 
 const connectionId = 'runtime-ssh-test'
+
 const projectRoot = '/workspace/orca'
 
 describe('adoptProvisionedRootSshCheckout', () => {
@@ -215,9 +216,11 @@ describe('adoptProvisionedRootSshCheckout', () => {
 
   it('rejects a linked worktree and sparse checkout', async () => {
     seedRuntime(userDataPath, projectRoot)
+
     const listWorktrees = vi
       .fn()
       .mockResolvedValue([gitWorktree(projectRoot, { isMainWorktree: false })])
+
     registerSshGitProvider(connectionId, {
       listWorktrees,
       exec: sparseCheckoutProbe(false)
@@ -276,17 +279,20 @@ describe('adoptProvisionedRootSshCheckout', () => {
   it('rejects provider rotation during verification', async () => {
     seedRuntime(userDataPath, projectRoot)
     let resolveList: (value: ReturnType<typeof gitWorktree>[]) => void = () => undefined
+
     const listWorktrees = vi.fn(
       () =>
         new Promise<ReturnType<typeof gitWorktree>[]>((resolve) => {
           resolveList = resolve
         })
     )
+
     registerSshGitProvider(connectionId, {
       listWorktrees,
       exec: sparseCheckoutProbe(false)
     } as never)
     const { store } = makeStore()
+
     const adoption = adoptProvisionedRootSshCheckout({
       userDataPath,
       request: request(projectRoot),
@@ -294,6 +300,7 @@ describe('adoptProvisionedRootSshCheckout', () => {
       store,
       isRepoCurrent: () => true
     })
+
     await vi.waitFor(() => expect(listWorktrees).toHaveBeenCalledOnce())
     rotateSshProviderAuthority(connectionId)
     resolveList([gitWorktree(projectRoot)])
@@ -430,6 +437,7 @@ function makeStore(): {
     lastActivityAt: 0,
     ...updates
   }))
+
   return {
     store: {
       getSettings: () => ({ nestWorkspaces: false, workspaceDir: '.orca/worktrees' }),

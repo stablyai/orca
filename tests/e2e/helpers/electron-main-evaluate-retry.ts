@@ -1,4 +1,5 @@
 const MAIN_EVALUATE_ATTEMPTS = 5
+
 const MAIN_EVALUATE_RETRY_MS = 200
 
 /**
@@ -31,8 +32,10 @@ export async function retryTransientMainEvaluate<T>(run: () => Promise<T>): Prom
       if (!isTransientMainEvaluateError(error)) {
         throw error
       }
+
       await waitBeforeRetry()
     }
   }
+
   return run()
 }

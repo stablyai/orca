@@ -16,6 +16,7 @@ describe('source-control AI variable registry', () => {
     // Why: the registry type already makes an undocumented chip a compile error;
     // this keeps the guarantee falsifiable at runtime if that type ever loosens.
     const documented = new Set<string>(Object.keys(SOURCE_CONTROL_ACTION_VARIABLE_INFO))
+
     const undocumented = [...new Set(Object.values(SOURCE_CONTROL_ACTION_VARIABLES).flat())].filter(
       (variable) => !documented.has(variable)
     )
@@ -27,6 +28,7 @@ describe('source-control AI variable registry', () => {
     expect(SOURCE_CONTROL_ACTION_VARIABLES.commitMessage).toContain('linkedIssue')
     expect(SOURCE_CONTROL_ACTION_VARIABLES.pullRequest).toContain('linkedIssue')
     expect(SOURCE_CONTROL_ACTION_VARIABLES.branchName).not.toContain('linkedIssue')
+
     for (const actionId of SOURCE_CONTROL_LAUNCH_ACTION_IDS) {
       expect(SOURCE_CONTROL_ACTION_VARIABLES[actionId]).not.toContain('linkedIssue')
     }
@@ -87,6 +89,7 @@ describe('withLinkedIssueDraftContext', () => {
     }
 
     expect(withLinkedIssueDraftContext(context, 42)).toEqual({ ...context, linkedIssue: 42 })
+
     for (const value of [null, undefined, Number.NaN, 0, -7, 12.9]) {
       expect(withLinkedIssueDraftContext(context, value)).toBe(context)
     }

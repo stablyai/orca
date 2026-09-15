@@ -21,10 +21,12 @@ describe('agent session option catalog', () => {
 
   it('merges discovered labels while preserving cataloged option shapes', () => {
     const seed = getAgentSessionOptionCatalog('cursor')!.models
+
     const merged = mergeCatalogModels(seed, [
       { id: 'gpt-5.3-codex', label: 'GPT 5.3 (live)', options: [] },
       { id: 'new-account-model', label: 'new-account-model', options: [] }
     ])
+
     expect(merged.find((model) => model.id === 'gpt-5.3-codex')).toMatchObject({
       label: 'GPT 5.3 (live)',
       options: expect.arrayContaining([expect.objectContaining({ id: 'effort' })])
@@ -80,6 +82,7 @@ describe('agent session option catalog', () => {
         }
       }
     })
+
     const parsed = getAgentSessionOptionCatalog('claude')!.listModels!.parse(stdout)
     expect(parsed.map(({ id }) => id)).toEqual(['opus[1m]', 'sonnet', 'haiku'])
     expect(parsed[0]).toMatchObject({
@@ -101,8 +104,10 @@ describe('agent session option catalog', () => {
 
   it('keeps the Claude seed when list_models output is unsupported or malformed', () => {
     const parse = getAgentSessionOptionCatalog('claude')!.listModels!.parse
+
     const unsupported =
       '{"type":"control_response","response":{"subtype":"error","request_id":"x","error":"Unsupported control request subtype: list_models"}}'
+
     expect(parse(unsupported)).toEqual([])
     expect(parse('')).toEqual([])
     expect(parse('garbage')).toEqual([])
@@ -110,10 +115,12 @@ describe('agent session option catalog', () => {
 
   it('merges discovered Claude variants after the seed and overlays matched labels', () => {
     const catalog = getAgentSessionOptionCatalog('claude')!
+
     const merged = mergeCatalogModels(catalog.models, [
       { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
       { id: 'sonnet', label: 'Sonnet', description: 'Sonnet 5 · Efficient', options: [] }
     ])
+
     expect(merged.map(({ id }) => id)).toEqual(['fable', 'opus', 'sonnet', 'haiku', 'opus[1m]'])
     const sonnet = merged.find((model) => model.id === 'sonnet')!
     expect(sonnet.description).toBe('Sonnet 5 · Efficient')
@@ -125,6 +132,7 @@ describe('agent session option catalog', () => {
     const parsed = getAgentSessionOptionCatalog('cursor')!.listModels!.parse(
       'Available models:\n- auto (default)\n- gpt-5.3-codex\nmodels\n'
     )
+
     expect(parsed.map(({ id }) => id)).toEqual(['auto', 'gpt-5.3-codex'])
   })
 
@@ -134,6 +142,7 @@ describe('agent session option catalog', () => {
       effort: 'high',
       fastMode: true
     })
+
     expect(resolved.args).toEqual(['--model', 'gpt-5.3-codex-high-fast'])
     expect(resolved.appliedValues).toEqual({
       model: 'gpt-5.3-codex',
@@ -165,6 +174,7 @@ describe('agent session option catalog', () => {
       optionId: 'model',
       value: 'opus'
     })
+
     persisted = updateNativeChatSessionOptionDefaults({
       persisted,
       agent: 'claude',
@@ -202,6 +212,7 @@ describe('agent session option catalog', () => {
       optionId: 'model',
       value: 'opus'
     })
+
     expect(resolveNativeChatSessionOptionDefaults(persisted, 'claude')).toEqual({
       model: 'opus'
     })
@@ -226,6 +237,7 @@ describe('agent session option catalog', () => {
       optionId: 'model',
       value: 'sonnet'
     })
+
     const defaults = resolveNativeChatSessionOptionDefaults(persisted, 'claude')
 
     expect(resolveAgentSessionOptionLaunch('claude', defaults)).toEqual({

@@ -69,6 +69,7 @@ function PortAction({
 }): React.JSX.Element {
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
     onClick(event)
+
     if (event.detail > 0) {
       event.currentTarget.blur()
     }
@@ -106,12 +107,15 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+
   const runtimeTarget = useWorktreeRuntimeTarget(
     port.kind === 'workspace' ? port.owner.worktreeId : null
   )
+
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
+
   const openBrowserLabel = translate(
     'auto.components.sidebar.WorktreeCardPorts.33bc7d7495',
     'Open in Browser'
@@ -121,6 +125,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
+
       const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
         settings,
         // Why: keyboard activations have detail=0; only pointer clicks carry
@@ -128,6 +133,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         event: event.detail > 0 ? event : null,
         isMac: navigator.userAgent.includes('Mac')
       })
+
       void openWorkspacePortInBrowser({
         port,
         runtimeTarget,
@@ -176,20 +182,26 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const handleStop = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
+
       if (!canStopWorkspacePort(port)) {
         return
       }
+
       recordFeatureInteraction('ports')
+
       const run = async (): Promise<void> => {
         const result = await killWorkspacePortForTarget(runtimeTarget, {
           repoId: port.owner.repoId,
           pid: port.pid,
           port: port.port
         })
+
         if (!result.ok) {
           toast.error(result.reason)
+
           return
         }
+
         toast.success(
           translate(
             'auto.components.sidebar.WorktreeCardPorts.5d1a5d51bb',
@@ -197,12 +209,14 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
             { value0: port.port }
           )
         )
+
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
           replaceWorkspacePortScans,
           getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
+
         if (!refreshResult.ok) {
           toast.error(
             translate(
@@ -215,6 +229,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
           )
         }
       }
+
       void run()
     },
     [

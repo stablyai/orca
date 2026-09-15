@@ -6,7 +6,9 @@ export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
 }
 
 const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
+
 const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16000
+
 const MAX_CLOUD_AUDIO_SECONDS = 10 * 60
 
 type OpenAiTranscriptionResponse = {
@@ -60,10 +62,12 @@ function combineChunks(chunks: Float32Array[]): Float32Array {
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
   const combined = new Float32Array(totalLength)
   let offset = 0
+
   for (const chunk of chunks) {
     combined.set(chunk, offset)
     offset += chunk.length
   }
+
   return combined
 }
 
@@ -71,9 +75,11 @@ function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): st
   if (typeof data.text === 'string') {
     return data.text.trim()
   }
+
   if (typeof data.error?.message === 'string') {
     throw new Error(sanitizeOpenAiTranscriptionErrorMessage(data.error.message))
   }
+
   throw new Error('OpenAI transcription response did not include text')
 }
 
@@ -89,9 +95,11 @@ export class OpenAiTranscriptionSession {
   feedAudio(samples: Float32Array, sampleRate: number): void {
     const normalized = resampleToRate(samples, sampleRate, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
     this.audioSeconds += normalized.length / CLOUD_TRANSCRIPTION_SAMPLE_RATE
+
     if (this.audioSeconds > MAX_CLOUD_AUDIO_SECONDS) {
       throw new Error('Cloud transcription is limited to 10 minutes per dictation')
     }
+
     this.chunks.push(new Float32Array(normalized))
   }
 
@@ -101,6 +109,7 @@ export class OpenAiTranscriptionSession {
     }
 
     const apiModel = OPENAI_TRANSCRIPTION_MODEL_BY_ID[this.modelId]
+
     if (!apiModel) {
       throw new Error(`Unknown OpenAI transcription model: ${this.modelId}`)
     }
@@ -124,11 +133,13 @@ export class OpenAiTranscriptionSession {
     })
 
     const data = (await response.json().catch(() => ({}))) as OpenAiTranscriptionResponse
+
     if (!response.ok) {
       const message =
         typeof data.error?.message === 'string'
           ? sanitizeOpenAiTranscriptionErrorMessage(data.error.message)
           : response.statusText
+
       throw new Error(`OpenAI transcription failed: ${message}`)
     }
 

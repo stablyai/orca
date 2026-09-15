@@ -40,6 +40,7 @@ function resetHookRefs(): void {
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
@@ -49,9 +50,11 @@ vi.mock('react', async (importOriginal) => {
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
+
       if (!reactRefState.slots[index]) {
         reactRefState.slots[index] = { current: value }
       }
+
       return reactRefState.slots[index] as { current: T }
     }
   }
@@ -103,9 +106,12 @@ vi.mock('./terminal-input-activity', () => ({
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
+
   const testHook = ((selector?: (state: ReturnType<typeof realHook.getState>) => unknown) =>
     selector ? selector(realHook.getState()) : realHook.getState()) as typeof realHook
+
   Object.assign(testHook, realHook)
+
   return { ...actual, useAppStore: testHook }
 })
 
@@ -144,10 +150,13 @@ function useMountForFileDrop(
   let onFileDrop: DropCallback = () => {
     throw new Error('onFileDrop callback was not registered')
   }
+
   window.api.ui.onFileDrop = vi.fn((callback) => {
     onFileDrop = callback
+
     return vi.fn()
   })
+
   const manager = {
     getPanes: vi.fn(() => []),
     resumeRendering: vi.fn(),
@@ -158,6 +167,7 @@ function useMountForFileDrop(
     getActivePane: vi.fn(() => null),
     fitAllRevealedPanes: vi.fn()
   }
+
   const paneTransports = new Map<number, never>()
 
   beginHookRender()
@@ -213,6 +223,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       tabId: 'tab-1',
       paneLeafId: 'leaf-1'
     }
+
     onFileDrop(data)
 
     expect(mocks.handleTerminalFileDrop).toHaveBeenCalledWith({

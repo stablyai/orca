@@ -1,4 +1,5 @@
 export type StepNumber = 1 | 2 | 3 | 4 | 5
+
 export type StepId = 'agent' | 'theme' | 'integrations' | 'windows_terminal' | 'notifications'
 
 export const STEPS: readonly {

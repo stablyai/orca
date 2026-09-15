@@ -110,14 +110,17 @@ describe('buildSetupRunnerCommand', () => {
 
 describe('buildSetupRunnerCommand cmd metacharacter guard', () => {
   const cmdRunner = (segment: string) => `C:\\repo${segment}\\.git\\orca\\setup-runner.cmd`
+
   const decodePowerShellCommand = (command: string): string => {
     const encoded = command.match(/-EncodedCommand (\S+)$/)?.[1]
     expect(encoded).toBeTruthy()
     const bytes = atob(encoded as string)
     let decoded = ''
+
     for (let index = 0; index < bytes.length; index += 2) {
       decoded += String.fromCharCode(bytes.charCodeAt(index) | (bytes.charCodeAt(index + 1) << 8))
     }
+
     return decoded
   }
 
@@ -147,6 +150,7 @@ describe('buildSetupRunnerCommand cmd metacharacter guard', () => {
 
   it('passes the runner path through the environment rather than the cmd argument string', () => {
     const runnerScriptPath = cmdRunner('\\100%%\\a&b')
+
     const script = decodePowerShellCommand(
       buildSetupRunnerCommand(runnerScriptPath, 'windows', { family: 'cmd' })
     )

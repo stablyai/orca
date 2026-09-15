@@ -38,6 +38,7 @@ describe('createWorktree composer parent pick', () => {
   function createParentPickStore(parent?: Worktree) {
     const store = createTestStore()
     store.setState({ worktreesByRepo: { repo1: parent ? [parent] : [] } } as Partial<AppState>)
+
     return store
   }
 
@@ -48,6 +49,7 @@ describe('createWorktree composer parent pick', () => {
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'feature', 'origin/main']
     args[25] = { parentWorktreeId }
+
     return createWorktree(...args)
   }
 
@@ -58,6 +60,7 @@ describe('createWorktree composer parent pick', () => {
       path: '/path/parent',
       instanceId: 'parent-instance'
     })
+
     const store = createParentPickStore(parent)
     store.setState({ activeWorkspaceKey: folderWorkspaceKey('folder-1') } as Partial<AppState>)
     mockApi.worktrees.create.mockResolvedValue({
@@ -93,6 +96,7 @@ describe('createWorktree composer parent pick', () => {
       displayName: 'parent-wt',
       isArchived: true
     })
+
     const store = createParentPickStore(parent)
     mockApi.worktrees.create.mockResolvedValue({
       worktree: makeWorktree({ id: 'repo1::/path/child', repoId: 'repo1', path: '/path/child' })
@@ -114,6 +118,7 @@ describe('createWorktree composer parent pick', () => {
       displayName: 'parent-wt',
       instanceId: 'parent-instance'
     })
+
     const store = createParentPickStore(parent)
     mockApi.worktrees.create.mockResolvedValue({
       worktree: makeWorktree({ id: 'repo1::/path/child', repoId: 'repo1', path: '/path/child' }),
@@ -135,18 +140,21 @@ describe('createWorktree composer parent pick', () => {
       path: '/path/parent',
       instanceId: 'parent-instance'
     })
+
     const created = makeWorktree({
       id: 'repo1::/path/child',
       repoId: 'repo1',
       path: '/path/child',
       instanceId: 'child-instance'
     })
+
     const lineage = makeLineage({
       worktreeId: created.id,
       worktreeInstanceId: 'child-instance',
       parentWorktreeId: parent.id,
       parentWorktreeInstanceId: 'parent-instance'
     })
+
     const store = createParentPickStore(parent)
     mockApi.worktrees.create.mockResolvedValue({ worktree: created, lineage })
 
@@ -165,6 +173,7 @@ describe('createWorktree composer parent pick', () => {
       displayName: 'parent-wt',
       instanceId: 'parent-instance'
     })
+
     const store = createParentPickStore(parent)
     mockApi.worktrees.create
       .mockRejectedValueOnce(
@@ -185,11 +194,13 @@ describe('createWorktree composer parent pick', () => {
 
   it('warns once when a dropped pick is followed by branch-conflict retries', async () => {
     const store = createParentPickStore()
+
     const created = makeWorktree({
       id: 'repo1::/path/child',
       repoId: 'repo1',
       path: '/path/child'
     })
+
     mockApi.worktrees.create
       .mockRejectedValueOnce(new Error('Branch "feature" already exists locally.'))
       .mockResolvedValue({ worktree: created })
@@ -235,6 +246,7 @@ describe('createWorktree parent pick on a remote runtime', () => {
         ]
       }
     } as Partial<AppState>)
+
     return store
   }
 
@@ -242,6 +254,7 @@ describe('createWorktree parent pick on a remote runtime', () => {
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = [REMOTE_REPO, 'feature', 'origin/main']
     args[25] = { parentWorktreeId: PARENT_ID }
+
     return createWorktree(...args)
   }
 
@@ -257,7 +270,9 @@ describe('createWorktree parent pick on a remote runtime', () => {
       if (method !== 'worktree.create') {
         return Promise.resolve({ id: method, ok: true, result: null })
       }
+
       createCount += 1
+
       return createCount === 1
         ? Promise.resolve(firstCreate('rpc-create'))
         : Promise.resolve({
@@ -324,7 +339,9 @@ describe('createWorktree parent pick on a remote runtime', () => {
       if (method !== 'worktree.create') {
         return Promise.resolve({ id: method, ok: true, result: null })
       }
+
       createCount += 1
+
       // Why: the relay envelope re-throws as a plain Error, so only the trailing code survives.
       return createCount === 1
         ? Promise.reject(new Error('Error invoking remote method: LINEAGE_PARENT_NOT_FOUND'))

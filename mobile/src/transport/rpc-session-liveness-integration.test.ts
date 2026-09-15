@@ -51,6 +51,7 @@ class MockWebSocket {
     ) {
       throw new Error('socket send failed')
     }
+
     this.sent.push(payload)
   }
 
@@ -63,6 +64,7 @@ class MockWebSocket {
 }
 
 const sockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 beforeEach(() => {
@@ -172,10 +174,12 @@ describe('physical session liveness', () => {
 
     for (let index = 0; index < 3; index++) {
       client.notifyForeground()
+
       const request = socket.sent
         .map((payload) => payload.replace(/^encrypted:/, ''))
         .map((payload) => JSON.parse(payload) as { id?: string; method?: string })
         .findLast((payload) => payload.method === 'status.get')
+
       socket.onmessage?.({
         data: `encrypted:${JSON.stringify({
           id: request?.id,

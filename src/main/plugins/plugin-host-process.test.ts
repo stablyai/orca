@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const processMocks = vi.hoisted(() => ({ fork: vi.fn() }))
+
 vi.mock('node:child_process', () => ({ fork: processMocks.fork }))
 
 import { startPluginWorker } from './plugin-host-process'
@@ -17,6 +18,7 @@ class FakeChild extends EventEmitter {
 
 function start(child: FakeChild, options: { eventTimeoutMs?: number } = {}) {
   processMocks.fork.mockReturnValue(child)
+
   return startPluginWorker({
     pluginId: 'orca-samples.demo',
     rootDir: '/plugin',

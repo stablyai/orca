@@ -21,6 +21,7 @@ type AttributionDetails = Record<string, CrashReportDetailValue>
 // renderer death, so observing runs before any suppression decision.
 export function correlateChildProcessDeath(death: ChildProcessDeath): void {
   observeChildProcessDeath(death)
+
   for (const { pending, attribution } of collectLateSiblingAttributions(death)) {
     pending.attachAttribution(attribution)
     recordCoalescedDurableCrashBreadcrumb({
@@ -44,6 +45,7 @@ export function trackRendererSiblingAttribution(
   if (event.source !== 'renderer') {
     return
   }
+
   trackRendererCrashReport(
     {
       at,

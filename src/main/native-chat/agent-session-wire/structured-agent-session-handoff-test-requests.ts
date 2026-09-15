@@ -26,6 +26,7 @@ export class StructuredHandoffTestRequests {
 
   operationId(): string {
     this.operations += 1
+
     return `${this.now}-${this.operations.toString(16).padStart(32, '0')}`
   }
 
@@ -36,6 +37,7 @@ export class StructuredHandoffTestRequests {
   ): AgentSessionHandoffRequest {
     const action = options.action ?? 'start'
     const fields = { direction, mode, action }
+
     return {
       envelope: {
         sessionId: this.sessionId,

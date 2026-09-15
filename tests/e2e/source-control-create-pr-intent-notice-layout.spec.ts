@@ -26,9 +26,11 @@ test.describe('Source Control Create PR intent notice layout', () => {
     await orcaPage.evaluate(
       ({ prWorktreeId, primaryBranch }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         store.setState((current) => ({
           // Unconfigured Source Control AI is what routes the run into the
           // "configure Source Control AI" notice rather than a failure notice.

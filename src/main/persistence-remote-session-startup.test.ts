@@ -10,16 +10,22 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
+
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
 
 const HOST = 'runtime:paired-host'
+
 const REPO = 'remote-repo'
+
 const WORKTREE = `${REPO}::/remote/project`
+
 const PAGE: BrowserPage = {
   id: 'page-1',
   workspaceId: 'browser-1',
@@ -36,6 +42,7 @@ const PAGE: BrowserPage = {
   remoteBrowserPageId: 'remote-page-1',
   remoteBrowserPageClientHosted: true
 }
+
 const BROWSER: BrowserWorkspace = {
   id: PAGE.workspaceId,
   worktreeId: WORKTREE,

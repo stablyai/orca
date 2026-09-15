@@ -209,6 +209,7 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
+
   const {
     listRef,
     showJumpToTail,
@@ -226,14 +227,17 @@ export function MobileNativeChatView({
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
       const accepted = await onSend(text)
+
       if (!accepted) {
         return false
       }
+
       // The route-owned banner outlives this send; a success must retire it too,
       // or a stale "Message not sent" sits above the delivered message.
       onClearSendError?.()
       // Always jump to the newest message when the user sends.
       jumpToTail()
+
       return true
     },
     [onSend, onClearSendError, jumpToTail]
@@ -248,6 +252,7 @@ export function MobileNativeChatView({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset } = e.nativeEvent
       recordScrollMetrics(e.nativeEvent)
+
       // Near the top — page in older history.
       if (contentOffset.y < 60 && hasMore && !loadingEarlier) {
         loadEarlier()
@@ -269,6 +274,7 @@ export function MobileNativeChatView({
     activityText: turnIndicator?.activityText ?? null,
     scopeKey: sendSurfaceId
   })
+
   const hasPendingStructuredInteraction =
     structuredActivityUi && (ask != null || permission != null || question != null)
 

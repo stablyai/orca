@@ -5,6 +5,7 @@ import { makeWorktree } from '../../worktrees-slice-test-fixtures'
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
 }))
+
 vi.mock('@/components/worktree-base-fallback-notice', () => ({
   requestWorktreeBaseFallbackNotice: vi.fn()
 }))

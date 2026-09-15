@@ -23,8 +23,10 @@ export function InlineUsageBars({
   const display = normalizeUsagePercentageDisplay(
     useAppStore((state) => state.usagePercentageDisplay)
   )
+
   // Why: tick the session countdown live via one boundary-scheduled clock, not just the usage poll (#5399).
   const now = useResetCountdownClock([limits.session?.resetsAt])
+
   const usageWindows = [
     limits.session
       ? {

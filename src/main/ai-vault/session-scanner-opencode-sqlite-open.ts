@@ -41,8 +41,10 @@ function openOpenCodeDatabaseReadonly(dbPath: string): SyncDatabase {
     fileMustExist: true,
     timeout: openCodeBusyTimeoutMs(dbPath)
   })
+
   try {
     db.pragma('query_only = ON')
+
     return db
   } catch (error) {
     try {
@@ -50,6 +52,7 @@ function openOpenCodeDatabaseReadonly(dbPath: string): SyncDatabase {
     } catch {
       // Why: close must not hide the query_only setup failure.
     }
+
     throw error
   }
 }
@@ -65,6 +68,7 @@ export function readOpenCodeDatabase<T>(args: {
   read: (db: SyncDatabase) => T
 }): T {
   const db = openOpenCodeDatabaseReadonly(args.dbPath)
+
   try {
     return args.read(db)
   } finally {
@@ -94,12 +98,14 @@ export function openCodeDatabaseScanIssue(dbPath: string, error: unknown): AiVau
   // while the identical bytes copied to local disk open fine. So on this share a
   // lock-family error never means "a writer holds it", and no timeout can help.
   const overWslShare = isWslUncPath(dbPath)
+
   const detail =
     kind === 'contended' && !overWslShare
       ? `OpenCode is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
       : kind === 'unreadable'
         ? `OpenCode history in ${name} could not be read: ${errorMessage(error)}`
         : `OpenCode history in ${name} could not be read. ${unreadableShareAdvice(dbPath)}`
+
   return { agent: 'opencode', kind: 'scope', path: dbPath, message: detail }
 }
 

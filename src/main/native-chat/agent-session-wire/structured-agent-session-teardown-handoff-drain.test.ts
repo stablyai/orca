@@ -29,9 +29,13 @@ import type {
 const CALLER = { callerKey: 'client-1' }
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let launchEntered: PromiseWithResolvers<void>
+
 let launchGate: PromiseWithResolvers<void>
 
 const requests = new StructuredHandoffTestRequests(
@@ -60,6 +64,7 @@ function gatedTransport(): StructuredAgentSessionHandoffTransport {
     launchTui: async ({ fence, spawnToken }) => {
       launchEntered.resolve()
       await launchGate.promise
+
       return tuiOwner(fence, spawnToken)
     },
     reproveTuiOwner: async ({ owner }) => owner,
@@ -127,13 +132,16 @@ describe('structured agent-session host teardown', () => {
     await launchEntered.promise
 
     let settled = false
+
     const teardown = host.flushAllStreamedEvents().then(() => {
       settled = true
     })
+
     // Quiescence probe, not a wait for the flow: teardown must still be blocked on it.
     for (let tick = 0; tick < 20; tick += 1) {
       await new Promise<void>((resolve) => setTimeout(resolve, 0))
     }
+
     expect(settled).toBe(false)
 
     launchGate.resolve()
@@ -150,6 +158,7 @@ describe('structured agent-session host teardown', () => {
 
   it('names every phase, so the quit-path order is pinned rather than incidental', () => {
     const noop = async (): Promise<void> => undefined
+
     const phases = structuredAgentSessionHostTeardownPhases({
       holds: { dispose: noop },
       runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
@@ -157,6 +166,7 @@ describe('structured agent-session host teardown', () => {
       tasks: { drainAttaches: noop },
       evictOwnedSessions: noop
     })
+
     expect(phases.map((phase) => phase.name)).toEqual([
       'dispose-holds',
       'stop-lease-renewal',
@@ -175,6 +185,7 @@ describe('structured agent-session host teardown', () => {
 
     // The gate is never opened: this is the flow that never comes back.
     vi.useFakeTimers()
+
     try {
       const teardown = host.flushAllStreamedEvents()
       await vi.advanceTimersByTimeAsync(5_000)

@@ -23,8 +23,10 @@ export function resolveLinearApiKeyDialogState(
   if (open) {
     return state
   }
+
   if (state.apiKeyDraft === '' && state.connectState === 'idle' && state.connectError === null) {
     return state
   }
+
   return CLOSED_LINEAR_API_KEY_DIALOG_STATE
 }

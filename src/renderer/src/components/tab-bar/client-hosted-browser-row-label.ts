@@ -13,6 +13,7 @@ export function getClientHostedBrowserRowLabel(row: ClientHostedBrowserRow): str
   ) {
     return formatBrowserTabUrlLabel(row.url)
   }
+
   return row.title
 }
 
@@ -28,6 +29,7 @@ export function describeClientHostedBrowserRowHost(row: ClientHostedBrowserRow):
         )
       : translate('browser.clientHosted.hostRowOffline', 'Offline — the device hosting it quit')
   }
+
   return row.hostDeviceName
     ? translate('browser.clientHosted.hostRowNamed', 'Hosted on {{device}}', {
         device: row.hostDeviceName

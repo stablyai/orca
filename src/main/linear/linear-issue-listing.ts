@@ -51,6 +51,7 @@ function linearWorkspaceError(
 ): LinearWorkspaceError {
   const message = error instanceof Error ? error.message : String(error)
   const lower = message.toLocaleLowerCase()
+
   const type: LinearWorkspaceError['type'] = isAuthError(error)
     ? 'auth'
     : lower.includes('rate limit') || lower.includes('429')
@@ -62,6 +63,7 @@ function linearWorkspaceError(
           lower.includes('enotfound')
         ? 'network'
         : 'unknown'
+
   return {
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName,
@@ -78,6 +80,7 @@ async function readListIssuesForWorkspace(
   options?: LinearIssueListOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
   await acquire()
+
   try {
     return await readIssueConnectionPages(
       entry,
@@ -87,12 +90,14 @@ async function readListIssuesForWorkspace(
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
+
       if (shouldThrowAuthError(workspaceId)) {
         throw error
       }
     } else {
       console.warn('[linear] listIssues failed:', error)
     }
+
     return { items: [], hasMore: false, errors: [linearWorkspaceError(entry, error)] }
   } finally {
     release()
@@ -106,6 +111,7 @@ async function readIssueConnectionPage(
 ): Promise<LinearIssuePageResult> {
   const connection = await loadConnection(page)
   const nodes = connection?.nodes ?? []
+
   return {
     items: nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)),
     hasMore: Boolean(connection?.pageInfo?.hasNextPage),
@@ -120,12 +126,14 @@ async function readListIssuesPageForState(
 ): Promise<void> {
   const previousCursor = state.after
   await acquire()
+
   try {
     const page = await readIssueConnectionPage(
       state.entry,
       state.loadConnection,
       previousCursor ? { first, after: previousCursor } : { first }
     )
+
     state.items.push(...page.items)
     state.hasMore = page.hasMore
     state.after = page.endCursor
@@ -137,8 +145,10 @@ async function readListIssuesPageForState(
     state.hasMore = false
     state.canPage = false
     state.error = linearWorkspaceError(state.entry, error)
+
     if (isAuthError(error)) {
       clearToken(state.entry.workspace.id)
+
       if (shouldThrowAuthError(workspaceId)) {
         throw error
       }
@@ -158,6 +168,7 @@ function findWorkspaceToPageForLimit(
     states.flatMap((state) => state.items),
     limit
   )
+
   if (merged.length < limit) {
     return states
       .filter((state) => state.canPage)
@@ -165,6 +176,7 @@ function findWorkspaceToPageForLimit(
   }
 
   const cutoff = new Date(merged[limit - 1].updatedAt).getTime()
+
   return states
     .filter((state) => state.canPage && getOldestIssueTime(state.items) > cutoff)
     .sort((a, b) => getOldestIssueTime(b.items) - getOldestIssueTime(a.items))[0]
@@ -176,6 +188,7 @@ function countSelectedIssuesOlderThanWorkspaceBoundary(
   limit: number
 ): number {
   const boundary = getOldestIssueTime(stateToPage.items)
+
   return sortAndLimitIssues(
     states.flatMap((state) => state.items),
     limit
@@ -196,6 +209,7 @@ async function readListIssuesAcrossWorkspaces(
     hasMore: false,
     canPage: false
   }))
+
   const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit)
 
   // Why: "all workspaces" is a global sorted list. Pull one bounded page per
@@ -205,10 +219,13 @@ async function readListIssuesAcrossWorkspaces(
 
   for (;;) {
     const nextState = findWorkspaceToPageForLimit(states, limit)
+
     if (!nextState) {
       break
     }
+
     const itemCount = states.reduce((count, state) => count + state.items.length, 0)
+
     const pageSize =
       itemCount < limit
         ? Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - itemCount)
@@ -216,6 +233,7 @@ async function readListIssuesAcrossWorkspaces(
             LINEAR_ISSUE_API_PAGE_SIZE_MAX,
             Math.max(1, countSelectedIssuesOlderThanWorkspaceBoundary(states, nextState, limit))
           )
+
     await readListIssuesPageForState(nextState, pageSize, workspaceId)
   }
 
@@ -223,6 +241,7 @@ async function readListIssuesAcrossWorkspaces(
     states.flatMap((state) => state.items),
     limit
   )
+
   return {
     items: limited.items,
     hasMore: states.some((state) => state.hasMore) || limited.clipped,
@@ -238,6 +257,7 @@ export async function listIssues(
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const effectiveLimit = clampLinearIssueListLimit(limit)
   const attributeFilter = options?.attributeFilter
+
   // Why: workspace-specific state/member/label ids cannot fan out safely across
   // "all" workspaces; reject before creating clients so non-UI callers cannot
   // get a misleading partial subset.
@@ -250,7 +270,9 @@ export async function listIssues(
       'Linear attribute filters require a concrete workspace; "all" workspaces is not supported.'
     )
   }
+
   const entries = getClients(workspaceId)
+
   if (entries.length === 0) {
     return { items: [] }
   }

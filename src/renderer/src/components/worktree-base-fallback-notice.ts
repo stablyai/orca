@@ -1,6 +1,7 @@
 import type { WorktreeCreateBaseFallback } from '../../../shared/worktree/create-types'
 
 const notices: WorktreeCreateBaseFallback[] = []
+
 const listeners = new Set<() => void>()
 
 function notifyListeners(): void {
@@ -26,6 +27,7 @@ export function getWorktreeBaseFallbackNotice(): WorktreeCreateBaseFallback | nu
 
 export function subscribeWorktreeBaseFallbackNotice(listener: () => void): () => void {
   listeners.add(listener)
+
   return () => listeners.delete(listener)
 }
 

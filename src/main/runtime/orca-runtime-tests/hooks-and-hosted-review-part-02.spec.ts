@@ -37,6 +37,7 @@ import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtur
 describe('OrcaRuntimeService', () => {
   it('routes runtime GitHub PR details and actions through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -55,6 +56,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const localGitOptions = { wslDistro: 'Ubuntu' }
     const prRepo = { owner: 'acme', repo: 'orca', host: 'github.acme.test' }
@@ -332,8 +334,10 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       }
+
       return MOCK_GIT_WORKTREES
     })
+
     const repos = [
       {
         id: TEST_REPO_ID,
@@ -350,11 +354,13 @@ describe('OrcaRuntimeService', () => {
         addedAt: 2
       }
     ]
+
     const multiRepoStore = {
       ...store,
       getRepos: () => repos,
       getRepo: (id: string) => repos.find((repo) => repo.id === id)
     }
+
     const runtime = new OrcaRuntimeService(multiRepoStore as never)
 
     await expect(
@@ -395,11 +401,13 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const remoteStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
     }
+
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     await runtime.getHostedReviewCreationEligibility({
@@ -461,6 +469,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes local WSL project hosted review flows through runtime git options', async () => {
     setPlatform('win32')
+
     const wslStore = {
       ...store,
       getProjects: () => [
@@ -479,6 +488,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = new OrcaRuntimeService(wslStore as never)
     getHostedReviewForBranchMock.mockResolvedValueOnce({
       provider: 'github',
@@ -571,6 +581,7 @@ describe('OrcaRuntimeService', () => {
   it('treats SSH worktree drift as unknown without local git probes', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(getBaseRefDefault).mockClear()
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -585,6 +596,7 @@ describe('OrcaRuntimeService', () => {
       ],
       getWorktreeMeta: () => null
     }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -596,6 +608,7 @@ describe('OrcaRuntimeService', () => {
         }
       ])
     }
+
     registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 

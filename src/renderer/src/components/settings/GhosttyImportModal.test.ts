@@ -12,19 +12,25 @@ function extractText(node: unknown): string {
   if (node == null) {
     return ''
   }
+
   if (typeof node === 'string') {
     return node
   }
+
   if (typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(extractText).join('')
   }
+
   const el = node as ReactElementLike
+
   if (el.props?.children) {
     return extractText(el.props.children)
   }
+
   return ''
 }
 
@@ -35,24 +41,31 @@ function findButtons(node: unknown): { text: string; onClick: () => void }[] {
     if (n == null) {
       return
     }
+
     if (typeof n === 'string' || typeof n === 'number') {
       return
     }
+
     if (Array.isArray(n)) {
       n.forEach(traverse)
+
       return
     }
+
     const el = n as ReactElementLike
+
     if (el.type === Button) {
       const text = extractText(el.props.children)
       buttons.push({ text, onClick: el.props.onClick as () => void })
     }
+
     if (el.props?.children) {
       traverse(el.props.children)
     }
   }
 
   traverse(node)
+
   return buttons
 }
 

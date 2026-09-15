@@ -4,21 +4,28 @@ import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repo
 
 const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./client-test-mocks')
+
   return { clientMocks: moduleMocks.createGitHubClientMocks(), moduleMocks }
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
+
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
+
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
+
 vi.mock('./github-enterprise-repository', async (importOriginal) =>
   moduleMocks.githubEnterpriseRepositoryModuleMock(
     await importOriginal<typeof GitHubEnterpriseRepositoryModule>()
   )
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(clientMocks))
+
 vi.mock('./github-api-repository', async (importOriginal) =>
   moduleMocks.githubApiRepositoryModuleMock(
     clientMocks,
@@ -208,6 +215,7 @@ describe('getPRForBranch', () => {
         stderr: ''
       })
     }
+
     getSshGitProviderMock.mockReturnValue(sshGitProvider)
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
@@ -256,6 +264,7 @@ describe('getPRForBranch', () => {
         stderr: ''
       })
     }
+
     getSshGitProviderMock.mockReturnValue(sshGitProvider)
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [
@@ -307,6 +316,7 @@ describe('getPRForBranch', () => {
         stderr: ''
       })
     }
+
     getSshGitProviderMock.mockReturnValue(sshGitProvider)
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
@@ -321,6 +331,7 @@ describe('getPRForBranch', () => {
 
   it('refreshes positive tracked-upstream entries for unsigned SSH runtimes after the TTL', async () => {
     vi.useFakeTimers()
+
     try {
       const sshGitProvider = {
         exec: vi
@@ -334,6 +345,7 @@ describe('getPRForBranch', () => {
             stderr: ''
           })
       }
+
       getSshGitProviderMock.mockReturnValue(sshGitProvider)
       getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
       getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })

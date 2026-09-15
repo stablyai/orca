@@ -100,6 +100,7 @@ export function isTerminalTabParked(tabId: string): boolean {
  */
 export function collectParkedTerminalWatcherPtyIds(): Set<string> {
   const ptyIds = new Set<string>()
+
   for (const entry of parkedWatchersByTabId.values()) {
     for (const ptyId of entry.disposersByPtyId.keys()) {
       if (parseRemoteRuntimePtyId(ptyId) === null && !hasPreHandlerPtyExit(ptyId)) {
@@ -107,6 +108,7 @@ export function collectParkedTerminalWatcherPtyIds(): Set<string> {
       }
     }
   }
+
   return ptyIds
 }
 
@@ -126,13 +128,17 @@ export function getParkedTerminalWatcherPaneIdsByPtyId(tabId: string): Map<strin
 
 export function disposeParkedTabWatchers(tabId: string): void {
   const entry = parkedWatchersByTabId.get(tabId)
+
   if (!entry) {
     return
   }
+
   parkedWatchersByTabId.delete(tabId)
+
   for (const dispose of entry.disposersByPtyId.values()) {
     dispose()
   }
+
   entry.disposersByPtyId.clear()
 }
 
@@ -154,6 +160,7 @@ export function disposeParkedTerminalWatchersForPtyIds(ptyIds: readonly string[]
   for (const entry of parkedWatchersByTabId.values()) {
     for (const ptyId of ptyIds) {
       const dispose = entry.disposersByPtyId.get(ptyId)
+
       if (dispose) {
         entry.disposersByPtyId.delete(ptyId)
         dispose()
@@ -184,6 +191,7 @@ export function disposeRemovedWorktreeParkedTerminalWatchers(
   for (const ptyId of authoritativePtyIds) {
     discardPreHandlerPtyState(ptyId)
   }
+
   disposeParkedTerminalWatchersForWorktree(worktreeId, { consumePreHandlerState: true })
 }
 
@@ -203,6 +211,7 @@ function disposeRemovedWorktreeParkedTabWatchers(
   for (const ptyId of entry.paneIdByPtyId.keys()) {
     discardPreHandlerPtyState(ptyId)
   }
+
   disposeParkedTabWatchers(tabId)
 }
 
@@ -213,6 +222,7 @@ export function pruneParkedTerminalWatchers(liveWorktreeIds: ReadonlySet<string>
       disposeRemovedWorktreeParkedTabWatchers(tabId, entry)
     }
   }
+
   for (const [tabId, capture] of capturedPanesByTabId) {
     if (!liveWorktreeIds.has(capture.worktreeId)) {
       capturedPanesByTabId.delete(tabId)

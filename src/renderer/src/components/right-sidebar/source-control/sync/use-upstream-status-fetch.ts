@@ -26,6 +26,7 @@ export function useSourceControlUpstreamStatusFetch({
     if (!activeWorktreeId || !worktreePath || isFolder || !isBranchVisible) {
       return
     }
+
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     void fetchUpstreamStatus(
       activeWorktreeId,

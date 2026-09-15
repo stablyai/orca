@@ -32,6 +32,7 @@ export function createDaemonPtySubprocessHandle(args: {
   let ioFailed = false
   let disposed = false
   let nodePtyKillIssued = false
+
   const foreground = createPtyForegroundProcessTracker({
     process: proc,
     shellPath: args.shellPath,
@@ -49,10 +50,12 @@ export function createDaemonPtySubprocessHandle(args: {
     // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
     foreground.markDead()
+
     // Why: neutralize kill synchronously so a later async socket-close SIGHUP cannot hit a recycled pid.
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
     }
+
     events.acceptExit({
       exitCode,
       signal,
@@ -61,6 +64,7 @@ export function createDaemonPtySubprocessHandle(args: {
   })
 
   const slavePath = readPtySlavePath(proc)
+
   return {
     pid: proc.pid,
     shellPath: args.shellPath,
@@ -77,6 +81,7 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead || ioFailed) {
         return
       }
+
       try {
         proc.write(data)
       } catch {
@@ -87,6 +92,7 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead || ioFailed || !isValidPtySize(cols, rows)) {
         return
       }
+
       try {
         proc.resize(cols, rows)
       } catch {
@@ -98,6 +104,7 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead) {
         return
       }
+
       try {
         proc.pause()
       } catch {
@@ -108,6 +115,7 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead) {
         return
       }
+
       try {
         proc.resume()
       } catch {
@@ -118,6 +126,7 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead || ioFailed) {
         return
       }
+
       try {
         proc.clear()
       } catch {
@@ -128,7 +137,9 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead) {
         return
       }
+
       nodePtyKillIssued = true
+
       try {
         proc.kill()
       } catch (error) {
@@ -142,11 +153,14 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead) {
         return
       }
+
       // Escalate a ConPTY kill through the job without double-closing node-pty's shell handle.
       if (process.platform === 'win32' && nodePtyKillIssued) {
         terminatePtyJob(proc)
+
         return
       }
+
       try {
         forceKillPosixPtyProcessGroups(proc.pid, () => {
           process.kill(proc.pid, 'SIGKILL')
@@ -165,6 +179,7 @@ export function createDaemonPtySubprocessHandle(args: {
       if (dead) {
         return
       }
+
       const signalRootPid = (): void => {
         try {
           process.kill(proc.pid, sig)
@@ -172,11 +187,14 @@ export function createDaemonPtySubprocessHandle(args: {
           // Process may already be dead.
         }
       }
+
       // SIGWINCH belongs to the tty foreground group; destructive signals keep the root-pid target.
       if (sig === 'SIGWINCH') {
         signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), sig, signalRootPid)
+
         return
       }
+
       signalRootPid()
     },
     onData: (cb) => events.onData(cb),
@@ -185,15 +203,18 @@ export function createDaemonPtySubprocessHandle(args: {
       if (disposed) {
         return
       }
+
       disposed = true
       dead = true
       events.clear()
+
       // POSIX destroy() can asynchronously signal a recycled pid; Windows needs kill() to close ConPTY.
       if (process.platform !== 'win32') {
         nativeProc.kill = () => {}
       } else if (nodePtyKillIssued) {
         return
       }
+
       try {
         nativeProc.destroy?.()
       } catch {

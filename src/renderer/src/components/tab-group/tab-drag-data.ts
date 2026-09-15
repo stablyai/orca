@@ -39,6 +39,7 @@ export function canDropTabIntoPaneBody({
   }
 
   const overGroup = (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === overGroupId)
+
   if (!overGroup) {
     return false
   }

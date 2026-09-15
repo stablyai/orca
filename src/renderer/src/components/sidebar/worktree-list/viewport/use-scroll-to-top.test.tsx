@@ -26,6 +26,7 @@ function createScroller(): HTMLElement {
     y: 0,
     toJSON: () => ({})
   })
+
   return element
 }
 
@@ -64,6 +65,7 @@ describe('useWorktreeListScrollToTop', () => {
     act(() =>
       element.dispatchEvent(new PointerEvent('pointerdown', { clientX: 295, pointerType: 'mouse' }))
     )
+
     for (const sample of [
       { t: 0, scrollTop: 2200 },
       { t: 80, scrollTop: 2000 },

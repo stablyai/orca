@@ -13,6 +13,7 @@ export type AgentGenerationFailureOutput = {
 // while preserving where CLIs put their errors (some front-load them, some
 // print them last).
 const STREAM_HEAD_LIMIT = 16 * 1024
+
 const STREAM_TAIL_LIMIT = 48 * 1024
 
 export function captureAgentGenerationFailureOutput(
@@ -24,6 +25,7 @@ export function captureAgentGenerationFailureOutput(
   if (!/\S/.test(stdout) && !/\S/.test(stderr)) {
     return null
   }
+
   return {
     label,
     exitCode,
@@ -36,10 +38,13 @@ function boundStream(value: string): string {
   if (value.length <= STREAM_HEAD_LIMIT + STREAM_TAIL_LIMIT) {
     return value
   }
+
   const omitted = value.length - STREAM_HEAD_LIMIT - STREAM_TAIL_LIMIT
+
   const bounded = `${value.slice(0, STREAM_HEAD_LIMIT)}\n… (${omitted} characters omitted) …\n${value.slice(
     value.length - STREAM_TAIL_LIMIT
   )}`
+
   // Why: V8 otherwise retains the multi-megabyte parent through sliced strings
   // stored in the capture map; this no-op replacement materializes a flat copy.
   return bounded.replace(/$/u, '')
@@ -52,13 +57,17 @@ export function formatAgentGenerationFailureOutputForDisplay(
 ): string {
   const sections = [`${output.label} exited with code ${output.exitCode ?? 'unknown'}.`]
   const stderr = sanitizeStreamForDisplay(output.stderr)
+
   if (stderr) {
     sections.push(`[stderr]\n${stderr}`)
   }
+
   const stdout = sanitizeStreamForDisplay(output.stdout)
+
   if (stdout) {
     sections.push(`[stdout]\n${stdout}`)
   }
+
   return sections.join('\n\n')
 }
 

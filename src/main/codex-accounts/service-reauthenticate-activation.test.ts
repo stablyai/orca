@@ -31,6 +31,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -64,6 +65,7 @@ function createLoginSpawn(onLogin?: () => void) {
       stderr: PassThrough
       kill: () => void
     }
+
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
@@ -74,6 +76,7 @@ function createLoginSpawn(onLogin?: () => void) {
       'utf-8'
     )
     queueMicrotask(() => child.emit('close', 0))
+
     return child
   })
 }
@@ -92,10 +95,12 @@ describe('CodexAccountService reauthenticate activation intent', () => {
       activeCodexManagedAccountId: null,
       activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
     })
+
     const store = createStore(settings)
     const runtimeHome = createRuntimeHome()
     const rateLimits = createRateLimits()
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -123,6 +128,7 @@ describe('CodexAccountService reauthenticate activation intent', () => {
 
   it('keeps the previously selected account even when the selection is cleared during OAuth', async () => {
     vi.resetModules()
+
     // Why: the runtime-home poll runs outside the mutation queue, so it can null
     // the lane while the login promise is pending. A post-login read of the
     // selection would see that null and hand the lane to the wrong account.
@@ -136,6 +142,7 @@ describe('CodexAccountService reauthenticate activation intent', () => {
         }
       })
     })
+
     vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: spawnMock }))
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 
@@ -144,10 +151,12 @@ describe('CodexAccountService reauthenticate activation intent', () => {
       activeCodexManagedAccountId: 'account-1',
       activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     })
+
     const store = createStore(settings)
     const runtimeHome = createRuntimeHome()
     const rateLimits = createRateLimits()
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -182,10 +191,12 @@ describe('CodexAccountService reauthenticate activation intent', () => {
       activeCodexManagedAccountId: null,
       activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
     })
+
     const store = createStore(settings)
     const runtimeHome = createRuntimeHome()
     const rateLimits = createRateLimits()
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,

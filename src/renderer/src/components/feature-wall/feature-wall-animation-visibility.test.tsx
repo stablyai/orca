@@ -10,6 +10,7 @@ import { useWorkbenchTerminalStoryboard } from './use-workbench-terminal-storybo
 import { WorkspacesAnimatedVisual } from './WorkspacesAnimatedVisual'
 
 let container: HTMLDivElement
+
 let root: Root
 
 function setDocumentVisibility(state: 'visible' | 'hidden'): void {

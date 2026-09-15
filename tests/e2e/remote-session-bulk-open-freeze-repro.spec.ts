@@ -41,6 +41,7 @@ import {
 } from './helpers/terminal-host-focus-storm-oracle'
 
 const REPORT_DIR = path.join(process.cwd(), 'test-results', 'freeze-repro')
+
 const USE_DESKTOP_PAIR = process.env.ORCA_E2E_FREEZE_DESKTOP_PAIR === '1'
 
 test('paired client host-focus storm keeps the latest terminal @freeze-repro', async ({
@@ -50,21 +51,28 @@ test('paired client host-focus storm keeps the latest terminal @freeze-repro', a
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, 'focus-storm')
   let disposeSessions: (() => Promise<void>) | null = null
+
   try {
     const worktreeId = await orcaPage.evaluate(() => {
       const id = window.__store?.getState().activeWorktreeId
+
       if (!id) {
         throw new Error('headed host has no active worktree')
       }
+
       return id
     })
+
     const environmentId = await client.page.evaluate(async () => {
       const environment = (await window.api.runtimeEnvironments.list())[0]
+
       if (!environment) {
         throw new Error('paired client has no runtime environment')
       }
+
       return environment.id
     })
+
     await expect
       .poll(
         () =>
@@ -95,6 +103,7 @@ test('paired client host-focus storm keeps the latest terminal @freeze-repro', a
         () =>
           orcaPage.evaluate((id) => {
             const state = window.__store?.getState()
+
             return {
               worktreeId: state?.activeWorktreeId ?? null,
               tabId: state?.activeTabIdByWorktree[id] ?? state?.activeTabId ?? null
@@ -117,17 +126,20 @@ test('R1 paired remote bulk-open freeze oracle @freeze-repro', async ({
   let webClient: PairedWebClient | null = null
   let desktopClient: PairedElectronClient | null = null
   let disposeSessions: (() => Promise<void>) | null = null
+
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
       path: testRepoPath,
       kind: 'git'
     })
+
     await expect
       .poll(
         async () => {
           const listed = await host.client.call<{ totalCount: number }>('worktree.list', {
             repo: `id:${added.result.repo.id}`
           })
+
           return listed.result.totalCount
         },
         { timeout: 30_000 }
@@ -138,11 +150,14 @@ test('R1 paired remote bulk-open freeze oracle @freeze-repro', async ({
     const page = await (async () => {
       if (USE_DESKTOP_PAIR) {
         desktopClient = await launchPairedElectronClient(host.offer, testInfo, 'freeze-r1')
+
         return desktopClient.page
       }
+
       webClient = await launchPairedWebClient(host.app, host.offer, {
         terminalParkingDelayMs: 500
       })
+
       return webClient.page
     })()
 
@@ -156,6 +171,7 @@ test('R1 paired remote bulk-open freeze oracle @freeze-repro', async ({
     const seeded = await seedBulkOpenRemoteSessions(page, {
       repoId: added.result.repo.id
     })
+
     disposeSessions = seeded.dispose
 
     const report = await runBulkOpenFreezeOracle(page, seeded.sessions, {
@@ -173,6 +189,7 @@ test('R1 paired remote bulk-open freeze oracle @freeze-repro', async ({
           `(threshold ${HARD_FREEZE_LAG_MS}ms). notes=${report.notes.join('; ')}`
       )
     }
+
     if (report.softFreeze) {
       throw new Error(
         `SOFT FREEZE signal: bulkOpenMaxLagMs=${report.bulkOpenMaxLagMs.toFixed(0)} ` +

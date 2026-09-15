@@ -31,7 +31,9 @@ export async function subscribeLocalWatcher(
   ) {
     return
   }
+
   const finishInstall = beginWatcherInstall(worktreePath)
+
   try {
     await subscribeWhileRemovalAllowed(worktreePath, sender, generation)
   } finally {
@@ -50,7 +52,9 @@ async function subscribeWhileRemovalAllowed(
   ) {
     return
   }
+
   const { key: rootKey, path: rootPath } = getLocalWatcherRoot(worktreePath)
+
   if (sender.isDestroyed()) {
     return
   }
@@ -58,6 +62,7 @@ async function subscribeWhileRemovalAllowed(
   // Don't retry roots that already failed — avoids repeated error spam.
   if (watcherLifecycleState.unwatchableRoots.has(rootKey)) {
     rememberUnwatchableRoot(rootKey)
+
     return
   }
 
@@ -65,32 +70,41 @@ async function subscribeWhileRemovalAllowed(
 
   // Cancel any pending grace-period teardown — a new listener arrived.
   const pendingTeardown = watcherLifecycleState.pendingTeardowns.get(rootKey)
+
   if (pendingTeardown) {
     clearTimeout(pendingTeardown)
     watcherLifecycleState.pendingTeardowns.delete(rootKey)
   }
+
   const capacityRetryListeners = takeLocalCapacityRetryListeners(rootKey)
 
   if (root) {
     for (const listener of capacityRetryListeners) {
       addLocalWatchListener(rootKey, listener)
     }
+
     addLocalWatchListener(rootKey, sender)
+
     return
   }
 
   const pendingInstall = watcherLifecycleState.pendingLocalInstallPromises.get(rootKey)
+
   if (pendingInstall) {
     const inFlight = watcherLifecycleState.inFlightLocalInstalls.get(rootKey)
     const canJoinInstall = inFlight && !inFlight.abortController.signal.aborted
+
     if (canJoinInstall) {
       // Why: an unwatch may cancel an install while another renderer awaits the same root; a new live listener keeps it alive.
       addInFlightLocalInstallListener(inFlight, sender)
+
       for (const listener of capacityRetryListeners) {
         addInFlightLocalInstallListener(inFlight, listener)
       }
     }
+
     const result = await pendingInstall
+
     if (
       result === 'cancelled' &&
       !canJoinInstall &&
@@ -101,17 +115,22 @@ async function subscribeWhileRemovalAllowed(
       if (watcherLifecycleState.pendingLocalInstallPromises.get(rootKey) === pendingInstall) {
         watcherLifecycleState.pendingLocalInstallPromises.delete(rootKey)
       }
+
       const retryListeners = new Map(
         capacityRetryListeners.map((listener) => [listener.id, listener])
       )
+
       retryListeners.set(sender.id, sender)
+
       for (const listener of retryListeners.values()) {
         if (!listener.isDestroyed()) {
           await subscribeWhileRemovalAllowed(worktreePath, listener, generation)
         }
       }
+
       return
     }
+
     if (!inFlight) {
       if (result === 'installed') {
         for (const listener of capacityRetryListeners) {
@@ -121,10 +140,12 @@ async function subscribeWhileRemovalAllowed(
         const retryListeners = new Map(
           capacityRetryListeners.map((listener) => [listener.id, listener])
         )
+
         retryListeners.set(sender.id, sender)
         scheduleLocalCapacityRetry(rootKey, worktreePath, retryListeners, subscribeLocalWatcher)
       }
     }
+
     if (
       result === 'installed' &&
       watcherLifecycleState.watchedRoots.has(rootKey) &&
@@ -133,6 +154,7 @@ async function subscribeWhileRemovalAllowed(
     ) {
       addLocalWatchListener(rootKey, sender)
     }
+
     return
   }
 
@@ -141,11 +163,15 @@ async function subscribeWhileRemovalAllowed(
     listeners: new Map(),
     abortController: new AbortController()
   }
+
   watcherLifecycleState.inFlightLocalInstalls.set(rootKey, cancelToken)
+
   for (const listener of capacityRetryListeners) {
     addInFlightLocalInstallListener(cancelToken, listener)
   }
+
   addInFlightLocalInstallListener(cancelToken, sender)
+
   const installPromise = installLocalWatcher(
     rootKey,
     rootPath,
@@ -154,7 +180,9 @@ async function subscribeWhileRemovalAllowed(
     (listeners) =>
       scheduleLocalCapacityRetry(rootKey, worktreePath, listeners, subscribeLocalWatcher)
   )
+
   watcherLifecycleState.pendingLocalInstallPromises.set(rootKey, installPromise)
+
   try {
     await installPromise
   } finally {
@@ -168,20 +196,27 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
   const { key: rootKey } = getLocalWatcherRoot(worktreePath)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey)
   suspended?.listeners.delete(senderId)
+
   if (suspended?.listeners.size === 0) {
     watcherLifecycleState.suspendedLocalWatcherListeners.delete(rootKey)
   }
+
   const capacityRetry = watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey)
+
   if (capacityRetry) {
     capacityRetry.listeners.delete(senderId)
+
     if (capacityRetry.listeners.size === 0) {
       clearLocalCapacityRetry(rootKey)
     }
   }
+
   const inFlight = watcherLifecycleState.inFlightLocalInstalls.get(rootKey)
+
   if (inFlight) {
     inFlight.listeners.delete(senderId)
     inFlight.cancelled = inFlight.listeners.size === 0
+
     // Why: last normal disconnect must abort the pending native/forked install (same early-cancel as closeLocalWatcherForWorktreePath).
     if (inFlight.cancelled) {
       inFlight.abortController.abort()
@@ -189,6 +224,7 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
   }
 
   const root = watcherLifecycleState.watchedRoots.get(rootKey)
+
   if (!root) {
     return
   }
@@ -202,6 +238,7 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
       // Why: a cleared handle can't be refresh()ed; null it so a grace-window re-subscribe arms a fresh window.
       root.batch.timer = null
     }
+
     // Why: duplicate unwatch calls for a root would leak overwritten grace timers; keep just one.
     if (watcherLifecycleState.pendingTeardowns.has(rootKey)) {
       return
@@ -211,9 +248,11 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
       watcherLifecycleState.pendingTeardowns.delete(rootKey)
       // Re-check: a new listener may have arrived during the grace period.
       const currentRoot = watcherLifecycleState.watchedRoots.get(rootKey)
+
       if (!currentRoot || currentRoot.listeners.size > 0) {
         return
       }
+
       void trackDetachedLocalUnsubscribe(rootKey, currentRoot)
       cancelLocalBatchFlush(currentRoot)
       watcherLifecycleState.watchedRoots.delete(rootKey)

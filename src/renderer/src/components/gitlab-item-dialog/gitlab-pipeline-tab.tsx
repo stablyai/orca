@@ -16,7 +16,9 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
   if (item.type !== 'mr') {
     return null
   }
+
   const { details, expandedJobId, jobTraceById, loading, retryingJobId } = state
+
   return (
     <TabsContent value="pipeline" className="mt-0">
       {loading && !details ? (

@@ -6,6 +6,7 @@ import { TaskPageGitHubList } from './github/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
+
 export function TaskPageContent({
   model
 }: {
@@ -25,6 +26,7 @@ export function TaskPageContent({
     closeTaskDetailPage,
     handleUseWorkItem
   } = model
+
   return taskSource === 'github' && dialogWorkItem ? (
     dialogWorkItem.type === 'pr' ? (
       <PullRequestPage

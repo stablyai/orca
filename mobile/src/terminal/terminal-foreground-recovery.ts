@@ -45,13 +45,17 @@ export function recoverActiveTerminalAfterForeground({
   if (connStateRef.current !== 'connected') {
     return 'deferred'
   }
+
   const initializedMountedHandles = Array.from(initializedHandlesRef.current).filter((handle) =>
     terminalRefs.current.has(handle)
   )
+
   if (initializedMountedHandles.length === 0) {
     return 'skipped'
   }
+
   const handle = activeHandleRef.current
+
   const shouldRecoverActive =
     !!handle && terminalRefs.current.has(handle) && initializedHandlesRef.current.has(handle)
 
@@ -70,10 +74,13 @@ export function recoverActiveTerminalAfterForeground({
     if (connStateRef.current !== 'connected') {
       return
     }
+
     if (activeHandleRef.current !== handle || !terminalRefs.current.has(handle)) {
       return
     }
+
     subscribeToTerminal(handle)
   }, delayMs)
+
   return 'recovered'
 }

@@ -51,6 +51,7 @@ describe('isNoiseMessage', () => {
       msg('user', '<task-notification>done'),
       msg('assistant', 'hi')
     ])
+
     expect(out.map((m) => m.role)).toEqual(['user', 'assistant'])
   })
 })

@@ -34,6 +34,7 @@ export function equalizeManagedPaneSizes(
   const changed = equalizePaneSplitSizes(
     root.firstElementChild instanceof HTMLElement ? root.firstElementChild : null
   )
+
   if (!changed) {
     return
   }

@@ -18,11 +18,13 @@ export function isGuestAbsoluteLinuxPath(path: string): boolean {
   if (!path.startsWith('/') || path.startsWith('//')) {
     return false
   }
+
   // Why: a Windows drive path normalized with forward slashes (`/C:/…`) must not
   // be rewritten as a WSL guest path.
   if (/^\/[A-Za-z]:(\/|$)/.test(path)) {
     return false
   }
+
   return isAbsolute(path)
 }
 
@@ -53,10 +55,13 @@ export async function createWslTranscriptResolutionSnapshot(
   } = {}
 ): Promise<WslTranscriptResolutionSnapshot> {
   const runningDistros = await listRunningWslDistrosAsync()
+
   if (options.includeHomes === false) {
     return { runningDistros }
   }
+
   const homes = await Promise.all(runningDistros.map((distro) => getWslHomeAsync(distro)))
+
   return { runningDistros, homeDirs: homes.filter((home): home is string => home !== null) }
 }
 
@@ -64,7 +69,9 @@ async function snapshotHomeDirs(snapshot: WslTranscriptResolutionSnapshot): Prom
   if (snapshot.homeDirs) {
     return snapshot.homeDirs
   }
+
   const homes = await Promise.all(snapshot.runningDistros.map((distro) => getWslHomeAsync(distro)))
+
   return homes.filter((home): home is string => home !== null)
 }
 
@@ -84,19 +91,23 @@ export type HostReadableTranscriptPathDeps = {
 // instead of falling through to the next candidate, so keep this off the loop.
 async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<boolean> {
   signal?.throwIfAborted()
+
   if (!isWslUncPath(path)) {
     return existsSync(path)
   }
+
   try {
     return await wslGatedAccess(path, 'exact', signal)
   } catch (error) {
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
+
     // A caller abort stays authoritative — it must never read as "missing".
     if (signal?.aborted) {
       throw error
     }
+
     return false
   }
 }
@@ -104,14 +115,19 @@ async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<bool
 // Test/caller-provided home loaders are cached across resolve ticks. Production
 // discovery is revalidated separately so a stale UNC root cannot restart WSL.
 const WSL_HOME_DIRS_EMPTY_RETRY_MS = 30_000
+
 // Why: a distro that was booting when we first probed resolves to no $HOME and
 // would otherwise be excluded for the whole session. Both branches expire so it
 // is retried; getWslHomeAsync caches successes, so a refresh only re-spawns
 // wsl.exe for the distros that actually failed.
 const WSL_HOME_DIRS_TTL_MS = 5 * 60_000
+
 let cachedWslHomeDirs: string[] | null = null
+
 let cachedWslHomeDirsExpiresAt = 0
+
 let inflightWslHomeDirs: Promise<string[]> | null = null
+
 let getAdditionalCodexHomePaths: (() => readonly string[]) | undefined
 
 export function configureHostReadableTranscriptPathSources(options: {
@@ -132,9 +148,11 @@ async function wslHomeDirs(load: () => Promise<string[]>): Promise<string[]> {
   if (cachedWslHomeDirs && Date.now() < cachedWslHomeDirsExpiresAt) {
     return cachedWslHomeDirs
   }
+
   if (inflightWslHomeDirs) {
     return inflightWslHomeDirs
   }
+
   inflightWslHomeDirs = load()
     .catch(() => [] as string[])
     .then((dirs) => {
@@ -142,8 +160,10 @@ async function wslHomeDirs(load: () => Promise<string[]>): Promise<string[]> {
       cachedWslHomeDirsExpiresAt =
         Date.now() + (dirs.length > 0 ? WSL_HOME_DIRS_TTL_MS : WSL_HOME_DIRS_EMPTY_RETRY_MS)
       inflightWslHomeDirs = null
+
       return dirs
     })
+
   return inflightWslHomeDirs
 }
 
@@ -171,22 +191,30 @@ export async function toHostReadableTranscriptPath(
   deps: HostReadableTranscriptPathDeps = {}
 ): Promise<string | null> {
   const path = transcriptPath.trim()
+
   if (!path) {
     return null
   }
+
   deps.signal?.throwIfAborted()
+
   const pathExists =
     deps.pathExists ?? ((candidate: string) => pathExistsAsync(candidate, deps.signal))
+
   const platform = deps.platform ?? process.platform
   const exactWslDistro = deps.wslDistro?.trim()
+
   if (platform === 'win32' && exactWslDistro) {
     const parsedUnc = parseWslUncPath(path)
+
     if (parsedUnc && parsedUnc.distro !== exactWslDistro) {
       return null
     }
+
     const candidate = needsWslHostTranslation(path, platform)
       ? toWindowsWslPath(path, exactWslDistro)
       : path
+
     // Keep the running-distro guard for attested paths as well. An exact
     // provider claim does not imply that the guest share is still available.
     if (
@@ -198,8 +226,10 @@ export async function toHostReadableTranscriptPath(
     ) {
       return null
     }
+
     return (await pathExists(candidate)) ? candidate : null
   }
+
   // Why: classify BEFORE probing — Win32 resolves a bare `/home/…` against the
   // current drive (`C:\home\…`), so a probe first could bind chat to a local
   // look-alike file instead of the real WSL transcript.
@@ -214,17 +244,21 @@ export async function toHostReadableTranscriptPath(
     ) {
       return null
     }
+
     return (await pathExists(path)) ? path : null
   }
 
   const homeDirs = deps.wslSnapshot
     ? await snapshotHomeDirs(deps.wslSnapshot)
     : await resolveWslHomeDirs(deps.listWslHomeDirs)
+
   // Sequential on purpose: the ranked order picks the owning distro, and probing
   // every distro at once would fan out 9P calls to ones the user left stopped.
   let unavailable: WslTranscriptFsError | undefined
+
   for (const distro of rankDistrosForGuestPath(homeDirs, path)) {
     const uncPath = toWindowsWslPath(path, distro)
+
     try {
       if (await pathExists(uncPath)) {
         return uncPath
@@ -234,28 +268,35 @@ export async function toHostReadableTranscriptPath(
       unavailable = wslTranscriptFsRefusal(error)
     }
   }
+
   // No hit and at least one distro never probed: "couldn't look", not "absent".
   if (unavailable) {
     throw unavailable
   }
+
   return null
 }
 
 function rankDistrosForGuestPath(wslHomeUncDirs: readonly string[], guestPath: string): string[] {
   const preferred: string[] = []
   const others: string[] = []
+
   for (const homeUnc of wslHomeUncDirs) {
     const parsed = parseWslUncPath(homeUnc)
+
     if (!parsed || preferred.includes(parsed.distro) || others.includes(parsed.distro)) {
       continue
     }
+
     const guestHome = parsed.linuxPath.replace(/\/+$/, '')
+
     if (guestHome && (guestPath === guestHome || guestPath.startsWith(`${guestHome}/`))) {
       preferred.push(parsed.distro)
     } else {
       others.push(parsed.distro)
     }
   }
+
   return [...preferred, ...others]
 }
 
@@ -268,10 +309,13 @@ export async function wslCodexSessionsDirs(
   deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'listWslHomeDirs' | 'wslSnapshot'> = {}
 ): Promise<string[]> {
   const platform = deps.platform ?? process.platform
+
   if (platform !== 'win32') {
     return []
   }
+
   const additionalHomes = getAdditionalCodexHomePaths?.() ?? []
+
   const [homeDirs, runningAdditionalHomes] = await Promise.all([
     deps.wslSnapshot
       ? snapshotHomeDirs(deps.wslSnapshot)
@@ -280,15 +324,18 @@ export async function wslCodexSessionsDirs(
       ? filterPathsToWslDistros(additionalHomes, deps.wslSnapshot.runningDistros)
       : filterPathsToRunningWslDistrosAsync(additionalHomes)
   ])
+
   const dirs = homeDirs.flatMap((home) => [
     joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
     joinUnderWslHome(home, '.codex', 'sessions')
   ])
+
   for (const home of runningAdditionalHomes) {
     if (parseWslUncPath(home)) {
       dirs.push(joinUnderWslHome(home, 'sessions'))
     }
   }
+
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }
 

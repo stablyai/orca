@@ -35,6 +35,7 @@ export async function waitForWorkspaceCleanupRemovalWithTimeout(
   settlementGraceMs: number
 ): Promise<WorkspaceCleanupRemovalWaitResult> {
   const settlement = toWorkspaceCleanupRemovalSettlement(promise)
+
   if (timeoutMs <= 0 || !Number.isFinite(timeoutMs)) {
     return settlement
   }
@@ -43,7 +44,9 @@ export async function waitForWorkspaceCleanupRemovalWithTimeout(
   // the grace stretches it so a settlement racing the deadline stays authoritative.
   const graceMs =
     settlementGraceMs > 0 && Number.isFinite(settlementGraceMs) ? settlementGraceMs : 0
+
   const outcome = await pollWorkspaceCleanupRemoval(settlement, timeoutMs + graceMs)
+
   return outcome.status === 'unresolved' ? { status: 'unresolved', settlement } : outcome
 }
 
@@ -73,6 +76,7 @@ export function trackWorkspaceCleanupLateSettlement(
     ...(candidate.executionHostId ? { executionHostId: candidate.executionHostId } : {}),
     displayName: candidate.displayName
   }
+
   const state: {
     active: boolean
     reconcile: ((result: WorkspaceCleanupRemoveResult) => void) | null
@@ -82,6 +86,7 @@ export function trackWorkspaceCleanupLateSettlement(
     reconcile: reconcileBeforeBatchResult,
     report: null
   }
+
   settlement
     .then((outcome) => {
       const reconcile = state.reconcile
@@ -90,21 +95,26 @@ export function trackWorkspaceCleanupLateSettlement(
       state.reconcile = null
       state.report = null
       const result = toWorkspaceCleanupRemoveResult(candidateIdentity, outcome)
+
       if (reconcile) {
         reconcile(result)
+
         return
       }
+
       report?.(candidateIdentity, result)
     })
     .catch((error: unknown) => {
       console.error('Workspace cleanup late settlement reporting failed', error)
     })
+
   return {
     candidate: candidateIdentity,
     detach: (reportAfterBatchResult) => {
       if (!state.active) {
         return
       }
+
       // Why: hung settlements retain only a two-field identity and the compact
       // post-batch reporter, never the candidate or batch reconciliation closure.
       state.reconcile = null
@@ -129,6 +139,7 @@ function toWorkspaceCleanupRemoveResult(
   if (settlement.status === 'fulfilled') {
     return settlement.result
   }
+
   return {
     removedIds: [],
     removedIdentities: [],
@@ -149,6 +160,7 @@ async function pollWorkspaceCleanupRemoval(
   timeoutMs: number
 ): Promise<WorkspaceCleanupRemovalSettlement | { status: 'unresolved' }> {
   let timeout: ReturnType<typeof setTimeout> | null = null
+
   try {
     return await Promise.race([
       settlement,

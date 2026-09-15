@@ -31,6 +31,7 @@ async function getVisibleWorktreeIdsByTop(page: Page): Promise<string[]> {
 async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
@@ -44,6 +45,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
     const worktrees = Object.values(state.worktreesByRepo)
       .flat()
       .filter((worktree) => !worktree.isArchived)
+
     if (worktrees.length < 2) {
       throw new Error('Smart sort E2E needs at least two worktrees')
     }
@@ -64,6 +66,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
                 sortOrder: 0
               }
             }
+
             if (worktree.id === done.id) {
               return {
                 ...worktree,
@@ -72,6 +75,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
                 sortOrder: 10
               }
             }
+
             return worktree
           })
         ])
@@ -80,6 +84,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
 
     for (const worktree of [blocked, done]) {
       const currentState = store.getState()
+
       if ((currentState.tabsByWorktree[worktree.id] ?? []).length === 0) {
         currentState.createTab(worktree.id)
       }
@@ -88,20 +93,24 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
     const stateWithTabs = store.getState()
     const blockedTab = stateWithTabs.tabsByWorktree[blocked.id]?.[0]
     const doneTab = stateWithTabs.tabsByWorktree[done.id]?.[0]
+
     if (!blockedTab || !doneTab) {
       throw new Error('Smart sort E2E failed to create terminal tabs')
     }
 
     const blockedPtyId = stateWithTabs.ptyIdsByTabId[blockedTab.id]?.[0] ?? `e2e-${blockedTab.id}`
     const donePtyId = stateWithTabs.ptyIdsByTabId[doneTab.id]?.[0] ?? `e2e-${doneTab.id}`
+
     const firstLayoutLeafId = (node: TerminalPaneLayoutNode | null | undefined): string | null => {
       if (!node) {
         return null
       }
+
       return node.type === 'leaf'
         ? node.leafId
         : (firstLayoutLeafId(node.first) ?? firstLayoutLeafId(node.second))
     }
+
     let blockedLeafId = ''
     let doneLeafId = ''
 
@@ -186,6 +195,7 @@ async function getSmartSortScenarioReadiness(
 }> {
   return page.evaluate((scenario) => {
     const state = window.__store?.getState()
+
     if (!state) {
       return {
         blockedHasLivePty: false,
@@ -195,9 +205,11 @@ async function getSmartSortScenarioReadiness(
         fallbackOrder: []
       }
     }
+
     const scenarioWorktrees = Object.values(state.worktreesByRepo)
       .flat()
       .filter((worktree) => worktree.id === scenario.blockedId || worktree.id === scenario.doneId)
+
     return {
       blockedHasLivePty: (state.ptyIdsByTabId[scenario.blockedTabId]?.length ?? 0) > 0,
       doneHasLivePty: (state.ptyIdsByTabId[scenario.doneTabId]?.length ?? 0) > 0,

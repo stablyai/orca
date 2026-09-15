@@ -18,8 +18,10 @@ export function writeNativeChatDraftCache(scopeKey: string, draft: string): void
   // scope key never resurrects cleared text.
   if (draft === '') {
     draftCache.delete(scopeKey)
+
     return
   }
+
   // LRU-bounded so unsent drafts for permanently-removed panes can't accumulate.
   setBoundedScopeCacheEntry(draftCache, scopeKey, {
     text: draft,
@@ -37,6 +39,7 @@ export function readNativeChatDraftDocument(
   text: string
 ): JSONContent | undefined {
   const cached = draftCache.get(scopeKey)
+
   return cached?.text === text ? cached.document : undefined
 }
 
@@ -47,7 +50,9 @@ export function writeNativeChatDraftDocument(
 ): void {
   if (!text) {
     draftCache.delete(scopeKey)
+
     return
   }
+
   setBoundedScopeCacheEntry(draftCache, scopeKey, { text, document })
 }

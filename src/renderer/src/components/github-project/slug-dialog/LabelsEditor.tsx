@@ -23,12 +23,14 @@ export function LabelsEditor({
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+
   const metadata = useRepoLabelsBySlug(
     open ? owner : null,
     open ? repo : null,
     sourceSettings,
     host
   )
+
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
       <PopoverTrigger asChild>
@@ -60,6 +62,7 @@ export function LabelsEditor({
         ) : (
           metadata.data.map((name) => {
             const isOn = selected.includes(name)
+
             return (
               <button
                 key={name}

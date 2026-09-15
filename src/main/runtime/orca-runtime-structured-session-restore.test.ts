@@ -10,11 +10,13 @@ describe('structured session cold restoration', () => {
     const refresh = vi.fn(async () => new Set<string>())
     const ensureHost = vi.fn(async () => undefined)
     const reconcileRestartLeases = vi.fn(async () => undefined)
+
     const internal = runtime as unknown as {
       hasPersistedStructuredAgentSessionStore(): boolean
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
+
     internal.hasPersistedStructuredAgentSessionStore = () => false
     internal.refreshMobileSessionPtyRecords = refresh
     internal.ensureStructuredAgentSessionHost = ensureHost
@@ -33,11 +35,13 @@ describe('structured session cold restoration', () => {
     const ensureHost = vi.fn(async () => undefined)
     const reconcileRestartLeases = vi.fn(async () => undefined)
     const restoreReadableSessions = vi.fn(async () => undefined)
+
     const internal = runtime as unknown as {
       hasPersistedStructuredAgentSessionStore(): boolean
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
+
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.refreshMobileSessionPtyRecords = refresh
     internal.ensureStructuredAgentSessionHost = ensureHost
@@ -58,6 +62,7 @@ describe('structured session cold restoration', () => {
     const ensureHost = vi.fn(async () => undefined)
     const reconcileRestartLeases = vi.fn(async () => undefined)
     const restoreReadableSessions = vi.fn(async () => undefined)
+
     const internal = runtime as unknown as {
       hasPersistedStructuredAgentSessionStore(): boolean
       getKnownWorkspaceSessionWorktreeIds(): Set<string>
@@ -68,6 +73,7 @@ describe('structured session cold restoration', () => {
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
+
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set(['workspace-1'])
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = hydrate
@@ -110,6 +116,7 @@ describe('structured session cold restoration', () => {
   it('prefers the durable visible-session index after a legacy profile drops agent tabs', async () => {
     const runtime = new OrcaRuntimeService()
     const restoreReadableSessions = vi.fn(async () => undefined)
+
     const internal = runtime as unknown as {
       store: { getWorkspaceSession: () => unknown }
       hasPersistedStructuredAgentSessionStore(): boolean
@@ -118,6 +125,7 @@ describe('structured session cold restoration', () => {
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
+
     internal.store = {
       getWorkspaceSession: () => ({
         activeRepoId: null,
@@ -151,6 +159,7 @@ describe('structured session cold restoration', () => {
   it('treats an empty durable visible-session index as authoritative', async () => {
     const runtime = new OrcaRuntimeService()
     const restoreReadableSessions = vi.fn(async () => undefined)
+
     const internal = runtime as unknown as {
       store: { getWorkspaceSession: () => unknown }
       hasPersistedStructuredAgentSessionStore(): boolean
@@ -159,6 +168,7 @@ describe('structured session cold restoration', () => {
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
+
     internal.store = {
       getWorkspaceSession: () => ({
         activeRepoId: null,
@@ -205,12 +215,15 @@ describe('structured session cold restoration', () => {
   it('normalizes a restored tab id and removes it when closed', async () => {
     const runtime = new OrcaRuntimeService()
     const closeSessionTab = vi.fn(async () => undefined)
+
     const closeStructuredSession = vi.fn(async () => {
       const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
       expect(snapshot.tabs.some((tab) => tab.type === 'agent-session')).toBe(false)
     })
+
     const setSessionTabVisibility = vi.fn(async () => undefined)
     runtime.setNotifier({ closeSessionTab } as never)
+
     const internal = runtime as unknown as {
       hasPersistedStructuredAgentSessionStore(): boolean
       getKnownWorkspaceSessionWorktreeIds(): Set<string>
@@ -218,6 +231,7 @@ describe('structured session cold restoration', () => {
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
+
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
@@ -328,6 +342,7 @@ describe('structured session cold restoration', () => {
   it('publishes restored Claude tabs with the Claude title', async () => {
     const runtime = new OrcaRuntimeService()
     const publish = vi.spyOn(runtime, 'publishStructuredAgentSessionTab')
+
     const internal = runtime as unknown as {
       hasPersistedStructuredAgentSessionStore(): boolean
       getKnownWorkspaceSessionWorktreeIds(): Set<string>
@@ -335,6 +350,7 @@ describe('structured session cold restoration', () => {
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
+
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()

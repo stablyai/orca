@@ -66,6 +66,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     if (!persistDraft) {
       return
     }
+
     setNewWorkspaceDraft({
       repoId: repoId || null,
       projectId:
@@ -127,6 +128,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     if (isProjectGroupTarget) {
       return
     }
+
     if (!repoId && eligibleRepos[0]?.id) {
       setRepoId(eligibleRepos[0].id)
     }
@@ -136,9 +138,11 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     if (!selectedProjectGroup) {
       return
     }
+
     if (repoId && folderSourceRepos.some((repo) => repo.id === repoId)) {
       return
     }
+
     setRepoId(folderSourceRepos[0]?.id ?? '')
   }, [folderSourceRepos, repoId, selectedProjectGroup, setRepoId])
 
@@ -147,9 +151,11 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     if (!repoId || !selectedRepoIsGit || selectedRepo?.connectionId) {
       return
     }
+
     if (sparsePresetsByRepo[repoId] !== undefined) {
       return
     }
+
     void fetchSparsePresets(repoId)
   }, [
     fetchSparsePresets,

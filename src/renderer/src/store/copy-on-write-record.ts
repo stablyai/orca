@@ -12,12 +12,15 @@ export type CopyOnWriteRecord<T> = {
  */
 export function copyOnWriteRecord<T>(source: Record<string, T>): CopyOnWriteRecord<T> {
   let next = source
+
   const mutable = (): Record<string, T> => {
     if (next === source) {
       next = { ...source }
     }
+
     return next
   }
+
   return {
     read: () => next,
     delete: (key) => {

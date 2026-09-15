@@ -13,6 +13,7 @@ import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
+
   return {
     id: 1,
     leafId,
@@ -71,6 +72,7 @@ describe('terminal WebGL context recovery', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -145,6 +147,7 @@ describe('terminal WebGL context recovery', () => {
   it('replaces a retained context lost before xterm dispatches its loss event', () => {
     const pane = createPane()
     const dispose = vi.fn()
+
     const lostAddon = {
       dispose,
       _renderer: {
@@ -154,6 +157,7 @@ describe('terminal WebGL context recovery', () => {
         }
       }
     }
+
     pane.webglAddon = lostAddon as never
 
     resumePaneRendering([pane])
@@ -221,6 +225,7 @@ describe('terminal WebGL context recovery', () => {
   it('carries the pane census under the same field names the fit-retry crumb uses', () => {
     const recorded: { kind: string; detail?: Record<string, unknown> }[] = []
     setTerminalWebglDiagnosticRecorder((kind, detail) => recorded.push({ kind, detail }))
+
     try {
       const pane = createPane()
       attachWebgl(pane)

@@ -11,6 +11,7 @@ export type MacNotificationPermissionState =
   | 'blocked'
 
 const MAC_PROBE_POLL_INTERVAL_MS = 2500
+
 // Why: bounded so an abandoned onboarding tab doesn't probe forever; ~3
 // minutes comfortably covers answering the dialog or flipping the toggle
 // in System Settings.
@@ -23,12 +24,15 @@ export function resolveMacNotificationPermissionState(
   if (probeState === 'unsupported') {
     return null
   }
+
   if (probeState === 'delivered') {
     return 'enabled'
   }
+
   if (probeState === 'awaiting-decision') {
     return 'awaiting-permission'
   }
+
   // Why: probe-fallback hosts can't tell "unanswered dialog" from "denied" —
   // a first-ever probe is what makes macOS show the permission dialog, so
   // its rejection means "unanswered", not "denied".
@@ -48,8 +52,10 @@ export function useMacNotificationPermissionState(
     // readout polling entirely until the setting is back on.
     if (!enabled) {
       setMacPermissionState(null)
+
       return
     }
+
     let cancelled = false
     let pollTimer: ReturnType<typeof setTimeout> | null = null
     let pollAttempts = 0
@@ -58,13 +64,16 @@ export function useMacNotificationPermissionState(
       if (cancelled || pollAttempts >= MAC_PROBE_POLL_MAX_ATTEMPTS) {
         return
       }
+
       pollTimer = setTimeout(() => {
         pollAttempts += 1
         void window.api.notifications.probeDelivery({ force: true }).then((probe) => {
           if (cancelled) {
             return
           }
+
           setMacPermissionState(resolveMacNotificationPermissionState(probe.state, promptedBefore))
+
           // Why: authoritative readouts are silent, so keep tracking System
           // Settings live in every state — flipping the toggle updates the
           // card within a poll. Probe fallbacks flash a banner when delivery
@@ -78,22 +87,28 @@ export function useMacNotificationPermissionState(
 
     void (async () => {
       const status = await window.api.notifications.getPermissionStatus()
+
       if (cancelled) {
         return
       }
+
       if (status.platform !== 'darwin' || !status.supported) {
         return
       }
+
       setMacPermissionState('checking')
       // Why: `status.requested` is read before the probe stamps it, so a
       // fresh install (where the check itself pops the macOS dialog) renders
       // as "answer the dialog" instead of "blocked" on probe-fallback hosts.
       const probe = await window.api.notifications.probeDelivery()
+
       if (cancelled) {
         return
       }
+
       const resolved = resolveMacNotificationPermissionState(probe.state, status.requested)
       setMacPermissionState(resolved)
+
       if (resolved !== null && (probe.authoritative || resolved !== 'enabled')) {
         schedulePoll(status.requested)
       }
@@ -101,6 +116,7 @@ export function useMacNotificationPermissionState(
 
     return () => {
       cancelled = true
+
       if (pollTimer) {
         clearTimeout(pollTimer)
       }

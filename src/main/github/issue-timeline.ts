@@ -8,6 +8,7 @@ import { githubHostExecOptions } from './github-api-repository'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
 const MAX_ISSUE_TIMELINE_ITEMS = 300
+
 const GITHUB_REST_PAGE_SIZE = 100
 
 type RestTimelineUser = {
@@ -67,8 +68,10 @@ function mapTimelineTarget(
   if (!issue || typeof issue.number !== 'number' || !issue.html_url) {
     return undefined
   }
+
   const owner = issue.repository?.owner?.login
   const repo = issue.repository?.name
+
   return {
     type: issue.pull_request ? 'pr' : 'issue',
     number: issue.number,
@@ -80,6 +83,7 @@ function mapTimelineTarget(
 
 function getTimelineActor(event: RestTimelineEvent): { login: string; avatarUrl: string } {
   const actor = event.actor ?? event.user
+
   return {
     login: actor?.login ?? 'ghost',
     avatarUrl: actor?.avatar_url ?? ''
@@ -88,11 +92,14 @@ function getTimelineActor(event: RestTimelineEvent): { login: string; avatarUrl:
 
 function mapRestTimelineEvent(event: RestTimelineEvent): GitHubIssueTimelineItem | null {
   const eventName = event.event
+
   if (!isSupportedTimelineEvent(eventName) || !event.created_at) {
     return null
   }
+
   const actor = getTimelineActor(event)
   const id = String(event.node_id ?? event.id ?? `${eventName}:${event.created_at}`)
+
   const base = {
     id,
     event: eventName,
@@ -100,12 +107,15 @@ function mapRestTimelineEvent(event: RestTimelineEvent): GitHubIssueTimelineItem
     actorAvatarUrl: actor.avatarUrl,
     createdAt: event.created_at
   }
+
   if (eventName === 'assigned' || eventName === 'unassigned') {
     return { ...base, assignee: event.assignee?.login ?? undefined }
   }
+
   if (eventName === 'mentioned' || eventName === 'cross-referenced') {
     return { ...base, source: mapTimelineTarget(event.source?.issue) }
   }
+
   if (eventName === 'closed') {
     return {
       ...base,
@@ -113,6 +123,7 @@ function mapRestTimelineEvent(event: RestTimelineEvent): GitHubIssueTimelineItem
       closer: mapTimelineTarget(event.closer ?? event.source?.issue)
     }
   }
+
   if (eventName === 'moved_columns_in_project') {
     return {
       ...base,
@@ -122,18 +133,23 @@ function mapRestTimelineEvent(event: RestTimelineEvent): GitHubIssueTimelineItem
       projectName: event.project?.name ?? null
     }
   }
+
   return base
 }
 
 function parseRestTimelineEventLines(stdout: string): RestTimelineEvent[] {
   const events: RestTimelineEvent[] = []
+
   for (const line of stdout.split('\n')) {
     const trimmed = line.trim()
+
     if (!trimmed) {
       continue
     }
+
     try {
       const parsed = JSON.parse(trimmed) as unknown
+
       if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
         events.push(parsed)
       }
@@ -141,6 +157,7 @@ function parseRestTimelineEventLines(stdout: string): RestTimelineEvent[] {
       // Timeline activity is auxiliary to issue details.
     }
   }
+
   return events
 }
 
@@ -151,11 +168,14 @@ export async function getIssueTimelineItems(
 ): Promise<GitHubIssueTimelineItem[]> {
   try {
     const items: GitHubIssueTimelineItem[] = []
+
     for (let page = 1; items.length < MAX_ISSUE_TIMELINE_ITEMS; page += 1) {
       if (repositoryRateLimitGuard(repository, 'core', ghOptions).blocked) {
         return items
       }
+
       noteRepositoryRateLimitSpend(repository, 'core', 1, ghOptions)
+
       const { stdout } = await ghExecFileAsync(
         [
           'api',
@@ -167,21 +187,28 @@ export async function getIssueTimelineItems(
         ],
         { ...ghOptions, ...githubHostExecOptions(repository) }
       )
+
       const pageEvents = parseRestTimelineEventLines(stdout)
+
       for (const event of pageEvents) {
         const item = mapRestTimelineEvent(event)
+
         if (!item) {
           continue
         }
+
         items.push(item)
+
         if (items.length === MAX_ISSUE_TIMELINE_ITEMS) {
           break
         }
       }
+
       if (pageEvents.length < GITHUB_REST_PAGE_SIZE) {
         break
       }
     }
+
     return items
   } catch {
     return []

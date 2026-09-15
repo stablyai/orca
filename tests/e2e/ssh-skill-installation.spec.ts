@@ -19,6 +19,7 @@ import {
 } from './helpers/remote-skill-cloud-fixture'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const REMOTE_FOLDER = '/tmp/orca-skill-folder-workspace'
 
 let cloud: RemoteSkillCloudFixture | null = null
@@ -29,6 +30,7 @@ test.use({
     if (!cloud) {
       throw new Error('Skill cloud fixture unavailable')
     }
+
     await provideEnv({
       ORCA_ARTIFACTS_API_URL: cloud.origin,
       ORCA_CLOUD_API_URL: cloud.origin,
@@ -48,6 +50,7 @@ test.afterAll(async () => {
   if (!cloud) {
     return
   }
+
   await stopRemoteSkillCloudFixture(cloud)
   cloud = null
 })
@@ -62,6 +65,7 @@ test.describe('SSH skill installation', () => {
     test.slow()
     const fixture = requireCloudFixture()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       execDockerSshRelayTargetCommand(target, `mkdir -p ${REMOTE_FOLDER}`)
@@ -75,16 +79,19 @@ test.describe('SSH skill installation', () => {
         scope: 'global',
         executionTarget: { kind: 'ssh', connectionId: remote.targetId }
       }
+
       await installAndVerify(
         orcaPage,
         target,
         globalDestination,
         '/root/.agents/skills/remote-e2e-skill'
       )
+
       const globalInstalls = await orcaPage.evaluate(
         (environmentId) => window.api.skills.listManagedInstalls(environmentId),
         `ssh:${remote.targetId}`
       )
+
       expect(globalInstalls).toMatchObject({
         status: 'ok',
         value: [
@@ -109,15 +116,18 @@ test.describe('SSH skill installation', () => {
         scope: 'workspace',
         worktreeId: remote.worktreeId
       }
+
       const worktreePath = '/tmp/orca-docker-relay-perf-repo/.agents/skills/remote-e2e-skill'
       await installAndVerify(orcaPage, target, worktreeDestination, worktreePath)
       await removeAndVerify(orcaPage, target, worktreeDestination, worktreePath)
 
       const folderWorkspaceId = await createRemoteFolderWorkspace(orcaPage, remote.targetId)
+
       const folderDestination: SkillInstallDestination = {
         scope: 'workspace',
         folderWorkspaceId
       }
+
       const folderPath = `${REMOTE_FOLDER}/.agents/skills/remote-e2e-skill`
       await installAndVerify(orcaPage, target, folderDestination, folderPath)
       await removeAndVerify(orcaPage, target, folderDestination, folderPath)
@@ -145,6 +155,7 @@ function requireCloudFixture(): RemoteSkillCloudFixture {
   if (!cloud) {
     throw new Error('skill Cloud fixture unavailable')
   }
+
   return cloud
 }
 
@@ -167,6 +178,7 @@ async function installAndVerify(
       versionId: REMOTE_SKILL_VERSION_ID
     }
   )
+
   expect(operation, JSON.stringify(operation, null, 2)).toMatchObject({
     status: 'ok',
     value: { status: 'installed', name: REMOTE_SKILL_NAME }
@@ -177,6 +189,7 @@ async function installAndVerify(
 
 async function previewUnchanged(page: Page, destination: SkillInstallDestination): Promise<void> {
   const fixture = requireCloudFixture()
+
   const preview = await page.evaluate(
     ({ destination, packageIdentity, name }) =>
       window.api.skills.previewInstall({
@@ -196,6 +209,7 @@ async function previewUnchanged(page: Page, destination: SkillInstallDestination
       }
     }
   )
+
   expect(preview).toMatchObject({ status: 'ok', value: { currentState: 'unchanged' } })
 }
 
@@ -209,6 +223,7 @@ async function removeAndVerify(
     ({ destination, name }) => window.api.skills.removeInstall({ name, destination }),
     { destination, name: REMOTE_SKILL_NAME }
   )
+
   expect(operation).toMatchObject({ status: 'ok', value: { status: 'removed' } })
   expect(execDockerSshRelayTargetCommand(target, `test ! -e ${remotePath} && echo removed`)).toBe(
     'removed'
@@ -223,12 +238,14 @@ async function createRemoteFolderWorkspace(page: Page, targetId: string): Promis
         parentPath: folderPath,
         connectionId: targetId
       })
+
       const workspace = await window.api.folderWorkspaces.create({
         projectGroupId: group.id,
         name: 'SSH skill folder E2E',
         folderPath,
         connectionId: targetId
       })
+
       return workspace.id
     },
     { targetId, folderPath: REMOTE_FOLDER }

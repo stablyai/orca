@@ -36,6 +36,7 @@ export function serializeRichMarkdownForReconcile(
     // from the live snapshot, without subscribing to the live editor's context.
     const { version: _version, ...snapshot } = htmlSuperscriptLinkContext.getSnapshot()
     const context = createRichMarkdownHtmlSuperscriptLinkContext(snapshot)
+
     const editor = new Editor({
       element: null,
       extensions: createRichMarkdownExtensions({
@@ -49,8 +50,10 @@ export function serializeRichMarkdownForReconcile(
         setRichMarkdownImageResolverContext(nextEditor, imageResolverContext)
       }
     })
+
     try {
       normalizeEmptyListItems(editor)
+
       return editor.getMarkdown()
     } finally {
       editor.destroy()

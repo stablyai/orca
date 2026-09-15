@@ -4,11 +4,14 @@ import { describe, expect, it } from 'vitest'
 import { BUNDLED_SKILL_GUIDES } from '../../src/cli/bundled-skill-guides'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 // Why: computer-use now ships a hybrid discovery stub, so its version-sensitive command
 // guidance lives in the authoritative guide source — assert that content there. The
 // installable stub projection is checked separately below.
 const guidePath = join(projectDir, 'skill-guides', 'computer-use.md')
+
 const stubPath = join(projectDir, 'skills', 'computer-use', 'SKILL.md')
+
 const bundledGuide = BUNDLED_SKILL_GUIDES.find((guide) => guide.name === 'computer-use')?.markdown
 
 describe('computer-use skill guidance', () => {

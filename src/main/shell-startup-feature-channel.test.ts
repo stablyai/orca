@@ -28,10 +28,13 @@ import {
 restoreUserDataPathAfterEach()
 
 const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+
 const ZSH_PATH = hasZsh
   ? (spawnSync('sh', ['-c', 'command -v zsh'], { encoding: 'utf8' }).stdout || '').trim()
   : ''
+
 const itWithZsh = hasZsh ? it : it.skip
+
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 
 const PLAIN_PANE = {
@@ -115,6 +118,7 @@ describePosix('zsh launch config', () => {
     } else {
       process.env.ORCA_SHELL_FEATURES = previousFeatures
     }
+
     chmodSync(userDataPath, 0o755)
     rmSync(userDataPath, { recursive: true, force: true })
   })
@@ -142,11 +146,13 @@ describePosix('zsh launch config', () => {
     // Why: pointing ZDOTDIR at an unwritten wrapper dir makes zsh skip the
     // user's entire configuration — silently, and for every future pane.
     chmodSync(userDataPath, 0o500)
+
     if (
       spawnSync('sh', ['-c', `touch ${JSON.stringify(join(userDataPath, 'probe'))}`]).status === 0
     ) {
       return // running with write access regardless of mode (e.g. root)
     }
+
     const { getShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
     const config = getShellLaunchConfig('/bin/zsh', ['history'])
@@ -169,6 +175,7 @@ describePosix('zsh launch config', () => {
     const previousHome = process.env.HOME
     process.env.ZDOTDIR = foreignWrapper
     process.env.HOME = home
+
     try {
       const { getShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
@@ -198,11 +205,13 @@ describePosix('zsh launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
         process.env.HOME = previousHome
       }
+
       rmSync(home, { recursive: true, force: true })
     }
   })
@@ -234,9 +243,11 @@ describePosix('epilogue under hostile user shell options', () => {
       if (!hasZsh) {
         return
       }
+
       const scoped = join(home, 'orca-history', 'zsh_history')
       const opencodeDir = join(home, 'opencode-overlay')
       writeFileSync(join(home, '.zshrc'), `setopt ${option}\n`)
+
       // Why an overlay pane: KSH_ARRAYS only drops whichever feature is listed
       // first, and `overlay` is the first token the selector ever emits.
       const spawnEnv: Record<string, string> = {
@@ -244,6 +255,7 @@ describePosix('epilogue under hostile user shell options', () => {
         ORCA_HISTFILE: scoped,
         ORCA_OPENCODE_CONFIG_DIR: opencodeDir
       }
+
       const features = selectShellStartupFeatures({
         shellPath: ZSH_PATH,
         env: spawnEnv,
@@ -251,6 +263,7 @@ describePosix('epilogue under hostile user shell options', () => {
         waitsForShellReady: true,
         emitsStartupIdentity: true
       })
+
       const { getShellLaunchConfig } = await importFreshLocalPtyShellReady()
       const launch = getShellLaunchConfig(ZSH_PATH, features)
 
@@ -281,9 +294,11 @@ describePosix('epilogue under hostile user shell options', () => {
 /** A temp HOME whose four zsh startup files each announce that they ran. */
 function makeUserHome(): string {
   const home = mkdtempSync(join(tmpdir(), 'orca-feature-home-'))
+
   for (const file of ['.zshenv', '.zprofile', '.zshrc', '.zlogin']) {
     writeFileSync(join(home, file), `print -r -- "RAN=${file}"\n`)
   }
+
   return home
 }
 
@@ -304,6 +319,7 @@ describePosix('history-only pane in a real zsh', () => {
 
   function withoutInheritedZdotdir(env: Record<string, string>): Record<string, string> {
     const { ORCA_ORIG_ZDOTDIR: _inherited, ...rest } = env
+
     return rest
   }
 
@@ -313,19 +329,23 @@ describePosix('history-only pane in a real zsh', () => {
     zdotdir: string
   }> {
     const scoped = join(home, 'orca-history', 'zsh_history')
+
     const spawnEnv: Record<string, string> = {
       HOME: home,
       HISTFILE: scoped,
       ORCA_HISTFILE: scoped
     }
+
     const features = selectShellStartupFeatures({
       shellPath: ZSH_PATH,
       env: spawnEnv,
       ...PLAIN_PANE
     })
+
     expect(features).toEqual(['history'])
     const { getShellLaunchConfig } = await importFreshLocalPtyShellReady()
     const launch = getShellLaunchConfig(ZSH_PATH, features)
+
     return {
       args: launch.args ?? ['-l'],
       env: {
@@ -367,13 +387,16 @@ describePosix('history-only pane in a real zsh', () => {
       // Why a PTY: the hook runs from the first prompt's precmd sweep, so a shell
       // started with -c would report a pane Orca had not finished setting up.
       const { env } = await launchHistoryOnly()
+
       const capture = [
         'PRECMD="${precmd_functions[*]}"; PREEXEC="${preexec_functions[*]}"',
         'LINEINIT="${widgets[zle-line-init]:-none}"'
       ]
+
       const report = ['PRECMD', 'PREEXEC', 'LINEINIT', 'ZDOTDIR', 'ORCA_SHELL_FEATURES']
 
       const wrapped = await runZshPty({ env, commands: capture, report })
+
       const unwrapped = await runZshPty({
         env: { PATH: '/usr/bin:/bin', HOME: home },
         commands: capture,

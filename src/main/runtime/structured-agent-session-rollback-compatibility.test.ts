@@ -10,6 +10,7 @@ import { AGENT_SESSION_STORE_FILE_NAME } from './agent-session-record-store-file
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 
 const WORKSPACE = 'workspace-1'
+
 const SESSION = 'session-alpha-1'
 
 function structuredTab() {
@@ -42,6 +43,7 @@ function profileWithStructuredTab(): Record<string, unknown> {
 /** The pinned base rejects the new discriminator and salvages the remaining profile. */
 function pinnedBaseRoundTrip(raw: Record<string, unknown>): Record<string, unknown> {
   const unifiedTabs = raw.unifiedTabs as Record<string, unknown[]> | undefined
+
   return {
     ...raw,
     ...(unifiedTabs
@@ -51,6 +53,7 @@ function pinnedBaseRoundTrip(raw: Record<string, unknown>): Record<string, unkno
               worktreeId,
               tabs.filter((tab) => {
                 const contentType = (tab as { contentType?: unknown }).contentType
+
                 return (
                   contentType === 'terminal' ||
                   contentType === 'editor' ||
@@ -79,11 +82,13 @@ describe('structured session rollback compatibility', () => {
     root = await mkdtemp(join(tmpdir(), 'orca-structured-rollback-'))
     const storeDir = join(root, 'agent-store')
     await mkdir(storeDir, { recursive: true })
+
     const record = agentSessionRecordFixture({
       ...agentSessionRecordFixture().lease,
       sessionId: SESSION,
       runtimeKind: 'native'
     })
+
     await writeFile(
       join(storeDir, AGENT_SESSION_STORE_FILE_NAME),
       JSON.stringify({

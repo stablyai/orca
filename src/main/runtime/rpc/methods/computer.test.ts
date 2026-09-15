@@ -75,6 +75,7 @@ describe('computer RPC methods', () => {
     const result = {
       apps: [{ name: 'Finder', bundleId: 'com.apple.finder', pid: 100 }]
     }
+
     computerMocks.callComputerSidecarListApps.mockResolvedValue(result)
 
     await expect(call('computer.listApps', {})).resolves.toBe(result)
@@ -102,6 +103,7 @@ describe('computer RPC methods', () => {
       openedSettings: false,
       launchedHelper: true
     }
+
     computerMocks.openComputerUsePermissions.mockReturnValue(result)
 
     await expect(call('computer.permissions', { id: 'accessibility' })).resolves.toBe(result)
@@ -115,6 +117,7 @@ describe('computer RPC methods', () => {
       helperUnavailableReason: null,
       permissions: [{ id: 'accessibility', status: 'granted' }]
     }
+
     computerMocks.getComputerUsePermissionStatus.mockReturnValue(result)
 
     await expect(call('computer.permissionsStatus', {})).resolves.toBe(result)
@@ -126,6 +129,7 @@ describe('computer RPC methods', () => {
       app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
       windows: []
     }
+
     const params = { app: 'Finder' }
     computerMocks.callComputerSidecarListWindows.mockResolvedValue(result)
 
@@ -161,6 +165,7 @@ describe('computer RPC methods', () => {
       screenshot: null,
       screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' }
     }
+
     const params = {
       app: 'Finder',
       worktree: 'path:/tmp/repo',
@@ -168,6 +173,7 @@ describe('computer RPC methods', () => {
       restoreWindow: true,
       windowId: 123
     }
+
     computerMocks.callComputerSidecarSnapshot.mockResolvedValue(snapshot)
 
     await expect(call('computer.getAppState', params)).resolves.toBe(snapshot)
@@ -250,15 +256,18 @@ describe('computer RPC methods', () => {
 
 function findMethod(name: string) {
   const method = eraseRpcMethods(COMPUTER_METHODS).find((candidate) => candidate.name === name)
+
   if (!method) {
     throw new Error(`missing method ${name}`)
   }
+
   return method
 }
 
 async function call(name: string, params: Record<string, unknown>) {
   const method = findMethod(name)
   const parsed = method.params ? method.params.parse(params) : undefined
+
   return await method.handler(parsed, {
     runtime: { getRuntimeId: () => 'runtime-1' } as never
   })

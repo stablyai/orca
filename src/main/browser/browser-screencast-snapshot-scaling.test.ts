@@ -6,12 +6,14 @@ import { startBrowserScreencast } from './browser-screencast-stream'
 
 function createMockWebContents(capturePage: () => Promise<unknown>) {
   let attached = false
+
   const dbg = new EventEmitter() as EventEmitter & {
     isAttached: ReturnType<typeof vi.fn>
     attach: ReturnType<typeof vi.fn>
     detach: ReturnType<typeof vi.fn>
     sendCommand: ReturnType<typeof vi.fn>
   }
+
   dbg.isAttached = vi.fn(() => attached)
   dbg.attach = vi.fn(() => {
     attached = true
@@ -20,6 +22,7 @@ function createMockWebContents(capturePage: () => Promise<unknown>) {
     attached = false
   })
   dbg.sendCommand = vi.fn(async () => ({}))
+
   return { isDestroyed: vi.fn(() => false), debugger: dbg, capturePage: vi.fn(capturePage) }
 }
 
@@ -30,12 +33,14 @@ function createCapturedImage(width: number, height: number) {
     toJPEG: vi.fn(() => Buffer.from('scaled-frame')),
     toPNG: vi.fn(() => Buffer.from('scaled-frame'))
   }
+
   const image = {
     getSize: vi.fn(() => ({ width, height })),
     resize: vi.fn(() => resized),
     toJPEG: vi.fn(() => Buffer.from('captured-frame')),
     toPNG: vi.fn(() => Buffer.from('captured-frame'))
   }
+
   return { image, resized }
 }
 

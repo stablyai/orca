@@ -7,11 +7,13 @@ export type SparsePresetDirectoryParseResult = {
 
 function isAbsoluteSparseDirectoryPath(value: string): boolean {
   const entry = value.trim()
+
   return entry.startsWith('/') || entry.startsWith('\\') || WINDOWS_DRIVE_PATH_PATTERN.test(entry)
 }
 
 function normalizeSparseDirectoryLines(value: string): string[] {
   const seen = new Set<string>()
+
   return value
     .split('\n')
     .map((entry) =>
@@ -25,7 +27,9 @@ function normalizeSparseDirectoryLines(value: string): string[] {
       if (seen.has(entry)) {
         return false
       }
+
       seen.add(entry)
+
       return true
     })
 }

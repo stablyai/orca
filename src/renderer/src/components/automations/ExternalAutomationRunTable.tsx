@@ -60,6 +60,7 @@ function normalizeRunPage(
   if (Array.isArray(result)) {
     return { runs: result }
   }
+
   return result
 }
 
@@ -85,17 +86,20 @@ export function ExternalAutomationRunTable({
   const scopeKey = externalAutomationScopeKey(scope)
 
   const resolvedTableState = resolveExternalAutomationRunTableState(tableState, job)
+
   if (resolvedTableState !== tableState) {
     // Why: manager rows can switch jobs while the table stays mounted; reset
     // before paint so stale fetched rows/selection never flash for the new job.
     setTableState(resolvedTableState)
   }
+
   const { page, selectedRunId, fetchedRuns, fetchedTotalCount, fetchError } = resolvedTableState
 
   useEffect(() => {
     if (!onFetchRuns) {
       return
     }
+
     let cancelled = false
     setIsLoading(true)
     setTableState((current) => ({
@@ -113,6 +117,7 @@ export function ExternalAutomationRunTable({
         if (cancelled) {
           return
         }
+
         const nextPage = normalizeRunPage(result)
         setTableState((current) =>
           resolveExternalAutomationFetchedRuns(current, jobRef.current, nextPage)
@@ -133,17 +138,21 @@ export function ExternalAutomationRunTable({
           setIsLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
   }, [job.id, manager.id, onFetchRuns, page, scopeKey])
 
   const fallbackRuns = job.runs
+
   const visibleRuns = onFetchRuns
     ? (fetchedRuns ?? fallbackRuns.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE))
     : fallbackRuns.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+
   const totalCount = onFetchRuns ? (fetchedTotalCount ?? job.runCount) : job.runCount
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+
   const selectedRun = useMemo(
     () =>
       visibleRuns.find((run) => run.id === selectedRunId) ??
@@ -152,6 +161,7 @@ export function ExternalAutomationRunTable({
       null,
     [fallbackRuns, selectedRunId, visibleRuns]
   )
+
   const hasVisibleRuns = visibleRuns.length > 0
   const pageStart = totalCount === 0 || !hasVisibleRuns ? 0 : page * PAGE_SIZE + 1
   const pageEnd = Math.min(totalCount, page * PAGE_SIZE + visibleRuns.length)

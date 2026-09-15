@@ -5,6 +5,7 @@ import { readWindowsProcessTableFresh } from './windows/windows-process-table'
 import { terminateWindowsProcessTree } from './windows-process-tree-kill'
 
 export const WINDOWS_DESCENDANT_KILL_VERIFY_MS = 3_500
+
 const WINDOWS_DESCENDANT_POLL_MS = 100
 
 /**
@@ -42,8 +43,10 @@ export async function verifyWindowsProcessIdentity(
   if (!Number.isInteger(target.pid) || target.pid <= 0 || !Number.isFinite(target.creationTimeMs)) {
     return false
   }
+
   const table = await (deps.readTable ?? readWindowsProcessTableFresh)().catch(() => null)
   const current = table?.filter((row) => row.pid === target.pid) ?? []
+
   return current.length === 1 && current[0]?.creationTimeMs === target.creationTimeMs
 }
 
@@ -69,21 +72,27 @@ export async function captureWindowsDescendantSnapshot(
   if (!Number.isInteger(rootPid) || rootPid <= 0) {
     return null
   }
+
   const capturedAtMs = (deps.now ?? Date.now)()
   // One table read, not a walk plus an identity read: each is bounded in
   // seconds, and this runs inside the close ladder's budget.
   const table = await (deps.readTable ?? readWindowsProcessTableFresh)().catch(() => null)
+
   if (!table) {
     return null
   }
+
   // One index for both lookups, so a repeated pid resolves to the same row for
   // the root and for a parent link: `byPid` is first-wins, a Map is not.
   const rowsByPid = getProcessTableIndex(table).byPid
   const root = rowsByPid.get(rootPid)
+
   if (typeof root?.creationTimeMs !== 'number') {
     return null
   }
+
   const rootCreationTimeMs = root.creationTimeMs
+
   // Windows keeps a process's original parent PID after that parent exits, so a
   // reused PID is not ancestry: no real child predates the parent it claims.
   // The root's start backstops the undefined-time bypass, which admits a row
@@ -92,6 +101,7 @@ export async function captureWindowsDescendantSnapshot(
   // collide exactly, so `>` would drop true descendants.
   const currentRows = table.filter((row) => {
     const parentCreationTimeMs = rowsByPid.get(row.ppid)?.creationTimeMs
+
     return (
       // Its own ppid can be recycled too, and a pruned root loses the snapshot.
       row.pid === rootPid ||
@@ -100,10 +110,13 @@ export async function captureWindowsDescendantSnapshot(
         (parentCreationTimeMs === undefined || row.creationTimeMs >= parentCreationTimeMs))
     )
   })
+
   const descendants = windowsDescendantsFromRows(currentRows, rootPid)
+
   if (!descendants) {
     return null
   }
+
   return {
     root: { pid: root.pid, creationTimeMs: root.creationTimeMs },
     descendants: descendants.flatMap((row) =>
@@ -132,13 +145,16 @@ export async function terminateIdentifiedWindowsProcessTree(
   if (!(await verifyWindowsProcessIdentity(target, { readTable: deps.readTable }))) {
     return false
   }
+
   if (deps.ownsRoot?.() === false) {
     return false
   }
+
   await (
     deps.terminateTree ??
     ((identified: WindowsProcessIdentity) => terminateWindowsProcessTree(identified.pid))
   )(target)
+
   return true
 }
 
@@ -157,15 +173,19 @@ export async function verifyWindowsDescendantSnapshotExit(
   // The most a read can prove: a descendant that denied identification was seen
   // and can never be matched gone, so "could not look" caps the verdict.
   const proven: DescendantTreeVerdict = snapshot.unidentifiedCount > 0 ? 'unverifiable' : 'exited'
+
   if (snapshot.descendants.length === 0) {
     return proven
   }
+
   const now = deps.now ?? Date.now
   const readTable = deps.readTable ?? readWindowsProcessTableFresh
   const deadline = now() + (deps.verifyMs ?? WINDOWS_DESCENDANT_KILL_VERIFY_MS)
   let verdict: DescendantTreeVerdict = 'unverifiable'
+
   do {
     const table = await readTable().catch(() => null)
+
     if (!table) {
       verdict = 'unverifiable'
     } else {
@@ -173,14 +193,18 @@ export async function verifyWindowsDescendantSnapshotExit(
       verdict = snapshot.descendants.some((row) => live.get(row.pid) === row.creationTimeMs)
         ? 'live'
         : proven
+
       if (verdict === proven) {
         return verdict
       }
     }
+
     if (now() >= deadline) {
       return verdict
     }
+
     await (deps.wait ?? delay)(WINDOWS_DESCENDANT_POLL_MS)
   } while (now() < deadline)
+
   return verdict
 }

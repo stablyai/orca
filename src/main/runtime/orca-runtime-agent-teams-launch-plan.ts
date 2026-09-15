@@ -23,11 +23,13 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
 }> {
   const sourceCommand =
     args.claudeAgentTeamsSourceCommand?.trim() || args.command?.trim() || undefined
+
   const mode = inferCapturedClaudeAgentTeamsMode(
     args.launchConfig,
     sourceCommand,
     args.claudeAgentTeamsMode
   )
+
   const plan = args.adoptedBeforeLaunch
     ? undefined
     : await buildClaudeAgentTeamsLaunchPlan({
@@ -36,10 +38,12 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
         baseEnv: args.baseEnv,
         createTeamEnv: args.createTeamEnv
       })
+
   const sequencedStartupCommand =
     plan && sourceCommand && args.command && sourceCommand !== args.command
       ? plan.command
       : undefined
+
   const effectiveLaunchConfig =
     args.launchConfig && plan
       ? {
@@ -52,5 +56,6 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
           agentEnv: { ...args.launchConfig.agentEnv, ...plan.env }
         }
       : args.launchConfig
+
   return { plan, sequencedStartupCommand, effectiveLaunchConfig }
 }

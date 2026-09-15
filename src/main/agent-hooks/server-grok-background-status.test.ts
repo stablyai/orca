@@ -11,6 +11,7 @@ const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
 
 beforeEach(() => {
@@ -27,6 +28,7 @@ async function postGrokHook(
   payload: Record<string, unknown>
 ): Promise<void> {
   const env = server.buildPtyEnv()
+
   const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
     method: 'POST',
     headers: {
@@ -35,6 +37,7 @@ async function postGrokHook(
     },
     body: JSON.stringify(buildBody(payload))
   })
+
   expect(response.status).toBe(204)
 }
 
@@ -42,6 +45,7 @@ describe('Grok background status ownership', () => {
   it('keeps the host-owned row working while finite background work remains', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       await postGrokHook(server, {
         hookEventName: 'user_prompt_submit',
@@ -134,6 +138,7 @@ describe('Grok background status ownership', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-grok-status-'))
     const firstServer = new AgentHookServer()
     const restoredServer = new AgentHookServer()
+
     try {
       await firstServer.start({ env: 'production', userDataPath })
       firstServer.ingestRemote(

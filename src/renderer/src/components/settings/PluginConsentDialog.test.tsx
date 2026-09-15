@@ -53,8 +53,10 @@ async function renderConsent(
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
+
   function Harness(): React.JSX.Element {
     const [selected, setSelected] = useState<PluginHostListEntry | null>(entry)
+
     return (
       <PluginConsentDialog
         plugin={selected}
@@ -65,6 +67,7 @@ async function renderConsent(
       />
     )
   }
+
   await act(async () => root.render(<Harness />))
   await act(() => new Promise<void>((resolve) => queueMicrotask(resolve)))
 }
@@ -92,9 +95,11 @@ describe('PluginConsentDialog', () => {
     })
 
     expect(document.body.textContent).not.toContain('Read a newly added secret')
+
     const enable = Array.from(document.querySelectorAll('button')).find(
       (candidate) => candidate.textContent?.trim() === 'Enable plugin'
     )
+
     await act(async () => enable?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
     expect(onDecision).toHaveBeenCalledWith(plugin.pluginKey, plugin.consentFingerprint, 'approve')
@@ -242,9 +247,11 @@ describe('PluginConsentDialog', () => {
     expect(document.body.textContent).toContain(
       'Permissions, the worker trust tier, or instructional content changed'
     )
+
     const enable = Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Enable plugin'
     )
+
     if (!enable) {
       throw new Error('missing enable action')
     }
@@ -258,7 +265,9 @@ describe('PluginConsentDialog', () => {
     const onDecision = vi
       .fn()
       .mockRejectedValue(new Error('reviewed fingerprint is no longer current'))
+
     await renderConsent(plugin, onDecision)
+
     const enable = Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Enable plugin'
     )

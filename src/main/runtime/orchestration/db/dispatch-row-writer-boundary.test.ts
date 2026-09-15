@@ -30,6 +30,7 @@ const insertPattern = (table: string): RegExp =>
 const EXEMPT_PATH_FRAGMENTS = ['/db/schema/', '/db/reset/', '/orchestration-schema-version-skew']
 
 const SCANNED_EXTENSIONS = ['.ts', '.tsx']
+
 const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
 
 function isTestFile(path: string): boolean {
@@ -44,22 +45,27 @@ function isTestFile(path: string): boolean {
 function collectSourceFiles(root: string): string[] {
   const found: string[] = []
   let entries: string[]
+
   try {
     entries = readdirSync(root)
   } catch {
     return found
   }
+
   for (const entry of entries) {
     if (IGNORED_DIRECTORIES.has(entry)) {
       continue
     }
+
     const full = join(root, entry)
+
     if (statSync(full).isDirectory()) {
       found.push(...collectSourceFiles(full))
     } else if (SCANNED_EXTENSIONS.some((ext) => entry.endsWith(ext))) {
       found.push(full)
     }
   }
+
   return found
 }
 
@@ -69,26 +75,33 @@ describe('live-worker row insert boundary', () => {
 
   it('inserts guarded tables only from dispatch-row-writer.ts', () => {
     const offenders: string[] = []
+
     for (const file of collectSourceFiles(srcRoot)) {
       const rel = relative(repoRoot, file).split('\\').join('/')
+
       if (rel === WRITER_MODULE || isTestFile(rel)) {
         continue
       }
+
       if (EXEMPT_PATH_FRAGMENTS.some((fragment) => rel.includes(fragment))) {
         continue
       }
+
       const contents = readFileSync(file, 'utf8')
+
       for (const table of GUARDED_TABLES) {
         if (insertPattern(table).test(contents)) {
           offenders.push(`${rel} inserts ${table}`)
         }
       }
     }
+
     expect(offenders).toEqual([])
   })
 
   it('the writer module actually owns an insert for every guarded table', () => {
     const contents = readFileSync(join(repoRoot, WRITER_MODULE), 'utf8')
+
     for (const table of GUARDED_TABLES) {
       expect(insertPattern(table).test(contents)).toBe(true)
     }
@@ -103,6 +116,7 @@ describe('live-worker row insert boundary', () => {
       'src/main/runtime/orchestration/db/schema/migrate-v39.ts',
       'src/main/runtime/orchestration/db/reset/orchestration-reset.ts'
     ]
+
     for (const rel of exempt) {
       expect(
         EXEMPT_PATH_FRAGMENTS.some((fragment) => rel.includes(fragment)),

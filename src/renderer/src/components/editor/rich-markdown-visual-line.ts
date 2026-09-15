@@ -25,6 +25,7 @@ export function getVisualLineRange(
 
   const cursorCoords = view.coordsAtPos(cursorPos)
   const lineHeight = cursorCoords.bottom - cursorCoords.top
+
   if (lineHeight <= 0) {
     return null
   }
@@ -32,6 +33,7 @@ export function getVisualLineRange(
   // Single visual line check: if paragraph start and end share a line, skip.
   const startCoords = view.coordsAtPos(paraStart)
   const endCoords = view.coordsAtPos(paraEnd)
+
   if (Math.abs(startCoords.top - endCoords.top) < lineHeight * 0.5) {
     return null
   }
@@ -39,18 +41,22 @@ export function getVisualLineRange(
   // Get the paragraph's DOM element for horizontal bounds.
   const domInfo = view.domAtPos(paraStart)
   const paraEl = domInfo.node instanceof HTMLElement ? domInfo.node : domInfo.node.parentElement
+
   if (!paraEl) {
     return null
   }
+
   const rect = paraEl.getBoundingClientRect()
 
   const midY = (cursorCoords.top + cursorCoords.bottom) / 2
 
   // Start of the current visual line.
   const startResult = view.posAtCoords({ left: rect.left + 1, top: midY })
+
   if (!startResult) {
     return null
   }
+
   const lineFrom = Math.max(startResult.pos, paraStart)
 
   // End of the current visual line = start of the next visual line.
@@ -81,9 +87,11 @@ export function cutVisualLine(
   lineRange: { from: number; to: number }
 ): boolean {
   const clipboardEvent = event as ClipboardEvent
+
   if (!clipboardEvent.clipboardData) {
     return false
   }
+
   event.preventDefault()
 
   const lineText = createRichMarkdownVisibleTextMap(
@@ -91,7 +99,9 @@ export function cutVisualLine(
     lineRange.from,
     lineRange.to
   ).text
+
   const slice = view.state.doc.slice(lineRange.from, lineRange.to)
+
   if (!writeRichMarkdownSliceToClipboard(clipboardEvent.clipboardData, view, slice, lineText)) {
     return true
   }
@@ -101,5 +111,6 @@ export function cutVisualLine(
   const resolvedPos = tr.doc.resolve(clampedPos)
   tr = tr.setSelection(TextSelection.near(resolvedPos))
   view.dispatch(tr)
+
   return true
 }

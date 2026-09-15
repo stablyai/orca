@@ -23,9 +23,11 @@ function daemonPidPath(userDataDir: string): string {
 function readDaemonPid(userDataDir: string): number {
   const raw = readFileSync(daemonPidPath(userDataDir), 'utf8')
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number') {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
@@ -48,6 +50,7 @@ async function bootstrapLaunch(
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneCount(page, 1, 30_000)
   const ptyId = await discoverActivePtyId(page)
+
   return { ptyId, worktreeId }
 }
 
@@ -56,8 +59,10 @@ test.describe.configure({ mode: 'serial' })
 test('preserves a live daemon PTY when the daemon launch identity is stale', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
@@ -106,9 +111,11 @@ test('preserves a live daemon PTY when the daemon launch identity is stale', asy
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

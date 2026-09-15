@@ -31,12 +31,14 @@ export function createBrowserClientPageGuestBinding(
       ) {
         return
       }
+
       const bound = browserManager.registerGuest({
         browserPageId: registration.browserPageId,
         sessionProfileId: browserProfileId,
         webContentsId: registration.webContentsId,
         rendererWebContentsId: registration.rendererWebContentsId
       })
+
       if (!bound) {
         // Downloads keep failing closed rather than landing on this desktop, so page creation stands.
         console.warn(
@@ -52,6 +54,7 @@ export function createBrowserClientPageGuestBinding(
       ) {
         return
       }
+
       browserManager.unregisterGuest(registration.browserPageId)
     }
   }

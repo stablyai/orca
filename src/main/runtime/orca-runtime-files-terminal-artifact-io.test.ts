@@ -16,31 +16,39 @@ import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './orca-runtime-files'
 import type { RuntimeFileCommands } from './orca-runtime-files'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -60,13 +68,16 @@ describe('RuntimeFileCommands', () => {
         path: '/repo',
         ...(nativeChat ? { hasRecentNativeChatOutputPath: vi.fn(() => true) } : {})
       })
+
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       let realArtifactPath = artifactPath
       let artifactStat = { type: 'file', size: 11, mtime: 3 }
       const stat = vi.fn(async () => artifactStat)
+
       const readTerminalArtifact = vi
         .fn()
         .mockResolvedValue({ content: '{"ok":true}', isBinary: false })
+
       const writeTerminalArtifact = vi.fn().mockResolvedValue({ type: 'file', size: 12, mtime: 4 })
       const realpath = vi.fn(async (p: string) => (p === artifactPath ? realArtifactPath : p))
       vi.mocked(getSshFilesystemProvider).mockReturnValue({
@@ -75,6 +86,7 @@ describe('RuntimeFileCommands', () => {
         realpath,
         writeTerminalArtifact
       } as never)
+
       return {
         commands,
         readTerminalArtifact,
@@ -415,9 +427,11 @@ describe('RuntimeFileCommands', () => {
     it('rejects remote binary terminal artifact writes before changing the file', async () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
       const stat = vi
         .fn()
         .mockResolvedValue({ type: 'file', size: 4, mtimeMs: 3, isDirectory: () => false })
+
       const writeTerminalArtifact = vi.fn().mockRejectedValue(new Error('binary_file'))
       const realpath = vi.fn(async (p: string) => p)
       const writeFile = vi.fn()
@@ -446,10 +460,12 @@ describe('RuntimeFileCommands', () => {
 
     it('reads a remote non-temp artifact cited by native chat', async () => {
       const artifactPath = '/home/me/report.json'
+
       const { commands, readTerminalArtifact } = createRemoteTerminalArtifactGrantFixture(
         artifactPath,
         true
       )
+
       const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
       const target = absoluteFileTarget(result)
 
@@ -469,8 +485,10 @@ describe('RuntimeFileCommands', () => {
 
     it('rejects a retargeted remote native-chat artifact grant', async () => {
       const artifactPath = '/home/me/report.json'
+
       const { commands, readTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+
       const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
       const target = absoluteFileTarget(result)
 
@@ -489,8 +507,10 @@ describe('RuntimeFileCommands', () => {
 
     it('rejects a replaced remote native-chat artifact grant', async () => {
       const artifactPath = '/home/me/report.json'
+
       const { commands, readTerminalArtifact, replaceArtifact } =
         createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+
       const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
       const target = absoluteFileTarget(result)
 
@@ -510,6 +530,7 @@ describe('RuntimeFileCommands', () => {
     it('rejects remote terminal artifact reads when a grant no longer resolves to the granted path', async () => {
       const { commands, readTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture()
+
       const result = await resolveTerminalArtifactPath(commands, '/tmp/result.json')
       const target = absoluteFileTarget(result)
 
@@ -529,6 +550,7 @@ describe('RuntimeFileCommands', () => {
     it('rejects remote terminal artifact previews when a grant no longer resolves to the granted path', async () => {
       const { commands, readTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture('/tmp/result.png')
+
       const result = await resolveTerminalArtifactPath(commands, '/tmp/result.png')
       const target = absoluteFileTarget(result)
 
@@ -548,6 +570,7 @@ describe('RuntimeFileCommands', () => {
     it('rejects additive remote terminal preview fields beyond the request budget', async () => {
       const { commands, readTerminalArtifact } =
         createRemoteTerminalArtifactGrantFixture('/tmp/result.png')
+
       const result = await resolveTerminalArtifactPath(commands, '/tmp/result.png')
       const target = absoluteFileTarget(result)
       readTerminalArtifact.mockResolvedValue({
@@ -570,6 +593,7 @@ describe('RuntimeFileCommands', () => {
     it('rejects remote terminal artifact writes when a grant no longer resolves to the granted path', async () => {
       const { commands, readTerminalArtifact, writeTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture()
+
       const result = await resolveTerminalArtifactPath(commands, '/tmp/result.json')
       const target = absoluteFileTarget(result)
 

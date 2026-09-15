@@ -4,9 +4,11 @@ import { getKeyedSerializedQueueTail, runKeyedSerializedOperation } from './keye
 describe('runKeyedSerializedOperation', () => {
   it('propagates rejections to the caller but never through the stored tail', async () => {
     const queues = new Map<string, Promise<void>>()
+
     const failing = runKeyedSerializedOperation(queues, 'key', async () => {
       throw new Error('write failed')
     })
+
     // Why: awaiting the tail is how reads barrier on writes; an unrelated
     // failed write must not abort the reader (startup candidate discovery).
     const tail = getKeyedSerializedQueueTail(queues, 'key')
@@ -22,6 +24,7 @@ describe('runKeyedSerializedOperation', () => {
     const queues = new Map<string, Promise<void>>()
     const events: string[] = []
     let release!: () => void
+
     const first = runKeyedSerializedOperation(queues, 'a', async () => {
       events.push('first-start')
       await new Promise<void>((resolve) => {
@@ -29,9 +32,11 @@ describe('runKeyedSerializedOperation', () => {
       })
       events.push('first-end')
     })
+
     const second = runKeyedSerializedOperation(queues, 'a', async () => {
       events.push('second')
     })
+
     const other = runKeyedSerializedOperation(queues, 'b', async () => {
       events.push('other')
     })

@@ -14,20 +14,24 @@ const MINIMUM_ELECTRON_VERSION = '43.7.0'
 
 function parseVersion(specifier: string): [number, number, number] {
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(specifier)
+
   if (!match) {
     throw new Error(`unparseable Electron version: ${specifier}`)
   }
+
   return [Number(match[1]), Number(match[2]), Number(match[3])]
 }
 
 function meetsRuntimeFloor(specifier: string): boolean {
   const version = parseVersion(specifier)
   const floor = parseVersion(MINIMUM_ELECTRON_VERSION)
+
   for (const [index, part] of version.entries()) {
     if (part !== floor[index]) {
       return part > floor[index]
     }
   }
+
   return true
 }
 
@@ -47,6 +51,7 @@ describe('electron runtime floor', () => {
     const packageJson = JSON.parse(
       readFileSync(join(__dirname, '../../package.json'), 'utf-8')
     ) as { devDependencies: Record<string, string> }
+
     const specifier = packageJson.devDependencies.electron
 
     expect(

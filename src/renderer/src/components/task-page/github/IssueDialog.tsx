@@ -25,6 +25,7 @@ import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownCompos
 import { GitHubIssueLabelSelector, GitHubIssueAssigneeSelector } from './IssueSelectors'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle } from 'lucide-react'
+
 export function TaskPageGitHubIssueDialog({
   model
 }: {
@@ -53,6 +54,7 @@ export function TaskPageGitHubIssueDialog({
     newIssueRepoAssignees,
     handleCreateNewIssue
   } = model
+
   return (
     <Dialog
       open={newIssueOpen}
@@ -80,10 +82,13 @@ export function TaskPageGitHubIssueDialog({
             const entry = newIssueTargetRepo
               ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
               : undefined
+
             const issuesSlug = entry?.sources?.issues
               ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
               : null
+
             const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
+
             return (
               <DialogDescription>
                 {translate('auto.components.TaskPage.9f2b4c03a6', 'Filing in')}
@@ -97,15 +102,19 @@ export function TaskPageGitHubIssueDialog({
             if (!newIssueTargetRepo) {
               return null
             }
+
             const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+
             if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.originCandidate) {
               return null
             }
+
             if (
               sameGitHubOwnerRepo(entry.sources.originCandidate, entry.sources.upstreamCandidate)
             ) {
               return null
             }
+
             return (
               <div className="mt-1">
                 <IssueSourceSelector

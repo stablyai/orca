@@ -20,6 +20,7 @@ export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
   'agent_session_journal_unreadable',
   'execution_owner_reconciling'
 ] as const
+
 export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
 
 /** For a host path that raises its refusal as the thrown code. Narrowing through this keeps an

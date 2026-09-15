@@ -52,6 +52,7 @@ import {
 import type { MockDispatcher } from './pty-handler-test-harness'
 
 const PTY_1 = testPtyId(1)
+
 const PTY_2 = testPtyId(2)
 
 describe('PtyHandler', () => {
@@ -76,6 +77,7 @@ describe('PtyHandler', () => {
     // user's; leaking it breaks `next build` and Vitest in the terminal.
     const previous = process.env.NODE_ENV
     process.env.NODE_ENV = 'development'
+
     try {
       await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
     } finally {
@@ -107,15 +109,18 @@ describe('PtyHandler', () => {
       spawnParams: Record<string, unknown>
     ): Promise<Record<string, string>> => {
       const saved = Object.fromEntries(CONDA_KEYS.map((key) => [key, process.env[key]]))
+
       try {
         for (const key of CONDA_KEYS) {
           delete process.env[key]
         }
+
         Object.assign(process.env, relayEnv)
         await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, ...spawnParams })
       } finally {
         for (const key of CONDA_KEYS) {
           const value = saved[key]
+
           if (value === undefined) {
             delete process.env[key]
           } else {
@@ -123,6 +128,7 @@ describe('PtyHandler', () => {
           }
         }
       }
+
       return (mockPtySpawn.mock.calls.at(-1)![2] as { env: Record<string, string> }).env
     }
 
@@ -180,9 +186,11 @@ describe('PtyHandler', () => {
 
     try {
       await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+
       const spawnedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
         env: Record<string, string>
       }
+
       expect(spawnedEnv.env.PATH).toBe('/usr/bin')
       expect(spawnedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
       expect(spawnedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
@@ -190,11 +198,13 @@ describe('PtyHandler', () => {
       const state = (await dispatcher.callRequest('pty.serialize', {
         ids: [PTY_1]
       })) as string
+
       await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       dispatcher = createMockDispatcher()
       handler = createTestPtyHandler(dispatcher)
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
       try {
         await dispatcher.callRequest('pty.revive', { state })
       } finally {
@@ -204,6 +214,7 @@ describe('PtyHandler', () => {
       const revivedEnv = mockPtySpawn.mock.calls.at(-1)?.[2] as {
         env: Record<string, string>
       }
+
       expect(revivedEnv.env.PATH).toBe('/usr/bin')
       expect(revivedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
       expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
@@ -222,6 +233,7 @@ describe('PtyHandler', () => {
     // Why: only the ambient value is stripped; an explicit request still wins.
     const previous = process.env.NODE_ENV
     process.env.NODE_ENV = 'development'
+
     try {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,
@@ -256,6 +268,7 @@ describe('PtyHandler', () => {
     ])('%s inherited from the relay process env', async (_kind, inherited, expected) => {
       const previous = process.env.fish_history
       process.env.fish_history = inherited
+
       try {
         await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
       } finally {
@@ -287,6 +300,7 @@ describe('PtyHandler', () => {
       async (_kind, inherited, expected) => {
         const previous = process.env.HISTFILE
         process.env.HISTFILE = inherited
+
         try {
           await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
         } finally {
@@ -320,6 +334,7 @@ describe('PtyHandler', () => {
       async (_kind, inherited) => {
         const previous = process.env.ORCA_HISTFILE
         process.env.ORCA_HISTFILE = inherited
+
         try {
           await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
         } finally {
@@ -360,12 +375,14 @@ describe('PtyHandler', () => {
 
   describe('history isolation for a Windows relay launching WSL', () => {
     const wslWorktreeId = 'r::/remote/wsl-worktree'
+
     const wslHistoryFile = join(
       homedir(),
       '.orca-remote',
       'terminal-history',
       `${hashWorktreeId(wslWorktreeId)}-bash_history`
     )
+
     let previousPlatform: PropertyDescriptor | undefined
 
     beforeEach(() => {
@@ -377,6 +394,7 @@ describe('PtyHandler', () => {
       if (previousPlatform) {
         Object.defineProperty(process, 'platform', previousPlatform)
       }
+
       rmSync(wslHistoryFile, { force: true })
     })
 
@@ -431,6 +449,7 @@ describe('PtyHandler', () => {
       'GIT_CONFIG_KEY_2',
       'GIT_CONFIG_VALUE_2'
     ] as const
+
     const saved = Object.fromEntries(gitConfigKeys.map((key) => [key, process.env[key]]))
     process.env.GIT_CONFIG_COUNT = '3'
     process.env.GIT_CONFIG_KEY_0 = 'core.quotePath'
@@ -545,8 +564,10 @@ describe('PtyHandler', () => {
       launchAgent?: string
       env: Record<string, string>
     }[] = []
+
     handler.addEnvAugmenter((ctx) => {
       seenContexts.push(ctx)
+
       return {
         OVERLAY_ID: ctx.paneKey ?? ctx.id
       }
@@ -574,6 +595,7 @@ describe('PtyHandler', () => {
   it('passes process and renderer env to env augmenters before augmenter overrides are applied', async () => {
     const oldProcessValue = process.env.OPENCODE_CONFIG_DIR
     process.env.OPENCODE_CONFIG_DIR = '/remote/default-opencode'
+
     try {
       handler.addEnvAugmenter((ctx) => ({
         SEEN_OPENCODE_CONFIG_DIR: ctx.env.OPENCODE_CONFIG_DIR,
@@ -598,6 +620,7 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.SEEN_OPENCODE_CONFIG_DIR).toBe('/remote/renderer-opencode')
     expect(spawnEnv.env.SEEN_PI_CODING_AGENT_DIR).toBe('/remote/pi')
@@ -623,6 +646,7 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(spawnEnv.name).toBe('screen-256color')
     expect(spawnEnv.env.TERM).toBe('screen-256color')
     expect(spawnEnv.env.COLORTERM).toBe('truecolor')
@@ -634,6 +658,7 @@ describe('PtyHandler', () => {
   it('replaces an ambient TERM=dumb when no explicit TERM is supplied', async () => {
     const previousTerm = process.env.TERM
     process.env.TERM = 'dumb'
+
     try {
       await dispatcher.callRequest('pty.spawn', {})
     } finally {
@@ -648,6 +673,7 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
     expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
@@ -683,6 +709,7 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
   })
@@ -712,6 +739,7 @@ describe('PtyHandler', () => {
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
       delete process.env.ORCA_PI_CODING_AGENT_DIR
+
       try {
         if (!existsSync('/bin/bash')) {
           return
@@ -730,11 +758,13 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         if (oldOrcaPi === undefined) {
           delete process.env.ORCA_PI_CODING_AGENT_DIR
         } else {

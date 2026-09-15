@@ -33,6 +33,7 @@ class MockElement {
 
   dispatchEvent(event: Event): boolean {
     this.dispatched.push(event)
+
     return true
   }
 }

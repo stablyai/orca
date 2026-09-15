@@ -8,6 +8,7 @@ import { resolveGitRouteForHost } from './providers/execution-host-provider-disp
 // Matches the background local-git-read budget in git/git-username.ts; a probe cut off early just
 // reports `unavailable` and retries on the enrichment TTL.
 const LOCAL_PROBE_TIMEOUT_MS = 5000
+
 // Why looser but still bounded: the relay adds a round trip a local spawn does not have, and the
 // budget must stay under the multiplexer's 30s request timeout so this deadline is the one that fires.
 const SSH_PROBE_TIMEOUT_MS = 20_000
@@ -34,11 +35,13 @@ export async function probeGitRemoteIdentity(
     // Inside the try on purpose: an id naming no host must land on `unavailable` like every other
     // probe that never reached git. It must never become the local answer for a remote path.
     const route = resolveGitRouteForHost(executionHostId)
+
     if (route.kind === 'runtime') {
       // That environment's server runs its own git, and the SSH target on its repo row is nested in
       // that server's namespace — dialing it here answers for a same-named box of ours.
       return { status: 'unavailable' }
     }
+
     const result =
       route.kind === 'ssh'
         ? await route.provider?.exec(['remote', '-v'], repoPath, {
@@ -50,10 +53,13 @@ export async function probeGitRemoteIdentity(
             timeout: options.timeoutMs ?? LOCAL_PROBE_TIMEOUT_MS,
             signal: options.signal
           })
+
     if (!result) {
       return { status: 'unavailable' }
     }
+
     const identity = deriveGitRemoteIdentity(result.stdout)
+
     return identity ? { status: 'resolved', identity } : { status: 'no-remote' }
   } catch {
     // Repo creation must not fail because a best-effort remote probe failed. A timeout or an abort
@@ -68,5 +74,6 @@ export async function detectGitRemoteIdentity(
   options: GitRemoteIdentityProbeOptions = {}
 ): Promise<GitRemoteIdentity | null> {
   const probe = await probeGitRemoteIdentity(repoPath, executionHostId, options)
+
   return probe.status === 'resolved' ? probe.identity : null
 }

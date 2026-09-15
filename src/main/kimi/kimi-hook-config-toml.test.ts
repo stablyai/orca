@@ -9,10 +9,12 @@ import {
 
 const COMMAND =
   "if [ -x '/home/u/.orca/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/home/u/.orca/agent-hooks/kimi-hook.sh'; fi"
+
 const isManaged = (command: string | undefined): boolean =>
   typeof command === 'string' && command.includes('agent-hooks/kimi-hook.sh')
 
 const END_MARKER_LINE = '# <<< orca-managed-kimi-hooks <<<'
+
 const START_MARKER = '# >>> orca-managed-kimi-hooks (managed by Orca; do not edit) >>>'
 
 /** Drops only the `# <<< ... <<<` line, the hand-edit that orphans the block. */
@@ -23,9 +25,11 @@ function deleteEndMarker(text: string): string {
 describe('kimi managed hooks TOML block', () => {
   it('installs every managed event without a matcher', () => {
     const block = buildManagedKimiHooksBlock(COMMAND)
+
     for (const event of KIMI_HOOK_EVENTS) {
       expect(block).toContain(`event = "${event}"`)
     }
+
     // Kimi treats matcher as a regex; omitting it matches all tools.
     expect(block).not.toContain('matcher')
     expect(
@@ -110,6 +114,7 @@ describe('kimi managed hooks TOML block', () => {
   it('treats stale managed entries pointing at a moved script path as managed', () => {
     const staleCommand =
       "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"
+
     const stale = applyManagedKimiHooks('', staleCommand, isManaged)
     expect(readManagedKimiHookEvents(stale, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
   })
@@ -129,6 +134,7 @@ describe('orphaned managed block ownership (#18861)', () => {
 
   function orphanedWithUserTail(): string {
     const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
+
     return `${deleteEndMarker(installed)}\n${USER_TAIL}\n`
   }
 
@@ -168,6 +174,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'value = "keep"',
       ''
     ].join('\n')
+
     const { text, changed } = removeManagedKimiHooks(orphan, isManaged)
     expect(changed).toBe(true)
     expect(text).toBe('default_model = "x"\n[hand.written]\nvalue = "keep"\n')
@@ -189,6 +196,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'timeout = 10',
       ''
     ].join('\n')
+
     const { text } = removeManagedKimiHooks(orphan, isManaged)
     expect(text).toContain('command = "node my-own-hook.mjs"')
     expect(text).not.toContain(START_MARKER)
@@ -207,6 +215,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'matcher = "Bash"',
       ''
     ].join('\n')
+
     expect(removeManagedKimiHooks(orphan, isManaged).text).toBe('')
   })
 
@@ -221,6 +230,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'matcher = "Bash"',
       ''
     ].join('\n')
+
     expect(removeManagedKimiHooks(customised, isManaged).text).toBe('default_model = "x"\n')
     // Status agrees, so install cannot append a second table for the same event.
     expect(readManagedKimiHookEvents(customised, isManaged)).toEqual(new Set(['Stop']))
@@ -241,6 +251,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       ']',
       ''
     ].join('\n')
+
     const { text } = removeManagedKimiHooks(orphan, isManaged)
     expect(text).toContain('args = [')
     expect(text).not.toContain(START_MARKER)
@@ -262,6 +273,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       `# command = "${COMMAND.replaceAll('"', '')}"`,
       ''
     ].join('\n')
+
     expect(readManagedKimiHookEvents(nearMiss, isManaged)).toEqual(new Set())
   })
 
@@ -278,6 +290,7 @@ describe('orphaned managed block ownership (#18861)', () => {
         'timeout = 10',
         ''
       ].join('\n')
+
       const { text } = removeManagedKimiHooks(orphan, isManaged)
       expect(text).toContain('timeout = 10')
       expect(text).toContain('[[hooks]]')
@@ -299,6 +312,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'v = 1',
       ''
     ].join('\n')
+
     const { text } = removeManagedKimiHooks(orphan, isManaged)
     expect(text).not.toContain(START_MARKER)
     expect(text).not.toContain('agent-hooks/kimi-hook.sh')
@@ -320,10 +334,12 @@ describe('orphaned managed block ownership (#18861)', () => {
         END_MARKER_LINE,
         ''
       ].join('\n')
+
       // remove() strips it, so status must see it too.
       expect(removeManagedKimiHooks(config, isManaged).changed).toBe(true)
       expect(readManagedKimiHookEvents(config, isManaged).size).toBeGreaterThan(0)
     }
+
     // The single-quoted form resolves to the real event name.
     const singleQuoted = [
       START_MARKER,
@@ -334,6 +350,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       END_MARKER_LINE,
       ''
     ].join('\n')
+
     expect(readManagedKimiHookEvents(singleQuoted, isManaged)).toEqual(new Set(['Stop']))
   })
 
@@ -347,6 +364,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'matcher = "Bash"',
       ''
     ].join('\n')
+
     const { text } = removeManagedKimiHooks(orphan, isManaged)
     expect(text).toContain('command = "node my-own-hook.mjs"')
     expect(text).toContain('matcher = "Bash"')
@@ -361,6 +379,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       `command = "${COMMAND.replaceAll('"', '')}"`,
       'timeout = 10'
     ].join('\n')
+
     const orphan = `${START_MARKER}\n${managedTable}\n[user.table]\nv = 1\n${managedTable}\n`
     const { text } = removeManagedKimiHooks(orphan, isManaged)
     expect(text).toBe('[user.table]\nv = 1\n')
@@ -377,6 +396,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'timeout = 10',
       ''
     ].join('\n')
+
     expect(readManagedKimiHookEvents(stranded, isManaged)).toEqual(new Set(['PreToolUse']))
   })
 
@@ -391,6 +411,7 @@ describe('orphaned managed block ownership (#18861)', () => {
       'timeout = 10',
       ''
     ].join('\n')
+
     const reinstalled = applyManagedKimiHooks(stranded, COMMAND, isManaged)
     expect((reinstalled.match(/event = "PreToolUse"/g) ?? []).length).toBe(1)
     expect(reinstalled).toContain('[user.table]')

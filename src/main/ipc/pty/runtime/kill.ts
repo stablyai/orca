@@ -22,10 +22,12 @@ export function killPtyFromRuntimeController(
     retiredRejectedPtyIds,
     reversibleStopOwnersByPtyId
   } = deps
+
   runtime?.markPtyStopRequested?.(ptyId)
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId
+
   const recordUndelivered = (incarnationId?: string): void => {
     recordUndeliveredSshPtyKill({
       store,
@@ -35,8 +37,10 @@ export function killPtyFromRuntimeController(
       incarnationId
     })
   }
+
   const killWithCurrentProvider = (): boolean => {
     let provider: IPtyProvider
+
     try {
       provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
     } catch {
@@ -55,15 +59,19 @@ export function killPtyFromRuntimeController(
           ...(incarnationId ? { incarnationId } : {})
         })
         runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
+
         return false
       }
+
       return false
     }
+
     // Why: controller is synchronous, but keep ownership until async shutdown proves whether the provider emitted an exit.
     void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
       .then((providerExitObserved) => {
         const retired = retiredRejectedPtyIds.has(ptyId)
         const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+
         if (!providerExitObserved && !retired) {
           runtime?.onPtyExit(ptyId, -1, incarnationId)
           rememberSyntheticKillExit(ptyId)
@@ -76,8 +84,10 @@ export function killPtyFromRuntimeController(
       })
       .catch((err) => {
         const retired = retiredRejectedPtyIds.has(ptyId)
+
         if (isPtyAlreadyGoneError(err)) {
           const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+
           if (!retired) {
             runtime?.onPtyExit(ptyId, -1, incarnationId)
             rememberSyntheticKillExit(ptyId)
@@ -87,11 +97,14 @@ export function killPtyFromRuntimeController(
               ...(incarnationId ? { incarnationId } : {})
             })
           }
+
           return
         }
+
         console.warn(
           `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
         )
+
         // Why: close runtime tails without clearing provider ownership, so
         // a retry can still target a PTY that survived the failed shutdown.
         if (!retired) {
@@ -101,21 +114,27 @@ export function killPtyFromRuntimeController(
               err instanceof Error ? err.message : String(err)
             )
           }
+
           runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
         }
+
         // Outside the `retired` guard: the remote process outlives this client's bookkeeping
         // either way, and the intent is what the next handshake replays.
         recordUndelivered()
       })
+
     return true
   }
+
   const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+
   if (startupPromise) {
     // Why: select the provider after the daemon swap; the fallback first can report success while orphaning a daemon PTY.
     void startupPromise.then(killWithCurrentProvider).catch((err) => {
       console.warn(
         `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
       )
+
       if (!retiredRejectedPtyIds.has(ptyId)) {
         if (connectionId) {
           runtime?.markPtyLivenessUnverifiable?.(
@@ -123,12 +142,16 @@ export function killPtyFromRuntimeController(
             err instanceof Error ? err.message : String(err)
           )
         }
+
         runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
       }
+
       recordUndelivered()
     })
+
     return true
   }
+
   return killWithCurrentProvider()
 }
 
@@ -145,15 +168,19 @@ export function retireRejectedPtyFromRuntimeController(
     sendPtyExitToRenderer,
     finishPtyShutdown
   } = deps
+
   rememberRetiredRejectedPty(ptyId)
+
   if (!stopConfirmed) {
     runtime?.markPtyLivenessUnverifiable?.(
       ptyId,
       'a follow-up stop was issued but its outcome could not be verified'
     )
+
     if (!ptyOwnership.has(ptyId)) {
       return
     }
+
     runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
     rememberSyntheticKillExit(ptyId)
     sendPtyExitToRenderer({
@@ -161,15 +188,19 @@ export function retireRejectedPtyFromRuntimeController(
       code: -1,
       ...(ptyIncarnationById.get(ptyId) ? { incarnationId: ptyIncarnationById.get(ptyId) } : {})
     })
+
     return
   }
+
   // Why: a completed stop already cleared provider state, tombstoned the lease and told the
   // renderer; repeating that double-fires the exit IPC. The runtime still needs code 0 so an
   // SSH pane retires for good instead of staying preserved by the stop's negative exit.
   if (!ptyOwnership.has(ptyId)) {
     runtime?.onPtyExit(ptyId, 0, ptyIncarnationById.get(ptyId))
+
     return
   }
+
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId
@@ -188,17 +219,23 @@ export function markReversibleStopsFromRuntimeController(
   ptyIds: readonly string[]
 ): () => void {
   const { reversibleStopOwnersByPtyId } = deps
+
   for (const ptyId of ptyIds) {
     reversibleStopOwnersByPtyId.set(ptyId, (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) + 1)
   }
+
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
+
     for (const ptyId of ptyIds) {
       const owners = (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) - 1
+
       if (owners > 0) {
         reversibleStopOwnersByPtyId.set(ptyId, owners)
       } else {
@@ -230,6 +267,7 @@ export async function stopAndWaitPtyFromRuntimeController(
     sendPtyExitToRenderer,
     finishPtyShutdown
   } = deps
+
   runtime?.markPtyStopRequested?.(ptyId)
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
@@ -239,6 +277,7 @@ export async function stopAndWaitPtyFromRuntimeController(
   // sequential RPCs share the budget and cannot overrun the sweep deadline.
   const deadlineMs = opts?.deadlineMs
   const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+
   if (startupPromise) {
     // Why: exact-stop must resolve the provider after daemon startup just
     // like renderer kills, or the fallback can falsely confirm teardown.
@@ -254,6 +293,7 @@ export async function stopAndWaitPtyFromRuntimeController(
         ),
         delay(Math.max(1, deadlineMs - Date.now())).then(() => false)
       ])
+
       if (!won) {
         return false
       }
@@ -261,7 +301,9 @@ export async function stopAndWaitPtyFromRuntimeController(
       await startupPromise
     }
   }
+
   let provider: IPtyProvider
+
   try {
     provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
   } catch {
@@ -278,9 +320,12 @@ export async function stopAndWaitPtyFromRuntimeController(
       })
       runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
     }
+
     return false
   }
+
   let providerExitObserved = false
+
   try {
     providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
       immediate: true,
@@ -295,15 +340,19 @@ export async function stopAndWaitPtyFromRuntimeController(
           err instanceof Error ? err.message : String(err)
         )
       }
+
       console.warn(
         `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
       )
+
       return false
     }
   }
+
   try {
     if (!(await verifyPtyStopped(provider, ptyId, opts))) {
       runtime?.markPtyLivenessLive?.(ptyId)
+
       return false
     }
   } catch (err) {
@@ -313,14 +362,18 @@ export async function stopAndWaitPtyFromRuntimeController(
         err instanceof Error ? err.message : String(err)
       )
     }
+
     console.warn(
       `[pty] Failed to verify PTY ${ptyId} stopped: ${
         err instanceof Error ? err.message : String(err)
       }`
     )
+
     return false
   }
+
   const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+
   if (!providerExitObserved) {
     // The owning provider's fresh inventory observed absence, so this is a
     // death certificate even when its exit event was missed.
@@ -332,5 +385,6 @@ export async function stopAndWaitPtyFromRuntimeController(
       ...(incarnationId ? { incarnationId } : {})
     })
   }
+
   return true
 }

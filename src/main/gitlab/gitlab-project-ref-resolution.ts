@@ -23,12 +23,15 @@ import {
 } from './project-ref-parser'
 
 export { DEFAULT_GITLAB_HOSTS, parseGitLabProjectRef }
+
 export type { ProjectRef }
+
 export {
   _resetKnownHostsCache,
   getGlabKnownHosts,
   parseGlabAuthStatusHosts
 } from './gitlab-known-host-probe'
+
 export type { LocalGitExecOptions } from './gitlab-known-host-probe'
 
 const PROJECT_REF_CACHE_MAX_ENTRIES = 512
@@ -58,11 +61,14 @@ function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null
     value,
     expiresAt: value === null ? Date.now() + NEGATIVE_ENTRY_TTL_MS : Number.POSITIVE_INFINITY
   })
+
   while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
     const oldestKey = projectRefCache.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     projectRefCache.delete(oldestKey)
   }
 }
@@ -81,12 +87,15 @@ export async function getProjectRefForRemote(
   const runtimeKey = connectionId
     ? `${connectionId}:${getSshGitProviderGeneration(connectionId)}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
+
   const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}\0${knownHosts.join(',')}`
   const cached = projectRefCache.get(cacheKey)
+
   if (cached) {
     if (cached.expiresAt > Date.now()) {
       return cached.value
     }
+
     projectRefCache.delete(cacheKey)
   }
 
@@ -120,6 +129,7 @@ async function resolveProjectRefForRemote(
       rememberProjectRefCacheEntry(cacheKey, value)
     }
   }
+
   try {
     const stdout = await readRemoteUrl(
       {
@@ -130,15 +140,21 @@ async function resolveProjectRefForRemote(
       },
       remoteName
     )
+
     if (stdout === null) {
       return null
     }
+
     const result = parseGitLabProjectRef(stdout, knownHosts)
+
     if (result) {
       publish(result)
+
       return result
     }
+
     const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
+
     if (
       remoteCandidate &&
       (await isGlabConfiguredForRemoteHost(
@@ -150,6 +166,7 @@ async function resolveProjectRefForRemote(
     ) {
       rememberGlabKnownHost(remoteCandidate.host, connectionId, localGitOptions)
       publish(remoteCandidate)
+
       return remoteCandidate
     }
   } catch (error) {
@@ -162,7 +179,9 @@ async function resolveProjectRefForRemote(
       return null
     }
   }
+
   publish(null)
+
   return null
 }
 
@@ -188,6 +207,7 @@ export async function getIssueProjectRef(
     connectionId,
     localGitOptions
   )
+
   if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
     const upstream = await getProjectRefForRemote(
       repoPath,
@@ -196,10 +216,12 @@ export async function getIssueProjectRef(
       connectionId,
       localGitOptions
     )
+
     if (upstream) {
       return upstream
     }
   }
+
   return originPromise
 }
 
@@ -224,9 +246,11 @@ export async function resolveIssueSource(
       connectionId,
       localGitOptions
     )
+
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
+
     const origin = await getProjectRefForRemote(
       repoPath,
       'origin',
@@ -234,8 +258,10 @@ export async function resolveIssueSource(
       connectionId,
       localGitOptions
     )
+
     return { source: origin, fellBack: origin !== null }
   }
+
   if (preference === 'origin') {
     return {
       source: await getProjectRefForRemote(
@@ -248,6 +274,7 @@ export async function resolveIssueSource(
       fellBack: false
     }
   }
+
   return {
     source: await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions),
     fellBack: false
@@ -287,27 +314,36 @@ async function isGlabConfiguredForRemoteHost(
   if (isGlabHostKnownUnauthenticated(projectRef.host, connectionId, localGitOptions)) {
     return false
   }
+
   try {
     const result = await glabExecFileAsync(
       ['auth', 'status', '--hostname', projectRef.host],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     if (result === undefined) {
       rememberGlabHostUnauthenticated(projectRef.host, connectionId, localGitOptions)
+
       return false
     }
+
     return true
   } catch (error) {
     const execLike = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
+
     const output =
       [execLike.stdout, execLike.stderr, execLike.message]
         .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
         .join('\n') || String(error)
+
     const hosts = parseGlabAuthStatusHosts(output).map(normalizeGitLabHost)
+
     if (hosts.includes(normalizeGitLabHost(projectRef.host))) {
       return true
     }
+
     rememberGlabHostUnauthenticated(projectRef.host, connectionId, localGitOptions)
+
     return false
   }
 }

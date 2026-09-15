@@ -31,22 +31,29 @@ export class CdpPageCaptureCommands {
   ): Promise<void> {
     if (this.webContents.isDestroyed()) {
       this.responder.sendError(clientId, 'Browser tab is no longer available', client)
+
       return
     }
+
     try {
       const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
+
       // Why: printToPDF can resolve after the client disconnected (or was
       // replaced). Bail before registering a stream so its buffer isn't
       // orphaned in pdfStreams past the disconnect's clear() until the TTL.
       if (!this.responder.isActiveClient(client)) {
         return
       }
+
       const buffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf)
+
       if (params.transferMode === 'ReturnAsStream') {
         const handle = this.pdfStreams.create(buffer)
         this.responder.sendResult(clientId, { data: '', stream: handle }, client)
+
         return
       }
+
       this.responder.sendResult(clientId, { data: buffer.toString('base64') }, client)
     } catch (err) {
       this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
@@ -55,10 +62,13 @@ export class CdpPageCaptureCommands {
 
   handleStreamRead(client: WebSocket, clientId: number, params: Record<string, unknown>): void {
     const chunk = this.pdfStreams.read(params)
+
     if (!chunk) {
       this.responder.sendError(clientId, 'Invalid stream handle', client)
+
       return
     }
+
     this.responder.sendResult(
       clientId,
       { base64Encoded: true, data: chunk.data, eof: chunk.eof },

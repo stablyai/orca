@@ -65,6 +65,7 @@ describe('captureScreenshot', () => {
       isEmpty: () => false,
       toPNG: () => Buffer.from('cropped-png')
     }
+
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
     webContents.capturePage.mockResolvedValueOnce({
@@ -246,9 +247,11 @@ describe('captureFullPageScreenshot', () => {
           contentSize: { width: 1280.5, height: 2561.5 }
         })
       }
+
       if (method === 'Page.captureScreenshot') {
         return Promise.resolve({ data: 'full-page-data' })
       }
+
       return Promise.resolve({})
     })
 
@@ -272,9 +275,11 @@ describe('captureFullPageScreenshot', () => {
           contentSize: { width: 800, height: 1600 }
         })
       }
+
       if (method === 'Page.captureScreenshot') {
         return Promise.resolve({ data: 'legacy-full-page-data' })
       }
+
       return Promise.resolve({})
     })
 

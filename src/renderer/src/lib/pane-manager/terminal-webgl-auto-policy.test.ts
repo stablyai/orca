@@ -24,6 +24,7 @@ function stubWebglRendererInfo({
 }: MockWebglRendererInfo): void {
   const rendererKey = 0x9246
   const vendorKey = 0x9245
+
   const gl = {
     getExtension: vi.fn(() =>
       hasDebugInfo
@@ -37,9 +38,11 @@ function stubWebglRendererInfo({
       if (key === rendererKey) {
         return renderer
       }
+
       if (key === vendorKey) {
         return vendor
       }
+
       return null
     })
   }
@@ -53,6 +56,7 @@ function stubWebglRendererInfo({
           )
         }
       }
+
       return {}
     })
   })

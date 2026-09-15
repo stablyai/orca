@@ -9,12 +9,14 @@ import { RuntimeClient } from './client'
 import { projectRemoteAppStatus } from './status'
 
 const servers = new Set<ReturnType<typeof createServer>>()
+
 const sockets = new Set<Socket>()
 
 afterEach(async () => {
   for (const socket of sockets) {
     socket.destroy()
   }
+
   sockets.clear()
   await Promise.all(
     [...servers].map(
@@ -33,6 +35,7 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
   it('uses the legacy singular runtime transport when reporting status', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
     const endpoint = join(userDataPath, 'runtime.sock')
+
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
@@ -61,6 +64,7 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
         )
       })
     })
+
     servers.add(server)
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
     writeFileSync(

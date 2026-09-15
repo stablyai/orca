@@ -12,9 +12,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: mocks.seedNativeChatAppliedSessionOptions
 }))
+
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
+
 vi.mock('@/runtime/web-runtime-session', () => ({
   setWebRuntimeTabProps: mocks.setWebRuntimeTabProps
 }))
@@ -22,10 +24,15 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 type AppState = ReturnType<typeof useAppStore.getState>
 
 const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
+
 const initialUnifiedTabsByWorktree = useAppStore.getState().unifiedTabsByWorktree
+
 const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
+
 const initialSettings = useAppStore.getState().settings!
+
 const initialWorktreesByRepo = useAppStore.getState().worktreesByRepo
+
 const initialRepos = useAppStore.getState().repos
 
 const DRAFT = 'https://github.com/o/r/issues/12'
@@ -147,6 +154,7 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
 
   it('opens a backend-spawned mirrorable draft in chat after host reconciliation', async () => {
     setTabs([{ id: 'agent-tab', launchAgent: 'claude', viewMode: 'terminal' }])
+
     const runtimeCall = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'agentSession.handoffStatus') {
         return {
@@ -156,8 +164,10 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       throw new Error(`Unexpected runtime method: ${method}`)
     })
+
     const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
     Object.defineProperty(globalThis, 'window', {
       configurable: true,

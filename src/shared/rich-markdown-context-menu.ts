@@ -40,4 +40,5 @@ export type RichMarkdownContextMenuTableTarget = {
 }
 
 export const richMarkdownContextMenuCommandChannel = 'rich-markdown:context-command'
+
 export const richMarkdownContextMenuTargetChannel = 'rich-markdown:context-target'

@@ -14,21 +14,26 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, success: mocks.toastSuccess }
 }))
+
 const request = {
   sourceKey: '/repo/report.html',
   content: '<h1>Report</h1>',
   contentType: 'text/html' as const,
   fileName: 'report.html'
 }
+
 const published = {
   change: 'created' as const,
   item: {
@@ -65,6 +70,7 @@ describe('artifact publish flow', () => {
     mocks.callRuntimeRpc
       .mockResolvedValueOnce({ status: 'reconnect-required' })
       .mockResolvedValueOnce({ status: 'ok', value: published })
+
     const createRequest = vi
       .fn()
       .mockResolvedValueOnce(request)
@@ -103,6 +109,7 @@ describe('artifact publish flow', () => {
 
   it('publishes content at the 10 MiB boundary', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
+
     const createRequest = vi.fn().mockResolvedValue({
       ...request,
       content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES)

@@ -19,6 +19,7 @@ export function buildWorktreeByIdIndex(
   worktreesByRepo: Record<string, Worktree[]>
 ): Map<string, Worktree> {
   const index = new Map<string, Worktree>()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       if (!index.has(worktree.id)) {
@@ -26,16 +27,19 @@ export function buildWorktreeByIdIndex(
       }
     }
   }
+
   return index
 }
 
 /** Same first-wins contract as `buildWorktreeByIdIndex`, for any id-bearing row. */
 export function buildByIdIndex<T extends { id: string }>(rows: readonly T[]): Map<string, T> {
   const index = new Map<string, T>()
+
   for (const row of rows) {
     if (!index.has(row.id)) {
       index.set(row.id, row)
     }
   }
+
   return index
 }

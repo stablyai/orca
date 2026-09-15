@@ -28,19 +28,24 @@ function frame(
 describe('BrowserNetworkTunnelClient', () => {
   it('preserves remote DNS and waits for an opened acknowledgement', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
 
     let opened = false
+
     const opening = client.open({ host: 'split-horizon.internal', port: 443 }).then((socket) => {
       opened = true
+
       return socket
     })
+
     await Promise.resolve()
 
     const open = decodeBrowserNetworkTunnelFrame(sent[0]!)
@@ -68,13 +73,16 @@ describe('BrowserNetworkTunnelClient', () => {
 
   it('sends only credited bytes in bounded frames and replenishes consumed input', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const opening = client.open({ host: 'localhost', port: 8080 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const socket = await opening
@@ -92,9 +100,11 @@ describe('BrowserNetworkTunnelClient', () => {
         encodeBrowserNetworkTunnelWindowUpdate(BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
       )
     )
+
     const dataFrames = sent
       .map(decodeBrowserNetworkTunnelFrame)
       .filter((candidate): candidate is BrowserNetworkTunnelFrame => candidate !== null)
+
     expect(
       dataFrames.every((candidate) => candidate.opcode === BrowserNetworkTunnelOpcode.Data)
     ).toBe(true)
@@ -135,6 +145,7 @@ describe('BrowserNetworkTunnelClient', () => {
       tunnelGeneration: 7,
       sendBinary: () => true
     })
+
     const firstOpening = client.open({ host: 'one.internal', port: 80 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened, new Uint8Array(), 7, 1))
     const first = await firstOpening
@@ -155,13 +166,16 @@ describe('BrowserNetworkTunnelClient', () => {
 
   it('retires a remotely failed stream without echoing an error or closing the route', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const opening = client.open({ host: 'refused.internal', port: 443 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const socket = await opening
@@ -189,6 +203,7 @@ describe('BrowserNetworkTunnelClient', () => {
       tunnelGeneration: 7,
       sendBinary: () => true
     })
+
     const opening = client.open({ host: 'refused.internal', port: 443 })
 
     client.handleBinary(
@@ -205,14 +220,17 @@ describe('BrowserNetworkTunnelClient', () => {
     vi.useFakeTimers()
     let opening: Promise<unknown>
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     try {
       const client = new BrowserNetworkTunnelClient({
         tunnelGeneration: 7,
         sendBinary: (bytes) => {
           sent.push(bytes)
+
           return true
         }
       })
+
       opening = client.open({ host: 'unreachable.internal', port: 443 })
       sent.length = 0
       vi.advanceTimersByTime(BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS)
@@ -230,6 +248,7 @@ describe('BrowserNetworkTunnelClient', () => {
       tunnelGeneration: 7,
       sendBinary: () => true
     })
+
     const firstOpening = client.open({ host: 'first.internal', port: 443 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const first = await firstOpening
@@ -255,11 +274,13 @@ describe('BrowserNetworkTunnelClient', () => {
 
   it('never reuses stream IDs within one generation after its bounded ledger exhausts', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
       maxStreamIds: 2,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
@@ -287,13 +308,16 @@ describe('BrowserNetworkTunnelClient', () => {
 
   it('withholds destination credit until a readable consumer asks for data', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const opening = client.open({ host: 'localhost', port: 8080 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const socket = await opening
@@ -316,13 +340,16 @@ describe('BrowserNetworkTunnelClient', () => {
 
   it('replenishes only bytes settled after the readable consumer takes them', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const opening = client.open({ host: 'localhost', port: 8080 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const socket = await opening
@@ -352,6 +379,7 @@ describe('BrowserNetworkTunnelClient', () => {
       tunnelGeneration: 7,
       sendBinary: () => true
     })
+
     const opening = client.open({ host: 'localhost', port: 8080 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const socket = await opening
@@ -369,13 +397,16 @@ describe('BrowserNetworkTunnelClient', () => {
 
   it('drains data that precedes a remote close before retiring the socket', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const opening = client.open({ host: 'localhost', port: 8080 })
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const socket = await opening

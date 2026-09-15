@@ -21,16 +21,20 @@ export function enqueueFederationRelay(
 ): FederationRelayItemRow {
   const byteCount = Buffer.byteLength(params.payload, 'utf8')
   const messageId = params.messageId ?? generateId('relay')
+
   if (byteCount > 64 * 1024) {
     throw new OrchestrationError(
       'relay_quota_exceeded',
       'A federated orchestration message cannot exceed 64 KiB.'
     )
   }
+
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     if (params.settleRemoteOutcome) {
       const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+
       if (!attachment || attachment.state !== 'ready') {
         throw new OrchestrationError(
           'dispatch_inactive',
@@ -38,6 +42,7 @@ export function enqueueFederationRelay(
         )
       }
     }
+
     if (params.kind === 'heartbeat') {
       const heartbeat = this.db
         .prepare(
@@ -47,6 +52,7 @@ export function enqueueFederationRelay(
            ORDER BY sequence DESC LIMIT 1`
         )
         .get(params.dispatchId, params.direction) as FederationRelayItemRow | undefined
+
       if (heartbeat) {
         this.db
           .prepare(
@@ -56,6 +62,7 @@ export function enqueueFederationRelay(
           )
           .run(params.payload, byteCount, params.dispatchId, params.direction, heartbeat.sequence)
         this.db.exec('COMMIT')
+
         return this.getFederationRelayItem(
           params.dispatchId,
           params.direction,
@@ -63,6 +70,7 @@ export function enqueueFederationRelay(
         ) as FederationRelayItemRow
       }
     }
+
     if (params.kind === 'worker_done') {
       const identicalReport = this.db
         .prepare(
@@ -74,12 +82,15 @@ export function enqueueFederationRelay(
         .get(params.dispatchId, params.direction, params.payload) as
         | FederationRelayItemRow
         | undefined
+
       if (identicalReport) {
         this.settleRemoteAttachmentInRelayTransaction(params.dispatchId, params.settleRemoteOutcome)
         this.db.exec('COMMIT')
+
         return identicalReport
       }
     }
+
     const quota = this.db
       .prepare(
         `SELECT COUNT(*) AS count, COALESCE(SUM(byte_count), 0) AS bytes
@@ -87,6 +98,7 @@ export function enqueueFederationRelay(
          WHERE dispatch_id = ? AND direction = ? AND acked_at IS NULL`
       )
       .get(params.dispatchId, params.direction) as { count: number; bytes: number }
+
     if (quota.count >= 256 || quota.bytes + byteCount > 1024 * 1024) {
       if (params.kind === 'worker_done') {
         const heartbeat = this.db
@@ -97,6 +109,7 @@ export function enqueueFederationRelay(
              ORDER BY sequence LIMIT 1`
           )
           .get(params.dispatchId, params.direction) as FederationRelayItemRow | undefined
+
         if (heartbeat) {
           this.db
             .prepare(
@@ -119,6 +132,7 @@ export function enqueueFederationRelay(
             params.settleRemoteOutcome
           )
           this.db.exec('COMMIT')
+
           return this.getFederationRelayItem(
             params.dispatchId,
             params.direction,
@@ -126,17 +140,20 @@ export function enqueueFederationRelay(
           ) as FederationRelayItemRow
         }
       }
+
       throw new OrchestrationError(
         'relay_quota_exceeded',
         `Federated Dispatch ${params.dispatchId} has no relay capacity.`
       )
     }
+
     const latest = this.db
       .prepare(
         `SELECT COALESCE(MAX(sequence), 0) AS sequence
          FROM federation_relay_items WHERE dispatch_id = ? AND direction = ?`
       )
       .get(params.dispatchId, params.direction) as { sequence: number }
+
     const sequence = latest.sequence + 1
     this.db
       .prepare(
@@ -153,6 +170,7 @@ export function enqueueFederationRelay(
         params.payload,
         byteCount
       )
+
     if (params.remoteQuestion) {
       this.db
         .prepare(
@@ -161,8 +179,10 @@ export function enqueueFederationRelay(
         )
         .run(messageId, params.dispatchId)
     }
+
     this.settleRemoteAttachmentInRelayTransaction(params.dispatchId, params.settleRemoteOutcome)
     this.db.exec('COMMIT')
+
     return this.getFederationRelayItem(
       params.dispatchId,
       params.direction,

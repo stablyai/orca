@@ -13,6 +13,7 @@ Electron Helper [102]: 64-bit    Footprint: 2000000 B (16384 bytes per page)
     phys_footprint: 2100000 B
 Summary Footprint: 6259264 B
 `
+
     expect(parsePhysicalFootprintBytes(output, 2)).toBe(6_259_264)
   })
 
@@ -21,6 +22,7 @@ Summary Footprint: 6259264 B
 Electron [101]: 64-bit    Footprint: 5000000 B (16384 bytes per page)
     phys_footprint: 5100000 B
 `
+
     expect(parsePhysicalFootprintBytes(output, 1)).toBe(5_000_000)
   })
 

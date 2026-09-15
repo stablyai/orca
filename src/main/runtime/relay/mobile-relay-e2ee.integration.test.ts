@@ -12,9 +12,11 @@ import { SimulatedMobileE2EEV2Peer } from './simulated-mobile-e2ee-v2-peer'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -51,10 +53,12 @@ describe('desktop relay E2EE integration', () => {
             for (const client of server.clients) {
               client.terminate()
             }
+
             server.close(() => resolve())
           })
       )
     )
+
     for (const path of userDataPaths.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
@@ -66,16 +70,20 @@ describe('desktop relay E2EE integration', () => {
     servers.push(relay)
     await new Promise<void>((resolve) => relay.once('listening', resolve))
     const address = relay.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('expected local relay TCP address')
     }
+
     let hostSocket: WebSocket | null = null
     let phoneSocket: WebSocket | null = null
     let phoneAuthorized = false
+
     const maybeSplice = (): void => {
       if (!hostSocket || !phoneSocket || !phoneAuthorized) {
         return
       }
+
       const host = hostSocket
       const phone = phoneSocket
       host.on('message', (raw, isBinary) => forward(phone, raw, isBinary))
@@ -89,8 +97,10 @@ describe('desktop relay E2EE integration', () => {
         })
       )
     }
+
     relay.on('connection', (socket, request) => {
       expect(request.url).not.toContain('?')
+
       if (request.url === '/v1/host/data/connection-1') {
         socket.once('message', (raw) => {
           expect(JSON.parse(raw.toString())).toEqual({
@@ -102,8 +112,10 @@ describe('desktop relay E2EE integration', () => {
           hostSocket = socket
           maybeSplice()
         })
+
         return
       }
+
       if (request.url?.startsWith('/v1/connect/')) {
         socket.once('message', (raw) => {
           expect(JSON.parse(raw.toString())).toEqual({
@@ -128,6 +140,7 @@ describe('desktop relay E2EE integration', () => {
     const receivedText = deferred<string>()
     const receivedBinary = deferred<Uint8Array>()
     const phoneBinary = deferred<Uint8Array>()
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registry,
       e2eeKeypair: {
@@ -150,11 +163,13 @@ describe('desktop relay E2EE integration', () => {
       onBinary: (_socket, bytes) => receivedBinary.resolve(new Uint8Array(bytes)),
       onClose: vi.fn()
     })
+
     const transport = new CloudRelayTransport({
       cellUrl: `http://127.0.0.1:${address.port}`,
       relayHostId,
       generation: 1
     })
+
     transports.push(transport)
     wiring.attachTransport(transport, (socket) => transport.metadataFor(socket))
     await transport.start()
@@ -169,6 +184,7 @@ describe('desktop relay E2EE integration', () => {
     const phone = new WebSocketClient(`ws://127.0.0.1:${address.port}/v1/connect/${relayHostId}`, {
       perMessageDeflate: false
     })
+
     await waitForOpen(phone)
     const relayHello = nextText(phone)
     phone.send(
@@ -183,11 +199,13 @@ describe('desktop relay E2EE integration', () => {
 
     const authenticated = deferred<void>()
     const phoneText = deferred<string>()
+
     const phoneSession = new SimulatedMobileE2EEV2Peer(
       nacl.box.keyPair(),
       desktopKeys.publicKey,
       relayHostId
     )
+
     let phoneState: 'awaiting-ready' | 'awaiting-authenticated' | 'ready' = 'awaiting-ready'
     phone.on('message', (raw, isBinary) => {
       if (phoneState === 'awaiting-ready') {
@@ -204,12 +222,16 @@ describe('desktop relay E2EE integration', () => {
             })
           )
         )
+
         return
       }
+
       const plaintext = isBinary
         ? phoneSession.openBinary(new Uint8Array(raw as Buffer))
         : phoneSession.openText(raw.toString())
+
       expect(plaintext).not.toBeNull()
+
       if (phoneState === 'awaiting-authenticated') {
         expect(JSON.parse(plaintext as string)).toEqual({
           type: 'e2ee_authenticated',

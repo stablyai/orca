@@ -45,6 +45,7 @@ export function isDisplayNamePersistencePending(
       return true
     }
   }
+
   return false
 }
 
@@ -62,18 +63,22 @@ export function persistWorktreeMeta(
     executionHostId,
     identityKey
   )
+
   if (!('displayName' in updates)) {
     return operation
   }
+
   const write: PendingDisplayNameWrite = {
     worktreeId,
     executionHostId
   }
+
   pendingDisplayNameWrites.add(write)
   void operation.then(
     () => pendingDisplayNameWrites.delete(write),
     () => pendingDisplayNameWrites.delete(write)
   )
+
   return operation
 }
 
@@ -85,14 +90,17 @@ async function persistWorktreeMetaUntracked(
   identityKey?: string
 ): Promise<void> {
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind === 'local') {
     await window.api.worktrees.updateMeta({
       worktreeId,
       ...(executionHostId ? { executionHostId } : {}),
       updates
     })
+
     return
   }
+
   // Why: `worktree.set` parses in strip mode, so an older runtime drops the key
   // and applies the rest. Both gates key off presence, not value — a dropped
   // *clear* strands a stale link that the Issue row then hides.
@@ -109,6 +117,7 @@ async function persistWorktreeMetaUntracked(
       )
     )
   }
+
   // task-source-context.v1 is a sound proxy for the Linear keys: #5322 added them
   // to the schema and is an ancestor of the commit introducing that capability.
   if (target.kind === 'environment' && 'linkedLinearIssue' in updates) {
@@ -121,7 +130,9 @@ async function persistWorktreeMetaUntracked(
       )
     )
   }
+
   let compatibleUpdates = updates
+
   if (target.kind === 'environment' && 'suppressedGitHubPR' in updates) {
     if (typeof updates.suppressedGitHubPR === 'number' && updates.suppressedGitHubPR > 0) {
       await assertRuntimeEnvironmentCapability(
@@ -144,6 +155,7 @@ async function persistWorktreeMetaUntracked(
       compatibleUpdates = olderHostUpdates
     }
   }
+
   await callRuntimeRpc(
     target,
     'worktree.set',

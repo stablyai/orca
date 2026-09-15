@@ -48,12 +48,15 @@ export async function getIssue(
     connectionId,
     localGitOptions
   )
+
   // Why: a connection-backed request has no local cwd, so the non-GitHub
   // fallback below would let gh target its default repository. Refuse instead.
   if (connectionId && !ownerRepo) {
     return null
   }
+
   await acquire()
+
   try {
     if (ownerRepo) {
       const { stdout } = await ghExecFileAsync(
@@ -65,15 +68,20 @@ export async function getIssue(
         ],
         ghOptions
       )
+
       const data = JSON.parse(stdout)
+
       return mapIssueInfo(data)
     }
+
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
       ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels,body'],
       ghOptions
     )
+
     const data = JSON.parse(stdout)
+
     return mapIssueInfo(data)
   } catch {
     return null
@@ -114,6 +122,7 @@ export async function listIssues(
     connectionId,
     localGitOptions
   )
+
   // Why: a connection-backed request has no local cwd, so the non-GitHub
   // fallback below would let gh list its default repository. Refuse instead.
   if (connectionId && !ownerRepo) {
@@ -125,7 +134,9 @@ export async function listIssues(
       }
     }
   }
+
   await acquire()
+
   try {
     if (ownerRepo) {
       const { stdout } = await ghExecFileAsync(
@@ -137,7 +148,9 @@ export async function listIssues(
         ],
         ghOptions
       )
+
       const data = JSON.parse(stdout) as Record<string, unknown>[]
+
       // Why: the GitHub REST `/repos/{owner}/{repo}/issues` endpoint returns
       // pull requests alongside issues (PRs carry a `pull_request` key).
       // Strip them here so `listIssues` only returns true issues, matching the
@@ -148,17 +161,21 @@ export async function listIssues(
           .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
       }
     }
+
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
       ['issue', 'list', '--json', 'number,title,state,url,labels', '--limit', String(limit)],
       ghOptions
     )
+
     const data = JSON.parse(stdout) as unknown[]
+
     return {
       items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
+
     return {
       items: [],
       error: classifyListIssuesError(stderr)

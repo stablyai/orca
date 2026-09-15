@@ -22,6 +22,8 @@ export function reconcileRepoSelection(
   if (!persisted || persisted.length === 0) {
     return new Set()
   }
+
   const availableIds = new Set(repos.filter(isHostedTaskRepo).map((repo) => repo.id))
+
   return new Set(persisted.filter((id) => availableIds.has(id)))
 }

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
 
 const KNOWN_LARGE_COPY = 'Large diffs are not rendered by default.'
+
 const UNKNOWN_SIZE_COPY = "This diff's size isn't known yet, so it loads on request."
 
 describe('LargeDiffLoadPrompt', () => {

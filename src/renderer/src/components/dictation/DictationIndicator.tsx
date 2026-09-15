@@ -18,6 +18,7 @@ export function DictationIndicator() {
   const shortcut = useShortcutKeyDetails('voice.dictation')
 
   const isVisible = ['listening', 'starting', 'stopping'].includes(dictationState)
+
   if (!isVisible) {
     return null
   }
@@ -25,21 +26,25 @@ export function DictationIndicator() {
   const isListening = dictationState === 'listening'
   const isClipping = isListening && dictationMeter.isClipping
   const isSpeaking = isListening && dictationMeter.isSpeaking && !isClipping
+
   const lifecycleLabel =
     dictationState === 'starting'
       ? translate('auto.components.dictation.DictationIndicator.7f3660a7ba', 'Starting mic…')
       : dictationState === 'stopping'
         ? translate('auto.components.dictation.DictationIndicator.f082d0cb9d', 'Processing…')
         : translate('auto.components.dictation.DictationIndicator.3de5a129e7', 'Listening')
+
   const label = isClipping
     ? translate('auto.components.dictation.DictationIndicator.4977162383', 'Too loud')
     : isSpeaking
       ? translate('auto.components.dictation.DictationIndicator.25f2b7a6a5', 'Speaking')
       : lifecycleLabel
+
   const announcedLabel = isClipping ? label : lifecycleLabel
   const canStop = dictationState !== 'stopping'
   const showShortcut = !isHoldMode && shortcut.keys.length > 0
   const transcript = partialTranscript.trim()
+
   const stopLabel = translate(
     'auto.components.dictation.DictationIndicator.335e1bc6cb',
     'Stop dictation'

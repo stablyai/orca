@@ -25,6 +25,7 @@ export function buildPosixCommandPathLookupScript(
   options: PosixCommandPathLookupOptions = {}
 ): string {
   const commandAssignment = buildCommandAssignment(target)
+
   // `drvfs` is what WSL mounts a Windows drive as, wherever the automount root
   // is; 9p/virtiofs cover the WSL2 shapes.
   //
@@ -39,6 +40,7 @@ export function buildPosixCommandPathLookupScript(
         '[ "${_orca_win_mounts+set}" = set ] || _orca_win_mounts=$(awk \'$3 == "drvfs" || $3 == "9p" || $3 == "virtiofs" { print $2 }\' /proc/mounts 2>/dev/null)'
       ]
     : []
+
   const skipMountComponent = options.skipWindowsMountDirs
     ? [
         '      for _orca_win_mount in $_orca_win_mounts; do',
@@ -52,6 +54,7 @@ export function buildPosixCommandPathLookupScript(
         '      fi'
       ]
     : []
+
   // Shell command resolution can be masked by aliases, functions, and builtins, so inspect PATH.
   return [
     `_orca_lookup_command=${commandAssignment}`,
@@ -102,9 +105,11 @@ function buildCommandAssignment(target: PosixCommandPathLookupTarget): string {
   if (target.kind === 'literal') {
     return shellQuote(target.value)
   }
+
   if (!SHELL_VARIABLE_NAME_PATTERN.test(target.name)) {
     throw new Error(`Invalid shell variable name: ${target.name}`)
   }
+
   return `\${${target.name}-}`
 }
 

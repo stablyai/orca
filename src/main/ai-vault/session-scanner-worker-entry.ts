@@ -19,12 +19,17 @@ const TITLE_INDEX_MAX_ENTRIES = 4_096
 if (!parentPort) {
   throw new Error('AI Vault scanner worker must run with a parent port.')
 }
+
 const port = parentPort
+
 const data = workerData as AiVaultWorkerData | undefined
+
 if (data?.sessionParseCache) {
   initSessionParseCachePersistence(data.sessionParseCache)
 }
+
 const controllers = new Map<number, AbortController>()
+
 const titleIndex = new Map<string, AiVaultSessionTitle>()
 
 function titleKey(request: Pick<AiVaultSessionTitleRequest, 'agent' | 'sessionId'>): string {
@@ -35,11 +40,14 @@ function storeTitle(title: AiVaultSessionTitle): void {
   const key = titleKey(title)
   titleIndex.delete(key)
   titleIndex.set(key, title)
+
   while (titleIndex.size > TITLE_INDEX_MAX_ENTRIES) {
     const oldest = titleIndex.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     titleIndex.delete(oldest)
   }
 }
@@ -47,12 +55,14 @@ function storeTitle(title: AiVaultSessionTitle): void {
 async function handleRequest(request: AiVaultWorkerRequest): Promise<AiVaultWorkerResponse> {
   const controller = new AbortController()
   controllers.set(request.id, controller)
+
   try {
     if (request.kind === 'titles') {
       const requests = await resolveHostReadableAiVaultTitleRequests(
         request.requests,
         controller.signal
       )
+
       return {
         id: request.id,
         ok: true,
@@ -66,8 +76,10 @@ async function handleRequest(request: AiVaultWorkerRequest): Promise<AiVaultWork
         })
       }
     }
+
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
+
     for (const session of result.sessions) {
       if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
         storeTitle({
@@ -77,6 +89,7 @@ async function handleRequest(request: AiVaultWorkerRequest): Promise<AiVaultWork
         })
       }
     }
+
     return {
       id: request.id,
       ok: true,
@@ -95,13 +108,17 @@ async function handleRequest(request: AiVaultWorkerRequest): Promise<AiVaultWork
 }
 
 let pending = Promise.resolve()
+
 port.on('message', (message: AiVaultWorkerRequest | AiVaultWorkerControl) => {
   if (message.kind === 'cancel') {
     controllers.get(message.id)?.abort()
+
     return
   }
+
   pending = pending.then(async () => {
     const response = await handleRequest(message)
+
     try {
       port.postMessage(response)
     } catch {

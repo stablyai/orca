@@ -65,6 +65,7 @@ vi.mock('@/store', () => ({
     getState: () => store,
     subscribe: (listener: (state: unknown, previousState: unknown) => void) => {
       storeListeners.add(listener)
+
       return () => {
         storeListeners.delete(listener)
       }
@@ -146,12 +147,14 @@ describe('getWorkspaceSeedName', () => {
   it('slugifies and truncates very long prompts', () => {
     const longPrompt =
       'Investigate the flaky login regression on iOS where the session cookie is dropped after background refresh and users get bounced to the splash screen.'
+
     const seed = getWorkspaceSeedName({
       explicitName: '',
       prompt: longPrompt,
       linkedIssueNumber: null,
       linkedPR: null
     })
+
     expect(seed.length).toBeLessThanOrEqual(48)
     expect(seed).toMatch(/^[a-z0-9._-]+$/)
     expect(seed.startsWith('investigate-the-flaky-login')).toBe(true)
@@ -186,6 +189,7 @@ describe('getWorkspaceSeedName', () => {
       linkedIssueNumber: null,
       linkedPR: null
     })
+
     expect(seed).not.toMatch(/\.{2,}/)
   })
 
@@ -368,6 +372,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     const call = mockPasteDraftToAgentPtyWhenReady.mock.calls.at(-1)?.[0] as
       | { onTimeout?: () => void }
       | undefined
+
     expect(call?.onTimeout).toBeTypeOf('function')
     call?.onTimeout?.()
     expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('claude')
@@ -501,6 +506,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         identity: { tabId: 'tab-1', leafId: startupLeafId, launchToken: 'launch-token-1' }
       }
     }
+
     for (const listener of storeListeners) {
       listener(store, store)
     }
@@ -556,6 +562,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         identity: { tabId: 'tab-1', leafId: splitLeafId, launchToken: 'other-token' }
       }
     }
+
     for (const listener of storeListeners) {
       listener(store, store)
     }
@@ -583,6 +590,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         identity: { tabId: 'tab-1', leafId: startupLeafId, launchToken: 'launch-token-1' }
       }
     }
+
     for (const listener of storeListeners) {
       listener(store, store)
     }
@@ -638,6 +646,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         identity: { tabId: 'tab-1', leafId: startupLeafId, launchToken: 'launch-token-1' }
       }
     }
+
     for (const listener of storeListeners) {
       listener(store, store)
       listener(store, store)
@@ -677,6 +686,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     store.terminalLayoutsByTabId = {}
     store.agentLaunchConfigByPaneKey = {}
     store.pendingStartupByTabId = { 'tab-1': { launchToken: 'launch-token-1' } }
+
     const startup = {
       agent: 'codex' as const,
       launchCommand: 'codex',
@@ -692,6 +702,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       primaryTabId: 'tab-1',
       startup
     })
+
     const second = ensureAgentStartupInTerminal({
       worktreeId: 'wt-1',
       primaryTabId: 'tab-1',
@@ -720,6 +731,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         identity: { tabId: 'tab-1', leafId: startupLeafId, launchToken: 'launch-token-1' }
       }
     }
+
     for (const listener of storeListeners) {
       listener(store, store)
     }
@@ -753,6 +765,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     await delivery
 
     store.pendingStartupByTabId = { 'tab-1': { launchToken: 'launch-token-new' } }
+
     for (const listener of storeListeners) {
       listener(store, store)
     }
@@ -774,6 +787,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         identity: { tabId: 'tab-1', leafId: startupLeafId, launchToken: 'launch-token-old' }
       }
     }
+
     for (const listener of storeListeners) {
       listener(store, store)
     }

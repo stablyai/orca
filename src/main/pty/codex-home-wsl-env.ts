@@ -9,21 +9,26 @@ export const WSL_CODEX_RUNTIME_HOME_SEGMENTS = [
 
 export function wslCodexRuntimeHomeForGuestHome(guestHome: string): string {
   const home = guestHome.endsWith('/') ? guestHome.slice(0, -1) : guestHome
+
   return `${home}/${WSL_CODEX_RUNTIME_HOME_SEGMENTS.join('/')}`
 }
 
 export function isHostCodexHomeForWsl(value: string | undefined): boolean {
   const trimmed = value?.trim()
+
   if (!trimmed) {
     return false
   }
+
   return /^[A-Za-z]:(?:[\\/]|$)/.test(trimmed) || trimmed.startsWith('\\\\')
 }
 
 export function isWslCodexHomeForHost(value: string | undefined): boolean {
   const trimmed = value?.trim()
+
   if (!trimmed) {
     return false
   }
+
   return trimmed.startsWith('/')
 }

@@ -39,16 +39,19 @@ export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowL
     is.dev && process.env.ELECTRON_RENDERER_URL
       ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
       : mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+
   // Observe each load promise so failures cannot leave recovery waiting silently.
   load.then(
     () => observer?.onLoaded?.(),
     (cause: unknown) => {
       const error = cause instanceof Error ? cause : new Error(String(cause))
       const errorCode = mainWindowLoadErrorCode(error)
+
       // Keep durable diagnostics path-free and exclude shutdown/navigation aborts.
       if (!mainWindow.isDestroyed() && errorCode !== 'ERR_ABORTED') {
         recordDurableCrashBreadcrumb('main_window_load_failed', { errorCode })
       }
+
       console.error('[window] Main window load failed', error)
       observer?.onError?.(error)
     }
@@ -60,6 +63,7 @@ export function createMainWindow(
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
   const rawSavedBounds = store?.getUI().windowBounds
+
   // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
@@ -68,17 +72,21 @@ export function createMainWindow(
     rectHasVisibleAreaOnAnyDisplay(rawSavedBounds, MIN_WIDTH / 2, MIN_HEIGHT / 2)
       ? rawSavedBounds
       : undefined
+
   if (rawSavedBounds && !savedBounds) {
     console.warn(
       '[window] Discarding persisted windowBounds and falling back to defaultBounds:',
       rawSavedBounds
     )
   }
+
   const savedMaximized = store?.getUI().windowMaximized ?? false
+
   // Why: on first launch fill the primary display work area so the window feels spacious without maximize(); saved bounds win later.
   const defaultBounds = (() => {
     try {
       const { width, height } = screen.getPrimaryDisplay().workAreaSize
+
       return { width, height }
     } catch {
       return { width: 1200, height: 800 }
@@ -91,6 +99,7 @@ export function createMainWindow(
     return false
   })
   const blur = settings?.windowBackgroundBlur ?? false
+
   // Why: only Windows acrylic is ever visible; macOS vibrancy+transparent sat behind our opaque background yet
   // forced per-frame WindowServer alpha compositing (#8482). Applies at creation only, so it needs a restart.
   const platformBlurOptions =
@@ -139,6 +148,7 @@ export function createMainWindow(
       additionalArguments: [formatBrowserClientHostIdArgument(getBrowserClientHostId())]
     }
   })
+
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
@@ -170,6 +180,7 @@ export function createMainWindow(
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
       return
     }
+
     forceRepaint(mainWindow)
     mainWindow.webContents.send('system:resumed')
     // Give a suspended recovery load its full budget on wake.
@@ -182,7 +193,9 @@ export function createMainWindow(
     savedMaximized,
     store
   })
+
   installMainWindowWebviewSecurity(mainWindow)
+
   const focus = installMainWindowFocusLifecycle({
     isWindowClosing: state.isWindowClosing,
     mainWindow,
@@ -190,9 +203,11 @@ export function createMainWindow(
     reloadMainWindow: (observer) => loadMainWindow(mainWindow, observer),
     rendererWebContentsId
   })
+
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
   installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
+
   const closeLifecycle = installMainWindowCloseLifecycle({
     focus,
     mainWindow,

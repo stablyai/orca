@@ -50,6 +50,7 @@ export function buildShortcutRowVisibility(options: {
           options.platform,
           options.keybindings
         )
+
         return {
           item,
           groupTitle: group.title,
@@ -64,23 +65,29 @@ export function buildShortcutRowVisibility(options: {
         }
       })
   }))
+
   const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
   const localQuery = normalizeShortcutLocalSearchQuery(options.shortcutQuery)
+
   const matchesGlobalSearch = buildShortcutGlobalSearchMatcher(
     shortcutRows,
     options.settingsSearchQuery
   )
+
   const matchesSearch = (row: ShortcutRowsByGroup['rows'][number]): boolean =>
     localQuery !== null &&
     matchesGlobalSearch(row) &&
     matchesShortcutLocalSearch(row, localQuery, options.platform)
+
   const baseVisibleRows = shortcutRows.filter(matchesSearch)
+
   const filterCounts: Record<ShortcutFilter, number> = {
     all: baseVisibleRows.length,
     modified: baseVisibleRows.filter((row) => row.modified).length,
     unassigned: baseVisibleRows.filter((row) => row.effective.length === 0).length,
     conflicts: baseVisibleRows.filter((row) => row.warnings.length > 0).length
   }
+
   const visibleShortcutGroups = shortcutGroups
     .map((group) => ({
       title: group.title,

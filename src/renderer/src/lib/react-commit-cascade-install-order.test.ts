@@ -14,12 +14,16 @@ import { describe, expect, it } from 'vitest'
  * records nothing. These tests are the failure.
  */
 const RENDERER_ROOT = resolve(__dirname, '..')
+
 const SHIM_MODULE = 'react-devtools-commit-hook-shim'
+
 const SHIM_IMPORT = `import './lib/${SHIM_MODULE}'`
+
 const OBSERVER_IMPORT = "import './lib/react-commit-cascade-observer'"
 
 /** Entries whose crash reports reach the breadcrumb pipe. */
 const INSTRUMENTED_ENTRIES = ['main.tsx', 'popout.tsx']
+
 /**
  * The web preload stubs crashReports.recordBreadcrumb to a no-op
  * (src/renderer/src/web/preload-api/web-diagnostics-api.ts), so instrumenting
@@ -51,9 +55,11 @@ function resolveLocalModule(specifier: string, fromFile: string): string | undef
     : specifier.startsWith('.')
       ? join(dirname(fromFile), specifier)
       : undefined
+
   if (base === undefined) {
     return undefined
   }
+
   // Only TS: a .css or asset import cannot pull react-dom into the graph.
   return [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts')].find((candidate) =>
     existsSync(candidate)
@@ -65,20 +71,26 @@ function transitiveSpecifiers(entryFile: string): Set<string> {
   const seen = new Set<string>()
   const specifiers = new Set<string>()
   const queue = [entryFile]
+
   while (queue.length > 0) {
     const file = queue.pop() as string
+
     if (seen.has(file)) {
       continue
     }
+
     seen.add(file)
+
     for (const specifier of importedSpecifiers(readFileSync(file, 'utf8'))) {
       specifiers.add(specifier)
       const local = resolveLocalModule(specifier, file)
+
       if (local) {
         queue.push(local)
       }
     }
   }
+
   return specifiers
 }
 

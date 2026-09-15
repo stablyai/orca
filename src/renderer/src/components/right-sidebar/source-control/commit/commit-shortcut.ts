@@ -10,6 +10,7 @@ export function handleSourceControlCommitShortcut(
   if (primaryAction.disabled || primaryAction.kind !== 'commit' || !isScreenSubmitShortcut(event)) {
     return
   }
+
   // Why: the handler lives on the Source Control root, so the shortcut cannot fire from the editor, terminal, or another sidebar tab.
   event.preventDefault()
   event.stopPropagation()

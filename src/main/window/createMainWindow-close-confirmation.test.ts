@@ -3,18 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+
 vi.mock('../browser/browser-route-session-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
+
   return {
     browserRouteSessionRegistry: { isAllowedPartition: harness.routePartitionAllowedMock },
     browserRouteWebContentsRegistry: {
@@ -23,8 +29,10 @@ vi.mock('../browser/browser-route-session-runtime', async () => {
     }
   }
 })
+
 vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
+
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
     retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
@@ -51,6 +59,7 @@ describe('createMainWindow', () => {
 
   it('clears the quit latch when the renderer prevents unload', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -61,6 +70,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -76,6 +86,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     const onQuitAborted = vi.fn()
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -98,6 +109,7 @@ describe('createMainWindow', () => {
 
   it('allows close after the renderer process is gone', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       id: 71,
       on: vi.fn((event, handler) => {
@@ -110,6 +122,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => false)
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -125,6 +138,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -155,6 +169,7 @@ describe('createMainWindow', () => {
   it('does not notify the crash recorder when renderer teardown follows a confirmed window close', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const ipcHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -166,6 +181,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => false)
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -184,9 +200,11 @@ describe('createMainWindow', () => {
         windowHandlers.close({} as never)
       })
     }
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
       ipcHandlers[channel] = handler as (...args: any[]) => void
+
       return ipcMain
     })
     browserWindowMock.mockImplementation(function () {
@@ -214,6 +232,7 @@ describe('createMainWindow', () => {
     vi.useFakeTimers()
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -225,6 +244,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => false)
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -241,6 +261,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     const updateUI = vi.fn()
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
@@ -273,6 +294,7 @@ describe('createMainWindow', () => {
 
   it('resumes close confirmation after a renderer process reloads', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -284,6 +306,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => false)
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -299,6 +322,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -330,6 +354,7 @@ describe('createMainWindow', () => {
 
   it('allows close when Electron reports a crashed webContents', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -341,6 +366,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => true)
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -356,6 +382,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -378,6 +405,7 @@ describe('createMainWindow', () => {
   // save/running-process confirmation runs.
   it('requests confirmation for a hung-but-alive renderer instead of bypassing', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -389,6 +417,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => false)
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -404,6 +433,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -424,6 +454,7 @@ describe('createMainWindow', () => {
   it('destroys an already-unresponsive renderer after an app-wide quit deadline', async () => {
     vi.useFakeTimers()
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       id: 42,
       on: vi.fn((event, handler) => {
@@ -436,6 +467,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => false)
     }
+
     const destroy = vi.fn()
     browserWindowMock.mockImplementation(function () {
       return {
@@ -471,8 +503,10 @@ describe('createMainWindow', () => {
     const ipcHandlers: Record<string, (...args: any[]) => void> = {}
     vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
       ipcHandlers[channel] = handler as (...args: any[]) => void
+
       return ipcMain
     })
+
     const webContents = {
       id: 42,
       on: vi.fn((event, handler) => {
@@ -485,6 +519,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isCrashed: vi.fn(() => false)
     }
+
     const destroy = vi.fn()
     browserWindowMock.mockImplementation(function () {
       return {
@@ -508,10 +543,12 @@ describe('createMainWindow', () => {
 
     windowHandlers.close({ preventDefault: vi.fn() } as never)
     windowHandlers.close({ preventDefault: vi.fn() } as never)
+
     const closeRequests = vi
       .mocked(webContents.send)
       .mock.calls.filter(([channel]) => channel === 'window:close-requested')
       .map(([, request]) => request as { requestId: number })
+
     expect(closeRequests).toHaveLength(2)
     const [staleRequest, currentRequest] = closeRequests
     ipcHandlers['window:close-request-received']?.({ sender: { id: 99 } }, currentRequest.requestId)

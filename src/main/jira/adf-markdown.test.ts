@@ -33,6 +33,7 @@ describe('adfToMarkdownText media', () => {
 
   it('uses the media resolver for file media nodes', () => {
     const resolveMedia = vi.fn(() => '![shot.png](data:image/png;base64,abc)')
+
     const markdown = adfToMarkdownText(
       {
         type: 'doc',
@@ -130,6 +131,7 @@ describe('adfToMarkdownText media', () => {
         }
       ]
     })
+
     expect(markdown).toContain('%29')
     expect(markdown).not.toContain('](https://evil')
   })
@@ -150,6 +152,7 @@ describe('adfToMarkdownText media', () => {
         }
       ]
     })
+
     expect(attrs).toEqual([
       { id: 'a', alt: 'one.png' },
       { id: 'b', url: 'https://x.example/y.png' }

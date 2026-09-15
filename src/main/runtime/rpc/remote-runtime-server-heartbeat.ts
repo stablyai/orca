@@ -30,6 +30,7 @@ export class RemoteRuntimeServerHeartbeat {
     if (this.timer) {
       return
     }
+
     this.lastTickAt = this.now()
     this.timer = setInterval(() => this.sweep(getClients()), this.intervalMs)
     this.timer.unref?.()
@@ -40,6 +41,7 @@ export class RemoteRuntimeServerHeartbeat {
       clearInterval(this.timer)
       this.timer = null
     }
+
     this.lastTickAt = null
   }
 
@@ -55,21 +57,26 @@ export class RemoteRuntimeServerHeartbeat {
     const stalledTick = elapsedMs < 0 || elapsedMs > this.intervalMs * 1.5
     let reaped = 0
     let clientCount = 0
+
     for (const socket of clients) {
       clientCount += 1
+
       if (this.alive.has(socket)) {
         this.alive.delete(socket)
         this.missedProbes.delete(socket)
       } else if (!stalledTick) {
         const missed = (this.missedProbes.get(socket) ?? 0) + 1
+
         if (missed >= this.missedProbeLimit) {
           this.missedProbes.delete(socket)
           socket.terminate()
           reaped += 1
           continue
         }
+
         this.missedProbes.set(socket, missed)
       }
+
       try {
         // Why: re-probe every sweep, including missed ones, so a path that just recovered can prove
         // itself on the next tick instead of waiting out the rest of the budget.
@@ -78,6 +85,7 @@ export class RemoteRuntimeServerHeartbeat {
         // Why: a mid-teardown socket is finalized by its close/error listener.
       }
     }
+
     if (reaped > 0 || clientCount >= this.warningClientCount) {
       console.warn(`[ws-transport] heartbeat reaped ${reaped}; ${clientCount} tracked sockets`)
     }

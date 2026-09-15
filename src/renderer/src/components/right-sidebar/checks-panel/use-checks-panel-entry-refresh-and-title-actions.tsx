@@ -94,11 +94,13 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     titleInputFocusTimerRef,
     titleInputRef
   } = model
+
   const handleEntryRefresh = useCallback(
     (options: { refreshChecks: boolean; refreshComments: boolean }) => {
       if (!repo || !branch || !activeWorktreeId) {
         return
       }
+
       // Why: tab entry is automatic UI, not a user refresh; keep coordinator rate-limit guards and only force panes already proven stale.
       if (isGitLabReviewContext) {
         void fetchHostedReviewForBranch(repo.path, branch, {
@@ -112,15 +114,20 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           linkedAzureDevOpsPR,
           linkedGiteaPR
         })
+
         if (activeGitLabReview) {
           void fetchGitLabDetails()
         }
+
         return
       }
+
       enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
+
       if (options.refreshChecks) {
         void fetchChecks({ force: true })
       }
+
       if (options.refreshComments) {
         void fetchComments({ force: true })
       }
@@ -151,19 +158,24 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     isPanelVisible && repo && !isFolder && branch
       ? `${activeWorktreeId ?? ''}::${activeGitLabReview ? hostedReviewCacheKey : prCacheKey}`
       : ''
+
   const lastEntryKeyRef = useRef<string>('')
   useEffect(() => {
     if (!entryKey) {
       // Reset on hide so reopening the same PR re-evaluates freshness; a prevKey !== currentKey check alone would miss close-and-reopen.
       lastEntryKeyRef.current = ''
+
       return
     }
+
     if (lastEntryKeyRef.current === entryKey) {
       return
     }
+
     lastEntryKeyRef.current = entryKey
 
     const now = Date.now()
+
     const stale = shouldEntryRefresh({
       prFetchedAt,
       checksFetchedAt,
@@ -172,12 +184,16 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       now,
       graceMs: ENTRY_REFRESH_GRACE_MS
     })
+
     if (!stale) {
       return
     }
+
     const cutoff = now - ENTRY_REFRESH_GRACE_MS
+
     const refreshChecks =
       prNumber !== null && (checksFetchedAt === undefined || checksFetchedAt < cutoff)
+
     const refreshComments =
       prNumber !== null && (commentsFetchedAt === undefined || commentsFetchedAt < cutoff)
 
@@ -200,6 +216,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     if (!repo || !branch) {
       return
     }
+
     if (activeReview?.provider === 'gitlab') {
       const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
@@ -212,8 +229,10 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         linkedAzureDevOpsPR,
         linkedGiteaPR
       })
+
       const refreshedGitLabReview =
         refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
+
       if (refreshedGitLabReview) {
         await fetchGitLabDetails({
           mrNumberOverride: refreshedGitLabReview.number,
@@ -221,8 +240,10 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           commitAsCurrent: true
         })
       }
+
       return
     }
+
     const refreshedPR = await fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
@@ -230,6 +251,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       linkedPRNumber: linkedPR,
       fallbackPRNumber: fallbackGitHubPRNumber
     })
+
     await refreshHostedReviewCard(fetchHostedReviewForBranch, {
       repoPath: repo.path,
       repoId: repo.id,
@@ -262,6 +284,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     if (!activeReview) {
       return
     }
+
     setTitleDraft(activeReview.title)
     setEditingTitle(true)
     clearTitleInputFocusTimer()
@@ -286,12 +309,16 @@ export function useChecksPanelEntryRefreshAndTitleActions(
 
   const handleSaveTitle = useCallback(async () => {
     const nextTitle = titleDraft.trim()
+
     if (!repo || !activeReview || !nextTitle || nextTitle === activeReview.title) {
       clearTitleInputFocusTimer()
       setEditingTitle(false)
+
       return
     }
+
     setTitleSaving(true)
+
     try {
       if (activeReview.provider === 'gitlab') {
         const result = await window.api.gl.updateMR({
@@ -300,15 +327,19 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           iid: activeReview.number,
           updates: { title: nextTitle }
         })
+
         if (!result.ok) {
           toast.error(result.error)
+
           return
         }
+
         await refreshHostedReviewAfterMutation()
       } else {
         if (!pr) {
           return
         }
+
         const ok = await window.api.gh.updatePRTitle({
           repoPath: repo.path,
           repoId: repo.id,
@@ -316,12 +347,14 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           title: nextTitle,
           prRepo: pr.prRepo ?? null
         })
+
         if (ok) {
           await refreshHostedReviewAfterMutation()
         }
       }
     } finally {
       clearTitleInputFocusTimer()
+
       if (mountedRef.current) {
         setTitleSaving(false)
         setEditingTitle(false)
@@ -350,6 +383,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     },
     [handleSaveTitle, handleCancelEdit]
   )
+
   return {
     refreshHostedReviewAfterMutation,
     handleStartEdit,

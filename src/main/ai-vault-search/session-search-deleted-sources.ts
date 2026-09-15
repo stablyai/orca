@@ -108,24 +108,30 @@ export async function retireDeletedSessionSearchSources(
   // or not. What it bounds is real work: a repeat of one already in here is a
   // map lookup, and only a name that is new to it can cost a readdir.
   const asked = new Set<string>()
+
   const listings: SessionSearchDirectoryReader = {
     namesIn: (directory, signal) => {
       asked.add(directory)
+
       return args.listings.namesIn(directory, signal)
     }
   }
+
   const retirement: SessionSearchRetirement = {
     retired: [],
     unverifiable: [],
     unchecked: [],
     degradedRoots: []
   }
+
   const degraded = new Map<string, string>()
+
   for (const [index, path] of paths.entries()) {
     // A synthetic row names a container and an entry inside it, never a file of
     // its own; walking the row's own path would report every one of them gone.
     const synthetic = splitSyntheticSessionSource(path)
     const filePath = synthetic?.container ?? path
+
     // Why capped at all: the sweep hands over every path it holds and did not
     // discover, and under an unmount that is the whole index. What is left is
     // simply still undiscovered next pass, so the walk finishes over the ones
@@ -139,31 +145,40 @@ export async function retireDeletedSessionSearchSources(
       retirement.unchecked.push(...paths.slice(index))
       break
     }
+
     const root = configuredRootFor(filePath, args.roots)
+
     const containerProof = await proveSource(filePath, root ?? dirname(filePath), {
       listings,
       emptiedRoots,
       signal
     })
+
     const proof = synthetic
       ? proveSyntheticSource(synthetic, containerProof, args.enumeratedContainers)
       : containerProof
+
     if (proof.verdict === 'gone') {
       store.removeFile(path)
       retirement.retired.push(path)
       continue
     }
+
     if (proof.verdict === 'present') {
       continue
     }
+
     retirement.unverifiable.push(path)
+
     // Only a configured root is an alarm worth raising: a row under no root
     // this scan walks is already reported on its own, as an orphan.
     if (root !== null && !degraded.has(root)) {
       degraded.set(root, proof.reason)
     }
   }
+
   retirement.degradedRoots = [...degraded].map(([root, reason]) => ({ root, reason }))
+
   return retirement
 }
 
@@ -188,23 +203,30 @@ async function proveSource(
 ): Promise<SessionSearchSourceVerdict> {
   let directory = dirname(path)
   let child = basename(path)
+
   while (directory === root || isUnderScanRoot(directory, root)) {
     const listing = await context.listings.namesIn(directory, context.signal)
+
     if (!listing.listed) {
       if (listing.code !== null && MISSING_DIRECTORY.has(listing.code)) {
         const parent = dirname(directory)
+
         if (parent === directory) {
           break
         }
+
         child = basename(directory)
         directory = parent
         continue
       }
+
       return { verdict: 'unverifiable', reason: listing.message }
     }
+
     if (listing.names.has(child)) {
       return { verdict: 'present' }
     }
+
     if (directory === root && context.emptiedRoots.has(root)) {
       // One pass of grace, so a root that blinks empty for a moment — a sync
       // client mid-swap, a mount that has not settled — cannot retire a tree.
@@ -213,8 +235,10 @@ async function proveSource(
         reason: 'Listed no transcripts where it listed some on the previous pass.'
       }
     }
+
     return { verdict: 'gone' }
   }
+
   return { verdict: 'unverifiable', reason: `${root} could not be listed.` }
 }
 
@@ -237,7 +261,9 @@ function proveSyntheticSource(
   if (containerProof.verdict !== 'present') {
     return containerProof
   }
+
   const ids = enumerated?.get(synthetic.container)
+
   // An enumeration that returned nothing at all is not evidence that the
   // container holds nothing: a source whose schema this scanner no longer
   // recognises reads as empty with no error to see, and believing it would
@@ -248,16 +274,19 @@ function proveSyntheticSource(
       reason: `${synthetic.container} was not enumerated in full this pass.`
     }
   }
+
   return ids.has(synthetic.id) ? { verdict: 'present' } : { verdict: 'gone' }
 }
 
 /** Longest configured root containing the path, or null for a row under none. */
 function configuredRootFor(path: string, roots: readonly string[]): string | null {
   let owner: string | null = null
+
   for (const root of roots) {
     if (isUnderScanRoot(path, root) && (owner === null || root.length > owner.length)) {
       owner = root
     }
   }
+
   return owner
 }

@@ -11,6 +11,7 @@ export function resolveTerminalTabTitle(
   fallback = ''
 ): string {
   const liveTitle = tab.title?.trim() ?? ''
+
   return (
     tab.customTitle?.trim() ||
     tab.quickCommandLabel?.trim() ||
@@ -30,6 +31,7 @@ export function resolveUnifiedTabLabel(
   fallback = ''
 ): string {
   const liveLabel = tab?.label?.trim() ?? ''
+
   return (
     tab?.customLabel?.trim() ||
     tab?.quickCommandLabel?.trim() ||

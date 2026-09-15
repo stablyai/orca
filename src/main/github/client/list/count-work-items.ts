@@ -25,6 +25,7 @@ import { sameOwnerRepo } from './../github-exec-scope'
 import { resolvePrWorkItemSource } from './work-item-list-request'
 import { buildSearchQueryString, defaultOpenWorkItemQuery } from './work-item-search-query'
 import { searchWorkItemCount, usesGraphqlWorkItemSearch } from './work-item-search-page'
+
 export async function countWorkItemsForQuery(
   repoPath: string,
   ownerRepo: OwnerRepo,
@@ -33,12 +34,15 @@ export async function countWorkItemsForQuery(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
   const searchQ = buildSearchQueryString(ownerRepo, query)
+
   const ghOptions: GitHubRepoExecOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(ownerRepo)
   }
+
   if (usesGraphqlWorkItemSearch(ownerRepo, ghOptions)) {
     ghOptions.env = { ...process.env }
+
     try {
       return await searchWorkItemCount(searchQ, ghOptions)
     } catch (error) {
@@ -47,9 +51,11 @@ export async function countWorkItemsForQuery(
       }
     }
   }
+
   if (repositoryRateLimitGuard(ownerRepo, 'search', ghOptions).blocked) {
     return 0
   }
+
   const { stdout } = await ghExecFileAsync(
     [
       'api',
@@ -61,8 +67,10 @@ export async function countWorkItemsForQuery(
     ],
     ghOptions
   )
+
   // Why: over-counting cache hits is the safe direction — the next probe corrects the estimate.
   noteRepositoryRateLimitSpend(ownerRepo, 'search', 1, ghOptions)
+
   return Number.parseInt(stdout.trim(), 10) || 0
 }
 
@@ -75,22 +83,27 @@ export async function countWorkItems(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
   const trimmedQuery = query?.trim() ?? ''
+
   if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
     return 0
   }
+
   const [issueResolved, prResolved] = await Promise.all([
     resolveIssueGitHubApiRepositorySource(repoPath, preference, connectionId, localGitOptions),
     resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
   ])
+
   const issueOwnerRepo = issueResolved.source
   const prOwnerRepo = prResolved.source
   const ownerRepo = prOwnerRepo ?? issueOwnerRepo
+
   if (!ownerRepo) {
     return 0
   }
 
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(ownerRepo)
@@ -100,6 +113,7 @@ export async function countWorkItems(
   if (spendsSharedGitHubComQuota(ownerRepo, ghOptions)) {
     await getRateLimit()
   }
+
   if (
     !usesGraphqlWorkItemSearch(ownerRepo, ghOptions) &&
     repositoryRateLimitGuard(ownerRepo, 'search', ghOptions).blocked
@@ -108,6 +122,7 @@ export async function countWorkItems(
   }
 
   await acquire()
+
   try {
     if (sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
       return await countWorkItemsForQuery(
@@ -120,11 +135,13 @@ export async function countWorkItems(
     }
 
     const counts: Promise<number>[] = []
+
     // Why: draft/reviewRequested/reviewedBy are PR-only, so the issue half would always return 0 — skip it to save a search call.
     const hasPrOnlyFilter =
       effectiveQuery.draft ||
       effectiveQuery.reviewRequested !== null ||
       effectiveQuery.reviewedBy !== null
+
     if (
       effectiveQuery.scope !== 'pr' &&
       effectiveQuery.state !== 'merged' &&
@@ -141,6 +158,7 @@ export async function countWorkItems(
         )
       )
     }
+
     if (effectiveQuery.scope !== 'issue' && prOwnerRepo) {
       counts.push(
         countWorkItemsForQuery(
@@ -152,9 +170,11 @@ export async function countWorkItems(
         )
       )
     }
+
     // Why: allSettled so one failing search side doesn't zero the total; sum only fulfilled halves.
     const results = await Promise.allSettled(counts)
     let total = 0
+
     for (const r of results) {
       if (r.status === 'fulfilled') {
         total += r.value
@@ -162,9 +182,11 @@ export async function countWorkItems(
         console.warn('countWorkItems partial failure:', r.reason)
       }
     }
+
     return total
   } catch (err) {
     console.warn('countWorkItems failed:', err)
+
     return 0
   } finally {
     release()

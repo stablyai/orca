@@ -6,14 +6,17 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
 
 vi.mock('./SearchableSetting', () => ({ SearchableSetting: ({ children }) => children }))
+
 afterEach(cleanup)
 
 function mount(initial: number | undefined = undefined): ReturnType<typeof vi.fn> {
   const persist = vi.fn()
+
   function Harness(): React.JSX.Element {
     const [settings, setSettings] = useState({
       terminalMinimumContrastRatio: initial
     } as GlobalSettings)
+
     return (
       <TerminalContrastSetting
         settings={settings}
@@ -24,7 +27,9 @@ function mount(initial: number | undefined = undefined): ReturnType<typeof vi.fn
       />
     )
   }
+
   render(<Harness />)
+
   return persist
 }
 

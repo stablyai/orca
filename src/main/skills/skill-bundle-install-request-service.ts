@@ -57,15 +57,19 @@ async function resolveIngress(
       fetcher: dependencies.fetcher
     })
   }
+
   if (request.ingress.kind === 'staged-upload') {
     if (!dependencies.resolveStagedUpload) {
       throw new Error('skill-bundle-staged-upload-unsupported')
     }
+
     return dependencies.resolveStagedUpload(request.ingress.uploadId, request.package)
   }
+
   if (!dependencies.allowTrustedLocalFile || !isAbsolute(request.ingress.path)) {
     throw new Error('skill-install-local-ingress-rejected')
   }
+
   return { archivePath: request.ingress.path, cleanup: async () => undefined }
 }
 
@@ -74,19 +78,24 @@ async function executeParsedSkillBundleInstallRequest(
   dependencies: SkillBundleInstallRequestDependencies
 ): Promise<SkillBundleInstallResult> {
   let ingress: StagedSkillBundle | null = null
+
   try {
     const destination = await resolveSkillInstallDestination(
       request.destination,
       dependencies.authority
     )
+
     ingress = await resolveIngress(request, dependencies)
+
     const detectedProviders = selectedOrDetectedSkillProviders(
       destination.wslDistro
         ? await detectSkillProvidersInWsl(destination.wslDistro)
         : await dependencies.detectProviders(),
       request.providers
     )
+
     const providerRootOverrides = await dependencies.resolveProviderRootOverrides?.(destination)
+
     const filesystem = destination.wslDistro
       ? createWslSkillInstallFilesystem({
           distro: destination.wslDistro,
@@ -95,6 +104,7 @@ async function executeParsedSkillBundleInstallRequest(
           providerRootOverrides
         })
       : undefined
+
     return await installSkillBundle({
       operationId: request.operationId,
       archivePath: ingress.archivePath,
@@ -130,9 +140,11 @@ export async function executeSkillBundleInstallRequest(
 ): Promise<SkillBundleInstallResult> {
   const request = SkillBundleInstallRequestSchema.parse(input)
   const operation = startSkillBundleInstallOperation(request)
+
   try {
     const result = await executeParsedSkillBundleInstallRequest(request, dependencies)
     operation.complete(result)
+
     return result
   } catch (error) {
     operation.fail(error)

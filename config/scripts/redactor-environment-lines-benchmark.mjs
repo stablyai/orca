@@ -6,25 +6,33 @@ import { redactString } from '../../src/main/observability/redactor.ts'
 
 // Supply an unchanged redactor.ts snapshot to measure the actual previous production function.
 const baselinePath = process.argv[2]
+
 if (!baselinePath) {
   throw new Error(
     'Usage: node config/scripts/redactor-environment-lines-benchmark.mjs <baseline-redactor.ts>'
   )
 }
+
 const baselineSource = stripTypeScriptTypes(readFileSync(baselinePath, 'utf8'))
+
 const { redactString: before } = await import(
   `data:text/javascript;base64,${Buffer.from(baselineSource).toString('base64')}`
 )
+
 function median(fn, input, repeats) {
   const samples = []
+
   for (let run = 0; run < repeats; run++) {
     const started = performance.now()
     fn(input)
     samples.push(performance.now() - started)
   }
+
   return samples.sort((a, b) => a - b)[Math.floor(samples.length / 2)]
 }
+
 const rows = []
+
 for (const [shape, input] of [
   ['8KiB blank lines', '\n'.repeat(8192)],
   ['16KiB blank lines', '\n'.repeat(16384)],
@@ -44,4 +52,5 @@ for (const [shape, input] of [
     speedup: beforeMs / afterMs
   })
 }
+
 console.log(JSON.stringify({ node: process.version, platform: process.platform, rows }, null, 2))

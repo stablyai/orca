@@ -22,6 +22,7 @@ export function registerLocalhostWorktreeLabelHandlers(store: Store): void {
       // target to loopback or a host:port that matches a live workspace port —
       // otherwise this IPC is an open proxy / SSRF vector.
       await assertAllowedTarget(store, route.targetUrl)
+
       return localhostWorktreeLabelProxy.registerRoute(route)
     }
   )
@@ -29,12 +30,15 @@ export function registerLocalhostWorktreeLabelHandlers(store: Store): void {
 
 async function assertAllowedTarget(store: Store, targetUrl: string): Promise<void> {
   let parsed: URL
+
   try {
     parsed = new URL(targetUrl)
   } catch {
     throw new Error('Localhost label target is not a valid URL.')
   }
+
   const targetHost = normalizeLocalhostHostname(parsed.hostname)
+
   if (LOOPBACK_LOCALHOST_HOSTS.has(targetHost)) {
     return
   }
@@ -42,28 +46,35 @@ async function assertAllowedTarget(store: Store, targetUrl: string): Promise<voi
   // Why: URL drops the port for protocol defaults (e.g. http://host/ on 80),
   // so compare against the effective port rather than the raw (empty) string.
   const targetPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80')
+
   // Why (#11161): a metadata-skipped scan drops advertisedUrl, which would
   // silently narrow this allowlist on an EDR-hooked host.
   const scan = await scanWorkspacePortProbes(getStoreWorkspacePortProbes(store), {
     requireMetadata: true
   })
+
   const matches = scan.ports.some((port) => {
     if (String(port.port) !== targetPort) {
       return false
     }
+
     if (normalizeLocalhostHostname(port.connectHost) === targetHost) {
       return true
     }
+
     const advertisedUrl = 'advertisedUrl' in port ? port.advertisedUrl : undefined
+
     if (!advertisedUrl) {
       return false
     }
+
     try {
       return normalizeLocalhostHostname(new URL(advertisedUrl).hostname) === targetHost
     } catch {
       return false
     }
   })
+
   if (!matches) {
     throw new Error('Localhost label target is not an allowed workspace port.')
   }
@@ -73,10 +84,12 @@ function parseRegisterArgs(value: unknown): LocalhostWorktreeLabelRoute {
   if (!value || typeof value !== 'object') {
     throw new Error('Invalid localhost label route.')
   }
+
   const candidate = value as Record<string, unknown>
   const targetUrl = readRequiredString(candidate.targetUrl, 'targetUrl')
   const projectName = readRequiredString(candidate.projectName, 'projectName')
   const worktreeName = readRequiredString(candidate.worktreeName, 'worktreeName')
+
   return {
     targetUrl,
     projectName,
@@ -90,6 +103,7 @@ function readRequiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`Invalid localhost label ${field}.`)
   }
+
   return value.trim()
 }
 

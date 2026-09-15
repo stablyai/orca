@@ -34,14 +34,19 @@ export {
 
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
+
   if (diff < 60_000) {
     return 'just now'
   }
+
   const mins = Math.floor(diff / 60_000)
+
   if (mins < 60) {
     return `${mins}m ago`
   }
+
   const hours = Math.floor(mins / 60)
+
   return `${hours}h ago`
 }
 
@@ -56,12 +61,15 @@ export function formatResetCreditExpiry(
   if (!expiresAt) {
     return null
   }
+
   const duration = formatResetDuration(expiresAt - Date.now())
+
   if (duration === 'now') {
     return count > 1
       ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
       : translate('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
   }
+
   return count > 1
     ? translate('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
         value0: duration
@@ -79,24 +87,31 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
+
   if (provider === 'gemini') {
     return <GeminiIcon size={13} />
   }
+
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />
   }
+
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
   }
+
   if (provider === 'antigravity') {
     return <AgentIcon agent="antigravity" size={13} />
   }
+
   if (provider === 'minimax') {
     return <MiniMaxIcon size={13} />
   }
+
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
   }
+
   return <ClaudeIcon size={13} />
 }
 
@@ -114,14 +129,17 @@ function ErrorMessage({
 }): React.JSX.Element {
   const labelClass = inverted ? 'text-background/80' : 'text-foreground/85'
   const detailClass = inverted ? 'text-background/55' : 'text-muted-foreground'
+
   const genericRefreshLabel = translate(
     'auto.components.status.bar.tooltip.e740f92596',
     'Refresh failed'
   )
+
   const staleRefreshLabel = translate(
     'auto.components.status.bar.tooltip.a9a318b7a3',
     'Refresh failed — showing cached data'
   )
+
   const resolvedLabel =
     stale && (!label || label === genericRefreshLabel)
       ? staleRefreshLabel
@@ -144,6 +162,7 @@ export function getWindowSections(
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+
     return [
       ...bucketSections,
       {
@@ -152,6 +171,7 @@ export function getWindowSections(
       }
     ]
   }
+
   const sections: { label: string; window: RateLimitWindow | null }[] = [
     {
       label: translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session'),
@@ -162,18 +182,21 @@ export function getWindowSections(
       window: p.weekly
     }
   ]
+
   if (p.fableWeekly !== undefined && p.fableWeekly !== null) {
     sections.push({
       label: translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable'),
       window: p.fableWeekly
     })
   }
+
   if (p.monthly !== undefined && p.monthly !== null) {
     sections.push({
       label: translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
       window: p.monthly
     })
   }
+
   return sections
 }
 
@@ -192,9 +215,11 @@ export function barColor(usedPct: number): string {
   if (usedPct < 60) {
     return 'bg-muted-foreground/40'
   }
+
   if (usedPct < 80) {
     return 'bg-yellow-500'
   }
+
   return 'bg-red-500'
 }
 
@@ -218,6 +243,7 @@ function ProviderRateLimitWindowSection({
   if (!window) {
     return null
   }
+
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
   const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
@@ -304,10 +330,12 @@ export function ProviderPanel({
   }
 
   const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+
   const resetCreditCount =
     showResetCredits && p.provider === 'codex'
       ? (p.rateLimitResetCredits?.availableCount ?? null)
       : null
+
   const resetCreditExpiry =
     resetCreditCount != null
       ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)

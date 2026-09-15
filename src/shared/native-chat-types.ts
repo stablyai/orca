@@ -14,6 +14,7 @@ export type { AgentType }
 /** Where a message came from. Used for dedup precedence: a transcript message
  *  supersedes a hook message, which supersedes a scrape message. */
 export const NATIVE_CHAT_SOURCES = ['transcript', 'hook', 'scrape'] as const
+
 export type NativeChatSource = (typeof NATIVE_CHAT_SOURCES)[number]
 
 /** Priority rank for a source — higher wins when two sources describe the same
@@ -26,6 +27,7 @@ export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
 }
 
 export const NATIVE_CHAT_ROLES = ['user', 'assistant', 'tool', 'reasoning', 'system'] as const
+
 export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 
 /** Plain prose / markdown. The assistant body, a user prompt, reasoning text. */
@@ -110,6 +112,7 @@ export const NATIVE_CHAT_SUBAGENT_STATES = [
   'stopped',
   'unverifiable'
 ] as const
+
 export type NativeChatSubagentState = (typeof NATIVE_CHAT_SUBAGENT_STATES)[number]
 
 /** One child agent in a spawn group. */
@@ -159,6 +162,7 @@ export type NativeChatMessage = {
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const
+
 export type NativeChatTurnLifecycleState = (typeof NATIVE_CHAT_TURN_LIFECYCLE_STATES)[number]
 
 export const NATIVE_CHAT_INTERRUPTED_STATUS_TEXT = 'Conversation interrupted'
@@ -181,6 +185,7 @@ export const NATIVE_CHAT_SESSION_STATUSES = [
   'empty',
   'error'
 ] as const
+
 export type NativeChatSessionStatus = (typeof NATIVE_CHAT_SESSION_STATUSES)[number]
 
 export type NativeChatSession = {

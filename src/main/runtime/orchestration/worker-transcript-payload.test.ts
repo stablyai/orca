@@ -149,6 +149,7 @@ describe('worker transcript wire bounds', () => {
   it('keeps two roster ids sharing a 512-char prefix distinct', () => {
     // The id is the roster key: a plain prefix clip would merge the two children.
     const head = 'a'.repeat(512)
+
     const result = boundWorkerTranscriptMessages([
       {
         id: 'message-1',
@@ -169,15 +170,18 @@ describe('worker transcript wire bounds', () => {
     ])
 
     const block = result.messages[0]?.blocks[0]
+
     if (block?.type !== 'subagent-group') {
       throw new Error('expected a subagent-group block')
     }
+
     expect(block.agents[0]?.id).not.toBe(block.agents[1]?.id)
     expect(block.agents[0]?.id).toHaveLength(512)
   })
 
   it('keeps fallback identifiers stable without exposing the transcript path', () => {
     const transcriptPath = 'C:\\Users\\worker\\.codex\\session.jsonl'
+
     const message = {
       id: `${transcriptPath}:0000000000000042`,
       turnId: `${transcriptPath}:0000000000000001`,
@@ -205,6 +209,7 @@ describe('worker transcript wire bounds', () => {
 
   it('redacts dispatch capabilities from prose and tool payloads', () => {
     const capability = `dcap_${'A'.repeat(43)}`
+
     const result = boundWorkerTranscriptMessages([
       {
         id: 'message-secret',

@@ -16,6 +16,7 @@ export type WebRuntimeSessionWorkspaceSelectionRollback = {
 
 export function readActiveWorkspaceSelection(): WebRuntimeSessionWorkspaceSelection {
   const state = useAppStore.getState()
+
   return {
     worktreeId: state.activeWorktreeId ?? null,
     executionHostId: state.activeWorkspaceExecutionHostId ?? null
@@ -33,6 +34,7 @@ export function restoreActiveWorkspaceSelection(
   ) {
     return
   }
+
   useAppStore
     .getState()
     .setActiveWorktree(rollback.previous.worktreeId, rollback.previous.executionHostId ?? undefined)
@@ -43,6 +45,7 @@ export function selectWebRuntimeSessionBrowserWorktree(
   environmentId: string
 ): void {
   const state = useAppStore.getState()
+
   if (
     state.activeWorktreeId !== worktreeId ||
     state.activeWorkspaceExecutionHostId !== toRuntimeExecutionHostId(environmentId)

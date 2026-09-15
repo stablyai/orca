@@ -11,6 +11,7 @@ vi.mock('./use-recent-project-ids', () => ({ useRecentProjectIds: () => [] }))
 function Composer({ populated }: { populated: boolean }): React.JSX.Element {
   const [adding, setAdding] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
+
   return (
     <Dialog open>
       <DialogContent aria-describedby={undefined}>
@@ -54,6 +55,7 @@ function Composer({ populated }: { populated: boolean }): React.JSX.Element {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -61,6 +63,7 @@ beforeEach(() => {
   const getStyle = window.getComputedStyle.bind(window)
   vi.spyOn(window, 'getComputedStyle').mockImplementation((element, ...args) => {
     const style = getStyle(element, ...args)
+
     if (element.getAttribute('data-slot') === 'popover-content') {
       return new Proxy(style, {
         get: (target, property) =>
@@ -71,6 +74,7 @@ beforeEach(() => {
             : Reflect.get(target, property)
       })
     }
+
     return style
   })
   container = document.createElement('div')
@@ -116,6 +120,7 @@ describe.each([false, true])(
             )
           }
         })
+
         if (input === 'keyboard') {
           await act(async () => {
             projectField().dispatchEvent(

@@ -24,9 +24,13 @@ export type TabBarAgentProjections = {
 }
 
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: Record<string, AgentStatusEntry> = Object.freeze({})
+
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: Record<string, TerminalLayoutSnapshot> = Object.freeze({})
+
 const EMPTY_TAB_AGENT_TYPES_BY_TAB_ID: Record<string, AgentType> = Object.freeze({})
+
 const EMPTY_UNSAFE_TABS_BY_ID: Record<string, true> = Object.freeze({})
+
 const DISABLED_TAB_BAR_AGENT_PROJECTIONS: TabBarAgentProjections = Object.freeze({
   nativeChatEnabled: false,
   tabAgentTypesByTabId: EMPTY_TAB_AGENT_TYPES_BY_TAB_ID,
@@ -40,10 +44,13 @@ function reuseRecordIfEqual<T>(
   if (!previous) {
     return next
   }
+
   const nextKeys = Object.keys(next)
+
   if (Object.keys(previous).length !== nextKeys.length) {
     return next
   }
+
   return nextKeys.every((key) => previous[key] === next[key]) ? previous : next
 }
 
@@ -54,36 +61,49 @@ function projectTabAgentTypesByTabId(
 ): Record<string, AgentType> {
   const byTabId: Record<string, AgentType> = {}
   const claimed = new Set<string>()
+
   for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
     dependencies?.onAgentTypeLayoutVisited?.(tabId)
+
     if (!layout.root && !layout.activeLeafId) {
       continue
     }
+
     claimed.add(tabId)
     const activeLeafId = resolveNativeChatActiveLayoutLeafId(layout)
+
     if (!activeLeafId) {
       continue
     }
+
     const entry = agentStatusByPaneKey[`${tabId}:${activeLeafId}`]
+
     if (entry?.agentType != null) {
       byTabId[tabId] = entry.agentType
     }
   }
+
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     dependencies?.onStatusEntryVisited?.(paneKey)
     const colon = paneKey.indexOf(':')
+
     if (colon <= 0) {
       continue
     }
+
     const tabId = paneKey.slice(0, colon)
+
     if (claimed.has(tabId)) {
       continue
     }
+
     claimed.add(tabId)
+
     if (entry.agentType != null) {
       byTabId[tabId] = entry.agentType
     }
   }
+
   return byTabId
 }
 
@@ -92,12 +112,15 @@ function projectNativeChatTabWideFallbackUnsafeTabsById(
   dependencies?: TabBarAgentProjectionSelectorDependencies
 ): Record<string, true> {
   const unsafeTabs: Record<string, true> = {}
+
   for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
     dependencies?.onUnsafeLayoutVisited?.(tabId)
+
     if (!isNativeChatTabWideFallbackSafe(layout)) {
       unsafeTabs[tabId] = true
     }
   }
+
   return unsafeTabs
 }
 
@@ -151,11 +174,13 @@ export function createTabBarAgentProjectionSelector(
         cachedUnsafeTabsById = EMPTY_UNSAFE_TABS_BY_ID
         cachedEnabledResult = null
       }
+
       return DISABLED_TAB_BAR_AGENT_PROJECTIONS
     }
 
     const statuses = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
     const layouts = state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
+
     if (statuses !== cachedAgentStatusByPaneKey || layouts !== cachedAgentTypeLayoutsByTabId) {
       cachedAgentTypesByTabId = reuseRecordIfEqual(
         cachedAgentTypesByTabId,
@@ -164,6 +189,7 @@ export function createTabBarAgentProjectionSelector(
       cachedAgentStatusByPaneKey = statuses
       cachedAgentTypeLayoutsByTabId = layouts
     }
+
     if (layouts !== cachedUnsafeLayoutsByTabId) {
       cachedUnsafeTabsById = reuseRecordIfEqual(
         cachedUnsafeTabsById,
@@ -171,17 +197,20 @@ export function createTabBarAgentProjectionSelector(
       )
       cachedUnsafeLayoutsByTabId = layouts
     }
+
     if (
       cachedEnabledResult?.tabAgentTypesByTabId === cachedAgentTypesByTabId &&
       cachedEnabledResult.nativeChatTabWideFallbackUnsafeTabsById === cachedUnsafeTabsById
     ) {
       return cachedEnabledResult
     }
+
     cachedEnabledResult = {
       nativeChatEnabled: true,
       tabAgentTypesByTabId: cachedAgentTypesByTabId,
       nativeChatTabWideFallbackUnsafeTabsById: cachedUnsafeTabsById
     }
+
     return cachedEnabledResult
   }
 }

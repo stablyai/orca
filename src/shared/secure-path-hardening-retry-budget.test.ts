@@ -11,7 +11,9 @@ import {
 } from './secure-path-hardening-report'
 
 const PATH = 'C:\\Users\\me\\.orca\\secret.json'
+
 const OTHER = 'C:\\Users\\me\\.orca\\other.json'
+
 const MINUTE = 60_000
 
 describe('secure path hardening retry budget', () => {
@@ -44,14 +46,17 @@ describe('secure path hardening retry budget', () => {
   function pollUntil(elapsedMs: number, stepMs: number, restricted = false): number[] {
     const attemptedAt: number[] = []
     const startedAt = clock
+
     while (clock - startedAt <= elapsedMs) {
       if (mayAttemptHardening(PATH)) {
         attemptedAt.push(clock - startedAt)
         recordHardeningOutcome(PATH, restricted)
       }
+
       clock += stepMs
       wallClock += stepMs
     }
+
     return attemptedAt
   }
 
@@ -84,9 +89,11 @@ describe('secure path hardening retry budget', () => {
 
     // 0, +1, +2, +4, +8, +16, then every 30 minutes forever.
     expect(attemptedAt.slice(0, 6).map((ms) => ms / MINUTE)).toEqual([0, 1, 3, 7, 15, 31])
+
     const trailingGaps = attemptedAt
       .slice(-4)
       .map((ms, index, all) => (all[index + 1]! - ms) / MINUTE)
+
     expect(trailingGaps.slice(0, -1)).toEqual([30, 30, 30])
   })
 

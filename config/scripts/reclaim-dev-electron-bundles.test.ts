@@ -20,13 +20,16 @@ afterEach(() => {
 function makeWorktree(bundles: { name: string; marker: boolean }[]): string {
   const worktree = mkdtempSync(path.join(tmpdir(), 'orca-dev-bundles-'))
   roots.push(worktree)
+
   for (const bundle of bundles) {
     const dir = path.join(worktree, 'out', 'electron-dev', bundle.name)
     mkdirSync(dir, { recursive: true })
+
     if (bundle.marker) {
       writeFileSync(path.join(dir, DEV_BUNDLE_MARKER_FILENAME), '{}')
     }
   }
+
   return worktree
 }
 
@@ -36,6 +39,7 @@ describe('collectDevBundles', () => {
       { name: 'aaaa', marker: true },
       { name: 'bbbb', marker: false }
     ])
+
     const bundles = collectDevBundles(worktree).sort((a, b) => a.dir.localeCompare(b.dir))
     expect(bundles).toHaveLength(2)
     expect(bundles[0].hasMarker).toBe(true)
@@ -56,8 +60,10 @@ describe('sweeping across worktrees', () => {
       { name: 'live', marker: true },
       { name: 'idle', marker: true }
     ])
+
     const bundles = collectDevBundles(worktree)
     const live = bundles.find((bundle) => bundle.dir.endsWith('live'))!
+
     // Why currentDir is null here: unlike the dev runner, the sweep is not about to launch
     // anything, so only a live process or an in-flight build may protect a bundle.
     const stale = selectStaleDevBundleDirs({
@@ -66,17 +72,20 @@ describe('sweeping across worktrees', () => {
       processTable: `/usr/bin/foo ${live.dir}/Orca.app/Contents/MacOS/Electron`,
       nowMs: Date.now()
     })
+
     expect(stale).toEqual([bundles.find((bundle) => bundle.dir.endsWith('idle'))!.dir])
   })
 
   it('spares a build still in flight, which has no marker yet', () => {
     const worktree = makeWorktree([{ name: 'building', marker: false }])
+
     const stale = selectStaleDevBundleDirs({
       bundles: collectDevBundles(worktree),
       currentDir: null,
       processTable: '',
       nowMs: Date.now()
     })
+
     expect(stale).toEqual([])
   })
 })

@@ -16,6 +16,7 @@ export function createMobileE2EEV2Fixture(): {
     transport: 'relay' as const,
     relayHostId: 'AbCdEf0123_-xyZ9'
   }
+
   return {
     hello: {
       type: 'e2ee_hello',

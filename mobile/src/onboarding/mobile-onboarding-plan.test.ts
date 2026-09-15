@@ -10,6 +10,7 @@ import {
 vi.mock('../notifications/notification-opt-in-gate', () => ({
   shouldPresentNotificationOptIn: vi.fn()
 }))
+
 vi.mock('../session/session-view-opt-in-gate', () => ({
   shouldPresentSessionViewOptIn: vi.fn()
 }))

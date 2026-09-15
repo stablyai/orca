@@ -21,6 +21,7 @@ export async function writePluginFileAtomically(
 ): Promise<void> {
   // Unique temp name so concurrent writers in one plugins dir cannot collide.
   const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`
+
   try {
     await writeFile(temporary, contents, { encoding: 'utf8', mode: options?.mode })
     await renamePluginFileWithWindowsRetry(temporary, target)
@@ -36,10 +37,12 @@ export async function renamePluginFileWithWindowsRetry(
   for (let attempt = 0; ; attempt += 1) {
     try {
       await rename(source, target)
+
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       const retryable = code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'
+
       if (
         process.platform !== 'win32' ||
         !retryable ||
@@ -47,6 +50,7 @@ export async function renamePluginFileWithWindowsRetry(
       ) {
         throw error
       }
+
       await new Promise<void>((resolve) =>
         setTimeout(resolve, WINDOWS_RENAME_RETRY_DELAYS_MS[attempt])
       )

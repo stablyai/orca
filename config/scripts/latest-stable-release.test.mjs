@@ -66,6 +66,7 @@ describe('fetchReleases', () => {
       tag_name: `v1.0.${index}`,
       draft: false
     }))
+
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(firstPage))

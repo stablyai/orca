@@ -97,6 +97,7 @@ function launchLegacyCloseClient(options: {
     })}\n`
   )
   let output = ''
+
   const child = fork(runtime.legacyCloseClientEntryPath, ['--config', configPath], {
     cwd: runtime.userDataDir,
     execPath: runtime.electronPath,
@@ -109,33 +110,41 @@ function launchLegacyCloseClient(options: {
     },
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   })
+
   child.stderr?.on('data', (chunk: Buffer) => {
     output = `${output}${chunk.toString('utf8')}`.slice(-32_768)
   })
+
   const ready = new Promise<LegacyCloseReport>((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`Legacy close client timed out: ${output}`)),
       60_000
     )
+
     const settle = (callback: () => void): void => {
       clearTimeout(timer)
       child.off('message', onMessage)
       child.off('exit', onExit)
       callback()
     }
+
     const onExit = (code: number | null): void =>
       settle(() => reject(new Error(`Legacy close client exited with ${code}: ${output}`)))
+
     const onMessage = (message: unknown): void => {
       const payload = message as LegacyCloseReport & { type?: string; message?: string }
+
       if (payload.type === 'error') {
         settle(() => reject(new Error(payload.message ?? 'Legacy close client failed')))
       } else if (payload.type === 'legacy-close-complete') {
         settle(() => resolve(payload))
       }
     }
+
     child.on('message', onMessage)
     child.once('exit', onExit)
   })
+
   return {
     child,
     ready,
@@ -144,15 +153,19 @@ function launchLegacyCloseClient(options: {
         const disconnected: NodeJS.ErrnoException = new Error(
           'Legacy close client IPC channel disconnected before finish handshake'
         )
+
         disconnected.code = 'ERR_IPC_CHANNEL_CLOSED'
         throw disconnected
       }
+
       await new Promise<void>((resolve, reject) => {
         child.send({ type: 'finish' }, (error) => {
           if (error) {
             reject(error)
+
             return
           }
+
           resolve()
         })
       })
@@ -168,14 +181,18 @@ async function terminateLegacyCloseClient(
   if (legacyCloseClientExited(client)) {
     return 'already-exited'
   }
+
   if (identity) {
     // Why: tree capture fails once the recorded root exits on its own, which is a normal exit.
     const tree = await recordProcessTree(identity).catch(() => null)
+
     if (!tree) {
       return 'already-exited'
     }
+
     return (await terminateRecordedTree(tree)) ? 'termination-attempted' : 'already-exited'
   }
+
   // Why: identity capture can race with teardown; the direct child handle is the last cleanup path.
   const signalled = client.child.kill('SIGKILL')
   await waitForCondition(
@@ -183,6 +200,7 @@ async function terminateLegacyCloseClient(
     () => legacyCloseClientExited(client),
     5_000
   )
+
   return signalled ? 'termination-attempted' : 'already-exited'
 }
 
@@ -192,6 +210,7 @@ function legacyCloseClientExited(client: ReturnType<typeof launchLegacyCloseClie
 
 function isIpcClosureError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null | undefined)?.code
+
   return code === 'ERR_IPC_CHANNEL_CLOSED' || code === 'ERR_IPC_DISCONNECTED'
 }
 
@@ -201,16 +220,20 @@ async function finishLegacyCloseClient(
   if (!client.child.pid || legacyCloseClientExited(client)) {
     return
   }
+
   const identity = await recordProcessIdentity(client.child.pid).catch(() => null)
   let finishError: unknown
   let finishFailed = false
+
   try {
     await client.finish()
   } catch (error) {
     finishError = error
     finishFailed = true
   }
+
   let forcedCleanup = false
+
   try {
     await waitForCondition('legacy close client exit', () => legacyCloseClientExited(client), 2_000)
   } catch {
@@ -225,9 +248,11 @@ async function finishLegacyCloseClient(
           'Legacy close client finish handshake and forced cleanup both failed'
         )
       }
+
       throw cleanupError
     }
   }
+
   // Why: a normal client exit can close the IPC channel before the finish ack lands.
   if (finishFailed && (forcedCleanup || !isIpcClosureError(finishError))) {
     throw finishError
@@ -256,6 +281,7 @@ function writeReconstruction(options: {
     after,
     postClosePing
   } = options
+
   writeFileSync(
     testInfo.outputPath('legacy-viewer-close-reconstruction.json'),
     `${JSON.stringify(
@@ -344,6 +370,7 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
         label: `legacy-close-v${protocolVersion}`,
         protocolVersion
       })
+
       generations.push(generation)
       canaries.push(
         await spawnGenerationCanary({
@@ -354,6 +381,7 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
         })
       )
     }
+
     for (const generation of generations) {
       canaries.push(
         await spawnGenerationCanary({
@@ -364,6 +392,7 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
         })
       )
     }
+
     canaries.push(
       await spawnGenerationCanary({
         runtime,
@@ -377,14 +406,18 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
     const controlCanary = canaries[4]!
     const capableSessionIds = new Set(capableCanaries.map((canary) => canary.sessionId))
     const legacySessionIds = new Set(legacyCanaries.map((canary) => canary.sessionId))
+
     const identities = canaries.flatMap((canary) => [
       canary.rootIdentity,
       canary.descendantIdentity
     ])
+
     const beforeMap = await processIdentityLiveness(identities)
+
     const before = Object.fromEntries(
       identities.map(({ pid }) => [pid, beforeMap.get(pid) === true])
     )
+
     expect(Object.values(before).every(Boolean)).toBe(true)
 
     client = launchLegacyCloseClient({
@@ -444,6 +477,7 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
     expect(
       report.observerAfterCapable.every((response, index) => {
         const result = response.result as { tabs?: { ptyId?: string | null }[] } | undefined
+
         return (
           result?.tabs?.some(
             (tab) => tab.ptyId === [...capableCanaries, ...legacyCanaries][index]!.sessionId
@@ -455,6 +489,7 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
     expect(
       report.capableResponses.every((response) => {
         const result = response.result as Record<string, unknown> | undefined
+
         return (
           response.ok === true &&
           result?.refused === true &&
@@ -467,24 +502,28 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
     expect(
       report.legacyResponses.every((response) => {
         const result = response.result as Record<string, unknown> | undefined
+
         return response.ok === true && result?.refused !== true
       })
     ).toBe(true)
     expect(report.calls.map((call) => call.sessionId)).toEqual(
       legacyCanaries.map((canary) => canary.sessionId)
     )
+
     for (const canary of capableCanaries) {
       expect(after[canary.rootIdentity.pid]).toBe(true)
       expect(after[canary.descendantIdentity.pid]).toBe(true)
       expect(report.postClosePing[canary.sessionId]).toBe(true)
       expect(killEvents(canary.generation, canary.sessionId)).toHaveLength(0)
     }
+
     for (const canary of legacyCanaries) {
       expect(after[canary.rootIdentity.pid]).toBe(false)
       expect(after[canary.descendantIdentity.pid]).toBe(false)
       expect(report.postClosePing[canary.sessionId]).toBe(false)
       expect(killEvents(canary.generation, canary.sessionId)).toHaveLength(1)
     }
+
     expect(after[controlCanary.rootIdentity.pid]).toBe(true)
     expect(after[controlCanary.descendantIdentity.pid]).toBe(true)
     expect(killEvents(controlCanary.generation, controlCanary.sessionId)).toHaveLength(0)
@@ -493,9 +532,11 @@ test('close-intent negotiation preserves legacy behavior while protecting capabl
     if (client) {
       await finishLegacyCloseClient(client)
     }
+
     if (!assertionsComplete) {
       runtime.retainDiagnostics(generations)
     }
+
     await cleanupDaemonGenerationFixtures({ generations, canaries })
     runtime.remove()
   }

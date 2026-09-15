@@ -20,9 +20,13 @@ type TerminalImeLinuxPhysicalKeyTracker = {
 }
 
 const CANDIDATE_DIGIT_WINDOW_MS = 1500
+
 const ASCII_LOWERCASE_LETTER = /^[a-z]$/
+
 const ASCII_DIGIT = /^[0-9]$/
+
 const PHYSICAL_ASCII_LETTER_CODE = /^Key[A-Z]$/
+
 const physicalKeyTrackers = new WeakMap<
   EventTarget,
   TerminalImeLinuxPhysicalKeyTracker & { users: number }
@@ -34,9 +38,12 @@ function acquirePhysicalKeyTracker(
   if (!eventTarget) {
     return { pressedCodes: new Set(), dispose: () => undefined }
   }
+
   const existing = physicalKeyTrackers.get(eventTarget)
+
   if (existing) {
     existing.users += 1
+
     return {
       pressedCodes: existing.pressedCodes,
       dispose: () => releasePhysicalKeyTracker(eventTarget, existing)
@@ -44,23 +51,28 @@ function acquirePhysicalKeyTracker(
   }
 
   const pressedCodes = new Set<string>()
+
   const observeKeyboardEvent = (event: Event): void => {
     const code = (event as Event & { code?: string }).code
+
     if (!code || !PHYSICAL_ASCII_LETTER_CODE.test(code)) {
       return
     }
+
     if (event.type === 'keydown') {
       pressedCodes.add(code)
     } else {
       pressedCodes.delete(code)
     }
   }
+
   const reset = (): void => pressedCodes.clear()
   // Why: bubble-phase keyup cleanup runs after xterm's target handler, so the
   // pane can still classify that release against the shared pressed-key set.
   eventTarget.addEventListener('keydown', observeKeyboardEvent)
   eventTarget.addEventListener('keyup', observeKeyboardEvent)
   eventTarget.addEventListener('blur', reset)
+
   const tracker = {
     pressedCodes,
     users: 1,
@@ -68,7 +80,9 @@ function acquirePhysicalKeyTracker(
     observeKeyboardEvent,
     reset
   }
+
   physicalKeyTrackers.set(eventTarget, tracker)
+
   return tracker
 }
 
@@ -81,14 +95,17 @@ function releasePhysicalKeyTracker(
   }
 ): void {
   tracker.users -= 1
+
   if (tracker.users > 0) {
     return
   }
+
   if (tracker.observeKeyboardEvent && tracker.reset) {
     eventTarget.removeEventListener('keydown', tracker.observeKeyboardEvent)
     eventTarget.removeEventListener('keyup', tracker.observeKeyboardEvent)
     eventTarget.removeEventListener('blur', tracker.reset)
   }
+
   tracker.pressedCodes.clear()
   physicalKeyTrackers.delete(eventTarget)
 }
@@ -137,6 +154,7 @@ export function createTerminalImeLinuxCandidateState(
     /** Classifies the current event before state is advanced for it. */
     classifyKeyboardEvent: (event) => {
       const at = now()
+
       return {
         candidateDigitGuardActive:
           event.type === 'keydown' && isPlainAsciiDigitKey(event) && candidateDigitUntil > at
@@ -145,8 +163,10 @@ export function createTerminalImeLinuxCandidateState(
     /** Records the current event after its classification is consumed. */
     observeKeyboardEvent: (event, classification) => {
       const at = now()
+
       if (classification.candidateDigitGuardActive) {
         candidateDigitUntil = 0
+
         return
       }
 
@@ -158,10 +178,13 @@ export function createTerminalImeLinuxCandidateState(
         if (!isPlainAsciiDigitKey(event)) {
           candidateDigitUntil = 0
         }
+
         const physicalCode = event.code
+
         if (physicalCode && PHYSICAL_ASCII_LETTER_CODE.test(physicalCode)) {
           pendingPlainLetterKeydownsByCode.add(physicalCode)
         }
+
         return
       }
 
@@ -169,6 +192,7 @@ export function createTerminalImeLinuxCandidateState(
         const matchingPlainLetterKeydown = event.code
           ? pendingPlainLetterKeydownsByCode.delete(event.code)
           : false
+
         if (isPlainAsciiLetterKey(event) && event.code) {
           if (!matchingPlainLetterKeydown) {
             // Why: some legacy Linux IME paths commit a single-letter preedit
@@ -193,6 +217,7 @@ export function installTerminalImeLinuxCandidateState(
   const physicalKeyTracker = acquirePhysicalKeyTracker(rendererKeyboardEventTarget)
   const state = createTerminalImeLinuxCandidateState(now, physicalKeyTracker.pressedCodes)
   terminalElement?.addEventListener('blur', state.resetCandidateGuard, true)
+
   return {
     ...state,
     dispose: () => {

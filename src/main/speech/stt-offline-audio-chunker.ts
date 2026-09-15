@@ -10,6 +10,7 @@ export const OFFLINE_DECODE_CHUNK_SECONDS = 30
 // window must be pause-sized (~100ms): shorter windows match momentary
 // quiet inside a word (e.g. plosive closures) and cut mid-word.
 const SPLIT_SEARCH_SECONDS = 5
+
 const SPLIT_ENERGY_WINDOW_SECONDS = 0.1
 
 export class OfflineAudioChunker {
@@ -30,10 +31,12 @@ export class OfflineAudioChunker {
     if (samples.length === 0) {
       return []
     }
+
     this.buffered.push(samples)
     this.bufferedSamples += samples.length
 
     const ready: Float32Array[] = []
+
     while (this.bufferedSamples >= this.chunkSampleLimit) {
       const combined = this.combineBuffered()
       const splitIndex = this.findQuietSplitIndex(combined)
@@ -42,6 +45,7 @@ export class OfflineAudioChunker {
       this.buffered = tail.length > 0 ? [tail] : []
       this.bufferedSamples = tail.length
     }
+
     return ready
   }
 
@@ -50,9 +54,11 @@ export class OfflineAudioChunker {
     if (this.bufferedSamples === 0) {
       return null
     }
+
     const combined = this.combineBuffered()
     this.buffered = []
     this.bufferedSamples = 0
+
     return combined
   }
 
@@ -60,12 +66,15 @@ export class OfflineAudioChunker {
     if (this.buffered.length === 1) {
       return this.buffered[0]
     }
+
     const combined = new Float32Array(this.bufferedSamples)
     let offset = 0
+
     for (const chunk of this.buffered) {
       combined.set(chunk, offset)
       offset += chunk.length
     }
+
     return combined
   }
 
@@ -76,16 +85,20 @@ export class OfflineAudioChunker {
     const hop = Math.max(1, Math.floor(window / 2))
     let bestIndex = limit
     let bestEnergy = Infinity
+
     for (let start = searchStart; start + window <= limit; start += hop) {
       let energy = 0
+
       for (let i = start; i < start + window; i += 1) {
         energy += samples[i] * samples[i]
       }
+
       if (energy < bestEnergy) {
         bestEnergy = energy
         bestIndex = start + Math.floor(window / 2)
       }
     }
+
     // Why: the split must consume at least one sample or push() would loop forever.
     return Math.max(1, bestIndex)
   }

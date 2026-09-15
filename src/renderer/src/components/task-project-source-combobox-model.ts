@@ -25,14 +25,17 @@ export function getSelectedTaskProjectSource(
 
 export function hasMultipleTaskProjectHosts(groups: readonly TaskProjectPickerGroup[]): boolean {
   const hostIds = new Set<string>()
+
   for (const group of groups) {
     for (const source of group.sources) {
       hostIds.add(getRepoExecutionHostId(source))
+
       if (hostIds.size > 1) {
         return true
       }
     }
   }
+
   return false
 }
 

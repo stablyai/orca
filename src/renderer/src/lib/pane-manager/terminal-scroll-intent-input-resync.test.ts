@@ -28,6 +28,7 @@ function createTerminal(viewportY: number, baseY: number) {
       | { coreService: { onUserInput: (listener: () => void) => { dispose: () => void } } }
       | undefined
   }
+
   return terminal
 }
 
@@ -44,10 +45,12 @@ class TestElement extends EventTarget {
   closest(selector: string): TestElement | null {
     for (const candidate of selector.split(',')) {
       const trimmed = candidate.trim()
+
       if (trimmed.startsWith('.') && this.classList.contains(trimmed.slice(1))) {
         return this
       }
     }
+
     return this.parentElement?.closest(selector) ?? null
   }
 }
@@ -58,16 +61,20 @@ function createTerminalWithInputCapture(viewportY: number, baseY: number) {
   const terminal = createTerminal(viewportY, baseY)
   terminal.onData = (listener: (data: string) => void) => {
     capturedInput.listener = listener
+
     return { dispose: vi.fn() }
   }
+
   terminal._core = {
     coreService: {
       onUserInput: (listener: () => void) => {
         capturedUserInput.listener = listener
+
         return { dispose: vi.fn() }
       }
     }
   }
+
   return { terminal, capturedInput, capturedUserInput }
 }
 

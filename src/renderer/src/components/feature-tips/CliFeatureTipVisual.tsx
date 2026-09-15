@@ -17,6 +17,7 @@ const CLI_AGENT_COMMANDS = [
 export function CliFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const [animatedVisibleCommandCount, setAnimatedVisibleCommandCount] = useState(0)
+
   // Why: reduced-motion users should see the static completed state without a
   // post-render state repair; only the animated path needs timer-backed state.
   const visibleCommandCount = reducedMotion
@@ -30,6 +31,7 @@ export function CliFeatureTipVisual(): JSX.Element {
 
     let cancelled = false
     const timeouts: number[] = []
+
     const later = (fn: () => void, ms: number): void => {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
     }
@@ -45,6 +47,7 @@ export function CliFeatureTipVisual(): JSX.Element {
     }
 
     runOnce()
+
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
@@ -73,6 +76,7 @@ export function CliFeatureTipVisual(): JSX.Element {
           {CLI_AGENT_COMMANDS.map((command, index) => {
             const isVisible = index < visibleCommandCount
             const isCurrentLine = isVisible && index === visibleCommandCount - 1
+
             return (
               <div
                 key={command}

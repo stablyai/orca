@@ -24,6 +24,7 @@ export function adjustDirectSshAuthorityUnsettled(
   delta: number
 ): void {
   const next = (unsettledByAuthority.get(authorityId) ?? 0) + delta
+
   if (next > 0) {
     unsettledByAuthority.set(authorityId, next)
   } else {
@@ -79,11 +80,13 @@ export function directSshWorktreeRefreshSchedulerSnapshot(
   let queued = 0
   let retrying = 0
   let waiters = 0
+
   for (const task of tasks.values()) {
     queued += task.state === 'queued' ? 1 : 0
     retrying += task.state === 'retrying' ? 1 : 0
     waiters += task.waiters.size
   }
+
   return {
     locallyUnsettled,
     queued,

@@ -29,14 +29,19 @@ export function selectActiveTerminalChromeState(
   const tabs = state.activeWorktreeId
     ? (state.tabsByWorktree[state.activeWorktreeId] ?? EMPTY_TABS)
     : EMPTY_TABS
+
   const effectiveActiveTabId = state.activeTabId ?? tabs[0]?.id ?? null
+
   const activeTabCanExpand = effectiveActiveTabId
     ? (state.canExpandPaneByTabId[effectiveActiveTabId] ?? false)
     : false
+
   const effectiveActiveTabExpanded = effectiveActiveTabId
     ? (state.expandedPaneByTabId[effectiveActiveTabId] ?? false)
     : false
+
   const cached = activeTerminalChromeCache
+
   if (
     cached &&
     cached.activeWorktreeId === state.activeWorktreeId &&
@@ -57,7 +62,9 @@ export function selectActiveTerminalChromeState(
     activeTabCanExpand,
     effectiveActiveTabExpanded
   }
+
   activeTerminalChromeCache = selected
+
   return selected
 }
 

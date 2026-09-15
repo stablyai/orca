@@ -12,6 +12,7 @@ export function areRemoteViewportSizesNear(
   if (!a || !b) {
     return false
   }
+
   return Math.abs(a.width - b.width) <= 3 && Math.abs(a.height - b.height) <= 3
 }
 
@@ -66,9 +67,11 @@ export class RemoteBrowserOperationTokens {
 
   createOperationToken(remotePageId: string | null = null): RemoteBrowserOperationToken | null {
     const environmentId = this.identity.getEnvironmentId()
+
     if (!environmentId) {
       return null
     }
+
     return {
       tabId: this.identity.getTabId(),
       environmentId,
@@ -95,6 +98,7 @@ export class RemoteBrowserOperationTokens {
 
   isCurrentStreamToken(token: RemoteBrowserStreamToken): boolean {
     const active = this.activeStreamToken
+
     return (
       active?.generation === token.generation &&
       active.operationGeneration === token.operationGeneration &&
@@ -126,8 +130,10 @@ export class RemoteBrowserOperationTokens {
       generation: this.streamGeneration + 1,
       operationGeneration: operationToken.generation
     }
+
     this.streamGeneration = token.generation
     this.activeStreamToken = token
+
     return token
   }
 

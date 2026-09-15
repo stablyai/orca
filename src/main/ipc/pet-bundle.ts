@@ -89,11 +89,13 @@ export function readWebpDimensionsFromBuffer(
   }
 
   let offset = 12
+
   while (offset + 8 <= buffer.byteLength) {
     const chunkType = buffer.toString('ascii', offset, offset + 4)
     const chunkSize = buffer.readUInt32LE(offset + 4)
     const dataOffset = offset + 8
     const dataEnd = dataOffset + chunkSize
+
     if (dataEnd > buffer.byteLength) {
       return null
     }
@@ -110,6 +112,7 @@ export function readWebpDimensionsFromBuffer(
       const b1 = buffer[dataOffset + 2]
       const b2 = buffer[dataOffset + 3]
       const b3 = buffer[dataOffset + 4]
+
       return {
         width: 1 + (((b1 & 0x3f) << 8) | b0),
         height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6))
@@ -125,6 +128,7 @@ export function readWebpDimensionsFromBuffer(
     ) {
       const width = buffer.readUInt16LE(dataOffset + 6) & 0x3fff
       const height = buffer.readUInt16LE(dataOffset + 8) & 0x3fff
+
       return width > 0 && height > 0 ? { width, height } : null
     }
 

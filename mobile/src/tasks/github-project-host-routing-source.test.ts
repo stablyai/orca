@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const readSource = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
+
 const source = [
   readSource('./use-mobile-tasks-project-loading-actions.tsx'),
   readSource('./use-mobile-tasks-project-workspace-comment-actions.tsx'),
@@ -17,6 +18,7 @@ describe('mobile GitHub Project host routing boundary', () => {
   it('host-qualifies every Project RPC request', () => {
     const calls = [...source.matchAll(/['"](github\.project\.[^'"]+)['"]/g)]
     expect(calls.length).toBeGreaterThan(10)
+
     for (const call of calls) {
       const request = source.slice(call.index, call.index + 700)
       expect(request, `${call[1]} must carry a host`).toMatch(/\bhost\s*:/)
@@ -25,6 +27,7 @@ describe('mobile GitHub Project host routing boundary', () => {
 
   it('pins Project-row PR actions to the row repository identity', () => {
     const actions = source.slice(source.indexOf('const toggleProjectGitHubReviewThread'))
+
     for (const method of [
       'github.resolveReviewThread',
       'github.addPRReviewCommentReply',

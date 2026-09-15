@@ -21,13 +21,16 @@ function mergeFetchedProjectGroupsForHost(
   hostId: string
 ): readonly ProjectGroup[] {
   const fetchedIdentities = new Set(fetched.map(getProjectGroupHostIdentity))
+
   const preserved = previous.filter((group) => {
     const existingHostId = getProjectGroupHostId(group)
+
     return (
       !catalogOwnsHost(hostId, existingHostId) ||
       fetchedIdentities.has(getProjectGroupHostIdentity(group))
     )
   })
+
   return unchangedMergeSource(
     previous,
     preserved,
@@ -47,6 +50,7 @@ export async function fetchProjectGroupCatalogForTarget(
             reuseRecentCompatibilityFailure: true
           })
         ).groups
+
   return {
     projectGroups: fetchedGroups.map((group) => projectGroupWithFetchedOwner(group, target)),
     hostId: getRuntimeTargetHostId(target)

@@ -22,9 +22,11 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
     collapseAllDirs: (worktreeId) =>
       set((s) => {
         const current = s.expandedDirs[worktreeId]
+
         if (!current?.size) {
           return s
         }
+
         return {
           expandedDirs: {
             ...s.expandedDirs,
@@ -35,26 +37,32 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
     collapseDirSubtree: (worktreeId, dirPath) =>
       set((s) => {
         const current = s.expandedDirs[worktreeId]
+
         if (!current?.size) {
           return s
         }
+
         const next = new Set(
           Array.from(current).filter((expandedDir) => !isPathInsideOrEqual(dirPath, expandedDir))
         )
+
         if (next.size === current.size) {
           return s
         }
+
         return { expandedDirs: { ...s.expandedDirs, [worktreeId]: next } }
       }),
     toggleDir: (worktreeId, dirPath) =>
       set((s) => {
         const current = s.expandedDirs[worktreeId] ?? new Set<string>()
         const next = new Set(current)
+
         if (next.has(dirPath)) {
           next.delete(dirPath)
         } else {
           next.add(dirPath)
         }
+
         return { expandedDirs: { ...s.expandedDirs, [worktreeId]: next } }
       }),
     pendingExplorerReveal: null,

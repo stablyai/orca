@@ -45,5 +45,6 @@ export function findBrowserClientPageByWebContentsId(
       return page
     }
   }
+
   return undefined
 }

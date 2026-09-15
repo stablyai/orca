@@ -22,13 +22,17 @@ export function NativeChatImageAttachmentPreview({
   const thumbnailRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const element = thumbnailRef.current
+
     if (!element) {
       return
     }
+
     if (typeof IntersectionObserver === 'undefined') {
       setIsNearViewport(true)
+
       return
     }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
@@ -38,26 +42,33 @@ export function NativeChatImageAttachmentPreview({
       },
       { rootMargin: '128px' }
     )
+
     observer.observe(element)
+
     return () => observer.disconnect()
   }, [])
   const isPending = attachment.pending === true
+
   const localSrc = useLocalImageSrc(
     !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
     attachment.path,
     attachment.connectionId
   )
+
   // The clipboard thumbnail is already in this process, so it renders with no
   // round-trip; the on-disk file only wins for the full-size dialog.
   const thumbnailSrc = attachment.previewUrl ?? localSrc
   const fullSizeSrc = localSrc ?? attachment.previewUrl
+
   const filename = isNativeChatPastedImagePath(attachment.path)
     ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
     : basename(attachment.path)
+
   const pendingLabel = translate(
     'components.native-chat.composer.imageSaving',
     'Saving pasted image…'
   )
+
   const label = isPending ? pendingLabel : filename
 
   return (

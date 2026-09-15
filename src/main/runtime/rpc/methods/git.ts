@@ -52,6 +52,7 @@ export const GIT_METHODS = [
               admissionTier: params.admissionTier ?? 'status',
               ...(signal ? { signal } : {})
             }
+
       return options === undefined
         ? runtime.getRuntimeGitStatus(params.worktree, { admissionTier: 'status' })
         : runtime.getRuntimeGitStatus(params.worktree, options)

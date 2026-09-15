@@ -88,6 +88,7 @@ export function resolveGroupAddress(
   // @worktree:<id> — all handles in a specific worktree
   if (group.startsWith('@worktree:')) {
     const worktreeId = to.slice('@worktree:'.length)
+
     return terminals
       .filter((t) => t.handle !== senderHandle && t.worktreeId === worktreeId)
       .map((t) => t.handle)
@@ -97,12 +98,14 @@ export function resolveGroupAddress(
   // published for each pane, so the sender can address every instance of an agent without
   // knowing their handles — and without a task title being able to redirect the message.
   const agentName = group.slice(1) // remove @
+
   if ((AGENT_NAME_GROUPS as readonly string[]).includes(agentName)) {
     return terminals
       .filter((t) => {
         if (t.handle === senderHandle) {
           return false
         }
+
         return terminalIsAgent(t, agentName as AgentNameGroup)
       })
       .map((t) => t.handle)

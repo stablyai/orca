@@ -10,6 +10,7 @@ import { formatNativeChatDuration } from '../../../../shared/native-chat-turn-st
 import { translate } from '@/i18n/i18n'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
+
 type RunState = AgentSessionBackgroundTaskRunState
 
 export type BackgroundRosterTask = {
@@ -29,9 +30,11 @@ const PLACEHOLDER_NAMES = new Set(['unknown', 'untitled', 'task', 'subagent'])
 
 function usableTaskText(value: string | undefined): string | null {
   const trimmed = value?.trim()
+
   if (!trimmed || PLACEHOLDER_NAMES.has(trimmed.toLowerCase())) {
     return null
   }
+
   return trimmed
 }
 
@@ -64,9 +67,11 @@ function effectiveState(task: AgentSessionBackgroundTask, settled: boolean): Run
   if (task.state) {
     return task.state
   }
+
   if (settled) {
     return 'done'
   }
+
   return task.kind === 'monitor' ? 'monitoring' : 'working'
 }
 
@@ -78,6 +83,7 @@ export function buildBackgroundTaskGroups(
 ): BackgroundTaskGroup[] {
   // Older hosts can retain a previous turn beside its resumed live task.
   const owners = new Map<string, BackgroundRosterTask>()
+
   for (const [roster, settled] of [
     [settledTasks, true],
     [tasks, false]
@@ -91,11 +97,14 @@ export function buildBackgroundTaskGroups(
       })
     }
   }
+
   const entries = [...owners.values()]
   entries.sort((left, right) => {
     const startDelta = (left.task.startedAt ?? 0) - (right.task.startedAt ?? 0)
+
     return startDelta !== 0 ? startDelta : left.task.id < right.task.id ? -1 : 1
   })
+
   return KIND_ORDER.map((kind) => ({
     kind,
     tasks: entries.filter((entry) => entry.task.kind === kind)
@@ -148,8 +157,10 @@ export function formatBackgroundTaskTokens(totalTokens: number): string {
   if (totalTokens < 1_000) {
     return String(totalTokens)
   }
+
   // Round before picking the unit, or 999_950 renders as "1000k" instead of "1m".
   const thousands = Math.round(totalTokens / 100) / 10
+
   return thousands < 1_000
     ? `${tokenScaleText(thousands)}k`
     : `${tokenScaleText(Math.round(totalTokens / 100_000) / 10)}m`
@@ -162,6 +173,7 @@ export function backgroundTaskElapsedLabel(
   if (task.startedAt === undefined || task.startedAt <= 0) {
     return null
   }
+
   return formatNativeChatDuration((now - task.startedAt) / 1000)
 }
 

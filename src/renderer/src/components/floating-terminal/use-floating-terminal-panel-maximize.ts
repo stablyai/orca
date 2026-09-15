@@ -44,18 +44,23 @@ export function useFloatingTerminalPanelMaximize({
         renderedBounds: resolveFloatingTerminalPanelCommittedBounds(committedBoundsRef.current),
         source: boundsSourceRef.current
       }
+
       restoreBoundsRef.current = null
       boundsSourceRef.current = restoredState.source
       committedBoundsRef.current = restoredState.committedBounds
+
       const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
         ? resolveFloatingTerminalPanelBounds(restoredState.committedBounds, restoredState.source)
         : restoredState.renderedBounds
+
       stagedBoundsRef.current = null
       setBounds(restoredBounds)
       setMaximized(false)
       persistFloatingTerminalPanelMaximized(false)
+
       return
     }
+
     restoreBoundsRef.current = {
       committedBounds: committedBoundsRef.current,
       renderedBounds: bounds,
@@ -80,6 +85,7 @@ export function useFloatingTerminalPanelMaximize({
     if (maximized) {
       return
     }
+
     restoreBoundsRef.current = {
       committedBounds: committedBoundsRef.current,
       renderedBounds: bounds,

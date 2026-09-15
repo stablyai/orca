@@ -33,11 +33,14 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 let clock = 1_000
+
 const journals = createTrackedJournalOpener()
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -61,6 +64,7 @@ function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> 
 
 async function withJournalDatabase(run: (db: Database.Database) => void): Promise<void> {
   const opened = openJournalDatabase(journalDatabaseFile(root))
+
   try {
     run(opened.db)
   } finally {
@@ -71,10 +75,12 @@ async function withJournalDatabase(run: (db: Database.Database) => void): Promis
 /** The row replay anchors on, parsed exactly as replay parses it. */
 function firstLiveRow(): Promise<JournalRow | null> {
   let row: JournalRow | null = null
+
   return withJournalDatabase((db) => {
     const stored = db.prepare('SELECT row_json FROM journal_rows ORDER BY seq LIMIT 1').get() as
       | { row_json: string }
       | undefined
+
     const parsed = stored ? parseJournalRow(stored.row_json) : null
     row = parsed?.ok ? parsed.row : null
   }).then(() => row)
@@ -82,6 +88,7 @@ function firstLiveRow(): Promise<JournalRow | null> {
 
 function liveSequences(): Promise<number[]> {
   let sequences: number[] = []
+
   return withJournalDatabase((db) => {
     sequences = (
       db.prepare('SELECT seq FROM journal_rows ORDER BY seq').all() as { seq: number }[]
@@ -126,10 +133,12 @@ describe('a malformed row', () => {
     })
 
     const reopened = await open()
+
     const disclosure = reopened
       .snapshot()
       .items.map((entry) => entry.body)
       .find((entry) => entry.kind === 'status')
+
     expect(disclosure).toMatchObject({ kind: 'status' })
     expect(disclosure && 'text' in disclosure ? disclosure.text : '').toContain(
       '1 journal line could not be read'
@@ -140,9 +149,11 @@ describe('a malformed row', () => {
 describe('a sequence gap', () => {
   it('drops every row after the hole and reports the epoch corrupt', async () => {
     const journal = await open()
+
     for (let ordinal = 0; ordinal < 5; ordinal += 1) {
       await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
     }
+
     await journal.close()
     // Sequence 1 is the epoch row, so the items occupy 2..6. Removing 4 leaves
     // 5 and 6 valid but unanchored.
@@ -162,9 +173,11 @@ describe('a sequence gap', () => {
   // the rows the repair deleted are never asked for again.
   it('still reports corrupt on the next probe, with the deleted suffix unrebuilt', async () => {
     const journal = await open()
+
     for (let ordinal = 0; ordinal < 5; ordinal += 1) {
       await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
     }
+
     await journal.close()
     await withJournalDatabase((db) => {
       db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(4)
@@ -186,9 +199,11 @@ describe('a sequence gap', () => {
   // counting it as content would retire the marker the instant it was raised.
   it('is not settled by the repair disclosure it appends for a malformed row', async () => {
     const journal = await open()
+
     for (let ordinal = 0; ordinal < 3; ordinal += 1) {
       await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
     }
+
     await journal.close()
     await withJournalDatabase((db) => {
       db.prepare('UPDATE journal_rows SET row_json = ? WHERE seq = ?').run('}{', 3)

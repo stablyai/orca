@@ -61,6 +61,7 @@ describe('the remote attachment release guard', () => {
 
       const result = db.requestRemoteAttachmentTerminalRelease(dispatchId)
       expect(result.disposition).toBe(disposition)
+
       if (reason) {
         expect(result).toMatchObject({ reason })
       }

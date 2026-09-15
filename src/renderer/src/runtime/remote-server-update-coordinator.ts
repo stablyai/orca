@@ -105,6 +105,7 @@ export async function inspectRemoteServerUpdate(
 ): Promise<RemoteServerUpdateEntry> {
   const base = checkingRemoteServerUpdateEntry(environment)
   let status: RuntimeStatus
+
   try {
     status = await transport.getRuntimeStatus(environment.id, 10_000)
   } catch (error) {
@@ -118,9 +119,12 @@ export async function inspectRemoteServerUpdate(
   const currentVersion = status.appVersion?.trim() || null
   const supportsRemoteUpdate = status.capabilities?.includes(REMOTE_SERVER_UPDATE_CAPABILITY)
   const support = status.remoteUpdateSupport ?? null
+
   const versionComparable =
     currentVersion !== null && isValidAppVersion(currentVersion) && isValidAppVersion(clientVersion)
+
   const outdated = versionComparable && compareAppVersions(currentVersion, clientVersion) < 0
+
   const statusFields = {
     currentVersion,
     runtimeId: status.runtimeId,
@@ -141,6 +145,7 @@ export async function inspectRemoteServerUpdate(
   if (checkOptions) {
     try {
       const first = await transport.check(environment.id, checkOptions)
+
       const checked =
         first.status.state === 'available' || first.status.state === 'not-available'
           ? first
@@ -152,6 +157,7 @@ export async function inspectRemoteServerUpdate(
                 snapshot.status.state === 'available' || snapshot.status.state === 'not-available',
               () => undefined
             )
+
       if (checked.status.state === 'available') {
         return {
           ...base,
@@ -160,6 +166,7 @@ export async function inspectRemoteServerUpdate(
           targetVersion: checked.status.version
         }
       }
+
       return {
         ...base,
         ...statusFields,
@@ -192,13 +199,16 @@ export async function runRemoteServerUpdate(
   options: RemoteServerUpdateRunOptions = {}
 ): Promise<RemoteServerUpdateEntry> {
   const timing = options.timing ?? DEFAULT_REMOTE_SERVER_UPDATE_TIMING
+
   let next: RemoteServerUpdateEntry = {
     ...entry,
     phase: 'checking-update',
     progress: null,
     error: null
   }
+
   onProgress(next)
+
   try {
     const inferredCheckOptions = {
       includePrerelease:
@@ -206,7 +216,9 @@ export async function runRemoteServerUpdate(
       includePerfPrerelease:
         entry.targetVersion !== null && isPerfPrereleaseAppVersion(entry.targetVersion)
     }
+
     await transport.check(entry.environmentId, options.checkOptions ?? inferredCheckOptions)
+
     const available = await pollRemoteServerUpdater(
       entry.environmentId,
       transport,
@@ -215,12 +227,15 @@ export async function runRemoteServerUpdate(
         snapshot.status.state === 'available' || snapshot.status.state === 'not-available',
       () => undefined
     )
+
     if (available.status.state === 'not-available') {
       const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
       const currentVersion = status.appVersion?.trim() ?? ''
+
       if (!hasReachedAppVersion(currentVersion, entry.targetVersion)) {
         throw new Error('remote_update_requested_version_unavailable')
       }
+
       next = {
         ...next,
         phase: 'current',
@@ -228,8 +243,10 @@ export async function runRemoteServerUpdate(
         runtimeId: status.runtimeId
       }
       onProgress(next)
+
       return next
     }
+
     if (available.status.state !== 'available') {
       throw new Error('remote_update_status_unavailable')
     }
@@ -242,6 +259,7 @@ export async function runRemoteServerUpdate(
     }
     onProgress(next)
     await transport.download(entry.environmentId)
+
     const downloaded = await pollRemoteServerUpdater(
       entry.environmentId,
       transport,
@@ -254,6 +272,7 @@ export async function runRemoteServerUpdate(
         }
       }
     )
+
     if (downloaded.status.state !== 'downloaded') {
       throw new Error('remote_update_download_incomplete')
     }
@@ -273,6 +292,7 @@ export async function runRemoteServerUpdate(
       install,
       timing
     )
+
     next = {
       ...next,
       phase: 'updated',
@@ -282,6 +302,7 @@ export async function runRemoteServerUpdate(
       liveLeafCount: replacement.liveLeafCount
     }
     onProgress(next)
+
     return next
   } catch (error) {
     next = {
@@ -291,6 +312,7 @@ export async function runRemoteServerUpdate(
       error: remoteServerUpdateErrorMessage(error)
     }
     onProgress(next)
+
     return next
   }
 }

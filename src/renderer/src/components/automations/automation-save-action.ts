@@ -16,6 +16,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
   return async function saveAutomation(now = Date.now()): Promise<void> {
     const { store, local, destinationForm, destination } = context
     const { settings } = store
+
     const {
       draft,
       editingAutomationId,
@@ -24,9 +25,12 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       setIsSaving,
       setEditorNotice
     } = local
+
     const isHermesSave =
       editingAutomationId === null && (createTarget === 'hermes' || editingExternalTarget !== null)
+
     const { hour, minute } = parseDraftTime(draft.time)
+
     if (
       !draft.projectId ||
       ((draft.workspaceMode === 'existing' || isHermesSave) && !draft.workspaceId) ||
@@ -38,8 +42,10 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           'Choose a run location and enter a prompt before saving.'
         )
       )
+
       return
     }
+
     if (draft.scheduleWarning) {
       toast.error(
         translate(
@@ -47,11 +53,14 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           'Pick a supported schedule before saving.'
         )
       )
+
       return
     }
+
     const validateAdvancedSchedule = isHermesSave
       ? isValidAutomationCronSchedule
       : isValidAutomationSchedule
+
     if (
       draft.preset === 'custom' &&
       !acceptsAutomationDraftSchedule({
@@ -66,8 +75,10 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           'Enter a valid advanced schedule before saving.'
         )
       )
+
       return
     }
+
     if (
       editingAutomationId === null &&
       !isHermesSave &&
@@ -79,13 +90,17 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           'Choose an enabled agent before saving.'
         )
       )
+
       return
     }
+
     setIsSaving(true)
+
     try {
       const selectedWorkspaceExists =
         draft.workspaceMode !== 'existing' ||
         destinationForm.dialogWorktrees.some((worktree) => worktree.id === draft.workspaceId)
+
       if (!selectedWorkspaceExists) {
         toast.error(
           translate(
@@ -93,15 +108,20 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
             'Choose an available workspace before saving.'
           )
         )
+
         return
       }
+
       if (!isHermesSave && editingAutomationId === null) {
         const checked = destination.createDestination.check(draft.projectId)
+
         if (!checked.ok) {
           setEditorNotice(checked.notice)
+
           return
         }
       }
+
       await (isHermesSave
         ? saveHermesAutomation(context)
         : saveOrcaAutomation(context, { hour, minute, now }))
@@ -109,6 +129,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       if (isHermesSave) {
         await context.pageRefresh.refresh().catch(() => undefined)
       }
+
       toast.error(
         error instanceof Error
           ? error.message

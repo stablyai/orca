@@ -33,6 +33,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   const projectUpdate = createProjectUpdateActions(set, get)
   const repoUpdate = createRepoUpdateActions(set, get)
   const repoOrdering = createRepoOrderingActions(set, get)
+
   return {
     repos: [],
     projects: [],

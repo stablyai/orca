@@ -13,14 +13,17 @@ export async function downloadAndOpenRemoteTerminalFile(
   filePath: string
 ): Promise<void> {
   const name = basename(filePath) || filePath
+
   try {
     const result = fileContext.connectionId
       ? await window.api.fs.downloadFile({ filePath, connectionId: fileContext.connectionId })
       : await downloadRuntimeFile(fileContext, filePath, name)
+
     // Why: cancelling the native save dialog is a deliberate no-op, not a failure.
     if (result.canceled) {
       return
     }
+
     await window.api.shell.openFilePath(result.destinationPath)
   } catch (error) {
     toast.error(

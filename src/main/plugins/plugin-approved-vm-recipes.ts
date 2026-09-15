@@ -7,6 +7,8 @@ export async function getApprovedPluginVmRecipes(
   if (!pluginService) {
     return []
   }
+
   await pluginService.whenReady()
+
   return pluginService.contentPacks.vmRecipes.list().map(({ recipe }) => recipe)
 }

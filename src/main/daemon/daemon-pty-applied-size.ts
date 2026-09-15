@@ -31,19 +31,24 @@ export async function readDaemonAppliedPtySize(
     getSizeUnsupported,
     markGetSizeUnsupported
   } = options
+
   const readInventory = async (): Promise<DaemonAppliedPtySize | null> => {
     const { sessions } = await client.request<ListSessionsResult>('listSessions', undefined)
     const session = sessions.find((candidate) => candidate.sessionId === sessionId)
+
     if (!session || !session.isAlive) {
       return null
     }
+
     if (!isValidPtySize(session.cols, session.rows)) {
       throw new DaemonProtocolError('Invalid listSessions size response')
     }
+
     return { cols: session.cols, rows: session.rows }
   }
 
   const useInventory = protocolVersion < GET_SIZE_PROTOCOL_VERSION || getSizeUnsupported
+
   if (useInventory) {
     try {
       return await readInventory()
@@ -51,6 +56,7 @@ export async function readDaemonAppliedPtySize(
       if (failureMode === 'preserve') {
         throw error
       }
+
       return null
     }
   }
@@ -59,29 +65,36 @@ export async function readDaemonAppliedPtySize(
     const result = await client.request<{
       size: { cols: number; rows: number } | null
     }>('getSize', { sessionId })
+
     if (result.size === null) {
       return null
     }
+
     if (!isValidPtySize(result.size.cols, result.size.rows)) {
       throw new DaemonProtocolError('Invalid getSize response')
     }
+
     return result.size
   } catch (error) {
     if (isUnknownRequestTypeError(error)) {
       // `getSize` shipped without a protocol bump; cache the negative capability.
       markGetSizeUnsupported()
+
       try {
         return await readInventory()
       } catch (inventoryError) {
         if (failureMode === 'preserve') {
           throw inventoryError
         }
+
         return null
       }
     }
+
     if (failureMode === 'preserve') {
       throw error
     }
+
     return null
   }
 }

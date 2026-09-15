@@ -68,6 +68,7 @@ export function createSystemCommandChannel(): MockSystemCommandChannel {
     channel.emit('data', Buffer.from('ORCA-SYSTEM-SSH-OK'))
     channel.emit('close', 0)
   })
+
   return channel
 }
 
@@ -83,8 +84,10 @@ export function createFailingSystemCommandChannel(
     if (stderrText) {
       channel.stderr.emit('data', Buffer.from(stderrText))
     }
+
     channel.emit('close', code)
   })
+
   return channel
 }
 
@@ -94,11 +97,13 @@ export function createHangingSystemCommandChannel(): MockSystemCommandChannel {
   channel.stdin = { end: vi.fn(), write: vi.fn() }
   channel.stderr = new EventEmitter()
   channel.close = vi.fn()
+
   return channel
 }
 
 export function createPendingSystemSshProcess(): MockSystemSshProcess {
   const stdout = new EventEmitter()
+
   return {
     stdin: {},
     stdout,
@@ -114,6 +119,7 @@ export function createSystemSshProcess(): MockSystemSshProcess {
   queueMicrotask(() => {
     proc.stdout.emit('data', Buffer.from('ORCA-SYSTEM-SSH-READY'))
   })
+
   return proc
 }
 
@@ -122,5 +128,6 @@ export function createFailingSystemSshProcess(code: number): MockSystemSshProces
   proc.onExit = vi.fn((handler: (exitCode: number | null) => void) => {
     queueMicrotask(() => handler(code))
   })
+
   return proc
 }

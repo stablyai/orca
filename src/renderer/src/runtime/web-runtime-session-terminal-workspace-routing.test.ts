@@ -46,6 +46,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     return () => {}
   },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
@@ -86,6 +87,7 @@ function stubSelectableWorkspaceStore(selection: MutableSelection): void {
     (worktreeId: string | null, executionHostId?: ExecutionHostId) => {
       selection.activeWorktreeId = worktreeId
       selection.activeWorkspaceExecutionHostId = executionHostId ?? null
+
       return true
     }
   )
@@ -107,6 +109,7 @@ describe('web-runtime-session terminal workspace routing', () => {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
     }
+
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
@@ -133,6 +136,7 @@ describe('web-runtime-session terminal workspace routing', () => {
       activeWorktreeId: FOLDER_WORKSPACE_ID,
       activeWorkspaceExecutionHostId: 'local'
     }
+
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
@@ -153,7 +157,9 @@ describe('web-runtime-session terminal workspace routing', () => {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID
     }
+
     stubSelectableWorkspaceStore(selection)
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -162,6 +168,7 @@ describe('web-runtime-session terminal workspace routing', () => {
         result: { tab: { id: 'host-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     const outcome = await createWebRuntimeSessionTerminal({
@@ -181,6 +188,7 @@ describe('web-runtime-session terminal workspace routing', () => {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
     }
+
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn().mockRejectedValue(new Error('selector_not_found'))
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
@@ -208,7 +216,9 @@ describe('web-runtime-session terminal workspace routing', () => {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
     }
+
     stubSelectableWorkspaceStore(selection)
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -217,6 +227,7 @@ describe('web-runtime-session terminal workspace routing', () => {
         result: { tab: { id: 'host-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
       })
       .mockRejectedValueOnce(new Error('list failed'))
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     const outcome = await createWebRuntimeSessionTerminal({
@@ -235,13 +246,16 @@ describe('web-runtime-session terminal workspace routing', () => {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
     }
+
     stubSelectableWorkspaceStore(selection)
+
     const runtimeCall = vi.fn().mockImplementation(async () => {
       // The user switched workspaces while the doomed create was in flight.
       selection.activeWorktreeId = 'repo::/other'
       selection.activeWorkspaceExecutionHostId = 'local'
       throw new Error('selector_not_found')
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     const outcome = await createWebRuntimeSessionTerminal({
@@ -260,6 +274,7 @@ describe('web-runtime-session terminal workspace routing', () => {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
     }
+
     stubSelectableWorkspaceStore(selection)
     const runtimeCall = vi.fn().mockRejectedValue(new Error('selector_not_found'))
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })

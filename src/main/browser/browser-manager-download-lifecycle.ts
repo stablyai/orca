@@ -10,19 +10,24 @@ import { BrowserManagerDownloadCreation } from './browser-manager-download-creat
 export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDownloadCreation {
   protected bindDownloadToTab(downloadId: string, browserTabId: string): void {
     const download = this.downloadsById.get(downloadId)
+
     if (!download) {
       return
     }
+
     download.browserTabId = browserTabId
     download.rendererWebContentsId = this.rendererWebContentsIdByTabId.get(browserTabId) ?? null
   }
 
   protected flushPendingDownloadRequests(browserTabId: string, guestWebContentsId: number): void {
     const pending = this.pendingDownloadIdsByGuestId.get(guestWebContentsId)
+
     if (!pending?.length) {
       return
     }
+
     this.pendingDownloadIdsByGuestId.delete(guestWebContentsId)
+
     for (const downloadId of pending) {
       this.bindDownloadToTab(downloadId, browserTabId)
       this.flushDownloadSnapshot(downloadId)
@@ -31,10 +36,13 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
 
   protected flushDownloadSnapshot(downloadId: string): void {
     const download = this.downloadsById.get(downloadId)
+
     if (!download) {
       return
     }
+
     this.sendDownloadStarted(downloadId)
+
     if (download.receivedBytes > 0 || download.transientState) {
       this.sendDownloadProgress(download.browserTabId, {
         browserPageId: download.browserTabId ?? undefined,
@@ -44,6 +52,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
         state: download.transientState
       })
     }
+
     if (download.terminalEvent) {
       this.sendDownloadFinished(download.browserTabId, {
         ...download.terminalEvent,
@@ -55,16 +64,21 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
 
   protected sendDownloadStarted(downloadId: string): void {
     const download = this.downloadsById.get(downloadId)
+
     if (!download?.browserTabId) {
       return
     }
+
     if (download.startedSent) {
       return
     }
+
     const renderer = this.resolveRendererForBrowserTab(download.browserTabId)
+
     if (!renderer) {
       return
     }
+
     renderer.send('browser:download-requested', {
       browserPageId: download.browserTabId,
       downloadId: download.downloadId,
@@ -85,10 +99,13 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!browserTabId) {
       return
     }
+
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
+
     if (!renderer) {
       return
     }
+
     renderer.send('browser:download-progress', payload)
   }
 
@@ -99,10 +116,13 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!browserTabId) {
       return
     }
+
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
+
     if (!renderer) {
       return
     }
+
     renderer.send('browser:download-finished', payload)
   }
 
@@ -112,15 +132,19 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     failure: string | null
   ): Promise<void> {
     const route = download.clientRoute
+
     if (!route) {
       return
     }
+
     if (status !== 'completed') {
       download.clientRoute = null
       await route.abort().catch(() => undefined)
       this.finishDownloadInternal(download.downloadId, status, failure)
+
       return
     }
+
     try {
       // Why: the route stays on the record for the whole commit, which spans many round trips -- a
       // cancel arriving mid-stream has to find something to abort or the bytes land anyway.
@@ -132,10 +156,12 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       this.finishDownloadInternal(download.downloadId, 'completed', null)
     } catch (error) {
       download.clientRoute = null
+
       if (download.terminalEvent) {
         // A cancel already reported the outcome; this rejection is that cancel taking effect.
         return
       }
+
       console.error('[browser-download] Failed to save download to the remote workspace:', error)
       this.finishDownloadInternal(
         download.downloadId,
@@ -147,6 +173,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
 
   protected cancelDownloadInternal(downloadId: string, reason: string): void {
     const download = this.downloadsById.get(downloadId)
+
     if (!download) {
       return
     }
@@ -155,6 +182,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       download.cleanup()
       download.cleanup = null
     }
+
     const shouldSendCancel = !download.terminalEvent
 
     try {
@@ -165,6 +193,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
 
     if (shouldSendCancel) {
       this.finishDownloadInternal(downloadId, 'canceled', reason || null)
+
       return
     }
 
@@ -177,6 +206,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     error: string | null
   ): void {
     const download = this.downloadsById.get(downloadId)
+
     if (!download || download.terminalEvent) {
       return
     }
@@ -185,13 +215,16 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       download.cleanup()
       download.cleanup = null
     }
+
     browserDownloadDestinationReservations.release(download.reservationKey)
     download.reservationKey = null
+
     if (download.clientRoute) {
       // Why: a cancel path can reach here before the relay settled; the staged copy must not survive.
       void download.clientRoute.abort().catch(() => undefined)
       download.clientRoute = null
     }
+
     const event: BrowserDownloadFinishedEvent = {
       browserPageId: download.browserTabId ?? undefined,
       downloadId: download.downloadId,
@@ -200,7 +233,9 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       ...(download.remoteDestination ? { remoteDestination: download.remoteDestination } : {}),
       error
     }
+
     download.terminalEvent = event
+
     if (download.browserTabId) {
       this.sendDownloadStarted(downloadId)
       this.sendDownloadFinished(download.browserTabId, event)
@@ -211,20 +246,26 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
   protected cancelPendingDownloadsForGuest(guestWebContentsId: number): void {
     const pending = this.pendingDownloadIdsByGuestId.get(guestWebContentsId)
     this.pendingDownloadIdsByGuestId.delete(guestWebContentsId)
+
     if (!pending?.length) {
       return
     }
+
     for (const downloadId of pending) {
       const download = this.downloadsById.get(downloadId)
+
       if (!download) {
         continue
       }
+
       if (download.terminalEvent) {
         this.downloadsById.delete(downloadId)
         continue
       }
+
       this.cancelDownloadInternal(downloadId, 'Browser page closed before download could be shown.')
       const afterCancel = this.downloadsById.get(downloadId)
+
       if (afterCancel?.terminalEvent && !afterCancel.browserTabId) {
         this.downloadsById.delete(downloadId)
       }

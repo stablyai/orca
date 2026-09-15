@@ -19,6 +19,7 @@ let dir: string
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-sink-'))
 })
+
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
@@ -33,11 +34,13 @@ function makeRecord(i: number): { i: number; payload: string } {
 describe('local-file-sink — basic write', () => {
   it('writes one NDJSON line per push', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       batchWindowMs: 100,
       flushBufferThreshold: 1
     })
+
     sink.push({ a: 1 })
     sink.push({ b: 2 })
     sink.flush()
@@ -51,14 +54,17 @@ describe('local-file-sink — basic write', () => {
 
   it('coalesces writes up to the buffer threshold', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       batchWindowMs: 100_000,
       flushBufferThreshold: 5
     })
+
     for (let i = 0; i < 4; i++) {
       sink.push({ i })
     }
+
     // Below threshold: nothing on disk yet (the periodic timer is far away).
     expect(statSync(file).size).toBe(0)
     sink.push({ i: 4 })
@@ -71,12 +77,15 @@ describe('local-file-sink — basic write', () => {
     if (process.platform === 'win32') {
       return
     }
+
     const file = join(dir, 'logs', 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     sink.push({ ok: true })
     sink.close()
 
@@ -88,6 +97,7 @@ describe('local-file-sink — basic write', () => {
     if (process.platform === 'win32') {
       return
     }
+
     const file = join(dir, 'test.ndjson')
     const rotated = `${file}.1`
     writeFileSync(file, '{}\n')
@@ -101,6 +111,7 @@ describe('local-file-sink — basic write', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     sink.close()
 
     expect(statSync(file).mode & 0o777).toBe(0o600)
@@ -111,6 +122,7 @@ describe('local-file-sink — basic write', () => {
 describe('local-file-sink — rotation', () => {
   it('rotates when the byte cap is exceeded', () => {
     const file = join(dir, 'test.ndjson')
+
     // ~120 bytes per record × 5 records = ~600 bytes; cap at 500 forces
     // rotation before all records land in the same file.
     const sink = createLocalFileSink({
@@ -120,9 +132,11 @@ describe('local-file-sink — rotation', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     for (let i = 0; i < 8; i++) {
       sink.push(makeRecord(i))
     }
+
     sink.flush()
     sink.close()
 
@@ -135,6 +149,7 @@ describe('local-file-sink — rotation', () => {
 
   it('uses UTF-8 byte length for rotation accounting', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       maxBytes: 90,
@@ -142,6 +157,7 @@ describe('local-file-sink — rotation', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     sink.push({ payload: '😀'.repeat(15) })
     sink.push({ payload: '😀'.repeat(15) })
     sink.flush()
@@ -152,6 +168,7 @@ describe('local-file-sink — rotation', () => {
 
   it('drops an individual record that exceeds the file byte cap', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       maxBytes: 100,
@@ -159,6 +176,7 @@ describe('local-file-sink — rotation', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     sink.push({ payload: 'x'.repeat(1_000) })
     sink.push({ ok: true })
     sink.flush()
@@ -171,6 +189,7 @@ describe('local-file-sink — rotation', () => {
 
   it('splits an oversized buffered batch instead of dropping valid records', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       maxBytes: 170,
@@ -178,6 +197,7 @@ describe('local-file-sink — rotation', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 3
     })
+
     sink.push({ i: 1, payload: 'x'.repeat(60) })
     sink.push({ i: 2, payload: 'x'.repeat(60) })
     sink.push({ i: 3, payload: 'x'.repeat(60) })
@@ -189,11 +209,13 @@ describe('local-file-sink — rotation', () => {
       .map((line) => JSON.parse(line) as { i: number })
       .map((record) => record.i)
       .sort((a, b) => a - b)
+
     expect(allRecords).toEqual([1, 2, 3])
   })
 
   it('caps total disk usage at maxFiles × maxBytes (worst case)', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       maxBytes: 500,
@@ -201,10 +223,12 @@ describe('local-file-sink — rotation', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     // Far more than 3 × 500 bytes — exercises the FIFO drop path.
     for (let i = 0; i < 50; i++) {
       sink.push(makeRecord(i))
     }
+
     sink.flush()
     sink.close()
 
@@ -219,6 +243,7 @@ describe('local-file-sink — rotation', () => {
 describe('local-file-sink — listing + clearing', () => {
   it('lists newest → oldest', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       maxBytes: 200,
@@ -226,15 +251,18 @@ describe('local-file-sink — listing + clearing', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     for (let i = 0; i < 20; i++) {
       sink.push(makeRecord(i))
     }
+
     sink.flush()
     sink.close()
 
     const files = listRotatedFiles(file, 5)
     // First entry is always the base (newest).
     expect(files[0]).toBe(file)
+
     // Subsequent entries are the rotated suffixes in ascending order.
     for (let i = 1; i < files.length; i++) {
       expect(files[i]).toBe(`${file}.${i}`)
@@ -245,11 +273,13 @@ describe('local-file-sink — listing + clearing', () => {
 describe('local-file-sink — robustness', () => {
   it('does not throw on circular records (drops the line)', () => {
     const file = join(dir, 'test.ndjson')
+
     const sink = createLocalFileSink({
       filePath: file,
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
+
     const a: Record<string, unknown> = { ok: true }
     a.self = a
     expect(() => {

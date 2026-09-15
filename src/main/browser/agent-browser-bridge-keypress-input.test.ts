@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
   vi.hoisted(() => {
     const stdinWrites: string[] = []
+
     return {
       execFileMock: vi.fn(),
       webContentsFromIdMock: vi.fn(),
@@ -13,6 +14,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   })
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -20,15 +22,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -37,6 +43,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
@@ -217,10 +224,12 @@ describe('AgentBrowserBridge keypress input', () => {
     })
 
     expect(keyEventCalls(wc)).toHaveLength(0)
+
     const pressCall = execFileMock.mock.calls
       .map(([, commandArgs]) => commandArgs)
       .filter(isStringArray)
       .find((commandArgs) => commandArgs.includes('press'))
+
     expect(pressCall).toBeDefined()
     const args = pressCall ?? []
     expect(args[args.indexOf('press') + 1]).toBe('MediaPlayPause')
@@ -243,9 +252,12 @@ describe('AgentBrowserBridge keypress input', () => {
       if (id !== 100 || remaining === 0) {
         return null
       }
+
       remaining -= 1
+
       return wc
     })
+
     return () => remaining
   }
 

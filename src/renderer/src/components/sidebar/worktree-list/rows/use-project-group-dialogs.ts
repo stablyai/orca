@@ -37,8 +37,10 @@ function reportProjectGroupDeleteFailures(result: {
         )
       }
     )
+
     return
   }
+
   if (result.status === 'deleted-group' && result.failedProjectRemovals.length > 0) {
     const requestedCount = result.requestedProjectIds.length
     toast.error(
@@ -71,9 +73,11 @@ export function useProjectGroupDialogs(args: {
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
+
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
+
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
 
@@ -86,6 +90,7 @@ export function useProjectGroupDialogs(args: {
       if (repo.projectGroupId === groupId) {
         return
       }
+
       void moveProjectToGroup(repo.id, groupId)
     },
     [moveProjectToGroup]
@@ -110,18 +115,23 @@ export function useProjectGroupDialogs(args: {
       if (!nameDialog) {
         return
       }
+
       if (nameDialog.type === 'create-from-repo') {
         const group = await createProjectGroup(name)
+
         if (group) {
           await moveProjectToGroup(nameDialog.repo.id, group.id)
         }
+
         return
       }
+
       const renamed = await updateProjectGroup(
         nameDialog.groupId,
         { name },
         { hostId: nameDialog.hostId }
       )
+
       if (!renamed) {
         toast.error(
           translate(
@@ -145,6 +155,7 @@ export function useProjectGroupDialogs(args: {
     if (!deleteDialog) {
       return null
     }
+
     return selectProjectGroupRemovalTargets(
       projectGroups,
       repos,
@@ -152,7 +163,9 @@ export function useProjectGroupDialogs(args: {
       deleteDialog.hostId
     )
   }, [deleteDialog, projectGroups, repos])
+
   const deleteProjectCount = deleteTargets?.projectIds.length ?? 0
+
   const deleteProjectNames = useMemo(
     () =>
       (deleteTargets?.projectIds ?? []).map(
@@ -160,6 +173,7 @@ export function useProjectGroupDialogs(args: {
       ),
     [deleteTargets, repoMap]
   )
+
   const removeContainedProjects =
     deleteProjectCount > 0 && deleteDialog?.removeContainedProjects === true
 
@@ -174,6 +188,7 @@ export function useProjectGroupDialogs(args: {
     if (!deleteDialog) {
       return
     }
+
     try {
       reportProjectGroupDeleteFailures(
         await deleteProjectGroupWithContainedProjects(deleteDialog.groupId, {

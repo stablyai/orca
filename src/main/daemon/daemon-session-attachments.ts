@@ -39,27 +39,35 @@ export class DaemonSessionAttachments {
     if (this.clientIdBySessionId.get(sessionId) !== clientId) {
       return
     }
+
     const token = this.tokenBySessionId.get(sessionId)
+
     if (token) {
       this.host.detach(sessionId, token)
     }
+
     this.clientIdBySessionId.delete(sessionId)
     this.tokenBySessionId.delete(sessionId)
   }
 
   detachClientSessions(clientId: string): void {
     const attachments: { sessionId: string; token: symbol }[] = []
+
     for (const [sessionId, attachedClientId] of this.clientIdBySessionId) {
       if (attachedClientId !== clientId) {
         continue
       }
+
       const token = this.tokenBySessionId.get(sessionId)
+
       if (token) {
         attachments.push({ sessionId, token })
       }
+
       this.clientIdBySessionId.delete(sessionId)
       this.tokenBySessionId.delete(sessionId)
     }
+
     if (attachments.length > 0) {
       this.host.detachClients(attachments)
     }

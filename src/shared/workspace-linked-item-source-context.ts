@@ -9,6 +9,7 @@ function resolveLinkedItemProvider(
   if (item.provider) {
     return item.provider
   }
+
   // Why: TaskPage seeds can omit title; provider inference only needs type/url/identifiers.
   return getWorkspaceSourceProvider({
     type: item.type,
@@ -31,16 +32,21 @@ export function isWorkspaceLinkedItemSourceContextMatch(
   if (!item || !context) {
     return false
   }
+
   // Why: TaskPage still seeds some GH/GL items without provider; use the same inference as write paths.
   const itemProvider = resolveLinkedItemProvider(item)
+
   if (itemProvider !== context.provider) {
     return false
   }
+
   if (itemProvider !== 'jira') {
     return true
   }
+
   const identity = context.providerIdentity
   const itemUrl = parseJiraIssueUrl(item.url)
+
   if (
     item.type !== 'issue' ||
     item.number !== 0 ||
@@ -53,10 +59,13 @@ export function isWorkspaceLinkedItemSourceContextMatch(
   ) {
     return false
   }
+
   const siteUrl = parseJiraIssueUrl(
     `${identity.siteUrl.replace(/\/+$/g, '')}/browse/${itemUrl.issueKey}`
   )
+
   const projectKey = itemUrl.issueKey.slice(0, itemUrl.issueKey.lastIndexOf('-'))
+
   return (
     item.jiraIdentifier.toUpperCase() === itemUrl.issueKey &&
     identity.projectKey.toUpperCase() === projectKey &&

@@ -33,7 +33,9 @@ export function mergeWebUIState(
     updates as Partial<PersistedUIState> & {
       featureInteractionTelemetryBuckets?: unknown
     }
+
   void _reserved
+
   return {
     ...base,
     ...safeUpdates,
@@ -79,6 +81,7 @@ export function mergeHostWebUIState(
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
     manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
+
   return { ...mergeWebUIState(local, incoming), ...pinned }
 }
 
@@ -89,6 +92,7 @@ export function mergeFeatureInteractionState(
   const currentNormalized = normalizeFeatureInteractions(current)
   const incomingNormalized = normalizeFeatureInteractions(incoming)
   const merged: FeatureInteractionState = { ...currentNormalized }
+
   for (const [id, incomingRecord] of Object.entries(incomingNormalized)) {
     const featureId = id as FeatureInteractionId
     const currentRecord = currentNormalized[featureId]
@@ -105,6 +109,7 @@ export function mergeFeatureInteractionState(
         }
       : incomingRecord
   }
+
   return merged
 }
 
@@ -113,9 +118,11 @@ export function mergeContextualTourSeenIds(
   incoming: PersistedUIState['contextualToursSeenIds']
 ): ContextualTourId[] {
   const merged = new Set<ContextualTourId>(normalizeContextualTourIds(current))
+
   for (const id of normalizeContextualTourIds(incoming)) {
     merged.add(id)
   }
+
   return [...merged]
 }
 
@@ -135,6 +142,7 @@ export function mergeSettings(
   options: { preserveAutoRenameBranchFromWorkUpdate?: boolean } = {}
 ): GlobalSettings {
   const defaults = getDefaultSettings('~')
+
   const merged = {
     ...base,
     ...updates,
@@ -165,6 +173,7 @@ export function mergeSettings(
     ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }
+
   return {
     ...merged,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(merged, {

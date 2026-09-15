@@ -14,7 +14,9 @@ import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin
 export const mainI18n: I18nInstance = i18next.createInstance()
 
 let initialized = false
+
 let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
+
 const registeredPluginLanguages = new Set<string>()
 
 // Why: main-process callers pass English fallbacks to translateMain(), so the
@@ -36,12 +38,15 @@ const lazyLocaleBackend: BackendModule = {
   init: () => {},
   read: (language: string, _namespace: string, callback: ReadCallback) => {
     const loader = LAZY_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
+
     if (!loader) {
       // English is intentionally represented by the empty bundled resource; its
       // user-visible copy comes from translateMain() defaultValue fallbacks.
       callback(null, false)
+
       return
     }
+
     loader().then(
       (mod) => callback(null, mod.default),
       (error) => callback(error instanceof Error ? error : new Error(String(error)), false)
@@ -78,24 +83,29 @@ export async function ensureMainI18n(): Promise<I18nInstance> {
     initialized = true
     applyMainPluginLanguagePacks()
   }
+
   return mainI18n
 }
 
 export async function setMainUiLanguage(language: UiLanguage): Promise<string> {
   await ensureMainI18n()
+
   const selectedLocale = resolveUiLocale(
     language,
     language === UI_LANGUAGE_SYSTEM ? getMainSystemLocale() : DEFAULT_UI_LOCALE
   )
+
   const locale =
     pluginLanguagePacks.find((pack) => pack.id === selectedLocale)?.resourceLanguage ??
     (selectedLocale.startsWith('plugin:') ? DEFAULT_UI_LOCALE : selectedLocale)
+
   if (mainI18n.language !== locale) {
     // changeLanguage triggers the lazy backend load for non-English locales and
     // resolves once the catalog is in memory, so callers that await this have
     // the translations ready before they render menus/dialogs.
     await mainI18n.changeLanguage(locale)
   }
+
   return locale
 }
 
@@ -103,7 +113,9 @@ function applyMainPluginLanguagePacks(): void {
   for (const language of registeredPluginLanguages) {
     mainI18n.removeResourceBundle(language, 'translation')
   }
+
   registeredPluginLanguages.clear()
+
   for (const pack of pluginLanguagePacks) {
     mainI18n.addResourceBundle(pack.resourceLanguage, 'translation', pack.catalog, true, true)
     registeredPluginLanguages.add(pack.resourceLanguage)
@@ -116,10 +128,13 @@ export function setMainPluginLanguagePacks(
   if (pluginLanguagePacks === packs) {
     return false
   }
+
   pluginLanguagePacks = packs
+
   if (initialized) {
     applyMainPluginLanguagePacks()
   }
+
   return true
 }
 
@@ -128,5 +143,6 @@ export function translateMain(key: string, fallback: string, options?: TOptions)
   // to the English default instead of returning undefined from an uninitialized i18n.
   const raw = initialized ? mainI18n.t(key, { defaultValue: fallback, ...options }) : fallback
   const value = typeof raw === 'string' && raw.length > 0 ? raw : fallback
+
   return isPseudoLocalizationLocale(mainI18n.language) ? pseudoLocalizeString(value) : value
 }

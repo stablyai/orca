@@ -23,18 +23,24 @@ export function resolveEffectiveProxy(
     if (resolved.proxyCommand) {
       return { kind: 'proxy-command', command: resolved.proxyCommand }
     }
+
     return resolved.proxyJump ? { kind: 'jump-host', jumpHost: resolved.proxyJump } : undefined
   }
+
   if (target.proxyCommand) {
     return { kind: 'proxy-command', command: target.proxyCommand }
   }
+
   if (resolved?.proxyCommand) {
     return { kind: 'proxy-command', command: resolved.proxyCommand }
   }
+
   const jump = target.jumpHost || resolved?.proxyJump
+
   if (jump) {
     return { kind: 'jump-host', jumpHost: jump }
   }
+
   return undefined
 }
 
@@ -50,6 +56,7 @@ function cmdEscape(s: string): string {
       `ProxyCommand value cannot be safely expanded on Windows (unsupported characters): ${s}`
     )
   }
+
   return `"${s}"`
 }
 
@@ -62,6 +69,7 @@ type ShellSpawnConfig = { file: string; args: string[]; windowsVerbatimArguments
 function getShellSpawnConfig(command: string): ShellSpawnConfig {
   if (process.platform === 'win32') {
     const comspec = process.env.ComSpec || 'cmd.exe'
+
     // Why: mirror Node's own `shell: true` form. `/s` makes cmd.exe strip the
     // outer quotes and take the rest verbatim; without verbatim arguments Node
     // would backslash-escape inner quotes, which cmd.exe does not understand.
@@ -71,6 +79,7 @@ function getShellSpawnConfig(command: string): ShellSpawnConfig {
       windowsVerbatimArguments: true
     }
   }
+
   return { file: '/bin/sh', args: ['-c', command], windowsVerbatimArguments: false }
 }
 
@@ -82,8 +91,10 @@ function jumpHostSpawnArgs(jumpHost: string, host: string, port: number): string
     .split(',')
     .map((hop) => hop.trim())
     .filter(Boolean)
+
   const destination = hops.at(-1) ?? jumpHost
   const chain = hops.slice(0, -1)
+
   return [
     '-W',
     `${host}:${port}`,
@@ -109,11 +120,14 @@ export function spawnProxyCommand(
         })
       : (() => {
           const escape = process.platform === 'win32' ? cmdEscape : shellEscape
+
           const expanded = proxy.command
             .replace(/%h/g, escape(host))
             .replace(/%p/g, escape(String(port)))
             .replace(/%r/g, escape(user))
+
           const shell = getShellSpawnConfig(expanded)
+
           // Why not spawnProcess here: a ProxyCommand is a user-authored shell
           // snippet, so it keeps its own verbatim command line. The console
           // still has to be hidden -- a cmd.exe spawn from a GUI process always
@@ -128,10 +142,12 @@ export function spawnProxyCommand(
   // Why: a single PassThrough for both directions creates a feedback loop.
   // Reads come from the proxy's stdout; writes go to its stdin.
   let cleanedUp = false
+
   const cleanup = (): void => {
     if (cleanedUp) {
       return
     }
+
     cleanedUp = true
     proc.stdout!.off('data', onStdoutData)
     proc.stdout!.off('end', onStdoutEnd)
@@ -139,6 +155,7 @@ export function spawnProxyCommand(
     proc.stdin!.off('error', onInputError)
     proc.off('error', onProcessError)
   }
+
   const onStdoutData = (data: Buffer): void => {
     // Why: honour the Duplex's backpressure so a slow ssh2 consumer cannot
     // buffer the proxy's output unboundedly.
@@ -146,23 +163,29 @@ export function spawnProxyCommand(
       proc.stdout!.pause()
     }
   }
+
   // Why: an undrained stderr pipe fills and blocks the proxy process, which
   // looks like a silently hung connection.
   const onStderrData = (data: Buffer): void => {
     const text = data.toString('utf-8').trimEnd()
+
     if (text) {
       console.error(`[ssh-proxy-command] ${text}`)
     }
   }
+
   const onStdoutEnd = (): void => {
     stream.push(null)
   }
+
   const onInputError = (err: Error): void => {
     stream.destroy(err)
   }
+
   const onProcessError = (err: Error): void => {
     stream.destroy(err)
   }
+
   const stream = new Duplex({
     read() {
       proc.stdout!.resume()
@@ -175,6 +198,7 @@ export function spawnProxyCommand(
       cb(err)
     }
   })
+
   proc.stdout!.on('data', onStdoutData)
   proc.stdout!.on('end', onStdoutEnd)
   proc.stderr!.on('data', onStderrData)

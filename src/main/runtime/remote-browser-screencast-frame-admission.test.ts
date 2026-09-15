@@ -10,12 +10,14 @@ import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-fr
 
 function createMockWebContents() {
   let attached = false
+
   const dbg = new EventEmitter() as EventEmitter & {
     isAttached: ReturnType<typeof vi.fn>
     attach: ReturnType<typeof vi.fn>
     detach: ReturnType<typeof vi.fn>
     sendCommand: ReturnType<typeof vi.fn>
   }
+
   dbg.isAttached = vi.fn(() => attached)
   dbg.attach = vi.fn(() => {
     attached = true
@@ -24,6 +26,7 @@ function createMockWebContents() {
     attached = false
   })
   dbg.sendCommand = vi.fn(async () => ({}))
+
   return { isDestroyed: vi.fn(() => false), debugger: dbg }
 }
 
@@ -32,13 +35,16 @@ function createMockWebContents() {
 function createRuntimeBinarySender() {
   const serverKeys = generateKeyPair()
   const clientKeys = generateKeyPair()
+
   const ws = {
     OPEN: 1 as const,
     readyState: 1,
     send: vi.fn(),
     close: vi.fn()
   }
+
   const onTransportError = vi.fn((code: number, reason: string) => ws.close(code, reason))
+
   const channel = new E2EEChannel(ws as never, {
     serverSecretKey: serverKeys.secretKey,
     resolveAuthenticatedDevice: (token) =>
@@ -48,6 +54,7 @@ function createRuntimeBinarySender() {
     onReady: vi.fn(),
     onError: onTransportError
   })
+
   const sharedKey = deriveSharedKey(clientKeys.secretKey, serverKeys.publicKey)
   channel.handleRawMessage(
     JSON.stringify({
@@ -63,9 +70,11 @@ function createRuntimeBinarySender() {
     sendBinary = sendBinaryReply
   })
   channel.handleRawMessage(encrypt('start-screencast', sharedKey))
+
   if (!sendBinary) {
     throw new Error('Runtime binary sender was not established')
   }
+
   return { channel, ws, onTransportError, sendBinary }
 }
 
@@ -100,6 +109,7 @@ describe('sendRemoteBrowserScreencastFrame', () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
     const transport = createRuntimeBinarySender()
+
     const session = await startBrowserScreencast(webContents as never, {
       format: 'jpeg',
       quality: 70,

@@ -64,6 +64,7 @@ export function TaskPageGitHubReviewerPicker({
   ): React.JSX.Element => {
     const selected = selectedReviewerLogins.has(reviewer.login.toLowerCase())
     const active = actionableReviewerRows[activeReviewerIndex]?.login === reviewer.login
+
     return (
       <button
         key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
@@ -142,26 +143,35 @@ export function TaskPageGitHubReviewerPicker({
             if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
               event.preventDefault()
               setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
+
               return
             }
+
             if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
               event.preventDefault()
               setActiveReviewerIndex(
                 (current) =>
                   (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
               )
+
               return
             }
+
             if (event.key === 'Enter') {
               event.preventDefault()
               const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+
               if (activeReviewer) {
                 void requestReviewer(activeReviewer)
+
                 return
               }
+
               void handleRequestReview()
+
               return
             }
+
             if (event.key === 'Escape') {
               event.preventDefault()
               handleReviewerPickerOpenChange(false)

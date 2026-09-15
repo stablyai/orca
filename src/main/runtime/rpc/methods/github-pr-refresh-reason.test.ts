@@ -15,6 +15,7 @@ describe('github.prForBranch refresh reason', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoPRForBranch: vi.fn().mockResolvedValue({ kind: 'no-pr', fetchedAt: 1 })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     await dispatcher.dispatch(

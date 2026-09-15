@@ -9,7 +9,9 @@ import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-v
 // Why: hide-empty used to default true; keep initial state, badge count, and Reset view
 // on one constant so a default flip cannot leave Reset pointing at the old value.
 export const DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS = false
+
 export const DEFAULT_AI_VAULT_SORT: AiVaultSort = 'updated'
+
 export const DEFAULT_AI_VAULT_GROUP: AiVaultGroup = 'project'
 
 export function countAiVaultViewAdjustments(options: {
@@ -22,6 +24,7 @@ export function countAiVaultViewAdjustments(options: {
   // Why: count by membership, not length — an agent swap keeps the array length but
   // still deviates from the default of every agent enabled.
   const allAgentsEnabled = AI_VAULT_AGENTS.every((agent) => options.agents.includes(agent))
+
   return (
     (allAgentsEnabled ? 0 : 1) +
     (options.sort === DEFAULT_AI_VAULT_SORT ? 0 : 1) +

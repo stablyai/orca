@@ -11,6 +11,7 @@ describe('worktree missing-terminal teardown RPC', () => {
         .fn()
         .mockResolvedValue({ stoppedWorktreeIds: ['repo-1::/workspace/deleted'] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch({

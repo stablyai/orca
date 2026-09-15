@@ -64,6 +64,7 @@ describe('SSH browser network execution route', () => {
   it('passes the exact domain and port to ssh2 forwardOut and fences rotation', async () => {
     const channel = new PassThrough() as PassThrough & { close: ReturnType<typeof vi.fn> }
     channel.close = vi.fn(() => channel.destroy())
+
     const forwardOut = vi.fn(
       (
         _sourceHost: string,
@@ -73,10 +74,12 @@ describe('SSH browser network execution route', () => {
         callback: (error: Error | undefined, channel: PassThrough) => void
       ) => callback(undefined, channel)
     )
+
     const connection = fakeConnection({ forwardOut })
     let current = true
     let authorityAbort: AbortController | undefined
     const removeAuthorityAbort = vi.fn()
+
     const route = await resolveSshBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
       {
@@ -87,6 +90,7 @@ describe('SSH browser network execution route', () => {
           authority.connectionGeneration === 2,
         registerAuthorityAbort: (_authority, controller) => {
           authorityAbort = controller
+
           return removeAuthorityAbort
         }
       }
@@ -116,6 +120,7 @@ describe('SSH browser network execution route', () => {
     const firstForwardOut = vi.fn()
     const secondForwardOut = vi.fn()
     let client = { forwardOut: firstForwardOut }
+
     const connection = {
       getState: () => ({
         targetId: 'target-a',
@@ -126,6 +131,7 @@ describe('SSH browser network execution route', () => {
       getClient: () => client,
       usesSystemSshTransport: () => false
     } as unknown as SshConnection
+
     const route = await resolveSshBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
       {
@@ -150,7 +156,9 @@ describe('SSH browser network execution route', () => {
     const forwardOut = vi.fn(() => {
       throw new Error('Not connected')
     })
+
     const connection = fakeConnection({ forwardOut })
+
     const route = await resolveSshBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
       {
@@ -159,6 +167,7 @@ describe('SSH browser network execution route', () => {
         registerAuthorityAbort: () => () => {}
       }
     )
+
     const socket = route.connect({ host: 'remote-only.internal', port: 443 })
     socket.on('error', () => {})
     const close = vi.fn()
@@ -172,14 +181,17 @@ describe('SSH browser network execution route', () => {
 
   it('owns one system dynamic forward for the whole execution route', async () => {
     const connection = fakeConnection(null)
+
     const process = new EventEmitter() as EventEmitter & {
       exitCode: number | null
       signalCode: NodeJS.Signals | null
     }
+
     process.exitCode = null
     process.signalCode = null
     const dispose = vi.fn()
     const close = vi.fn(async () => {})
+
     const startDynamicForward = vi.fn(async () => ({
       localPort: 45678,
       process: process as unknown as ChildProcess,
@@ -187,6 +199,7 @@ describe('SSH browser network execution route', () => {
       dispose,
       close
     }))
+
     const route = await resolveSshBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
       {
@@ -212,12 +225,15 @@ describe('SSH browser network execution route', () => {
     servers.push(listener)
     await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve))
     const connection = fakeConnection(null)
+
     const forwardProcess = new EventEmitter() as EventEmitter & {
       exitCode: number | null
       signalCode: NodeJS.Signals | null
     }
+
     forwardProcess.exitCode = null
     forwardProcess.signalCode = null
+
     const route = await resolveSshBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
       {
@@ -250,6 +266,7 @@ describe('SSH browser network execution route', () => {
     const connection = fakeConnection(null)
     const controller = new AbortController()
     const removeAuthorityAbort = vi.fn()
+
     const startDynamicForward = vi.fn(
       async (_connection: SshConnection, signal: AbortSignal) =>
         new Promise<never>((_resolve, reject) =>
@@ -260,6 +277,7 @@ describe('SSH browser network execution route', () => {
           )
         )
     )
+
     const resolving = resolveSshBrowserNetworkExecutionRoute(
       {
         executionHost,
@@ -274,6 +292,7 @@ describe('SSH browser network execution route', () => {
         startDynamicForward
       }
     )
+
     await vi.waitFor(() => expect(startDynamicForward).toHaveBeenCalledOnce())
 
     controller.abort()

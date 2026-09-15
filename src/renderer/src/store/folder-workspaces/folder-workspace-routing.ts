@@ -11,9 +11,11 @@ export function getFolderWorkspacePathStatusScopeKey(
   if (request.scope === 'project-group') {
     return `project-group:${request.projectGroupId}`
   }
+
   if (request.scope === 'path') {
     return `path:${request.connectionId ?? ''}:${request.path}`
   }
+
   return `folder-workspace:${request.folderWorkspaceId}`
 }
 
@@ -21,6 +23,7 @@ export function getRuntimeTargetCachePrefix(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): string {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
@@ -51,15 +54,20 @@ export function mergeFolderWorkspaceUpdateResponse(
   ) {
     return current
   }
+
   const next = { ...current }
+
   for (const field of fields) {
     // Why: coalesced activity can land an older response after later local bumps.
     if (field === 'lastActivityAt') {
       next.lastActivityAt = Math.max(current.lastActivityAt, updated.lastActivityAt)
       continue
     }
+
     Object.assign(next, { [field]: updated[field] })
   }
+
   next.updatedAt = Math.max(current.updatedAt, updated.updatedAt)
+
   return next
 }

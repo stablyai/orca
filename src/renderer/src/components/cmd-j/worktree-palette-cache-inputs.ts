@@ -21,6 +21,7 @@ export function selectWorktreePaletteCacheInputs(
   if (!active) {
     return EMPTY_WORKTREE_PALETTE_CACHE_INPUTS
   }
+
   return {
     prCache: state.prCache,
     issueCache: state.issueCache,

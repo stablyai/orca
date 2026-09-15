@@ -1,6 +1,7 @@
 import type { SshGitProvider } from './ssh-git-provider'
 
 const sshProviders = new Map<string, SshGitProvider>()
+
 const sshProviderGenerations = new Map<string, number>()
 
 export const SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE =
@@ -27,8 +28,10 @@ export function getSshGitProvider(connectionId: string): SshGitProvider | undefi
 
 export function requireSshGitProvider(connectionId: string): SshGitProvider {
   const provider = getSshGitProvider(connectionId)
+
   if (!provider) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   return provider
 }

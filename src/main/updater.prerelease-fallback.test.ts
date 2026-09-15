@@ -5,17 +5,29 @@ const { appMock, autoUpdaterMock, fetchNewerReleaseTagsMock, moduleFactories, re
   await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 warmUpdaterModule()
@@ -32,17 +44,22 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return Promise.reject(missingManifest)
       }
+
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-not-available')
       })
+
       return Promise.resolve(undefined)
     })
 
@@ -68,6 +85,7 @@ describe('updater', () => {
     const statuses = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
     expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
   })
@@ -79,14 +97,18 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       return Promise.reject(missingManifest)
     })
 
@@ -99,9 +121,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
@@ -119,18 +143,23 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+
       if (callCount === 1) {
         autoUpdaterMock.emit('checking-for-update')
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       if (callCount === 2) {
         return Promise.reject(missingManifest)
       }
+
       return new Promise(() => {})
     })
 
@@ -142,9 +171,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({ state: 'idle' })
     })
 
@@ -163,22 +194,28 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+
       if (callCount === 1) {
         autoUpdaterMock.emit('checking-for-update')
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       if (callCount === 2) {
         return Promise.reject(missingManifest)
       }
+
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-not-available')
       })
+
       return Promise.resolve(undefined)
     })
 
@@ -193,6 +230,7 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
@@ -206,9 +244,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({ state: 'not-available' })
       expect(statuses).not.toContainEqual({ state: 'checking', userInitiated: true })
       expect(statuses).not.toContainEqual({ state: 'not-available', userInitiated: true })
@@ -223,18 +263,23 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+
       if (callCount === 1) {
         autoUpdaterMock.emit('checking-for-update')
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return Promise.reject(missingManifest)
       }
+
       setTimeout(() => {
         autoUpdaterMock.emit('update-not-available')
       }, 10)
+
       return Promise.resolve(undefined)
     })
 
@@ -253,6 +298,7 @@ describe('updater', () => {
     const statuses = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
   })
 
@@ -265,21 +311,27 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         setTimeout(() => {
           autoUpdaterMock.emit('error', missingManifest)
         }, 10)
+
         return Promise.reject(missingManifest)
       }
+
       if (callCount === 2) {
         setTimeout(() => {
           autoUpdaterMock.emit('update-not-available')
         }, 20)
+
         return Promise.resolve(undefined)
       }
+
       return new Promise(() => {})
     })
 
@@ -301,6 +353,7 @@ describe('updater', () => {
     const statuses = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     expect(statuses).toContainEqual({ state: 'not-available' })
     expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
@@ -318,17 +371,21 @@ describe('updater', () => {
 
     const missingManifestMessage =
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+
     const primaryMissingManifest = new Error(missingManifestMessage)
     const fallbackMissingManifest = new Error(missingManifestMessage)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         return Promise.reject(primaryMissingManifest)
       }
+
       queueMicrotask(() => {
         autoUpdaterMock.emit('error', fallbackMissingManifest)
       })
+
       return new Promise(() => {})
     })
 
@@ -341,9 +398,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses.at(-1)).toEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
@@ -361,21 +420,27 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       if (callCount === 2) {
         setTimeout(() => {
           autoUpdaterMock.emit('error', missingManifest)
         }, 10)
+
         return Promise.reject(missingManifest)
       }
+
       return new Promise(() => {})
     })
 
@@ -387,9 +452,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({ state: 'idle' })
     })
 
@@ -399,6 +466,7 @@ describe('updater', () => {
     const statusesAfterLateError = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     expect(statusesAfterLateError).not.toContainEqual(
       expect.objectContaining({ state: 'error', message: missingManifest.message })
     )
@@ -418,18 +486,23 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       setTimeout(() => {
         autoUpdaterMock.emit('error', missingManifest)
       }, 10)
+
       return Promise.reject(missingManifest)
     })
 
@@ -444,6 +517,7 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
@@ -457,6 +531,7 @@ describe('updater', () => {
     const statusesAfterLateError = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     expect(statusesAfterLateError).not.toContainEqual(
       expect.objectContaining({ state: 'error', message: missingManifest.message })
     )
@@ -471,20 +546,26 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 2) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('update-not-available')
         })
+
         return Promise.resolve(undefined)
       }
+
       return new Promise(() => {})
     })
 
@@ -500,9 +581,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({ state: 'not-available' })
     })
 
@@ -524,21 +607,27 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       if (callCount === 2) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('update-not-available')
         })
+
         return Promise.resolve(undefined)
       }
+
       return new Promise(() => {})
     })
 
@@ -555,9 +644,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
     })
 
@@ -579,21 +670,27 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('error', missingManifest)
         })
+
         return new Promise(() => {})
       }
+
       if (callCount === 2) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('update-available', { version: '1.3.51-rc.6' })
         })
+
         return Promise.resolve(undefined)
       }
+
       return new Promise(() => {})
     })
 
@@ -610,9 +707,11 @@ describe('updater', () => {
 
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({
         state: 'available',
         version: '1.3.51-rc.6',
@@ -636,11 +735,13 @@ describe('updater', () => {
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
         autoUpdaterMock.emit('error', missingManifest)
       })
+
       return Promise.reject(missingManifest)
     })
 
@@ -658,6 +759,7 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",

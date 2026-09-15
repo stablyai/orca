@@ -21,11 +21,14 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 }))
 
 const TOTAL_CHARS = 4 * 1024 * 1024
+
 const FEED_CHUNK_CHARS = 8 * 1024
+
 const MAX_SIMULATED_MS = 60_000
 
 function createInstantParseTerminal() {
   let written = 0
+
   return {
     get written() {
       return written
@@ -43,6 +46,7 @@ function createInstantParseTerminal() {
 
 async function loadScheduler() {
   vi.resetModules()
+
   return import('./pane-terminal-output-scheduler')
 }
 
@@ -57,6 +61,7 @@ async function measure(options: { foreground: boolean }): Promise<number> {
   const IN_FLIGHT_WINDOW_CHARS = 256 * 1024
   let fed = 0
   let elapsed = 0
+
   while (terminal.written < TOTAL_CHARS && elapsed < MAX_SIMULATED_MS) {
     while (fed < TOTAL_CHARS && fed - terminal.written < IN_FLIGHT_WINDOW_CHARS) {
       scheduler.writeTerminalOutput(terminal as never, payload, {
@@ -68,10 +73,13 @@ async function measure(options: { foreground: boolean }): Promise<number> {
       })
       fed += FEED_CHUNK_CHARS
     }
+
     vi.advanceTimersByTime(1)
     elapsed += 1
   }
+
   expect(terminal.written).toBe(TOTAL_CHARS)
+
   return TOTAL_CHARS / 1024 / 1024 / (elapsed / 1000)
 }
 
@@ -103,19 +111,24 @@ describe('message-channel drain path', () => {
   it('drains high-priority output with real timers and no timer advance', async () => {
     vi.useRealTimers()
     setUseMessageChannelDrainForTesting(true)
+
     try {
       const writes: string[] = []
+
       const terminal = {
         write: (data: string, cb?: () => void) => {
           writes.push(data)
           cb?.()
         }
       }
+
       const { writeTerminalOutput, discardTerminalOutput } =
         await import('./pane-terminal-output-scheduler')
+
       for (let i = 0; i < 40; i++) {
         writeTerminalOutput(terminal as never, `chunk-${i};`, { foreground: true })
       }
+
       await new Promise((resolve) => setTimeout(resolve, 250))
       expect(writes.join('')).toContain('chunk-39;')
       discardTerminalOutput(terminal as never)

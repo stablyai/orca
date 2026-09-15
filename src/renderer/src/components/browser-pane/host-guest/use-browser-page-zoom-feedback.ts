@@ -20,6 +20,7 @@ export function useBrowserPageZoomFeedback(browserTabId: string): {
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
   )
+
   const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
   const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
   const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
@@ -39,6 +40,7 @@ export function useBrowserPageZoomFeedback(browserTabId: string): {
       clearTimeout(browserZoomFeedbackTimerRef.current)
     }
   }, [])
+
   const showBrowserZoomFeedback = useCallback((level: number): void => {
     setBrowserZoomPercent(browserPageZoomLevelToPercent(level))
     setBrowserZoomFeedbackVisible(true)

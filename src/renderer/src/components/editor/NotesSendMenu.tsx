@@ -83,10 +83,13 @@ export function NotesSendMenu<TNote>({
   const [sendMenuOpen, setSendMenuOpen] = useState(false)
   const targetModeId = useMemo(() => buildNotesSendTargetModeId(modeIdParts), [modeIdParts])
   const enabledScopes = useMemo(() => scopes.filter((scope) => scope.notes.length > 0), [scopes])
+
   const defaultScope = useMemo(() => {
     const requested = enabledScopes.find((scope) => scope.id === defaultScopeId)
+
     return requested ?? enabledScopes[0] ?? null
   }, [defaultScopeId, enabledScopes])
+
   const hasDeliverableNotes = enabledScopes.length > 0
 
   const markDelivered = useCallback(
@@ -101,6 +104,7 @@ export function NotesSendMenu<TNote>({
       if (scope.notes.length === 0) {
         return
       }
+
       openAgentSendPopoverTargetMode({
         id: targetModeId,
         worktreeId,
@@ -124,6 +128,7 @@ export function NotesSendMenu<TNote>({
   const handleOpenChange = useCallback(
     (open: boolean) => {
       setSendMenuOpen(open)
+
       if (open) {
         if (defaultScope) {
           openTargetMode(defaultScope)
@@ -136,6 +141,7 @@ export function NotesSendMenu<TNote>({
   )
 
   const effectiveSendMenuOpen = sendMenuOpen && activeTargetModeId === targetModeId
+
   if (sendMenuOpen && activeTargetModeId !== targetModeId) {
     // Why: avoid rendering a stale menu for one paint after another send target
     // wins; the local open bit is only meaningful while this target is active.
@@ -153,12 +159,15 @@ export function NotesSendMenu<TNote>({
     if (openRequestNonce == null) {
       return
     }
+
     // Why: only open when notes remain and the request has not aged out; either
     // way clear it so a stale nonce cannot reopen the menu on a later remount.
     const expired = openRequestExpiresAt != null && Date.now() >= openRequestExpiresAt
+
     if (!expired && hasDeliverableNotes && defaultScope) {
       handleOpenChange(true)
     }
+
     onOpenRequestHandled?.()
   }, [
     openRequestNonce,
@@ -270,9 +279,11 @@ export function NotesSendMenu<TNote>({
 
 function preventAgentSendTargetOutsideDismiss(event: CustomEvent<{ originalEvent: Event }>) {
   const target = event.detail.originalEvent.target
+
   if (!(target instanceof Element)) {
     return
   }
+
   if (
     target.closest(
       '[data-agent-send-target="eligible"], [data-agent-send-target="disabled"], [data-agent-send-target="sending"]'

@@ -59,23 +59,30 @@ export function registerTelemetryHandlers(store: Store): void {
     if (typeof name !== 'string') {
       return
     }
+
     // `props` is optional (undefined/null → {} below); reject any other non-object at the boundary.
     if (props !== null && props !== undefined && typeof props !== 'object') {
       return
     }
+
     const eventName = name as EventName
+
     // Why: these events are main-owned; renderer IPC emitting them would let compromised content spoof product outcomes.
     if (MAIN_OWNED_TELEMETRY_EVENTS.has(eventName)) {
       return
     }
+
     // Inject cohort props only for schemas that declare them: schemas are `.strict()`, so an extra prop on any other event fails Zod and drops it.
     const baseProps = (props ?? {}) as Record<string, unknown>
+
     const withRepoCohort = isCohortExtendedEvent(eventName)
       ? { ...baseProps, ...getCohortAtEmit() }
       : baseProps
+
     const finalProps = isOnboardingEvent(eventName)
       ? { ...withRepoCohort, ...getOnboardingCohortAtEmit() }
       : withRepoCohort
+
     // Casts are pass-through only; `track()`'s validator is the single runtime enforcement point, not these casts.
     track(eventName, finalProps as EventProps<EventName>)
   })
@@ -85,16 +92,20 @@ export function registerTelemetryHandlers(store: Store): void {
     if (typeof optedIn !== 'boolean') {
       return
     }
+
     // Check storeRef before consuming a token — burning one on a no-op would eventually block legitimate mutations this session.
     if (!storeRef) {
       return
     }
+
     // Consent-mutation bucket: ≤5 per session (see `burst-cap.ts`).
     if (!consumeConsentMutationToken()) {
       return
     }
+
     // Derive `via` BEFORE the write so it sees the pre-mutation state (optedIn still null for an existing user's "Turn off").
     const via = deriveOptInVia(storeRef, optedIn)
+
     return setOptIn(via, optedIn)
   })
 
@@ -104,6 +115,7 @@ export function registerTelemetryHandlers(store: Store): void {
       // Fail closed: no store means we can't honor the stored preference, so surface pending_banner, not a misleading 'enabled'.
       return { effective: 'pending_banner' }
     }
+
     return resolveConsent(storeRef.getSettings())
   })
 
@@ -112,15 +124,19 @@ export function registerTelemetryHandlers(store: Store): void {
     if (!storeRef) {
       return
     }
+
     // Only valid while the notice is pending (existedBefore=true, optedIn=null); any other state is a renderer silently flipping optedIn after opt-out.
     const telemetry = storeRef.getSettings().telemetry
+
     if (telemetry?.existedBeforeTelemetryRelease !== true || telemetry?.optedIn !== null) {
       return
     }
+
     // Rate-limit even this silent path: unbounded acknowledge calls are a disk-write amplification vector.
     if (!consumeConsentMutationToken()) {
       return
     }
+
     return persistBannerAcknowledgeWithoutEmitting()
   })
 }

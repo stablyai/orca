@@ -32,7 +32,9 @@ export function normalizeField(
   if (!raw || typeof raw.id !== 'string' || typeof raw.name !== 'string') {
     return null
   }
+
   const dataType = raw.dataType ?? raw.__typename ?? ''
+
   if (raw.__typename === 'ProjectV2SingleSelectField' || dataType === 'SINGLE_SELECT') {
     const options: GitHubProjectSingleSelectOption[] = (raw.options ?? [])
       .map((o) =>
@@ -41,11 +43,14 @@ export function normalizeField(
           : null
       )
       .filter((o): o is GitHubProjectSingleSelectOption => o !== null)
+
     return { kind: 'single-select', id: raw.id, name: raw.name, dataType: 'SINGLE_SELECT', options }
   }
+
   if (raw.__typename === 'ProjectV2IterationField' || dataType === 'ITERATION') {
     const cfg = raw.configuration ?? {}
     const iterations: GitHubProjectIteration[] = []
+
     for (const it of cfg.completedIterations ?? []) {
       if (typeof it.id === 'string' && typeof it.title === 'string') {
         iterations.push({
@@ -57,6 +62,7 @@ export function normalizeField(
         })
       }
     }
+
     for (const it of cfg.iterations ?? []) {
       if (typeof it.id === 'string' && typeof it.title === 'string') {
         iterations.push({
@@ -68,8 +74,10 @@ export function normalizeField(
         })
       }
     }
+
     return { kind: 'iteration', id: raw.id, name: raw.name, dataType: 'ITERATION', iterations }
   }
+
   return { kind: 'field', id: raw.id, name: raw.name, dataType }
 }
 
@@ -83,6 +91,7 @@ export function normalizeUser(raw: RawUser | null | undefined): GitHubProjectUse
   if (!raw || typeof raw.login !== 'string') {
     return null
   }
+
   return {
     login: raw.login,
     name: raw.name ?? null,
@@ -96,6 +105,7 @@ export function normalizeLabel(raw: RawLabel | null | undefined): GitHubProjectL
   if (!raw || typeof raw.name !== 'string') {
     return null
   }
+
   return { name: raw.name, color: raw.color ?? '' }
 }
 
@@ -122,12 +132,15 @@ export function normalizeFieldValue(
   if (!raw || !raw.field || typeof raw.field.id !== 'string') {
     return null
   }
+
   const fieldId = raw.field.id
+
   switch (raw.__typename) {
     case 'ProjectV2ItemFieldSingleSelectValue':
       if (typeof raw.optionId !== 'string') {
         return null
       }
+
       return {
         kind: 'single-select',
         fieldId,
@@ -139,6 +152,7 @@ export function normalizeFieldValue(
       if (typeof raw.iterationId !== 'string') {
         return null
       }
+
       return {
         kind: 'iteration',
         fieldId,
@@ -154,6 +168,7 @@ export function normalizeFieldValue(
       if (typeof raw.number !== 'number') {
         return null
       }
+
       return { kind: 'number', fieldId, number: raw.number }
     case 'ProjectV2ItemFieldDateValue':
       return {
@@ -166,14 +181,18 @@ export function normalizeFieldValue(
       const labels = (raw.labels?.nodes ?? [])
         .map(normalizeLabel)
         .filter((l): l is GitHubProjectLabel => l !== null)
+
       return { kind: 'labels', fieldId, labels }
     }
+
     case 'ProjectV2ItemFieldUserValue': {
       const users = (raw.users?.nodes ?? [])
         .map(normalizeUser)
         .filter((u): u is GitHubProjectUser => u !== null)
+
       return { kind: 'users', fieldId, users }
     }
+
     case undefined:
     default:
       // Unknown __typename → forward-compat: drop silently, don't classify as drift (see design §Error Handling).

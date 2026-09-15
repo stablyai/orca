@@ -25,6 +25,7 @@ function makeRequest(method: string, params: unknown = {}): RpcRequest {
 
 function makeRuntime(ui: PersistedUIState = getDefaultUIState()): OrcaRuntimeService {
   let currentUI = ui
+
   return {
     getRuntimeId: () => 'test-runtime',
     getUIState: vi.fn(() => currentUI),
@@ -41,10 +42,12 @@ function makeRuntime(ui: PersistedUIState = getDefaultUIState()): OrcaRuntimeSer
           }
         }
       }
+
       return currentUI
     }),
     updateUIState: vi.fn((updates: Partial<PersistedUIState>) => {
       currentUI = { ...currentUI, ...updates }
+
       return currentUI
     }),
     getOrchestrationDb: () => ({
@@ -218,6 +221,7 @@ describe('RpcDispatcher feature interactions', () => {
   it('does not record browser pane UI-originated browser RPCs as agent browser use', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+
     const browserPaneUiParams = {
       [ORCA_RUNTIME_RPC_FEATURE_INTERACTION_SOURCE_KEY]: ORCA_RUNTIME_RPC_BROWSER_UI_SOURCE
     }

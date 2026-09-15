@@ -52,9 +52,11 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     this.assertGraphReady()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId)
+
     if (!repo) {
       throw new Error('repo_not_found')
     }
+
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
     const targetsClients = navigationTargetsClients(navigation)
@@ -68,16 +70,19 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
 
     let sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable' =
       'not-applicable'
+
     if (targetsHost || targetsClients) {
       // Why: inactive worktree terminal panes are renderer-owned and may not have
       // live PTYs until the desktop activates the worktree and mounts them.
       if (targetsHost) {
         this.notifyHostActivateWorktree(repo.id, worktree.id)
       }
+
       if (targetsClients) {
         this.notifyClientsActivateWorktree(repo.id, worktree.id)
       }
     }
+
     if (!targetsHost) {
       // Why: mobile/web selection needs fresh session surfaces without forcing
       // every attached desktop renderer to navigate to the phone's workspace.
@@ -86,6 +91,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       })
       await this.refreshMobileSessionPtyRecords()
       this.notifyMobileSessionTabsChanged(worktree.id)
+
       // Why: a phone open must also wake the worktree's slept agents (experimental
       // agent sleep). Only the host renderer holds the sleeping records + wake
       // authority, so fire-and-forget ask it — mobile-scoped so web/desktop are
@@ -111,6 +117,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
         }
       }
     }
+
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
   }
 
@@ -126,6 +133,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     if (!this.store) {
       return null
     }
+
     return buildWorktreeStartupForDraft({
       repo,
       draft,
@@ -144,6 +152,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     return buildWorktreeStartupForAgent({
       repo,
       agent,
@@ -169,8 +178,10 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   ): Promise<void> {
     if (connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(agent, connectionId, workspacePath)
+
       return
     }
+
     await this.markLocalWorkspaceTrustedForAgent(agent, workspacePath)
   }
 

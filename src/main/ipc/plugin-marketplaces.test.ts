@@ -6,6 +6,7 @@ import type { PluginService } from '../plugins/plugin-service'
 type IpcHandler = (event: unknown, args?: unknown) => unknown
 
 const electronMocks = vi.hoisted(() => ({ handle: vi.fn() }))
+
 vi.mock('electron', () => ({ ipcMain: { handle: electronMocks.handle } }))
 
 import {
@@ -14,8 +15,11 @@ import {
 } from './plugin-marketplaces'
 
 const SOURCE_ID = 'a'.repeat(32)
+
 const MARKETPLACE_COMMIT = 'b'.repeat(40)
+
 const PLUGIN_COMMIT = 'c'.repeat(40)
+
 const PLUGIN_KEY = 'orca-samples.demo'
 
 let handlers: Map<string, IpcHandler>
@@ -48,9 +52,11 @@ function createPluginService(): PluginService {
 
 async function invoke(channel: string, args?: unknown): Promise<unknown> {
   const handler = handlers.get(channel)
+
   if (!handler) {
     throw new Error(`missing IPC handler: ${channel}`)
   }
+
   return handler({}, args)
 }
 
@@ -108,6 +114,7 @@ describe('plugin marketplace IPC authority', () => {
   it('dispatches source listing, add, removal, and refresh operations', async () => {
     const services = createServices()
     registerPluginMarketplaceHandlers(createPluginService(), services)
+
     const source = {
       kind: 'git' as const,
       url: 'https://example.com/marketplace.git',
@@ -133,6 +140,7 @@ describe('plugin marketplace IPC authority', () => {
     const services = createServices()
     const pluginService = createPluginService()
     registerPluginMarketplaceHandlers(pluginService, services)
+
     const preview = {
       marketplaceSourceId: SOURCE_ID,
       marketplaceCommit: MARKETPLACE_COMMIT,

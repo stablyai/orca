@@ -26,6 +26,7 @@ export async function reconcileRetainedCodexHookHomes(args: {
       const status = args.hooksEnabled
         ? await args.hookService.install(runtimeHomePath)
         : await args.hookService.refreshRuntimeUserHooks(runtimeHomePath)
+
       if (status.state === 'error') {
         console.warn('[codex-hook-service] failed to reconcile retained Codex home', status.detail)
       }

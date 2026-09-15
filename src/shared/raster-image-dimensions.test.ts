@@ -8,6 +8,7 @@ function pngHeader(width: number, height: number): Buffer {
   png.write('IHDR', 12, 'ascii')
   png.writeUInt32BE(width, 16)
   png.writeUInt32BE(height, 20)
+
   return png
 }
 
@@ -17,6 +18,7 @@ function bmpHeader(width: number, height: number): Buffer {
   bmp.writeUInt32LE(40, 14)
   bmp.writeInt32LE(width, 18)
   bmp.writeInt32LE(height, 22)
+
   return bmp
 }
 
@@ -28,6 +30,7 @@ function jpegWithMetadata(
   extraSegments = 0
 ): Buffer {
   const parts = [Buffer.from([0xff, 0xd8])]
+
   for (let written = 0; written < metadataBytes;) {
     // A JPEG segment length field is 16 bits, so real files chain many segments to carry a profile.
     const size = Math.min(65_533, metadataBytes - written)
@@ -37,12 +40,14 @@ function jpegWithMetadata(
     parts.push(header, Buffer.alloc(size))
     written += size
   }
+
   for (let index = 0; index < extraSegments; index += 1) {
     const empty = Buffer.alloc(4)
     empty.writeUInt16BE(0xffe2)
     empty.writeUInt16BE(2, 2)
     parts.push(empty)
   }
+
   const sof = Buffer.alloc(11)
   sof.writeUInt16BE(0xffc0)
   sof.writeUInt16BE(8, 2)
@@ -50,6 +55,7 @@ function jpegWithMetadata(
   sof.writeUInt16BE(height, 5)
   sof.writeUInt16BE(width, 7)
   parts.push(sof)
+
   return Buffer.concat(parts)
 }
 
@@ -61,6 +67,7 @@ function icoWithPayload(payload: Buffer, width = 1, height = 1): Buffer {
   header[7] = height === 256 ? 0 : height
   header.writeUInt32LE(payload.byteLength, 14)
   header.writeUInt32LE(header.byteLength, 18)
+
   return Buffer.concat([header, payload])
 }
 

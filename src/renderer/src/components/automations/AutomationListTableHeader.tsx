@@ -63,12 +63,14 @@ export function AutomationListTableHeader({
     <div className={`${AUTOMATIONS_TABLE_GRID_CLASS} ${LIST_TABLE_HEADER_CLASS}`}>
       {COLUMNS.map((column, index) => {
         const label = translate(column.key, column.fallback)
+
         const className =
           index === 0
             ? LIST_TABLE_STICKY_HEADER_CELL_CLASS
             : index === COLUMNS.length - 1
               ? 'text-center'
               : undefined
+
         return (
           <span key={column.key} className={className}>
             {column.sortField && onSort ? (

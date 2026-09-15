@@ -29,6 +29,7 @@ describe('getTaskSourceHostAvailabilityForHost', () => {
       label: 'Env',
       health: 'available'
     })
+
     expect(getTaskSourceHostAvailabilityForHost(host, 'runtime:env-1')).toEqual({
       hostId: 'runtime:env-1',
       reason: 'checking-task-source-capability'
@@ -43,6 +44,7 @@ describe('getTaskSourceHostAvailabilityForHost', () => {
       health: 'available',
       capabilities: []
     })
+
     expect(getTaskSourceHostAvailabilityForHost(host, 'runtime:env-1')).toEqual({
       hostId: 'runtime:env-1',
       reason: 'missing-task-source-capability'
@@ -57,6 +59,7 @@ describe('getTaskSourceHostAvailabilityForHost', () => {
       health: 'available',
       capabilities: [TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY]
     })
+
     expect(getTaskSourceHostAvailabilityForHost(host, 'runtime:env-1')).toBeNull()
   })
 
@@ -73,6 +76,7 @@ describe('getTaskSourceHostAvailabilityForHost', () => {
       connectionStatus: 'disconnected',
       capabilities: [TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY]
     })
+
     expect(getTaskSourceHostAvailabilityForHost(host, 'ssh:box')).toEqual({
       hostId: 'ssh:box',
       health: 'disconnected',

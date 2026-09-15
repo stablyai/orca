@@ -18,6 +18,7 @@ function clearTerminalSearch(searchAddon: SearchAddon | null): void {
   if (!searchAddon) {
     return
   }
+
   searchAddon.clearDecorations()
   // Why: xterm keeps the active match selected after decorations are cleared.
   searchAddon.findNext('')
@@ -95,12 +96,16 @@ export default function TerminalSearch({
 
     if (!isOpen) {
       clearTerminalSearch(searchAddon)
+
       return
     }
+
     if (!requestQuery) {
       clearTerminalSearch(searchAddon)
+
       return
     }
+
     if (searchAddon) {
       safeFind(
         (term, options) => searchAddon.findNext(term, options),

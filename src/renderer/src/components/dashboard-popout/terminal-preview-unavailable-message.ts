@@ -15,6 +15,7 @@ export function terminalPreviewUnavailableMessage(source: {
   const isRemote =
     source.hostKind === 'ssh' ||
     (typeof source.ptyId === 'string' && parseAppSshPtyId(source.ptyId) !== null)
+
   return isRemote
     ? translate(
         'dashboardPopout.terminal.remotePreviewUnavailable',

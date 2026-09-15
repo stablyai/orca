@@ -44,8 +44,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -66,6 +69,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -75,6 +79,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -95,6 +100,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -105,9 +111,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -117,9 +125,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -128,6 +138,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -163,6 +174,7 @@ describe('connectPanePty', () => {
           replay: 'replay-payload'
         }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -175,6 +187,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -201,6 +214,7 @@ describe('connectPanePty', () => {
           coldRestore: { scrollback: 'cold-payload' }
         }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -213,6 +227,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -236,6 +251,7 @@ describe('connectPanePty', () => {
     const written: string[] = []
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       callbacks.onData?.('PS >')
+
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
@@ -261,6 +277,7 @@ describe('connectPanePty', () => {
       callback?.()
     })
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredViewportBlankingPanesRef: { current: new Set([1]) }
     })
@@ -277,6 +294,7 @@ describe('connectPanePty', () => {
       20,
       4
     )
+
     expect(rendered.baseY).toBeGreaterThan(0)
     expect(rendered.allLines.some((line) => line.includes('old TUI row'))).toBe(true)
     expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
@@ -286,10 +304,12 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
     const written: string[] = []
+
     const operations: (
       | { kind: 'write'; data: string }
       | { kind: 'resize'; cols: number; rows: number }
     )[] = []
+
     const destinationCols = 10
     const destinationRows = 5
     const recoveredCols = 20
@@ -309,6 +329,7 @@ describe('connectPanePty', () => {
           }
         }
       }
+
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
@@ -327,12 +348,15 @@ describe('connectPanePty', () => {
     pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
       written.push(data)
       operations.push({ kind: 'write', data })
+
       if (data === viewportClear) {
         sawViewportClear = true
       } else if (sawViewportClear && data === '' && preResizeBarrier.release === null) {
         preResizeBarrier.release = callback ?? (() => {})
+
         return
       }
+
       callback?.()
     })
     pane.terminal.resize = vi.fn((cols: number, rows: number) => {
@@ -348,6 +372,7 @@ describe('connectPanePty', () => {
     pane.fitAddon.fit = vi.fn(() => {
       pane.terminal.resize(destinationCols, destinationRows)
     })
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
@@ -376,15 +401,18 @@ describe('connectPanePty', () => {
     )
     expect(written.indexOf(viewportClear)).toBeLessThan(written.indexOf(groundedColdScrollback))
     expect(written.indexOf(groundedColdScrollback)).toBeLessThan(written.indexOf(blankViewport))
+
     const viewportClearOperation = operations.findIndex(
       (operation) => operation.kind === 'write' && operation.data === viewportClear
     )
+
     const recoveredResizeOperation = operations.findIndex(
       (operation) =>
         operation.kind === 'resize' &&
         operation.cols === recoveredCols &&
         operation.rows === recoveredRows
     )
+
     expect(viewportClearOperation).toBeLessThan(recoveredResizeOperation)
 
     // Model the real op order: the old path appended a 20-col snapshot onto a dirty 10-col xterm, wrapping rows at the wrong grid.
@@ -393,6 +421,7 @@ describe('connectPanePty', () => {
       rows: destinationRows,
       allowProposedApi: true
     })
+
     try {
       await writeHeadlessTerminal(
         rendered,
@@ -401,6 +430,7 @@ describe('connectPanePty', () => {
       await writeHeadlessTerminal(rendered, '\x1b[44m')
       let replayedAtRecoveredGrid = false
       let sourceGridLines: string[] = []
+
       for (const operation of operations) {
         if (operation.kind === 'resize') {
           if (
@@ -415,45 +445,58 @@ describe('connectPanePty', () => {
                 rendered.buffer.active.getLine(lineIndex)?.translateToString(true) ?? ''
             )
           }
+
           rendered.resize(operation.cols, operation.rows)
+
           if (operation.cols === recoveredCols && operation.rows === recoveredRows) {
             replayedAtRecoveredGrid = true
           }
         } else {
           await writeHeadlessTerminal(rendered, operation.data)
+
           if (operation.data === viewportClear) {
             expect(rendered.buffer.active.getLine(0)?.getCell(0)?.getBgColor()).toBe(-1)
           }
         }
       }
+
       if (sourceGridLines.length === 0) {
         sourceGridLines = Array.from(
           { length: rendered.buffer.active.length },
           (_, lineIndex) => rendered.buffer.active.getLine(lineIndex)?.translateToString(true) ?? ''
         )
       }
+
       expect(sourceGridLines).toContain('COLD          END')
+
       if (rendered.cols !== destinationCols || rendered.rows !== destinationRows) {
         rendered.resize(destinationCols, destinationRows)
       }
+
       await writeHeadlessTerminal(rendered, 'PS >')
       const buffer = rendered.buffer.active
+
       const lines = Array.from({ length: buffer.length }, (_, lineIndex) =>
         buffer.getLine(lineIndex)?.translateToString(true)
       )
+
       const logicalLines: string[] = []
+
       for (let lineIndex = 0; lineIndex < buffer.length; lineIndex += 1) {
         const line = buffer.getLine(lineIndex)
         const text = line?.translateToString(true) ?? ''
+
         if (line?.isWrapped && logicalLines.length > 0) {
           logicalLines[logicalLines.length - 1] += text
         } else {
           logicalLines.push(text)
         }
       }
+
       const visibleLines = Array.from({ length: rendered.rows }, (_, row) =>
         buffer.getLine(buffer.viewportY + row)?.translateToString(true)
       )
+
       expect(buffer.baseY).toBeGreaterThan(0)
       expect(lines.some((line) => line?.includes('OLD_ROW_'))).toBe(false)
       expect(lines.some((line) => line?.includes('KEEP_1'))).toBe(true)

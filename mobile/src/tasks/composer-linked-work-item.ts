@@ -95,6 +95,7 @@ export function resolveComposerCreateSelection(args: {
   name: string
 }): MobileComposerCreateSelection | null {
   const { linkedWorkItem, base, branch, reuseEligibleBranch, reuseSelectedBranch } = args
+
   if (linkedWorkItem) {
     return {
       kind: 'work-item',
@@ -105,6 +106,7 @@ export function resolveComposerCreateSelection(args: {
       branchNameOverride: base.branchNameOverride
     }
   }
+
   if (branch && base.baseBranch) {
     return {
       kind: 'branch',
@@ -115,9 +117,11 @@ export function resolveComposerCreateSelection(args: {
       branchNameOverride: base.branchNameOverride
     }
   }
+
   if (args.branchCreateIntent && args.name.trim()) {
     return { kind: 'new-branch', branchName: args.name.trim() }
   }
+
   return null
 }
 
@@ -139,6 +143,7 @@ export function resolveComposerBranchPick(args: {
   worktreeBranches: readonly string[]
 }): ComposerBranchPick {
   const selection = resolveSharedComposerBranchPick(args)
+
   return {
     base: {
       baseBranch: selection.baseBranch,

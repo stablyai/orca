@@ -44,6 +44,7 @@ export function onWorkspaceDocGuestRegistered(
   listener: (browserPageId: string) => void
 ): () => void {
   registrationListeners.add(listener)
+
   return () => registrationListeners.delete(listener)
 }
 
@@ -57,17 +58,22 @@ export function getWorkspaceDocPageGuest(
   senderWebContentsId: number
 ): Electron.WebContents | null {
   const registration = docGuestsByPageId.get(browserPageId)
+
   if (!registration || registration.hostId !== senderWebContentsId) {
     return null
   }
+
   // Why: revocation is how a closed tab withdraws its preview, and it happens before the guest is torn down.
   if (!getDocPreviewGrant(registration.grantId)) {
     return null
   }
+
   if (registration.guest.isDestroyed()) {
     docGuestsByPageId.delete(browserPageId)
+
     return null
   }
+
   return registration.guest
 }
 
@@ -107,16 +113,20 @@ export function installDocPreviewGuestPolicy(
     if (boundGrantId !== null) {
       return
     }
+
     const grantId = parseDocPreviewUrl(rawUrl)?.grantId ?? null
     // Why the grant must still be live: registering under the page a dead grant names would put a
     // guest nothing can read into the registry the tool door answers from.
     const grant = grantId === null ? null : getDocPreviewGrant(grantId)
+
     if (!grant) {
       return
     }
+
     boundGrantId = grant.id
     boundPageId = grant.browserPageId
     docGuestsByPageId.set(boundPageId, { guest, hostId: host.id, grantId: grant.id })
+
     for (const listener of registrationListeners) {
       listener(boundPageId)
     }
@@ -126,21 +136,26 @@ export function installDocPreviewGuestPolicy(
     host,
     readBoundGrantId: () => boundGrantId
   })
+
   const forgetGuest = (): void => {
     previewGuests.delete(guest)
+
     // Why the identity check: a re-mint registers the replacement under the same page before this
     // guest's own teardown runs, and deleting by key alone would unregister the live one.
     if (boundPageId !== null && docGuestsByPageId.get(boundPageId)?.guest === guest) {
       docGuestsByPageId.delete(boundPageId)
     }
   }
+
   guest.once('destroyed', forgetGuest)
 
   const isAllowedPreviewNavigation = (rawUrl: string): boolean => {
     const target = parseDocPreviewUrl(rawUrl)
+
     if (!target || !getDocPreviewGrant(target.grantId)) {
       return false
     }
+
     // Why the latch is required and not just consistent: the renderer-set src is browser-initiated,
     // so will-navigate never fires for it. Anything reaching here before the latch is the guest
     // moving itself, which no grant has admitted yet.
@@ -156,6 +171,7 @@ export function installDocPreviewGuestPolicy(
     if (isAllowedPreviewNavigation(url)) {
       return
     }
+
     event.preventDefault()
   }
 
@@ -163,18 +179,22 @@ export function installDocPreviewGuestPolicy(
   // the embedder hands it to us, so the only navigation most previews ever make has already
   // started. Latching what it is on now is what binds the usual preview to its grant at all.
   latchGrantFromUrl(guest.getURL())
+
   const latchFromMainFrameNavigation = (details: { isMainFrame: boolean; url: string }): void => {
     // Why: only the top document defines which grant this guest belongs to. Latching from a
     // subframe would let an in-document iframe rebind the guest to another grant.
     if (!details.isMainFrame) {
       return
     }
+
     latchGrantFromUrl(details.url)
   }
+
   // Why a committed URL too: a navigation that started before this listener existed still commits
   // after it, and a preview that never navigates again would otherwise stay bound to nothing.
   const latchFromCommittedUrl = (_event: Electron.Event, url: string): void =>
     latchGrantFromUrl(url)
+
   // Why: will-navigate never fires for a subframe, so without this an <iframe src="https://…">
   // inside a previewed document would load off-machine even though the top frame cannot.
   const frameNavigationGuard = (details: {
@@ -185,8 +205,10 @@ export function installDocPreviewGuestPolicy(
     if (details.isMainFrame || isAllowedPreviewNavigation(details.url)) {
       return
     }
+
     details.preventDefault()
   }
+
   guest.on('did-start-navigation', latchFromMainFrameNavigation)
   guest.on('did-navigate', latchFromCommittedUrl)
   guest.on('will-navigate', navigationGuard)
@@ -202,9 +224,11 @@ export function installDocPreviewGuestPolicy(
 
   return () => {
     forgetGuest()
+
     if (guest.isDestroyed()) {
       return
     }
+
     guest.off('destroyed', forgetGuest)
     guest.off('did-start-navigation', latchFromMainFrameNavigation)
     guest.off('did-navigate', latchFromCommittedUrl)
@@ -225,16 +249,22 @@ function isWebUrl(url: string): boolean {
  */
 export function reportDocPreviewLinkClick(sender: Electron.WebContents, rawUrl: string): void {
   const registration = previewGuests.get(sender)
+
   if (!registration) {
     return
   }
+
   const boundGrantId = registration.readBoundGrantId()
+
   if (boundGrantId === null || !getDocPreviewGrant(boundGrantId)) {
     return
   }
+
   const externalUrl = normalizeExternalBrowserUrl(rawUrl)
+
   if (!externalUrl || !isWebUrl(externalUrl)) {
     return
   }
+
   registration.host.send(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, { url: externalUrl })
 }

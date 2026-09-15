@@ -5,6 +5,7 @@ export const EMOJI_TABLE_FIXTURE = readFileSync(
   path.join(__dirname, 'fixtures', 'terminal-emoji-table.md'),
   'utf8'
 )
+
 export const NARROW_TERMINAL_MAX_COLS = 120
 
 export function longMarkdownTableScript(runId: string): string {
@@ -35,6 +36,7 @@ export function longMarkdownTableScript(runId: string): string {
     ['Pam Payload', 'Serialization', 'Online', '📦', '5800', 'JSON.stringify is my yoga'],
     ['Reed Regex', 'Matching', 'Offline', '🔍', '6800', 'Now I have two problems']
   ]
+
   return `
 const rows = ${JSON.stringify(names)}
 const widths = [16, 14, 12, 6, 7, 42]
@@ -90,6 +92,7 @@ await writeStdout('LONG_TABLE_SCROLL_RESTORE_${runId}\\n')
 export function emojiFixtureMarkdownTableScript(table: string, runId: string): string {
   const marker = `EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
   const widthMarker = `${marker} WIDTH`
+
   return `
 const table = ${JSON.stringify(table)}
 const minimumWidths = [2, 5, 4, 7, 7, 4, 3, 4]
@@ -224,6 +227,7 @@ export function emojiFixtureTableWidthMarker(runId: string): string {
 
 export function narrowSignerMarkdownTableScript(runId: string): string {
   const marker = `NARROW_SIGNER_TABLE_RESTORE_${runId}`
+
   const rows = [
     '| # | Status | Signer | Action |',
     '| ---: | --- | --- | --- |',
@@ -231,9 +235,11 @@ export function narrowSignerMarkdownTableScript(runId: string): string {
     '| 2 | waiting | did:web:example.signing.service:teams:release:prod:primary-key-2026-06-08-with-extra-qualifiers-and-long-human-readable-suffix | counter-sign |',
     '| 3 | signed | 0x742d35Cc6634C0532925a3b844Bc454e4438f44e9E8F12A7C4D9B6530F9D2C8E7A6B5C4D3E2F1A0B998877665544332211 | archive receipt |'
   ]
+
   const repeatedRows = Array.from({ length: 8 }, (_, index) =>
     rows.concat(`| ${index + 4} | signed | signer-row-${index}-${'a'.repeat(96)} | verify |`)
   ).flat()
+
   return `
 const rows = ${JSON.stringify(repeatedRows)}
 async function writeStdout(chunk) {

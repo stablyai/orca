@@ -60,6 +60,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
   it('resumes the thread the durable handle chain names, not the client one', async () => {
     const codex = fakeCodex()
+
     const adapter = adapterFor(codex, {
       resumeThreadId: 'thread-proven',
       resumePath: '/rollouts/thread-proven.jsonl'
@@ -126,6 +127,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         method: 'item/commandExecution/requestApproval',
         params: { itemId: 'codex-item-early', threadId: THREAD_ID, turnId: 'turn-1' }
       })
+
       return { thread: { id: THREAD_ID } }
     }
 
@@ -149,19 +151,24 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     let attempts = 0
+
     const sink: StructuredAgentSessionEventSink = {
       appendItem: vi.fn(),
       appendTombstone: vi.fn(),
       publish: vi.fn(),
       tryAppendItem: vi.fn((identity, body, blobs) => {
         attempts += 1
+
         if (attempts === 1) {
           return { accepted: false as const, reason: 'backpressure' as const }
         }
+
         sink.appendItem(identity, body, blobs)
+
         return { accepted: true as const }
       })
     }
+
     const adapter = adapterFor(codex, {}, events)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -183,6 +190,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
   it('refuses to publish a session whose child died while it was being acquired', async () => {
     const codex = fakeCodex()
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => ({
         command: 'codex',
@@ -195,6 +203,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       // The child dies while the acquisition is still reading its identity.
       readProcessStartTime: async () => {
         codex.connections[0].closed = true
+
         return 1_700_000_000_000
       }
     })
@@ -215,6 +224,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
   it('classifies launch validation failure as pre-spawn without opening a child', async () => {
     const codex = fakeCodex()
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => {
         throw new Error('workspace no longer exists')
@@ -248,18 +258,24 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   it('lets closeAll cancel and reap an acquisition still opening', async () => {
     const codex = fakeCodex()
     let releaseOpen = (): void => {}
+
     let markOpenEntered = (): void => {}
+
     const gate = new Promise<void>((resolve) => {
       releaseOpen = resolve
     })
+
     const openEntered = new Promise<void>((resolve) => {
       markOpenEntered = resolve
     })
+
     const openConnection: typeof openCodexAppServerConnection = async (...args) => {
       markOpenEntered()
       await gate
+
       return codex.openConnection(...args)
     }
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => ({
         command: 'codex',
@@ -271,11 +287,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const acquiring = adapter.acquire({
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9'
     })
+
     await openEntered
 
     const closing = adapter.closeAll()
@@ -289,11 +307,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   it('fences an acquisition while launch resolution is still pending', async () => {
     const launch = Promise.withResolvers<CodexStructuredLaunch>()
     const codex = fakeCodex()
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: () => launch.promise,
       openConnection: codex.openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const acquiring = adapter.acquire({
       identity: identityFor('session-1'),
       fence: 7,
@@ -358,6 +378,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         threadId: THREAD_ID,
         turn: { id: 'turn-late' }
       })
+
       return {}
     }
 
@@ -381,8 +402,10 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       const notify = codex.connections[0].handlers.onNotification
       notify?.('turn/started', { threadId: 'thread-child', turn: { id: 'turn-child' } })
       notify?.('turn/started', { threadId: THREAD_ID, turn: { id: 'turn-root' } })
+
       return {}
     }
+
     const adapter = await acquired(codex, {}, events)
 
     const outcome = await adapter.dispatch({
@@ -407,6 +430,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         throw new CodexAppServerRequestError('turn/start', -32602, 'turn already running')
       }
     })
+
     const adapter = await acquired(codex)
 
     expect(
@@ -425,6 +449,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         throw new Error('codex app-server connection ended')
       }
     })
+
     const adapter = await acquired(codex)
 
     await expect(
@@ -456,6 +481,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       }),
       'turn/start': () => ({ turn: { id: 'turn-1' } })
     })
+
     const adapter = await acquired(codex)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'gpt-5', fence: 7 })
@@ -520,12 +546,14 @@ describe('CodexStructuredSessionAdapter prompts', () => {
   it('responds with an error when a prompt cannot be admitted to the journal sink', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
+
     const sink: StructuredAgentSessionEventSink = {
       appendItem: vi.fn(),
       appendTombstone: vi.fn(),
       publish: vi.fn(),
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'closed' as const }))
     }
+
     const adapter = adapterFor(codex, {}, events)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -560,12 +588,14 @@ describe('CodexStructuredSessionAdapter prompts', () => {
   it('force-closes when an unhandled provider frame cannot be admitted', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
+
     const sink: StructuredAgentSessionEventSink = {
       appendItem: vi.fn(),
       appendTombstone: vi.fn(),
       publish: vi.fn(),
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'backpressure' as const }))
     }
+
     const adapter = adapterFor(codex, {}, events)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -585,12 +615,14 @@ describe('CodexStructuredSessionAdapter prompts', () => {
   it('force-closes after a responded server request is not durably admitted', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
+
     const sink: StructuredAgentSessionEventSink = {
       appendItem: vi.fn(),
       appendTombstone: vi.fn(),
       publish: vi.fn(),
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'failed' as const }))
     }
+
     const adapter = adapterFor(codex, {}, events)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -615,6 +647,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
+
     // A shell bridge re-asks per command under one parent tool item, so only the
     // approval id tells the two requests apart.
     const ask = (id: number, approvalId: string): void => {
@@ -629,6 +662,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     ask(12, 'approval-b')
     adapter.bindPromptItemId('session-1', 'journal-a', 'approval-a')
     adapter.bindPromptItemId('session-1', 'journal-b', 'approval-b')
+
     for (const [itemId, optionId] of [
       ['journal-b', 'decline'],
       ['journal-a', 'accept']

@@ -11,12 +11,16 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 const { warnTerminalLifecycleAnomaly } = vi.hoisted(() => ({
   warnTerminalLifecycleAnomaly: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
 })
+
 vi.mock('@/components/terminal-pane/terminal-lifecycle-diagnostics', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return { ...actual, warnTerminalLifecycleAnomaly }
 })
 
@@ -24,6 +28,7 @@ import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatch
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const AUTO_PTY = 'auto-bg-pty'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
@@ -102,6 +107,7 @@ async function captureGraph(): Promise<RuntimeSyncWindowGraph> {
   expect(syncWindowGraph).toHaveBeenCalledTimes(1)
   const graph = syncWindowGraph.mock.calls[0]?.[0]
   expect(graph).toBeDefined()
+
   return graph as RuntimeSyncWindowGraph
 }
 

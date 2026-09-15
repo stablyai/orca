@@ -24,17 +24,21 @@ export function reconcileFederatedWorkerStart(
   }
 ): WorkerDispatchRow {
   const transaction = beginLifecycleWriteTransaction(this.db, 'federated_worker_start_reconcile')
+
   try {
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
+
     if (!dispatch || !worker) {
       throw new OrchestrationError(
         'dispatch_not_found',
         `Federated Dispatch ${params.dispatchId} was not found.`
       )
     }
+
     if (!['starting', 'start_unknown'].includes(worker.state)) {
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return worker
     }
 
@@ -57,6 +61,7 @@ export function reconcileFederatedWorkerStart(
           updated_at: new Date().toISOString()
         }
       })
+
       if (dispatch.status === 'pending') {
         transitionLifecycleWithDb(this.db, {
           entity: 'dispatch',
@@ -65,7 +70,9 @@ export function reconcileFederatedWorkerStart(
           to: 'dispatched'
         })
       }
+
       const task = this.getTask(dispatch.task_id)
+
       if (task?.status === 'blocked') {
         transitionLifecycleWithDb(this.db, {
           entity: 'task',
@@ -77,6 +84,7 @@ export function reconcileFederatedWorkerStart(
       }
     } else if (params.state === 'start_unknown') {
       const reason = params.lastError ?? worker.last_error ?? 'The remote start outcome is unknown.'
+
       if (worker.state === 'starting') {
         transitionLifecycleWithDb(this.db, {
           entity: 'worker',
@@ -96,7 +104,9 @@ export function reconcileFederatedWorkerStart(
           to: dispatch.status
         })
       }
+
       const task = this.getTask(dispatch.task_id)
+
       if (task?.status === 'dispatched') {
         transitionLifecycleWithDb(this.db, {
           entity: 'task',
@@ -118,6 +128,7 @@ export function reconcileFederatedWorkerStart(
           updated_at: new Date().toISOString()
         }
       })
+
       if (['pending', 'dispatched'].includes(dispatch.status)) {
         transitionLifecycleWithDb(this.db, {
           entity: 'dispatch',
@@ -131,8 +142,10 @@ export function reconcileFederatedWorkerStart(
           }
         })
       }
+
       reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, params.dispatchId)
       const task = this.getTask(dispatch.task_id)
+
       if (
         task &&
         ['blocked', 'dispatched'].includes(task.status) &&
@@ -150,9 +163,12 @@ export function reconcileFederatedWorkerStart(
           projection: { completed_at: new Date().toISOString() }
         })
       }
+
       this.closeQuestionsForDispatch(params.dispatchId)
     }
+
     commitLifecycleWriteTransaction(this.db, transaction)
+
     return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
   } catch (error) {
     rollbackLifecycleWriteTransaction(this.db, transaction)

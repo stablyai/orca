@@ -26,9 +26,11 @@ type HostInventory = Map<string, string | undefined>
 async function readHostInventory(args: SshPendingPtyKillReplayArgs): Promise<HostInventory> {
   const processes = await args.provider.listProcesses()
   const inventory: HostInventory = new Map()
+
   for (const process of processes) {
     inventory.set(toRelaySshPtyId(args.targetId, process.id), process.incarnationId)
   }
+
   return inventory
 }
 
@@ -45,6 +47,7 @@ function retire(
   reason: SshPendingPtyKillRetirement
 ): void {
   args.store.clearSshRemotePtyKillIntent(args.targetId, relayPtyId)
+
   if (reason === 'host-reports-absent' || reason === 'stop-confirmed') {
     args.store.markSshRemotePtyLease(args.targetId, relayPtyId, 'terminated')
   } else if (reason === 'relay-id-recycled') {
@@ -56,6 +59,7 @@ function retire(
       relayIdRecycled: true
     })
   }
+
   console.log(
     `[ssh-pending-kill] retired stop for ${args.targetId}/${relayPtyId} (${reason.replace(/-/g, ' ')})`
   )
@@ -79,11 +83,14 @@ function selectReplayTargets(
   attempted: ReadonlySet<string>
 ): SshPendingPtyKillEntry[] {
   const replayable: SshPendingPtyKillEntry[] = []
+
   for (const entry of args.store.getSshRemotePtyKillIntents(args.targetId, now)) {
     if (attempted.has(entry.ptyId)) {
       continue
     }
+
     const decision = decideSshPendingPtyKill(entry.intent, observe(inventory, entry.ptyId), now)
+
     if (decision.action === 'retire') {
       retire(args, entry.ptyId, decision.reason)
     } else if (decision.action === 'defer') {
@@ -94,6 +101,7 @@ function selectReplayTargets(
       replayable.push(entry)
     }
   }
+
   return replayable
 }
 
@@ -115,12 +123,15 @@ async function deliverReplay(
   ) {
     return false
   }
+
   args.store.noteSshRemotePtyKillReplayAttempt(args.targetId, entry.ptyId)
+
   try {
     await args.provider.shutdown(toAppSshPtyId(args.targetId, entry.ptyId), {
       immediate: true,
       expectedIncarnationId: entry.intent.incarnationId
     })
+
     return true
   } catch (err) {
     console.warn(
@@ -128,6 +139,7 @@ async function deliverReplay(
         err instanceof Error ? err.message : String(err)
       }`
     )
+
     return false
   }
 }
@@ -143,7 +155,9 @@ async function confirmDelivered(
   if (awaitingProof.length === 0) {
     return
   }
+
   const inventory = await readHostInventory(args)
+
   for (const relayPtyId of awaitingProof) {
     if (!inventory.has(relayPtyId)) {
       retire(args, relayPtyId, 'stop-confirmed')
@@ -167,41 +181,51 @@ async function confirmDelivered(
  *  as a failed connection. */
 export async function replayPendingSshPtyKills(args: SshPendingPtyKillReplayArgs): Promise<void> {
   const now = args.now ?? Date.now
+
   try {
     // Inside the guard with everything else: these touch persistence, and a disk hiccup must not
     // turn best-effort cleanup into a failed SSH connection.
     args.store.pruneExpiredSshRemotePtyKillIntents(args.targetId, now())
+
     if (args.store.getSshRemotePtyKillIntents(args.targetId, now()).length === 0) {
       return
     }
+
     const attempted = new Set<string>()
     const awaitingProof: string[] = []
+
     while (args.shouldContinue()) {
       // No inventory means no fence, and an unfenced replay can kill a shell nobody asked to close.
       const inventory = await readHostInventory(args)
       const selected = selectReplayTargets(args, inventory, now(), attempted)
       const wave = selected.slice(0, REPLAY_WAVE_SIZE)
+
       if (wave.length === 0) {
         break
       }
+
       for (const entry of wave) {
         attempted.add(entry.ptyId)
       }
+
       const delivered = await Promise.all(
         wave.map(async (entry) =>
           (await deliverReplay(args, entry, inventory, now())) ? entry.ptyId : null
         )
       )
+
       for (const relayPtyId of delivered) {
         if (relayPtyId !== null) {
           awaitingProof.push(relayPtyId)
         }
       }
+
       if (selected.length <= REPLAY_WAVE_SIZE) {
         // This wave took everything the inventory offered, so another read would only confirm that.
         break
       }
     }
+
     if (args.shouldContinue()) {
       await confirmDelivered(args, awaitingProof)
     }

@@ -33,13 +33,16 @@ export async function saveSourceControlAiActionRecipeForTarget({
 }): Promise<void> {
   const state = getStoreState()
   const latestSettings = state.settings
+
   if (!latestSettings) {
     throw new Error('Settings are not loaded.')
   }
+
   const latestRepo =
     target.type === 'repo'
       ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
       : null
+
   const result = saveSourceControlActionRecipe({
     target,
     settings: latestSettings,
@@ -48,10 +51,13 @@ export async function saveSourceControlAiActionRecipeForTarget({
     recipe,
     customAgentCommand
   })
+
   if ('sourceControlAi' in result) {
     await updateSettings({ sourceControlAi: result.sourceControlAi })
+
     return
   }
+
   await updateRepo(result.target.repoId, result.update)
 }
 

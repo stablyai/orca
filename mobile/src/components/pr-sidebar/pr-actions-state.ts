@@ -14,6 +14,7 @@ export type PrActionAvailability = {
 
 export function resolvePrActionAvailability(state: PRState): PrActionAvailability {
   const isOpen = state === 'open' || state === 'draft'
+
   return {
     canMerge: isOpen,
     canAutoMerge: isOpen,

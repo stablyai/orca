@@ -27,6 +27,7 @@ type WriteFlushBarrierOperationsRuntime = Pick<
 >
 
 const writeFlushBarrierOperationsContext = Symbol('WriteFlushBarrierOperations')
+
 type WriteFlushBarrierOperationsContext = {
   runtime: WriteFlushBarrierOperationsRuntime
   writes: PrimaryStateWriteOperations
@@ -41,19 +42,23 @@ export class WriteFlushBarrierOperations {
 
   flush(): void {
     this[writeFlushBarrierOperationsContext].runtime.automationListProjectionCache = null
+
     if (this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted) {
       return
     }
+
     try {
       this[writeFlushBarrierOperationsContext].writes.flushOrThrow()
     } catch (err) {
       console.error('[persistence] Failed to flush state:', err)
     }
+
     try {
       this[writeFlushBarrierOperationsContext].writes.flushActiveViewPreferenceOrThrow()
     } catch (err) {
       console.error('[active-view] Failed to flush preference:', err)
     }
+
     writeGithubCacheSnapshotSync(this)
   }
 
@@ -61,11 +66,13 @@ export class WriteFlushBarrierOperations {
     if (this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise) {
       return this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise
     }
+
     this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted = true
     this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise = flushCurrentStateAsync(
       this,
       true
     ).catch(() => {})
+
     return this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise
   }
 
@@ -83,6 +90,7 @@ export class WriteFlushBarrierOperations {
     ) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
+
     return flushCurrentStateAsync(
       this,
       false,
@@ -102,14 +110,17 @@ export async function flushDurableStateOrThrowAsync(
   ) {
     throw new Error('Cannot flush while persistence is finalized')
   }
+
   for (;;) {
     if (owner[writeFlushBarrierOperationsContext].runtime.writeTimer) {
       clearTimeout(owner[writeFlushBarrierOperationsContext].runtime.writeTimer)
       owner[writeFlushBarrierOperationsContext].runtime.writeTimer = null
     }
+
     owner[writeFlushBarrierOperationsContext].runtime.firstPendingSaveAt = null
     const generation = owner[writeFlushBarrierOperationsContext].runtime.writeGeneration
     await enqueueWrite(owner[writeFlushBarrierOperationsContext].writes)
+
     if (generation === owner[writeFlushBarrierOperationsContext].runtime.writeGeneration) {
       break
     }
@@ -126,16 +137,20 @@ export async function flushCurrentStateAsync(
   const requiredDurableGeneration = requireInitialGenerationDurable
     ? owner[writeFlushBarrierOperationsContext].runtime.writeGeneration
     : null
+
   for (;;) {
     if (signal?.aborted) {
       throw new Error('Persistence flush aborted')
     }
+
     if (owner[writeFlushBarrierOperationsContext].runtime.writeTimer) {
       clearTimeout(owner[writeFlushBarrierOperationsContext].runtime.writeTimer)
       owner[writeFlushBarrierOperationsContext].runtime.writeTimer = null
     }
+
     owner[writeFlushBarrierOperationsContext].runtime.firstPendingSaveAt = null
     const generation = owner[writeFlushBarrierOperationsContext].runtime.writeGeneration
+
     try {
       await enqueueWrite(owner[writeFlushBarrierOperationsContext].writes)
     } catch (error) {
@@ -147,15 +162,18 @@ export async function flushCurrentStateAsync(
       await writeGithubCacheSnapshotAsync(owner, final, signal)
       throw error
     }
+
     await (final
       ? owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushAsync()
       : owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushPendingAsync(
           signal
         ))
     await writeGithubCacheSnapshotAsync(owner, final, signal)
+
     if (signal?.aborted) {
       throw new Error('Persistence flush aborted')
     }
+
     if (!drainToStableGeneration) {
       if (
         requiredDurableGeneration === null ||
@@ -164,8 +182,10 @@ export async function flushCurrentStateAsync(
       ) {
         break
       }
+
       continue
     }
+
     if (generation === owner[writeFlushBarrierOperationsContext].runtime.writeGeneration) {
       break
     }
@@ -180,32 +200,40 @@ export async function writeGithubCacheSnapshotAsync(
   if (!owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty) {
     return
   }
+
   const previousWrite =
     owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite ??
     owner[writeFlushBarrierOperationsContext].runtime.staleGithubCacheTempCleanup
+
   const nextWrite = previousWrite
     .then(async () => {
       while (owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty) {
         if (signal?.aborted) {
           throw new Error('GitHub cache flush aborted')
         }
+
         const generation = owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
+
         const cacheFile = getGithubCacheFile(
           owner[writeFlushBarrierOperationsContext].runtime.dataFile
         )
+
         const tmpFile = durableWriteTempPath(cacheFile)
         let renamed = false
+
         try {
           await writeFile(
             tmpFile,
             JSON.stringify(owner[writeFlushBarrierOperationsContext].runtime.state.githubCache),
             'utf-8'
           )
+
           if (
             generation === owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
           ) {
             await rename(tmpFile, cacheFile)
             renamed = true
+
             if (
               generation === owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
             ) {
@@ -217,9 +245,11 @@ export async function writeGithubCacheSnapshotAsync(
             await rm(tmpFile).catch(() => {})
           }
         }
+
         if (signal?.aborted) {
           throw new Error('GitHub cache flush aborted')
         }
+
         if (!drainToStableGeneration) {
           break
         }
@@ -233,6 +263,7 @@ export async function writeGithubCacheSnapshotAsync(
         owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite = null
       }
     })
+
   owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite = nextWrite
   await nextWrite
 }
@@ -241,13 +272,17 @@ export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations)
   if (!owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty) {
     return
   }
+
   if (owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite) {
     void writeGithubCacheSnapshotAsync(owner)
+
     return
   }
+
   const cacheFile = getGithubCacheFile(owner[writeFlushBarrierOperationsContext].runtime.dataFile)
   const generation = owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
   const tmpFile = durableWriteTempPath(cacheFile)
+
   try {
     writeFileSync(
       tmpFile,
@@ -255,6 +290,7 @@ export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations)
       'utf-8'
     )
     renameSync(tmpFile, cacheFile)
+
     if (generation === owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration) {
       owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty = false
     }
@@ -264,6 +300,7 @@ export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations)
     } catch {
       // Best-effort cleanup.
     }
+
     console.warn('[persistence] Failed to write github cache snapshot:', err)
   }
 }

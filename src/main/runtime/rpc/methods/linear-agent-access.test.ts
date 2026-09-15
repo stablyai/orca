@@ -16,6 +16,7 @@ describe('Linear agent access RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       linearIssueContext: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -57,6 +58,7 @@ describe('Linear agent access RPC methods', () => {
       linearSaveIssue: vi.fn().mockResolvedValue({ ok: true }),
       linearIssueCreate: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const setStateResponse = await dispatcher.dispatch(
@@ -66,18 +68,23 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const teamListResponse = await dispatcher.dispatch(
       makeRequest('linear.agentTeamList', { workspaceId: 'all' })
     )
+
     const teamMembersResponse = await dispatcher.dispatch(
       makeRequest('linear.agentTeamMembers', { teamInput: 'ENG', workspaceId: 'workspace-1' })
     )
+
     const teamStatesResponse = await dispatcher.dispatch(
       makeRequest('linear.agentTeamStates', { teamInput: 'ENG', workspaceId: 'workspace-1' })
     )
+
     const teamLabelsResponse = await dispatcher.dispatch(
       makeRequest('linear.agentTeamLabels', { teamInput: 'ENG', workspaceId: 'workspace-1' })
     )
+
     const issueListResponse = await dispatcher.dispatch(
       makeRequest('linear.agentIssueList', {
         filter: 'open',
@@ -86,6 +93,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const projectListResponse = await dispatcher.dispatch(
       makeRequest('linear.agentProjectList', {
         query: 'launch',
@@ -93,6 +101,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'all'
       })
     )
+
     const taskUpdateResponse = await dispatcher.dispatch(
       makeRequest('linear.issueUpdateTask', {
         input: 'ENG-1',
@@ -101,6 +110,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const relationResponse = await dispatcher.dispatch(
       makeRequest('linear.issueRelationWrite', {
         input: 'ENG-1',
@@ -110,6 +120,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const commentResponse = await dispatcher.dispatch(
       makeRequest('linear.issueAddComment', {
         input: 'ENG-1',
@@ -119,6 +130,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const attachResponse = await dispatcher.dispatch(
       makeRequest('linear.issueAttachLink', {
         input: 'ENG-1',
@@ -128,6 +140,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const createResponse = await dispatcher.dispatch(
       makeRequest('linear.issueCreate', {
         title: 'Follow up',
@@ -140,6 +153,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const saveResponse = await dispatcher.dispatch(
       makeRequest('linear.saveIssue', {
         input: 'ENG-1',
@@ -246,6 +260,7 @@ describe('Linear agent access RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       linearIssueAddComment: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -266,6 +281,7 @@ describe('Linear agent access RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       linearIssueSetState: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -288,6 +304,7 @@ describe('Linear agent access RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       linearTeamMembersForAgents: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -310,6 +327,7 @@ describe('Linear agent access RPC methods', () => {
       linearIssueUpdateTask: vi.fn(),
       linearIssueCreate: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const updateResponse = await dispatcher.dispatch(
@@ -320,6 +338,7 @@ describe('Linear agent access RPC methods', () => {
         workspaceId: 'workspace-1'
       })
     )
+
     const createResponse = await dispatcher.dispatch(
       makeRequest('linear.issueCreate', {
         title: 'Follow up',
@@ -423,6 +442,7 @@ describe('Linear agent write recovery helpers', () => {
     const runner = runtime as unknown as LinearWriteRunner
     const builder = runtime as unknown as LinearUnconfirmedBuilder
     const writeId = '11111111-1111-4111-8111-111111111111'
+
     const target = {
       workspaceId: 'workspace-1',
       issue: { id: 'issue-1', identifier: 'ENG-123', url: 'https://example.invalid/ENG-123' }
@@ -467,9 +487,11 @@ describe('Linear agent write recovery helpers', () => {
 
   it('returns unconfirmed at the write deadline even when the request ignores abort', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService()
       const write = vi.fn((_signal: AbortSignal) => new Promise<string>(() => undefined))
+
       const unconfirmed = vi.fn(() =>
         Object.assign(new Error('unconfirmed'), { code: 'linear_write_unconfirmed' })
       )
@@ -478,9 +500,11 @@ describe('Linear agent write recovery helpers', () => {
         write,
         unconfirmed
       )
+
       const rejection = expect(pending).rejects.toMatchObject({
         code: 'linear_write_unconfirmed'
       })
+
       await vi.advanceTimersByTimeAsync(25_000)
 
       await rejection
@@ -495,10 +519,12 @@ describe('Linear agent write recovery helpers', () => {
     const runtime = new OrcaRuntimeService()
     const builder = runtime as unknown as LinearUnconfirmedBuilder
     const writeId = '11111111-1111-4111-8111-111111111111'
+
     const target = {
       workspaceId: 'workspace-1',
       issue: { id: 'issue-1', identifier: 'ENG-123', url: 'https://example.invalid/ENG-123' }
     }
+
     const parent = {
       workspaceId: 'workspace-1',
       issue: { id: 'issue-1', identifier: 'ENG-123', url: 'https://example.invalid/ENG-123' }
@@ -508,10 +534,12 @@ describe('Linear agent write recovery helpers', () => {
       parentId: 'comment-root',
       bodyRequired: true
     })
+
     const attach = builder.linearCreateStyleUnconfirmed('attach', writeId, target, {
       title: 'Review link',
       url: 'https://example.invalid/review/1'
     })
+
     const create = builder.linearCreateStyleUnconfirmed('create', writeId, null, {
       parent,
       team: { id: 'team-2', key: 'OTHER', name: 'Other', workspaceId: 'workspace-1' },
@@ -546,6 +574,7 @@ describe('Linear agent write recovery helpers', () => {
   it('requires created issue readback to match enriched field intent', () => {
     const runtime = new OrcaRuntimeService()
     const builder = runtime as unknown as LinearUnconfirmedBuilder
+
     const issue = {
       id: 'issue-2',
       identifier: 'ENG-2',
@@ -585,6 +614,7 @@ describe('Linear agent write recovery helpers', () => {
   it('confirms save-issue updates including explicit relationship clears', () => {
     const runtime = new OrcaRuntimeService()
     const builder = runtime as unknown as LinearUnconfirmedBuilder
+
     const issue = {
       id: 'issue-2',
       identifier: 'ENG-2',
@@ -621,10 +651,12 @@ describe('Linear agent write recovery helpers', () => {
 
   it('resolves workflow states by UUID or case-insensitive exact name', () => {
     const runtime = new OrcaRuntimeService()
+
     const states = [
       { id: 'state-review', name: 'In Review', type: 'started' },
       { id: 'state-done', name: 'Done', type: 'completed' }
     ]
+
     const builder = runtime as unknown as LinearUnconfirmedBuilder
 
     expect(builder.resolveLinearAgentState('In Review', states)).toBe(states[0])
@@ -706,6 +738,7 @@ describe('Linear agent write recovery helpers', () => {
   it('keeps the unconfirmed retry envelope when duplicate recovery lookup fails', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearRetryLookupTester
+
     const unconfirmed = Object.assign(new Error('try pinned retry again'), {
       code: 'linear_write_unconfirmed',
       data: { writeId: '11111111-1111-4111-8111-111111111111' }

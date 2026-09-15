@@ -72,11 +72,13 @@ describe('handle identity', () => {
       sessionId: 'a#b',
       leafUuid: 'c'
     }
+
     const right: AgentSessionProviderHandle = {
       provider: 'claude',
       sessionId: 'a',
       leafUuid: 'b#c'
     }
+
     expect(agentSessionProviderHandleKey(left)).not.toBe(agentSessionProviderHandleKey(right))
     expect(agentSessionProviderHandlesEqual(left, right)).toBe(false)
   })
@@ -110,6 +112,7 @@ describe('chain append', () => {
 
   it('records a fork only with a new root and the seed it came from', () => {
     const chain = [link()]
+
     const forked = link({
       linkId: 'link-2',
       origin: 'forked',
@@ -117,6 +120,7 @@ describe('chain append', () => {
       mintedAtFence: 2,
       forkedFromKey: agentSessionProviderHandleKey(CLAUDE)
     })
+
     expect(appendAgentSessionProviderHandleLink(chain, forked)).toHaveLength(2)
     expect(() =>
       appendAgentSessionProviderHandleLink(chain, { ...forked, forkedFromKey: 'claude:other' })
@@ -161,10 +165,12 @@ describe('chain append', () => {
 
   it('treats re-proving the same handle at the same fence as a retry, not a new link', () => {
     const chain = [link({ mintedAtFence: 3 })]
+
     const retried = appendAgentSessionProviderHandleLink(
       chain,
       link({ linkId: 'link-2', origin: 'resumed', mintedAtFence: 3 })
     )
+
     expect(retried).toHaveLength(1)
     expect(retried[0]?.linkId).toBe('link-1')
     // A later fence on the same handle is a genuine re-acquisition and does append.
@@ -191,6 +197,7 @@ describe('chain append', () => {
 
   it('refuses to grow past the cap rather than dropping fork provenance', () => {
     const chain: AgentSessionProviderHandleLink[] = [link()]
+
     for (let index = 1; index < MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS; index += 1) {
       chain.push(
         link({
@@ -201,6 +208,7 @@ describe('chain append', () => {
         })
       )
     }
+
     expect(chain).toHaveLength(MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS)
     expect(() =>
       appendAgentSessionProviderHandleLink(
@@ -245,6 +253,7 @@ describe('chain lookup and validation', () => {
         mintedAtFence: 2
       })
     )
+
     expect(findAgentSessionProviderHandleLink(chain, 'link-1')?.origin).toBe('created')
     expect(findAgentSessionProviderHandleLink(chain, 'missing')).toBeNull()
     expect(agentSessionProviderHandleChainHead(chain)?.linkId).toBe('link-2')
@@ -320,6 +329,7 @@ describe('adopted chain heads', () => {
       handle: CLAUDE,
       mintedAtFence: 1
     })
+
     const chain = appendAgentSessionProviderHandleLink([adopted()], resumed)
 
     expect(chain.map((entry) => entry.origin)).toEqual(['adopted', 'resumed'])
@@ -328,6 +338,7 @@ describe('adopted chain heads', () => {
 
   it('elides a Claude re-proof of the identical adopted handle at the same fence', () => {
     const chain = [adopted()]
+
     const elided = appendAgentSessionProviderHandleLink(
       chain,
       link({
@@ -347,6 +358,7 @@ describe('adopted chain heads', () => {
       origin: 'adopted',
       handle: { provider: 'codex', threadId: 'thread-1' }
     })
+
     const reproved = link({
       linkId: 'codex-1-thread-1-retry',
       origin: 'resumed',

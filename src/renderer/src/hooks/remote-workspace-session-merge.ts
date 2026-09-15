@@ -20,6 +20,7 @@ function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTa
     // allowance on every republication, which is the storm again (b5cfc6ca).
     ...(local.recovery ? { recovery: local.recovery } : {})
   }
+
   return local.pendingActivationSpawn
     ? { ...preserved, pendingActivationSpawn: local.pendingActivationSpawn }
     : preserved
@@ -51,9 +52,12 @@ export function mergeDirectSshRemoteWorkspaceSession(
       .flatMap((worktreeId) => liveTabsByWorktree[worktreeId] ?? [])
       .map((tab) => [tab.id, tab])
   )
+
   const locallyPreservedTabIds = new Set<string>()
+
   const localTabsFor = (worktreeId: string): TerminalTab[] =>
     liveTabsByWorktree[worktreeId] ?? current.tabsByWorktree[worktreeId] ?? []
+
   // Why presence and not length: an explicit empty row is the record that the user closed the last
   // terminal (initial-terminal.ts), and localTabsFor cannot tell it from an absent one. Admitting
   // only non-empty rows dropped the key, which reads downstream as "never initialized" and seeds a
@@ -61,6 +65,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   const hasLocalTabsRow = (worktreeId: string): boolean =>
     Object.hasOwn(liveTabsByWorktree, worktreeId) ||
     Object.hasOwn(current.tabsByWorktree, worktreeId)
+
   // Why the union and not just the remote keys: a host snapshot that has never been told about this
   // worktree carries no entry for it at all, and iterating only its keys would drop every local tab
   // through the omit below.
@@ -68,6 +73,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
     ...Object.keys(remote.tabsByWorktree),
     ...[...replaceWorktreeIds].filter(hasLocalTabsRow)
   ])
+
   // The active worktree is walked FIRST so that when one tab id is held locally under two of them,
   // the copy that survives below is the one the user is looking at. That matches what
   // resolveActiveTabOwnerWorktreeId already prefers when it has to pick an owner, so the merge and
@@ -75,6 +81,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   const orderedWorktreeIds = [...mergedWorktreeIds].sort(
     (a, b) => Number(b === current.activeWorktreeId) - Number(a === current.activeWorktreeId)
   )
+
   // Every id already emitted by an earlier worktree in THIS merge. Without it the host-unknown
   // branch below only excludes ids the host knows, so a tab id that local state already holds under
   // two worktrees is re-added under both — two panes sharing one entry in terminalLayoutsByTabId and
@@ -102,9 +109,11 @@ export function mergeDirectSshRemoteWorkspaceSession(
   // .ts caught it. A duplicate is survivable and already mitigated by active-tab-owner-worktree.ts;
   // deleting the tabs of the worktree the user is about to land in is not.
   const emittedTabIds = new Set<string>()
+
   const remoteKnownTabIds = new Set(
     Object.values(remote.tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
+
   // Why sessions and not just tab ids: the host can carry the same agent session under a NEW tab id,
   // and keeping the local tab as well would put one launched agent on the screen twice. The session
   // id is the identity that survives a tab-id change, so a session the host already lists means the
@@ -114,6 +123,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       .filter(([tabId]) => remoteKnownTabIds.has(tabId))
       .map(([, sessionId]) => sessionId)
   )
+
   // The other half of the trade below. Absence still cannot say "closed", so this says it instead:
   // a tab THIS client watched the user close, whose close never reached the host. Only ids the user
   // closed are ever in here, and only until the host's own snapshot stops listing them.
@@ -128,6 +138,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
     hostRevision: remoteRevision,
     now: Date.now()
   })
+
   // Why Object.hasOwn and not `in`: the map is a plain object from Object.fromEntries, so `in`
   // answers true for every Object.prototype key on an EMPTY map — a host tab whose id is
   // `toString` would be filtered, blocked from the host-unknown branch, and stripped of its layout
@@ -144,23 +155,29 @@ export function mergeDirectSshRemoteWorkspaceSession(
     Object.hasOwn(closedTerminalTabTombstonesByTabId, tabId) &&
     closedTerminalTabTombstonesByTabId[tabId]?.worktreeId === worktreeId &&
     !currentTabsById.has(tabId)
+
   // Ids this merge actually suppressed, recorded as it walks the worktrees. The layout and
   // session-id sweeps below have no worktree in scope, so they consult decisions already made
   // rather than re-deriving one without the scope that makes it safe.
   const suppressedTabIds = new Set<string>()
+
   const tabsByWorktree = Object.fromEntries(
     orderedWorktreeIds.map((worktreeId) => {
       const remoteTabs = remote.tabsByWorktree[worktreeId] ?? []
+
       const reconciled = remoteTabs
         .filter((tab) => {
           if (!isSuppressedByClose(tab.id, worktreeId)) {
             return true
           }
+
           suppressedTabIds.add(tab.id)
+
           return false
         })
         .map((tab) => {
           const local = currentTabsById.get(tab.id)
+
           if (
             !local ||
             ((local.generation ?? 0) <= (tab.generation ?? 0) &&
@@ -169,15 +186,20 @@ export function mergeDirectSshRemoteWorkspaceSession(
           ) {
             return tab
           }
+
           locallyPreservedTabIds.add(tab.id)
+
           return preserveNewerLocalTerminalFields(tab, local)
         })
+
       for (const tab of reconciled) {
         emittedTabIds.add(tab.id)
       }
+
       if (!replaceWorktreeIds.has(worktreeId)) {
         return [worktreeId, reconciled]
       }
+
       // Why: the host is authoritative for what it knows, not for what it has never been told. A tab
       // created locally whose upload was still pending is absent from the snapshot for the same
       // reason it is new — deleting it here loses a live pane and the process running in it.
@@ -195,43 +217,55 @@ export function mergeDirectSshRemoteWorkspaceSession(
         if (remoteKnownTabIds.has(tab.id) || emittedTabIds.has(tab.id)) {
           return false
         }
+
         if (isSuppressedByClose(tab.id, worktreeId)) {
           suppressedTabIds.add(tab.id)
+
           return false
         }
+
         const localSessionId = current.remoteSessionIdsByTabId?.[tab.id]
+
         return localSessionId == null || !remoteKnownSessionIds.has(localSessionId)
       })
+
       for (const tab of hostUnknown) {
         // Keeps the tab's layout and remote session id from being swept with the replaced ids below.
         locallyPreservedTabIds.add(tab.id)
         emittedTabIds.add(tab.id)
       }
+
       return [worktreeId, [...reconciled, ...hostUnknown]]
     })
   )
+
   const remoteTabIds = new Set(
     Object.values(tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
+
   const replacedTabIds = new Set([
     ...remoteTabIds,
     ...Object.entries(current.tabsByWorktree)
       .filter(([worktreeId]) => replaceWorktreeIds.has(worktreeId))
       .flatMap(([, tabs]) => tabs.map((tab) => tab.id))
   ])
+
   const omitTargetWorktrees = <T>(record: Record<string, T> | undefined): Record<string, T> =>
     Object.fromEntries(
       Object.entries(record ?? {}).filter(([worktreeId]) => !replaceWorktreeIds.has(worktreeId))
     )
+
   const omitTargetVisitRecency = (
     record: Record<string, number> | undefined
   ): Record<string, number> =>
     Object.fromEntries(
       Object.entries(record ?? {}).filter(([key]) => {
         const worktreeId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+
         if (!replaceWorktreeIds.has(worktreeId)) {
           return true
         }
+
         // A direct SSH snapshot replaces one host's row. Legacy bare keys
         // remain because they may be the only recency evidence for a sibling
         // host; a qualified key is removed only for the target host.
@@ -242,6 +276,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
         )
       })
     )
+
   const terminalLayoutsByTabId = {
     ...Object.fromEntries(
       Object.entries(current.terminalLayoutsByTabId).filter(
@@ -254,8 +289,10 @@ export function mergeDirectSshRemoteWorkspaceSession(
       )
     )
   }
+
   const activeOutsideTarget =
     current.activeWorktreeId != null && !replaceWorktreeIds.has(current.activeWorktreeId)
+
   // Why this is narrow: a null from the host is not always missing information. A null activeTabId
   // is a deliberate deselect that arms the duplicate-tab repair, so it is honoured verbatim below.
   // A null activeWorktreeId is different — it is what a snapshot carries when the host never named
@@ -266,7 +303,9 @@ export function mergeDirectSshRemoteWorkspaceSession(
     current.activeWorktreeId != null &&
     replaceWorktreeIds.has(current.activeWorktreeId) &&
     (tabsByWorktree[current.activeWorktreeId]?.length ?? 0) > 0
+
   const preservedActiveWorktreeId = localActiveWorkspaceSurvives ? current.activeWorktreeId : null
+
   // The three active-* fields have to describe ONE workspace, so they are all derived from whichever
   // worktree wins rather than each choosing a source. Taking the repo from the host while the
   // worktree came from local state left the pair disagreeing — and precisely in the case the
@@ -274,9 +313,11 @@ export function mergeDirectSshRemoteWorkspaceSession(
   // repo.
   const keepsLocalWorkspace =
     !activeOutsideTarget && remote.activeWorktreeId == null && preservedActiveWorktreeId != null
+
   const activeWorktreeId = activeOutsideTarget
     ? current.activeWorktreeId
     : (remote.activeWorktreeId ?? preservedActiveWorktreeId)
+
   return {
     ...current,
     activeRepoId:
@@ -304,6 +345,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       ...Object.fromEntries(
         [...replaceWorktreeIds].flatMap((worktreeId) => {
           const localActiveTabId = current.activeTabIdByWorktree?.[worktreeId]
+
           return localActiveTabId == null ? [] : [[worktreeId, localActiveTabId] as const]
         })
       ),
@@ -347,12 +389,16 @@ export function uniqueWorktreeIdByPath(
   worktreeIds: ReadonlySet<string>
 ): (worktreePath: string) => string | null {
   const byPath = new Map<string, string | null>()
+
   for (const worktreeId of worktreeIds) {
     const path = splitWorktreeId(worktreeId)?.worktreePath
+
     if (!path) {
       continue
     }
+
     byPath.set(path, byPath.has(path) ? null : worktreeId)
   }
+
   return (worktreePath) => byPath.get(worktreePath) ?? null
 }

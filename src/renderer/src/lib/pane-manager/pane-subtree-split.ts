@@ -44,9 +44,11 @@ export function splitPaneAroundMountedSubtree(
   const sourceContainer =
     findMountedSubtreeContainer(args.sourceLeafIds, args) ??
     args.panes.get(args.fallbackPaneId)?.container
+
   if (!sourceContainer) {
     return null
   }
+
   const createdPane = splitManagedPane({
     paneId: args.fallbackPaneId,
     direction: args.direction,
@@ -63,14 +65,17 @@ export function splitPaneAroundMountedSubtree(
     setActivePaneId: args.setActivePaneId,
     isDestroyed: args.isDestroyed
   })
+
   if (!createdPane || args.opts?.placement !== 'before') {
     return createdPane
   }
 
   const createdInternal = args.panes.get(createdPane.id)
+
   if (createdInternal) {
     placeCreatedPaneBeforeSource(sourceContainer, createdInternal.container)
   }
+
   return createdPane
 }
 
@@ -81,14 +86,18 @@ function findMountedSubtreeContainer(
   if (sourceLeafIds.length === 0) {
     return null
   }
+
   const expectedLeafIds = new Set(sourceLeafIds)
   const firstLeafId = sourceLeafIds[0]
+
   if (!firstLeafId) {
     return null
   }
+
   const firstPaneId = args.getNumericIdForLeaf(firstLeafId)
   const firstPane = firstPaneId === null ? null : args.panes.get(firstPaneId)
   let candidate: HTMLElement | null = firstPane?.container ?? null
+
   while (candidate && candidate !== args.root) {
     if (
       (candidate.classList.contains('pane') || candidate.classList.contains('pane-split')) &&
@@ -96,21 +105,26 @@ function findMountedSubtreeContainer(
     ) {
       return candidate
     }
+
     candidate = candidate.parentElement
   }
+
   return null
 }
 
 function leafIdsInContainer(container: HTMLElement): Set<string> {
   const leafIds = new Set<string>()
+
   if (container.classList.contains('pane') && container.dataset.leafId) {
     leafIds.add(container.dataset.leafId)
   }
+
   for (const pane of container.querySelectorAll<HTMLElement>('.pane[data-leaf-id]')) {
     if (pane.dataset.leafId) {
       leafIds.add(pane.dataset.leafId)
     }
   }
+
   return leafIds
 }
 
@@ -118,11 +132,13 @@ function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boole
   if (left.size !== right.size) {
     return false
   }
+
   for (const value of left) {
     if (!right.has(value)) {
       return false
     }
   }
+
   return true
 }
 
@@ -131,17 +147,21 @@ function placeCreatedPaneBeforeSource(
   createdContainer: HTMLElement
 ): boolean {
   const split = createdContainer.parentElement
+
   if (!split || sourceContainer.parentElement !== split) {
     return false
   }
+
   const divider = Array.from(split.children).find(
     (child): child is HTMLElement =>
       child instanceof HTMLElement && child.classList.contains('pane-divider')
   )
+
   if (!divider) {
     return false
   }
 
   split.replaceChildren(createdContainer, divider, sourceContainer)
+
   return true
 }

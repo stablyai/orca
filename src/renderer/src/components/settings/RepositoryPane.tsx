@@ -30,7 +30,9 @@ import { matchesRepositoryIdentitySearch } from './repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../store/worktree-visibility-defaults-by-host'
+
 export { getRepositoryPaneSearchEntries }
+
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
 type RepositoryPaneRepoUpdate = Omit<
@@ -89,16 +91,20 @@ export function RepositoryPane({
   // host, not findRepoForHost's focused-host fallback (the same-id/self-pair
   // case where local and a runtime share one repo id).
   const selectedHostId = getRepoExecutionHostId(repo)
+
   const updateSelectedRepo = useCallback(
     (repoId: string, updates: RepositoryPaneRepoUpdate) =>
       updateRepo(repoId, updates, { hostId: selectedHostId }),
     [updateRepo, selectedHostId]
   )
+
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const settings = useAppStore((state) => state.settings)
+
   const worktreeVisibilityDefaultsByHost = useAppStore(
     (state) => state.worktreeVisibilityDefaultsByHost
   )
+
   const repoOwnerSettings = settings
     ? {
         ...settings,
@@ -109,10 +115,13 @@ export function RepositoryPane({
         )
       }
     : null
+
   const fetchWorktrees = useAppStore((state) => state.fetchWorktrees)
+
   const runtimeSessionSummary = useAppStore(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
+
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
@@ -133,6 +142,7 @@ export function RepositoryPane({
   const setRepositoryPaneRootRef = useCallback(
     (node: HTMLDivElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedTemplateResetTimer()
       }
@@ -144,6 +154,7 @@ export function RepositoryPane({
     if (confirmingRemove === repoId) {
       removeProject(repoId)
       setConfirmingRemove(null)
+
       return
     }
 
@@ -164,9 +175,11 @@ export function RepositoryPane({
     pnpm worktree:setup
   archive: |
     echo "Cleaning up before archive"`)
+
     if (!isMountedRef.current) {
       return
     }
+
     clearCopiedTemplateResetTimer()
     setCopiedTemplate(true)
     copiedTemplateResetTimerRef.current = window.setTimeout(() => {
@@ -176,6 +189,7 @@ export function RepositoryPane({
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject })
+
   const identityEntryTitles = new Set([
     translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
@@ -189,10 +203,13 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
     translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])
+
   const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
+
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
   )
+
   const hooksEntries = allEntries.filter((entry) =>
     [
       'Setup Script',
@@ -202,11 +219,13 @@ export function RepositoryPane({
       'Custom GitHub Issue Command'
     ].includes(entry.title)
   )
+
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
+
   const removeProjectLabel =
     confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 

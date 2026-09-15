@@ -15,6 +15,7 @@ const makeProject = (overrides: Partial<Project> = {}): Project => ({
 describe('carryProjectStateThroughIdentityChange', () => {
   it('keeps the exact-id match and reports no remap', () => {
     const projected = makeProject({ id: 'git:host/acme/app', sourceRepoIds: ['r1'] })
+
     const previous = makeProject({
       id: 'git:host/acme/app',
       sourceRepoIds: ['r1'],
@@ -34,6 +35,7 @@ describe('carryProjectStateThroughIdentityChange', () => {
 
   it('adopts a prior row through a changed identity key by repo overlap', () => {
     const projected = makeProject({ id: 'github:acme/app', sourceRepoIds: ['r1'] })
+
     const previous = makeProject({
       id: 'repo:r1',
       sourceRepoIds: ['r1'],
@@ -49,6 +51,7 @@ describe('carryProjectStateThroughIdentityChange', () => {
   it('ignores prior rows that still exist under their own id', () => {
     const kept = makeProject({ id: 'git:host/acme/app', sourceRepoIds: ['r1'] })
     const renamed = makeProject({ id: 'git:host/acme/tool', sourceRepoIds: ['r2'] })
+
     const previousKept = makeProject({
       id: 'git:host/acme/app',
       sourceRepoIds: ['r1', 'r2'],
@@ -63,12 +66,14 @@ describe('carryProjectStateThroughIdentityChange', () => {
 
   it('prefers the prior row sharing the most repos over the more recently updated one', () => {
     const projected = makeProject({ id: 'git:host/acme/merged', sourceRepoIds: ['r1', 'r2'] })
+
     const wide = makeProject({
       id: 'git:host/acme/wide',
       sourceRepoIds: ['r1', 'r2'],
       updatedAt: 10,
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
+
     const narrow = makeProject({
       id: 'git:host/acme/narrow',
       sourceRepoIds: ['r2'],
@@ -87,12 +92,14 @@ describe('carryProjectStateThroughIdentityChange', () => {
 
   it('breaks an equal-overlap tie by newest updatedAt, then lowest prior id', () => {
     const projected = makeProject({ id: 'git:host/acme/merged', sourceRepoIds: ['r1', 'r2'] })
+
     const older = makeProject({
       id: 'git:host/acme/a',
       sourceRepoIds: ['r1'],
       updatedAt: 100,
       localWindowsRuntimePreference: { kind: 'windows-host' }
     })
+
     const newer = makeProject({
       id: 'git:host/acme/b',
       sourceRepoIds: ['r2'],
@@ -106,6 +113,7 @@ describe('carryProjectStateThroughIdentityChange', () => {
     ).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
 
     const sameStamp = { ...newer, updatedAt: 100 }
+
     // Same overlap and same updatedAt: the lexicographically lowest prior id wins, both orders.
     for (const previous of [
       [older, sameStamp],
@@ -120,6 +128,7 @@ describe('carryProjectStateThroughIdentityChange', () => {
   it('lets one prior row be claimed by only one surviving project', () => {
     const left = makeProject({ id: 'git:host/acme/left', sourceRepoIds: ['r1'] })
     const right = makeProject({ id: 'git:host/acme/right', sourceRepoIds: ['r2'] })
+
     const previous = makeProject({
       id: 'repo:r1',
       sourceRepoIds: ['r1', 'r2'],
@@ -137,16 +146,20 @@ describe('carryProjectStateThroughIdentityChange', () => {
   })
   it('visits prior repo memberships once for a bulk identity promotion', () => {
     let reads = 0
+
     const previous = Array.from({ length: 1000 }, (_, i) => ({
       ...makeProject({ id: `old-${i}`, localWindowsRuntimePreference: { kind: 'windows-host' } }),
       get sourceRepoIds() {
         reads++
+
         return [`repo-${i}`]
       }
     }))
+
     const projected = Array.from({ length: 1000 }, (_, i) =>
       makeProject({ id: `new-${i}`, sourceRepoIds: [`repo-${i}`] })
     )
+
     const result = carryProjectStateThroughIdentityChange(projected, previous)
     expect(reads).toBe(1000)
     expect([...result.remappedProjectIds]).toEqual(
@@ -159,16 +172,19 @@ describe('carryProjectStateThroughIdentityChange', () => {
 
   it('retains duplicate membership weight and stable prior-row ties', () => {
     const projected = makeProject({ id: 'new', sourceRepoIds: ['b', 'a', 'b'] })
+
     const first = makeProject({
       id: 'old',
       sourceRepoIds: ['a', 'a'],
       localWindowsRuntimePreference: { kind: 'windows-host' }
     })
+
     const second = makeProject({
       id: 'old',
       sourceRepoIds: ['b', 'b'],
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
+
     const result = carryProjectStateThroughIdentityChange([projected], [first, second])
     expect(result.projects[0].localWindowsRuntimePreference).toEqual(
       first.localWindowsRuntimePreference

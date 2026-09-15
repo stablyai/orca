@@ -28,9 +28,11 @@ export async function readConnectionPages<T>(
     hasMore = Boolean(connection?.pageInfo?.hasNextPage)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+
     if (!hasMore || !nextCursor || nextCursor === after || pageNodes.length === 0) {
       break
     }
+
     after = nextCursor
   }
 

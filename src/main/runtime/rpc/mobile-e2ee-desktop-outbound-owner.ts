@@ -33,17 +33,22 @@ export class MobileE2EEDesktopOutboundOwner {
   sendLegacyFrame(frame: string, onOverflow: () => void): boolean {
     if (!this.canSend(frame.length) || this.ws.readyState !== this.ws.OPEN) {
       onOverflow()
+
       return false
     }
+
     this.ws.send(frame)
+
     return true
   }
 
   enqueueLegacyText(frame: string, isKeyed: () => boolean, onOverflow: () => void): boolean {
     if (!this.socketMemory) {
       onOverflow()
+
       return false
     }
+
     this.legacyQueue ??= createLegacyMobileE2EETextReplyQueue({
       ws: this.ws,
       isKeyed,
@@ -51,6 +56,7 @@ export class MobileE2EEDesktopOutboundOwner {
       socketMemory: this.socketMemory,
       onOverflow
     })
+
     return this.legacyQueue.enqueue(frame)
   }
 
@@ -61,8 +67,10 @@ export class MobileE2EEDesktopOutboundOwner {
   ): boolean {
     if (!this.socketMemory) {
       onOverflow()
+
       return false
     }
+
     this.v2Queue ??= createDesktopMobileE2EEV2OutboundQueue({
       ws: this.ws,
       session,
@@ -70,6 +78,7 @@ export class MobileE2EEDesktopOutboundOwner {
       socketMemory: this.socketMemory,
       onOverflow
     })
+
     return this.v2Queue.enqueue(item)
   }
 

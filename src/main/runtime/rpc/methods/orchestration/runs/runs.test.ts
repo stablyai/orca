@@ -82,6 +82,7 @@ describe('orchestration RPC methods', () => {
         objective: 'Coordinate reviews',
         from: 'term_coord'
       })) as { run: { id: string; consumer_generation: number } }
+
       const current = (await call('orchestration.runCurrent', { from: 'term_coord' })) as {
         run: { id: string } | null
       }
@@ -123,14 +124,17 @@ describe('orchestration RPC methods', () => {
           ? 'tab_old:11111111-1111-4111-8111-111111111111'
           : 'tab_new:22222222-2222-4222-9222-222222222222'
       )
+
       const created = (await call('orchestration.runCreate', {
         objective: 'Move me',
         from: 'term_old'
       })) as { run: { id: string } }
+
       const rebound = (await call('orchestration.runUse', {
         id: created.run.id,
         from: 'term_new'
       })) as { run: { consumer_generation: number } }
+
       const listed = (await call('orchestration.runList', {})) as {
         runs: { id: string; legacy: number }[]
       }
@@ -173,22 +177,26 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_old' ? oldPane : newPane
       )
+
       const runA = db.createRun({
         objective: 'A',
         coordinatorHandle: 'term_old',
         coordinatorPaneKey: oldPane
       })
+
       const runB = db.createRun({
         objective: 'B',
         coordinatorHandle: 'term_other',
         coordinatorPaneKey: newPane
       })
+
       const taskA = db.createTask({ spec: 'A work', runId: runA.id })
       db.createTask({ spec: 'B work', runId: runB.id })
 
       const listed = (await call('orchestration.taskList', { run: runA.id })) as {
         tasks: { id: string }[]
       }
+
       expect(listed.tasks.map((task) => task.id)).toEqual([taskA.id])
 
       db.bindRun({
@@ -212,15 +220,18 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_old' ? oldPane : newPane
       )
+
       const created = (await call('orchestration.runCreate', {
         objective: 'Wait fencing',
         from: 'term_old'
       })) as { run: { id: string } }
+
       const oldWait = call('orchestration.check', {
         terminal: 'term_old',
         wait: true,
         timeoutMs: 5_000
       })
+
       const fenced = expect(oldWait).rejects.toMatchObject({ code: 'consumer_fenced' })
       await Promise.resolve()
 
@@ -235,11 +246,13 @@ describe('orchestration RPC methods', () => {
     it('fences an unbound direct waiter when its pane creates a Run', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(coordinatorPaneKey)
+
       const directWait = call('orchestration.check', {
         terminal: 'term_coord',
         wait: true,
         timeoutMs: 5_000
       })
+
       const fenced = expect(directWait).rejects.toMatchObject({ code: 'consumer_fenced' })
       await Promise.resolve()
 

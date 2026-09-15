@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sidecarUnchanged, type SessionSidecarObservation } from './session-sidecar-stat'
 
 const META = { path: '/chats/a/meta.json', mtimeMs: 100, sizeBytes: 20 } as const
+
 const OTHER = { path: '/chats/a/meta.json', mtimeMs: 101, sizeBytes: 20 } as const
 
 type Named = [label: string, value: SessionSidecarObservation | undefined]
@@ -12,6 +13,7 @@ const ENTRIES: Named[] = [
   ["'unknown'", 'unknown'],
   ['object', { ...META }]
 ]
+
 const OBSERVED: Named[] = [
   ['undefined', undefined],
   ["'none'", 'none'],

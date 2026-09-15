@@ -34,26 +34,32 @@ function createMockElement(className = ''): TestElement {
     appendChild: (child: TestElement): TestElement => {
       element.children.push(child)
       child.parentElement = element
+
       return child
     },
     replaceChild: (nextChild: TestElement, oldChild: TestElement): TestElement => {
       const index = element.children.indexOf(oldChild)
+
       if (index !== -1) {
         element.children[index] = nextChild
       } else {
         element.children.push(nextChild)
       }
+
       nextChild.parentElement = element
       oldChild.parentElement = null
+
       return oldChild
     },
     remove: vi.fn()
   } as unknown as TestElement
+
   return element
 }
 
 function createPane(id: number, container = createMockElement('pane')): ManagedPaneInternal {
   const leafId = `${id}1111111-1111-4111-8111-111111111111` as never
+
   return {
     id,
     leafId,
@@ -158,10 +164,12 @@ describe('insertPaneNextTo reparent frame', () => {
 
   it('passes pane drag active callbacks into dividers created during reorder', async () => {
     setupDocument()
+
     const [{ insertPaneNextTo }, { createDivider }] = await Promise.all([
       import('./pane-tree-ops'),
       import('./pane-divider')
     ])
+
     const parent = createMockElement('pane-split')
     const source = createPane(1)
     const target = createPane(2)

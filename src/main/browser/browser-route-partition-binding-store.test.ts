@@ -6,9 +6,13 @@ import { BrowserRoutePartitionBindingStore } from './browser-route-partition-bin
 
 const partition =
   'persist:orca-browser-v1-1111111111111111222222222222222233333333333333334444444444444444'
+
 const fingerprint = 'a'.repeat(64)
+
 const otherPartition = partition.replace(/1{16}/, '5555555555555555')
+
 const thirdPartition = partition.replace(/1{16}/, '6666666666666666')
+
 const fourthPartition = partition.replace(/1{16}/, '7777777777777777')
 
 beforeEach(() => {
@@ -25,6 +29,7 @@ function createPath(): string {
 
 function createStorePaths(): { filePath: string; partitionDataRoot: string } {
   const root = mkdtempSync(join(tmpdir(), 'orca-browser-route-store-'))
+
   return {
     filePath: join(root, 'profile', 'bindings.json'),
     partitionDataRoot: join(root, 'Partitions')
@@ -155,6 +160,7 @@ describe('BrowserRoutePartitionBindingStore', () => {
       maxBindings: 2,
       isPartitionRetained: () => false
     })
+
     vi.setSystemTime(1_000)
     store.set(partition, fingerprint, 'e'.repeat(64))
     vi.setSystemTime(2_000)
@@ -172,11 +178,13 @@ describe('BrowserRoutePartitionBindingStore', () => {
   it('never evicts a retained partition, and fails only when every binding is retained', () => {
     const filePath = createPath()
     const retained = new Set<string>()
+
     const store = new BrowserRoutePartitionBindingStore({
       filePath,
       maxBindings: 2,
       isPartitionRetained: (candidate) => retained.has(candidate)
     })
+
     vi.setSystemTime(1_000)
     store.set(partition, fingerprint, 'e'.repeat(64))
     vi.setSystemTime(2_000)
@@ -195,11 +203,13 @@ describe('BrowserRoutePartitionBindingStore', () => {
 
   it('evicts a binding kept fresh by touch only after the untouched ones', () => {
     const filePath = createPath()
+
     const store = new BrowserRoutePartitionBindingStore({
       filePath,
       maxBindings: 2,
       isPartitionRetained: () => false
     })
+
     vi.setSystemTime(1_000)
     store.set(partition, fingerprint, 'e'.repeat(64))
     vi.setSystemTime(2_000)

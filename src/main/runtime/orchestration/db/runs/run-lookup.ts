@@ -18,6 +18,7 @@ export type LegacyAdoptedMailboxOwner = {
 
 // Why: hoisted and wildcard-free so the per-publish run lookups hit the SyncDatabase statement cache.
 const RUN_BY_ID_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs WHERE id = ?`
+
 const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
@@ -25,6 +26,7 @@ const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
   const run = this.getRunRaw(id)
+
   return run ? exposeRunTimestamps(run) : undefined
 }
 
@@ -32,10 +34,13 @@ export function getLegacyAdoptedRunMailboxOwner(
   this: OrchestrationDb
 ): LegacyAdoptedMailboxOwner | null {
   const adoption = this.getLegacyAdoption()
+
   if (!adoption) {
     return null
   }
+
   const terminalHandle = this.getUniqueLegacyCoordinatorHandle(adoption.adopted_run_id)
+
   return terminalHandle ? { runId: adoption.adopted_run_id, terminalHandle } : null
 }
 
@@ -55,13 +60,16 @@ export function getRunMailboxOwnerIdsForHandle(
       )
       .all(terminalHandle) as { run_id: string }[]
   ).map((row) => row.run_id)
+
   const adoptedOwner =
     legacyAdoptedMailboxOwner === undefined
       ? this.getLegacyAdoptedRunMailboxOwner()
       : legacyAdoptedMailboxOwner
+
   if (adoptedOwner?.terminalHandle === terminalHandle) {
     runIds.push(adoptedOwner.runId)
   }
+
   return [...new Set(runIds)].sort()
 }
 
@@ -73,13 +81,17 @@ export function listRuns(
     const rows = this.db
       .prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC')
       .all() as RunRow[]
+
     return { runs: rows.map(exposeRunTimestamps), nextCursor: null }
   }
+
   const limit = Math.min(
     Math.max(1, params.limit ?? ORCHESTRATION_RUN_PAGE_LIMIT),
     ORCHESTRATION_RUN_PAGE_LIMIT
   )
+
   const cursor = params.cursor ? decodeRunListCursor(params.cursor) : undefined
+
   const rows = (
     cursor
       ? this.db
@@ -94,8 +106,10 @@ export function listRuns(
           .prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC LIMIT ?')
           .all(limit + 1)
   ) as RunRow[]
+
   const hasMore = rows.length > limit
   const pageRows = hasMore ? rows.slice(0, limit) : rows
+
   return {
     runs: pageRows.map(exposeRunTimestamps),
     nextCursor: hasMore ? encodeRunListCursor(pageRows.at(-1) as RunRow) : null
@@ -104,6 +118,7 @@ export function listRuns(
 
 export function getCurrentRunForPane(this: OrchestrationDb, paneKey: string): RunRow | undefined {
   const run = this.runsBoundToPane(paneKey)[0]
+
   return run ? exposeRunTimestamps(run) : undefined
 }
 
@@ -132,6 +147,7 @@ export function unbindOtherRunsForPane(
       if (run.coordinator_handle) {
         this.routeAllUnreadDirectMessagesToRunMailbox(run.id, run.coordinator_handle)
       }
+
       this.db
         .prepare(
           `UPDATE runs

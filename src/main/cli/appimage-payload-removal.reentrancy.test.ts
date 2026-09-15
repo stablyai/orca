@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // Why a mocked rm: the property under test is the ORDER in which overlapping removals settle, which
 // real filesystem timing cannot pin down. Deferreds make the interleaving exact.
 const { rmMock } = vi.hoisted(() => ({ rmMock: vi.fn() }))
+
 vi.mock('node:fs/promises', () => ({ rm: rmMock }))
 
 const originalNoAsar = process.noAsar
@@ -14,9 +15,11 @@ afterEach(() => {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((r) => {
     resolve = r
   })
+
   return { promise, resolve }
 }
 

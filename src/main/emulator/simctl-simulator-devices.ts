@@ -24,17 +24,20 @@ type SimctlDeviceList = {
 }
 
 const UDID_RE = /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/i
+
 const SIMCTL_UNAVAILABLE_MESSAGE =
   'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
 
 function parseSimctlDevices(stdout: string): SimulatorDevice[] {
   const data = JSON.parse(stdout || '{}') as SimctlDeviceList
   const devices: SimulatorDevice[] = []
+
   for (const [runtime, runtimeDevices] of Object.entries(data.devices ?? {})) {
     for (const device of runtimeDevices) {
       if (!device.udid) {
         continue
       }
+
       devices.push({
         name: device.name ?? device.udid,
         udid: device.udid,
@@ -44,12 +47,14 @@ function parseSimctlDevices(stdout: string): SimulatorDevice[] {
       })
     }
   }
+
   return devices
 }
 
 function mapSimctlError(error: ExecFileException, stderr?: string | Buffer): EmulatorError {
   const raw = `${error.message}\n${stderr?.toString() ?? ''}`
   const lower = raw.toLowerCase()
+
   if (
     error.code === 'ENOENT' ||
     (lower.includes('unable to find utility') && lower.includes('simctl')) ||
@@ -59,6 +64,7 @@ function mapSimctlError(error: ExecFileException, stderr?: string | Buffer): Emu
     // the actionable Xcode fix instead of "Command failed: xcrun ...".
     return new EmulatorError('emulator_simctl_unavailable', SIMCTL_UNAVAILABLE_MESSAGE)
   }
+
   return new EmulatorError('emulator_error', raw.trim() || 'xcrun simctl command failed.')
 }
 
@@ -66,6 +72,7 @@ export async function listSimulatorDevices(): Promise<SimulatorDevice[]> {
   if (platform() !== 'darwin') {
     return []
   }
+
   return new Promise((resolve, reject) => {
     execFile(
       'xcrun',
@@ -74,8 +81,10 @@ export async function listSimulatorDevices(): Promise<SimulatorDevice[]> {
       (error, stdout, stderr) => {
         if (error) {
           reject(mapSimctlError(error, stderr))
+
           return
         }
+
         try {
           resolve(parseSimctlDevices(stdout))
         } catch (parseError) {
@@ -93,12 +102,15 @@ export async function resolveSimulatorUdid(
   if (UDID_RE.test(deviceOrName)) {
     return deviceOrName
   }
+
   try {
     const devices = await listSimulatorDevices()
     const needle = deviceOrName.toLowerCase()
+
     const match = devices.find(
       (device) => device.name.toLowerCase().includes(needle) || device.udid === deviceOrName
     )
+
     if (match) {
       return match.udid
     }
@@ -111,13 +123,16 @@ export async function resolveSimulatorUdid(
       json: true,
       timeoutMs: 10_000
     })
+
     if (raw && typeof raw === 'object') {
       const device = (raw as { device?: unknown }).device
+
       if (typeof device === 'string' && device.toLowerCase().includes(deviceOrName.toLowerCase())) {
         return device
       }
     }
   } catch {}
+
   return deviceOrName
 }
 
@@ -128,14 +143,17 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
       'iOS Simulator requires macOS with Xcode Command Line Tools.'
     )
   }
+
   const devices = await listSimulatorDevices()
   const device = devices.find((candidate) => candidate.udid === udid)
+
   if (!device) {
     throw new EmulatorError(
       'emulator_device_not_found',
       `Simulator ${udid} not found. Create one via Xcode > Window > Devices and Simulators.`
     )
   }
+
   if (device.state === 'Booted') {
     return
   }
@@ -145,13 +163,18 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
       execFile('xcrun', ['simctl', 'boot', udid], { timeout: 45_000 }, (error, _stdout, stderr) => {
         if (error) {
           const message = error.message.toLowerCase()
+
           if (message.includes('booted') || message.includes('current state')) {
             resolve()
+
             return
           }
+
           reject(mapSimctlError(error, stderr))
+
           return
         }
+
         resolve()
       })
     })
@@ -160,10 +183,13 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
   }
 
   const deadline = Date.now() + 22_000
+
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 700))
+
     try {
       const fresh = await listSimulatorDevices()
+
       if (fresh.find((candidate) => candidate.udid === udid)?.state === 'Booted') {
         return
       }
@@ -189,15 +215,20 @@ export async function shutdownSimulatorDevice(udid: string): Promise<void> {
       (error, _stdout, stderr) => {
         if (!error) {
           resolve()
+
           return
         }
+
         // Why: execFile's message echoes the command line, so only the actual
         // already-off state is idempotent; other current states are real failures.
         const message = `${error.message}\n${stderr?.toString() ?? ''}`.toLowerCase()
+
         if (/\bcurrent state:\s*shutdown\b/.test(message)) {
           resolve()
+
           return
         }
+
         reject(mapSimctlError(error, stderr))
       }
     )

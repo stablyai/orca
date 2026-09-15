@@ -8,6 +8,7 @@ export type SkillInstallLockOwner = {
 
 function validOwner(value: unknown): SkillInstallLockOwner | null {
   const owner = value as Partial<SkillInstallLockOwner> | null
+
   return owner &&
     typeof owner.token === 'string' &&
     typeof owner.pid === 'number' &&
@@ -31,6 +32,7 @@ export async function readSkillInstallLockOwner(
 export function skillInstallLockOwnerProcessIsAlive(owner: SkillInstallLockOwner): boolean {
   try {
     process.kill(owner.pid, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'EPERM'

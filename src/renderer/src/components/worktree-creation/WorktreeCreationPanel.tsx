@@ -32,10 +32,12 @@ export default function WorktreeCreationPanel({
     if (entryStatus !== 'creating') {
       return
     }
+
     // Pause the 1s clock while the window is hidden so a backgrounded creation
     // panel stops re-rendering for ticks no one can see.
     return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
   }, [entryStatus])
+
   if (!entry) {
     return null
   }
@@ -186,6 +188,7 @@ function VmProvisioningStatus({
   onDismiss?: () => void
 }): React.JSX.Element {
   const isError = error !== undefined && error !== null
+
   return (
     <div className="flex min-h-full justify-center pt-12">
       <div className="flex w-full max-w-2xl flex-col gap-4">
@@ -277,19 +280,25 @@ function RecipeOutputLog({
   // Why: follow the tail as output streams in, but stop following the moment the user scrolls up so
   // they can read earlier output. Resume following once they scroll back to the bottom.
   const pinnedToBottomRef = React.useRef(true)
+
   const handleScroll = React.useCallback((): void => {
     const el = ref.current
+
     if (!el) {
       return
     }
+
     pinnedToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8
   }, [])
+
   React.useEffect(() => {
     const el = ref.current
+
     if (el && pinnedToBottomRef.current) {
       el.scrollTop = el.scrollHeight
     }
   }, [log])
+
   return (
     <pre
       ref={ref}
@@ -305,8 +314,10 @@ function formatElapsedTime(elapsedMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000))
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
+
   if (minutes === 0) {
     return `${seconds}s`
   }
+
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }

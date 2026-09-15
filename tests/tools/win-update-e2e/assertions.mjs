@@ -30,15 +30,18 @@ const APP_OWNER_PROCESSES = new Set(['orca', 'electron'])
  */
 export function classifyWindowEvents(events, { canary }) {
   const unexpected = []
+
   for (const event of events) {
     const title = typeof event.title === 'string' ? event.title : ''
     const owner = (event.processName ?? '').toLowerCase()
     const canaryHit = canary && title.includes(canary)
     const consoleHit = CONSOLE_HOST_PROCESSES.has(owner) && !APP_OWNER_PROCESSES.has(owner)
+
     if (canaryHit || consoleHit) {
       unexpected.push({ ...event, reason: canaryHit ? 'canary-title' : 'console-host' })
     }
   }
+
   return { unexpected }
 }
 
@@ -49,6 +52,7 @@ function assertion(name, pass, expected, actual, detail = '') {
 /** Build the ordered assertion list for the run's profile. */
 export function buildAssertions(ctx) {
   const { unexpected } = classifyWindowEvents(ctx.watchEvents ?? [], { canary: ctx.canary })
+
   const windowAssertion = assertion(
     'zero unexpected console/terminal windows',
     unexpected.length === 0,
@@ -67,6 +71,7 @@ export function buildAssertions(ctx) {
 function survivalAssertions(ctx) {
   const samePid =
     ctx.preDaemonPid != null && ctx.preDaemonPid === ctx.postDaemonPid && ctx.postDaemonAlive
+
   return [
     assertion(
       'daemon PID unchanged across update',
@@ -104,6 +109,7 @@ function survivalAssertions(ctx) {
 function coldRestoreAssertions(ctx) {
   const freshDaemon =
     ctx.postDaemonPid != null && ctx.postDaemonPid !== ctx.preDaemonPid && ctx.postDaemonAlive
+
   return [
     assertion(
       'old daemon PID is dead after update',
@@ -152,12 +158,14 @@ function daemonLogAssertion(ctx) {
       'no daemon log present (informational)'
     )
   }
+
   // Only genuinely-bad records count (fatal uncaught exceptions, invalid-token
   // hello rejections). Benign suppressed native-PTY exceptions are reported as
   // context but never affect pass/fail.
   const errorLines = ctx.daemonLog.errorLines ?? []
   const suppressed = ctx.daemonLog.suppressedCount ?? 0
   const suppressedNote = suppressed > 0 ? ` (${suppressed} benign suppressed, ignored)` : ''
+
   return assertion(
     'daemon log free of fatal records',
     errorLines.length === 0,
@@ -177,11 +185,15 @@ export function allPassed(assertions) {
 export function renderTable(assertions, label = 'win-update-e2e') {
   const symbol = (pass) => (pass === true ? 'PASS' : pass === false ? 'FAIL' : 'INFO')
   const nameWidth = Math.max(...assertions.map((a) => a.name.length), 10)
+
   const lines = assertions.map((a) => {
     const detail = a.detail ? `  — ${a.detail}` : ''
+
     return `  [${symbol(a.pass)}] ${a.name.padEnd(nameWidth)}  expected: ${a.expected}; actual: ${a.actual}${detail}`
   })
+
   const failed = assertions.filter((a) => a.pass === false).length
   const header = `\n===== ${label} assertions (${failed === 0 ? 'ALL PASS' : `${failed} FAILED`}) =====`
+
   return [header, ...lines, ''].join('\n')
 }

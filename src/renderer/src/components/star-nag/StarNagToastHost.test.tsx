@@ -6,13 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StarNagToastHost } from './StarNagToastHost'
 
 type ShowPayload = { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }
+
 type ShowCallback = (payload?: ShowPayload) => void
+
 type CustomToastOptions = {
   dismissible?: boolean
   onDismiss?: () => void
 }
 
 const toastDismissMock = vi.hoisted(() => vi.fn())
+
 const customToastMock = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
@@ -40,9 +43,11 @@ function createDeferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 
@@ -57,6 +62,7 @@ function renderHost(): { root: Root; container: HTMLDivElement } {
   act(() => {
     root.render(<StarNagToastHost />)
   })
+
   return { root, container }
 }
 
@@ -87,10 +93,12 @@ describe('StarNagToastHost', () => {
     starNag = {
       onShow: vi.fn((callback: ShowCallback) => {
         showCallback = callback
+
         return vi.fn()
       }),
       onHide: vi.fn((callback: () => void) => {
         hideCallback = callback
+
         return vi.fn()
       }),
       dismiss: vi.fn().mockResolvedValue(undefined),
@@ -108,6 +116,7 @@ describe('StarNagToastHost', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     toastContainer?.remove()
     root = null
@@ -133,6 +142,7 @@ describe('StarNagToastHost', () => {
     const button = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Star on GitHub')
     )
+
     expect(button?.className).toContain('flex-1')
     await act(async () => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -153,6 +163,7 @@ describe('StarNagToastHost', () => {
     const button = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Open GitHub')
     )
+
     expect(button?.className).toContain('bg-amber-400/15')
     expect(button?.className).toContain('text-amber-800')
     await act(async () => {
@@ -178,6 +189,7 @@ describe('StarNagToastHost', () => {
     const button = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Star on GitHub')
     )
+
     await act(async () => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -186,9 +198,11 @@ describe('StarNagToastHost', () => {
     expect(shell.openUrl).not.toHaveBeenCalled()
     expect(starNag.openWeb).not.toHaveBeenCalled()
     expect(toastContainer.textContent).toContain('Open GitHub')
+
     const fallbackButton = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Open GitHub')
     )
+
     expect(fallbackButton?.className).toContain('bg-amber-400/15')
     expect(fallbackButton?.className).toContain('text-amber-800')
     expect(toastContainer.textContent).toContain('Later')
@@ -205,6 +219,7 @@ describe('StarNagToastHost', () => {
     const laterButton = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Later')
     )
+
     act(() => {
       laterButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -234,6 +249,7 @@ describe('StarNagToastHost', () => {
     const starButton = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Star on GitHub')
     )
+
     await act(async () => {
       starButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -241,6 +257,7 @@ describe('StarNagToastHost', () => {
     const closeButton = Array.from(toastContainer.querySelectorAll('button')).find(
       (candidate) => candidate.getAttribute('aria-label') === 'Dismiss'
     )
+
     expect((closeButton as HTMLButtonElement | undefined)?.disabled).toBe(true)
     act(() => {
       closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

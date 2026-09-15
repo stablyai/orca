@@ -25,9 +25,11 @@ export function clampAutomationListSearchQueryInput(
   maxBytes = AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES
 ): string {
   const maxStoredCodeUnits = maxBytes + 1
+
   if (rawQuery.length <= maxStoredCodeUnits) {
     return rawQuery
   }
+
   return rawQuery.slice(0, maxStoredCodeUnits)
 }
 
@@ -39,10 +41,13 @@ export function resolveAutomationListSearchQuery(
   if (isClipboardTextByteLengthOverLimit(rawQuery, maxBytes)) {
     return { status: 'too_large' }
   }
+
   const query = rawQuery.trim().toLowerCase()
+
   if (!query) {
     return { status: 'inactive' }
   }
+
   return { status: 'active', query }
 }
 
@@ -52,5 +57,6 @@ export function getActiveAutomationListSearchQuery(
   maxBytes = AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES
 ): string | null {
   const resolved = resolveAutomationListSearchQuery(rawQuery, maxBytes)
+
   return resolved.status === 'active' ? resolved.query : null
 }

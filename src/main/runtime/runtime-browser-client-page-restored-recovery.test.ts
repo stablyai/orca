@@ -143,6 +143,7 @@ describe('recovery of rehydrated client-hosted pages', () => {
 
   it('lets adoption take a rehydrated row back when the client still holds the guest', async () => {
     const { pages } = harness()
+
     const adoptionAuthority = {
       authorityRuntimeId: 'runtime-new',
       authorityEpoch: 'epoch-new',
@@ -191,6 +192,7 @@ function harness(options: { pairedDeviceId?: string } = {}) {
   })
   const commands: { browserPageId: string; type: string }[] = []
   const placements = new Map<string, RuntimeBrowserClientPlacement | undefined>()
+
   const authority = {
     authorityRuntimeId: 'runtime-new',
     authorityEpoch: 'epoch-new',
@@ -204,13 +206,16 @@ function harness(options: { pairedDeviceId?: string } = {}) {
     completePageRetirement: vi.fn(() => true),
     createClientPage: vi.fn(async (input: { browserPageId: string }) => {
       placements.set(input.browserPageId, freshPlacement)
+
       return freshPlacement
     }),
     issueClientPageCommand: vi.fn((input: { browserPageId: string }, command: { type: string }) => {
       commands.push({ browserPageId: input.browserPageId, type: command.type })
+
       return { event: {}, result: Promise.resolve({ status: 'completed' as const }) }
     })
   }
+
   return { authority, commands, notifyWorkspace: vi.fn(), pages, placements }
 }
 

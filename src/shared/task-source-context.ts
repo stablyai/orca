@@ -24,6 +24,7 @@ export type {
   LinearTaskProviderIdentity,
   TaskProviderIdentity
 } from './task-provider-identity'
+
 export type { TaskProvider } from './task-providers'
 
 export type TaskSourceContext = {
@@ -55,13 +56,17 @@ export function normalizeTaskSourceContext(
   input: TaskSourceContextInput
 ): TaskSourceContext | null {
   const projectId = normalizeNonEmptyString(input.projectId)
+
   if (!projectId) {
     return null
   }
+
   const provider = normalizeTaskProvider(input.provider)
+
   if (!provider) {
     return null
   }
+
   return {
     kind: 'task-source',
     provider,
@@ -78,8 +83,10 @@ export function normalizeStoredTaskSourceContext(value: unknown): TaskSourceCont
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const input = value as Record<string, unknown>
   const provider = normalizeTaskProvider(input.provider)
+
   if (
     !provider ||
     typeof input.projectId !== 'string' ||
@@ -92,6 +99,7 @@ export function normalizeStoredTaskSourceContext(value: unknown): TaskSourceCont
   ) {
     return null
   }
+
   if (
     typeof input.hostId === 'string' &&
     input.hostId.trim().length > 0 &&
@@ -99,6 +107,7 @@ export function normalizeStoredTaskSourceContext(value: unknown): TaskSourceCont
   ) {
     return null
   }
+
   return normalizeTaskSourceContext(input as TaskSourceContextInput)
 }
 
@@ -128,9 +137,11 @@ export function areTaskSourceContextsEqual(
   if (a === b) {
     return true
   }
+
   if (!a || !b) {
     return !a && !b
   }
+
   return (
     a.provider === b.provider &&
     a.projectId === b.projectId &&
@@ -146,6 +157,7 @@ export function getTaskSourceRuntimeSettings(
   context: Pick<TaskSourceContext, 'hostId'> | null | undefined
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
   const parsed = parseExecutionHostId(context?.hostId)
+
   return {
     activeRuntimeEnvironmentId: parsed?.kind === 'runtime' ? parsed.environmentId : null
   }
@@ -180,9 +192,11 @@ export function buildWorkspaceRunContext(args: {
   const projectHostSetupId = normalizeNonEmptyString(args.projectHostSetupId)
   const repoId = normalizeNonEmptyString(args.repoId)
   const repoPath = normalizeNonEmptyString(args.path)
+
   if (!projectId || !projectHostSetupId || !repoId || !repoPath) {
     return null
   }
+
   return {
     kind: 'workspace-run',
     projectId,
@@ -195,10 +209,13 @@ export function buildWorkspaceRunContext(args: {
 
 function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): ExecutionHostId {
   const explicit = normalizeExecutionHostId(repo.executionHostId)
+
   if (explicit) {
     return explicit
   }
+
   const connectionId = normalizeNonEmptyString(repo.connectionId)
+
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
@@ -216,6 +233,7 @@ function normalizeTaskProvider(value: unknown): TaskProvider | null {
 
 function normalizeNonEmptyString(value: unknown): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
+
   return trimmed ? trimmed : null
 }
 
@@ -231,5 +249,6 @@ export function runtimeHostIdFromEnvironmentId(
   environmentId: string | null | undefined
 ): ExecutionHostId {
   const trimmed = normalizeNonEmptyString(environmentId)
+
   return trimmed ? toRuntimeExecutionHostId(trimmed) : LOCAL_EXECUTION_HOST_ID
 }

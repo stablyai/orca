@@ -122,6 +122,7 @@ describe('IosEmulatorBackend', () => {
         ]
       }
     ]
+
     netFetchMock.mockResolvedValue(new Response(JSON.stringify(raw), { status: 200 }))
     const backend = new IosEmulatorBackend()
 
@@ -210,10 +211,12 @@ describe('IosEmulatorBackend', () => {
 
   it('sends a gesture over the provided ws url and rejects without one', async () => {
     const backend = new IosEmulatorBackend()
+
     const points = [
       { type: 'begin' as const, x: 0.1, y: 0.1 },
       { type: 'end' as const, x: 0.2, y: 0.2 }
     ]
+
     await backend.gesture('device-1', points, 'ws://127.0.0.1:3100/device-1')
     expect(sendEmulatorGestureSequenceMock).toHaveBeenCalledWith(
       'ws://127.0.0.1:3100/device-1',
@@ -341,10 +344,13 @@ describe('IosEmulatorBackend', () => {
         if (args[0] !== '--detach') {
           return {}
         }
+
         detachCalls += 1
+
         if (detachCalls === 2) {
           return {}
         }
+
         throw new EmulatorError(
           'emulator_error',
           'Helper failed:\n[main] Failed to start capture: No framebuffer display descriptor found'
@@ -384,12 +390,14 @@ describe('IosEmulatorBackend', () => {
 
   it('treats a session as reusable only when reachable and helper-backed', async () => {
     const reachable = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+
     const info = {
       deviceUdid: 'device-1',
       streamUrl: 'http://127.0.0.1:3100/device-1',
       wsUrl: 'ws://127.0.0.1:3100/device-1',
       helperPid: 1234
     }
+
     expect(await reachable.isSessionReusable(info)).toBe(true)
 
     const unreachable = new IosEmulatorBackend({ waitForEndpointReady: async () => false })

@@ -28,6 +28,7 @@ import { installCopilotHooksRemote } from './copilot-remote-hook-install'
 
 function getCopilotHome(): string {
   const fromEnv = process.env.COPILOT_HOME?.trim()
+
   return fromEnv ? fromEnv : join(homedir(), '.copilot')
 }
 
@@ -44,6 +45,7 @@ export class CopilotHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'copilot',
@@ -59,25 +61,31 @@ export class CopilotHookService {
     let presentCount = 0
     let staleManagedPresent = false
     const managedEvents = new Set<string>(COPILOT_EVENTS)
+
     for (const eventName of COPILOT_EVENTS) {
       const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
+
       const hasCurrentCommand = definitions.some((definition) =>
         definitionHasCurrentCommand(definition, command)
       )
+
       if (hasCurrentCommand) {
         presentCount += 1
       } else {
         missing.push(eventName)
       }
     }
+
     for (const [eventName, definitions] of Object.entries(config.hooks ?? {})) {
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const currentCommand = managedEvents.has(eventName)
         ? getManagedCommand(scriptPath, eventName)
         : null
+
       staleManagedPresent =
         staleManagedPresent ||
         definitions.some((definition) =>
@@ -88,6 +96,7 @@ export class CopilotHookService {
     const managedHooksPresent = presentCount > 0 || staleManagedPresent
     let state: AgentHookInstallState
     let detail: string | null
+
     if (config.disableAllHooks === true && managedHooksPresent) {
       state = 'partial'
       detail = 'Managed Copilot hook file is disabled'
@@ -104,6 +113,7 @@ export class CopilotHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return { agent: 'copilot', state, configPath, managedHooksPresent, detail }
   }
 
@@ -111,6 +121,7 @@ export class CopilotHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'copilot',
@@ -129,7 +140,9 @@ export class CopilotHookService {
       if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
@@ -151,6 +164,7 @@ export class CopilotHookService {
     config.hooks = nextHooks
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 
@@ -160,10 +174,13 @@ export class CopilotHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
+
     if (!existsSync(configPath)) {
       return this.getStatus()
     }
+
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'copilot',
@@ -177,23 +194,29 @@ export class CopilotHookService {
     const nextHooks = { ...config.hooks }
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
     let changed = false
+
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
       changed = changed || definitionsChanged(definitions, cleaned)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
         nextHooks[eventName] = cleaned
       }
     }
+
     if (!changed) {
       return this.getStatus()
     }
+
     config.hooks = nextHooks
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 }

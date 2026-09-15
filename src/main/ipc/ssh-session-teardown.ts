@@ -17,9 +17,11 @@ export async function disconnectRegisteredSshTarget(targetId: string): Promise<v
 
 export async function removeRegisteredSshTarget(targetId: string): Promise<void> {
   const store = getSshTargetRegistryStore()
+
   if (!store) {
     return
   }
+
   invalidateConnectAttempt(targetId)
   await runTargetLifecycle(targetId, async () => {
     try {
@@ -31,8 +33,10 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
         `[ssh] Failed to disconnect removed target ${targetId}: ${err instanceof Error ? err.message : String(err)}`
       )
     }
+
     persistedStore?.removeSshRemotePtyLeases(targetId)
     store.removeTarget(targetId)
+
     // Why: removal is the storage boundary — the target's browser cookie jars
     // must not outlive the record that scoped them.
     try {
@@ -40,6 +44,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
         import('../browser/local-ssh-browser-partitions'),
         import('../browser/browser-route-partition-storage-runtime')
       ])
+
       await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
       await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
       // Why (review P2-2): a prepare racing the removal can re-register between
@@ -61,6 +66,7 @@ export async function teardownSshTargetTransport(
   teardown: (session: SshRelaySession) => void | Promise<void>
 ): Promise<void> {
   let transportDisconnect: Promise<{ ok: true } | { ok: false; error: unknown }>
+
   try {
     transportDisconnect = Promise.resolve(connectionManager?.disconnect(targetId)).then(
       () => ({ ok: true }) as const,
@@ -69,17 +75,21 @@ export async function teardownSshTargetTransport(
   } catch (error) {
     transportDisconnect = Promise.resolve({ ok: false, error })
   }
+
   const sessionTeardown = teardownActiveSshSession(targetId, teardown).then(
     () => ({ ok: true }) as const,
     (error: unknown) => ({ ok: false, error }) as const
   )
+
   const [disconnectResult, teardownResult] = await Promise.all([
     transportDisconnect,
     sessionTeardown
   ])
+
   if (!teardownResult.ok) {
     throw teardownResult.error
   }
+
   if (!disconnectResult.ok) {
     throw disconnectResult.error
   }
@@ -90,26 +100,32 @@ export async function teardownActiveSshSession(
   teardown: (session: SshRelaySession) => void | Promise<void>
 ): Promise<void> {
   const session = activeSessions.get(targetId)
+
   if (!session) {
     return
   }
+
   let teardownError: { error: unknown } | null = null
+
   try {
     // Why: await port teardown so local listeners are released before disconnect/remove completes, else an immediate reconnect hits EADDRINUSE.
     await portForwardManager?.removeAllForwards(targetId)
   } catch (error) {
     teardownError = { error }
   }
+
   try {
     await teardown(session)
   } catch (error) {
     teardownError ??= { error }
   }
+
   if (activeSessions.get(targetId) === session) {
     activeSessions.delete(targetId)
     clearRelayLostBackoff(targetId)
     clearRelayStateOverride(targetId)
   }
+
   if (teardownError) {
     throw teardownError.error
   }
@@ -134,6 +150,7 @@ export async function abandonFailedSshSession(
       `[ssh] Failed to detach abandoned session for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
     )
   }
+
   if (activeSessions.get(targetId) === session) {
     activeSessions.delete(targetId)
   }
@@ -153,9 +170,11 @@ export async function abandonCancelledConnectAttempt(
   if (activeSessions.get(targetId) === session) {
     await abandonFailedSshSession(targetId, session)
   }
+
   if (!mintedConnection) {
     return
   }
+
   try {
     await connectionManager!.disconnectConnection(targetId, mintedConnection)
   } catch (error) {

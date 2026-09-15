@@ -5,6 +5,7 @@ const { handlers, sshSearch, runtimeSearch } = vi.hoisted(() => ({
   sshSearch: vi.fn(),
   runtimeSearch: vi.fn()
 }))
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: (name: string, handler: (...args: unknown[]) => Promise<unknown>) =>
@@ -12,6 +13,7 @@ vi.mock('electron', () => ({
   },
   ipcRenderer: { invoke: (name: string, ...args: unknown[]) => handlers.get(name)!(null, ...args) }
 }))
+
 vi.mock('./ssh', () => ({
   requestActiveSshSessionSearch: sshSearch
 }))
@@ -21,6 +23,7 @@ import { aiVaultApi } from '../../preload/api/ai-vault-bridge'
 import { setSessionSearchService } from '../ai-vault-search/session-search-service-registry'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
 import { fakeSearchService, searchResults } from '../../shared/ai-vault-search-test-fixture'
+
 beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()
@@ -29,6 +32,7 @@ beforeEach(() => {
     callRuntimeSearch: runtimeSearch
   })
 })
+
 afterEach(() => setSessionSearchService(null))
 
 describe('desktop IPC and preload search boundary', () => {
@@ -126,6 +130,7 @@ describe('desktop IPC and preload search boundary', () => {
   it('refuses an unroutable host instead of widening it to every host', async () => {
     const local = fakeSearchService()
     setSessionSearchService(local)
+
     for (const scope of ['all', 'nope', 'ssh:', 'runtime:a|b']) {
       await expect(
         handlers.get('aiVault:searchSessions')!(null, { query: 'needle' }, scope)
@@ -134,6 +139,7 @@ describe('desktop IPC and preload search boundary', () => {
         'not available for this execution host'
       )
     }
+
     expect(local.search).not.toHaveBeenCalled()
     expect(local.status).not.toHaveBeenCalled()
     expect(sshSearch).not.toHaveBeenCalled()

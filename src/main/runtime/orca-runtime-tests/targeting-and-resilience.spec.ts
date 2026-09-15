@@ -29,6 +29,7 @@ describe('OrcaRuntimeService', () => {
       vi.mocked(listWorktrees).mockClear()
       mockLiveBrowserGuest()
       const runtime = createRuntime()
+
       const snapshotMock = vi.fn().mockResolvedValue({
         browserPageId: 'page-1',
         snapshot: 'tree',
@@ -53,6 +54,7 @@ describe('OrcaRuntimeService', () => {
       vi.mocked(listWorktrees).mockClear()
       mockLiveBrowserGuest()
       const runtime = createRuntime()
+
       const snapshotMock = vi.fn().mockResolvedValue({
         browserPageId: 'page-1',
         snapshot: 'tree',
@@ -77,10 +79,12 @@ describe('OrcaRuntimeService', () => {
     it('routes tab switch and capture start by explicit page id', async () => {
       mockLiveBrowserGuest()
       const runtime = createRuntime()
+
       const tabSwitchMock = vi.fn().mockResolvedValue({
         switched: 2,
         browserPageId: 'page-2'
       })
+
       const captureStartMock = vi.fn().mockResolvedValue({
         capturing: true
       })
@@ -112,6 +116,7 @@ describe('OrcaRuntimeService', () => {
     it('accepts focus on tab switch without altering bridge args (focus is main-side concern)', async () => {
       mockLiveBrowserGuest()
       const runtime = createRuntime()
+
       const tabSwitchMock = vi.fn().mockResolvedValue({
         switched: 0,
         browserPageId: 'page-1'
@@ -199,6 +204,7 @@ describe('OrcaRuntimeService', () => {
         }
       ])
       const runtime = createRuntime()
+
       const getRegisteredTabsMock = vi.fn((worktreeId?: string) =>
         worktreeId === `${TEST_REPO_ID}::/tmp/worktree-b` ? new Map() : new Map([['page-1', 1]])
       )
@@ -269,25 +275,31 @@ describe('OrcaRuntimeService', () => {
     it('RPC-initiated delete awaits matching PTYs before git', async () => {
       // Seed the runtime with a live leaf whose worktreeId matches the target.
       const callOrder: string[] = []
+
       const stopAndWait = vi.fn(async (id: string) => {
         callOrder.push(`stop-and-wait:${id}`)
+
         return true
       })
+
       const localProvider = createProviderStub(async () => [])
       vi.mocked(assertWorktreeCleanForRemoval).mockImplementation(async () => {
         callOrder.push('preflight')
       })
       vi.mocked(removeWorktree).mockImplementation(async () => {
         callOrder.push('git-removeWorktree')
+
         return {}
       })
 
       const runtime = new OrcaRuntimeService(store, undefined, {
         getLocalProvider: () => {
           callOrder.push('getLocalProvider')
+
           return localProvider as never
         }
       })
+
       runtime.setPtyController({
         write: () => true,
         kill: vi.fn(() => true),
@@ -320,9 +332,11 @@ describe('OrcaRuntimeService', () => {
       const localProvider = createProviderStub(async () => [
         { id: 'pty-1', cwd: '/tmp', title: 'shell' }
       ])
+
       const runtime = new OrcaRuntimeService(store, undefined, {
         getLocalProvider: () => localProvider as never
       })
+
       runtime.setPtyController({
         write: () => true,
         kill: vi.fn(() => true),
@@ -344,9 +358,11 @@ describe('OrcaRuntimeService', () => {
         { id: '1', cwd: '/tmp', title: 'shell' },
         { id: '2', cwd: '/tmp', title: 'shell' }
       ])
+
       const postDaemonProvider = createProviderStub(async () => [
         { id: `${TEST_WORKTREE_ID}@@aaaaaaaa`, cwd: '/tmp', title: 'shell' }
       ])
+
       let currentProvider: ReturnType<typeof createProviderStub> = preDaemonProvider
       const onPtyStopped = vi.fn()
 
@@ -354,6 +370,7 @@ describe('OrcaRuntimeService', () => {
         getLocalProvider: () => currentProvider as never,
         onPtyStopped
       })
+
       vi.mocked(removeWorktree).mockResolvedValue({})
 
       // Simulate daemon-init swapping the provider after construction.
@@ -423,12 +440,15 @@ describe('OrcaRuntimeService', () => {
         leaves: Map<string, { ptyId: string | null }>
         issueHandle: (leaf: unknown) => string
       }
+
       const leaf = Array.from(internals.leaves.values()).find(
         (candidate) => candidate.ptyId === ptyId
       )
+
       if (!leaf) {
         throw new Error('expected leaf record')
       }
+
       return internals.issueHandle(leaf)
     }
 
@@ -442,6 +462,7 @@ describe('OrcaRuntimeService', () => {
       const internals = runtime as unknown as {
         leaves: Map<string, { ptyId: string | null }>
       }
+
       for (const leaf of internals.leaves.values()) {
         if (leaf.ptyId === 'pty-a') {
           leaf.ptyId = 'pty-b'
@@ -465,10 +486,13 @@ describe('OrcaRuntimeService', () => {
       const internals = runtime as unknown as {
         handles: Map<string, { ptyId: string | null }>
       }
+
       const record = internals.handles.get(handle)
+
       if (!record) {
         throw new Error('expected handle record')
       }
+
       record.ptyId = null
 
       expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-a' })
@@ -495,12 +519,14 @@ describe('OrcaRuntimeService', () => {
   describe('mobile terminal create resilience (#7718)', () => {
     it('cancels the surface wait without rolling back when the client connection dies', async () => {
       vi.useFakeTimers()
+
       try {
         const closeTerminal = vi.fn()
         const runtime = new OrcaRuntimeService(store)
         runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
         const abort = new AbortController()
         const webContents = { send: vi.fn() }
+
         const send = vi.fn((_channel: string, payload: { requestId: string }) => {
           ipcMain.emit(
             'terminal:tabCreateReply',
@@ -508,6 +534,7 @@ describe('OrcaRuntimeService', () => {
             { requestId: payload.requestId, tabId: 'tab-abort', title: 'Terminal' }
           )
         })
+
         webContents.send = send
         runtime.attachWindow(1)
         runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -520,10 +547,12 @@ describe('OrcaRuntimeService', () => {
           activate: false,
           signal: abort.signal
         })
+
         const settled = create.then(
           () => ({ ok: true as const }),
           (error: Error) => ({ ok: false as const, error })
         )
+
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
         // Client socket dies mid-wait: create must settle right away (not the 10s timeout) and must NOT close the tab (real terminal exists).
@@ -532,9 +561,11 @@ describe('OrcaRuntimeService', () => {
         const outcome = await settled
 
         expect(outcome.ok).toBe(false)
+
         if (outcome.ok === false) {
           expect(outcome.error.message).toBe('client_disconnected')
         }
+
         expect(closeTerminal).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()
@@ -543,11 +574,13 @@ describe('OrcaRuntimeService', () => {
 
     it('keeps a mobile-created terminal alive when its live shell has no registered pane key', async () => {
       vi.useFakeTimers()
+
       try {
         const closeTerminal = vi.fn()
         const runtime = new OrcaRuntimeService(store)
         runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
         const webContents = { send: vi.fn() }
+
         const send = vi.fn((_channel: string, payload: { requestId: string }) => {
           ipcMain.emit(
             'terminal:tabCreateReply',
@@ -555,6 +588,7 @@ describe('OrcaRuntimeService', () => {
             { requestId: payload.requestId, tabId: 'tab-stall', title: 'Terminal' }
           )
         })
+
         webContents.send = send
         runtime.attachWindow(1)
         runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -566,10 +600,12 @@ describe('OrcaRuntimeService', () => {
         const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
           activate: false
         })
+
         const settled = create.then(
           () => ({ ok: true as const }),
           (error: Error) => ({ ok: false as const, error })
         )
+
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
         // A live shell backs the tab but its leaf id isn't a terminal UUID, so no pane key registers (stalled renderer publication).
@@ -592,9 +628,11 @@ describe('OrcaRuntimeService', () => {
 
         // The create fails, but the timeout must not kill the live terminal (the "tab dies after ~10s" symptom).
         expect(outcome.ok).toBe(false)
+
         if (outcome.ok === false) {
           expect(outcome.error.message).toContain('Timed out')
         }
+
         expect(closeTerminal).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()

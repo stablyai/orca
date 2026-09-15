@@ -16,6 +16,7 @@ export function agentSessionRefusalOperationState(
   if (method === 'agentSession.requestHandoff' && HANDOFF_SETTLED_REFUSALS.has(code)) {
     return 'settled-rejected'
   }
+
   switch (code) {
     case 'agent_session_operation_conflict':
     case 'agent_session_operation_expired':

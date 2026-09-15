@@ -23,10 +23,12 @@ const { statDelayMs, readdirCalls, concurrency, entryZeroStatCalls } = vi.hoiste
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     readdir: (...args: Parameters<typeof actual.readdir>) => {
       readdirCalls.count += 1
+
       return actual.readdir(...args)
     },
     stat: async (...args: Parameters<typeof actual.stat>) => {
@@ -34,16 +36,19 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       concurrency.peak = Math.max(concurrency.peak, concurrency.current)
       const path = args[0]
       const entryZeroSegment = `${sep}wt-0`
+
       if (
         typeof path === 'string' &&
         (path.endsWith(entryZeroSegment) || path.includes(`${entryZeroSegment}${sep}`))
       ) {
         entryZeroStatCalls.count += 1
       }
+
       try {
         if (statDelayMs.current > 0) {
           await new Promise((resolve) => setTimeout(resolve, statDelayMs.current))
         }
+
         return await actual.stat(...args)
       } finally {
         concurrency.current -= 1
@@ -59,6 +64,7 @@ const alwaysVisible: WorktreePollerWindowVisibility = {
 
 async function makeCommonDir(entryCount: number): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'git-common-polling-test-'))
+
   for (let i = 0; i < entryCount; i++) {
     const entryPath = join(root, 'worktrees', `wt-${i}`)
     await mkdir(join(entryPath, 'logs'), { recursive: true })
@@ -69,6 +75,7 @@ async function makeCommonDir(entryCount: number): Promise<string> {
       writeFile(join(entryPath, 'logs', 'HEAD'), '0000 aaaa\n')
     ])
   }
+
   return root
 }
 
@@ -147,12 +154,14 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     dirsToRemove.push(commonDir)
     const events: WorktreeBasePollEvent[][] = []
     const pollIntervalMs = 20
+
     const sub = await startGitCommonPolling(
       commonDir,
       (batch) => events.push(batch),
       pollIntervalMs,
       alwaysVisible
     )
+
     cleanups.push(() => sub.unsubscribe())
     // Let the bootstrap snapshot settle before mutating.
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
@@ -178,12 +187,14 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     dirsToRemove.push(commonDir)
     const events: WorktreeBasePollEvent[][] = []
     const pollIntervalMs = 10
+
     const sub = await startGitCommonPolling(
       commonDir,
       (batch) => events.push(batch),
       pollIntervalMs,
       alwaysVisible
     )
+
     cleanups.push(() => sub.unsubscribe())
     // Let the bootstrap snapshot settle before mutating.
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
@@ -213,12 +224,14 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     const commonDir = await makeCommonDir(5)
     dirsToRemove.push(commonDir)
     const events: WorktreeBasePollEvent[][] = []
+
     const sub = await startGitCommonPolling(
       commonDir,
       (batch) => events.push(batch),
       20,
       alwaysVisible
     )
+
     cleanups.push(() => sub.unsubscribe())
 
     const newEntry = join(commonDir, 'worktrees', 'wt-new')

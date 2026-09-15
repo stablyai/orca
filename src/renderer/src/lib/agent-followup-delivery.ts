@@ -18,9 +18,11 @@ export async function sendFollowupPromptWhenAgentReady(args: {
   settings: RuntimeOwnerSettings
 }): Promise<boolean> {
   const { ptyId, expectedProcess, prompt, settings } = args
+
   if (!(await waitForAgentForeground(ptyId, expectedProcess, settings))) {
     return false
   }
+
   try {
     return await sendRuntimePtyInputVerified(settings, ptyId, `${prompt}\r`)
   } catch {
@@ -39,12 +41,15 @@ async function waitForAgentForeground(
     if (attempt > 0) {
       await new Promise((resolve) => globalThis.setTimeout(resolve, 150))
     }
+
     try {
       const process = await inspectRuntimeTerminalProcess(settings, ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+
       if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return true
       }
+
       // Why: interpreter-wrapped agents (aider, mistral-vibe are pip console
       // scripts) surface a python/node foreground comm, so the exact-name check
       // never matches — locally when the ps-table resolver can't pin the child,
@@ -63,5 +68,6 @@ async function waitForAgentForeground(
       // Ignore transient PTY inspection failures and keep polling.
     }
   }
+
   return false
 }

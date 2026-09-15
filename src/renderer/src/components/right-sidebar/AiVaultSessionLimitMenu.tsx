@@ -25,6 +25,7 @@ export function AiVaultSessionLimitMenu({
     sessionLimit === 'unlimited'
       ? translate('auto.components.right.sidebar.AiVaultSessionLimitMenu.unlimited', 'Unlimited')
       : sessionLimit.toLocaleString()
+
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>

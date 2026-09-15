@@ -46,6 +46,7 @@ describe('workspace lineage menu actions', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')
     const grandchild = makeWorktree('grandchild')
+
     const actions = getWorkspaceLineageMenuActions({
       parent,
       worktrees: [parent, child, grandchild],

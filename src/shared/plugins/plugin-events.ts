@@ -39,5 +39,7 @@ export const PLUGIN_EVENT_PAYLOAD_SCHEMAS: Record<PluginEventName, z.ZodTypeAny>
 }
 
 export type PluginWorktreeCreatedPayload = z.infer<typeof worktreeCreatedPayloadSchema>
+
 export type PluginWorktreeRemovedPayload = z.infer<typeof worktreeRemovedPayloadSchema>
+
 export type PluginAgentStatusChangedPayload = z.infer<typeof agentStatusChangedPayloadSchema>

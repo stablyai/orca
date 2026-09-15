@@ -21,16 +21,21 @@ export function resolveWindowsTerminalCapabilityOwnerKey(args: {
 }): string {
   const activeEnvironmentId = args.activeRuntimeEnvironmentId?.trim() || null
   const environment = args.isWebClient ? (args.runtimeEnvironments[0] ?? null) : null
+
   const ownerKey = getWindowsTerminalCapabilityOwnerKey(
     environment?.id ?? activeEnvironmentId,
     args.sshConnectionId
   )
+
   if (!environment) {
     return ownerKey
   }
+
   const pairingRevision = environment.pairingRevision ?? environment.createdAt
+
   const connectionGeneration =
     args.runtimeStatusByEnvironmentId?.get(environment.id)?.connectionGeneration ?? 0
+
   return `${ownerKey}:pairing:${pairingRevision}:connection:${connectionGeneration}`
 }
 
@@ -39,6 +44,7 @@ export function useWindowsTerminalCapabilityOwnerKey(
   sshConnectionId?: string | null
 ): string {
   const isWebClient = isWebClientLocation()
+
   return useAppStore((state) =>
     resolveWindowsTerminalCapabilityOwnerKey({
       activeRuntimeEnvironmentId,

@@ -17,6 +17,7 @@ export function normalizeOpenCodeFamilyEvent(
   const resetsTurn =
     isNewTurnEvent(source, eventName) ||
     (eventName === 'MessagePart' && hookPayload.role === 'user')
+
   const stateName =
     eventName === 'SessionBusy' || eventName === 'MessagePart'
       ? 'working'

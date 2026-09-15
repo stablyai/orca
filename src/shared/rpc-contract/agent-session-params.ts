@@ -140,6 +140,7 @@ export const ExplicitEnsure = z
         message: 'OMP resume path requires the OMP agent'
       })
     }
+
     if (getAgentResumeArgv(value.agent, value.providerSession, value.ompResumeFilePath) === null) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

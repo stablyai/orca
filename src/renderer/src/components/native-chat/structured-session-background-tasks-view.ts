@@ -29,6 +29,7 @@ export function structuredSessionBackgroundTasksView(
   turnId: string | null
 ): StructuredSessionBackgroundTasksView {
   const monitoring = backgroundTasks?.state === 'monitoring'
+
   return {
     show: monitoring,
     isMonitoring: turnId === null && monitoring,

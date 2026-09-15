@@ -13,12 +13,14 @@ export function getWorktreePaletteCreateActionState({
   query: string
 }): WorktreePaletteCreateActionState {
   const createWorktreeName = query.trim()
+
   if (isWorktreePaletteQueryTooLarge(createWorktreeName)) {
     return {
       createWorktreeName: '',
       showCreateAction: false
     }
   }
+
   // Why no project gate: the composer can add the first project inline, so
   // creation stays offered with zero projects.
   return {
@@ -117,6 +119,7 @@ export function getNextWorktreePaletteSelection({
     (autoSelectCreateAction
       ? selectableItemIds[0]
       : selectableItemIds.find((id) => id !== CREATE_WORKTREE_ITEM_ID)) ?? null
+
   const fallbackId =
     defaultSelectableId ??
     (showCreateAction && autoSelectCreateAction ? CREATE_WORKTREE_ITEM_ID : '')
@@ -148,6 +151,7 @@ export function createWorktreePaletteRequestGuard(): WorktreePaletteRequestGuard
   return {
     start: () => {
       currentToken += 1
+
       return currentToken
     },
     invalidate: () => {

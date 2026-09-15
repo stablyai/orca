@@ -7,16 +7,19 @@ const LOCAL_REPO: RepoConnection = {
   connectionId: null,
   executionHostId: 'local'
 }
+
 const SSH_REPO: RepoConnection = {
   id: 'ssh-repo',
   connectionId: 'conn-1',
   executionHostId: null
 }
+
 const RUNTIME_REPO: RepoConnection = {
   id: 'runtime-repo',
   connectionId: null,
   executionHostId: 'runtime:env-1'
 }
+
 const REPOS = [LOCAL_REPO, SSH_REPO, RUNTIME_REPO]
 
 describe('canReleaseReplayedScrollbackFromStore', () => {

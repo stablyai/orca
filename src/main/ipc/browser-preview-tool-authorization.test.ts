@@ -64,10 +64,12 @@ vi.mock('../browser/browser-manager', () => ({
 // registry a channel reads, so a stub of it would prove nothing about what was consulted.
 vi.mock('../browser/doc-preview-guest-policy', async (importOriginal) => {
   const actual = await importOriginal<typeof DocPreviewGuestPolicyModule>()
+
   return {
     ...actual,
     getWorkspaceDocPageGuest: (browserPageId: string, senderWebContentsId: number) => {
       previewAuthoritySpy(browserPageId, senderWebContentsId)
+
       return actual.getWorkspaceDocPageGuest(browserPageId, senderWebContentsId)
     }
   }
@@ -77,10 +79,12 @@ vi.mock('../browser/doc-preview-guest-policy', async (importOriginal) => {
 // only whether a preview target enters it is under test.
 vi.mock('./browser-tab-registration-wait', async (importOriginal) => {
   const actual = await importOriginal<typeof TabRegistrationWaitModule>()
+
   return {
     ...actual,
     waitForNextTabRegistration: (...args: Parameters<typeof actual.waitForNextTabRegistration>) => {
       registrationWaitSpy(args[0])
+
       return actual.waitForNextTabRegistration(...args)
     }
   }
@@ -100,7 +104,9 @@ import {
 import { buildDocPreviewUrl } from '../../shared/doc-preview-scheme'
 
 const HOST_RENDERER_ID = 91
+
 const OTHER_RENDERER_ID = 92
+
 /** Mirrors browser-grab-ipc's own wait, so elapsing it here settles the same parked request. */
 const GRAB_REGISTRATION_WAIT_MS = 1_000
 
@@ -148,9 +154,11 @@ type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unkno
 
 function registeredHandlers(): Map<string, Handler> {
   const handlers = new Map<string, Handler>()
+
   for (const [channel, handler] of handleMock.mock.calls as [string, Handler][]) {
     handlers.set(channel, handler)
   }
+
   return handlers
 }
 
@@ -170,12 +178,14 @@ let nextDocPageOrdinal = 0
 function grantForNewDocPage(): { id: string; browserPageId: string } {
   nextDocPageOrdinal += 1
   const browserPageId = `doc-page-${nextDocPageOrdinal}`
+
   const grant = mintDocPreviewGrant({
     owner: { kind: 'ssh', connectionId: 'ssh-1' },
     root: '/home/alice/docs',
     entryRelativePath: 'index.html',
     browserPageId
   })
+
   return { id: grant.id, browserPageId }
 }
 
@@ -191,13 +201,16 @@ function renderPreviewForGrant(
 } {
   const browserPageId = grant.browserPageId
   const handlers: Record<string, (...args: never[]) => void> = {}
+
   const register = (event: string, handler: (...args: never[]) => void): void => {
     handlers[event] = handler
   }
+
   // Why the guest already reports its URL: the embedder hands a preview over mid-load, so this is
   // the state the policy really installs into.
   const documentUrl = buildDocPreviewUrl(grant.id, 'index.html')
   let contentsDestroyed = false
+
   const guest = {
     isFocused: () => true,
     isDestroyed: () => contentsDestroyed,
@@ -207,8 +220,10 @@ function renderPreviewForGrant(
     setWindowOpenHandler: vi.fn(),
     setWebRTCIPHandlingPolicy: vi.fn()
   }
+
   installDocPreviewGuestPolicy(guest as never, { id: hostId, send: vi.fn() })
   handlers['did-start-navigation']?.({ url: documentUrl, isMainFrame: true } as never)
+
   return {
     grantId: grant.id,
     browserPageId,
@@ -293,6 +308,7 @@ afterEach(() => {
 /** Settles a tool request, elapsing the registration wait it may be parked in. */
 async function settle<T>(pending: Promise<T> | T | undefined): Promise<T | undefined> {
   await vi.advanceTimersByTimeAsync(GRAB_REGISTRATION_WAIT_MS)
+
   return pending
 }
 
@@ -315,6 +331,7 @@ describe('doc preview tool authorization', () => {
     const receivedGuest = GUEST_RECEIVING_MOCKS.some((mock) =>
       mock.mock.calls.some((args) => args.some((arg) => resolvesToGuest(arg, preview.contents)))
     )
+
     expect(receivedGuest || cancelGrabOpMock.mock.calls.length > 0).toBe(true)
   })
 
@@ -393,6 +410,7 @@ describe('doc preview tool authorization', () => {
       browserPageId: grant.browserPageId,
       enabled: true
     })
+
     await vi.advanceTimersByTimeAsync(0)
     expect(registrationWaitSpy).toHaveBeenCalledWith(grant.browserPageId)
 
@@ -452,6 +470,7 @@ describe('doc preview tool authorization', () => {
   it('leaves an in-flight preview grab armed when unregisterGuest names its target', async () => {
     const preview = liveRenderedPreview()
     const handlers = registeredHandlers()
+
     const pending = handlers.get('browser:setGrabMode')?.(trustedSender(HOST_RENDERER_ID), {
       browserPageId: preview.browserPageId,
       enabled: true
@@ -476,6 +495,7 @@ describe('doc preview tool authorization', () => {
   it('still disposes a browser page grab through the same door', async () => {
     getAuthorizedGuestMock.mockReturnValue({ isDestroyed: () => false })
     const handlers = registeredHandlers()
+
     const pending = handlers.get('browser:setGrabMode')?.(trustedSender(HOST_RENDERER_ID), {
       browserPageId: 'browser-page-1',
       enabled: true

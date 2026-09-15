@@ -13,22 +13,29 @@ export function sameBucketRecords<T>(
   if (previous === next) {
     return true
   }
+
   const keys = Object.keys(next)
+
   if (keys.length !== Object.keys(previous).length) {
     return false
   }
+
   for (const key of keys) {
     const nextItems = next[key]
     const previousItems = previous[key]
+
     if (previousItems === nextItems) {
       continue
     }
+
     if (!previousItems || !nextItems || previousItems.length !== nextItems.length) {
       return false
     }
+
     for (let index = 0; index < nextItems.length; index += 1) {
       const previousItem = previousItems[index]
       const nextItem = nextItems[index]
+
       if (
         previousItem === undefined ||
         nextItem === undefined ||
@@ -38,5 +45,6 @@ export function sameBucketRecords<T>(
       }
     }
   }
+
   return true
 }

@@ -23,9 +23,11 @@ const denials = vi.hoisted(() => {
       if (typeof target !== 'string' || !state.paths.has(target)) {
         return
       }
+
       const error: NodeJS.ErrnoException = new Error(
         `EPERM: operation not permitted, ${syscall} '${target}'`
       )
+
       error.code = 'EPERM'
       error.errno = -4048
       error.syscall = syscall
@@ -33,19 +35,25 @@ const denials = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   const guard = (fn: unknown, syscall: string): unknown => {
     const original = fn as (...args: unknown[]) => unknown
+
     const wrapped = (...args: unknown[]): unknown => {
       denials.check(args[0], syscall)
+
       return original(...args)
     }
+
     return Object.assign(wrapped, original)
   }
+
   const patched: Record<string, unknown> = {
     ...actual,
     readFileSync: guard(actual.readFileSync, 'read'),
@@ -57,6 +65,7 @@ vi.mock('node:fs', async (importOriginal) => {
       actual.existsSync
     )
   }
+
   return { ...patched, default: patched }
 })
 
@@ -69,15 +78,20 @@ vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return { ...actual, homedir: homedirMock }
 })
 
 const realFs = await vi.importActual<typeof NodeFs>('node:fs')
+
 const { snapshotCodexRuntimeHookTrustProvenance } = await import('./hook-trust-promotion')
 
 const PROVENANCE_ENTRY = 'orca-hooks:stop:0:0'
+
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let runtimeHomePath: string
 
 const provenancePath = (): string => join(runtimeHomePath, '.orca-hook-trust-provenance.json')
@@ -88,7 +102,9 @@ function seedRecordedProvenance(): string {
     null,
     2
   )}\n`
+
   realFs.writeFileSync(provenancePath(), contents, 'utf-8')
+
   return contents
 }
 
@@ -102,6 +118,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   realFs.mkdirSync(runtimeHomePath, { recursive: true })

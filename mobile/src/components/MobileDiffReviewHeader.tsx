@@ -42,6 +42,7 @@ export function MobileDiffReviewHeader({
     isWideLayout,
     canDock: prSidebarCanDock
   })
+
   return (
     <View style={styles.header}>
       <View style={styles.topBar}>

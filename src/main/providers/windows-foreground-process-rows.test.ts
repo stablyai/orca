@@ -22,10 +22,12 @@ import {
   queryWindowsProcessRowsFresh,
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
+
 // A real snapshot always contains the process doing the querying; the reader
 // rejects a table without it, because that is what a blocked
 // CreateToolhelp32Snapshot looks like (an empty list, not an error).
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
   ...rows
@@ -64,6 +66,7 @@ describe('windows process rows', () => {
 
   afterEach(() => {
     __setWindowsProcessTreeLoaderForTests()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }

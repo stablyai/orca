@@ -7,6 +7,7 @@ import {
 } from './mobile-tasks-reviewer-linear'
 
 vi.mock('./mobile-tasks-dependencies', () => import('../theme/mobile-theme'))
+
 afterEach(() => vi.restoreAllMocks())
 
 const issues: LinearIssue[] = Array.from({ length: 60 }, (_, i) => ({
@@ -28,6 +29,7 @@ describe('mobile Linear grouping of sorted issues', () => {
     'preserves %s ordering, ties and group metadata',
     (order) => {
       const sorted = Object.freeze(sortLinearIssues(issues, order))
+
       for (const group of ['none', 'status', 'assignee', 'team', 'priority'] as const) {
         const expected = groupLinearIssues([...sorted], group, order)
         const actual = groupSortedLinearIssues(sorted, group)
@@ -64,6 +66,7 @@ describe('mobile Linear grouping of sorted issues', () => {
       first[0].issues.pop()
       expect(second[0].issues).toEqual(sorted)
     }
+
     expect(groupSortedLinearIssues([], 'status')).toEqual([])
   })
 })

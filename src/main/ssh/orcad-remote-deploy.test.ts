@@ -4,15 +4,19 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
   isUnconfirmedSshCommandTermination: () => false
 }))
+
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+
 vi.mock('./ssh-relay-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
+
 vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: vi.fn().mockResolvedValue(undefined),
   writeRelayFile: vi.fn().mockResolvedValue(undefined)
 }))
+
 vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
@@ -26,7 +30,9 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
 
 const mockExec = vi.mocked(execCommand)
+
 const NEW_VERSION = '0.2.0+bb01'
+
 const OLD_VERSION = '0.1.0+aa01'
 
 vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
@@ -86,25 +92,35 @@ type HostScript = {
 function scriptHost(script: HostScript): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
     const text = String(command)
+
     if (text.startsWith('cat ') && text.includes('orcad-active.json')) {
       return script.activationRecord
     }
+
     if (text.includes('.orcad-readiness') && text.startsWith('cat ')) {
       const version = Object.keys(script.readiness).find((v) => text.includes(v))
+
       return version ? script.readiness[version] : ''
     }
+
     if (text.includes('nohup')) {
       script.log.push(`launch:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
+
       return '9999'
     }
+
     if (text.includes('kill -TERM')) {
       script.log.push(`stop:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
+
       return 'STOPPED'
     }
+
     if (text.includes('tar -C') && text.includes('-cf')) {
       script.log.push('snapshot')
+
       return 'CAPTURED'
     }
+
     return ''
   })
 }
@@ -142,6 +158,7 @@ describe('deployOrcad', () => {
       readiness: { [NEW_VERSION]: readyLine({}) },
       log: []
     }
+
     scriptHost(script)
     await deployOrcad(options())
     expect(vi.mocked(acquireInstallLock).mock.calls[0][1]).toBe(
@@ -156,12 +173,15 @@ describe('deployOrcad', () => {
       readiness: { [NEW_VERSION]: readyLine({}) },
       log: []
     }
+
     scriptHost(script)
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ outcome: 'installed-and-activated', fullVersion: NEW_VERSION })
+
     const written = vi
       .mocked(writeRelayFile)
       .mock.calls.find((call) => String(call[2]).endsWith('orcad-active.json'))
+
     expect(JSON.parse(String(written?.[3]))).toMatchObject({
       active: NEW_VERSION,
       previous: OLD_VERSION
@@ -174,6 +194,7 @@ describe('deployOrcad', () => {
       readiness: { [NEW_VERSION]: readyLine({}) },
       log: []
     }
+
     scriptHost(script)
     await deployOrcad(options())
     expect(script.log.indexOf('snapshot')).toBeGreaterThan(-1)
@@ -186,10 +207,13 @@ describe('deployOrcad', () => {
       readiness: { [NEW_VERSION]: readyLine({}) },
       log: []
     }
+
     scriptHost(script)
+
     const result = await deployOrcad(
       options({ census: { liveSessions: 2, startedSinceActivation: 0 } })
     )
+
     expect(result).toMatchObject({
       outcome: 'installed-not-activated',
       code: 'orcad_update_terminals_running'
@@ -205,6 +229,7 @@ describe('deployOrcad', () => {
       readiness: { [NEW_VERSION]: readyLine({ daemonState: 'degraded' }) },
       log: []
     }
+
     scriptHost(script)
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ code: 'orcad_activation_daemon_degraded' })
@@ -224,6 +249,7 @@ describe('deployOrcad', () => {
       },
       log: []
     }
+
     scriptHost(script)
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ outcome: 'installed-not-activated' })
@@ -248,6 +274,7 @@ describe('deployOrcad', () => {
       },
       log: []
     }
+
     scriptHost(script)
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ code: 'orcad_activation_build_mismatch' })
@@ -259,6 +286,7 @@ describe('deployOrcad', () => {
       readiness: { [NEW_VERSION]: readyLine({}) },
       log: []
     }
+
     scriptHost(script)
     await expect(deployOrcad(options())).rejects.toThrow('activation record')
     expect(vi.mocked(uploadRelayDirectory)).not.toHaveBeenCalled()

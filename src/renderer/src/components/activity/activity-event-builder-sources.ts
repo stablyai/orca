@@ -35,16 +35,21 @@ export function appendUnsupportedAndRetainedEvents(context: {
   for (const unsupported of Object.values(args.migrationUnsupportedByPtyId ?? {})) {
     const cacheKey = `unsupported:${unsupported.paneKey ?? unsupported.ptyId}`
     const cached = cache?.panes.get(cacheKey)
+
     const entry =
       cached?.source === unsupported
         ? cached.rowEntry
         : migrationUnsupportedToAgentStatusEntry(unsupported)
+
     const parsed = entry ? parsePaneKey(entry.paneKey) : null
     const tabEntry = parsed ? tabContext.get(parsed.tabId) : null
+
     if (!entry || !tabEntry) {
       continue
     }
+
     const owner = resolveOwner(tabEntry, entry, unsupported.ptyId)
+
     const { events: paneEvents, live } = resolvePaneBuild(
       {
         cacheKey,
@@ -64,9 +69,11 @@ export function appendUnsupportedAndRetainedEvents(context: {
       cache,
       seenCacheKeys
     )
+
     if (live) {
       liveAgentByPaneKey[entry.paneKey] = live
     }
+
     pushPaneEvents(paneEvents)
   }
 
@@ -74,14 +81,17 @@ export function appendUnsupportedAndRetainedEvents(context: {
     if (!parsePaneKey(paneKey)) {
       continue
     }
+
     const owner = resolveOwner(
       { worktreeId: retained.worktreeId, tab: retained.tab },
       retained.entry,
       retained.tab.ptyId ?? retained.entry.terminalHandle
     )
+
     if (!owner.knownWorktree) {
       continue
     }
+
     const { events: paneEvents } = resolvePaneBuild(
       {
         cacheKey: `retained:${paneKey}`,
@@ -100,6 +110,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
       cache,
       seenCacheKeys
     )
+
     pushPaneEvents(paneEvents)
   }
 }

@@ -9,10 +9,13 @@ export function useBrowserClientHostedPopupNotices(browserPageId: string): void 
       if (event.browserPageId !== browserPageId) {
         return
       }
+
       const notice = formatPopupNotice(event)
+
       if (!notice) {
         return
       }
+
       toast.message(notice, {
         id: `browser-popup:${browserPageId}:${event.action}:${event.origin}`
       })

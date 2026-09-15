@@ -16,6 +16,7 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
     'hooks:inspectSetupScriptImports',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
+
       if (!repo || isFolderRepo(repo)) {
         return []
       }
@@ -23,13 +24,17 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
       return inspectSetupScriptImportCandidates(
         async (relativePath) => {
           const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+
           if (repo.connectionId) {
             const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
             if (!fsProvider) {
               return null
             }
+
             try {
               const result = await fsProvider.readFile(filePath)
+
               return result.isBinary ? null : result.content
             } catch {
               return null
@@ -42,19 +47,24 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
             if (!isENOENT(error)) {
               console.warn('[hooks] Failed to inspect setup script import candidate:', error)
             }
+
             return null
           }
         },
         {
           fileExists: async (relativePath) => {
             const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+
             if (repo.connectionId) {
               const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
               if (!fsProvider) {
                 return false
               }
+
               try {
                 const fileStat = await fsProvider.stat(filePath)
+
                 return fileStat.type !== 'directory'
               } catch {
                 return false
@@ -63,11 +73,13 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
 
             try {
               const fileStat = await stat(filePath)
+
               return !fileStat.isDirectory()
             } catch (error) {
               if (!isENOENT(error)) {
                 console.warn('[hooks] Failed to stat setup script import candidate:', error)
               }
+
               return false
             }
           }

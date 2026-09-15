@@ -10,6 +10,7 @@ describe('mobile-file-preview-source', () => {
       grantId: 'grant-1',
       terminalHandle: 'b:c'
     })
+
     const second = sourceKeyForPreview({
       source: 'terminalArtifact',
       worktreeId: 'wt',

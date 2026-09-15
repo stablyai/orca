@@ -57,6 +57,7 @@ export function useRichMarkdownReviewRailController({
   const syncNotePositions = useCallback((): void => {
     const editor = editorRef.current
     const container = scrollContainerRef.current
+
     if (
       !reviewRailVisible ||
       !canAnnotateRichMarkdown ||
@@ -65,8 +66,10 @@ export function useRichMarkdownReviewRailController({
       markdownComments.length === 0
     ) {
       clearRichMarkdownNotePositions(setNotePositions)
+
       return
     }
+
     setNotePositions(
       measureRichMarkdownReviewNotePositions({
         editor,
@@ -87,11 +90,14 @@ export function useRichMarkdownReviewRailController({
   const requestSyncNotePositions = useCallback((): void => {
     if (!reviewRailVisible) {
       clearRichMarkdownNotePositions(setNotePositions)
+
       return
     }
+
     if (notePositionsFrameRef.current !== null) {
       return
     }
+
     notePositionsFrameRef.current = window.requestAnimationFrame(() => {
       notePositionsFrameRef.current = null
       syncNotePositions()
@@ -127,18 +133,22 @@ export function useRichMarkdownReviewRailController({
   const pulseRichMarkdownSourceRange = useCallback(
     (range: RichMarkdownAnnotationHighlightRange): void => {
       const editor = editorRef.current
+
       if (!editor) {
         return
       }
+
       clearWindowTimer(sourceAttentionTimeoutRef)
       editor.view.dispatch(
         editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, { activeRange: null })
       )
       window.requestAnimationFrame(() => {
         const latestEditor = editorRef.current
+
         if (!latestEditor) {
           return
         }
+
         latestEditor.view.dispatch(
           latestEditor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
             activeRange: range
@@ -161,18 +171,23 @@ export function useRichMarkdownReviewRailController({
     (comment: DiffComment): void => {
       const editor = editorRef.current
       const container = scrollContainerRef.current
+
       if (!editor || !container) {
         return
       }
+
       const ranges = getRichMarkdownAnnotationHighlightRangesForComment(
         editor,
         comment,
         markdownSourceLineOffsetRef.current
       )
+
       const bounds = getRichMarkdownRangeBounds(ranges)
+
       if (!bounds) {
         return
       }
+
       const maxPos = editor.state.doc.content.size
       const startCoords = editor.view.coordsAtPos(Math.max(1, Math.min(bounds.from, maxPos)))
       const endCoords = editor.view.coordsAtPos(Math.max(1, Math.min(bounds.to, maxPos)))
@@ -194,16 +209,21 @@ export function useRichMarkdownReviewRailController({
   useEffect(() => {
     if (!reviewRailVisible) {
       clearRichMarkdownNotePositions(setNotePositions)
+
       return
     }
+
     const container = scrollContainerRef.current
+
     if (!container) {
       return
     }
+
     const update = (): void => requestSyncNotePositions()
     container.addEventListener('scroll', update, { passive: true })
     window.addEventListener('resize', update)
     requestSyncNotePositions()
+
     return () => {
       container.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
@@ -247,15 +267,19 @@ function centerReviewNoteCard(
   const card = container?.querySelector<HTMLElement>(
     `[data-rich-markdown-review-note-id="${CSS.escape(commentId)}"]`
   )
+
   if (!container) {
     return
   }
+
   const position = positions.find((item) => item.comment.id === commentId)
   const cardHeight = card?.offsetHeight ?? 72
   const cardTop = position?.top ?? card?.offsetTop
+
   if (cardTop === undefined) {
     return
   }
+
   const targetTop = cardTop - Math.max(0, (container.clientHeight - cardHeight) / 2)
   container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
 }

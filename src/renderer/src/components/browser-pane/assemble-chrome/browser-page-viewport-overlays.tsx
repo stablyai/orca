@@ -72,6 +72,7 @@ export function BrowserPageViewportOverlays({
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
 }): React.JSX.Element {
   const recheckSshRoute = useSshWorkspaceProbeSkipRecheck(worktreeId)
+
   return (
     <>
       <BrowserGuestAnnotateOverlays
@@ -105,14 +106,19 @@ export function BrowserPageViewportOverlays({
           httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
           onRetry={() => {
             const webview = webviewRef.current
+
             if (!webview) {
               return
             }
+
             onUpdatePageStateRef.current(browserTab.id, { loading: true })
+
             if (browserTab.loadError?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
               retryGuestRecoveryRef.current()
+
               return
             }
+
             retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
           }}
           onTryHttps={navigateToUrl}

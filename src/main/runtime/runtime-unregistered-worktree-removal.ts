@@ -52,16 +52,21 @@ export async function removeRuntimeUnregisteredWorktree(args: {
 }): Promise<{}> {
   const { repo, target, registeredWorktrees, removedMeta, route } = args
   let canCleanOrphanedDirectory = false
+
   if (canCleanupUnregisteredOrcaWorktreeDirectory({ meta: removedMeta })) {
     if (route.kind === 'ssh') {
       const fsProvider = route.fsProvider
+
       if (!fsProvider) {
         throw new Error('SSH filesystem provider unavailable')
       }
+
       const lstat = fsProvider.lstat
+
       if (!lstat) {
         throw new Error('SSH filesystem provider lstat unavailable')
       }
+
       canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
         target.path,
         repo.path,
@@ -80,18 +85,24 @@ export async function removeRuntimeUnregisteredWorktree(args: {
         ))
     }
   }
+
   if (canCleanOrphanedDirectory) {
     assertWorktreeDoesNotContainRegisteredWorktree(target.path, registeredWorktrees)
+
     if (!args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
+
     await deleteUnregisteredDirectory(args)
     args.finishRemoval()
+
     return {}
   }
+
   if (route.kind === 'local') {
     const access = getLocalWorktreePathAccess(args.localOptions)
     const runtimeWorktreePath = toLocalWorktreeRuntimePath(target.path, args.localOptions)
+
     if (
       await canCleanupUnregisteredOrcaLeftoverDirectory({
         meta: removedMeta,
@@ -107,20 +118,26 @@ export async function removeRuntimeUnregisteredWorktree(args: {
       if (!args.force) {
         throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
       }
+
       await deleteUnregisteredDirectory(args)
       args.finishRemoval()
+
       return {}
     }
   }
+
   if (await isRuntimeWorktreePathMissing(route.hostId, target.path, args.localOptions)) {
     if (!args.force && !removedMeta) {
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
     }
+
     await cleanupPushTarget(args)
     await args.deleteHistory()
     args.finishRemoval()
+
     return {}
   }
+
   throw new Error(`Refusing to delete unregistered worktree path: ${target.path}`)
 }
 
@@ -131,8 +148,10 @@ async function deleteUnregisteredDirectory(
   const connectionId = getWorktreeRemovalConnectionId(route)
   const gate = await args.acquireWatcherRemoval(args.target.path, connectionId)
   let completed = false
+
   try {
     await args.stopPtys(args.target.id, connectionId, args.allowUnverifiedPtyStop)
+
     if (route.kind === 'local') {
       await removeLocalWorktreePath(args.target.path, args.localOptions)
     } else if (route.fsProvider) {
@@ -140,10 +159,12 @@ async function deleteUnregisteredDirectory(
     } else {
       throw new Error('SSH filesystem provider unavailable')
     }
+
     completed = true
   } finally {
     await gate.finish(completed)
   }
+
   await cleanupPushTarget(args)
   await args.deleteHistory()
 }

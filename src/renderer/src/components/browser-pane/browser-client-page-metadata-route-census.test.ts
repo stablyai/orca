@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest'
 const ROUTE_PATH = fileURLToPath(
   new URL('./browser-client-page-metadata-reporting.ts', import.meta.url)
 )
+
 const PANE_PATH = fileURLToPath(new URL('./ClientHostedBrowserPagePane.tsx', import.meta.url))
 
 describe('client-hosted page metadata route', () => {

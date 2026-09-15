@@ -44,17 +44,21 @@ export class PackRefsLockOwnership {
   /** Refused when the lock belongs to something we cannot prove is our own wreckage. */
   async claim(now = Date.now()): Promise<PackRefsLockClaim> {
     const reclaim = await this.reclaimAbandonedLock(now)
+
     if (!reclaim.ok) {
       return reclaim
     }
+
     // Per-ref strands outlive their pack and are invisible to Git, which never
     // clears a `refs/**\/*.lock` it did not create in this process.
     await this.reclaimStrandedRefLocks(now)
+
     try {
       await writeFile(this.markerPath, JSON.stringify({ pid: process.pid }), 'utf-8')
     } catch {
       // Losing the marker only costs attribution on the next run, never correctness.
     }
+
     return { ok: true }
   }
 
@@ -65,19 +69,24 @@ export class PackRefsLockOwnership {
   watchLock(report: (held: boolean) => void): { stop: () => void } {
     let stopped = false
     let last = false
+
     const tick = async (): Promise<void> => {
       if (stopped) {
         return
       }
+
       const held = (await fileAgeMs(this.lockPath, Date.now())) !== null
+
       if (!stopped && held !== last) {
         last = held
         report(held)
       }
     }
+
     const timer = setInterval(() => void tick(), PACKED_REFS_LOCK_POLL_MS)
     timer.unref?.()
     void tick()
+
     return {
       stop: () => {
         stopped = true
@@ -92,26 +101,33 @@ export class PackRefsLockOwnership {
 
   private async reclaimAbandonedLock(now: number): Promise<PackRefsLockClaim> {
     const lockAgeMs = await fileAgeMs(this.lockPath, now)
+
     if (lockAgeMs === null) {
       return { ok: true }
     }
+
     // No marker means the lock is not ours to reason about, let alone remove.
     const marker = await readOwnerMarker(this.markerPath)
+
     if (marker === null) {
       return { ok: false, reason: 'held by another process' }
     }
+
     if (lockAgeMs < ABANDONED_LOCK_AGE_MS) {
       // Ours, but too young to be certain the writer is gone. Worth retrying soon.
       return { ok: false, reason: 'our own lock, not yet old enough to reclaim' }
     }
+
     // Past the pid-reuse horizon the pid proves nothing, and a lock this old is
     // abandoned whoever wrote it -- otherwise a recycled pid would wedge the
     // repository permanently.
     if (isProcessAlive(marker.pid) && lockAgeMs < PID_REUSE_HORIZON_MS) {
       return { ok: false, reason: 'the recorded owner is still running' }
     }
+
     await rm(this.lockPath, { force: true }).catch(() => {})
     await rm(this.markerPath, { force: true }).catch(() => {})
+
     return { ok: true }
   }
 
@@ -126,29 +142,39 @@ export class PackRefsLockOwnership {
    */
   private async reclaimStrandedRefLocks(now: number): Promise<void> {
     const marker = await readOwnerMarker(this.markerPath)
+
     if (marker === null || isProcessAlive(marker.pid)) {
       return
     }
+
     const markerAgeMs = await fileAgeMs(this.markerPath, now)
+
     if (markerAgeMs === null || markerAgeMs < ABANDONED_LOCK_AGE_MS) {
       return
     }
+
     const path = isWindowsAbsolutePathLike(this.markerPath) ? win32 : posix
     const pending = [path.join(path.dirname(this.markerPath), 'refs')]
     let visited = 0
+
     while (pending.length > 0) {
       const directory = pending.pop()
+
       if (directory === undefined || (visited += 1) > REF_LOCK_SCAN_CEILING) {
         return
       }
+
       let entries: { name: string; isDirectory: () => boolean }[]
+
       try {
         entries = await readdir(directory, { withFileTypes: true })
       } catch {
         continue
       }
+
       for (const entry of entries) {
         const full = path.join(directory, entry.name)
+
         if (entry.isDirectory()) {
           pending.push(full)
         } else if (entry.name.endsWith('.lock') && (await isEmptyFile(full))) {
@@ -174,6 +200,7 @@ async function readOwnerMarker(path: string): Promise<{ pid: number } | null> {
   try {
     const raw = (await readFile(path, 'utf-8')).slice(0, 256)
     const pid = (JSON.parse(raw) as { pid?: unknown }).pid
+
     return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? { pid } : null
   } catch {
     return null
@@ -193,8 +220,10 @@ function isProcessAlive(pid: number): boolean {
   if (pid === process.pid) {
     return true
   }
+
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH'

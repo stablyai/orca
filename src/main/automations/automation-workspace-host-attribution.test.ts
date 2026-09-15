@@ -24,7 +24,9 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 const REPOS: Repo[] = [
@@ -119,6 +121,7 @@ async function createStore(
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -137,9 +140,11 @@ describe('folder-workspace host attribution', () => {
     const store = await createStore([folderWorkspace({ connectionId: 'ssh-1' })], [])
 
     expect(store.listAutomationsForScope({ selector: { kind: 'self' } }).automations).toEqual([])
+
     const scoped = store.listAutomationsForScope({
       selector: { kind: 'ssh', targetId: 'ssh-1', expectedTargetGeneration: 7 }
     })
+
     expect(scoped.automations.map((entry) => entry.id)).toEqual(['pinned-1'])
     expect(scoped.items[0]?.selector).toEqual({
       kind: 'ssh',
@@ -179,6 +184,7 @@ const AMBIGUOUS_REFUSAL =
 async function ambiguousStore() {
   vi.setSystemTime(new Date('2026-05-13T08:00:00'))
   const store = await createStore([folderWorkspace({})], AMBIGUOUS_REPOS, { automations: [] })
+
   const automation = store.createAutomation({
     name: 'Nightly',
     prompt: 'go',
@@ -190,6 +196,7 @@ async function ambiguousStore() {
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     dtstart: new Date('2026-05-12T00:00:00').getTime()
   })
+
   return { store, automation }
 }
 
@@ -243,6 +250,7 @@ describe('dispatch refused for an ambiguous workspace host', () => {
   it('refuses the headless dispatch, which has no ambiguity check of its own', async () => {
     const seeded = await ambiguousStore()
     const dispatcher = vi.fn(async () => ({ workspaceId: 'folder:fw-1', terminalSessionId: 't1' }))
+
     const service = new AutomationService(seeded.store, {
       tickMs: 60_000,
       headlessDispatcher: dispatcher

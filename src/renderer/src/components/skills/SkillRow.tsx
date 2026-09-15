@@ -87,6 +87,7 @@ export function SkillRow({
 
   const revealSkill = async (): Promise<void> => {
     const result = await window.api.shell.openInFileManager(skill.skillFilePath)
+
     if (!result.ok) {
       toast.error(
         translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')
@@ -141,8 +142,10 @@ export function SkillRow({
       if (!selectionBlocked) {
         onSelectionChange(!selected, rangeRef.current)
       }
+
       return
     }
+
     onOpenDetail()
   }
 
@@ -164,8 +167,10 @@ export function SkillRow({
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()
               activate()
+
               return
             }
+
             onKeyDown(event)
           }}
           className={cn(

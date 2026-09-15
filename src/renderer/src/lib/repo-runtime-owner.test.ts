@@ -218,11 +218,13 @@ describe('getRepoOwnerRoutedSettings', () => {
 
   it('falls back to the focused runtime for a legacy repo without an explicit owner', () => {
     const settings = { activeRuntimeEnvironmentId: 'focused-runtime' } as unknown as GlobalSettings
+
     const routed = getRepoOwnerRoutedSettings(settings, {
       id: 'repo-1',
       connectionId: null,
       executionHostId: null
     })
+
     expect(routed?.activeRuntimeEnvironmentId).toBe('focused-runtime')
   })
 
@@ -243,9 +245,11 @@ describe('getSettingsForRepoRuntimeOwner identity', () => {
   })
 
   type OwnerRepo = NonNullable<RepoRuntimeOwnerState['repos']>[number]
+
   const repos: OwnerRepo[] = [
     { id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-a' }
   ]
+
   const settings = {
     activeRuntimeEnvironmentId: 'focused',
     sourceControlViewMode: 'list'
@@ -282,9 +286,11 @@ describe('getSettingsForRepoRuntimeOwner identity', () => {
 
   it('returns a new value when the repo owner changes', () => {
     const first = getSettingsForRepoRuntimeOwner({ repos, settings }, 'repo-1')
+
     const movedRepos: OwnerRepo[] = [
       { id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-b' }
     ]
+
     const second = getSettingsForRepoRuntimeOwner({ repos: movedRepos, settings }, 'repo-1')
     expect(second).not.toBe(first)
     expect(second.activeRuntimeEnvironmentId).toBe('env-b')
@@ -295,11 +301,13 @@ describe('getSettingsForRepoRuntimeOwner identity', () => {
   // survives, so each gets a case that holds the other constant.
   it('returns a new value when the repo list changes but the owner does not', () => {
     const first = getSettingsForRepoRuntimeOwner({ repos, settings }, 'repo-1')
+
     // Same owner for repo-1; only the array identity and an unrelated row differ.
     const grownRepos: OwnerRepo[] = [
       ...repos,
       { id: 'repo-9', connectionId: null, executionHostId: 'local' }
     ]
+
     const second = getSettingsForRepoRuntimeOwner({ repos: grownRepos, settings }, 'repo-1')
     expect(second.activeRuntimeEnvironmentId).toBe('env-a')
     expect(second).not.toBe(first)
@@ -311,6 +319,7 @@ describe('getSettingsForRepoRuntimeOwner identity', () => {
     const mutableRepos: OwnerRepo[] = [
       { id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-a' }
     ]
+
     const state = { repos: mutableRepos, settings }
     const first = getSettingsForRepoRuntimeOwner(state, 'repo-1')
     expect(first.activeRuntimeEnvironmentId).toBe('env-a')
@@ -323,9 +332,11 @@ describe('getSettingsForRepoRuntimeOwner identity', () => {
   it('bounds the cache so unbounded repo ids cannot leak', () => {
     const state = { repos, settings }
     const first = getSettingsForRepoRuntimeOwner(state, 'repo-evictable')
+
     for (let index = 0; index < 300; index += 1) {
       getSettingsForRepoRuntimeOwner(state, `repo-filler-${index}`)
     }
+
     expect(getSettingsForRepoRuntimeOwner(state, 'repo-evictable')).not.toBe(first)
   })
 })

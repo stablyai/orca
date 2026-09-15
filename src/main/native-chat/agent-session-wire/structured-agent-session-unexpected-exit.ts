@@ -55,11 +55,14 @@ export async function settleUnexpectedStructuredAgentSessionExit<
   if (event.cause !== 'unexpected-exit') {
     return null
   }
+
   const unexpectedEvent = event as UnexpectedExitLifecycleEvent
   // Receipt of the exit is the one end time the host may record for a running turn.
   const observedAt = event.observedAt ?? context.now()
+
   return context.serialize(unexpectedEvent.sessionId, async () => {
     const session = context.sessions.get(unexpectedEvent.sessionId)
+
     if (
       !session?.hasProviderChild ||
       session.fence !== unexpectedEvent.fence ||
@@ -67,29 +70,36 @@ export async function settleUnexpectedStructuredAgentSessionExit<
     ) {
       return null
     }
+
     const record = context.store.getRecord(unexpectedEvent.sessionId)
+
     if (!record || record.lease.handoffStage !== null) {
       // The handoff coordinator owns an already-started transition.
       session.hasProviderChild = false
       context.publishStatus?.(unexpectedEvent.sessionId)
+
       return null
     }
 
     let settlementFailed = false
     const stableSettlementId = providerExitSettlementId(unexpectedEvent)
     const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
+
     let released: Awaited<
       ReturnType<typeof releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit>
     > | null = null
+
     try {
       try {
         const barrier = await context.flushLifecycle(unexpectedEvent.sessionId)
+
         if (!barrier.ok) {
           context.onBarrierError?.(unexpectedEvent.sessionId, barrier.error)
         }
       } catch (error) {
         context.onBarrierError?.(unexpectedEvent.sessionId, error)
       }
+
       settlementFailed = !(await retryUnexpectedExitSettlement({
         context,
         event: unexpectedEvent,
@@ -129,18 +139,22 @@ export async function settleUnexpectedStructuredAgentSessionExit<
       } finally {
         session.hasProviderChild = false
         context.publishStatus?.(unexpectedEvent.sessionId)
+
         if (released) {
           session.fence = released.lease.runtimeFence
           context.publishFence(unexpectedEvent.sessionId, session)
         }
       }
     }
+
     if (settlementFailed || !released) {
       return null
     }
+
     if (!context.hasResumeCapableHolder(unexpectedEvent.sessionId)) {
       return null
     }
+
     return {
       sessionId: unexpectedEvent.sessionId,
       releasedFence: released.lease.runtimeFence,
@@ -166,6 +180,7 @@ export function isStructuredAgentSessionRecoveryTicketCurrent(
 ): boolean {
   const session = context.sessions.get(ticket.sessionId)
   const record = context.store.getRecord(ticket.sessionId)
+
   return (
     session?.hasProviderChild === false &&
     session.fence === ticket.releasedFence &&

@@ -22,6 +22,7 @@ import { store } from '../orca-runtime-test-fixtures.spec'
 describe('OrcaRuntimeService', () => {
   it('deduplicates runtime repo paths with Windows/UNC comparison semantics', async () => {
     const added: Record<string, unknown>[] = []
+
     const uncStore = {
       ...store,
       getRepos: () => [
@@ -40,6 +41,7 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => [...uncStore.getRepos()].find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(uncStore as never)
 
     const repo = await runtime.addRepo('//server/share/repo', 'folder')
@@ -50,6 +52,7 @@ describe('OrcaRuntimeService', () => {
 
   it('browses runtime server directories before projects are added', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-browse-'))
+
     try {
       await mkdir(join(tempRoot, 'zeta'))
       await mkdir(join(tempRoot, 'alpha'))
@@ -86,6 +89,7 @@ describe('OrcaRuntimeService', () => {
 
   it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const added: Record<string, unknown>[] = []
+
     const colorStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -94,6 +98,7 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(colorStore as never)
 
     const repo = await runtime.addRepo('/tmp/runtime-add-default', 'folder')
@@ -104,6 +109,7 @@ describe('OrcaRuntimeService', () => {
 
   it('prepares the runtime worktree root when adding a repo', async () => {
     const added: Record<string, unknown>[] = []
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -112,6 +118,7 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const repo = await runtime.addRepo('/tmp/runtime-add-root-prep', 'folder')
@@ -123,6 +130,7 @@ describe('OrcaRuntimeService', () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -132,19 +140,24 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index === -1) {
           return null
         }
+
         repos[index] = { ...repos[index], ...updates }
+
         return repos[index] as never
       },
       getProjects: () =>
         repos
           .map((repo) => {
             const upstream = repo.upstream as { owner: string; repo: string } | undefined
+
             if (!upstream) {
               return null
             }
+
             return {
               id: `github:${upstream.owner}/${upstream.repo}`,
               displayName: repo.displayName,
@@ -159,6 +172,7 @@ describe('OrcaRuntimeService', () => {
       getProjectHostSetups: () =>
         repos.map((repo) => {
           const upstream = repo.upstream as { owner: string; repo: string } | undefined
+
           return {
             id: repo.id,
             projectId: upstream ? `github:${upstream.owner}/${upstream.repo}` : repo.id,
@@ -174,10 +188,12 @@ describe('OrcaRuntimeService', () => {
           }
         }) as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
       execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+
       const result = await runtime.setupProjectExistingFolder({
         projectId: 'github:stablyai/orca',
         hostId: 'runtime:env-1',
@@ -202,6 +218,7 @@ describe('OrcaRuntimeService', () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-cross-host-project-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce(null)
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -209,20 +226,25 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const repo = repos.find((entry) => entry.id === id)
+
         if (!repo) {
           return null
         }
+
         Object.assign(repo, updates)
+
         return { ...repo } as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
       execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+
       const result = await runtime.setupProjectExistingFolder({
         projectId: 'github:github.acme.test/acme/orca',
         projectProviderIdentity: {
@@ -254,6 +276,7 @@ describe('OrcaRuntimeService', () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-rollback-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce(null)
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -261,14 +284,18 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const repo = repos.find((entry) => entry.id === id)
+
         if (!repo) {
           return null
         }
+
         Object.assign(repo, updates)
+
         return { ...repo } as never
       },
       removeProject: (id: string) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index !== -1) {
           repos.splice(index, 1)
         }
@@ -277,6 +304,7 @@ describe('OrcaRuntimeService', () => {
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
@@ -298,6 +326,7 @@ describe('OrcaRuntimeService', () => {
 
   it('rolls back a newly cloned repo when project alignment fails', async () => {
     const repos: Record<string, unknown>[] = []
+
     const clonedRepo = {
       id: 'cloned-repo',
       path: '/tmp/cloned-repo',
@@ -306,11 +335,13 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'git'
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
       removeProject: (id: string) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index !== -1) {
           repos.splice(index, 1)
         }
@@ -319,9 +350,11 @@ describe('OrcaRuntimeService', () => {
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     vi.spyOn(runtime, 'cloneRepo').mockImplementation(async () => {
       repos.push(clonedRepo)
+
       return clonedRepo as never
     })
 
@@ -341,6 +374,7 @@ describe('OrcaRuntimeService', () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-host-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -350,20 +384,25 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index === -1) {
           return null
         }
+
         repos[index] = { ...repos[index], ...updates }
+
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
       execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+
       const first = await runtime.setupProjectExistingFolder({
         projectId: 'github:stablyai/orca',
         hostId: 'runtime:env-1',
@@ -371,6 +410,7 @@ describe('OrcaRuntimeService', () => {
         kind: 'git',
         setupMethod: 'imported-existing-folder'
       })
+
       const second = await runtime.setupProjectExistingFolder({
         projectId: 'github:stablyai/orca',
         hostId: 'runtime:env-2',
@@ -425,6 +465,7 @@ describe('OrcaRuntimeService', () => {
         executionHostId: 'runtime:env-1'
       }
     ]
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -433,6 +474,7 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const repo = await runtime.addRepo('/tmp/runtime-shared', 'folder')
@@ -458,6 +500,7 @@ describe('OrcaRuntimeService', () => {
         connectionId: 'ssh-target-1'
       }
     ]
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -467,13 +510,17 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index === -1) {
           return null
         }
+
         repos[index] = { ...repos[index], ...updates }
+
         return repos[index] as never
       }
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const repo = await runtime.addRepo('/workspace', 'folder', 'runtime:env-1')
@@ -499,6 +546,7 @@ describe('OrcaRuntimeService', () => {
           kind: 'folder'
         }
       ]
+
       const runtimeStore = {
         ...store,
         getRepos: () => [...repos] as never,
@@ -508,13 +556,17 @@ describe('OrcaRuntimeService', () => {
         getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
         updateRepo: (id: string, updates: Record<string, unknown>) => {
           const index = repos.findIndex((repo) => repo.id === id)
+
           if (index === -1) {
             return null
           }
+
           repos[index] = { ...repos[index], ...updates }
+
           return repos[index] as never
         }
       }
+
       const runtime = new OrcaRuntimeService(runtimeStore as never)
 
       const repo = await runtime.addRepo('/workspace', 'folder', importHostId)
@@ -532,6 +584,7 @@ describe('OrcaRuntimeService', () => {
     const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -541,16 +594,20 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index === -1) {
           return null
         }
+
         repos[index] = { ...repos[index], ...updates }
+
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
+
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -559,6 +616,7 @@ describe('OrcaRuntimeService', () => {
         execFileSync('git', ['init'], { cwd: clonePath, stdio: 'ignore' })
         proc.emit('close', 0, null)
       })
+
       return proc as never
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -596,6 +654,7 @@ describe('OrcaRuntimeService', () => {
     const existingFolder = join(destination, 'orca')
     mkdirSync(existingFolder, { recursive: true })
     execFileSync('git', ['init'], { cwd: existingFolder, stdio: 'ignore' })
+
     const spawnSpy = vi
       .spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
       .mockImplementation(() => {
@@ -604,9 +663,12 @@ describe('OrcaRuntimeService', () => {
         const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
         proc.stderr = new EventEmitter()
         setImmediate(() => proc.emit('close', 1, null))
+
         return proc as never
       })
+
     const repos: Record<string, unknown>[] = []
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -614,6 +676,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       }
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
@@ -625,6 +688,7 @@ describe('OrcaRuntimeService', () => {
           destination
         })
         .catch((error: unknown) => error)
+
       const existingFolderError = await runtime
         .setupProjectExistingFolder({
           projectId: 'github:stablyai/orca',

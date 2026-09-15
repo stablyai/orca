@@ -46,6 +46,7 @@ describe('task-page-linear-issue-request', () => {
       limit: 36,
       attributeFilter: filter
     })
+
     expect(signature).toContain('local::ws-1::list::all::36::')
     expect(signature).toContain('"stateIds":["s1"]')
   })

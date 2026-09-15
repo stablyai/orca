@@ -83,6 +83,7 @@ export function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResu
       modifiedIsBinary: contents.modifiedIsBinary
     }
   }
+
   if (contents.modifiedIsBinary) {
     return {
       kind: 'binary',

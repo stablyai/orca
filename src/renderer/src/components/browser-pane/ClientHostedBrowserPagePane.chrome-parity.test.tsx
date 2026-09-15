@@ -17,9 +17,11 @@ const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
   message: vi.fn()
 }))
+
 vi.mock('sonner', () => ({ toast: toastMocks }))
 
 const mocks = vi.hoisted(() => ({ attach: vi.fn() }))
+
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
@@ -41,16 +43,27 @@ const PLACEMENT = {
 const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 
 let contextMenu = paneChannel<BrowserContextMenuRequestedEvent>()
+
 let contextMenuDismissed = paneChannel<{ browserPageId: string }>()
+
 let permissionDenied = paneChannel<BrowserPermissionDeniedEvent>()
+
 let findRequests = paneChannel<void>()
+
 let historyNavigate = paneChannel<'back' | 'forward'>()
+
 let reloadRequests = paneChannel<void>()
+
 let hardReloadRequests = paneChannel<void>()
+
 let zoomRequests = paneChannel<'in' | 'out' | 'reset'>()
+
 let openDevTools = vi.fn(async () => true)
+
 let proceedCertificate = vi.fn(async () => ({ ok: true as const }))
+
 let openUrl = vi.fn(async () => {})
+
 let writeClipboardText = vi.fn(async () => {})
 
 beforeEach(() => {
@@ -175,6 +188,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
       description: 'ERR_CERT_AUTHORITY_INVALID',
       validatedUrl: 'https://selfsigned.internal/'
     }
+
     useAppStore.setState({
       browserCertificateFailuresByPageId: { 'page-a': certificateFailure() }
     })
@@ -193,9 +207,11 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(webview.style.display).toBe('flex')
 
     cleanup()
+
     const failed = renderPane({
       loadError: { code: -105, description: 'ERR_NAME_NOT_RESOLVED', validatedUrl: 'https://x/' }
     })
+
     expect(failed.webview.style.display).toBe('none')
   })
 
@@ -216,6 +232,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     const loadError = onUpdatePageState.mock.calls.at(-1)?.[1]?.loadError as
       | BrowserLoadError
       | undefined
+
     expect(loadError?.validatedUrl).toBe('javascript:alert(1)')
 
     cleanup()
@@ -404,6 +421,7 @@ function renderPane(
       />
     </TooltipProvider>
   )
+
   return { onUpdatePageState, webview }
 }
 
@@ -428,6 +446,7 @@ function createWebview(): Electron.WebviewTag & { setZoomLevel: ReturnType<typeo
   const webview = document.createElement('webview') as Electron.WebviewTag & {
     setZoomLevel: ReturnType<typeof vi.fn>
   }
+
   Object.assign(webview, {
     getURL: vi.fn(() => 'https://example.internal/app'),
     getTitle: vi.fn(() => 'App'),
@@ -448,5 +467,6 @@ function createWebview(): Electron.WebviewTag & { setZoomLevel: ReturnType<typeo
     stopFindInPage: vi.fn(),
     loadURL: vi.fn(async () => {})
   })
+
   return webview
 }

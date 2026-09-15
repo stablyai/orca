@@ -3,6 +3,7 @@ import type { Readable } from 'node:stream'
 type PluginWorkerOutputSink = (level: 'info' | 'warn' | 'error', line: string) => void
 
 export const PLUGIN_WORKER_OUTPUT_LINE_LIMIT = 8192
+
 const TRUNCATION_SUFFIX = '… [truncated]'
 
 /** Keeps a worker's unterminated output bounded even if it never writes a newline. */
@@ -14,6 +15,7 @@ export function pipePluginWorkerOutput(
   if (!stream) {
     return
   }
+
   let buffered = ''
   let discarding = false
 
@@ -31,33 +33,41 @@ export function pipePluginWorkerOutput(
   stream.setEncoding('utf8')
   stream.on('data', (chunk: string) => {
     let remaining = chunk
+
     while (remaining.length > 0) {
       if (discarding) {
         const newline = remaining.indexOf('\n')
+
         if (newline === -1) {
           return
         }
+
         discarding = false
         remaining = remaining.slice(newline + 1)
         continue
       }
+
       const newline = remaining.indexOf('\n')
       const segment = newline === -1 ? remaining : remaining.slice(0, newline)
       const available = PLUGIN_WORKER_OUTPUT_LINE_LIMIT - buffered.length
+
       if (segment.length > available) {
         emit(buffered + segment.slice(0, available), true)
         buffered = ''
         discarding = newline === -1
       } else {
         buffered += segment
+
         if (newline !== -1) {
           emit(buffered)
           buffered = ''
         }
       }
+
       if (newline === -1) {
         return
       }
+
       remaining = remaining.slice(newline + 1)
     }
   })
@@ -65,6 +75,7 @@ export function pipePluginWorkerOutput(
     if (!discarding) {
       emit(buffered)
     }
+
     buffered = ''
   })
 }

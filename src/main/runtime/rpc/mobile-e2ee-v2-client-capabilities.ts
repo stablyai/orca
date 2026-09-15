@@ -7,6 +7,7 @@ export function parseMobileE2EEV2ClientCapabilities(
 ): readonly RuntimeCapability[] | null {
   try {
     const message = parseRemoteRuntimeJsonText(plaintext) as Record<string, unknown>
+
     if (
       Object.keys(message).sort().join(',') !== 'clientCapabilities,type,v' ||
       message.type !== 'e2ee_client_capabilities' ||
@@ -14,6 +15,7 @@ export function parseMobileE2EEV2ClientCapabilities(
     ) {
       return null
     }
+
     return parseRuntimeClientCapabilities(message.clientCapabilities)
   } catch {
     return null

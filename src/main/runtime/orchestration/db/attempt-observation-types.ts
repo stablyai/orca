@@ -106,4 +106,5 @@ export type AttemptOutcomeProjection = {
   coordinatorAcknowledgment: AttemptCoordinatorAcknowledgment | null
   liveness: AttemptLivenessObservation & { freshness: AttemptFreshness }
 }
+
 import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'

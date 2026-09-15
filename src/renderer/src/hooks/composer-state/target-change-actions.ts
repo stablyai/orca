@@ -82,6 +82,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     setStartFromResetHint,
     smartGitHubPrStartPointSelectionRef
   } = input
+
   const { retargetGitHubPrStartPointSelection } = decisions
 
   const handleRepoChange = useCallback(
@@ -90,15 +91,20 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       options: { preserveStartFrom?: boolean; forceResetStartFrom?: boolean } = {}
     ): void => {
       setProjectError(null)
+
       if (value === repoId && !options.forceResetStartFrom) {
         if (!options.preserveStartFrom) {
           setSelectedProjectHostSetupOverrideId(null)
         }
+
         setRepoId(value)
+
         return
       }
+
       // Why: capture a descriptor of the prior Start-from selection so the field can show an inline reset (e.g. "was PR #8778") after it's wiped.
       let hint: string | null = null
+
       if (!options.preserveStartFrom) {
         if (linkedWorkItem?.type === 'pr' && baseBranch) {
           hint = `was PR #${linkedWorkItem.number}`
@@ -109,14 +115,19 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
           hint = `was ${baseBranch}`
         }
       }
+
       const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
+
       const preservedLinearBranchName = preserveLinearLinkedWorkItem
         ? getLinearLinkedWorkItemBranchName(linkedWorkItem)
         : undefined
+
       setRepoId(value)
+
       if (!options.preserveStartFrom) {
         setSelectedProjectHostSetupOverrideId(null)
       }
+
       if (options.preserveStartFrom && smartGitHubPrStartPointSelectionRef.current) {
         smartGitHubPrStartPointSelectionRef.current = retargetGitHubPrStartPointSelection(
           smartGitHubPrStartPointSelectionRef.current,
@@ -130,12 +141,14 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
         branchAutoNameRef.current = ''
         setForkPushWarning(null)
       }
+
       if (!options.preserveStartFrom) {
         smartGitHubPrStartPointSelectionRef.current = null
         setLinkedIssue('')
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
+
         // Why: a repo change invalidates repo-scoped sources, but Linear and
         // Jira issues are workspace-scoped and must survive choosing the
         // implementation project — not just Linear.
@@ -144,10 +157,12 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
           setLinkedTaskSourceContext(null)
         }
       }
+
       setSparseEnabled(false)
       setSparseDirectories('')
       // Why: presets are repo-scoped, so a prior-repo selection is meaningless after a switch.
       setSparseSelectedPresetId(null)
+
       // Why: Start-from is repo-scoped; reset to undefined so the field falls back to the new repo's effective base ref.
       if (!options.preserveStartFrom) {
         setBaseBranch(undefined)
@@ -200,14 +215,17 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       if (!folderSourceRepos.some((repo) => repo.id === value)) {
         return
       }
+
       setRepoId(value)
       smartGitHubPrStartPointSelectionRef.current = null
       setLinkedWorkItem((current) =>
         current && !shouldPreserveWorkspaceSourceOnRepoChange(current) ? null : current
       )
+
       if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
         setLinkedTaskSourceContext(null)
       }
+
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
@@ -230,6 +248,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
   const handleProjectHostSetupChange = useCallback(
     (setupId: string): void => {
       const option = projectHostSetupOptions.find((candidate) => candidate.id === setupId)
+
       // Why: a just-created setup lands in the store before the memoized picker
       // options refresh. Rebuild through the same builder rather than reading the
       // raw record — repo eligibility, ephemeral-VM/runtime-owned host exclusion,
@@ -247,9 +266,11 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
               (candidate): candidate is ReadyProjectHostSetupOption =>
                 candidate.id === setupId && candidate.kind === 'ready'
             )
+
       if (!target) {
         return
       }
+
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
       setSelectedProjectHostSetupOverrideId(target.id)
       handleRepoChange(target.repoId, {

@@ -58,7 +58,9 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
     resolvedLanguage: 'html',
     mdViewMode: 'rich'
   }
+
   const noop = (): void => {}
+
   return renderToStaticMarkup(
     <EditorPanelShell
       panelRef={null}

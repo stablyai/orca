@@ -34,6 +34,7 @@ export function planSkillDeleteMoves(
   toFilesystemPath: (path: string) => string
 ): SkillDeleteJournalMove[] {
   const path = api()
+
   return [...placements]
     .sort((left, right) => STAGING_ORDER[left.kind] - STAGING_ORDER[right.kind])
     .map((placement) => {
@@ -44,6 +45,7 @@ export function planSkillDeleteMoves(
         placement.kind === 'alias-file'
           ? path.join(toFilesystemPath(placement.path), SKILL_FILE_NAME)
           : toFilesystemPath(placement.path)
+
       return {
         sourcePath: source,
         stagedPath: path.join(
@@ -66,20 +68,24 @@ export async function stageSkillDeleteMoves(input: {
   onProgress: (movedCount: number) => Promise<void>
 }): Promise<SkillDeleteStagingOutcome> {
   const staged: SkillDeleteJournalMove[] = []
+
   for (const move of input.moves) {
     // Record the intent before the rename, so a crash in between leaves a move
     // recovery treats as possibly-done rather than orphaning the directory.
     await input.onProgress(staged.length + 1)
+
     try {
       await input.filesystem.rename(move.sourcePath, move.stagedPath)
       staged.push(move)
     } catch (error) {
       const unrestored = await rollbackSkillDeleteMoves(staged, input.filesystem)
+
       return unrestored.length > 0
         ? { status: 'partial', error, stagedPaths: unrestored }
         : { status: 'rolled-back', error }
     }
   }
+
   return { status: 'staged' }
 }
 
@@ -89,10 +95,12 @@ export async function rollbackSkillDeleteMoves(
   filesystem: SkillInstallFilesystem
 ): Promise<string[]> {
   const unrestored: string[] = []
+
   // Indexed rather than `toReversed()`: the delete modules reach the Node 18
   // relay bundle, where the ES2023 array-copy methods do not exist.
   for (let index = staged.length - 1; index >= 0; index -= 1) {
     const move = staged[index]
+
     try {
       await filesystem.rename(move.stagedPath, move.sourcePath)
     } catch {
@@ -102,6 +110,7 @@ export async function rollbackSkillDeleteMoves(
       unrestored.push(move.stagedPath)
     }
   }
+
   return unrestored
 }
 
@@ -114,10 +123,12 @@ export async function removeStagedSkillDeleteMoves(
   const path = api()
   const removedPaths: string[] = []
   const unremoved: string[] = []
+
   for (const move of moves) {
     try {
       await filesystem.remove(move.stagedPath)
       removedPaths.push(move.sourcePath)
+
       if (move.kind === 'alias-file') {
         await removeDirectoryIfEmpty(path.dirname(move.sourcePath), filesystem)
       }
@@ -125,6 +136,7 @@ export async function removeStagedSkillDeleteMoves(
       unremoved.push(move.stagedPath)
     }
   }
+
   return { removedPaths, unremoved }
 }
 
@@ -138,7 +150,9 @@ async function removeDirectoryIfEmpty(
   if (!filesystem.listEntries) {
     return
   }
+
   const listing = await filesystem.listEntries([directory]).catch(() => null)
+
   if (listing?.get(directory)?.length === 0) {
     await filesystem.remove(directory).catch(() => undefined)
   }

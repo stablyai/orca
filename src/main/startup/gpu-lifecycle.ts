@@ -39,6 +39,7 @@ export function updateGpuAccelerationAboutPanel(): void {
 
 function getWindowsGpuFallbackEnvironment(): WindowsGpuFallbackEnvironment | null {
   const environment = gpuFallbackEnvironment()
+
   return environment.platform === 'win32' ? { ...environment, platform: 'win32' } : null
 }
 
@@ -48,14 +49,18 @@ function persistGpuFallbackMarker(
   info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean }
 ): boolean {
   const environment = getWindowsGpuFallbackEnvironment()
+
   if (!environment) {
     return false
   }
+
   try {
     writeGpuFallbackMarker(userDataPath, info, environment)
+
     return true
   } catch (error) {
     console.warn('[gpu-fallback] failed to persist marker:', error)
+
     return false
   }
 }
@@ -65,10 +70,13 @@ export function maybeApplyGpuFallbackForThisLaunch(): void {
   if (state.isServeMode || process.platform !== 'win32') {
     return
   }
+
   const marker = readActiveGpuFallbackMarker(app.getPath('userData'), gpuFallbackEnvironment())
+
   if (!marker) {
     return
   }
+
   state.activeGpuFallbackMarker = marker
   app.disableHardwareAcceleration()
   const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
@@ -85,17 +93,21 @@ export async function presentGpuFallbackRecoveredLaunchPrompt(
   window: BrowserWindow
 ): Promise<void> {
   const marker = state.activeGpuFallbackMarker
+
   if (!marker || marker.userConfirmed || window.isDestroyed() || state.isQuitting) {
     return
   }
+
   // One prompt per process. A failure leaves the on-disk marker unconfirmed so the next launch retries.
   state.activeGpuFallbackMarker = null
   const userDataPath = app.getPath('userData')
+
   // The marker was read before whenReady; the pre-window ACL gate can have retired it since.
   // Asking then would let a "keep it" answer pin software rendering on a machine Orca just fixed.
   if (!readActiveGpuFallbackMarker(userDataPath, gpuFallbackEnvironment())) {
     return
   }
+
   // The symmetric case: while the tree, not the driver, is on trial (a failed gate leaves it
   // a live suspect), a "keep it" answer would pin a userConfirmed marker no later repair may
   // clear — on the window the poison keeps blank. Staying silent leaves the marker
@@ -103,6 +115,7 @@ export async function presentGpuFallbackRecoveredLaunchPrompt(
   if (isInstallDirAclSuspect()) {
     return
   }
+
   await handleGpuFallbackRecoveredLaunch({
     isQuitting: () => state.isQuitting,
     prompt: () => promptForGpuFallbackRecoveredLaunch(window),
@@ -161,15 +174,19 @@ async function installDirAclClearsGpuFallback(
   if (!installDirAclWithholdsGpuFallback()) {
     return true
   }
+
   const persisted = persistGpuFallbackMarker(userDataPath, {
     engagedAt: Date.now(),
     crashesInWindow,
     userConfirmed: false
   })
+
   await waitForInstallDirAclVerdict()
+
   if (!installDirAclWithholdsGpuFallback()) {
     return true
   }
+
   // Why the marker survives a pending repair: withdrawing it here left a machine that
   // Chromium FATALs mid-repair (crash 6 lands ~1.3s after crash 3, well inside the gate)
   // relaunching hardware accelerated into the same 20s gate, spawning the same GPU children,
@@ -178,9 +195,11 @@ async function installDirAclClearsGpuFallback(
   // clean probe reading means we never reach here. It is still not *engaged* this launch, so
   // --in-process-gpu does not erase the sibling-death evidence on the launch that is running.
   const repairPending = isInstallDirAclRepairPending()
+
   if (persisted && !repairPending) {
     clearGpuFallbackMarker(userDataPath)
   }
+
   // Why re-arm: recordGpuCrash reports the threshold crossing once and latches. Withholding
   // consumed that one report, so without this a later burst — including one after the repair
   // succeeds and the tree is no longer the suspect — could never engage safe graphics again.
@@ -189,6 +208,7 @@ async function installDirAclClearsGpuFallback(
     crashesInWindow,
     markerHeldForPendingRepair: repairPending
   })
+
   return false
 }
 
@@ -202,23 +222,29 @@ export async function handleGpuChildCrash(
   if (state.gpuFallbackActiveThisLaunch || state.isQuitting || state.isServeMode) {
     return
   }
+
   // Recorded before any install-DACL consideration: the verdict decides whether safe
   // graphics is the right answer, never whether the crash happened. Dropping it here
   // would erase a real driver burst from the rolling window on healthy machines too.
   const result = state.gpuCrashFallbackTracker.recordGpuCrash(crashedAt)
+
   if (!result.shouldEngageFallback) {
     return
   }
+
   const fallbackData = { processReason: reason, exitCode, crashesInWindow: result.crashesInWindow }
   const userDataPath = app.getPath('userData')
+
   if (!(await installDirAclClearsGpuFallback(userDataPath, result.crashesInWindow))) {
     return
   }
+
   // Re-read after that wait: it can span the probe's whole grace window, and a quit that
   // started inside it must not be answered with a modal and a relaunch.
   if (state.isQuitting) {
     return
   }
+
   await engageGpuFallbackAfterCrashBurst(
     { reason, exitCode, crashesInWindow: result.crashesInWindow, engagedAt: Date.now() },
     {
@@ -265,6 +291,7 @@ export function registerGpuLifecycleHandlers(): void {
   app.on('gpu-info-update', () => {
     state.gpuFeatureStatus = app.getGPUFeatureStatus()
     state.gpuCrashDiagnostics?.warm()
+
     if (app.isReady()) {
       updateGpuAccelerationAboutPanel()
     }

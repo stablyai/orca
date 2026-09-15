@@ -29,6 +29,7 @@ vi.mock('@/store', () => {
     deleteFolderWorkspace: vi.fn(),
     setActiveWorktree: vi.fn()
   }
+
   return {
     useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
       getState: () => state
@@ -55,6 +56,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 // the reveal decision rather than menu mechanics.
 vi.mock('@/components/ui/dropdown-menu', () => {
   const passthrough = ({ children }: { children?: ReactNode }) => <>{children}</>
+
   return {
     DropdownMenu: passthrough,
     DropdownMenuContent: passthrough,
@@ -72,13 +74,18 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 })
 
 vi.mock('./WorktreeOpenInMenu', () => ({ WorktreeOpenInSubMenu: () => null }))
+
 vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
+
 vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
+
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+
 vi.mock('./delete-worktree-flow', () => ({
   runWorktreeBatchDelete: vi.fn(),
   runWorktreeDelete: vi.fn()
 }))
+
 vi.mock('./sleep-worktree-flow', () => ({ runSleepWorktrees: vi.fn() }))
 
 const WorktreeContextMenu = (await import('./WorktreeContextMenu')).default
@@ -113,7 +120,9 @@ function openContextMenu(altKey: boolean): string {
       <div data-testid="card">card</div>
     </WorktreeContextMenu>
   )
+
   fireEvent.contextMenu(screen.getByTestId('card'), { altKey })
+
   return container.textContent ?? ''
 }
 

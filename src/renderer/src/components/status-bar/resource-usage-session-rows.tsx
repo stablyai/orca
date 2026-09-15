@@ -26,6 +26,7 @@ export function SessionRow({
   onKill: (session: UnifiedSessionRow) => void
 }): React.JSX.Element {
   const clickable = session.tabId !== null && session.bound
+
   const handleClick = (): void => {
     if (clickable && session.tabId) {
       onNavigate(session.tabId, session.paneKey)
@@ -91,6 +92,7 @@ export function SessionRow({
 
 function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Element {
   const label = browser.title?.trim() || browser.label?.trim() || browser.url
+
   return (
     <div className="flex items-center gap-2 pl-10 pr-3 py-1.5">
       <Globe className="size-3 shrink-0 text-muted-foreground" aria-hidden />
@@ -125,13 +127,17 @@ export function WorktreeRow({
   navigateToTab: (tabId: string, paneKey: string | null) => void
 }): React.JSX.Element {
   const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
+
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
+
   const isNavigable = !isSynthetic
+
   // Why: Delete needs a sidebar worktree record; hidden for synthetic/SSH-only rows and the active worktree, but the row stays navigable.
   const showWorktreeActions =
     !isSynthetic && storeRecord !== null && worktree.worktreeId !== activeWorktreeId
+
   const isMainWorktree = storeRecord?.isMainWorktree ?? false
   const rowLabel = storeRecord?.displayName?.trim() || worktree.worktreeName
 

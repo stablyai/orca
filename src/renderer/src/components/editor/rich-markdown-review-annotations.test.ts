@@ -58,10 +58,12 @@ describe('getRichMarkdownAnnotationButtonLeft', () => {
 describe('rich markdown annotation block reuse', () => {
   function makeEditor(nodeCount: number): { editor: Editor; serializeCalls: () => number } {
     let serializeCalls = 0
+
     const content = Array.from({ length: nodeCount }, (_value, index) => ({
       type: 'paragraph',
       content: [{ type: 'text', text: `paragraph ${index}` }]
     }))
+
     const doc = {
       forEach(callback: (node: unknown, offset: number, index: number) => void): void {
         content.forEach((node, index) => callback(node, index * 10, index))
@@ -71,16 +73,19 @@ describe('rich markdown annotation block reuse', () => {
       nodesBetween(): void {},
       content: { size: nodeCount * 10 }
     }
+
     const editor = {
       getJSON: () => ({ content }),
       state: { doc },
       markdown: {
         serialize: (value: { content?: unknown[] }) => {
           serializeCalls += 1
+
           return (value.content ?? []).map((_node, index) => `line ${index}`).join('\n')
         }
       }
     } as unknown as Editor
+
     return { editor, serializeCalls: () => serializeCalls }
   }
 

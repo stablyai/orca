@@ -15,7 +15,9 @@
 import { performance } from 'node:perf_hooks'
 
 const ITERATIONS = Number(process.env.ORCA_HYDRATE_BENCH_ITERATIONS ?? '60')
+
 const WARMUP = Number(process.env.ORCA_HYDRATE_BENCH_WARMUP ?? '10')
+
 const ROUNDS = 6
 
 for (const [name, value] of [
@@ -30,18 +32,22 @@ for (const [name, value] of [
 // Pre-fix: re-flatten and linear-search per id.
 function resolveByFlatten(worktreesByRepo, ids) {
   const resolved = []
+
   for (const id of ids) {
     const worktree = Object.values(worktreesByRepo)
       .flat()
       .find((entry) => entry.id === id)
+
     resolved.push(worktree ? worktree.repoId : null)
   }
+
   return resolved
 }
 
 // Post-fix: mirrors buildWorktreeByIdIndex in store/slices/worktree-by-id-index.ts.
 function resolveByIndex(worktreesByRepo, ids) {
   const index = new Map()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       if (!index.has(worktree.id)) {
@@ -49,16 +55,20 @@ function resolveByIndex(worktreesByRepo, ids) {
       }
     }
   }
+
   const resolved = []
+
   for (const id of ids) {
     const worktree = index.get(id)
     resolved.push(worktree ? worktree.repoId : null)
   }
+
   return resolved
 }
 
 function makeStore(repoCount, worktreesPerRepo) {
   const worktreesByRepo = {}
+
   for (let repo = 0; repo < repoCount; repo += 1) {
     const repoId = `repo-${repo}`
     worktreesByRepo[repoId] = Array.from({ length: worktreesPerRepo }, (_value, index) => ({
@@ -68,6 +78,7 @@ function makeStore(repoCount, worktreesPerRepo) {
       branch: `feature/branch-${index}`
     }))
   }
+
   // Why a deliberate duplicate: `.find()` is first-wins, so an index that overwrote on
   // collision would resolve a different repo. Without a collision in the fixture that
   // difference is unobservable and the equality check below would pass a broken index.
@@ -78,6 +89,7 @@ function makeStore(repoCount, worktreesPerRepo) {
       ...worktreesByRepo[secondRepo]
     ]
   }
+
   return worktreesByRepo
 }
 
@@ -86,31 +98,39 @@ function makeStore(repoCount, worktreesPerRepo) {
 // case for the linear arm, and the one the code comments call out explicitly.
 function makeIds(worktreesByRepo, count) {
   const all = Object.values(worktreesByRepo).flat()
+
   const ids = Array.from({ length: count }, (_value, index) =>
     index % 7 === 0 ? `absent/wt-${index}` : all[(index * 31) % all.length].id
   )
+
   // Always look up the duplicated id, so first-wins is exercised, not just present.
   ids[1] = all[0].id
+
   return ids
 }
 
 function timeArm(resolve, worktreesByRepo, ids) {
   let sink = 0
   const start = performance.now()
+
   for (let index = 0; index < ITERATIONS; index += 1) {
     // Consume the result so V8 cannot drop the call as dead.
     sink += resolve(worktreesByRepo, ids).length
   }
+
   const elapsed = (performance.now() - start) / ITERATIONS
+
   if (sink === -1) {
     throw new Error('unreachable')
   }
+
   return elapsed
 }
 
 function median(samples) {
   const sorted = [...samples].sort((a, b) => a - b)
   const mid = sorted.length / 2
+
   return (sorted[mid - 1] + sorted[mid]) / 2
 }
 
@@ -120,8 +140,10 @@ function measure(worktreesByRepo, ids) {
     resolveByFlatten(worktreesByRepo, ids)
     resolveByIndex(worktreesByRepo, ids)
   }
+
   const flattenSamples = []
   const indexSamples = []
+
   for (let round = 0; round < ROUNDS; round += 1) {
     if (round % 2 === 0) {
       flattenSamples.push(timeArm(resolveByFlatten, worktreesByRepo, ids))
@@ -131,12 +153,16 @@ function measure(worktreesByRepo, ids) {
       flattenSamples.push(timeArm(resolveByFlatten, worktreesByRepo, ids))
     }
   }
+
   return { flattenMs: median(flattenSamples), indexMs: median(indexSamples) }
 }
 
 const pad = (value, width) => String(value).padStart(width)
+
 console.log('Session-hydration worktree lookup, per cold start. Lower is better.')
+
 console.log(`iterations=${ITERATIONS} warmup=${WARMUP} rounds=${ROUNDS} (per-arm medians)`)
+
 console.log(
   `${pad('repos', 6)} ${pad('worktrees', 10)} ${pad('ids', 5)} ${pad('flatten', 11)} ${pad('indexed', 11)} ${pad('speedup', 9)}`
 )
@@ -155,15 +181,19 @@ for (const [repoCount, worktreesPerRepo, idCount] of [
   const ids = makeIds(worktreesByRepo, idCount)
   const flattenResult = resolveByFlatten(worktreesByRepo, ids)
   const indexResult = resolveByIndex(worktreesByRepo, ids)
+
   if (JSON.stringify(flattenResult) !== JSON.stringify(indexResult)) {
     throw new Error(`resolution differs at ${repoCount} repos x ${worktreesPerRepo} worktrees`)
   }
+
   if (!flattenResult.some((value) => value !== null)) {
     throw new Error(`fixture resolved nothing at ${repoCount} repos`)
   }
+
   if (!flattenResult.some((value) => value === null)) {
     throw new Error(`fixture had no absent ids at ${repoCount} repos`)
   }
+
   // Count the generated rows rather than multiplying: makeStore injects a duplicate
   // id for multi-repo cases, so the product would misreport the fixture by one.
   const worktreeCount = Object.values(worktreesByRepo).reduce((sum, rows) => sum + rows.length, 0)

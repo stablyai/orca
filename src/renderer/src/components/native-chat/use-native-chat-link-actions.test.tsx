@@ -62,11 +62,13 @@ function Transcript({
   linkContext?: typeof context | null
 }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
+
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     linkContext,
     rootRef,
     { sessionId, isVisible }
   )
+
   return (
     <div ref={rootRef}>
       <CommentMarkdown
@@ -128,10 +130,12 @@ describe('native chat transcript links', () => {
 
   it('keeps mailto links on the anchor default', async () => {
     const { container } = render(<Transcript markdown="[email](mailto:hello@example.com)" />)
+
     const anchorDefault = vi.fn((event: Event) => {
       expect(event.defaultPrevented).toBe(false)
       event.preventDefault()
     })
+
     container.addEventListener('click', anchorDefault)
     fireEvent.click(await screen.findByRole('link', { name: 'email' }))
     expect(anchorDefault).toHaveBeenCalledOnce()

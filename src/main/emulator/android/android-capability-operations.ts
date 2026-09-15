@@ -20,6 +20,7 @@ export async function installAndroidApk(
   options?: { reinstall?: boolean }
 ): Promise<void> {
   const result = await runner(sdk.adb, installApkArgs(serial, apkPath, options))
+
   // adb install can exit 0 while printing "Failure [...]" to stdout.
   if (result.code !== 0 || /Failure|Error/i.test(`${result.stdout}${result.stderr}`)) {
     throw new EmulatorError(
@@ -64,10 +65,12 @@ export async function dumpAndroidAccessibilityTree(
     await runner(sdk.adb, ['-s', serial, 'shell', 'uiautomator', 'dump', UIAUTOMATOR_DUMP_PATH]),
     'uiautomator dump'
   )
+
   const xml = ensureAdbOk(
     await runner(sdk.adb, ['-s', serial, 'shell', 'cat', UIAUTOMATOR_DUMP_PATH]),
     'read ui dump'
   )
+
   return parseUiAutomatorXml(xml.stdout)
 }
 
@@ -82,6 +85,7 @@ export async function captureAndroidLogcat(
     await runner(sdk.adb, logcatArgs(serial, { ...options, dump: true })),
     'adb logcat'
   )
+
   return result.stdout
     .split('\n')
     .filter((line) => line.trim() !== '')

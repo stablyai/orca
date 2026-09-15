@@ -25,9 +25,11 @@ const conflict: NonNullable<OpenFile['conflict']> = {
 
 function countedEntries(count: number): { entries: GitStatusEntry[]; reads: () => number } {
   let reads = 0
+
   const entries = Array.from({ length: count }, (_, index): GitStatusEntry => ({
     get path() {
       reads++
+
       return `file-${index}.ts`
     },
     status: 'modified',
@@ -36,6 +38,7 @@ function countedEntries(count: number): { entries: GitStatusEntry[]; reads: () =
     conflictStatus: conflict.conflictStatus,
     conflictStatusSource: conflict.conflictStatusSource
   }))
+
   return { entries, reads: () => reads }
 }
 
@@ -44,6 +47,7 @@ describe('open conflict status indexing', () => {
     'skips status rows without eligible open conflicts (complete=%s)',
     (complete) => {
       const { entries, reads } = countedEntries(10_000)
+
       const files = [
         openFile(),
         openFile({ worktreeId: 'folder:other', conflict }),
@@ -54,15 +58,18 @@ describe('open conflict status indexing', () => {
       for (let refresh = 0; refresh < 10; refresh++) {
         expect(reconcileOpenFilesForStatus(files, 'wt', entries, complete)).toBe(files)
       }
+
       expect(reads()).toBe(0)
     }
   )
 
   it('builds one index for all open conflicts and rebuilds it on the next snapshot', () => {
     const { entries, reads } = countedEntries(1_000)
+
     const files = Array.from({ length: 100 }, (_, index) =>
       openFile({ id: `file-${index}`, relativePath: `file-${index}.ts`, conflict })
     )
+
     expect(reconcileOpenFilesForStatus(files, 'wt', entries, true)).toBe(files)
     expect(reads()).toBe(1_000)
 
@@ -74,6 +81,7 @@ describe('open conflict status indexing', () => {
       conflictStatus: 'resolved_locally',
       conflictStatusSource: 'session'
     }
+
     const updated = reconcileOpenFilesForStatus(files, 'wt', [...entries, resolved], true)
     expect(reads()).toBe(2_000)
     expect(updated[0].conflict?.conflictStatus).toBe('resolved_locally')

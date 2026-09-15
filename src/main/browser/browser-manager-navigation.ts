@@ -27,22 +27,28 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     // That is worse than doing nothing: native sessions skip setupGoogleAuthUserAgentOverride, so
     // the popup would send the raw Electron UA on the wire while navigator.userAgent claims Firefox.
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
+
     // Session state is authoritative before renderer registration and after a native profile imports a source UA.
     const mode =
       getBrowserSessionUserAgentMode(guest.session) ??
       (ownerTabId ? this.userAgentModeByPageId.get(ownerTabId) : undefined)
+
     if (mode === 'native') {
       return
     }
+
     const firefoxUa = googleAuthUserAgent()
     const overrideState = this.authUserAgentOverrideStateByGuestId.get(guest.id)
     const latestPendingOverride = overrideState?.pending.at(-1)
     const confirmedOverride = overrideState?.confirmed
+
     const currentOverride =
       latestPendingOverride && latestPendingOverride.sequence > (confirmedOverride?.sequence ?? -1)
         ? latestPendingOverride
         : confirmedOverride
+
     const currentUa = currentOverride?.userAgent ?? guest.getUserAgent()
+
     const nextUa = isGoogleAuthUrl(url)
       ? firefoxUa
       : // Only restore when the auth-host override is actually in place, so normal
@@ -50,7 +56,9 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         currentUa === firefoxUa
         ? guest.session.getUserAgent()
         : null
+
     let authOverrideIssuedOverCdp = false
+
     if (nextUa !== null && nextUa !== currentUa) {
       // Why: WebContents.setUserAgent() during a redirect makes Chromium cancel the in-flight
       // navigation (ERR_ABORTED) and replay the original request, which a POST-started OAuth chain
@@ -79,6 +87,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         guest.setUserAgent(nextUa)
       }
     }
+
     // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of
     // its own, so inheriting the owner tab's preset UA would pair a mobile UA with a desktop viewport.
     if (browserPageId && !authOverrideIssuedOverCdp) {
@@ -103,18 +112,22 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     if (!this.canOverrideUserAgentOverCdp(guest)) {
       return Promise.resolve(false)
     }
+
     const state = this.authUserAgentOverrideStateByGuestId.get(guest.id) ?? {
       confirmed: null,
       nextSequence: 0,
       pending: []
     }
+
     const operation = { sequence: ++state.nextSequence, userAgent }
     state.pending.push(operation)
     this.authUserAgentOverrideStateByGuestId.set(guest.id, state)
+
     return this.sendViewportUserAgentOverride(guest, mobile, url, userAgent).then(
       () => this.settleAuthUserAgentOverride(guest.id, state, operation, true),
       () => {
         this.settleAuthUserAgentOverride(guest.id, state, operation, false)
+
         return false
       }
     )
@@ -129,16 +142,21 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     if (this.authUserAgentOverrideStateByGuestId.get(guestId) !== state) {
       return false
     }
+
     if (succeeded && (state.confirmed?.sequence ?? -1) < operation.sequence) {
       state.confirmed = operation
     }
+
     const pendingIndex = state.pending.indexOf(operation)
+
     if (pendingIndex !== -1) {
       state.pending.splice(pendingIndex, 1)
     }
+
     if (state.confirmed === null && state.pending.length === 0) {
       this.authUserAgentOverrideStateByGuestId.delete(guestId)
     }
+
     return true
   }
 
@@ -152,30 +170,40 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
 
   protected updatePendingNavigationForRedirect(guestId: number, url: string): void {
     const pending = this.pendingNavigationByGuestId.get(guestId)
+
     if (!pending) {
       this.pendingNavigationByGuestId.set(guestId, {
         currentUrl: url,
         supersededUrls: []
       })
+
       return
     }
+
     pending.currentUrl = url
   }
 
   protected failPendingNavigation(guestId: number, failedUrl: string): boolean {
     const pending = this.pendingNavigationByGuestId.get(guestId)
+
     if (!pending) {
       return false
     }
+
     const supersededIndex = pending.supersededUrls.indexOf(failedUrl)
+
     if (supersededIndex !== -1) {
       pending.supersededUrls.splice(supersededIndex, 1)
+
       return false
     }
+
     if (pending.currentUrl !== failedUrl) {
       return false
     }
+
     this.pendingNavigationByGuestId.delete(guestId)
+
     return true
   }
 
@@ -196,9 +224,11 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     url: string
   ): void {
     const mobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
+
     if (mobile === undefined) {
       return
     }
+
     // Why: no queue needed — debugger.sendCommand dispatches in call order over one channel, so the
     // later-issued write wins. What matters is that both writers resolve the SAME host, which they
     // now do via the navigation target rather than the stale committed URL.
@@ -214,6 +244,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     if (guest.isDestroyed() || !guest.debugger.isAttached()) {
       return
     }
+
     await guest.debugger.sendCommand(
       'Emulation.setUserAgentOverride',
       buildViewportUserAgentOverride({
@@ -258,6 +289,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         openerGuest.off('destroyed', closePopupWithOpener)
       }
     })
+
     return popup.contentWebContents
   }
 }

@@ -18,5 +18,6 @@ export function DeferredBrowserContent({
       setHasCommittedMount(true)
     }
   }, [hasCommittedMount, mountEligible, retainMounted])
+
   return mountEligible || (retainMounted && hasCommittedMount) ? <>{children}</> : null
 }

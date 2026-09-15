@@ -11,12 +11,15 @@ export async function createSpinnerRepository(worktrees: number) {
   const directory = mkdtempSync(path.join(parent, 'spinner-workspaces-'))
   const repoPath = path.join(directory, 'primary')
   mkdirSync(repoPath)
+
   const git = async (args: string[]) => {
     const result = await runProcess({ program: 'git', args, cwd: repoPath })
+
     if (result.code !== 0) {
       throw new Error(result.stderr)
     }
   }
+
   await git(['init'])
   await git(['config', 'user.email', 'spinner-benchmark@test.local'])
   await git(['config', 'user.name', 'Spinner benchmark'])
@@ -24,6 +27,7 @@ export async function createSpinnerRepository(worktrees: number) {
   writeFileSync(path.join(repoPath, 'README.md'), '# Spinner benchmark\n')
   await git(['add', 'README.md'])
   await git(['commit', '-m', 'Spinner fixture'])
+
   for (let index = 1; index < worktrees; index++) {
     await git([
       'worktree',
@@ -33,6 +37,7 @@ export async function createSpinnerRepository(worktrees: number) {
       path.join(directory, `workspace-${index}`)
     ])
   }
+
   return { directory, repoPath }
 }
 
@@ -51,9 +56,11 @@ export async function seedSpinnerWorkspaces(
     const store = window.__store!
     const repo = store.getState().repos[0]
     await store.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
+
     const paths = (store.getState().detectedWorktreesByRepo[repo.id]?.worktrees ?? [])
       .filter((worktree) => !worktree.selectedCheckout)
       .map((worktree) => worktree.path)
+
     await store.getState().updateRepo(repo.id, {
       externalWorktreeVisibility: 'show',
       importedExternalWorktreePaths: paths,
@@ -65,15 +72,18 @@ export async function seedSpinnerWorkspaces(
     (count) => Object.values(window.__store!.getState().worktreesByRepo).flat().length === count,
     options.worktrees
   )
+
   return configureRendererScaleFixture(page, options, repoPath)
 }
 
 export async function refreshSpinnerAgents(page: Page) {
   return page.evaluate(() => {
     const store = window.__store!
+
     const agents = Object.values(store.getState().agentStatusByPaneKey).filter((entry) =>
       entry.prompt?.startsWith('Idle CPU agent ')
     )
+
     for (const entry of agents) {
       store.getState().setAgentStatus(
         entry.paneKey,
@@ -91,6 +101,7 @@ export async function refreshSpinnerAgents(page: Page) {
         }
       )
     }
+
     return agents.length
   })
 }
@@ -98,11 +109,14 @@ export async function refreshSpinnerAgents(page: Page) {
 export async function startSpinnerStatusTraffic(page: Page) {
   return page.evaluateHandle(() => {
     const store = window.__store!
+
     const keys = Object.values(store.getState().agentStatusByPaneKey)
       .filter((entry) => entry.prompt?.startsWith('Idle CPU agent '))
       .map((entry) => entry.paneKey)
+
     let cursor = 0
     let updates = 0
+
     const timer = setInterval(() => {
       for (let index = 0; index < Math.min(8, keys.length); index++) {
         const entry = store.getState().agentStatusByPaneKey[keys[cursor++ % keys.length]]
@@ -124,9 +138,11 @@ export async function startSpinnerStatusTraffic(page: Page) {
         updates++
       }
     }, 200)
+
     return {
       stop() {
         clearInterval(timer)
+
         return updates
       }
     }

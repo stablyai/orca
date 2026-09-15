@@ -35,11 +35,14 @@ export function resolveNativeChatModelDiscoveryHostKey(
   if (scope !== null) {
     return getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }
+
   const localProjectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
+
   const wslDistro =
     localProjectRuntime?.status === 'resolved' && localProjectRuntime.runtime.kind === 'wsl'
       ? localProjectRuntime.runtime.distro
       : getWslDistroFromPath(worktreePath)
+
   return getCommitMessageModelDiscoveryHostKeyForLocalRuntime(wslDistro)
 }
 
@@ -47,17 +50,22 @@ export function resolveNativeChatModelDiscoveryContext(
   terminalTabId: string
 ): NativeChatModelDiscoveryContext | null {
   const state = useAppStore.getState()
+
   const worktreeId =
     Object.entries(state.tabsByWorktree ?? {}).find(([, tabs]) =>
       tabs.some((tab) => tab.id === terminalTabId)
     )?.[0] ?? null
+
   const connectionId = getConnectionIdFromState(state, worktreeId)
+
   if (worktreeId && connectionId === undefined) {
     return null
   }
+
   const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
   const worktreePath = worktreeId ? (state.getKnownWorktreeById?.(worktreeId)?.path ?? '') : ''
   const scope = getRuntimeGitScope(settings, connectionId)
+
   return {
     hostKey: resolveNativeChatModelDiscoveryHostKey(state, worktreeId, worktreePath, scope),
     runtime: {
@@ -75,6 +83,7 @@ export async function discoverNativeChatCatalogModels(
 ): Promise<CatalogModel[] | null> {
   const result = await discoverRuntimeCommitMessageModels(context, agent)
   const catalog = getAgentSessionOptionCatalog(agent)
+
   if (
     !result.success ||
     result.models.length === 0 ||
@@ -85,6 +94,7 @@ export async function discoverNativeChatCatalogModels(
   ) {
     return null
   }
+
   return result.models.map((model) => ({
     id: model.id,
     label: model.label,

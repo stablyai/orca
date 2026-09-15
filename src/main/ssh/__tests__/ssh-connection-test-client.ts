@@ -26,9 +26,13 @@ export type Ssh2ModuleMock = {
 
 // Read-only from tests: live ESM bindings so importers observe the mock's writes.
 export let eventHandlers = new Map<string, Set<(...args: unknown[]) => void>>()
+
 export let clientInstances: MockSshClient[] = []
+
 export let connectAttempts = 0
+
 export let pendingExecCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
+
 export let pendingSftpCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
 
 /** Lets a test present a real key blob instead of the placeholder. */
@@ -57,6 +61,7 @@ export const emitSshEvent = (event: string, ...args: unknown[]): void =>
 
 export function createSsh2Module(): Ssh2ModuleMock {
   class MockBaseAgent {}
+
   class MockSshClient {
     setNoDelay = vi.fn()
     // Why: production code reads `client._sock` and checks `instanceof net.Socket`
@@ -82,6 +87,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
     off(event: string, handler: (...args: unknown[]) => void) {
       const handlers = this.handlers.get(event)
       handlers?.delete(handler)
+
       if (handlers?.size === 0) {
         this.handlers.delete(event)
       }
@@ -95,14 +101,17 @@ export function createSsh2Module(): Ssh2ModuleMock {
       if (this.connectTimer) {
         clearTimeout(this.connectTimer)
       }
+
       if (this.handshakeTimer) {
         clearTimeout(this.handshakeTimer)
       }
+
       this.connectTimer = this.handshakeTimer = null
     }
     connect(config?: unknown) {
       connectAttempts += 1
       this.lastConnectConfig = config
+
       // Why the callback form: ssh2 calls hostVerifier(key, verify) and only accepts synchronously
       // when the return is not undefined. A mock that passed one argument and ignored the result
       // would pass against a verifier that never decides — which is the regression host key
@@ -112,11 +121,13 @@ export function createSsh2Module(): Ssh2ModuleMock {
           | { hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined }
           | undefined
       )?.hostVerifier
+
       const presentedHostKey = ssh2Mock.presentedHostKey ?? VALID_ED25519_HOST_KEY
       ssh2Mock.lastHostKeyAccepted = undefined
       hostVerifier?.(presentedHostKey, (ok) => {
         ssh2Mock.lastHostKeyAccepted = ok
       })
+
       if (ssh2Mock.lastHostKeyAccepted === false) {
         // ssh2 aborts the handshake when the verifier denies; a mock that carried on to 'ready'
         // would let a rejected host key look like a successful connect.
@@ -124,21 +135,29 @@ export function createSsh2Module(): Ssh2ModuleMock {
           this.connectTimer = null
           this.emit('error', new Error('All configured authentication methods failed'))
         }, 0)
+
         return
       }
+
       this.connectTimer = setTimeout(() => {
         this.connectTimer = null
         const next = ssh2Mock.connectSequence.shift()
+
         if (next instanceof Error) {
           this.emit('error', next)
+
           return
         }
+
         if (next === 'ready') {
           this.emit('ready')
+
           return
         }
+
         if (ssh2Mock.connectBehavior === 'pending') {
           const configValue = this.lastConnectConfig
+
           const readyTimeout =
             configValue &&
             typeof configValue === 'object' &&
@@ -146,19 +165,24 @@ export function createSsh2Module(): Ssh2ModuleMock {
             typeof configValue.readyTimeout === 'number'
               ? configValue.readyTimeout
               : undefined
+
           if (readyTimeout && readyTimeout > 0) {
             this.handshakeTimer = setTimeout(() => {
               this.handshakeTimer = null
               this.emit('error', new Error('Timed out while waiting for handshake'))
             }, readyTimeout)
           }
+
           return
         }
+
         if (ssh2Mock.connectBehavior === 'error') {
           const err = new Error(ssh2Mock.connectErrorMessage) as NodeJS.ErrnoException
+
           if (ssh2Mock.connectErrorCode) {
             err.code = ssh2Mock.connectErrorCode
           }
+
           this.emit('error', err)
         } else {
           this.emit('ready')
@@ -170,32 +194,43 @@ export function createSsh2Module(): Ssh2ModuleMock {
     }
     destroy() {
       this.clearPendingTimers()
+
       if (!ssh2Mock.destroyErrorMessage) {
         this.emit('close')
+
         return
       }
+
       if (this.handlers.has('error')) {
         this.emit('error', new Error(ssh2Mock.destroyErrorMessage))
+
         return
       }
+
       throw new Error(ssh2Mock.destroyErrorMessage)
     }
     exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
       this.lastExecCommand = cmd
+
       if (ssh2Mock.execBehavior === 'pending') {
         pendingExecCallback = cb
+
         return
       }
+
       cb(undefined, { close: vi.fn() })
     }
     sftp(cb: (err: Error | undefined, channel: unknown) => void) {
       if (ssh2Mock.sftpBehavior === 'pending') {
         pendingSftpCallback = cb
+
         return
       }
+
       cb(undefined, { end: vi.fn() })
     }
   }
+
   return {
     BaseAgent: MockBaseAgent,
     Client: MockSshClient,
@@ -210,6 +245,7 @@ export function resetSsh2ClientState(): void {
   for (const client of clientInstances) {
     client.clearPendingTimers()
   }
+
   eventHandlers = new Map()
   connectAttempts = 0
   pendingExecCallback = null

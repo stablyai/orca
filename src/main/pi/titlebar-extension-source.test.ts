@@ -13,6 +13,7 @@ type TitlebarContext = {
   ui: { setTitle: (title: string) => void }
   isIdle?: () => boolean
 }
+
 type HookHandler = (event?: unknown, context?: TitlebarContext) => Promise<void> | void
 
 type Harness = {
@@ -23,8 +24,11 @@ type Harness = {
 }
 
 const CWD = '/repo/orca-app'
+
 const SESSION = 'omp-session'
+
 const IDLE_TITLE = `π - ${SESSION} - orca-app`
+
 const PROMPT_TITLE = `π ! ${SESSION} - orca-app`
 
 function createHarness(
@@ -41,6 +45,7 @@ function createHarness(
   } = {}
 ): Harness {
   const titles: string[] = []
+
   const ctx: TitlebarContext = {
     ui: {
       setTitle: (title: string) => {
@@ -78,14 +83,17 @@ function createHarness(
     setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
     clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)
   } as Record<string, unknown>
+
   context.globalThis = options.globals ?? context
 
   const output = ts.transpileModule(getPiTitlebarExtensionSource(options.kind ?? 'pi'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
   }).outputText
+
   runInNewContext(output, context)
 
   const register = module.exports.default
+
   if (!register) {
     throw new Error('expected default export from generated source')
   }
@@ -104,9 +112,11 @@ function createHarness(
     lastTitle: () => titles.at(-1),
     callHook: async (name, event) => {
       const handler = handlers[name]
+
       if (!handler) {
         throw new Error(`no handler registered for ${name}`)
       }
+
       await handler(event, ctx)
     }
   }
@@ -415,6 +425,7 @@ describe('getPiTitlebarExtensionSource', () => {
 
   it('does not reject when the dialog ctx can no longer paint', async () => {
     const harness = createHarness()
+
     const throwing = {
       ui: {
         setTitle: () => {
@@ -433,12 +444,14 @@ describe('getPiTitlebarExtensionSource', () => {
   it('does not reject when the captured ctx dies before the dialog closes', async () => {
     const harness = createHarness()
     let live = true
+
     const dying = {
       ui: {
         setTitle: (title: string) => {
           if (!live) {
             throw new Error('extension runner is no longer active')
           }
+
           harness.titles.push(title)
         }
       }
@@ -457,6 +470,7 @@ describe('getPiTitlebarExtensionSource', () => {
 
   it('does not strand the marker when the closing ctx throws on ui access', async () => {
     const harness = createHarness()
+
     // Why: pi's ctx.ui is a getter that calls assertActive(); a session-replacing dialog
     // invalidates the runner, so reading ctx.ui throws rather than yielding undefined.
     const stale = {
@@ -480,6 +494,7 @@ describe('getPiTitlebarExtensionSource', () => {
 
   it('does not reject when the opening ctx throws on ui access', async () => {
     const harness = createHarness()
+
     const stale = {
       get ui(): never {
         throw new Error('This extension ctx is stale')
@@ -557,11 +572,13 @@ describe('getPiTitlebarExtensionSource', () => {
 
   it('survives a session name that throws on a stale runtime', async () => {
     let live = true
+
     const harness = createHarness({
       sessionNameImpl: () => {
         if (!live) {
           throw new Error('This extension API is stale')
         }
+
         return SESSION
       }
     })
@@ -596,11 +613,13 @@ describe('getPiTitlebarExtensionSource', () => {
     'retires a stale %s during animation without throwing or rescheduling',
     async (failure) => {
       let stale = false
+
       const harness = createHarness({
         sessionNameImpl: () => {
           if (stale && failure === 'getter') {
             throw new Error('expired session')
           }
+
           return SESSION
         },
         setTitle: () => {
@@ -609,6 +628,7 @@ describe('getPiTitlebarExtensionSource', () => {
           }
         }
       })
+
       await harness.callHook('agent_start')
       stale = true
       expect(() => vi.advanceTimersByTime(80)).not.toThrow()
@@ -623,11 +643,13 @@ describe('getPiTitlebarExtensionSource', () => {
 
   it.each(['getter', 'title'] as const)('contains stale %s during shutdown', async (failure) => {
     let stale = false
+
     const harness = createHarness({
       sessionNameImpl: () => {
         if (stale && failure === 'getter') {
           throw new Error('expired session')
         }
+
         return SESSION
       },
       setTitle: () => {
@@ -637,6 +659,7 @@ describe('getPiTitlebarExtensionSource', () => {
       },
       isIdle: () => false
     })
+
     await harness.callHook('agent_start')
     await harness.callHook('agent_end')
     stale = true
@@ -650,6 +673,7 @@ describe('getPiTitlebarExtensionSource', () => {
         throw new Error('expired')
       }
     })
+
     await harness.callHook('agent_start')
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -660,6 +684,7 @@ describe('getPiTitlebarExtensionSource', () => {
         throw new Error('expired')
       }
     })
+
     await harness.callHook('agent_start')
     await harness.callHook('agent_end')
     expect(() => vi.advanceTimersByTime(1)).not.toThrow()
@@ -705,15 +730,18 @@ describe('getPiTitlebarExtensionSource', () => {
 
   it('stops spinner, prompt reassertion and idle recheck together on invalidation', async () => {
     let stale = false
+
     const harness = createHarness({
       isIdle: () => false,
       sessionNameImpl: () => {
         if (stale) {
           throw new Error('stale generation')
         }
+
         return SESSION
       }
     })
+
     await harness.callHook('agent_start')
     await harness.callHook('ui_prompt_start')
     await harness.callHook('agent_end')

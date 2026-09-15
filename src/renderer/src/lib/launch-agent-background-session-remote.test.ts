@@ -7,24 +7,43 @@ import {
 } from '@/lib/agent-background-session-test-state'
 
 const mockSpawn = vi.fn()
+
 const mockKill = vi.fn()
+
 const mockWrite = vi.fn()
+
 const mockRuntimeEnvironmentCall = vi.fn()
+
 const mockRuntimeEnvironmentTransportCall = vi.fn()
+
 const mockRuntimeEnvironmentSubscribe = vi.fn()
+
 const mockCreateTab = vi.fn()
+
 const mockSetTabCustomTitle = vi.fn()
+
 const mockUpdateTabPtyId = vi.fn()
+
 const mockCloseTab = vi.fn()
+
 const mockSetTabLayout = vi.fn()
+
 const mockRegisterAgentLaunchConfig = vi.fn()
+
 const mockRegisterEagerPtyBuffer = vi.fn()
+
 const mockSubscribeToPtyData = vi.fn()
+
 const mockSubscribeToPtyExit = vi.fn()
+
 const mockPasteDraftWhenAgentReady = vi.fn()
+
 const mockMarkTrusted = vi.fn()
+
 const mockDispatchEvent = vi.fn()
+
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
+
 const state = createAgentBackgroundSessionTestState({
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
@@ -87,20 +106,24 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('closes a runtime terminal when its worktree disappears before creation resolves', async () => {
     useRemoteAgentBackgroundRuntime(state)
+
     let resolveCreate!: (result: {
       ok: true
       result: { terminal: { handle: string; worktreeId: string; title: null } }
     }) => void
+
     const createResult = new Promise<{
       ok: true
       result: { terminal: { handle: string; worktreeId: string; title: null } }
     }>((resolve) => {
       resolveCreate = resolve
     })
+
     mockRuntimeEnvironmentCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.createAgentSession') {
         return createResult
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -110,6 +133,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       worktreeId: 'wt-1',
       prompt: 'run remotely'
     })
+
     await vi.waitFor(() =>
       expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
         expect.objectContaining({ method: 'terminal.createAgentSession' })
@@ -155,6 +179,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -185,6 +210,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('waits for shell-ready before injecting payload-bearing SSH background commands', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -223,6 +249,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
   // still arms the marker for it, so writing early would display the launch twice.
   it('waits for shell-ready for a promptless SSH background Codex launch', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -248,6 +275,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('skips the shell-ready wait when the host reports it did not arm the marker', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       mockSpawn.mockResolvedValue({ id: 'pty-1', shellReadyArmed: false })
@@ -269,6 +297,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('falls back when an SSH shell produces no observable startup data', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -295,6 +324,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('keeps the short fallback for an SSH shell that talks but cannot emit the marker', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -319,6 +349,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('waits for shell-ready for SSH background Codex native prefill commands without a hint', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       state.settings = {
@@ -360,6 +391,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('does not rearm SSH background startup delivery after exit cleanup', async () => {
     vi.useFakeTimers()
+
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
@@ -472,6 +504,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
           }
         })
       }
+
       return Promise.resolve({
         id: 'create',
         ok: true,

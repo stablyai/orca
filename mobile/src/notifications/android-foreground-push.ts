@@ -10,6 +10,7 @@ export function startAndroidForegroundPushPresentation(): () => void {
 
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
     const { trigger, content, identifier } = notification.request
+
     // Expo emits foreground data pushes but only auto-presents them in the background.
     if (
       !trigger ||
@@ -19,7 +20,9 @@ export function startAndroidForegroundPushPresentation(): () => void {
     ) {
       return
     }
+
     const payload = readOrcaPushPayload(content.data)
+
     if (!payload || payload.kind === 'dismiss' || (!content.title && !content.body)) {
       return
     }
@@ -32,6 +35,7 @@ export function startAndroidForegroundPushPresentation(): () => void {
       if (!payload || !(await canPresentForegroundPush(payload))) {
         return
       }
+
       await Notifications.scheduleNotificationAsync({
         identifier,
         content: {
@@ -45,5 +49,6 @@ export function startAndroidForegroundPushPresentation(): () => void {
       })
     }
   })
+
   return () => subscription.remove()
 }

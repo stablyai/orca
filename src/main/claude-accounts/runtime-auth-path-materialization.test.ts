@@ -14,6 +14,7 @@ vi.mock('electron', () => ({ app: { getPath: () => testState.fakeHomeDir } }))
 vi.mock('node:os', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const actual = await vi.importActual<typeof import('node:os')>('node:os')
+
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
@@ -27,11 +28,13 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
+
   if (testState.previousConfigDir === undefined) {
     delete process.env.CLAUDE_CONFIG_DIR
   } else {
     process.env.CLAUDE_CONFIG_DIR = testState.previousConfigDir
   }
+
   testState.fakeHomeDir = ''
 })
 
@@ -43,10 +46,12 @@ describe('Claude runtime auth path materialization', () => {
       claudeManagedAccounts: [],
       activeClaudeManagedAccountId: null
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn()
     }
+
     const service = new ClaudeRuntimeAuthService(store as never)
 
     const preparation = await service.prepareForRateLimitFetch()

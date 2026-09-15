@@ -9,10 +9,15 @@ type CsvViewerProps = {
 }
 
 const ROW_HEIGHT = 28
+
 const OVERSCAN = 12
+
 const MIN_COL_PX = 80
+
 const MAX_COL_PX = 320
+
 const ROW_NUMBER_COL_PX = 48
+
 const CHAR_PX = 7
 
 // Why: CsvViewer is the table counterpart to source-mode Monaco for .csv/.tsv
@@ -26,6 +31,7 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
 
   const parsed = useMemo(() => {
     const delimiter = detectCsvDelimiter(filePath, content)
+
     return parseCsv(content, delimiter)
   }, [content, filePath])
 
@@ -38,15 +44,21 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
     if (parsed.rows.length === 0) {
       return { headerRow: [] as string[], bodyRows: [] as string[][] }
     }
+
     const [head, ...rest] = parsed.rows
+
     return { headerRow: head ?? [], bodyRows: rest }
   }, [parsed])
+
   const columnCount = parsed.maxColumns
+
   const header = useMemo(() => {
     const out = [...(headerRow ?? [])]
+
     while (out.length < columnCount) {
       out.push('')
     }
+
     return out
   }, [headerRow, columnCount])
 
@@ -56,23 +68,30 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
   // blowing out the viewport width.
   const columnWidths = useMemo(() => {
     const widths = Array.from<number>({ length: columnCount }).fill(MIN_COL_PX)
+
     const consider = (cell: string | undefined, idx: number): void => {
       if (!cell) {
         return
       }
+
       const w = Math.min(MAX_COL_PX, Math.max(MIN_COL_PX, cell.length * CHAR_PX + 24))
+
       if (w > widths[idx]!) {
         widths[idx] = w
       }
     }
+
     header.forEach(consider)
     const sampleLimit = Math.min(bodyRows.length, 200)
+
     for (let i = 0; i < sampleLimit; i += 1) {
       const row = bodyRows[i]!
+
       for (let c = 0; c < columnCount; c += 1) {
         consider(row[c], c)
       }
     }
+
     return widths
   }, [header, bodyRows, columnCount])
 
@@ -140,6 +159,7 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
           <div style={{ height: totalHeight, position: 'relative' }}>
             {virtualRows.map((vr) => {
               const row = bodyRows[vr.index] ?? []
+
               return (
                 <div
                   role="row"

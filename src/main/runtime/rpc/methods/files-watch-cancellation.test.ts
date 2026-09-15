@@ -11,6 +11,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('file watch RPC cancellation', () => {
   it('cancels a file watch waiting for setup before ready', async () => {
     let setupSignal: AbortSignal | undefined
+
     const watchFileExplorer = vi.fn(
       (
         _worktree: string,
@@ -19,6 +20,7 @@ describe('file watch RPC cancellation', () => {
         signal?: AbortSignal
       ) => {
         setupSignal = signal
+
         return new Promise<() => void>((_resolve, reject) => {
           signal?.addEventListener('abort', () => reject(new Error('setup aborted')), {
             once: true
@@ -26,12 +28,15 @@ describe('file watch RPC cancellation', () => {
         })
       }
     )
+
     const cleanups = new Map<string, () => void | Promise<void>>()
+
     const cleanupSubscriptionAndWait = vi.fn(async (id: string) => {
       const cleanup = cleanups.get(id)
       await cleanup?.()
       cleanups.delete(id)
     })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       watchFileExplorer,
@@ -41,6 +46,7 @@ describe('file watch RPC cancellation', () => {
         void cleanupSubscriptionAndWait(id)
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const replies: { result?: { type?: string; subscriptionId?: string } }[] = []
 
@@ -49,6 +55,7 @@ describe('file watch RPC cancellation', () => {
       (response) => replies.push(JSON.parse(response)),
       { connectionId: 'conn-1' }
     )
+
     await vi.waitFor(() => expect(replies[0]?.result?.type).toBe('starting'))
     const subscriptionId = replies[0]?.result?.subscriptionId
     expect(subscriptionId).toBeTruthy()
@@ -64,19 +71,25 @@ describe('file watch RPC cancellation', () => {
 
   it('drops queued file watch events when aborted before setup resolves', async () => {
     vi.useFakeTimers()
+
     try {
       type WatchCallback = (
         events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
       ) => void
+
       const unwatch = vi.fn()
       let resolveWatch: (value: () => void) => void = () => {}
+
       const watchFileExplorer = vi.fn((_worktree: string, callback: WatchCallback) => {
         callback([{ kind: 'update', absolutePath: '/repo/queued.ts', isDirectory: false }])
+
         return new Promise<() => void>((resolve) => {
           resolveWatch = resolve
         })
       })
+
       const cleanups = new Map<string, () => void | Promise<void>>()
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         watchFileExplorer,
@@ -85,6 +98,7 @@ describe('file watch RPC cancellation', () => {
           void Promise.resolve(cleanups.get(id)?.())
         })
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
       const abortController = new AbortController()
       const replies: unknown[] = []
@@ -94,6 +108,7 @@ describe('file watch RPC cancellation', () => {
         (response) => replies.push(JSON.parse(response)),
         { connectionId: 'conn-1', signal: abortController.signal }
       )
+
       await vi.waitFor(() => expect(watchFileExplorer).toHaveBeenCalled())
 
       abortController.abort()

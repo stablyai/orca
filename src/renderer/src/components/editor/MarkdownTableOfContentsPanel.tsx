@@ -26,8 +26,11 @@ type MarkdownTableOfContentsPanelProps = {
 }
 
 const TOC_LEVELS: MarkdownTocLevel[] = [1, 2, 3, 4, 5]
+
 const TOC_EXPAND_ALL_LEVEL: MarkdownTocLevel = 5
+
 const TOC_INDENT_BASE_PX = 12
+
 const TOC_INDENT_STEP_PX = 12
 
 function MarkdownTocRow({
@@ -45,6 +48,7 @@ function MarkdownTocRow({
 }): React.JSX.Element {
   const hasChildren = item.children.length > 0
   const expanded = isMarkdownTocItemExpanded(collapsedIds, item)
+
   // Why: parents already shift title right via the disclosure chevron, so deeper
   // parents skip the base inset; only the root row keeps it so top-level titles
   // are not flush against the panel edge.
@@ -119,10 +123,12 @@ export function MarkdownTableOfContentsPanel({
   const setMarkdownTocPanelWidth = useAppStore((s) => s.setMarkdownTocPanelWidth)
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null)
   const maxPanelWidth = computeMaxMarkdownTocPanelWidth(layoutWidth ?? 0)
+
   const renderedPanelWidth = clampMarkdownTocPanelWidth(
     markdownTocPanelWidth,
     layoutWidth ?? undefined
   )
+
   const { containerRef, onResizeStart } = useSidebarResize<HTMLElement>({
     isOpen: true,
     width: renderedPanelWidth,
@@ -139,6 +145,7 @@ export function MarkdownTableOfContentsPanel({
   useEffect(() => {
     const container = containerRef.current
     const layout = container?.parentElement
+
     if (!layout) {
       return
     }
@@ -150,6 +157,7 @@ export function MarkdownTableOfContentsPanel({
     updateMaxWidth()
     const observer = new ResizeObserver(updateMaxWidth)
     observer.observe(layout)
+
     return () => observer.disconnect()
   }, [containerRef])
 

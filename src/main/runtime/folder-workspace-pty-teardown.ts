@@ -20,9 +20,11 @@ export async function teardownFolderWorkspacePtys(
 ): Promise<void> {
   const sshPtyProvider = connectionId ? deps.getSshProvider?.(connectionId) : undefined
   const ptyProvider = sshPtyProvider ?? deps.getLocalProvider()
+
   if (!ptyProvider) {
     return
   }
+
   await killAllProcessesForWorktree(worktreeId, {
     runtime: deps.runtime,
     resolvedWorktreeId: worktreeId,

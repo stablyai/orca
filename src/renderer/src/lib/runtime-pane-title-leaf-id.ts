@@ -27,6 +27,7 @@ function collectReplayCreatedPaneLeafIds(
   if (node.first.type === 'split') {
     collectReplayCreatedPaneLeafIds(node.first, leafIdsInReplayCreationOrder)
   }
+
   if (node.second.type === 'split') {
     collectReplayCreatedPaneLeafIds(node.second, leafIdsInReplayCreationOrder)
   }
@@ -38,10 +39,13 @@ function collectLeafIdsInReplayCreationOrder(
   if (!node) {
     return []
   }
+
   const leafIdsInReplayCreationOrder = [getLeftmostLeafId(node)]
+
   if (node.type === 'split') {
     collectReplayCreatedPaneLeafIds(node, leafIdsInReplayCreationOrder)
   }
+
   return leafIdsInReplayCreationOrder
 }
 
@@ -86,6 +90,7 @@ export function resolveRuntimePaneTitleLeafResolution(
     }
 
     const title = titlesByPaneId[runtimePaneId]
+
     if (hasOnePaneTitle) {
       hasMultiplePaneTitles = true
     } else {
@@ -114,10 +119,14 @@ export function resolveRuntimePaneTitleLeafIdFromRoot(
   if (isTerminalLeafId(runtimePaneId)) {
     return runtimePaneId
   }
+
   const numericPaneId = Number(runtimePaneId)
+
   if (!Number.isInteger(numericPaneId) || numericPaneId < FIRST_PANE_ID) {
     return null
   }
+
   const leafIds = collectLeafIdsInReplayCreationOrder(root)
+
   return leafIds[numericPaneId - FIRST_PANE_ID] ?? null
 }

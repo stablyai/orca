@@ -14,7 +14,9 @@ function repoNeedsRendererCapturedScrollback(repo: RepoTerminalScrollbackOwner):
   if (repo.connectionId) {
     return true
   }
+
   const parsedHost = parseExecutionHostId(repo.executionHostId)
+
   return parsedHost !== null && parsedHost.kind !== 'local'
 }
 
@@ -25,17 +27,21 @@ function shouldPreserveTerminalScrollbackBuffersForRepoMap(
   if (worktreeId === undefined || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return false
   }
+
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const repo = repoById.get(repoId)
+
   if (repo && repoNeedsRendererCapturedScrollback(repo)) {
     return true
   }
+
   if (!repoById.has(repoId)) {
     // Why: when the repo catalog is not hydrated, treating the worktree as
     // remote avoids losing the only scrollback source a relay/runtime terminal
     // may have.
     return true
   }
+
   return false
 }
 
@@ -53,6 +59,7 @@ export function capTerminalScrollbackSessionBuffer(buffer: string): string {
   if (isUtf8ByteLengthWithinLimit(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)) {
     return buffer
   }
+
   return clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
 }
 
@@ -63,13 +70,16 @@ function capTerminalScrollbackLeafBuffers(buffers: Record<string, string> | unde
   if (!buffers) {
     return { buffers: undefined, changed: false }
   }
+
   let changed = false
   const capped: Record<string, string> = {}
+
   for (const [leafId, buffer] of Object.entries(buffers)) {
     const next = capTerminalScrollbackSessionBuffer(buffer)
     capped[leafId] = next
     changed ||= next !== buffer
   }
+
   return { buffers: Object.keys(capped).length > 0 ? capped : undefined, changed }
 }
 
@@ -82,26 +92,34 @@ export function pruneLocalTerminalScrollbackBuffers(
   const tabsByWorktree = session.tabsByWorktree ?? {}
   const terminalLayoutsByTabIdForRead = session.terminalLayoutsByTabId ?? {}
   let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
+
   for (const [tabId, layout] of Object.entries(terminalLayoutsByTabIdForRead)) {
     if (!layout.buffersByLeafId && !layout.scrollbackRefsByLeafId) {
       continue
     }
+
     repoById ??= new Map(repos.map((repo) => [repo.id, repo] as const))
+
     if (!worktreeIdByTabId) {
       worktreeIdByTabId = new Map()
+
       for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
         for (const tab of tabs) {
           worktreeIdByTabId.set(tab.id, worktreeId)
         }
       }
     }
+
     const worktreeId = worktreeIdByTabId.get(tabId)
+
     if (shouldPreserveTerminalScrollbackBuffersForRepoMap(worktreeId, repoById)) {
       const capped = capTerminalScrollbackLeafBuffers(layout.buffersByLeafId)
+
       if (capped.changed) {
         terminalLayoutsByTabId ??= { ...terminalLayoutsByTabIdForRead }
         terminalLayoutsByTabId[tabId] = { ...layout, buffersByLeafId: capped.buffers }
       }
+
       continue
     }
 

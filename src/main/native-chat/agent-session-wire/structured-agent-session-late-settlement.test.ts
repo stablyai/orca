@@ -28,9 +28,13 @@ import {
 const CALLER = { callerKey: 'client-1' }
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
+
 let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 
 function accepted(): AgentSessionDispatchOutcome {
@@ -45,6 +49,7 @@ function sendParams(text: string): {
   body: ReturnType<typeof hostTestMessage>
 } {
   const body = hostTestMessage(text)
+
   return {
     envelope: {
       sessionId: SESSION,
@@ -62,6 +67,7 @@ function sendParams(text: string): {
 
 function submissions(): unknown {
   const state = host.history({ sessionId: SESSION, direction: 'tail' })
+
   return state.ok ? state.page.submissions : null
 }
 
@@ -126,14 +132,17 @@ describe('settling a send the provider proves it received after the ack window',
         })
     )
     const events: AgentSessionSubscribeEvent[] = []
+
     const unsubscribe = host.subscribe({
       id: 'late-receipt',
       sessionId: SESSION,
       emit: (event) => events.push(event)
     })
+
     const params = sendParams('echo before send completes')
     const pending = host.send(CALLER, params)
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+
     try {
       await host.settleLateDispatch({
         sessionId: SESSION,
@@ -152,6 +161,7 @@ describe('settling a send the provider proves it received after the ack window',
       finishDispatch({ state: 'unknown', reason: 'ack timeout' })
       unsubscribe()
     }
+
     await expect(pending).resolves.toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
@@ -175,6 +185,7 @@ describe('settling a send the provider proves it received after the ack window',
         providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'closing-echo' }
       })
       void settlement.catch(() => undefined)
+
       return true
     })
 

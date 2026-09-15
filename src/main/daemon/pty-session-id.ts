@@ -30,6 +30,7 @@ export function ptySessionIdForAgentCreateOperation(
 ): string {
   // Why: keep the legacy eight-character suffix budget so max-length worktree IDs still launch.
   const suffix = operationId.slice(0, 8)
+
   return worktreeId ? `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${suffix}` : suffix
 }
 
@@ -58,12 +59,15 @@ export function isSafePtySessionId(id: string, userDataPath: string): boolean {
   if (id.length === 0 || id.length > 512) {
     return false
   }
+
   if (id.includes('\0')) {
     return false
   }
+
   const resolvedRoot = resolve(userDataPath)
   const resolvedTarget = resolve(join(userDataPath, id))
   const rel = relative(resolvedRoot, resolvedTarget)
+
   // Why: `path.relative` can return an absolute path when the target lives
   // on a different drive or under a UNC share on Windows (e.g. relative
   // from C:\userdata to D:\evil yields "D:\evil", which does NOT start with
@@ -72,5 +76,6 @@ export function isSafePtySessionId(id: string, userDataPath: string): boolean {
   if (rel === '' || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
     return false
   }
+
   return true
 }

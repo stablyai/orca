@@ -18,6 +18,7 @@ describe('web native chat preload API', () => {
 
   it('forwards validated lifecycle metadata from reads and stream frames', async () => {
     const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+
     const message = {
       id: 'a-1',
       role: 'assistant' as const,
@@ -25,6 +26,7 @@ describe('web native chat preload API', () => {
       timestamp: 42,
       source: 'transcript' as const
     }
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(): Promise<RuntimeRpcResponse<unknown>> {
@@ -52,6 +54,7 @@ describe('web native chat preload API', () => {
             },
             _meta: { runtimeId: 'runtime-1' }
           })
+
           return Promise.resolve({ unsubscribe: vi.fn() })
         }
 
@@ -95,7 +98,9 @@ describe('web native chat preload API', () => {
       timestamp: 7,
       source: 'transcript' as const
     }
+
     let deliver: (result: unknown) => void = () => {}
+
     let subscribeParams: unknown
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -112,6 +117,7 @@ describe('web native chat preload API', () => {
               result,
               _meta: { runtimeId: 'runtime-1' }
             })
+
           return Promise.resolve({ unsubscribe: vi.fn() })
         }
 
@@ -190,15 +196,18 @@ describe('web AI Vault preload API', () => {
 
   it('routes session scans through the paired runtime host', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
+
     const scanResult = {
       sessions: [],
       issues: [],
       scannedAt: '2026-07-04T00:00:00.000Z'
     }
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -243,6 +252,7 @@ describe('web AI Vault preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,

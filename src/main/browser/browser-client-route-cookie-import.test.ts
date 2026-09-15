@@ -31,18 +31,22 @@ vi.mock('./browser-cookie-import', () => ({
   importCookiesFromBrowser: importCookiesFromBrowserMock,
   selectBrowserProfile: selectBrowserProfileMock
 }))
+
 vi.mock('./browser-route-partition-binding-runtime', () => ({
   currentBrowserRoutePartitionBindingStore: () => bindingStore
 }))
+
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: getProfileMock,
     requireRouteBrowserProfile: requireRouteBrowserProfileMock
   }
 }))
+
 vi.mock('./client-route-cookie-import-source-store', () => ({
   recordClientRouteCookieImportSource: recordClientRouteImportSourceMock
 }))
+
 vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
 }))

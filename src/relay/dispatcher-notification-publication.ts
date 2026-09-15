@@ -12,27 +12,34 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     if (this.disposed) {
       return
     }
+
     const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params } : {})
     }
+
     this.runPublicationTransaction(() => {
       let frame: PreparedRelayFrame | undefined
+
       for (const client of this.clients.values()) {
         if (client.closed) {
           continue
         }
+
         if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
           continue
         }
+
         frame ??= this.prepareFrame(msg)
+
         if (method === 'pty.replay') {
           // Why: replay is never re-sent, so it takes the control lane where overflow is fatal — the
           // writer closes the client and reconnect reloads history rather than stranding a short buffer.
           this.enqueuePreparedFrame(client, frame, 'control')
           continue
         }
+
         // Why: closing can never make an oversized frame sendable — the producer regenerates it after
         // reattach and re-kills the link, turning a recoverable drop into an endless reconnect loop.
         if (!this.publishPreparedToClient(client, frame, 'ordinary')) {
@@ -55,26 +62,34 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     if (this.disposed) {
       return false
     }
+
     const client = this.clients.get(clientId)
+
     if (!client || client.closed) {
       return false
     }
+
     const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params } : {})
     }
+
     if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
       return false
     }
+
     const frame = this.prepareFrame(msg)
+
     if (this.publishPreparedToClient(client, frame, 'ordinary')) {
       return true
     }
+
     // Why: same diagnostics as notify() — a producer that drops here must not do so silently.
     if (options?.logDrop !== false) {
       this.logDroppedProducerNotification(client, method, frame.frameBytes)
     }
+
     return false
   }
 
@@ -93,13 +108,18 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
   ): boolean {
     if (this.disposed) {
       onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
+
       return false
     }
+
     const client = this.clients.get(clientId)
+
     if (!client || client.closed) {
       onSettled({ ok: false, error: new Error('Relay client is not connected') })
+
       return false
     }
+
     return this.enqueueFrame(
       client,
       {
@@ -117,16 +137,21 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     if (this.disposed) {
       return
     }
+
     const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params } : {})
     }
+
     const clients = this.activeClients()
+
     if (clients.length === 0) {
       return
     }
+
     const frame = this.prepareFrame(msg)
+
     for (const client of clients) {
       if (!this.enqueuePreparedFrame(client, frame, 'control')) {
         this.closeClient(
@@ -152,23 +177,29 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     if (this.disposed) {
       return Promise.resolve()
     }
+
     const targets =
       opts?.clientId !== undefined
         ? [this.clients.get(opts.clientId)].filter((c): c is RelayClient => c !== undefined)
         : Array.from(this.clients.values())
+
     const activeTargets = targets.filter((client) => !client.closed)
+
     if (activeTargets.length === 0) {
       return Promise.resolve()
     }
+
     const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params: { ...params } } : {})
     }
+
     let prepared:
       | { ok: true; frame: PreparedRelayFrame }
       | { ok: false; error: unknown }
       | undefined
+
     const prepareOnce = (): PreparedRelayFrame => {
       if (!prepared) {
         try {
@@ -177,23 +208,30 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
           prepared = { ok: false, error }
         }
       }
+
       if (!prepared.ok) {
         throw prepared.error
       }
+
       return prepared.frame
     }
+
     const lane = method === 'fs.streamChunk' ? 'fixed-bulk' : 'bulk'
     const waits: Promise<void>[] = []
+
     for (const client of activeTargets) {
       const step = client.bulkChain.then(() => {
         if (this.disposed || client.closed) {
           return
         }
+
         return this.publishBulkWhenAvailable(client, prepareOnce(), lane)
       })
+
       client.bulkChain = step.catch(() => {})
       waits.push(step)
     }
+
     return Promise.all(waits).then(() => {})
   }
 
@@ -204,13 +242,16 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     const overCapacity = bytes > capacity
     const key = `${method}:${overCapacity ? 'over-capacity' : 'queue-full'}`
     let log = client.droppedNotificationLog
+
     if (!log || log.generation !== client.generation) {
       log = { generation: client.generation, loggedKeys: new Set() }
       client.droppedNotificationLog = log
     }
+
     if (log.loggedKeys.has(key) || log.loggedKeys.size >= DROPPED_NOTIFICATION_LOG_KEY_LIMIT) {
       return
     }
+
     log.loggedKeys.add(key)
     process.stderr.write(
       overCapacity

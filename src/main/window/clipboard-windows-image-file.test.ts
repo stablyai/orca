@@ -12,6 +12,7 @@ function fileNameW(filePath: string): Buffer {
 function clipboardFormats(filePath: string, shellItemCount = 1) {
   const shellIdListArray = Buffer.alloc(4 + 4 * (shellItemCount + 1))
   shellIdListArray.writeUInt32LE(shellItemCount)
+
   return { fileNameW: fileNameW(filePath), shellIdListArray }
 }
 
@@ -22,6 +23,7 @@ function pngHeader(width = 10, height = 10): Buffer {
   source.write('IHDR', 12, 'ascii')
   source.writeUInt32BE(width, 16)
   source.writeUInt32BE(height, 20)
+
   return source
 }
 
@@ -58,15 +60,19 @@ function fileHandle(
   options: { chunkSize?: number; isFile?: boolean; size?: number } = {}
 ) {
   const close = vi.fn().mockResolvedValue(undefined)
+
   const read = vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
     const bytesRead = Math.min(
       Math.max(source.byteLength - position, 0),
       length,
       options.chunkSize ?? Number.POSITIVE_INFINITY
     )
+
     source.copy(buffer, offset, position, position + bytesRead)
+
     return { buffer, bytesRead }
   })
+
   return {
     close,
     read,
@@ -180,6 +186,7 @@ describe('readWindowsClipboardImageFileAsPng', () => {
     const handle = fileHandle(Buffer.alloc(0), {
       size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1
     })
+
     const createImageFromBuffer = vi.fn()
 
     await expect(
@@ -238,9 +245,11 @@ describe('readWindowsClipboardImageFileAsPng', () => {
   it('bounds malformed JPEG marker scanning before native decoding', async () => {
     const source = Buffer.alloc(2 + 2 * 4097)
     source.set([0xff, 0xd8])
+
     for (let offset = 2; offset < source.byteLength; offset += 2) {
       source.set([0xff, 0x01], offset)
     }
+
     const createImageFromBuffer = vi.fn()
 
     await expect(

@@ -14,8 +14,11 @@ export type SshPtyModelAdmissionLimits = Readonly<{
 }>
 
 const DEFAULT_PER_PTY_HIGH_SOURCE_UNITS = 256 * 1024
+
 const DEFAULT_PER_PTY_HIGH_BYTES = 2 * 1024 * 1024
+
 const DEFAULT_GLOBAL_HIGH_SOURCE_UNITS = 50 * DEFAULT_PER_PTY_HIGH_SOURCE_UNITS
+
 const DEFAULT_GLOBAL_HIGH_BYTES = 64 * 1024 * 1024
 
 export function resolveSshPtyModelAdmissionLimits(
@@ -23,6 +26,7 @@ export function resolveSshPtyModelAdmissionLimits(
 ): SshPtyModelAdmissionLimits {
   const perPtyHighSourceUnits = options.perPtyHighSourceUnits ?? DEFAULT_PER_PTY_HIGH_SOURCE_UNITS
   const perPtyHighBytes = options.perPtyHighBytes ?? DEFAULT_PER_PTY_HIGH_BYTES
+
   return {
     perPtyHighSourceUnits,
     perPtyHighBytes,

@@ -87,6 +87,7 @@ describe('projectAutomationSelector', () => {
       executionTargetGeneration: 7,
       projectId: 'repo-ssh'
     })
+
     expect(projectAutomationSelector(record, context())).toEqual({
       kind: 'ssh',
       targetId: 'ssh-1',
@@ -100,6 +101,7 @@ describe('projectAutomationSelector', () => {
       executionTargetId: 'ssh-1',
       executionTargetGeneration: 5
     })
+
     expect(projectAutomationSelector(record, context())).toEqual({
       kind: 'orphan',
       issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
@@ -120,6 +122,7 @@ describe('projectAutomationSelector', () => {
       kind: 'orphan',
       issue: AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere
     })
+
     const byHostId = automation({
       runContext: {
         kind: 'workspace-run',
@@ -130,6 +133,7 @@ describe('projectAutomationSelector', () => {
         path: '/tmp'
       }
     })
+
     expect(projectAutomationSelector(byHostId, context()).kind).toBe('orphan')
   })
 })
@@ -197,6 +201,7 @@ describe('projectAutomationList', () => {
             }
           : null
     })
+
     expect(result.items[0]?.usageSummary?.knownRuns).toBe(2)
     expect(result.items[1]?.usageSummary).toBeNull()
   })
@@ -205,29 +210,36 @@ describe('projectAutomationList', () => {
     const collectionMethodReads: string[] = []
     const repoLookups: string[] = []
     const targetLookups: string[] = []
+
     const source = new Proxy(records, {
       get(target, property, receiver) {
         if (property === 'map' || property === 'filter') {
           collectionMethodReads.push(String(property))
         }
+
         return Reflect.get(target, property, receiver)
       }
     })
+
     const usageIds: string[] = []
+
     const result = projectAutomationList(
       source,
       {
         ...context(),
         repoConnectionId: (repoId) => {
           repoLookups.push(repoId)
+
           return repoId === 'repo-1' ? null : repoId === 'repo-ssh' ? 'ssh-1' : undefined
         },
         sshTargetGeneration: (targetId) => {
           targetLookups.push(targetId)
+
           return targetId === 'ssh-1' ? 7 : undefined
         },
         usageSummary: (id) => {
           usageIds.push(id)
+
           return null
         }
       },

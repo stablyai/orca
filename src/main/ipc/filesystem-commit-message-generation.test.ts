@@ -16,48 +16,61 @@ import {
 } from './filesystem-test-harness'
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+
 vi.mock(
   '../wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
+
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+
 vi.mock(
   '../local-downloaded-folder-promotion',
   async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
+
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
+
 vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
+
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
 )
+
 vi.mock(
   '../providers/ssh-git-dispatch',
   async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
+
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
+
 vi.mock(
   '../text-generation/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
+
 vi.mock(
   '../source-control/pull-request-template',
   async () => (await import('./filesystem-test-harness')).pullRequestTemplateMock
 )
+
 vi.mock(
   '../source-control/pull-request-linked-issue',
   async () => (await import('./filesystem-test-harness')).pullRequestLinkedIssueMock
@@ -80,6 +93,7 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
@@ -111,12 +125,14 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const sourceControlAiResolvedParams = {
       agentId: 'codex' as const,
       model: 'gpt-5.5',
       thinkingLevel: 'high',
       customPrompt: 'Use Conventional Commits.'
     }
+
     getStagedCommitContextMock.mockResolvedValue(context)
     generateCommitMessageFromContextMock.mockResolvedValue({
       success: true,
@@ -149,6 +165,7 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
@@ -182,6 +199,7 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
@@ -216,6 +234,7 @@ describe('registerFilesystemHandlers', () => {
         stagedSummary: 'M\tREADME.md',
         stagedPatch: '+hello'
       }
+
       const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
       const prepareForCodexLaunch = vi.fn(() => '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex')
       resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
@@ -224,6 +243,7 @@ describe('registerFilesystemHandlers', () => {
         success: true,
         message: 'Update README'
       })
+
       const wslStore = {
         ...store,
         getRepos: () => [
@@ -281,11 +301,13 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
     const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
     generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+
     const linkedStore = {
       ...store,
       getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
@@ -314,11 +336,13 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
     const instanceId = `repo-1::${WORKTREE_FEATURE_PATH}::workspace:${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}`
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
     generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+
     const getWorktreeMeta = vi.fn((id: string) =>
       id === instanceId ? { linkedIssue: 9 } : undefined
     )
@@ -346,6 +370,7 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
     const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
@@ -377,6 +402,7 @@ describe('registerFilesystemHandlers', () => {
       executeCommitMessagePlan: vi.fn()
     })
     generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Add file' })
+
     const linkedStore = {
       ...store,
       getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
@@ -403,6 +429,7 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
@@ -427,11 +454,13 @@ describe('registerFilesystemHandlers', () => {
   it('prepares the selected Claude auth environment before local generation', async () => {
     const previousAnthropicApiKey = process.env.ANTHROPIC_API_KEY
     process.env.ANTHROPIC_API_KEY = 'do-not-leak-managed-auth-conflict'
+
     const context = {
       branch: 'feature/ai',
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'claude', model: 'haiku' }
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
@@ -457,6 +486,7 @@ describe('registerFilesystemHandlers', () => {
       const target = generateCommitMessageFromContextMock.mock.calls[0]?.[2] as
         | { env?: NodeJS.ProcessEnv }
         | undefined
+
       expect(target?.env).toEqual(
         expect.objectContaining({
           CLAUDE_CONFIG_DIR: '/managed/claude'
@@ -478,6 +508,7 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'A\tremote.txt',
       stagedPatch: '+remote'
     }
+
     const params = { agentId: 'custom', model: '', customAgentCommand: 'agent' }
     const executeCommitMessagePlan = vi.fn()
     const prepareForCodexLaunch = vi.fn(() => '/managed/codex-home')

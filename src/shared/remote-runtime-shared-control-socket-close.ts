@@ -32,6 +32,7 @@ export function closeSharedControlSocket(args: {
       error: args.error
     })
   }
+
   args.clearReadyStableTimer()
   finishCloseAfterReadySubscriptions(args.subscriptions)
   closeSharedControlSocketState({

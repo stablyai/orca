@@ -22,6 +22,7 @@ export function buildTerminalCreateWindow(args: {
     focusTerminalListenerRef,
     newTerminalTabListenerRef
   } = args
+
   return {
     dispatchEvent,
     api: {
@@ -75,6 +76,7 @@ export function buildTerminalCreateWindow(args: {
           }) => void
         ) => {
           createTerminalListenerRef.current = listener
+
           return () => {}
         },
         onRequestTerminalCreate: (
@@ -94,6 +96,7 @@ export function buildTerminalCreateWindow(args: {
           }) => void
         ) => {
           requestTerminalCreateListenerRef.current = listener
+
           return () => {}
         },
         onRequestTerminalTabMount: () => () => {},
@@ -111,6 +114,7 @@ export function buildTerminalCreateWindow(args: {
           }) => void
         ) => {
           focusTerminalListenerRef.current = listener
+
           return () => {}
         },
         onFocusEditorTab: () => () => {},
@@ -133,6 +137,7 @@ export function buildTerminalCreateWindow(args: {
         replyTabSetProfile: () => {},
         onNewTerminalTab: (listener: () => void) => {
           newTerminalTabListenerRef.current = listener
+
           return () => {}
         },
         onCloseActiveTab: () => () => {},

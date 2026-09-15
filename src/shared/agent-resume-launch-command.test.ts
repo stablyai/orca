@@ -4,7 +4,9 @@ import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from './tui-agent-
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 
 const SESSION_ID = 'claude-session-1'
+
 const RESUME = ['--resume', SESSION_ID] as const
+
 const providerSession = { key: 'session_id', id: SESSION_ID } as const
 
 const SHELLS: { platform: NodeJS.Platform; shell: AgentStartupShell }[] = [
@@ -28,9 +30,11 @@ function isSelectorShapedToken(token: string): boolean {
 function expectSingleAuthoritativeResume(command: string, shell: AgentStartupShell): void {
   const tokenized = tokenizeStartupCommand(command, shell)
   expect(tokenized.ok).toBe(true)
+
   if (!tokenized.ok) {
     return
   }
+
   const selectors = tokenized.tokens.filter(isSelectorShapedToken)
   expect(selectors).toEqual(['--resume'])
   const index = tokenized.tokens.indexOf('--resume')
@@ -518,7 +522,9 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
         shell,
         allowEmptyPromptLaunch: true
       })
+
       expect(initial).not.toBeNull()
+
       const restored = buildAgentResumeStartupPlan({
         agent: 'claude',
         providerSession,
@@ -528,6 +534,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
         platform,
         shell
       })
+
       expect(restored).not.toBeNull()
       expectSingleAuthoritativeResume(restored?.launchCommand ?? '', shell)
     }
@@ -541,6 +548,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       agentArgs: '--resume stale-session --model sonnet',
       platform: 'linux'
     })
+
     expect(restored?.launchCommand).toBe(`claude '--model' 'sonnet' '--resume' '${SESSION_ID}'`)
   })
 
@@ -552,6 +560,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       agentCommand: 'claude --model $(cat ~/.claude-model) "unterminated',
       platform: 'darwin'
     })
+
     expect(restored).not.toBeNull()
     expect(restored?.launchCommand.endsWith(`'--resume' '${SESSION_ID}'`)).toBe(true)
   })
@@ -564,6 +573,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       agentArgs: '--resume',
       platform: 'linux'
     })
+
     expect(restored?.launchCommand).toBe(`gemini '--resume' '--resume' '${SESSION_ID}'`)
   })
 
@@ -575,6 +585,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       agentCommand: "claude '--resume'",
       platform: 'linux'
     })
+
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })
 })

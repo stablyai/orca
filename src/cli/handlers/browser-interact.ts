@@ -27,11 +27,13 @@ const checkHandler =
   async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<BrowserCheckResult>('browser.check', {
       element,
       checked,
       ...target
     })
+
     printResult(result, json, (v) => (v.checked ? `Checked ${element}` : `Unchecked ${element}`))
   }
 
@@ -52,11 +54,13 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
     const element = getRequiredStringFlag(flags, 'element')
     const value = getRequiredStringFlag(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<BrowserFillResult>('browser.fill', {
       element,
       value,
       ...target
     })
+
     printResult(result, json, (v) => `Filled ${v.filled}`)
   },
   type: async ({ flags, client, cwd, json }) => {
@@ -69,11 +73,13 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
     const element = getRequiredStringFlag(flags, 'element')
     const value = getRequiredStringFlag(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<BrowserSelectResult>('browser.select', {
       element,
       value,
       ...target
     })
+
     printResult(result, json, (v) => `Selected ${v.selected}`)
   },
   check: checkHandler(true),
@@ -93,19 +99,23 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   'select-all': async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<BrowserSelectAllResult>('browser.selectAll', {
       element,
       ...target
     })
+
     printResult(result, json, (v) => `Selected all in ${v.selected}`)
   },
   keypress: async ({ flags, client, cwd, json }) => {
     const key = getRequiredStringFlag(flags, 'key')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<BrowserKeypressResult>('browser.keypress', {
       key,
       ...target
     })
+
     printResult(result, json, (v) => `Pressed ${v.pressed}`)
   },
   hover: async ({ flags, client, cwd, json }) => {
@@ -126,11 +136,13 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
     const filesStr = getRequiredStringFlag(flags, 'files')
     const files = filesStr.split(',').map((f) => f.trim())
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<BrowserUploadResult>('browser.upload', {
       element,
       files,
       ...target
     })
+
     printResult(result, json, (v) => `Uploaded ${v.uploaded} file(s)`)
   },
   scrollintoview: async ({ flags, client, cwd, json }) => {
@@ -143,22 +155,26 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
     const what = getRequiredStringFlag(flags, 'what')
     const element = getOptionalStringFlag(flags, 'element')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<unknown>('browser.get', {
       what,
       selector: element,
       ...target
     })
+
     printResult(result, json, (v) => (typeof v === 'string' ? v : JSON.stringify(v, null, 2)))
   },
   is: async ({ flags, client, cwd, json }) => {
     const what = getRequiredStringFlag(flags, 'what')
     const element = getRequiredStringFlag(flags, 'element')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<unknown>('browser.is', {
       what,
       selector: element,
       ...target
     })
+
     printResult(result, json, (v) => String(v))
   },
   inserttext: async ({ flags, client, cwd, json }) => {
@@ -199,6 +215,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
     const action = getRequiredStringFlag(flags, 'action')
     const text = getOptionalStringFlag(flags, 'text')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<unknown>('browser.find', {
       locator,
       value,
@@ -206,6 +223,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
       text,
       ...target
     })
+
     printResult(result, json, (v) => JSON.stringify(v, null, 2))
   },
   download: async ({ flags, client, cwd, json }) => {

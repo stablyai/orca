@@ -18,13 +18,16 @@ import { registerHeadlessPtyRuntime } from './register-headless-runtime'
 describe('registerHeadlessPtyRuntime', () => {
   it('registers handlers before awaiting registry hydration', async () => {
     let resolveHydration!: () => void
+
     const hydration = new Promise<void>((resolve) => {
       resolveHydration = resolve
     })
+
     const events: string[] = []
     registerHandlersMock.mockImplementation(() => events.push('handlers'))
     hydrateMock.mockImplementation(() => {
       events.push('hydrate')
+
       return hydration
     })
     const store = {} as never

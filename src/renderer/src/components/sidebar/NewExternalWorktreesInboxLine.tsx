@@ -37,6 +37,7 @@ export default function NewExternalWorktreesInboxLine({
     'auto.components.sidebar.NewExternalWorktreesInboxLine.c3e8a1f4b2',
     "Don't show again"
   )
+
   // Why: the same project on two hosts renders two identical rows, so every
   // accessible name has to name the host as well as the project.
   const repoScopeLabel = hostContextLabel
@@ -46,12 +47,15 @@ export default function NewExternalWorktreesInboxLine({
         { value0: repoDisplayName, value1: hostContextLabel }
       )
     : repoDisplayName
+
   const suppressAriaLabel = translate(
     'auto.components.sidebar.NewExternalWorktreesInboxLine.9f2d4c8b17',
     'Hide external worktrees permanently for {{value0}}',
     { value0: repoScopeLabel }
   )
+
   const isSingular = inboxCount === 1
+
   const countLabel = isSingular
     ? translate(
         'auto.components.sidebar.NewExternalWorktreesInboxLine.2a6f31d8c7',
@@ -61,6 +65,7 @@ export default function NewExternalWorktreesInboxLine({
         'auto.components.sidebar.NewExternalWorktreesInboxLine.5b90e4a2f6',
         'hidden worktrees'
       )
+
   const reviewAriaLabel = isSingular
     ? translate(
         'auto.components.sidebar.NewExternalWorktreesInboxLine.7f18c5b0d3',

@@ -22,7 +22,9 @@ import {
 } from './ActivityPrototypePage-test-fixtures'
 
 const PANE_A = makePaneKey('tab-1', LEAF_ID)
+
 const PANE_B = makePaneKey('tab-2', LEAF_ID_2)
+
 const NOW = 100_000
 
 function entry(paneKey: string, overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -43,6 +45,7 @@ type BuildArgs = Parameters<typeof buildActivityEvents>[0]
 function makeArgs(overrides: Partial<BuildArgs> = {}): BuildArgs {
   const repo = makeRepo()
   const worktree = makeWorktree()
+
   return {
     agentStatusByPaneKey: {
       [PANE_A]: entry(PANE_A),
@@ -66,10 +69,12 @@ function buildBoth(
   threadCache: AgentPaneThreadReuseCache
 ) {
   const result = buildActivityEvents(args, eventCache)
+
   const threads = buildAgentPaneThreads(
     { events: result.events, liveAgentByPaneKey: result.liveAgentByPaneKey },
     threadCache
   )
+
   return { ...result, threads }
 }
 
@@ -87,9 +92,11 @@ describe('activity build identity reuse', () => {
 
     expect(second.threads).toBe(first.threads)
     expect(second.events.map((event) => event)).toEqual(first.events.map((event) => event))
+
     for (let i = 0; i < first.events.length; i += 1) {
       expect(second.events[i]).toBe(first.events[i])
     }
+
     expect(second.liveAgentByPaneKey[PANE_B]).toBe(first.liveAgentByPaneKey[PANE_B])
   })
 
@@ -112,6 +119,7 @@ describe('activity build identity reuse', () => {
       worktreeMap: args.worktreeMap,
       repoMap: args.repoMap
     })
+
     const second = buildBoth(next, eventCache, threadCache)
 
     expect(threadByPane(second.threads, PANE_A)).toBe(threadByPane(first.threads, PANE_A))
@@ -136,6 +144,7 @@ describe('activity build identity reuse', () => {
       eventCache,
       threadCache
     )
+
     expect(threadByPane(acked.threads, PANE_B)).toBe(threadByPane(first.threads, PANE_B))
     expect(threadByPane(acked.threads, PANE_A)?.unread).toBe(false)
     expect(threadByPane(first.threads, PANE_A)?.unread).toBe(true)
@@ -152,6 +161,7 @@ describe('activity build identity reuse', () => {
       eventCache,
       threadCache
     )
+
     expect(threadByPane(cleared.threads, PANE_B)).toBe(threadByPane(first.threads, PANE_B))
     expect(threadByPane(cleared.threads, PANE_A)).toBeUndefined()
   })
@@ -169,6 +179,7 @@ describe('activity build identity reuse', () => {
       eventCache,
       threadCache
     )
+
     expect(decayed.liveAgentByPaneKey[PANE_B]).toBeUndefined()
     expect(decayed.events.some((event) => event.state === 'working')).toBe(false)
     // PANE_A had no live snapshot; its thread survives untouched.
@@ -178,6 +189,7 @@ describe('activity build identity reuse', () => {
   it('uses the same read receipt for working activity, heartbeats, and the next turn', () => {
     const eventCache = createActivityEventBuildCache()
     const threadCache = createAgentPaneThreadReuseCache()
+
     const args = makeArgs({
       agentStatusByPaneKey: {
         [PANE_B]: entry(PANE_B, {
@@ -188,6 +200,7 @@ describe('activity build identity reuse', () => {
         })
       }
     })
+
     const first = buildBoth(args, eventCache, threadCache)
     expect(first.events[0]).toMatchObject({ state: 'working', unread: true })
     expect(first.threads[0].unread).toBe(true)
@@ -202,6 +215,7 @@ describe('activity build identity reuse', () => {
       },
       now: NOW + 1_000
     }
+
     const heartbeat = buildBoth(heartbeatArgs, eventCache, threadCache)
     expect(heartbeat.events).toHaveLength(1)
     expect(heartbeat.events[0].id).toBe(first.events[0].id)
@@ -217,6 +231,7 @@ describe('activity build identity reuse', () => {
       eventCache,
       threadCache
     )
+
     expect(next.events[0].id).not.toBe(first.events[0].id)
     expect(next.threads[0].unread).toBe(true)
   })
@@ -224,6 +239,7 @@ describe('activity build identity reuse', () => {
   it('cached builds always equal a cold uncached build (no drift)', () => {
     const eventCache = createActivityEventBuildCache()
     const threadCache = createAgentPaneThreadReuseCache()
+
     const scenarios: BuildArgs[] = [
       makeArgs(),
       makeArgs({ acknowledgedAgentsByPaneKey: { [PANE_A]: NOW } }),
@@ -235,13 +251,16 @@ describe('activity build identity reuse', () => {
       }),
       makeArgs({ now: NOW + 60 * 60 * 1000 })
     ]
+
     for (const scenario of scenarios) {
       const cached = buildBoth(scenario, eventCache, threadCache)
       const cold = buildActivityEvents(scenario)
+
       const coldThreads = buildAgentPaneThreads({
         events: cold.events,
         liveAgentByPaneKey: cold.liveAgentByPaneKey
       })
+
       expect(cached.events).toEqual(cold.events)
       expect(cached.liveAgentByPaneKey).toEqual(cold.liveAgentByPaneKey)
       expect(cached.threads).toEqual(coldThreads)
@@ -251,6 +270,7 @@ describe('activity build identity reuse', () => {
   it('keeps first-source-wins dedupe when a pane is both live and retained, and evicts gone panes', () => {
     const eventCache = createActivityEventBuildCache()
     const threadCache = createAgentPaneThreadReuseCache()
+
     const retained: RetainedAgentEntry = {
       entry: entry(PANE_A, { prompt: 'retained copy' }),
       worktreeId: makeWorktree().id,
@@ -258,6 +278,7 @@ describe('activity build identity reuse', () => {
       agentType: 'claude',
       startedAt: 50_000
     }
+
     const args = makeArgs({ retainedAgentsByPaneKey: { [PANE_A]: retained } })
     const cachedResult = buildBoth(args, eventCache, threadCache)
     const cold = buildActivityEvents(args)

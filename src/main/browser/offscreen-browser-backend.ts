@@ -16,8 +16,11 @@ import { browserSessionRegistry } from './browser-session-registry'
 // required there — provisioned in the serve image, not by this code).
 
 const DEFAULT_VIEWPORT_WIDTH = 1280
+
 const DEFAULT_VIEWPORT_HEIGHT = 800
+
 const LOAD_TIMEOUT_MS = 30_000
+
 const OWNER_RETIREMENT_CONCURRENCY = 4
 
 export class OffscreenBrowserBackend implements BrowserBackend {
@@ -38,15 +41,19 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     if (this.shutdownStarted) {
       throw new Error('Offscreen browser backend is shutting down')
     }
+
     const browserPageId = params.browserPageId ?? randomUUID()
+
     if (this.windowsByPageId.has(browserPageId)) {
       throw new Error(`Browser page ${browserPageId} already exists`)
     }
+
     // Why: profiles map to Electron partitions; using the profile's partition
     // makes cookies/storage persist in the same SQLite DB the desktop path uses.
     const profile = params.profileId
       ? browserSessionRegistry.getProfile(params.profileId)
       : browserSessionRegistry.getDefaultProfile()
+
     const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
 
     const win = new BrowserWindow({
@@ -79,6 +86,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       userAgentMode: profile?.userAgentMode,
       webContentsId: win.webContents.id
     })
+
     if (!registered) {
       // Why destroy rather than carry on: the window already exists but carries none of the guest
       // policies registration installs, so leaving it would navigate an unvalidated URL with no
@@ -99,6 +107,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       if (this.windowsByPageId.get(browserPageId) !== win) {
         return
       }
+
       void this.retirePageOwner(browserPageId)
       this.windowsByPageId.delete(browserPageId)
       this.browserManager.unregisterGuest(browserPageId)
@@ -119,6 +128,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const win = this.windowsByPageId.get(browserPageId)
     this.windowsByPageId.delete(browserPageId)
     this.browserManager.unregisterGuest(browserPageId)
+
     try {
       if (win) {
         await this.retirePageOwner(browserPageId)
@@ -132,6 +142,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
   getWebContentsId(browserPageId: string): number | null {
     const win = this.windowsByPageId.get(browserPageId)
+
     return win && !win.isDestroyed() ? win.webContents.id : null
   }
 
@@ -146,12 +157,15 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
   private retirePageOwner(browserPageId: string): Promise<void> {
     const bridge = this.options.getAgentBrowserBridge?.()
+
     if (!bridge) {
       return Promise.resolve()
     }
+
     const retirement = bridge.onPageClosed(browserPageId).catch(() => {})
     this.pendingOwnerRetirements.add(retirement)
     void retirement.finally(() => this.pendingOwnerRetirements.delete(retirement))
+
     return retirement
   }
 
@@ -159,10 +173,12 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const wc = win.webContents
     await new Promise<void>((resolve, reject) => {
       let settled = false
+
       const timer = setTimeout(() => {
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
         // Why: about:blank and slow pages can resolve via timeout without a
@@ -174,10 +190,12 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
         resolve()
       }
+
       const onFail = (
         _e: unknown,
         errorCode: number,
@@ -191,27 +209,35 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         if (!isMainFrame) {
           return
         }
+
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
+
         // Why: aborted loads (-3) happen on redirects/SPA navigations and are not
         // real failures; the page is still usable.
         if (errorCode === -3) {
           resolve()
+
           return
         }
+
         reject(new Error(`${errorDescription} (${errorCode})`))
       }
+
       const onDestroyed = (): void => {
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
         resolve()
       }
+
       const cleanup = (): void => {
         clearTimeout(timer)
         wc.removeListener('did-finish-load', onFinish)

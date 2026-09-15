@@ -22,19 +22,23 @@ describe('createActivityPortalChurnBudget', () => {
   it('stays spent while the churn keeps firing', () => {
     const clock = { ms: 0 }
     const budget = budgetAt(clock)
+
     for (let i = 0; i < 500; i += 1) {
       clock.ms += 10
       budget.record()
     }
+
     expect(budget.isSpent()).toBe(true)
   })
 
   it('releases a window after the churn stops', () => {
     const clock = { ms: 0 }
     const budget = budgetAt(clock)
+
     for (let i = 0; i < 3; i += 1) {
       budget.record()
     }
+
     clock.ms += 1_000
     expect(budget.isSpent()).toBe(false)
     expect(budget.record()).toBe(false)
@@ -44,6 +48,7 @@ describe('createActivityPortalChurnBudget', () => {
     // A user hopping between threads must keep the seamless path, however long they keep hopping.
     const clock = { ms: 0 }
     const budget = budgetAt(clock)
+
     for (let i = 0; i < 100; i += 1) {
       clock.ms += 500
       expect(budget.record()).toBe(false)
@@ -54,9 +59,11 @@ describe('createActivityPortalChurnBudget', () => {
     // Date.now() jumps backwards on NTP/sleep-wake.
     const clock = { ms: 10_000 }
     const budget = budgetAt(clock)
+
     for (let i = 0; i < 3; i += 1) {
       budget.record()
     }
+
     clock.ms = 5_000
     expect(budget.isSpent()).toBe(false)
   })
@@ -64,9 +71,11 @@ describe('createActivityPortalChurnBudget', () => {
   it('clears on demand', () => {
     const clock = { ms: 0 }
     const budget = budgetAt(clock)
+
     for (let i = 0; i < 3; i += 1) {
       budget.record()
     }
+
     budget.clear()
     expect(budget.isSpent()).toBe(false)
   })

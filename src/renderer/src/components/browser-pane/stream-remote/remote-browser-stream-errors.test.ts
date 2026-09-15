@@ -21,6 +21,7 @@ describe('remote browser stream failure classification', () => {
     ]) {
       expect(isPermanentRemoteBrowserStreamFailure(rpcError(code))).toBe(true)
     }
+
     expect(isPermanentRemoteBrowserStreamFailure(remoteBrowserStreamUnsupportedError())).toBe(true)
   })
 
@@ -39,6 +40,7 @@ describe('remote browser stream failure classification', () => {
     for (const code of ['runtime_unavailable', 'runtime_timeout', 'socket_closed']) {
       expect(isPermanentRemoteBrowserStreamFailure(rpcError(code))).toBe(false)
     }
+
     expect(isPermanentRemoteBrowserStreamFailure(new Error('no code at all'))).toBe(false)
     expect(isPermanentRemoteBrowserStreamFailure(null)).toBe(false)
   })
@@ -47,6 +49,7 @@ describe('remote browser stream failure classification', () => {
     const permanent = resolveRemoteBrowserStreamRestartFailure(
       rpcError('worktree_not_found_on_server', 'worktree is gone')
     )
+
     // Its own message says something true that a generic "lost connection" would not.
     expect(permanent.message).toBe('worktree is gone')
     expect(permanent.shouldRetry).toBe(false)
@@ -55,6 +58,7 @@ describe('remote browser stream failure classification', () => {
     const transient = resolveRemoteBrowserStreamRestartFailure(
       rpcError('runtime_unavailable', 'Runtime environment is manually disconnected.')
     )
+
     expect(transient.message).toBe('Lost connection to the remote server.')
     expect(transient.shouldRetry).toBe(true)
     // Dropped from the UI but not lost: nothing else records it.

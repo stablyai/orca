@@ -32,6 +32,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 
 function makeDispatcher(): RpcDispatcher {
   const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+
   return new RpcDispatcher({ runtime, methods: CLIPBOARD_METHODS })
 }
 
@@ -48,9 +49,11 @@ async function callMobile(
     { clientKind: 'mobile', clientId }
   )
   const response = replies[0]
+
   if (!response) {
     throw new Error(`no reply for ${method}`)
   }
+
   return response
 }
 
@@ -164,6 +167,7 @@ describe('clipboard RPC methods', () => {
         connectionId: 'ssh-1'
       })
     )
+
     expect(start.ok).toBe(true)
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
@@ -203,10 +207,12 @@ describe('clipboard RPC methods', () => {
     saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/orca-paste-image.png')
     const dispatcher = makeDispatcher()
     const contentBase64 = Buffer.from('png-bytes').toString('base64')
+
     const start = await callMobile(dispatcher, 'clipboard.startImageUpload', {
       expectedBase64Length: contentBase64.length,
       connectionId: null
     })
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
     for (const method of [
@@ -218,6 +224,7 @@ describe('clipboard RPC methods', () => {
         method === 'clipboard.appendImageUploadChunk'
           ? { uploadId: uploadId.uploadId, offset: 0, contentBase64 }
           : { uploadId: uploadId.uploadId }
+
       await expect(callMobile(dispatcher, method, params, 'device-b')).resolves.toMatchObject({
         ok: false
       })
@@ -242,12 +249,14 @@ describe('clipboard RPC methods', () => {
 
   it('rejects out-of-order chunk offsets', async () => {
     const dispatcher = makeDispatcher()
+
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: 8,
         connectionId: null
       })
     )
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
     const response = await dispatcher.dispatch(
@@ -264,12 +273,14 @@ describe('clipboard RPC methods', () => {
 
   it('rejects invalid base64 chunks and oversized chunks', async () => {
     const dispatcher = makeDispatcher()
+
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS + 4,
         connectionId: null
       })
     )
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
     await expect(
@@ -295,12 +306,14 @@ describe('clipboard RPC methods', () => {
   it('rejects oversized clipboard image upload chunks before base64 validation', async () => {
     const base64Test = vi.spyOn(RegExp.prototype, 'test')
     const dispatcher = makeDispatcher()
+
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS + 4,
         connectionId: null
       })
     )
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
     try {
@@ -336,12 +349,14 @@ describe('clipboard RPC methods', () => {
 
   it('rejects commit until all expected bytes arrive', async () => {
     const dispatcher = makeDispatcher()
+
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: 8,
         connectionId: null
       })
     )
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
     await dispatcher.dispatch(
       makeRequest('clipboard.appendImageUploadChunk', {
@@ -361,12 +376,14 @@ describe('clipboard RPC methods', () => {
 
   it('validates the complete base64 payload before saving', async () => {
     const dispatcher = makeDispatcher()
+
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: 8,
         connectionId: null
       })
     )
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
     await dispatcher.dispatch(
       makeRequest('clipboard.appendImageUploadChunk', {
@@ -393,12 +410,14 @@ describe('clipboard RPC methods', () => {
 
   it('deletes upload state after abort and treats repeated aborts as success', async () => {
     const dispatcher = makeDispatcher()
+
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: 4,
         connectionId: null
       })
     )
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
     await expect(
@@ -422,12 +441,14 @@ describe('clipboard RPC methods', () => {
     saveClipboardImageBufferAsTempFile.mockRejectedValue(new Error('ssh write failed'))
     const dispatcher = makeDispatcher()
     const contentBase64 = Buffer.from('png-bytes').toString('base64')
+
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: contentBase64.length,
         connectionId: 'ssh-1'
       })
     )
+
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
     await dispatcher.dispatch(
       makeRequest('clipboard.appendImageUploadChunk', {
@@ -453,6 +474,7 @@ describe('clipboard RPC methods', () => {
   it('bounds concurrent uploads and releases slots through TTL cleanup', async () => {
     vi.useFakeTimers()
     const dispatcher = makeDispatcher()
+
     for (let index = 0; index < CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT; index++) {
       await expect(
         dispatcher.dispatch(
@@ -463,6 +485,7 @@ describe('clipboard RPC methods', () => {
         )
       ).resolves.toMatchObject({ ok: true })
     }
+
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.startImageUpload', {

@@ -16,10 +16,12 @@ function registerMobileTestSurface(args: {
   let leafIds = [...args.leafIds]
   let activeLeafId = args.activeLeafId
   const paneIdByLeafId = new Map(args.leafIds.map((leafId, index) => [leafId, index + 1]))
+
   const manager = {
     getPanes: () => leafIds.map((leafId) => ({ id: paneIdByLeafId.get(leafId)!, leafId })),
     getActivePane: () => {
       const paneId = paneIdByLeafId.get(activeLeafId)
+
       return !paneId || !leafIds.includes(activeLeafId)
         ? null
         : { id: paneId, leafId: activeLeafId }
@@ -29,6 +31,7 @@ function registerMobileTestSurface(args: {
     getNumericIdForLeaf: (leafId: string) =>
       leafIds.includes(leafId) ? (paneIdByLeafId.get(leafId) ?? null) : null
   }
+
   return {
     unregister: registerRuntimeTerminalTab({
       tabId: args.tabId,
@@ -48,6 +51,7 @@ function registerMobileTestSurface(args: {
 describe('buildMobileSessionTabSnapshots', () => {
   it('publishes the native-chat launch draft on terminal surface tabs', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Terminal 1', launchAgent: 'claude' }]
@@ -84,6 +88,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('retracts a launch draft as soon as mobile resolves it', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Terminal 1', launchAgent: 'claude' }]
@@ -115,6 +120,7 @@ describe('buildMobileSessionTabSnapshots', () => {
     // consumer declines on mismatch; publishing anyway would prefill the new
     // agent's mobile chat with the previous agent's link.
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Terminal 1', launchAgent: 'codex' }]
@@ -145,12 +151,14 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('keeps agent identity and launch context off a plain sibling leaf', () => {
     const agentLeafId = '11111111-1111-4111-8111-111111111111'
     const shellLeafId = '22222222-2222-4222-8222-222222222222'
+
     const surface = registerMobileTestSurface({
       tabId: 'term-1',
       leafIds: [agentLeafId, shellLeafId],
       activeLeafId: shellLeafId,
       launchAgentLeafId: agentLeafId
     })
+
     try {
       const state = makeState({
         tabsByWorktree: {
@@ -222,14 +230,17 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('re-engages tab-wide launch context after the owning leaf becomes the sole leaf', () => {
     const agentLeafId = '33333333-3333-4333-8333-333333333333'
     const shellLeafId = '44444444-4444-4444-8444-444444444444'
+
     const surface = registerMobileTestSurface({
       tabId: 'term-collapse',
       leafIds: [agentLeafId, shellLeafId],
       activeLeafId: shellLeafId,
       launchAgentLeafId: agentLeafId
     })
+
     try {
       surface.setTopology([agentLeafId], agentLeafId)
+
       const state = makeState({
         tabsByWorktree: {
           'wt-1': [
@@ -280,14 +291,17 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('keeps split-leaf ownership stable across reorder and active-leaf changes', () => {
     const agentLeafId = '55555555-5555-4555-8555-555555555555'
     const shellLeafId = '66666666-6666-4666-8666-666666666666'
+
     const surface = registerMobileTestSurface({
       tabId: 'term-reorder',
       leafIds: [agentLeafId, shellLeafId],
       activeLeafId: agentLeafId,
       launchAgentLeafId: agentLeafId
     })
+
     try {
       surface.setTopology([shellLeafId, agentLeafId], shellLeafId)
+
       const state = makeState({
         activeTabId: 'term-reorder',
         tabsByWorktree: {
@@ -337,6 +351,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('preserves single-leaf tab-wide identity while provider status is arriving', () => {
     const leafId = '77777777-7777-4777-8777-777777777777'
+
     const state = makeState({
       tabsByWorktree: {
         'wt-1': [
@@ -372,6 +387,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('publishes terminal pane agent status', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = `term-1:${leafId}`
+
     const state = makeState({
       tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
       tabsByWorktree: {
@@ -416,6 +432,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('does not publish terminal pane agent status for the Claude agents screen behind a custom title', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = `term-1:${leafId}`
+
     const state = makeState({
       tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
       tabsByWorktree: {
@@ -455,6 +472,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('publishes generated terminal titles to mobile snapshots only when enabled', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const base = makeState({
       settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: false },
       tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
@@ -496,6 +514,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('publishes quick command labels to mobile snapshots before generated titles', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
       tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
@@ -530,6 +549,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('publishes the desktop-resolved terminal theme for mobile terminal tabs', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       settings: {
         ...getDefaultSettings('/tmp'),
@@ -574,6 +594,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('uses the explicit system appearance for mobile terminal theme snapshots', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       settings: {
         ...getDefaultSettings('/tmp'),

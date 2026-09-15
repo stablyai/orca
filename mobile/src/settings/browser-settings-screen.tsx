@@ -55,6 +55,7 @@ export default function BrowserSettingsScreen({
         }
       }
     )
+
     return () => {
       active = false
     }

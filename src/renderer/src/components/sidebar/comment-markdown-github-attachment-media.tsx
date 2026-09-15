@@ -4,8 +4,10 @@ export function isGitHubUserAttachmentUrl(href: string | undefined): href is str
   if (!href) {
     return false
   }
+
   try {
     const url = new URL(href)
+
     return (
       url.protocol === 'https:' &&
       url.hostname === 'github.com' &&
@@ -18,6 +20,7 @@ export function isGitHubUserAttachmentUrl(href: string | undefined): href is str
 
 function isBareAutolink(children: React.ReactNode, href: string): boolean {
   const text = React.Children.toArray(children).join('').trim()
+
   return text === href
 }
 

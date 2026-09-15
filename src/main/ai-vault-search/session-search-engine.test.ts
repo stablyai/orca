@@ -20,6 +20,7 @@ afterEach(async () => {
 
 async function open(name: string, options = {}): Promise<SessionSearchHarness> {
   harness = await openSessionSearchHarness(name, options)
+
   return harness
 }
 
@@ -34,6 +35,7 @@ describe('the route ladder tries phrase, then AND, then repair, then OR', () => 
   ): Promise<SessionSearchResponse> {
     const { db, engine } = await open('ss-engine-route')
     addSyntheticSession(db, { id: 1, text })
+
     return engine.search(request)
   }
 
@@ -103,6 +105,7 @@ describe('scope picks the corpus and never switches it', () => {
     const opened = await open('ss-engine-scope')
     addSyntheticSession(opened.db, { id: 1, text: 'harbor pilot manifest', role: 'user' })
     addSyntheticSession(opened.db, { id: 2, text: 'harbor tool output line', role: 'tool' })
+
     return opened
   }
 
@@ -180,9 +183,11 @@ describe('the conversation scope is a column filter, and it binds the whole quer
     expect(hit?.evidence?.snippet).not.toContain('output')
     // And asked for a tool-only row directly, it has nothing to show.
     addSyntheticSession(db, { id: 2, text: 'harbor tool output line', role: 'tool' })
+
     const rowid = Number(
       (db.prepare('SELECT max(id) AS id FROM messages').get() as { id: number }).id
     )
+
     const plan = planSessionSearchQuery('harbor')
     expect(sessionSearchSnippet(db, 'conversation', rowid, plan)).toEqual(EMPTY_SNIPPET)
     expect(sessionSearchSnippet(db, 'all', rowid, plan).text).toContain('output')
@@ -209,9 +214,11 @@ describe('a session is one hit, however many of its rows matched', () => {
 
   it('folds forks the same way for an operator-only page as for a text page', async () => {
     const { db, engine } = await open('ss-engine-forks')
+
     for (const id of [1, 2, 3, 4]) {
       addSyntheticSession(db, { id, updatedAt: `2026-09-0${id}T00:00:00.000Z` })
     }
+
     markFork(db, [1, 2, 3, 4], 'shared-fork-prefix')
     const operatorOnly = engine.search({ query: 'repo:app' })
     const withText = engine.search({ query: 'needle repo:app' })
@@ -355,6 +362,7 @@ describe('the engine carries its own schema and puts it back', () => {
     db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
 
     expect(() => ensureSessionSearchQuerySchema(db)).toThrow('missing messages_fts')
+
     for (const scope of ['all', 'conversation'] as const) {
       expect(() => engine.search({ query: 'coalesces', scope })).toThrow(/missing messages_fts/i)
     }
@@ -364,11 +372,13 @@ describe('the engine carries its own schema and puts it back', () => {
     const { db, engine } = await open('ss-engine-vocab-returns')
     addSyntheticSession(db, { id: 1, text: 'coalesces here now' })
     addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
+
     const fts = (
       db.prepare("SELECT sql FROM sqlite_master WHERE name = 'messages_fts'").get() as {
         sql: string
       }
     ).sql
+
     db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
     expect(() => ensureSessionSearchQuerySchema(db)).toThrow('missing messages_fts')
 
@@ -405,9 +415,11 @@ describe('a query the engine had to cut says so', () => {
     const { db, engine } = await open('ss-engine-id-batching', {
       sessionCandidateLimit: 1200
     })
+
     for (let id = 1; id <= 1100; id++) {
       addSyntheticSession(db, { id, text: 'needle' })
     }
+
     const result = engine.search({ query: 'needle', limit: 5 })
     expect(result.hits).toHaveLength(5)
     expect(result.truncated.candidates).toBe(false)

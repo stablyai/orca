@@ -8,15 +8,19 @@ import CloseTerminalDialog from './CloseTerminalDialog'
  *  outside any pane's React tree. */
 export default function RunningTerminalCloseDialog(): React.JSX.Element {
   const request = useRunningTerminalCloseConfirmStore((state) => state.runningTerminalCloseConfirm)
+
   const confirmClose = useRunningTerminalCloseConfirmStore(
     (state) => state.confirmRunningTerminalClose
   )
+
   const confirmAllCloses = useRunningTerminalCloseConfirmStore(
     (state) => state.confirmAllRunningTerminalCloses
   )
+
   const dismissClose = useRunningTerminalCloseConfirmStore(
     (state) => state.dismissRunningTerminalClose
   )
+
   const updateSettings = useAppStore((state) => state.updateSettings)
   // Why: this queue is async (it opens after a probe) while the pinned queue is synchronous,
   // so both can be pending at once. Wait rather than stack two modal overlays and focus traps.
@@ -36,8 +40,10 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element {
           void updateSettings({ skipCloseTerminalWithRunningProcessConfirm: true })
           // Why: the user just opted out of this prompt; a queued one must not still appear.
           confirmAllCloses()
+
           return
         }
+
         confirmClose()
       }}
     />

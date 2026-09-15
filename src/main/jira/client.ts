@@ -32,12 +32,14 @@ export function getClients(selection?: JiraSiteSelection | null): JiraClientForS
   const file = getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
   const isAllSelection = selected === 'all'
+
   const sites = isAllSelection
     ? file.sites
     : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
 
   return sites.flatMap((site) => {
     let token: string | null
+
     try {
       token = readToken(site.id)
     } catch (error) {
@@ -49,8 +51,10 @@ export function getClients(selection?: JiraSiteSelection | null): JiraClientForS
       if (isAllSelection && error instanceof CredentialDecryptionError) {
         return []
       }
+
       throw error
     }
+
     return token ? [{ site, authorization: authHeader(site.email, token, site.authType) }] : []
   })
 }
@@ -59,9 +63,11 @@ export function getStatus(): JiraConnectionStatus {
   const file = getSiteFile()
   const sites = file.sites.filter((site) => hasStoredToken(site.id))
   const activeSite = sites.find((site) => site.id === file.activeSiteId) ?? sites[0] ?? null
+
   const credentialError = sites
     .map((site) => credentialErrors.get(site.id))
     .find((message) => message !== undefined)
+
   return {
     connected: sites.length > 0,
     viewer: siteToViewer(activeSite),
@@ -76,6 +82,7 @@ export async function connect(
   args: JiraConnectArgs
 ): Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }> {
   let siteUrl: string
+
   try {
     siteUrl = normalizeJiraSiteUrl(args.siteUrl)
   } catch {
@@ -85,6 +92,7 @@ export async function connect(
   const authType: JiraAuthType = args.authType === 'server' ? 'server' : 'cloud'
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
+
   if (authType === 'server') {
     if (!apiToken) {
       // A username present means classic Basic auth (password); its absence
@@ -99,8 +107,10 @@ export async function connect(
   }
 
   await acquire()
+
   try {
     const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
+
     const viewer = toViewer(
       (await requestWithCredentials(
         siteUrl,
@@ -112,11 +122,13 @@ export async function connect(
       )) as Record<string, unknown>,
       email || siteUrl
     )
+
     // PAT sites have no email, so keying on it alone would collide every PAT
     // connection to the same host into one id (silently overwriting a prior
     // account + token). Fall back to the verified viewer identity so distinct
     // accounts stay distinct. Cloud/Basic keep keying on their non-empty email.
     const id = getSiteId(siteUrl, email || viewer.accountId)
+
     const site: JiraSite = {
       id,
       siteUrl,
@@ -125,6 +137,7 @@ export async function connect(
       accountId: viewer.accountId,
       authType
     }
+
     saveToken(id, apiToken)
     const file = getSiteFile()
     writeSiteFile({
@@ -133,6 +146,7 @@ export async function connect(
       selectedSiteId: id,
       sites: [site, ...file.sites.filter((entry) => entry.id !== id)]
     })
+
     return { ok: true, viewer }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
@@ -144,9 +158,11 @@ export async function connect(
 export function disconnect(siteId?: string): void {
   const file = getSiteFile()
   const ids = siteId ? [siteId] : file.sites.map((site) => site.id)
+
   for (const id of ids) {
     deleteToken(id)
   }
+
   // Why: drop cached attachment data URLs for disconnected sites so main does
   // not retain multi-MB strings after logout.
   clearAttachmentImagesForSite(siteId)
@@ -160,14 +176,17 @@ export function disconnect(siteId?: string): void {
 
 export function selectSite(siteId: JiraSiteSelection): JiraConnectionStatus {
   const file = getSiteFile()
+
   if (siteId !== 'all' && !file.sites.some((site) => site.id === siteId)) {
     return getStatus()
   }
+
   writeSiteFile({
     ...file,
     activeSiteId: siteId === 'all' ? file.activeSiteId : siteId,
     selectedSiteId: siteId
   })
+
   return getStatus()
 }
 
@@ -175,20 +194,25 @@ export async function testConnection(
   siteId?: string
 ): Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }> {
   let client: JiraClientForSite | undefined
+
   try {
     client = getClients(siteId)[0]
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
   }
+
   if (!client) {
     return { ok: false, error: 'Not connected to Jira.' }
   }
+
   await acquire()
+
   try {
     const viewer = toViewer(
       (await jiraRequest(client, `${apiBasePath(client.site)}/myself`)) as Record<string, unknown>,
       client.site.email
     )
+
     return { ok: true, viewer }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }

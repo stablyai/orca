@@ -123,11 +123,13 @@ describe('simulator-palette-search', () => {
   it('keeps same-id simulator tabs isolated by execution host', () => {
     const sharedId = 'repo-shared::/workspace'
     const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
+
     const remote = makeWorktree({
       id: sharedId,
       hostId: 'runtime:host-b',
       displayName: 'Remote workspace'
     })
+
     const entries = buildSearchableSimulatorTabs({
       worktrees: [local, remote],
       repoMap: new Map([[local.repoId, { displayName: 'repo/mobile' }]]),
@@ -174,6 +176,7 @@ describe('simulator-palette-search', () => {
 
   it('does not route one ambiguous legacy simulator bucket to both hosts', () => {
     const sharedId = 'repo-shared::/workspace'
+
     const entries = buildSearchableSimulatorTabs({
       worktrees: [
         makeWorktree({ id: sharedId, hostId: 'local' }),
@@ -351,6 +354,7 @@ describe('simulator-palette-search', () => {
 
   it('marks the current simulator tab from the active unified group', () => {
     const worktree = makeWorktree()
+
     const entries = buildSearchableSimulatorTabs({
       worktrees: [worktree],
       repoMap: new Map([[worktree.repoId, { displayName: 'repo/mobile' }]]),
@@ -373,6 +377,7 @@ describe('simulator-palette-search', () => {
 
   it('rejects a query with more unique tokens than the matcher accepts', () => {
     const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
+
     const entries = [
       makeEntry({
         tab: makeTab(),
@@ -389,6 +394,7 @@ describe('simulator-palette-search', () => {
 
   it('rejects oversized pasted queries before scanning simulator tabs', () => {
     const oversizedQuery = 'secret-simulator-palette'.repeat(SIMULATOR_PALETTE_QUERY_MAX_BYTES)
+
     const entry = {
       get tab(): Tab {
         throw new Error('oversized simulator palette queries must not scan tabs')

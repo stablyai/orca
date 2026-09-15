@@ -61,6 +61,7 @@ describe('openMobileEmulatorTab', () => {
     vi.mocked(ensureSimulatorTab).mockReset()
     vi.mocked(ensureSimulatorTab).mockImplementation((worktreeId) => {
       mockStoreState.unifiedTabsByWorktree[worktreeId] = [{ id: 'sim-1', contentType: 'simulator' }]
+
       return 'sim-1'
     })
     vi.mocked(getSimulatorTabForWorktree).mockReset()
@@ -94,11 +95,13 @@ describe('openMobileEmulatorTab', () => {
     const calls: string[] = []
     vi.mocked(callRuntimeRpc).mockImplementation(async () => {
       calls.push('attach')
+
       return mockAttachResult
     })
     vi.mocked(ensureSimulatorTab).mockImplementation(() => {
       calls.push('ensure')
       mockStoreState.unifiedTabsByWorktree['wt-1'] = [{ id: 'sim-1', contentType: 'simulator' }]
+
       return 'sim-1'
     })
 
@@ -121,6 +124,7 @@ describe('openMobileEmulatorTab', () => {
 
   it('marks manual launch pending only while attach is in flight', async () => {
     let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
+
     vi.mocked(callRuntimeRpc).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -150,6 +154,7 @@ describe('openMobileEmulatorTab', () => {
 
   it('does not start a duplicate attach while a manual launch is already pending', async () => {
     let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
+
     vi.mocked(callRuntimeRpc).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -167,15 +172,18 @@ describe('openMobileEmulatorTab', () => {
 
   it('shuts down the managed emulator if the tab closes before attach resolves', async () => {
     let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
+
     vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
       if (method === 'emulator.attach') {
         return new Promise((resolve) => {
           resolveAttach = resolve
         })
       }
+
       if (method === 'emulator.shutdown') {
         return { ok: true }
       }
+
       throw new Error(`Unexpected RPC method: ${method}`)
     })
 
@@ -249,15 +257,18 @@ describe('openMobileEmulatorTab', () => {
     )
 
     expect(ensureSimulatorTab).toHaveBeenCalledTimes(2)
+
     const attachCalls = vi
       .mocked(callRuntimeRpc)
       .mock.calls.filter(([, method]) => method === 'emulator.attach')
+
     expect(attachCalls).toHaveLength(1)
     expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
   })
 
   it('does not release another in-flight launch when duplicate tab creation throws', async () => {
     let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
+
     vi.mocked(callRuntimeRpc).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -272,6 +283,7 @@ describe('openMobileEmulatorTab', () => {
             contentType: 'simulator'
           }
         ]
+
         return 'sim-1'
       })
       .mockImplementationOnce(() => {

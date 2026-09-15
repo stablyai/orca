@@ -40,8 +40,10 @@ describe('persisted connection log store', () => {
         message: 'Relay: active relay session failed'
       }
     ]
+
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(stored))
     vi.resetModules()
+
     const { connectionLogStore, recordConnectionClientSessionStart } =
       await import('./persisted-connection-log-store')
 

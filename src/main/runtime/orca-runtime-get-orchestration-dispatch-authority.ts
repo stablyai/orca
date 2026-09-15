@@ -28,18 +28,23 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   protected collectPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = new Set<string>()
     const pty = this.ptysById.get(ptyId)
+
     if (pty?.paneKey && parsePaneKey(pty.paneKey)) {
       paneKeys.add(pty.paneKey)
     }
+
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
+
     if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
       paneKeys.add(receipt.paneKey)
     }
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
         paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
       }
     }
+
     return paneKeys
   }
 
@@ -47,6 +52,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = this.collectPaneKeysForPty(ptyId)
     const terminalHandles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
+
     // The provider-session snapshot is the unfiltered store view, so certified exit can also
     // retire a dismissed row's identity-only remnant after its pane binding moved.
     for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
@@ -54,16 +60,21 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
         paneKeys.add(row.paneKey)
       }
     }
+
     const ptyPaneKey = this.ptysById.get(ptyId)?.paneKey
+
     if (ptyPaneKey && parseLegacyNumericPaneKey(ptyPaneKey)) {
       paneKeys.add(ptyPaneKey)
     }
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       const paneKey = this.makeRuntimePaneKey(leaf)
+
       if (parseLegacyNumericPaneKey(paneKey)) {
         paneKeys.add(paneKey)
       }
     }
+
     return paneKeys
   }
 
@@ -74,6 +85,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       terminalHandle,
       this.getOrchestrationDbIfAvailable?.() ?? null
     )
+
     if (structured) {
       return {
         runtimeId: this.runtimeId,
@@ -90,7 +102,9 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
         hostScope: structured.identity.hostScope
       }
     }
+
     let ptyId: string | null
+
     try {
       ptyId =
         this.getLivePtyForHandle(terminalHandle)?.pty.ptyId ??
@@ -99,17 +113,23 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     } catch {
       return null
     }
+
     if (!ptyId) {
       return null
     }
+
     const pty = this.ptysById.get(ptyId)
+
     if (!pty?.connected) {
       return null
     }
+
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
+
     if (!hostScope) {
       return null
     }
+
     return {
       runtimeId: this.runtimeId,
       terminalHandle,
@@ -126,13 +146,17 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
+
     if (!pty) {
       return
     }
+
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
+
     if (!pty.launchToken && !receipt && !pty.launchAgent) {
       return
     }
+
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
@@ -140,6 +164,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     pty.launchToken = null
     pty.launchIncarnationId = null
     pty.launchAgent = null
+
     for (const paneKey of paneKeys) {
       this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
     }
@@ -147,15 +172,20 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
 
   async resolveTerminalCwd(handle: string): Promise<string | null> {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
+
     if (!ptyId) {
       return null
     }
+
     const tracked = this.terminalCwdByPtyId.get(ptyId)
+
     if (tracked) {
       return tracked
     }
+
     try {
       const cwd = await this.ptyController?.getCwd?.(ptyId)
+
       return cwd && cwd.trim().length > 0 ? cwd : null
     } catch {
       return null
@@ -164,11 +194,13 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
 
   resolveTerminalFileUriHostname(handle: string): string | null {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
+
     return ptyId ? (this.terminalFileUriHostnameByPtyId.get(ptyId) ?? null) : null
   }
 
   protected recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void {
     let recentOutputBuffer = this.recentPtyOutputById.get(ptyId)
+
     if (!recentOutputBuffer) {
       // Boundaries are only owed to the one-time activation backfill; once
       // tracking is live, new buffers keep the read-collapsing hot path.
@@ -177,7 +209,9 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       })
       this.recentPtyOutputById.set(ptyId, recentOutputBuffer)
     }
+
     recentOutputBuffer.append(data)
+
     if (
       this.recentPtyPathCandidateTrackingActive ||
       // Why: an over-window chunk is stored pre-sliced, so activation backfill
@@ -196,7 +230,9 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     if (this.recentPtyPathCandidateTrackingActive) {
       return
     }
+
     this.recentPtyPathCandidateTrackingActive = true
+
     // Why: synchronous backfill from the retained raw windows so a file tap
     // right after first mobile connect resolves exactly as before the gate.
     // Replay each retained chunk in its original full form: joining or
@@ -208,6 +244,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     for (const [ptyId, buffer] of this.recentPtyOutputById) {
       let candidates = this.recentPtyPathCandidatesById.get(ptyId)
       const { chunks, headChunkIsPartial } = buffer.retainedChunks()
+
       for (let index = 0; index < chunks.length; index += 1) {
         if (index === 0 && headChunkIsPartial) {
           // A pre-sliced over-window chunk was already extracted eagerly at
@@ -215,11 +252,14 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
           // truncated remainder would mint or drop candidates spuriously.
           continue
         }
+
         candidates = appendRecentPtyPathCandidates(candidates, chunks[index]!)
       }
+
       if (candidates) {
         this.recentPtyPathCandidatesById.set(ptyId, candidates)
       }
+
       // Chunk boundaries were owed only to this one-time backfill; return
       // the buffer to the compact read-collapsing steady state.
       buffer.compact()
@@ -231,6 +271,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   ): { worktreeId: string; connectionId: string | null } | null {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
     const pty = ptyId ? this.ptysById.get(ptyId) : null
+
     return pty ? { worktreeId: pty.worktreeId, connectionId: pty.connectionId } : null
   }
 
@@ -250,15 +291,18 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
 
   getTerminalOrchestrationCliCommand(handle: string): OrchestrationCliCommand {
     let pty: RuntimePtyWorktreeRecord | null = null
+
     try {
       const ptyId = this.resolveLeafForHandle(handle)?.ptyId
       pty = ptyId ? (this.ptysById.get(ptyId) ?? null) : null
     } catch {
       return 'orca'
     }
+
     if (!pty) {
       return 'orca'
     }
+
     return resolveTerminalOrchestrationCliCommand({
       connectionId: pty.connectionId,
       isWsl: pty.isWsl,

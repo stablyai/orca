@@ -30,12 +30,15 @@ describe('registerSvelteLanguage registration', () => {
   // (ids, extensions, idempotence), which no amount of tokenizing can observe.
   it('registers the svelte language, Monarch tokenizer, and configuration once', () => {
     const languages: { id: string }[] = [{ id: 'typescript' }]
+
     const register = vi.fn((entry: { id: string }) => {
       languages.push({ id: entry.id })
     })
+
     const setMonarchTokensProvider = vi.fn()
     const setLanguageConfiguration = vi.fn()
     const getLanguages = vi.fn(() => languages)
+
     const monacoMock = {
       languages: {
         register,
@@ -230,6 +233,7 @@ describe('svelte root state invariant', () => {
   // first character of a file. Guard every root rule, exercised or not.
   it('has no root rule that pops an embedded language', () => {
     const rootRules = (svelteMonarchLanguage.tokenizer as Record<string, unknown[]>).root
+
     const popRules = rootRules.filter(
       (rule) =>
         Array.isArray(rule) && (rule[1] as { nextEmbedded?: string })?.nextEmbedded === '@pop'

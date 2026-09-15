@@ -44,6 +44,7 @@ async function performDiscardPreparedWorktree(
     ...gitCleanupOptions(repoPath, options),
     timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
   }
+
   try {
     // Preserve the ownership lock if removal cannot start; Git 2.25 supports locked removal.
     await gitExecFileAsync(
@@ -75,6 +76,7 @@ export async function prepareWorktreeCreateCheckout(
         const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
           hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
         )
+
         try {
           await gitExecFileAsync(
             [
@@ -140,6 +142,7 @@ export async function unlockPreparedWorktree(
     ...gitCleanupOptions(repoPath, options),
     timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
   }
+
   try {
     await runWithGitReadCacheInvalidation(() =>
       gitExecFileAsync(
@@ -160,18 +163,22 @@ async function removeFailedFinalization(
   options: GitWorktreeExecOptions
 ): Promise<void> {
   let branchAttached = false
+
   if (moved) {
     try {
       const { stdout } = await gitExecFileAsync(
         ['symbolic-ref', '--short', 'HEAD'],
         gitCleanupOptions(cleanupPath, options)
       )
+
       branchAttached = stdout.trim() === branch
     } catch {
       // Detached or no longer readable.
     }
   }
+
   await performDiscardPreparedWorktree(repoPath, cleanupPath, options).catch(() => {})
+
   if (branchAttached) {
     await gitExecFileAsync(
       ['branch', '-D', '--', branch],
@@ -193,6 +200,7 @@ export async function finalizePreparedWorktree(
     ...options,
     timeout: options.timeout ?? resolveWorktreeAddTimeoutMs()
   }
+
   try {
     return await runWithGitReadCacheInvalidation(async () => {
       const [targetResult, preparedResult] = await Promise.allSettled([
@@ -203,6 +211,7 @@ export async function finalizePreparedWorktree(
             refreshLocalBaseRef,
             finalizeGitOptions
           )
+
           const targetHead =
             baseContext.effectiveBaseOid ??
             (
@@ -211,6 +220,7 @@ export async function finalizePreparedWorktree(
                 gitExecOptions(repoPath, finalizeGitOptions)
               )
             ).stdout.trim()
+
           return { baseContext, targetHead }
         })(),
         gitExecFileAsync(
@@ -218,15 +228,19 @@ export async function finalizePreparedWorktree(
           gitExecOptions(preparedPath, finalizeGitOptions)
         )
       ])
+
       // Settle both reads before failure cleanup can remove the prepared checkout.
       if (targetResult.status === 'rejected') {
         throw targetResult.reason
       }
+
       if (preparedResult.status === 'rejected') {
         throw preparedResult.reason
       }
+
       const { baseContext, targetHead } = targetResult.value
       const preparedHeadOutput = preparedResult.value.stdout
+
       if (preparedHeadOutput.trim() !== targetHead) {
         await gitExecFileAsync(
           [...windowsLongPathGitArgs(preparedPath), 'reset', '--hard', targetHead],
@@ -235,6 +249,7 @@ export async function finalizePreparedWorktree(
       }
 
       let moved = false
+
       try {
         try {
           // Why: `-f -f` moves the locked preparation while preserving its lock reason (Git >=2.25).
@@ -256,6 +271,7 @@ export async function finalizePreparedWorktree(
           invalidateWslLinkedWorktreeGitRouting(preparedPath)
           invalidateWslLinkedWorktreeGitRouting(worktreePath)
         }
+
         await gitExecFileAsync(
           [
             ...windowsLongPathGitArgs(worktreePath),
@@ -288,6 +304,7 @@ export async function finalizePreparedWorktree(
         )
         throw error
       }
+
       return {
         ...(baseContext.localBaseRefRefresh
           ? { localBaseRefRefresh: baseContext.localBaseRefRefresh }

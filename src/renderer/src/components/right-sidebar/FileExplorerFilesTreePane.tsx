@@ -61,6 +61,7 @@ export function FileExplorerFilesTreePane({
 }: FileExplorerFilesTreePaneProps): React.JSX.Element {
   const { loadingDirPaths, rootCache, rootError } = tree
   const { selectedPaths, preserveSelectionForContextMenu, copyPathsForNode } = selection
+
   const {
     scrollRef,
     runtimeDownloadContext,
@@ -75,10 +76,13 @@ export function FileExplorerFilesTreePane({
     handlers,
     nodeCommands
   } = paneState
+
   const { inlineInput, inlineInputIndex, startNew, dismissInlineInput, handleInlineSubmit } =
     inlineInputState
+
   const { virtualizer, flashingPath } = rowScrolling
   const { handleClick, handleDoubleClick, handleWheelCapture } = handlers
+
   const {
     handleMoveDrop,
     handleDragExpandDir,
@@ -94,6 +98,7 @@ export function FileExplorerFilesTreePane({
     stopDragEdgeScroll,
     rootDragHandlers
   } = dragDrop
+
   const {
     handleStartRename,
     handleContextMenuDelete,
@@ -116,6 +121,7 @@ export function FileExplorerFilesTreePane({
   const treeError = hasNameFilter ? nameFilterFiles.loadError : rootError
   const hasError = isEmptyState && !isLoading && !!treeError
   const showTree = !isEmptyState
+
   const emptyMessage =
     hasNameFilter && !nameFilterFiles.loadError
       ? translate(

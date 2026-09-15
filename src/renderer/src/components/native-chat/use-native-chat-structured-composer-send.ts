@@ -40,22 +40,28 @@ export function useNativeChatStructuredComposerSend({
   useLayoutEffect(() => {
     composition.current = { draft, imageAttachments }
   }, [draft, imageAttachments])
+
   return useCallback(
     (text: string, attachments = imageAttachments): void => {
       if (!structuredTransport) {
         return
       }
+
       if (attachments.length > 0 && isStructuredAgentSessionComposerCommand(text, agent)) {
         structuredTransport.onError('Remove attachments before using a chat-session command.')
+
         return
       }
+
       const submitted = composition.current
       void dispatchNativeChatStructuredComposerText(structuredTransport, text, attachments)
         .then(({ accepted, error }) => {
           structuredTransport.onError(error)
+
           if (!accepted) {
             return
           }
+
           emitNativeChatMessageSent({ agent, runtime: structuredTransport.runtime })
           // A real user send is a takeover, exactly as typing into a worker's pane is. Only past
           // `accepted`, and only from this hook: the outbox dispatcher retries and would re-fire,
@@ -65,6 +71,7 @@ export function useNativeChatStructuredComposerSend({
             structuredTransport.runtimeEnvironmentId
           )
           setHistory((previous) => pushHistory(previous, text))
+
           if (
             isStructuredAgentSessionComposerCommand(text, agent) &&
             (composition.current.draft !== submitted.draft ||
@@ -72,6 +79,7 @@ export function useNativeChatStructuredComposerSend({
           ) {
             return
           }
+
           setDraft('')
           setCaret(0)
           clearSkillOrigin()

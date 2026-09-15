@@ -13,5 +13,6 @@ export function linearPriorityLabel(priority: number | null | undefined): Linear
   if (priority === 1 || priority === 2 || priority === 3 || priority === 4) {
     return LINEAR_PRIORITY_LABELS[priority]
   }
+
   return LINEAR_PRIORITY_LABELS[0]
 }

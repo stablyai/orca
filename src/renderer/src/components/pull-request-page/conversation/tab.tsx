@@ -102,9 +102,11 @@ export function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -115,18 +117,23 @@ export function ConversationTab({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const botAuthorOverrides = usePRBotAuthorOverrides()
+
   const commentCounts = useMemo(
     () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
     [botAuthorOverrides, comments]
   )
+
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
     [botAuthorOverrides, commentFilter, comments]
   )
+
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, visibleComments)
+
   const mentionOptions = useMemo(
     () =>
       buildMentionOptions({
@@ -151,6 +158,7 @@ export function ConversationTab({
   }
 
   const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
+
   if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
     // Why: reconcile before paint so a background body refresh while the editor is closed doesn't show a stale draft on reopen.
     setBodyDraft(resolvedBodyDraft)
@@ -159,18 +167,22 @@ export function ConversationTab({
   useEffect(() => {
     if (!bodyEditing) {
       cancelBodyTextareaFocusFrame()
+
       return cancelBodyTextareaFocusFrame
     }
+
     cancelBodyTextareaFocusFrame()
     bodyTextareaFocusFrameRef.current = requestAnimationFrame(() => {
       bodyTextareaFocusFrameRef.current = null
       bodyTextareaRef.current?.focus()
     })
+
     return cancelBodyTextareaFocusFrame
   }, [bodyEditing, cancelBodyTextareaFocusFrame])
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
+
   const markdownGitHubRepo = useMemo(
     () =>
       projectOrigin
@@ -178,18 +190,23 @@ export function ConversationTab({
         : bodySlug,
     [bodySlug, projectOrigin]
   )
+
   const canEditBody =
     item.type === 'pr'
       ? Boolean(projectOrigin || bodySlug)
       : Boolean(projectOrigin || canUseRepoMutationContext)
+
   const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
     if (bodySaving || !bodyChanged) {
       setBodyEditing(false)
+
       return
     }
+
     setBodySaving(true)
+
     try {
       await runWorkItemBodyUpdate({
         item,

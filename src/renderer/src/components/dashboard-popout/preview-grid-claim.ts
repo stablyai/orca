@@ -1,10 +1,14 @@
 import type { Terminal } from '@xterm/xterm'
 
 const FIT_REQUEST_DEBOUNCE_MS = 200
+
 // Mirror the runtime's clampTerminalViewport so a request always matches what lands.
 const FIT_MIN_COLS = 20
+
 const FIT_MAX_COLS = 240
+
 const FIT_MIN_ROWS = 8
+
 const FIT_MAX_ROWS = 120
 
 function clampGridAxis(value: number, min: number, max: number): number {
@@ -31,17 +35,22 @@ export function createPreviewGridClaim(args: {
 
   const request = (): void => {
     const terminal = args.getTerminal()
+
     if (disposed || !terminal) {
       return
     }
+
     const screen = args.container.querySelector<HTMLElement>('.xterm-screen')
     const box = args.container.parentElement
+
     if (!screen || !box) {
       return
     }
+
     // offsetWidth/Height are layout dims, unaffected by the scale transform.
     const cellWidth = screen.offsetWidth / Math.max(1, terminal.cols)
     const cellHeight = screen.offsetHeight / Math.max(1, terminal.rows)
+
     if (
       !Number.isFinite(cellWidth) ||
       !Number.isFinite(cellHeight) ||
@@ -52,16 +61,21 @@ export function createPreviewGridClaim(args: {
     ) {
       return
     }
+
     const cols = clampGridAxis(Math.floor(box.clientWidth / cellWidth), FIT_MIN_COLS, FIT_MAX_COLS)
+
     const rows = clampGridAxis(
       Math.floor(box.clientHeight / cellHeight),
       FIT_MIN_ROWS,
       FIT_MAX_ROWS
     )
+
     const fitKey = `${cols}x${rows}`
+
     if (fitKey === lastRequestedFit) {
       return
     }
+
     lastRequestedFit = fitKey
     // The resize triggers a main-side resync push; the reconnect snapshot
     // carries the new grid. If the claim didn't land (a phone owns the size),
@@ -73,9 +87,11 @@ export function createPreviewGridClaim(args: {
     if (disposed) {
       return
     }
+
     if (timer) {
       clearTimeout(timer)
     }
+
     timer = setTimeout(() => {
       timer = null
       request()
@@ -86,6 +102,7 @@ export function createPreviewGridClaim(args: {
     schedule,
     dispose: (): void => {
       disposed = true
+
       if (timer) {
         clearTimeout(timer)
         timer = null

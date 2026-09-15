@@ -10,9 +10,11 @@ function findInputByAriaLabel(node: unknown, ariaLabel: string): ReactElementLik
       found = entry
     }
   })
+
   if (!found) {
     throw new Error(`${ariaLabel} input not found`)
   }
+
   return found
 }
 
@@ -26,15 +28,18 @@ function findButtonByAriaLabel(node: unknown, ariaLabel: string): ReactElementLi
       found = entry
     }
   })
+
   if (!found) {
     throw new Error(`${ariaLabel} button not found`)
   }
+
   return found
 }
 
 describe('FileExplorerNameFilter', () => {
   it('reports text changes and shows the compact file filter input', () => {
     const onQueryChange = vi.fn()
+
     const element = FileExplorerNameFilter({
       query: '',
       onQueryChange,
@@ -42,6 +47,7 @@ describe('FileExplorerNameFilter', () => {
     })
 
     const input = findInputByAriaLabel(element, 'Find files')
+
     ;(input.props.onChange as (event: { currentTarget: { value: string } }) => void)({
       currentTarget: { value: 'FileExplorer' }
     })
@@ -52,6 +58,7 @@ describe('FileExplorerNameFilter', () => {
 
   it('clears the current file filter from the clear button', () => {
     const onClear = vi.fn()
+
     const element = FileExplorerNameFilter({
       query: 'FileExplorer',
       onQueryChange: vi.fn(),
@@ -59,6 +66,7 @@ describe('FileExplorerNameFilter', () => {
     })
 
     const button = findButtonByAriaLabel(element, 'Clear file filter')
+
     ;(button.props.onClick as () => void)()
 
     expect(onClear).toHaveBeenCalledTimes(1)

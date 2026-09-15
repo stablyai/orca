@@ -27,6 +27,7 @@ describe('resolveSshTargetGenerationHighWaterMark', () => {
       targetGenerations: [1, 2],
       capturedGenerations: [9]
     })
+
     expect(highWaterMark).toBe(9)
     expect(nextSshTargetGeneration(highWaterMark)).toBe(10)
   })

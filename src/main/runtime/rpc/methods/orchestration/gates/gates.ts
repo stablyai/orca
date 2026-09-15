@@ -28,11 +28,13 @@ export const ORCHESTRATION_GATE_METHODS = [
       const db = runtime.getOrchestrationDb()
 
       const existing = db.getActiveCoordinatorRun()
+
       if (existing) {
         throw new Error(`Coordinator already running: ${existing.id}`)
       }
 
       const coordinatorHandle = params.from ?? 'coordinator'
+
       const coordinator = new Coordinator(db, runtime, {
         spec: params.spec,
         coordinatorHandle,
@@ -68,6 +70,7 @@ export const ORCHESTRATION_GATE_METHODS = [
     handler: (_params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const run = db.getActiveCoordinatorRun()
+
       if (!run) {
         throw new Error('No active coordinator run')
       }
@@ -87,21 +90,27 @@ export const ORCHESTRATION_GATE_METHODS = [
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       let options: string[] | undefined
+
       if (params.options) {
         try {
           const parsed = JSON.parse(params.options)
+
           if (!Array.isArray(parsed) || !parsed.every((option) => typeof option === 'string')) {
             throw new Error('not an array of strings')
           }
+
           options = parsed
         } catch {
           throw new Error('Invalid --options: must be a JSON array of strings')
         }
       }
+
       const task = db.getTask(params.task)
+
       if (!task) {
         throw new Error(`Task not found: ${params.task}`)
       }
+
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.from,
@@ -109,17 +118,20 @@ export const ORCHESTRATION_GATE_METHODS = [
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence
       })
+
       if (task.run_id !== run.id) {
         throw taskNotFoundError(`Task ${params.task} was not found in Run ${run.id}.`, {
           taskId: params.task,
           runId: run.id
         })
       }
+
       const gate = db.createGate({
         taskId: params.task,
         question: params.question,
         options
       })
+
       return { gate }
     }
   }),
@@ -130,9 +142,11 @@ export const ORCHESTRATION_GATE_METHODS = [
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const existing = db.getGate(params.id)
+
       if (!existing) {
         throw new Error(`Gate not found: ${params.id}`)
       }
+
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.from,
@@ -140,14 +154,18 @@ export const ORCHESTRATION_GATE_METHODS = [
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence
       })
+
       // Why: a gate outside the caller's Run is indistinguishable from a missing one, so probing cannot map foreign Runs.
       if (existing.run_id !== run.id) {
         throw new Error(`Gate not found: ${params.id}`)
       }
+
       const gate = db.resolveGate(params.id, params.resolution)
+
       if (!gate) {
         throw new Error(`Gate not found: ${params.id}`)
       }
+
       return { gate }
     }
   }),
@@ -158,6 +176,7 @@ export const ORCHESTRATION_GATE_METHODS = [
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
+
       // Why: same read posture as taskList — an explicitly named Run is inspectable, an unnamed one means the caller's own.
       const run =
         explicitRun?.legacy === 1
@@ -169,12 +188,14 @@ export const ORCHESTRATION_GATE_METHODS = [
               legacyCoordinatorRunId,
               callerEvidence: orchestrationCompatibilityEvidence
             })
+
       const gates = db
         .listGates({
           taskId: params.task,
           status: params.status as GateStatus
         })
         .filter((gate) => gate.run_id === run.id)
+
       return { runId: run.id, gates, count: gates.length }
     }
   })

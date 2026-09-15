@@ -7,11 +7,13 @@ import {
 describe('stringifyJsonWithinByteLimit', () => {
   it('matches native JSON for nested values, escaping, and omitted fields', () => {
     const shared = { label: 'same object' }
+
     const value = {
       text: 'quote " slash \\ control\n emoji 🐋 lone \ud800',
       nested: [1, undefined, Number.NaN, { omitted: undefined, kept: true }],
       repeated: [shared, shared]
     }
+
     const native = JSON.stringify(value)
 
     const result = stringifyJsonWithinByteLimit(value, Buffer.byteLength(native))
@@ -38,6 +40,7 @@ describe('stringifyJsonWithinByteLimit', () => {
 
   it('matches native numeric and string indentation normalization', () => {
     const value = { nested: { value: true } }
+
     for (const space of [Number.NaN, -1, 20, '🐋'.repeat(6)]) {
       const native = JSON.stringify(value, null, space)
       expect(stringifyJsonWithinByteLimit(value, Buffer.byteLength(native), space)).toEqual({
@@ -49,9 +52,11 @@ describe('stringifyJsonWithinByteLimit', () => {
 
   it('stops visiting indented collections when whitespace crosses the limit', () => {
     let visits = 0
+
     const value = Array.from({ length: 10_000 }, () => ({
       toJSON() {
         visits += 1
+
         return 1
       }
     }))
@@ -62,9 +67,11 @@ describe('stringifyJsonWithinByteLimit', () => {
 
   it('measures values after toJSON without invoking it twice', () => {
     let calls = 0
+
     const value = {
       toJSON() {
         calls += 1
+
         return { rendered: 'value' }
       }
     }
@@ -81,9 +88,11 @@ describe('stringifyJsonWithinByteLimit', () => {
 
   it('stops visiting a large collection as soon as it crosses the limit', () => {
     let visits = 0
+
     const value = Array.from({ length: 10_000 }, () => ({
       toJSON() {
         visits += 1
+
         return 1
       }
     }))
@@ -94,9 +103,11 @@ describe('stringifyJsonWithinByteLimit', () => {
 
   it('measures raw JSON values before native serialization materializes them', () => {
     const createRawJson = (JSON as { rawJSON?: (value: string) => unknown }).rawJSON
+
     if (!createRawJson) {
       return
     }
+
     const value = createRawJson(JSON.stringify('x'.repeat(1024)))
 
     expect(() => stringifyJsonWithinByteLimit(value, 32)).toThrow(JsonStringifyByteLimitError)

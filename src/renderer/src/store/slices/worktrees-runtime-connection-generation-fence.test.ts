@@ -22,6 +22,7 @@ vi.mock('sonner', () => ({
 }))
 
 const ENV = 'env-remote'
+
 const REPO_IDS = ['repo1', 'repo2', 'repo3', 'repo4', 'repo5'] as const
 
 function seedRuntimeRepos(store: ReturnType<typeof createTestStore>) {
@@ -89,10 +90,12 @@ describe('fetchAllWorktrees across a runtime connection-generation change', () =
     let bumped = false
     runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
       const repo = repoOf(args)
+
       // Park every repo but the first, so the bump lands with four scans outstanding.
       if (repo !== 'repo1' && !bumped) {
         await new Promise<void>((resolve) => parked.set(repo, resolve))
       }
+
       return detectedListReply(repo)
     })
 
@@ -100,12 +103,15 @@ describe('fetchAllWorktrees across a runtime connection-generation change', () =
     await vi.waitFor(() => expect(parked.size).toBe(REPO_IDS.length - 1))
     bumped = true
     advanceRuntimeEnvironmentConnectionGeneration(ENV)
+
     for (const release of parked.values()) {
       release()
     }
+
     await fetching
 
     expect(Object.keys(store.getState().worktreesByRepo).sort()).toEqual([...REPO_IDS])
+
     for (const repoId of REPO_IDS) {
       expect(store.getState().worktreesByRepo[repoId]).toHaveLength(1)
     }
@@ -120,12 +126,14 @@ describe('fetchAllWorktrees across a runtime connection-generation change', () =
       attemptsByRepo.set(repo, (attemptsByRepo.get(repo) ?? 0) + 1)
       // Bump on every answer: the retried read is stale again the moment it lands.
       advanceRuntimeEnvironmentConnectionGeneration(ENV)
+
       return detectedListReply(repo)
     })
 
     await store.getState().fetchAllWorktrees()
 
     expect(Object.keys(store.getState().worktreesByRepo)).toEqual([])
+
     for (const repoId of REPO_IDS) {
       expect(attemptsByRepo.get(repoId)).toBe(2)
     }

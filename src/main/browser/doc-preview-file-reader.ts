@@ -15,7 +15,9 @@ import {
 } from './doc-preview-grant-registry'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
+
 const DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES = 10 * 1024 * 1024
+
 const DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES = 10 * 1024 * 1024
 
 /** Why not "needs a newer server": the SSH read path only ever serves images and PDFs as bytes, so
@@ -88,12 +90,15 @@ function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewRea
   if (source.truncated) {
     return { ok: false, status: 413, reason: 'too-large', message: TRUNCATED_PREVIEW_MESSAGE }
   }
+
   if (!source.isBinary) {
     return { ok: true, bytes: Buffer.from(source.content, 'utf8'), contentType }
   }
+
   if (source.content) {
     return { ok: true, bytes: Buffer.from(source.content, 'base64'), contentType }
   }
+
   // Why: an empty binary body is two different answers. A host that still named the file's type
   // read a 0-byte file, and 0 bytes is what it should serve; a host that named no type declined
   // the format outright and has nothing to send.
@@ -116,6 +121,7 @@ async function readRuntimeDocPreviewFile(
   authorizedRootRelativePaths: string[]
 ): Promise<PreviewFileBytes> {
   const userDataPath = getCanonicalUserDataPath()
+
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
@@ -129,6 +135,7 @@ async function readRuntimeDocPreviewFile(
     },
     DOC_PREVIEW_READ_TIMEOUT_MS
   )
+
   if (!response.ok) {
     // Why the rewrite: fail-closed on an old host is deliberate, so tell the reader what to do —
     // the raw method_not_found wording reads as a broken preview, not an out-of-date machine.
@@ -138,7 +145,9 @@ async function readRuntimeDocPreviewFile(
         : response.error.message
     )
   }
+
   const preview = response.result as RuntimeFilePreviewResult
+
   return {
     content: preview.content,
     isBinary: preview.isBinary,
@@ -156,10 +165,13 @@ export async function readDocPreviewFile(
   relativePath: string
 ): Promise<DocPreviewReadOutcome> {
   const candidatePath = resolveDocPreviewCandidatePath(grant, relativePath)
+
   if (!candidatePath) {
     return notFoundOutcome()
   }
+
   const absolutePath = resolveDocPreviewTargetPath(grant, relativePath)
+
   if (!absolutePath) {
     return {
       ok: false,
@@ -168,14 +180,18 @@ export async function readDocPreviewFile(
       message: 'This file needs permission before the preview can read it.'
     }
   }
+
   const contentType = docPreviewContentType(relativePath)
+
   try {
     if (grant.owner.kind === 'ssh') {
       const provider = requireSshFilesystemProvider(grant.owner.connectionId)
       const authority = resolveDocPreviewAuthorityPaths(grant)
+
       if (!authority.entryPath || !provider.readDocPreviewFile) {
         return notFoundOutcome()
       }
+
       return toOutcome(
         await provider.readDocPreviewFile({
           boundaryPath: grant.requestBase,
@@ -189,28 +205,36 @@ export async function readDocPreviewFile(
         contentType
       )
     }
+
     const runtimeOwner = grant.owner
+
     const worktreeRelativePath = toRuntimeWorktreeRelativePath(
       runtimeOwner.worktreeRoot,
       absolutePath
     )
+
     const authority = resolveDocPreviewAuthorityPaths(grant)
+
     const entryRelativePath = authority.entryPath
       ? toRuntimeWorktreeRelativePath(runtimeOwner.worktreeRoot, authority.entryPath)
       : null
+
     const implicitRootRelativePath = authority.implicitRootPath
       ? toRuntimeWorktreeRelativeDirectoryPath(
           runtimeOwner.worktreeRoot,
           authority.implicitRootPath
         )
       : null
+
     const authorizedRootRelativePaths = authority.authorizedRootPaths
       .map((root) => toRuntimeWorktreeRelativeDirectoryPath(runtimeOwner.worktreeRoot, root))
       .filter((root): root is string => root !== null)
+
     if (!worktreeRelativePath || !entryRelativePath) {
       // Why: files.read is worktree-scoped, so a doc outside the worktree has no client-side channel.
       return notFoundOutcome()
     }
+
     return toOutcome(
       await readRuntimeDocPreviewFile(
         runtimeOwner.environmentId,

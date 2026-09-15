@@ -68,10 +68,12 @@ import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shi
 
 describe('PTY provider dispatch', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
+
   const mainWindow = {
     isDestroyed: () => false,
     webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
   }
+
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
 
   function setup(): void {
@@ -125,20 +127,24 @@ describe('PTY provider dispatch', () => {
 
   it('routes to local provider when connectionId is null', async () => {
     setup()
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
       connectionId: null
     })) as { id: string }
+
     expect(result.id).toBeTruthy()
   })
 
   it('routes to local provider when connectionId is undefined', async () => {
     setup()
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     expect(result.id).toBeTruthy()
   })
 

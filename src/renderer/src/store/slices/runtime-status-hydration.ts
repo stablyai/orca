@@ -41,14 +41,17 @@ function revisionsMatch(
   expected: ReadonlyMap<string, number>
 ): boolean {
   const current = environmentRevisions(environments)
+
   if (current.size !== expected.size) {
     return false
   }
+
   for (const [environmentId, revision] of current) {
     if (expected.get(environmentId) !== revision) {
       return false
     }
   }
+
   return true
 }
 
@@ -68,8 +71,10 @@ export function createRuntimeStatusHydration({
       if (expectedRevisions && !revisionsMatch(getCurrentEnvironments(), expectedRevisions)) {
         rerunRequested = true
       }
+
       return inFlight
     }
+
     const hydration = (async (): Promise<void> => {
       // Catalog changes queue a current-catalog pass without duplicating stable overlaps.
       do {
@@ -77,18 +82,23 @@ export function createRuntimeStatusHydration({
         const revisionsAtListStart = environmentRevisions(getCurrentEnvironments())
         expectedRevisions = revisionsAtListStart
         let environments: PublicKnownRuntimeEnvironment[]
+
         try {
           environments = await listEnvironments()
         } catch (err) {
           console.error('Failed to list runtime environments for status hydration:', err)
           markCatalogSettled()
+
           return
         }
+
         lastCatalogListedAt = Date.now()
+
         if (!revisionsMatch(getCurrentEnvironments(), revisionsAtListStart)) {
           rerunRequested = true
           continue
         }
+
         expectedRevisions = environmentRevisions(environments)
         publishEnvironments(environments)
         await Promise.allSettled(
@@ -99,11 +109,13 @@ export function createRuntimeStatusHydration({
         (expectedRevisions && !revisionsMatch(getCurrentEnvironments(), expectedRevisions))
       )
     })()
+
     inFlight = hydration.finally(() => {
       inFlight = null
       expectedRevisions = null
       rerunRequested = false
     })
+
     return inFlight
   }
 }

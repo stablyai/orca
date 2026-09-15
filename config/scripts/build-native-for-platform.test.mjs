@@ -6,20 +6,26 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '../../src/shared/child-process/run-process'
 
 const buildScript = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
+
 const directories = []
+
 const children = []
+
 const buildPids = new Set()
 
 afterEach(() => {
   for (const child of children.splice(0)) {
     child.kill('SIGKILL')
   }
+
   for (const pid of buildPids) {
     try {
       process.kill(-pid, 'SIGKILL')
     } catch {}
   }
+
   buildPids.clear()
+
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -87,6 +93,7 @@ function startBuild(mode, options = {}) {
     }, 10)
   `
   )
+
   const child = spawnProcess({
     program: process.execPath,
     args: [
@@ -121,21 +128,26 @@ function startBuild(mode, options = {}) {
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
+
   children.push(child)
   let output = ''
   let stderr = ''
   let descendantPids = []
   let readyResolve
+
   const ready = new Promise((resolve) => {
     readyResolve = resolve
   })
+
   child.stdout.on('data', (chunk) => {
     output += chunk.toString()
     const pids = [...output.matchAll(/ready (\d+)/g)].map((match) => Number(match[1]))
     descendantPids = [...output.matchAll(/descendant (\d+)/g)].map((match) => Number(match[1]))
+
     for (const pid of pids) {
       buildPids.add(pid)
     }
+
     if (pids.length === 3 && (!mode.startsWith('descendant') || descendantPids.length === 3)) {
       readyResolve()
     }
@@ -143,10 +155,12 @@ function startBuild(mode, options = {}) {
   child.stderr.on('data', (chunk) => {
     stderr += chunk.toString()
   })
+
   const closed = new Promise((resolve, reject) => {
     child.on('error', reject)
     child.on('close', (code, signal) => resolve({ code, signal, output, stderr }))
   })
+
   return {
     child,
     ready,
@@ -167,10 +181,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function waitFor(condition, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs
+
   while (!condition()) {
     if (Date.now() > deadline) {
       throw new Error('timed out waiting for condition')
     }
+
     await sleep(50)
   }
 }
@@ -241,6 +257,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 7, signal: null })
+
     for (const { pid } of build.events().filter(({ event }) => event === 'started')) {
       expect(() => process.kill(pid, 0)).toThrow()
     }
@@ -257,6 +274,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       const result = await build.closed
       expect(result).toMatchObject({ code: 1, signal: null })
       expect(result.stderr).not.toContain('Unhandled')
+
       for (const { pid } of build.events().filter(({ event }) => event === 'started')) {
         expect(() => process.kill(pid, 0)).toThrow()
       }
@@ -287,6 +305,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.child.kill('SIGTERM')
     expect(await build.closed).toMatchObject({ code: null, signal: 'SIGTERM' })
+
     for (const pid of build.descendants()) {
       expect(() => process.kill(pid, 0)).toThrow()
     }
@@ -298,6 +317,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     build.release()
     expect(await build.closed).toMatchObject({ code: 0, signal: null })
     expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+
     for (const pid of build.descendants()) {
       expect(() => process.kill(pid, 0)).toThrow()
     }
@@ -309,10 +329,12 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     build.child.stdout.pause()
     build.release()
     await new Promise((resolve) => setTimeout(resolve, 1_500))
+
     const buffered = build
       .events()
       .filter(({ event }) => event === 'buffered')
       .map(({ bytes }) => bytes)
+
     expect(buffered.length).toBeGreaterThan(0)
     expect(Math.max(...buffered)).toBeLessThan(1_000_000)
   })
@@ -329,21 +351,25 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await sleep(300)
     build.releaseExit()
     await waitFor(() => build.events().some(({ event }) => event === 'completed'))
+
     const accepted = Math.max(
       ...build
         .events()
         .filter(({ event }) => event === 'accepted')
         .map(({ line }) => line)
     )
+
     expect(accepted).toBeGreaterThan(0)
     await sleep(3_000)
     build.child.stdout.resume()
 
     const result = await build.closed
     expect(result).toMatchObject({ code: 0, signal: null })
+
     const delivered = [...result.output.matchAll(/^\[computer\] line (\d+) /gm)].map((match) =>
       Number(match[1])
     )
+
     expect(delivered).toEqual(Array.from({ length: accepted }, (_, index) => index + 1))
   })
 

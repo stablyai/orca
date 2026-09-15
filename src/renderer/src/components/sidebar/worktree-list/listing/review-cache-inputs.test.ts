@@ -19,6 +19,7 @@ const FOLDER_WORKSPACE = { id: 'folder-1' } as FolderWorkspace
 describe('selectWorktreeListReviewCacheInputs', () => {
   it('ignores cache churn for ordinary cards outside PR-status grouping', () => {
     const first = selectWorktreeListReviewCacheInputs(EMPTY_STATE, 'repo', ['pr'])
+
     const afterCacheFill = selectWorktreeListReviewCacheInputs(
       {
         ...EMPTY_STATE,
@@ -36,6 +37,7 @@ describe('selectWorktreeListReviewCacheInputs', () => {
 
   it('keeps the PR cache live for PR-status grouping', () => {
     const prCache = { branch: {} as never }
+
     const selected = selectWorktreeListReviewCacheInputs(
       { ...EMPTY_STATE, prCache },
       'pr-status',
@@ -47,6 +49,7 @@ describe('selectWorktreeListReviewCacheInputs', () => {
 
   it('keeps the PR cache live for legacy folder-card review displays', () => {
     const prCache = { branch: {} as never }
+
     const selected = selectWorktreeListReviewCacheInputs(
       { ...EMPTY_STATE, folderWorkspaces: [FOLDER_WORKSPACE], prCache },
       'repo',
@@ -59,6 +62,7 @@ describe('selectWorktreeListReviewCacheInputs', () => {
   it('keeps both caches live for new-style folder status displays', () => {
     const prCache = { branch: {} as never }
     const hostedReviewCache = { branch: {} as never }
+
     const selected = selectWorktreeListReviewCacheInputs(
       {
         ...EMPTY_STATE,

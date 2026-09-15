@@ -18,6 +18,7 @@ vi.mock('os', () => ({
 import { getGhosttyThemeSearchDirs, resolveGhosttyThemeColors } from './theme-resolution'
 
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
+
 const originalGhosttyResourcesDir = process.env.GHOSTTY_RESOURCES_DIR
 
 beforeEach(() => {
@@ -27,11 +28,13 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+
   if (originalXdgConfigHome !== undefined) {
     process.env.XDG_CONFIG_HOME = originalXdgConfigHome
   } else {
     delete process.env.XDG_CONFIG_HOME
   }
+
   if (originalGhosttyResourcesDir !== undefined) {
     process.env.GHOSTTY_RESOURCES_DIR = originalGhosttyResourcesDir
   } else {
@@ -78,6 +81,7 @@ describe('resolveGhosttyThemeColors', () => {
       if (p === '/Users/alice/.config/ghostty/themes/Tomorrow Night Bright') {
         return { isFile: () => true, size: THEME_FILE.length }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue(THEME_FILE)
@@ -98,6 +102,7 @@ describe('resolveGhosttyThemeColors', () => {
       if (p === '/Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow') {
         return { isFile: () => true, size: THEME_FILE.length }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('background = #1d1f21')
@@ -111,6 +116,7 @@ describe('resolveGhosttyThemeColors', () => {
       if (p === '/Users/alice/themes/work') {
         return { isFile: () => true, size: 64 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('background = #1d1f21')
@@ -125,6 +131,7 @@ describe('resolveGhosttyThemeColors', () => {
       if (p === '/Users/alice/.config/ghostty/themes/custom') {
         return { isFile: () => true, size: 64 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('background = #101010\nfont-size = 20')
@@ -158,9 +165,11 @@ describe('resolveGhosttyThemeColors', () => {
       if (p === '/Users/alice/.config/ghostty/themes/night') {
         return { isFile: () => false, size: 128 }
       }
+
       if (p === '/Applications/Ghostty.app/Contents/Resources/ghostty/themes/night') {
         return { isFile: () => true, size: 128 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
 

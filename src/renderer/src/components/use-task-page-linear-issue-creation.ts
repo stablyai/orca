@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { linearCreateIssue, linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { useAppStore } from '@/store'
+
 export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreationModel) {
   const {
     settings,
@@ -33,14 +34,18 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
     discardNewLinearIssueDraft,
     newLinearIssueTargetTeam
   } = model
+
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
     if (!newLinearIssueTargetTeam) {
       return
     }
+
     const title = newLinearIssueTitle.trim()
+
     if (!title || newLinearIssueSubmitting) {
       return
     }
+
     if (
       selectedLinearProject &&
       newLinearIssueProjectId === selectedLinearProject.id &&
@@ -52,10 +57,13 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
           'Select a team from the project workspace before filing this issue.'
         )
       )
+
       return
     }
+
     setNewLinearIssueSubmitting(true)
     const submitProviderRuntimeContextKey = providerRuntimeContextKey
+
     try {
       const result = await linearCreateIssue(linearTaskSourceContext ?? settings, {
         teamId: newLinearIssueTargetTeam.id,
@@ -68,16 +76,20 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
         projectId: newLinearIssueProjectId || null,
         labelIds: newLinearIssueLabelIds.length > 0 ? newLinearIssueLabelIds : undefined
       })
+
       if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
         return
       }
+
       if (!result.ok) {
         toast.error(
           result.error ||
             translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.')
         )
+
         return
       }
+
       toast.success(
         translate('auto.components.TaskPage.cb98f0350c', 'Created {{value0}}', {
           value0: result.identifier
@@ -113,6 +125,7 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
           if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
             return
           }
+
           if (full) {
             setSelectedLinearIssue(full, {
               allowOutsideList: true
@@ -153,10 +166,14 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
     setNewLinearIssueSubmitting,
     setLinearRefreshNonce
   ])
+
   const nextModel = model as typeof model & {
     handleCreateNewLinearIssue: typeof handleCreateNewLinearIssue
   }
+
   nextModel.handleCreateNewLinearIssue = handleCreateNewLinearIssue
+
   return nextModel
 }
+
 export type TaskPageLinearIssueCreationModel = ReturnType<typeof useTaskPageLinearIssueCreation>

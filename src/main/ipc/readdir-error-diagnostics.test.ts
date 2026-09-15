@@ -45,6 +45,7 @@ describe('buildReadDirErrorBreadcrumb', () => {
       throwSite: 'readdir',
       error: Object.assign(new Error('EIO: i/o error'), { code: 'EIO' })
     })
+
     expect(breadcrumb).toEqual({
       throwSite: 'readdir',
       errorName: 'Error',
@@ -62,6 +63,7 @@ describe('buildReadDirErrorBreadcrumb', () => {
       throwSite: 'ssh-provider',
       error: new Error('Remote connection dropped.')
     })
+
     expect(breadcrumb).toMatchObject({ throwSite: 'ssh-provider', errorName: 'Error' })
     expect(breadcrumb.errorCode).toBeUndefined()
     expect(breadcrumb.hasConnectionId).toBe(true)

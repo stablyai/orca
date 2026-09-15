@@ -11,7 +11,9 @@ export type ParsedHermesOutput = {
 }
 
 const METADATA_LINE_PATTERN = /^\*\*([^*]+):\*\*\s+(.+?)\s*$/
+
 const LINE_FEED_CODE_UNIT = 10
+
 const CARRIAGE_RETURN_CODE_UNIT = 13
 
 type HermesLine = {
@@ -28,24 +30,32 @@ export function parseHermesOutput(content: string): ParsedHermesOutput {
   forEachHermesLine(content, 0, ({ line, nextLineStart }) => {
     if (!title) {
       const titleMatch = /^#\s+(?:Cron Job:\s*)?(.+?)\s*$/.exec(line)
+
       if (titleMatch) {
         title = titleMatch[1]
         bodyStartOffset = nextLineStart
+
         return true
       }
     }
+
     const metaMatch = METADATA_LINE_PATTERN.exec(line)
+
     if (metaMatch) {
       metadata.push({ label: metaMatch[1].trim(), value: metaMatch[2].trim() })
       bodyStartOffset = nextLineStart
+
       return true
     }
+
     if (line.trim() === '') {
       if (metadata.length > 0 || title) {
         bodyStartOffset = nextLineStart
       }
+
       return true
     }
+
     return !(title || metadata.length > 0)
   })
 
@@ -62,18 +72,22 @@ function splitHermesSections(content: string, startOffset: number): ParsedHermes
 
   forEachHermesLine(content, startOffset, ({ line, lineStart, nextLineStart }) => {
     const heading = /^(#{2,6})\s+(.+?)\s*$/.exec(line)
+
     if (heading) {
       if (current) {
         sections.push(createHermesSection(content, current))
       }
+
       current = {
         heading: heading[2],
         level: heading[1].length,
         bodyStart: nextLineStart,
         bodyEnd: nextLineStart
       }
+
       return true
     }
+
     if (current) {
       current.bodyEnd = nextLineStart
     } else {
@@ -81,6 +95,7 @@ function splitHermesSections(content: string, startOffset: number): ParsedHermes
       // previous parser; preserving that keeps fallback rendering unchanged.
       void lineStart
     }
+
     return true
   })
 
@@ -106,6 +121,7 @@ const HERMES_TRIM_END_PATTERN = /\s/
 
 function normalizeHermesSectionBody(content: string, start: number, end: number): string {
   let trimEnd = Math.min(end, content.length)
+
   while (trimEnd > start && HERMES_TRIM_END_PATTERN.test(content.charAt(trimEnd - 1))) {
     trimEnd -= 1
   }
@@ -122,6 +138,7 @@ function normalizeHermesSectionBody(content: string, start: number, end: number)
     ) {
       continue
     }
+
     normalized += `${content.slice(sliceStart, index)}\n`
     index += 1
     sliceStart = index + 1
@@ -145,18 +162,22 @@ function forEachHermesLine(
     if (index < content.length && content.charCodeAt(index) !== LINE_FEED_CODE_UNIT) {
       continue
     }
+
     const lineEnd =
       index > lineStart && content.charCodeAt(index - 1) === CARRIAGE_RETURN_CODE_UNIT
         ? index - 1
         : index
+
     const shouldContinue = visitor({
       line: content.slice(lineStart, lineEnd),
       lineStart,
       nextLineStart: index + 1
     })
+
     if (!shouldContinue) {
       return
     }
+
     lineStart = index + 1
   }
 }

@@ -48,6 +48,7 @@ describe('AI Vault session scanner text values', () => {
       { type: 'text', text: 'Visible preview '.repeat(30) },
       unreadItem
     ])
+
     const normalizedPreview = Array.from({ length: 30 }, () => 'Visible preview').join(' ')
 
     expect(result).toBe(`${normalizedPreview.slice(0, 217)}...`)
@@ -121,6 +122,7 @@ describe('AI Vault session scanner text values', () => {
   // fallback here; real win32 semantics cannot be pinned on a posix runner.
   it('falls back to the default root for every non-absolute agent dir', () => {
     const fallback = join(homedir(), '.prime', 'agent', 'sessions')
+
     for (const value of [
       '/',
       '//',
@@ -178,6 +180,7 @@ describe('AI Vault session scanner text values', () => {
       expect(primeAgentSessionsDirFromEnv({ PRIME_AGENT_SESSION_DIR: '~/t' })).toBe(
         join(homedir(), 't')
       )
+
       // Why: '.' would otherwise scan the main-process cwd outright.
       for (const value of ['/', '.', '..', 'rel/path', '   ', 'C:foo']) {
         expect(primeAgentSessionsDirFromEnv({ PRIME_AGENT_SESSION_DIR: value })).toBe(defaultDir)

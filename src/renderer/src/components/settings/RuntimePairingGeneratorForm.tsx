@@ -50,10 +50,13 @@ export function RuntimePairingGeneratorForm({
     value: networkInterface.address,
     label: `${networkInterface.name} (${networkInterface.address})`
   }))
+
   const generatedIsCurrent = generatedAddress === selectedAddress
   const staleGeneratedLink = generatedAddress !== null && !generatedIsCurrent
+
   const customAddressResult =
     intent === 'custom' ? parseServerShareAddress(selectedAddress) : { ok: true as const }
+
   const customAddressInvalid = selectedAddress !== '' && !customAddressResult.ok
   const canGenerate = selectedAddress !== '' && (intent !== 'custom' || customAddressResult.ok)
 

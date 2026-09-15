@@ -38,6 +38,7 @@ export function supportsStructuredAgentSessions(context: StructuredPolicyContext
   if (!supportsStructuredAgentSessionCapability(context)) {
     return false
   }
+
   return (
     context.structuredNativeChatEnabled === true ||
     (context.runtime ? isStructuredNativeChatEnabled(context.runtime) : false)

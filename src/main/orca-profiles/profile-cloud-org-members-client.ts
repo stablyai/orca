@@ -9,6 +9,7 @@ import type { OrcaCloudSession } from './profile-cloud-session-store'
 import { OrcaCloudRequestError } from './profile-cloud-client'
 
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
+
 const ORG_ROLES: readonly OrcaOrgRole[] = ['owner', 'admin', 'member']
 
 function isOrgRole(value: unknown): value is OrcaOrgRole {
@@ -23,7 +24,9 @@ function optionalString(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
+
   const trimmed = value.trim()
+
   return trimmed || undefined
 }
 
@@ -31,12 +34,15 @@ function normalizeTimestamp(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
   }
+
   if (typeof value === 'string') {
     const parsed = Date.parse(value)
+
     if (Number.isFinite(parsed)) {
       return parsed
     }
   }
+
   return Date.now()
 }
 
@@ -44,12 +50,16 @@ function normalizeMember(value: unknown): OrcaOrgMember | null {
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const record = value as Record<string, unknown>
   const email = optionalString(record.email)
+
   if (!email) {
     return null
   }
+
   const userId = optionalString(record.userId)
+
   return {
     userId: userId ?? null,
     email,
@@ -62,11 +72,14 @@ function normalizePendingInvite(value: unknown): OrcaOrgPendingInvite | null {
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const record = value as Record<string, unknown>
   const email = optionalString(record.email)
+
   if (!email) {
     return null
   }
+
   return {
     email,
     role: normalizeRole(record.role, 'member'),
@@ -78,17 +91,21 @@ function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
   if (!value || typeof value !== 'object') {
     throw new Error('invalid_orca_org_members_roster')
   }
+
   const record = value as Record<string, unknown>
+
   const members = Array.isArray(record.members)
     ? record.members
         .map(normalizeMember)
         .filter((member): member is OrcaOrgMember => member !== null)
     : []
+
   const pendingInvites = Array.isArray(record.pendingInvites)
     ? record.pendingInvites
         .map(normalizePendingInvite)
         .filter((invite): invite is OrcaOrgPendingInvite => invite !== null)
     : []
+
   return {
     members,
     pendingInvites,
@@ -107,6 +124,7 @@ function orgMembersUrl(config: OrcaCloudAuthConfig, orgId: string, path: string)
 async function extractErrorCode(response: Response): Promise<string | undefined> {
   try {
     const body = (await response.json()) as unknown
+
     if (
       body &&
       typeof body === 'object' &&
@@ -117,6 +135,7 @@ async function extractErrorCode(response: Response): Promise<string | undefined>
   } catch {
     // Non-JSON error body; the status code alone drives the caller's mapping.
   }
+
   return undefined
 }
 
@@ -142,9 +161,11 @@ async function requestOrgMembers<T>(
   parse: (value: unknown) => T
 ): Promise<T> {
   const response = await fetch(url, init)
+
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }
+
   return parse((await response.json()) as unknown)
 }
 

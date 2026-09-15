@@ -45,6 +45,7 @@ export class StructuredAgentSessionHolds {
       ...(deps.onError ? { onError: deps.onError } : {}),
       ...(deps.graceMs === undefined ? {} : { graceMs: deps.graceMs })
     }
+
     this.clock = new StructuredAgentSessionReleaseClock(clockDeps)
   }
 
@@ -58,11 +59,14 @@ export class StructuredAgentSessionHolds {
     // Unconditional, not only on the first-holder edge: a second surface arriving during the grace
     // window must cancel the pending release too.
     this.clock.cancel(sessionId)
+
     if (options.resume === false || this.deps.hasProviderChild(sessionId)) {
       return
     }
+
     try {
       await this.deps.resume(sessionId)
+
       if (!this.deps.hasProviderChild(sessionId)) {
         throw new Error('agent_session_ownership_unknown')
       }
@@ -70,6 +74,7 @@ export class StructuredAgentSessionHolds {
       if (!alreadyHeld) {
         this.holders.remove(sessionId, holderId)
       }
+
       throw error
     }
   }
@@ -78,6 +83,7 @@ export class StructuredAgentSessionHolds {
     if (!this.holders.remove(sessionId, holderId)) {
       return
     }
+
     if (this.deps.hasProviderChild(sessionId)) {
       this.clock.arm(sessionId)
     }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const execCommand = vi.fn()
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: (...args: unknown[]) => execCommand(...args),
   isUnconfirmedSshCommandTermination: (error: unknown) =>
@@ -23,7 +24,9 @@ import type { SshConnection } from './ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const SOCK = '/home/u/.orca-remote/relay-0.1.0+aaaa/relay-deadbeef.sock'
+
 const HOST = getRemoteHostPlatform('linux-x64')
+
 const CONN = {} as SshConnection
 
 function probe(lines: string[]): string {
@@ -164,6 +167,7 @@ describe('incumbent unverifiable', () => {
     const unconfirmed = Object.assign(new Error('remote channel close was not confirmed'), {
       sshChannelCloseConfirmed: false
     })
+
     execCommand.mockRejectedValueOnce(unconfirmed)
 
     await expect(resolve()).rejects.toBe(unconfirmed)
@@ -198,9 +202,11 @@ describe('reapEmptyRelayHuskCommand', () => {
 
   it('subtracts only the daemon service children it can name from the reap gate', () => {
     const command = reapEmptyRelayHuskCommand(4242, SOCK)
+
     for (const filename of RELAY_DAEMON_SERVICE_ENTRY_FILENAMES) {
       expect(command).toContain(`*'/${filename}'`)
     }
+
     expect(command).toContain('unrecognized_kids=$((unrecognized_kids+1))')
   })
 })

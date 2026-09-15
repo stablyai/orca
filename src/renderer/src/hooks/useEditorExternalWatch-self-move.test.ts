@@ -5,8 +5,10 @@ import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 vi.mock('@/store', () => ({
   useAppStore: { getState: vi.fn() }
 }))
+
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
+
   return {
     ...actual,
     notifyEditorExternalFileChange: vi.fn(),
@@ -39,6 +41,7 @@ function payload(events: FsChangedPayload['events']): FsChangedPayload {
 
 describe('self-move source suppression (in-flight)', () => {
   const setExternalMutation = vi.fn()
+
   const fileNotes = {
     id: 'file-notes',
     worktreeId: 'wt-1',
@@ -99,6 +102,7 @@ describe('self-move source suppression (in-flight)', () => {
       mode: 'edit' as const,
       isDirty: true
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [lateTab],
       setExternalMutation
@@ -285,6 +289,7 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
   // A floating-workspace tab: relativePath is relative to its OWN root (`../…`)
   // and must NOT be joined onto the initiating worktree path.
   const FLOATING_FILE_PATH = '/elsewhere/notes/readme.md'
+
   const floatingTab = {
     id: 'file-x',
     worktreeId: 'floating',
@@ -297,6 +302,7 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     lastKnownDiskSignature: baseline,
     pendingSelfMoveEcho: { operationId: 'op-1', targetPath: FLOATING_FILE_PATH }
   }
+
   let readFile: ReturnType<typeof vi.fn>
 
   beforeEach(() => {

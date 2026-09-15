@@ -3,6 +3,7 @@ import { isExecKilledError } from '../../shared/git-remote-error'
 export function isMissingRemoteRefGitError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.toLowerCase()
+
   return (
     normalized.includes('could not find remote ref') ||
     normalized.includes("couldn't find remote ref")
@@ -34,10 +35,13 @@ export function isTransientReviewHeadFetchError(error: unknown): boolean {
   if (isMissingRemoteRefGitError(error)) {
     return false
   }
+
   if (isExecKilledError(error)) {
     return true
   }
+
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.toLowerCase()
+
   return TRANSIENT_FETCH_ERROR_PATTERNS.some((pattern) => normalized.includes(pattern))
 }

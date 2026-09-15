@@ -25,28 +25,35 @@ export async function runRecording(
   const effects: { name: string; value: RecordedValue }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
+
   const effect = (name: string, value: unknown) => {
     effects.push({ name, value: captureValue(value) })
   }
+
   const stopUnhandled = recordUnhandledRejections(effect)
   let mounted: MountedOperation | undefined
   const ids = new Set<string>()
   let advanced = 0
   let cleaned = false
+
   const teardown = async (): Promise<void> => {
     cleaned = true
     await mounted?.dispose()
     transport.dispose()
     await scheduler.flush()
   }
+
   try {
     mounted = mount({ client: transport.client, effect })
+
     for (const step of scenario.steps) {
       if ('action' in step) {
         if (ids.has(step.id)) {
           throw new Error(`Duplicate action: ${step.id}`)
         }
+
         ids.add(step.id)
+
         try {
           const value =
             step.action === 'disconnect'
@@ -54,6 +61,7 @@ export async function runRecording(
               : step.action === 'cutover'
                 ? transport.cutover()
                 : mounted.action(step.action, step.args ?? {})
+
           observeSettlement(value, scheduler.elapsed, (state) => {
             settlements[step.id] = state
           })
@@ -72,7 +80,9 @@ export async function runRecording(
         advanced += step.advance
         await scheduler.advance(step.advance)
       }
+
       await scheduler.flush()
+
       if ('checkpoint' in step) {
         // A checkpoint's own clock is the sum of the scripted advances, so recording it would add
         // bytes and no signal. Asserted rather than recorded, so a future drift fails loudly.
@@ -81,6 +91,7 @@ export async function runRecording(
             `Checkpoint clock drifted: ${scenario.id} ${step.checkpoint} at ${scheduler.elapsed()}, scripted ${advanced}`
           )
         }
+
         recording.checkpoints.push({
           id: step.checkpoint,
           observation: {
@@ -95,9 +106,11 @@ export async function runRecording(
         })
       }
     }
+
     if (!recording.checkpoints.length) {
       throw new Error(`No checkpoints: ${scenario.id}`)
     }
+
     // Why cleanup runs here and not only in `finally`: each checkpoint clones `effects`, so a
     // rejection or state write produced by dispose, transport teardown or the final flush landed
     // after the recording was built and never reached a golden. Unmount leaks are exactly what
@@ -107,6 +120,7 @@ export async function runRecording(
     const beforeCleanup = effects.length
     const stateAtCleanup = captureValue(mounted.state())
     await teardown()
+
     if (effects.length !== beforeCleanup) {
       recording.checkpoints.push({
         id: 'cleanup',
@@ -121,6 +135,7 @@ export async function runRecording(
         }
       })
     }
+
     return recording
   } finally {
     try {
@@ -142,6 +157,7 @@ export async function runRecordingMutant(
   project: (recording: Recording) => unknown = (recording) => recording
 ): Promise<{ verdict: 'killed' | 'survived'; recording: Recording }> {
   const recording = await runRecording(scenario, mutatedMount, scheduler)
+
   return {
     verdict:
       JSON.stringify(project(recording)) === JSON.stringify(project(baseline))

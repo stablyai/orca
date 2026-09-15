@@ -17,6 +17,7 @@ export function buildPrelaunchedEmulatorSessionState(
   configuredDefaultUdid: string | null
 ): PrelaunchedEmulatorSessionState {
   const liveTarget = info?.deviceUdid || info?.device || null
+
   return {
     selectedUdid: liveTarget || configuredDefaultUdid,
     session: info

@@ -21,6 +21,7 @@ export function getMonacoCodebaseSearchQuery(
 
   if (selection && !selection.isEmpty()) {
     const selectedQuery = normalizeSelectedTextForFileSearch(model.getValueInRange(selection))
+
     if (selectedQuery) {
       return selectedQuery
     }

@@ -21,6 +21,7 @@ describe('useMobileNativeChatSendError', () => {
     const api = useMobileNativeChatSendError({ scopeKey, showToast })
     api.bannerMountedRef.current = bannerMounted
     apiRef.current = api
+
     return null
   }
 
@@ -28,6 +29,7 @@ describe('useMobileNativeChatSendError', () => {
     if (!apiRef.current) {
       throw new Error('Harness was not rendered')
     }
+
     return apiRef.current
   }
 
@@ -164,13 +166,16 @@ describe('useMobileNativeChatSendError', () => {
 
     const errors: unknown[] = []
     const original = console.error
+
     const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
         return
       }
+
       errors.push(args[0])
       original(...args)
     })
+
     try {
       act(() => renderer?.unmount())
       renderer = null
@@ -180,6 +185,7 @@ describe('useMobileNativeChatSendError', () => {
     } finally {
       spy.mockRestore()
     }
+
     expect(errors).toEqual([])
   })
 })

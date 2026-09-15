@@ -36,6 +36,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).not.toBeNull()
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('ship the Hermes support')
@@ -55,6 +56,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const tool = normalizeHookPayload(
       state,
       'hermes',
@@ -68,6 +70,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool?.payload.state).toBe('working')
     expect(tool?.payload.toolName).toBe('terminal')
     expect(tool?.payload.toolInput).toBe('pnpm test')
@@ -86,6 +89,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(approval?.payload.state).toBe('waiting')
     expect(approval?.payload.toolName).toBe('approval')
     expect(approval?.payload.toolInput).toBe('rm -rf build')
@@ -105,6 +109,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(execute?.payload.toolName).toBe('execute_code')
     expect(execute?.payload.toolInput).toBe('print("ok")')
 
@@ -121,6 +126,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(pluginTool?.payload.toolName).toBe('custom_plugin_tool')
     expect(pluginTool?.payload.toolInput).toBe('agent hooks')
   })
@@ -171,6 +177,7 @@ describe('shared agent-hook-listener', () => {
         }
       ]
     }
+
     const waiting = normalizeHookPayload(
       state,
       'codex',
@@ -185,6 +192,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(waiting?.payload.state).toBe('waiting')
     expect(waiting?.payload.toolName).toBe('request_user_input')
     expect(waiting?.payload.interactivePrompt).toBe(JSON.stringify(questions))
@@ -204,6 +212,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(answered?.payload.state).toBe('working')
     expect(answered?.payload.interactivePrompt).toBeUndefined()
 
@@ -213,6 +222,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'Stop' } },
       'production'
     )
+
     expect(stop?.payload.state).toBe('done')
   })
 
@@ -230,6 +240,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(working?.payload.state).toBe('working')
     expect(working?.payload.interactivePrompt).toBeUndefined()
   })
@@ -280,6 +291,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const done = normalizeHookPayload(
       state,
       'hermes',
@@ -292,6 +304,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(done?.payload.state).toBe('done')
     expect(done?.payload.prompt).toBe('summarize')
     expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')

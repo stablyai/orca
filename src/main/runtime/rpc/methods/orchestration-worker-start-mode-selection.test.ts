@@ -9,14 +9,17 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
+
 const TERMINAL_HANDLE = 'term_worker'
 
 const createStructuredWorkerSessionForWorktree = vi.fn(
   async (args: { effects: { kind: string }[] }) => {
     args.effects.push({ kind: 'terminal' })
+
     return { identity: { handle: STRUCTURED_HANDLE, sessionId: 'sess_1' }, host: {} }
   }
 )
+
 const createExistingWorktreeWorkerTerminal = vi.fn(async () => ({ handle: TERMINAL_HANDLE }))
 
 vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
@@ -25,9 +28,11 @@ vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
     createStructuredWorkerSessionForWorktree(args),
   createExistingWorktreeWorkerTerminal: () => createExistingWorktreeWorkerTerminal()
 }))
+
 vi.mock('./orchestration/federation/federated-worker-start', () => ({
   startFederatedWorker: async () => ({ state: 'ready', dispatchId: 'ctx_remote' })
 }))
+
 vi.mock('./orchestration-structured-worker-session', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   sendStructuredWorkerPreamble: async () => {},
@@ -106,12 +111,15 @@ describe('worker-start honours the settings default', () => {
       if (!settings) {
         throw new Error('runtime_unavailable')
       }
+
       return settings as never
     })
     const task = db.createTask({ spec: 'settings-driven task', runId })
+
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.workerStart'
     )!
+
     const params = method.params!.parse({
       task: task.id,
       from: 'term_coord',
@@ -119,6 +127,7 @@ describe('worker-start honours the settings default', () => {
       agent: 'claude',
       ...overrides
     })
+
     return (await method.handler(params, { runtime })) as {
       state: string
       mode: { mode: string; preferred: string; reason: string; detail: string }
@@ -132,6 +141,7 @@ describe('worker-start honours the settings default', () => {
     } as never)
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo', kind: 'git' } as never)
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({ terminals: [] } as never)
+
     return vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(
       async (createArgs) =>
         ({

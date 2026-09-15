@@ -55,6 +55,7 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
     tcc_attribution: 'intact',
     live_session_count_bucket: '2-5'
   }
+
   const denied = {
     cwd_class: 'documents',
     app_version_match: 'different',
@@ -78,6 +79,7 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
         false
       )
     }
+
     expect(
       eventSchemas.daemon_adopted.safeParse({ ...adopted, spawner_path_class: '/Applications' })
         .success

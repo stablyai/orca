@@ -13,6 +13,7 @@ export async function runPluginGit(args: string[], cwd: string): Promise<string>
     cwd,
     timeout: PLUGIN_GIT_TIMEOUT_MS
   })
+
   return stdout.trim()
 }
 
@@ -26,7 +27,9 @@ export async function checkoutPluginGitSource(input: {
   if (!isAllowedPluginGitUrl(input.url)) {
     throw new Error('plugin Git URL must use HTTPS or SSH')
   }
+
   const ref = input.ref.trim()
+
   if (PLUGIN_COMMIT_PATTERN.test(ref)) {
     await runPluginGit(['init', '--quiet', input.destination], input.workingDirectory)
     await runPluginGit(['remote', 'add', 'origin', input.url], input.destination)
@@ -34,15 +37,20 @@ export async function checkoutPluginGitSource(input: {
     await runPluginGit(['checkout', '--quiet', 'FETCH_HEAD'], input.destination)
   } else {
     const args = ['clone', '--quiet', '--depth', '1']
+
     if (ref.length > 0) {
       args.push('--branch', ref)
     }
+
     args.push('--', input.url, input.destination)
     await runPluginGit(args, input.workingDirectory)
   }
+
   const resolvedCommit = await runPluginGit(['rev-parse', 'HEAD'], input.destination)
+
   if (!PLUGIN_COMMIT_PATTERN.test(resolvedCommit)) {
     throw new Error('Git resolved an invalid commit identity')
   }
+
   return resolvedCommit
 }

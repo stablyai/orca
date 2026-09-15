@@ -19,11 +19,13 @@ export type CommitMessageAgentRuntimeTarget = {
 
 function cloneProcessEnv(): Record<string, string> {
   const env: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) {
       env[key] = value
     }
   }
+
   return env
 }
 
@@ -34,10 +36,13 @@ function cloneProcessEnv(): Record<string, string> {
 // user-set CODEX_HOME.
 function cloneProcessEnvWithoutOrcaCodexHomeOverride(): Record<string, string> {
   const env = cloneProcessEnv()
+
   if (env.ORCA_CODEX_HOME && env.CODEX_HOME === env.ORCA_CODEX_HOME) {
     delete env.CODEX_HOME
   }
+
   delete env.ORCA_CODEX_HOME
+
   return env
 }
 
@@ -58,9 +63,11 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
         : agentId === 'grok'
           ? 'GROK_HOME'
           : null
+
   if (!configVar) {
     return null
   }
+
   // Why: each kind owns a distinct ORCA_*_SOURCE_* shadow so a headless commit
   // run from inside a legacy OMP overlay restores the OMP source dir, never
   // the Pi one (and vice versa). PI_CODING_AGENT_DIR is the binary-facing var
@@ -75,6 +82,7 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
           : undefined
 
   const value = readInheritedOrShellEnvVar(configVar, sourceVar)
+
   if (!value) {
     return { ok: true }
   }
@@ -93,9 +101,11 @@ export async function prepareLocalCommitMessageAgentEnv(
   // Why: a non-null result short-circuits the resolvers below, so any agent added
   // to prepareShellConfigDirEnv must not also need a Codex/Claude-style resolver.
   const shellConfigEnv = target?.runtime === 'wsl' ? null : prepareShellConfigDirEnv(agentId)
+
   if (shellConfigEnv) {
     return shellConfigEnv
   }
+
   if (!resolvers) {
     return { ok: true }
   }
@@ -104,8 +114,10 @@ export async function prepareLocalCommitMessageAgentEnv(
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
       const codexHomePath = await resolvers.prepareForCodexLaunch(target)
       const wslCodexHome = codexHomePath ? parseWslUncPath(codexHomePath) : null
+
       if (target?.runtime === 'wsl') {
         const codexHomeForTarget = wslCodexHome?.linuxPath ?? null
+
         // Why: the fallback must still strip Orca-owned overrides, or a
         // system-default WSL run inherits the managed CODEX_HOME.
         return {
@@ -115,11 +127,13 @@ export async function prepareLocalCommitMessageAgentEnv(
             : cloneProcessEnvWithoutOrcaCodexHomeOverride()
         }
       }
+
       if (codexHomePath && wslCodexHome) {
         // Why: this local generation path spawns the host Codex binary. A WSL
         // managed home is only valid when the process is routed through wsl.exe.
         return { ok: true }
       }
+
       return {
         ok: true,
         env: codexHomePath
@@ -130,13 +144,16 @@ export async function prepareLocalCommitMessageAgentEnv(
 
     if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
       const preparation = await resolvers.prepareForClaudeLaunch(target)
+
       const env = applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
         stripAuthEnv: preparation.stripAuthEnv
       })
+
       return { ok: true, env }
     }
   } catch (error) {
     console.error('[commit-message] Failed to prepare agent environment:', error)
+
     return {
       ok: false,
       error: 'Failed to prepare the selected agent account for commit message generation.'

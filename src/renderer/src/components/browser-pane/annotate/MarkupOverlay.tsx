@@ -29,9 +29,11 @@ export function MarkupOverlay({
 
   const handleDone = useCallback(() => {
     const imageElement = baseImgRef.current
+
     if (!imageElement || !baseLoaded) {
       return
     }
+
     onComplete({ imageElement, shapes: editor.shapes })
   }, [baseLoaded, editor.shapes, onComplete])
 
@@ -81,6 +83,7 @@ export function MarkupOverlay({
             // Why: keep keystrokes local — without this the browser pane's global
             // key handlers can swallow typing before it reaches the input.
             event.stopPropagation()
+
             // Why: during IME composition (e.g. Japanese conversion), Enter
             // confirms the candidate — it must NOT also commit the annotation.
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) {

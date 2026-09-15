@@ -52,6 +52,7 @@ describe('terminal delivery watchdog', () => {
   afterEach(() => {
     warnSpy.mockRestore()
     vi.useRealTimers()
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -72,6 +73,7 @@ describe('terminal delivery watchdog', () => {
       reattachPushListeners: reattachMock,
       hasAttachedPtys: () => true
     })
+
     return {
       recordPtyDataReceived: watchdog.recordPtyDataReceived,
       registerRestoreHandler: (ptyId, handler) => {
@@ -98,9 +100,11 @@ describe('terminal delivery watchdog', () => {
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 4)
 
     expect(reportMock).toHaveBeenCalledTimes(4)
+
     for (const call of reportMock.mock.calls) {
       expect((call[0] as { heal?: boolean }).heal).toBeUndefined()
     }
+
     expect(reattachMock).not.toHaveBeenCalled()
   })
 
@@ -136,9 +140,11 @@ describe('terminal delivery watchdog', () => {
     // marker reaches the pane handler without any push event.
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     expect(reattachMock).toHaveBeenCalledTimes(1)
+
     const healCalls = reportMock.mock.calls.filter(
       (call) => (call[0] as { heal?: boolean }).heal === true
     )
+
     expect(healCalls).toHaveLength(1)
     expect(healCalls[0]![0]).toMatchObject({
       heal: true,

@@ -57,6 +57,7 @@ type EntryExpiries = { hookExpiryAt: number; completionExpiryAt: number | null }
 
 function entryExpiries(entry: AgentStatusEntry): EntryExpiries {
   const completedAt = agentEntryCompletionAt(entry)
+
   return {
     hookExpiryAt: agentStatusEvidenceObservedAt(entry) + AGENT_STATUS_STALE_AFTER_MS,
     completionExpiryAt: completedAt === null ? null : completedAt + AGENT_STATUS_STALE_AFTER_MS
@@ -98,6 +99,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
       if (generation !== deferredScheduleGeneration) {
         return
       }
+
       schedule()
     })
   }
@@ -105,14 +107,18 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
   const noteLiveEntryDelta = (delta: FreshnessLiveEntryDelta): void => {
     if (cache === null || cache.entries !== delta.previousEntries) {
       cache = null
+
       return
     }
+
     const departing =
       delta.replacedEntry === undefined
         ? delta.evictedEntries
         : [delta.replacedEntry, ...delta.evictedEntries]
+
     for (const entry of departing) {
       const { hookExpiryAt, completionExpiryAt } = entryExpiries(entry)
+
       // A departing row that holds (or ties) a cached minimum leaves it unknowable without a scan.
       if (
         hookExpiryAt === cache.minExpiryAt ||
@@ -121,17 +127,22 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
             completionExpiryAt === cache.minCompletionExpiryAt))
       ) {
         cache = null
+
         return
       }
     }
+
     const { hookExpiryAt, completionExpiryAt } = entryExpiries(delta.nextEntry)
+
     if (hookExpiryAt >= cache.scannedAt) {
       cache.minExpiryAt = Math.min(cache.minExpiryAt, hookExpiryAt)
     }
+
     if (completionExpiryAt !== null && completionExpiryAt >= cache.scannedAt) {
       cache.minExpiryAt = Math.min(cache.minExpiryAt, completionExpiryAt)
       cache.minCompletionExpiryAt = Math.min(cache.minCompletionExpiryAt, completionExpiryAt)
     }
+
     cache.size =
       cache.size - delta.evictedEntries.length + (delta.replacedEntry === undefined ? 1 : 0)
     cache.entries = delta.nextEntries
@@ -141,6 +152,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     if (!Number.isFinite(nextExpiryAt)) {
       return
     }
+
     // Why: +1 ms ensures the timer fires strictly after the stale boundary,
     // so isExplicitAgentStatusFresh (which uses `<=`) flips to stale when the
     // timer runs. Without the +1, float/rounding could leave the entry "just
@@ -159,6 +171,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
   const scan = (statusEntries: Record<string, AgentStatusEntry>, now: number): void => {
     agentStatusFreshnessScanCounters.fullScans += 1
     const entries = Object.values(statusEntries)
+
     if (entries.length === 0) {
       cache = {
         entries: statusEntries,
@@ -168,11 +181,14 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
         size: 0
       }
       lastCheckedAt = null
+
       return
     }
+
     let nextExpiryAt = Number.POSITIVE_INFINITY
     let nextCompletionExpiryAt = Number.POSITIVE_INFINITY
     let crossedCompletionDeadline = false
+
     // Why: skip entries already past the stale boundary — they each contribute
     // exactly one epoch bump at crossing, and rescheduling on them would spin
     // the timer forever because the bump doesn't clear them from the map
@@ -184,9 +200,11 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     for (const entry of entries) {
       agentStatusFreshnessScanCounters.entryVisits += 1
       const { hookExpiryAt, completionExpiryAt } = entryExpiries(entry)
+
       if (hookExpiryAt >= now) {
         nextExpiryAt = Math.min(nextExpiryAt, hookExpiryAt)
       }
+
       // Completion and hook freshness have independent expiry times.
       if (completionExpiryAt !== null) {
         // Detect a missed completion expiry before a same-state update extends hook freshness.
@@ -197,12 +215,14 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
         ) {
           crossedCompletionDeadline = true
         }
+
         if (completionExpiryAt >= now) {
           nextExpiryAt = Math.min(nextExpiryAt, completionExpiryAt)
           nextCompletionExpiryAt = Math.min(nextCompletionExpiryAt, completionExpiryAt)
         }
       }
     }
+
     cache = {
       entries: statusEntries,
       scannedAt: now,
@@ -211,9 +231,11 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
       size: entries.length
     }
     lastCheckedAt = now
+
     if (crossedCompletionDeadline) {
       deps.bumpEpochs()
     }
+
     arm(nextExpiryAt, now)
   }
 
@@ -221,6 +243,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     clear()
     const statusEntries = deps.getStatusEntries()
     const now = Date.now()
+
     // The cached minima answer only while they are still in the future: a minimum that has gone
     // past is exactly the case where the surviving candidates — and any crossing — need a rescan.
     if (
@@ -230,14 +253,19 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
       cache.minCompletionExpiryAt >= now
     ) {
       agentStatusFreshnessScanCounters.cachedScans += 1
+
       if (cache.size === 0) {
         lastCheckedAt = null
+
         return
       }
+
       lastCheckedAt = now
       arm(cache.minExpiryAt, now)
+
       return
     }
+
     scan(statusEntries, now)
   }
 

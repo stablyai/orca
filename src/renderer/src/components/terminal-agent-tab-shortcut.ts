@@ -19,8 +19,10 @@ export function resolveTerminalAgentTabShortcut({
   matchShortcut: (actionId: KeybindingActionId) => boolean
 }): TerminalAgentTabShortcut {
   const state = useAppStore.getState()
+
   if (matchShortcut('tab.newAgent')) {
     const connectionId = getConnectionId(activeWorktreeId)
+
     return {
       actionId: 'tab.newAgent',
       agent: resolveDefaultAgentForNewTab({
@@ -33,10 +35,12 @@ export function resolveTerminalAgentTabShortcut({
       })
     }
   }
+
   for (const bound of listBoundAgentTabActions(keybindings, state.settings?.disabledTuiAgents)) {
     if (matchShortcut(bound.actionId)) {
       return { actionId: bound.actionId, agent: bound.agent }
     }
   }
+
   return { actionId: null, agent: null }
 }

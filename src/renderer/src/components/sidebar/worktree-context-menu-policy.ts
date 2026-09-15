@@ -11,11 +11,17 @@ import { translate } from '@/i18n/i18n'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
+
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
+
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
+
 const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
+
 const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
+
 // Why: the picker is unmounted on close, which would cut PopoverContent's
 // data-[state=closed] exit animation short; hold the subtree for its duration.
 export const PARENT_PICKER_EXIT_ANIMATION_MS = 200
@@ -26,11 +32,17 @@ export const PARENT_PICKER_EXIT_ANIMATION_MS = 200
 // teardown set() churn. Module-level (one allocation, never recreated per render) so
 // the reference is constant and Zustand's Object.is equality short-circuits.
 export const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
+
 export const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
+
 export const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
+
 export const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
+
 export const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
+
 export const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
+
 export const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 
 // Why: the gating decision for the menu-only store subscriptions. When the menu is
@@ -68,7 +80,9 @@ export function shouldUseNativeContextMenu(target: EventTarget | null): boolean 
     closest?: (selector: string) => Element | null
     parentElement?: { closest?: (selector: string) => Element | null }
   } | null
+
   const nativeContextMenuSelector = `[${WORKTREE_NATIVE_CONTEXT_MENU_ATTR}]`
+
   return (
     (maybeElement?.closest?.(nativeContextMenuSelector) ??
       maybeElement?.parentElement?.closest?.(nativeContextMenuSelector)) != null
@@ -83,10 +97,13 @@ export function shouldIgnoreNestedWorktreeContextMenuScope(
     closest?: (selector: string) => Element | null
     parentElement?: { closest?: (selector: string) => Element | null }
   } | null
+
   const scopeSelector = `[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`
+
   const closestScope =
     maybeScopedTarget?.closest?.(scopeSelector) ??
     maybeScopedTarget?.parentElement?.closest?.(scopeSelector)
+
   // Why: lineage child previews live inside the parent card DOM but own their
   // context menu target. The parent must ignore only those nested scopes.
   return closestScope != null && closestScope !== currentTarget
@@ -125,9 +142,11 @@ export function getWorktreeParentPickerAnchor(
   worktreeId: string
 ): HTMLElement | null {
   const dragRow = scope?.closest<HTMLElement>('[data-worktree-drag-id]')
+
   if (dragRow?.dataset.worktreeDragId === worktreeId) {
     return dragRow
   }
+
   return scope
 }
 
@@ -168,20 +187,25 @@ export function shouldContinueDeleteSiblingPositionRestore(args: {
 export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
   const sidebar = scope?.closest('[data-worktree-sidebar]')
   const row = scope?.closest('[data-worktree-virtual-row]')
+
   if (!(sidebar instanceof HTMLElement) || !(row instanceof HTMLElement)) {
     return () => {}
   }
+
   const rows = Array.from(sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]'))
     .map((element) => ({ element, top: element.getBoundingClientRect().top }))
     .sort((a, b) => a.top - b.top)
     .map(({ element }) => element)
+
   const rowIndex = rows.indexOf(row)
   const anchorRow = rows[rowIndex + 1] ?? rows[rowIndex - 1] ?? null
   const anchorKey = anchorRow?.getAttribute('data-worktree-virtual-row-key')
   const rowKey = row.getAttribute('data-worktree-virtual-row-key')
+
   if (!anchorKey || !rowKey) {
     return () => {}
   }
+
   const previousScrollTop = sidebar.scrollTop
   const previousScrollHeight = sidebar.scrollHeight
   const desiredTop = row.getBoundingClientRect().top
@@ -189,15 +213,20 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   return () => {
     let attempts = 0
     let stableFrames = 0
+
     const restore = (): void => {
       const currentSidebar = document.querySelector('[data-worktree-sidebar]')
+
       if (!(currentSidebar instanceof HTMLElement)) {
         return
       }
+
       const currentTarget = findSidebarVirtualRowByKey(currentSidebar, rowKey)
       const currentAnchor = currentTarget ?? findSidebarVirtualRowByKey(currentSidebar, anchorKey)
+
       if (currentAnchor) {
         const delta = currentAnchor.getBoundingClientRect().top - desiredTop
+
         if (Math.abs(delta) > 1) {
           currentSidebar.scrollTop += delta
           stableFrames = 0
@@ -211,7 +240,9 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
         )
         stableFrames = 0
       }
+
       attempts += 1
+
       if (
         shouldContinueDeleteSiblingPositionRestore({
           attempts,
@@ -221,6 +252,7 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
         window.requestAnimationFrame(restore)
       }
     }
+
     restore()
   }
 }
@@ -242,8 +274,10 @@ export function planWorkspaceStatusAssignment(
   if (boardSyncEnabled) {
     return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
   }
+
   const localWriteIds = worktrees
     .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
     .map((item) => item.id)
+
   return { kind: 'local-only', localWriteIds }
 }

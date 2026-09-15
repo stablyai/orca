@@ -70,35 +70,44 @@ export class PluginWorkerController {
     if (!plugin.manifest.main) {
       throw new Error(`plugin ${plugin.pluginKey} has no worker entry`)
     }
+
     try {
       this.assertCurrentApproved(plugin)
       await this.options.contentVerifier.verify(plugin)
       await resolveContainedPluginArtifact(plugin.rootDir, plugin.manifest.main)
       this.assertCurrentApproved(plugin)
       const capabilities = this.options.capabilities(plugin.pluginKey)
+
       if (!capabilities) {
         throw new Error(`plugin ${plugin.pluginKey} is no longer approved`)
       }
+
       const spec = buildPluginWorkerSpawnSpec(plugin, capabilities)
       const handle = await this.manager.ensureActive(spec)
+
       if (!this.options.isCurrentApproved(plugin)) {
         await this.manager.deactivate(plugin.pluginKey)
         throw new Error(`plugin ${plugin.pluginKey} changed or was disabled during activation`)
       }
+
       const declaredCommands = new Set(
         plugin.manifest.contributes.commands
           .filter((command) => command.action === undefined)
           .map((command) => command.id)
       )
+
       const undeclaredCommand = handle.commands.find((command) => !declaredCommands.has(command))
+
       if (undeclaredCommand) {
         await this.manager.deactivate(plugin.pluginKey)
         throw new Error(
           `plugin ${plugin.pluginKey} registered undeclared command ${undeclaredCommand}`
         )
       }
+
       this.activationErrors.delete(plugin.pluginKey)
       this.registerCommands(plugin, spec, handle.commands)
+
       return handle
     } catch (error) {
       this.activationErrors.set(
@@ -118,11 +127,14 @@ export class PluginWorkerController {
 
   async reconcile(nextSpecs: ReadonlyMap<string, PluginWorkerSpawnSpec>): Promise<void> {
     const current = new Map([...this.registeredSpecs, ...this.manager.trackedSpecs()])
+
     for (const [pluginKey, spec] of current) {
       const next = nextSpecs.get(pluginKey)
+
       if (next && pluginWorkerSpawnSpecsEqual(spec, next)) {
         continue
       }
+
       this.options.registry.clearPlugin(pluginKey)
       this.registeredSpecs.delete(pluginKey)
       this.activationErrors.delete(pluginKey)
@@ -155,6 +167,7 @@ export class PluginWorkerController {
     commands: readonly string[]
   ): void {
     this.options.registry.clearPlugin(plugin.pluginKey)
+
     for (const commandId of commands) {
       this.options.registry.register(
         PLUGIN_COMMAND_EXTENSION_POINT,
@@ -166,6 +179,7 @@ export class PluginWorkerController {
         commandId
       )
     }
+
     this.registeredSpecs.set(plugin.pluginKey, spec)
   }
 }

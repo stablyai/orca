@@ -29,9 +29,12 @@ export function withReactCommitCascadeWriteProbe<TState>(
           // would drop the write itself.
         }
       }
+
       ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
     }) as typeof set
+
     api.setState = wrapped as typeof api.setState
+
     return createState(wrapped, get, api)
   }
 }

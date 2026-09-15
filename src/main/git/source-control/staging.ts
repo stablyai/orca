@@ -13,6 +13,7 @@ export async function stageFile(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   invalidateGitReadCaches()
+
   try {
     await gitExecFileAsync(
       ['add', '--', literalPathspec(filePath, options)],
@@ -32,6 +33,7 @@ export async function unstageFile(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   invalidateGitReadCaches()
+
   try {
     await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath, options)], {
       ...gitOptionsForWorktree(worktreePath, options)
@@ -50,9 +52,11 @@ export async function bulkStageFiles(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   invalidateGitReadCaches()
+
   if (filePaths.length === 0) {
     return
   }
+
   try {
     for (const args of bulkPathspecCommands(['add', '--'], filePaths, worktreePath, options)) {
       await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
@@ -71,9 +75,11 @@ export async function bulkUnstageFiles(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   invalidateGitReadCaches()
+
   if (filePaths.length === 0) {
     return
   }
+
   try {
     const commands = bulkPathspecCommands(
       ['restore', '--staged', '--'],
@@ -81,6 +87,7 @@ export async function bulkUnstageFiles(
       worktreePath,
       options
     )
+
     for (const args of commands) {
       await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
     }

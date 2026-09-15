@@ -24,9 +24,11 @@ export type LinearSdkModule = {
 // tests can mock the loader — a raw createRequire bypasses vitest's module
 // registry, but `vi.doMock('./linear-sdk', …)` on this module works.
 const requireFromMain = createRequire(__filename)
+
 let cached: LinearSdkModule | null = null
 
 export function loadLinearSdk(): LinearSdkModule {
   cached ??= requireFromMain('@linear/sdk') as LinearSdkModule
+
   return cached
 }

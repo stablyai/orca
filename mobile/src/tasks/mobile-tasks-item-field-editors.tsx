@@ -39,9 +39,11 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
     updateGitHubPullRequestMetadata,
     updateGitLabIssueMetadata
   } = model
+
   if (!actionItem || !detailPayload) {
     return null
   }
+
   return SHOW_MOBILE_DETAIL_METADATA_EDITORS &&
     ((actionItem.provider === 'github' &&
       detailPayload.provider === 'github' &&
@@ -71,14 +73,18 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               void updateGitHubPullRequestMetadata(actionItem, {
                 title: itemTitleDraft.trim()
               })
+
               return
             }
+
             if (actionItem.provider === 'github') {
               void updateGitHubIssueMetadata(actionItem, {
                 title: itemTitleDraft.trim()
               })
+
               return
             }
+
             if (actionItem.provider === 'gitlab') {
               void updateGitLabIssueMetadata(actionItem, {
                 title: itemTitleDraft.trim()
@@ -109,6 +115,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
             <View style={styles.chipRow}>
               {[...new Set([...itemAvailableLabels, ...detailPayload.labels])].map((label) => {
                 const selected = detailPayload.labels.includes(label)
+
                 return (
                   <Pressable
                     key={label}
@@ -198,6 +205,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                 ).values()
               ].map((user) => {
                 const selected = detailPayload.assignees.includes(user.login)
+
                 return (
                   <Pressable
                     key={user.login}

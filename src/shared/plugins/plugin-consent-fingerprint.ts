@@ -8,6 +8,7 @@ type PluginConsentSubject = Pick<PluginManifest, 'capabilities' | 'main'> & {
 
 export function hasInstructionalPluginContributions(manifest: PluginConsentSubject): boolean {
   const contributions = manifest.contributes
+
   return Boolean(
     contributions &&
     ((contributions.keybindings?.length ?? 0) > 0 ||
@@ -27,11 +28,13 @@ export function canonicalizePluginConsent(
 ): string {
   const capabilities = canonicalizeCapabilitySet(manifest.capabilities)
   const workerIdentity = manifest.main === undefined ? '' : '\0trusted-node-worker'
+
   // Instructional bytes execute later under user or agent authority, so
   // approval is bound to their immutable install/dev-tree identity.
   const instructionalIdentity = hasInstructionalPluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
+
   return `${capabilities}${workerIdentity}${instructionalIdentity}`
 }
 

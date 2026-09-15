@@ -65,6 +65,7 @@ describe('useFileSearchRunner result ownership', () => {
 
   it('commits the explicit remote owner used for the search, not the ambient runtime', async () => {
     const worktreeId = 'repo-a::/repo'
+
     const state = {
       settings: { activeRuntimeEnvironmentId: 'ambient-runtime-b' },
       repos: [{ id: 'repo-a', executionHostId: 'runtime:repo-runtime' }],
@@ -73,6 +74,7 @@ describe('useFileSearchRunner result ownership', () => {
       },
       fileSearchStateByWorktree: { [worktreeId]: {} }
     }
+
     const { hook, updates } = renderSearchRunner(state, worktreeId)
 
     await finishSearch(hook.result.current.executeSearch)
@@ -95,6 +97,7 @@ describe('useFileSearchRunner result ownership', () => {
 
   it('commits explicit local ownership without inheriting an ambient runtime', async () => {
     const worktreeId = 'repo-a::/repo'
+
     const state = {
       settings: { activeRuntimeEnvironmentId: 'ambient-runtime-b' },
       repos: [{ id: 'repo-a', executionHostId: 'runtime:repo-runtime' }],
@@ -103,6 +106,7 @@ describe('useFileSearchRunner result ownership', () => {
       },
       fileSearchStateByWorktree: { [worktreeId]: {} }
     }
+
     const { hook, updates } = renderSearchRunner(state, worktreeId)
 
     await finishSearch(hook.result.current.executeSearch)
@@ -119,6 +123,7 @@ describe('useFileSearchRunner result ownership', () => {
 
   it('preserves SSH routing through the worktree connection without a runtime owner', async () => {
     const worktreeId = 'repo-a::/repo'
+
     const state = {
       settings: { activeRuntimeEnvironmentId: 'ambient-runtime-b' },
       repos: [{ id: 'repo-a', connectionId: 'ssh-target' }],
@@ -127,6 +132,7 @@ describe('useFileSearchRunner result ownership', () => {
       },
       fileSearchStateByWorktree: { [worktreeId]: {} }
     }
+
     mocks.getConnectionId.mockReturnValue('ssh-target')
     const { hook, updates } = renderSearchRunner(state, worktreeId)
 
@@ -148,12 +154,14 @@ describe('useFileSearchRunner result ownership', () => {
 
   it('keeps an unresolved owner local when no runtime actually handled the search', async () => {
     const worktreeId = 'missing-repo::/repo'
+
     const state = {
       settings: { activeRuntimeEnvironmentId: null },
       repos: [],
       worktreesByRepo: {},
       fileSearchStateByWorktree: { [worktreeId]: {} }
     }
+
     const { hook, updates } = renderSearchRunner(state, worktreeId)
 
     await finishSearch(hook.result.current.executeSearch)

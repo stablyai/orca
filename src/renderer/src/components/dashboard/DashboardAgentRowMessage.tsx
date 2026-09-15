@@ -20,6 +20,7 @@ export function DashboardAgentRowMessage({
   // These rows are the sidebar's only boot-visible markdown, so warm the chunk as
   // soon as one mounts rather than waiting for text to arrive.
   useEffect(preloadCommentMarkdown, [])
+
   // Why: message slot is always reserved in collapsed view so the row height
   // stays fixed as assistant text arrives or clears.
   if (!isInterrupted && !lastAssistantMessage) {

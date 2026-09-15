@@ -41,26 +41,34 @@ export async function engageGpuFallbackAfterCrashBurst(
   handlers.onEngaged(engagement)
   const persisted = handlers.persistMarker(engagement)
   let decision: GpuFallbackRestartDecision
+
   try {
     decision = await handlers.promptForRestart()
   } catch (error) {
     // Marker stays: the next launch is safe even though the user was never asked.
     handlers.onPromptFailed(error)
+
     return
   }
+
   if (handlers.isQuitting()) {
     return
   }
+
   if (decision !== 'restart') {
     if (persisted) {
       handlers.clearMarker()
     }
+
     handlers.onRestartDeferred(engagement)
+
     return
   }
+
   if (!persisted) {
     return
   }
+
   handlers.confirmMarker(engagement)
   handlers.restartIntoSafeGraphics(engagement)
 }

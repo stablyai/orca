@@ -12,21 +12,26 @@ export async function fetchRelayRegionCatalog(
   if (!isCanonicalDirectorOrigin(directorUrl)) {
     throw new Error('invalid relay director origin')
   }
+
   const response = await fetch(`${directorUrl}/v1/regions`, {
     method: 'GET',
     cache: 'no-store',
     redirect: 'error',
     signal: AbortSignal.timeout(timeoutMs)
   })
+
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
     throw new Error(`relay region catalog failed (${response.status})`)
   }
+
   const body = await readFetchResponseJsonWithinLimit<unknown>(response, CATALOG_MAX_BYTES, {
     structuralTokens: 64,
     nestingDepth: 8
   })
+
   const catalog = RelayRegionCatalogSchema.parse(body)
+
   if (
     catalog.regions.some((entry) =>
       entry.probeOrigins.some((origin) => !isProbeOriginForDirector(origin, directorUrl))
@@ -34,6 +39,7 @@ export async function fetchRelayRegionCatalog(
   ) {
     throw new Error('relay probe origin does not belong to the director')
   }
+
   return catalog
 }
 
@@ -51,6 +57,7 @@ function isCanonicalDirectorOrigin(value: string): boolean {
   try {
     const url = new URL(value)
     const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+
     return (
       url.origin === value && (url.protocol === 'https:' || (url.protocol === 'http:' && loopback))
     )

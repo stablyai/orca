@@ -14,6 +14,7 @@ function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
   return listRegisteredSshTargets().map(({ id, label, generation }) => {
     const state = getRegisteredSshState(id)
     const remotePlatform = state?.remotePlatform
+
     return {
       id,
       label,

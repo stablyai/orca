@@ -49,9 +49,12 @@ function matchTuiStructuredKey(
 ): string | null {
   if (inPreamble) {
     const tuiKey = keyPath.length === 2 && keyPath[0] === 'tui' ? keyPath[1] : null
+
     return tuiKey && isPromotedTuiKey(tuiKey) ? tuiStructuredKey(tuiKey) : null
   }
+
   const tuiKey = keyPath.length === 1 ? keyPath[0] : null
+
   return tuiBodyActive && tuiKey && isPromotedTuiKey(tuiKey) ? tuiStructuredKey(tuiKey) : null
 }
 
@@ -67,11 +70,14 @@ function matchPromotedStructuredKey(
   tuiBodyActive: boolean
 ): { structuredKey: string; raw: string } | null {
   const parsed = parseTomlKeyPath(line)
+
   if (!parsed || line[parsed.end] !== '=') {
     return null
   }
+
   const raw = line.slice(parsed.end + 1).trim()
   const topLevelKey = parsed.segments.length === 1 ? parsed.segments[0] : null
+
   if (
     inPreamble &&
     topLevelKey &&
@@ -79,7 +85,9 @@ function matchPromotedStructuredKey(
   ) {
     return { structuredKey: topLevelKey, raw }
   }
+
   const tuiKey = matchTuiStructuredKey(parsed.segments, inPreamble, tuiBodyActive)
+
   return tuiKey ? { structuredKey: tuiKey, raw } : null
 }
 
@@ -92,12 +100,15 @@ export function readPromotedSettingValues(configPath: string): Map<string, TopLe
   // not read them. Returning an empty map says the user cleared every promoted
   // value, and the write below then acts on that.
   const observation = observeAgentStateFile(configPath)
+
   if (observation.kind === 'absent') {
     return new Map()
   }
+
   if (observation.kind === 'indeterminate') {
     throw observation.error
   }
+
   return readPromotedSettingValuesFromContent(observation.value)
 }
 
@@ -110,9 +121,11 @@ export function readPromotedSettingValuesFromContent(
   let inPreamble = true
   let tuiTableSeen = false
   let tuiBodyActive = false
+
   for (const line of lines) {
     if (isTomlStructuralLine(state)) {
       const header = getTomlTableHeader(line)
+
       if (header) {
         const table = parseTomlTableHeaderPath(header)
         tuiBodyActive =
@@ -121,14 +134,18 @@ export function readPromotedSettingValuesFromContent(
           table.segments.length === 1 &&
           table.segments[0] === 'tui' &&
           !tuiTableSeen
+
         if (tuiBodyActive) {
           tuiTableSeen = true
         }
+
         inPreamble = false
         state = updateTomlLineScanState(state, line)
         continue
       }
+
       const matched = matchPromotedStructuredKey(line, inPreamble, tuiBodyActive)
+
       if (matched) {
         const nextState = updateTomlLineScanState(state, line)
         result.set(matched.structuredKey, {
@@ -139,7 +156,9 @@ export function readPromotedSettingValuesFromContent(
         continue
       }
     }
+
     state = updateTomlLineScanState(state, line)
   }
+
   return result
 }

@@ -21,13 +21,16 @@ import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
 
 const CLAUDE_SESSION = '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88'
+
 const CODEX_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 let root: string
+
 let clock = 1_000
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -37,6 +40,7 @@ function providerHandle(agent: ImportAgent, sessionId: string): AgentSessionProv
   if (agent === 'claude') {
     return { kind: 'claude', sessionId, leafUuid: null }
   }
+
   return agent === 'codex'
     ? { kind: 'codex', threadId: sessionId }
     : { kind: 'opaque', agent, value: sessionId }
@@ -78,6 +82,7 @@ function legacyKey(recordId: string): string {
 async function writeFixture(name: string, lines: unknown[]): Promise<string> {
   const path = join(root, name)
   await writeFile(path, `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`, 'utf-8')
+
   return path
 }
 
@@ -196,6 +201,7 @@ describe('claude import', () => {
   it('keys items by (session id, uuid) from the raw record', async () => {
     const filePath = await writeFixture('claude.jsonl', CLAUDE_LINES)
     const journal = await open('claude', CLAUDE_SESSION)
+
     const result = await importLegacyTranscriptIntoJournal({
       journal,
       agent: 'claude',
@@ -287,6 +293,7 @@ describe('claude import', () => {
       // The fork's own session id, which is NOT what the copied records carry.
       sessionId: '7b1e5d33-0f28-42ac-8d59-9a4c6e2b1f70'
     })
+
     const copied = JSON.stringify(CLAUDE_LINES[1])
     expect(tracker.identify(copied, 0)).toEqual({
       provider: 'claude',
@@ -300,6 +307,7 @@ describe('codex import', () => {
   it('upserts live transcript messages without rolling the structured epoch', async () => {
     const journal = await open('codex', CODEX_SESSION)
     const epoch = journal.epoch
+
     const message = {
       id: 'live-tui-message',
       role: 'assistant' as const,
@@ -372,6 +380,7 @@ describe('codex import', () => {
       agent: 'codex',
       sessionId: CODEX_SESSION
     })
+
     const original = tracker.identify(JSON.stringify(CODEX_LINES[3]), 4)
     // Same record replayed at a different position in a resumed file.
     const replayed = tracker.identify(JSON.stringify(CODEX_LINES[3]), 11)
@@ -387,6 +396,7 @@ describe('codex import', () => {
       agent: 'codex',
       sessionId: CODEX_SESSION
     })
+
     expect(tracker.identify(JSON.stringify({ type: 'event_msg', payload: {} }), 3)).toEqual({
       provider: 'legacy',
       agent: 'codex',
@@ -399,6 +409,7 @@ describe('codex import', () => {
 describe('payload bounds on import', () => {
   it('marks a clipped tool result and discards the remainder', async () => {
     const output = 'y'.repeat(64 * 1024)
+
     const filePath = await writeFixture('claude-big.jsonl', [
       {
         parentUuid: null,
@@ -413,6 +424,7 @@ describe('payload bounds on import', () => {
         sessionId: CLAUDE_SESSION
       }
     ])
+
     const journal = await open('claude', CLAUDE_SESSION)
     await importLegacyTranscriptIntoJournal({
       journal,
@@ -425,9 +437,11 @@ describe('payload bounds on import', () => {
     const item = journal.snapshot().items[0]
     expect(item?.body).toMatchObject({ kind: 'tool-call', state: 'completed' })
     const body = item?.body
+
     if (body?.kind !== 'tool-call' || !body.output) {
       throw new Error('expected a bounded tool-call output')
     }
+
     expect(body.output.truncated).toBe(true)
     expect(body.output.byteLength).toBe(64 * 1024)
     expect(body.output.head).toHaveLength(1_024)
@@ -465,9 +479,11 @@ describe('payload bounds on import', () => {
 
     const body = journal.snapshot().items[0]?.body
     const block = body?.kind === 'message' ? body.blocks[0] : undefined
+
     if (block?.type !== 'subagent-group') {
       throw new Error('expected a subagent-group block')
     }
+
     expect(block.agents).toHaveLength(64)
     expect(block.agents[0]?.label.length).toBeLessThan(oversized.length)
     expect(block.agents[0]?.id.length).toBeLessThan(oversized.length)
@@ -506,9 +522,11 @@ describe('payload bounds on import', () => {
 
     const body = journal.snapshot().items[0]?.body
     const block = body?.kind === 'message' ? body.blocks[0] : undefined
+
     if (block?.type !== 'subagent-group') {
       throw new Error('expected a subagent-group block')
     }
+
     expect(block.agents[0]?.id).not.toBe(block.agents[1]?.id)
     expect(block.agents[0]?.id).toHaveLength(512)
   })
@@ -542,6 +560,7 @@ describe('import failures', () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
     const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
     const journal = await open('claude', CLAUDE_SESSION, { journalDir })
+
     const filePath = await writeFixture('oversized-tool-input.jsonl', [
       {
         parentUuid: null,
@@ -571,6 +590,7 @@ describe('import failures', () => {
       fence: 1,
       options: { filePath, limits }
     })
+
     expect(result.ok).toBe(true)
     const imported = journal.snapshot().items[0]
     expect(imported?.body).toMatchObject({
@@ -588,6 +608,7 @@ describe('import failures', () => {
   it('reports a missing transcript without touching the journal', async () => {
     const journal = await open('claude', CLAUDE_SESSION)
     const before = journal.epoch
+
     const result = await importLegacyTranscriptIntoJournal({
       journal,
       agent: 'claude',
@@ -595,6 +616,7 @@ describe('import failures', () => {
       fence: 1,
       options: { filePath: join(root, 'missing.jsonl') }
     })
+
     expect(result).toMatchObject({ ok: false })
     expect(journal.epoch).toBe(before)
   })
@@ -610,6 +632,7 @@ describe('import failures', () => {
       { fence: 1 }
     )
     const before = journal.epoch
+
     const metadataOnly = await writeFixture('metadata-only.jsonl', [
       {
         type: 'session_meta',
@@ -634,6 +657,7 @@ describe('import failures', () => {
 
   it('rejects an agent with no transcript decoder', async () => {
     const journal = await open('claude', CLAUDE_SESSION)
+
     const result = await importLegacyTranscriptIntoJournal({
       journal,
       agent: 'gemini',
@@ -641,6 +665,7 @@ describe('import failures', () => {
       fence: 1,
       options: { filePath: join(root, 'claude.jsonl') }
     })
+
     expect(result).toMatchObject({ ok: false })
   })
 })
@@ -659,11 +684,14 @@ describe('multi-block legacy messages', () => {
       if (entry.body.kind !== 'message') {
         continue
       }
+
       const block = entry.body.blocks.find((candidate) => candidate.type === 'tool-call')
+
       if (block) {
         return block.input
       }
     }
+
     return null
   }
 
@@ -671,6 +699,7 @@ describe('multi-block legacy messages', () => {
     const journal = await open('claude', CLAUDE_SESSION, {
       journalDir: join(root, 'claude-mixed-journal')
     })
+
     const filePath = await writeFixture('claude-mixed.jsonl', [
       {
         parentUuid: null,
@@ -717,6 +746,7 @@ describe('multi-block legacy messages', () => {
     const journal = await open('grok', CODEX_SESSION, {
       journalDir: join(root, 'grok-mixed-journal')
     })
+
     const filePath = await writeFixture('grok-mixed.jsonl', [
       {
         type: 'assistant',
@@ -745,6 +775,7 @@ describe('multi-block legacy messages', () => {
     const journal = await open('omp', CODEX_SESSION, {
       journalDir: join(root, 'omp-mixed-journal')
     })
+
     const filePath = await writeFixture('omp-mixed.jsonl', [
       {
         type: 'message',

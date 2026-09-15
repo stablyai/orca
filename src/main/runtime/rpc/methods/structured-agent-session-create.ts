@@ -56,6 +56,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
 }): Promise<PreparedStructuredAgentSessionCreate> {
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
+
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
     envelope: args.envelope,
     worktree: args.worktree,
@@ -63,13 +64,16 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     callerKey: args.caller.callerKey,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
+
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
     fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
+
   host ??= await args.ensureHost()
   const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
+
   return {
     host,
     attachParams: {
@@ -98,9 +102,11 @@ export async function commitStructuredAgentSessionCreate(args: {
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const result = await prepared.host.attach(args.caller, prepared.attachParams)
+
   if (!result.ok || !prepared.tab) {
     return result
   }
+
   try {
     await args.runtime.publishStructuredAgentSessionTab({
       workspaceId: prepared.tab.workspaceId,
@@ -110,6 +116,7 @@ export async function commitStructuredAgentSessionCreate(args: {
     })
   } catch (error) {
     console.warn('[agent-session] create committed before tab publication failed', error)
+
     return {
       ok: false,
       refusal: {
@@ -118,6 +125,7 @@ export async function commitStructuredAgentSessionCreate(args: {
       }
     }
   }
+
   return result
 }
 
@@ -135,9 +143,11 @@ export async function createStructuredAgentSessionForWorktree(args: {
     await resolveUncommittedStructuredCreate(() =>
       prepareStructuredAgentSessionCreateForWorktree(args)
     )
+
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
+
   return commitStructuredAgentSessionCreate({
     runtime: args.runtime,
     caller: args.caller,

@@ -12,6 +12,7 @@ import {
   cacheRepositoryMergeMetadata,
   type GitHubRepositoryMergeMetadata
 } from './repository-merge-metadata-cache'
+
 export async function detectRepositoryMergeMetadata(
   ownerRepo: GitHubApiRepository,
   branchName: string | undefined,
@@ -21,13 +22,17 @@ export async function detectRepositoryMergeMetadata(
   const cacheKey = `${executionScope ?? 'default'}\0${githubRepoIdentityKey(ownerRepo)}:${branchName ?? '__repo__'}`
   pruneRepositoryMergeMetadataCache()
   const cached = repositoryMergeMetadataCache.get(cacheKey)
+
   if (cached) {
     return cached.value
   }
+
   const guard = repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions)
+
   if (guard.blocked) {
     return { mergeQueueRequired: null, autoMergeAllowed: null }
   }
+
   const query = branchName
     ? `query($owner: String!, $repo: String!, $branch: String!, $qualified: String!) {
     repository(owner: $owner, name: $repo) {
@@ -51,8 +56,10 @@ export async function detectRepositoryMergeMetadata(
       autoMergeAllowed
     }
   }`
+
   try {
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
+
     const args = [
       'api',
       'graphql',
@@ -63,14 +70,17 @@ export async function detectRepositoryMergeMetadata(
       '-f',
       `repo=${ownerRepo.repo}`
     ]
+
     if (branchName) {
       args.push('-f', `branch=${branchName}`)
       args.push('-f', `qualified=refs/heads/${branchName}`)
     }
+
     const { stdout } = await ghExecFileAsync(args, {
       ...ghOptions,
       ...githubHostExecOptions(ownerRepo)
     })
+
     const parsed = JSON.parse(stdout) as {
       data?: {
         repository?: {
@@ -84,7 +94,9 @@ export async function detectRepositoryMergeMetadata(
         } | null
       }
     }
+
     const repository = parsed.data?.repository
+
     const mergeMethodSettings = repository
       ? normalizeGitHubPRMergeMethodSettings({
           defaultMethod: repository.viewerDefaultMergeMethod,
@@ -93,6 +105,7 @@ export async function detectRepositoryMergeMetadata(
           squashMergeAllowed: repository.squashMergeAllowed
         })
       : undefined
+
     const value: GitHubRepositoryMergeMetadata = {
       mergeQueueRequired: branchName
         ? Boolean(repository?.mergeQueue) ||
@@ -102,12 +115,14 @@ export async function detectRepositoryMergeMetadata(
         typeof repository?.autoMergeAllowed === 'boolean' ? repository.autoMergeAllowed : null,
       ...(mergeMethodSettings ? { mergeMethodSettings } : {})
     }
+
     // Why: a payload without `repository` is all-unknown; keep it on the short TTL so it retries once the condition clears.
     cacheRepositoryMergeMetadata(
       cacheKey,
       value,
       repository ? MERGE_QUEUE_CACHE_TTL_MS : MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS
     )
+
     return value
   } catch {
     // Why: cache a conservative result for failed merge-queue probes so we don't retry GraphQL on every poll while GitHub/network is unhappy.
@@ -115,7 +130,9 @@ export async function detectRepositoryMergeMetadata(
       mergeQueueRequired: null,
       autoMergeAllowed: null
     }
+
     cacheRepositoryMergeMetadata(cacheKey, value, MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS)
+
     return value
   }
 }

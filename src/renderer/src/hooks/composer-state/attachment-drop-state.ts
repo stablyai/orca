@@ -35,9 +35,11 @@ function localDropFailure(detail: string | undefined): ComposerDropFailure {
   if (detail?.startsWith('ENOENT')) {
     return { status: 'skipped', reason: 'missing' }
   }
+
   if (/^(EACCES|EPERM)/.test(detail ?? '')) {
     return { status: 'skipped', reason: 'permission-denied' }
   }
+
   return { status: 'failed', reason: detail }
 }
 
@@ -59,13 +61,16 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       if (paths.length === 0) {
         return
       }
+
       setAttachmentPaths((current) => {
         const next = [...current]
+
         for (const pathValue of paths) {
           if (!next.includes(pathValue)) {
             next.push(pathValue)
           }
         }
+
         return next
       })
     },
@@ -77,15 +82,19 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       if (folderPaths.length === 0) {
         return
       }
+
       // Why: de-dup within one drop — the OS can deliver the same folder twice when the selection includes an item and its parent.
       const uniqueFolderPaths = Array.from(new Set(folderPaths))
+
       // Why: quote paths with shell metacharacters so an inserted folder ref stays one token if pasted into a terminal; simple paths stay unadorned.
       const formatPath = (p: string): string => {
         if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
           return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
         }
+
         return p
       }
+
       const insertion = uniqueFolderPaths.map(formatPath).join(' ')
       const textarea = promptTextareaRef.current
       // Why: compute selection/insertion/caret outside the setAgentPrompt updater so it stays pure — Strict Mode double-invokes updaters in dev.
@@ -99,17 +108,21 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
       const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
       const caret = before.length + padded.length
+
       if (textarea) {
         cancelPromptCaretFrame()
         promptCaretFrameRef.current = requestAnimationFrame(() => {
           promptCaretFrameRef.current = null
+
           if (promptTextareaRef.current !== textarea || !textarea.isConnected) {
             return
           }
+
           textarea.focus()
           textarea.setSelectionRange(caret, caret)
         })
       }
+
       // Why: pass a plain value (not an updater) since before/after were already resolved, keeping the write pure under Strict-Mode double-render.
       setAgentPrompt(before + padded + after)
     },
@@ -127,6 +140,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       if (!targetSettings?.activeRuntimeEnvironmentId?.trim() && !targetConnectionId) {
         return null
       }
+
       if (!targetRepoPath) {
         if (canReportFailure()) {
           toast.error(
@@ -136,9 +150,12 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
             )
           )
         }
+
         return { filePaths: [], folderPaths: [] }
       }
+
       const destinationDir = joinPath(targetRepoPath, '.orca/drops')
+
       const sshExpectation = targetConnectionId
         ? captureDirectSshMutationExpectation(
             useAppStore.getState(),
@@ -150,6 +167,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
             expectedSshTargetId: undefined,
             expectedSshConnectionGeneration: undefined
           }
+
       const assertCurrent = targetConnectionId
         ? () => {
             const current = captureDirectSshMutationExpectation(
@@ -157,6 +175,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
               targetConnectionId,
               targetSettings?.activeRuntimeEnvironmentId
             )
+
             if (
               current.expectedSshTargetId !== sshExpectation.expectedSshTargetId ||
               current.expectedSshConnectionGeneration !==
@@ -166,6 +185,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
             }
           }
         : undefined
+
       const { results } = await importExternalPathsToRuntime(
         {
           settings: targetSettings,
@@ -178,7 +198,9 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         destinationDir,
         { ensureDestinationDir: true, assertCurrent }
       )
+
       const uploadResult = collectComposerDropResult(results)
+
       if (uploadResult.failureCount > 0 && canReportFailure()) {
         showComposerDropFailureToast({
           failureCount: uploadResult.failureCount,
@@ -186,6 +208,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
           commonFailure: uploadResult.commonFailure
         })
       }
+
       return { filePaths: uploadResult.filePaths, folderPaths: uploadResult.folderPaths }
     },
     [connectionId, selectedRepoPath, selectedRepoSettings]
@@ -194,15 +217,20 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
   const handleAddAttachment = useCallback(async (): Promise<void> => {
     try {
       const selectedPath = await window.api.shell.pickAttachment()
+
       if (!selectedPath) {
         return
       }
+
       const uploaded = await uploadComposerPaths([selectedPath])
+
       if (uploaded) {
         addComposerAttachments(uploaded.filePaths)
         insertComposerFolderPaths(uploaded.folderPaths)
+
         return
       }
+
       addComposerAttachments([selectedPath])
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add attachment.'
@@ -213,6 +241,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
   const applyLocalComposerDrop = useCallback(
     async (paths: string[], canApply: () => boolean = () => true): Promise<void> => {
       const results: ComposerDropItemResult[] = []
+
       for (const filePath of paths) {
         try {
           await window.api.fs.authorizeExternalPath({ targetPath: filePath })
@@ -230,9 +259,11 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       if (!canApply()) {
         return
       }
+
       const dropResult = collectComposerDropResult(results)
       addComposerAttachments(dropResult.filePaths)
       insertComposerFolderPaths(dropResult.folderPaths)
+
       if (dropResult.failureCount > 0) {
         showComposerDropFailureToast({
           failureCount: dropResult.failureCount,
@@ -274,6 +305,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       uploadComposerPaths
     ]
   )
+
   // Why: native OS file drops relay via the preload bridge; only the most recently mounted composer applies them.
   useComposerDropListener(applyNativeDrop)
 

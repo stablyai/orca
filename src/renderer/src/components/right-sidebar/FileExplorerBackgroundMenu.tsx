@@ -13,6 +13,7 @@ function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
     return
   }
+
   // Why: the synthetic trigger sits at the cursor; the right-button release
   // can otherwise land on "New File" and select it immediately.
   event.preventDefault()
@@ -35,6 +36,7 @@ export function FileExplorerBackgroundMenu({
   useEffect(() => {
     const close = (): void => onOpenChange(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
+
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
   }, [onOpenChange])
 

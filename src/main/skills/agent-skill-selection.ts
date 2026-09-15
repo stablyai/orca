@@ -17,28 +17,36 @@ export function selectDiscoveredSkills(
   const requested = new Set(selectors)
   const byId = new Map<string, DiscoveredSkill>()
   const discoveredByName = new Map<string, DiscoveredSkill[]>()
+
   for (const skill of skills) {
     // First writer wins, matching the `find` this replaces.
     if (requested.has(skill.id) && !byId.has(skill.id)) {
       byId.set(skill.id, skill)
     }
+
     if (!requested.has(skill.name)) {
       continue
     }
+
     const named = discoveredByName.get(skill.name)
+
     if (named) {
       named.push(skill)
     } else {
       discoveredByName.set(skill.name, [skill])
     }
   }
+
   for (const selector of selectors) {
     const exactId = byId.get(selector)
+
     if (exactId) {
       selected.set(exactId.id, exactId)
       continue
     }
+
     const named = discoveredByName.get(selector) ?? []
+
     if (named.length === 0) {
       throw new AgentSkillSharingError(
         AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
@@ -46,6 +54,7 @@ export function selectDiscoveredSkills(
         { selector }
       )
     }
+
     if (named.length > 1) {
       throw new AgentSkillSharingError(
         AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
@@ -53,19 +62,25 @@ export function selectDiscoveredSkills(
         { selector, matchingIds: named.map((skill) => skill.id) }
       )
     }
+
     selected.set(named[0].id, named[0])
   }
+
   const values = [...selected.values()]
   const byName = new Map<string, DiscoveredSkill[]>()
+
   for (const skill of values) {
     const named = byName.get(skill.name)
+
     if (named) {
       named.push(skill)
     } else {
       byName.set(skill.name, [skill])
     }
   }
+
   const collision = [...byName.entries()].find(([, named]) => named.length > 1)
+
   if (collision) {
     throw new AgentSkillSharingError(
       AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
@@ -73,5 +88,6 @@ export function selectDiscoveredSkills(
       { selector: collision[0], matchingIds: collision[1].map((skill) => skill.id) }
     )
   }
+
   return values
 }

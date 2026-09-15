@@ -3,7 +3,9 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
 
 export const MAILBOX_POINTER_RESERVED = 1
+
 export const MAILBOX_POINTER_WRITE_ATTEMPTED = 2
+
 export const MAILBOX_POINTER_ENTER_ATTEMPTED = 3
 
 export type MailboxPointerReservationTarget = {
@@ -122,6 +124,7 @@ export function settleMailboxPointerEnter(
   if (expectedPhases.length === 0) {
     return
   }
+
   mutatePointerMessages(this, ids, (placeholders) => ({
     sql: `UPDATE messages
           SET delivered_at = COALESCE(delivered_at, datetime('now')),
@@ -143,6 +146,7 @@ export function releaseMailboxPointerEnter(
   if (expectedPhases.length === 0) {
     return
   }
+
   mutatePointerMessages(this, ids, (placeholders) => ({
     sql: `UPDATE messages
           SET delivered_at = NULL, pointer_enter_pending = 0,
@@ -179,8 +183,10 @@ function mutatePointerMessages(
   if (ids.length === 0) {
     return 0
   }
+
   let changed = 0
   db.db.exec('SAVEPOINT mailbox_pointer_enter_mutation')
+
   try {
     for (let offset = 0; offset < ids.length; offset += ORCHESTRATION_DELIVERY_BATCH_LIMIT) {
       const batch = ids.slice(offset, offset + ORCHESTRATION_DELIVERY_BATCH_LIMIT)
@@ -189,12 +195,16 @@ function mutatePointerMessages(
         db.db.prepare(mutation.sql).run(...mutation.leadingParams, ...batch).changes
       )
     }
+
     if (options?.requireAll && changed !== ids.length) {
       db.db.exec('ROLLBACK TO mailbox_pointer_enter_mutation')
       db.db.exec('RELEASE mailbox_pointer_enter_mutation')
+
       return 0
     }
+
     db.db.exec('RELEASE mailbox_pointer_enter_mutation')
+
     return changed
   } catch (error) {
     db.db.exec('ROLLBACK TO mailbox_pointer_enter_mutation')

@@ -2,7 +2,9 @@ import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import { WSL_CODEX_SESSION_BRIDGE_SCRIPT } from '../codex/wsl-codex-session-bridge-script'
 
 export const RETIRED_SESSION_BRIDGE_COMMAND = `bash -c ${quotePosixShell(WSL_CODEX_SESSION_BRIDGE_SCRIPT)} bash "$legacy_home/sessions" "$target_home/sessions" "$session_link_manifest" "$session_stage_root"`
+
 export const RETIRED_RECENT_SESSION_BRIDGE_COMMAND = `${RETIRED_SESSION_BRIDGE_COMMAND} recent "$session_scan_start" "$session_scan_day"`
+
 const ROLLBACK_SESSION_LINKS_COMMAND = `bash -c ${quotePosixShell(`while IFS= read -r -d '' staged_file && IFS= read -r -d '' target_file; do
   if [ -e "$target_file" ] || [ -L "$target_file" ]; then
     [ -f "$staged_file" ] && [ ! -L "$staged_file" ] && [ "$target_file" -ef "$staged_file" ] || exit 1

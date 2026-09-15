@@ -50,6 +50,7 @@ export function DocPreviewToolbar({
   markupDisabled: boolean
 }): React.JSX.Element {
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
+
   const reloadLabel = translate(
     'auto.components.editor.HtmlDocPreview.reloadPreviewControl',
     'Reload preview'

@@ -7,6 +7,7 @@ import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import { CliSection } from './CliSection'
 
 const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
+
 const dialog = vi.hoisted(() => ({
   props: null as null | { onInstall: () => Promise<void>; open: boolean }
 }))
@@ -39,6 +40,7 @@ vi.mock('./CliRegistrationDialog', () => ({
     open: boolean
   }) {
     dialog.props = props
+
     return null
   }
 }))

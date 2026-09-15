@@ -25,6 +25,7 @@ export function checklistItemsFromVersion(version: SkillCloudVersion): SkillChec
       files: skill.files
     }))
   }
+
   return [
     {
       id: version.manifest.name,

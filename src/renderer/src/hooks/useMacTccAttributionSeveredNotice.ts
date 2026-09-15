@@ -20,15 +20,18 @@ export function useMacTccAttributionSeveredNotice(): void {
   const pluginLanguagePacksLoaded = usePluginLanguagePackStore((s) => s.loaded)
   const { i18n } = useTranslation()
   const selectedPluginLanguage = pluginLanguagePacks.find((pack) => pack.id === uiLanguage)
+
   const targetLocale =
     uiLanguage === null || (isPluginUiLanguage(uiLanguage) && !pluginLanguagePacksLoaded)
       ? null
       : (selectedPluginLanguage?.resourceLanguage ??
         (isPluginUiLanguage(uiLanguage) ? 'en' : resolveUiLocale(uiLanguage)))
+
   const localeReady =
     targetLocale !== null &&
     i18n.language === targetLocale &&
     i18n.hasResourceBundle(targetLocale, 'translation')
+
   const toastedThisSession = useRef(false)
   // Why: toast was only marked after await; a focus/effect re-run mid-check could dual-toast.
   const checkInFlight = useRef(false)
@@ -41,7 +44,9 @@ export function useMacTccAttributionSeveredNotice(): void {
     ) {
       return
     }
+
     const macTccAttribution = window.api?.pty?.management?.macTccAttribution
+
     if (!macTccAttribution) {
       return
     }
@@ -50,18 +55,24 @@ export function useMacTccAttributionSeveredNotice(): void {
       if (checkInFlight.current) {
         return
       }
+
       checkInFlight.current = true
+
       try {
         const { health } = await macTccAttribution()
+
         if (health !== 'severed') {
           if (toastedThisSession.current) {
             toast.dismiss(SEVERED_TCC_NOTICE_ID)
           }
+
           return
         }
+
         if (toastedThisSession.current) {
           return
         }
+
         toastedThisSession.current = true
         toast.warning(
           translate(
@@ -104,10 +115,13 @@ export function useMacTccAttributionSeveredNotice(): void {
     }
 
     void maybeToast()
+
     const onFocus = (): void => {
       void maybeToast()
     }
+
     window.addEventListener('focus', onFocus)
+
     return () => window.removeEventListener('focus', onFocus)
   }, [localeReady, openSettingsPage, openSettingsTarget, setSettingsSearchQuery])
 }

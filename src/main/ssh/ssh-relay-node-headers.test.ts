@@ -26,9 +26,11 @@ function runPrefix(nodePath: string): {
   const result = spawnSync('/bin/sh', ['-c', script], { encoding: 'utf8' })
   expect(result.status).toBe(0)
   const marker = localNodeHeadersFromOutput(result.stdout)
+
   const [nodedir = '', pkgNodedir = ''] = result.stdout
     .split('\n')
     .filter((line) => !line.startsWith('ORCA-NODE-HEADERS:'))
+
   return { nodedir, pkgNodedir, marker }
 }
 
@@ -45,6 +47,7 @@ function fakeNodePrefix(root: string, version: string): string {
   // Why a symlink to the real binary: the probe reads process.execPath, which Node resolves
   // through symlinks -- so this stands in for `/usr/bin/node -> /opt/node/bin/node` shims too.
   symlinkSync(process.execPath, join(prefix, 'bin', 'node'))
+
   return join(prefix, 'bin', 'node')
 }
 
@@ -117,6 +120,7 @@ describe.skipIf(!POSIX)('exportLocalNodeHeadersPrefix', () => {
     copyFileSync(process.execPath, copied)
     chmodSync(copied, 0o755)
     const script = `${exportLocalNodeHeadersPrefix(copied)}printf '%s|%s|%s' "$npm_config_nodedir" "$NPM_CONFIG_NODEDIR" "$npm_package_config_node_gyp_nodedir"`
+
     const result = spawnSync('/bin/sh', ['-c', script], {
       encoding: 'utf8',
       env: {
@@ -126,6 +130,7 @@ describe.skipIf(!POSIX)('exportLocalNodeHeadersPrefix', () => {
         npm_package_config_node_gyp_nodedir: '/usr/stale-headers'
       }
     })
+
     expect(result.status).toBe(0)
     expect(result.stdout.split('\n').at(-1)).toBe('||')
   })
@@ -142,8 +147,10 @@ describe('localNodeHeadersFromOutput', () => {
   it('reads the host answer, not the copy of the marker echo quoted in an exec-failure head', () => {
     // The real shape: execCommand quotes the whole command line, prefix included, before the output.
     const command = `export PATH='/usr/local/bin':$PATH && cd '/root/.orca-remote/relay-x' && ${exportLocalNodeHeadersPrefix('/usr/local/bin/node')}npm install node-pty 2>&1`
+
     const failed = (hostOutput: string): string =>
       `Command "${command}" failed (exit 1): ${hostOutput}`
+
     expect(
       localNodeHeadersFromOutput(failed('ORCA-NODE-HEADERS:none\ngyp ERR! configure error'))
     ).toBeNull()

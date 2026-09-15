@@ -9,8 +9,11 @@ import type { RuntimeClient } from './runtime-client'
 import { normalizeWorktreeSelectorForCaller } from './selectors'
 
 const UBUNTU = 'Ubuntu-24.04'
+
 const DEBIAN = 'Debian'
+
 const LINUX_PATH = '/home/neil/qa-repo'
+
 const MOUNTED_PATH = '/mnt/c/Users/neil/qa-repo'
 
 function uncPath(distro: string, linuxPath: string): string {
@@ -26,10 +29,12 @@ function makeClient(paths: readonly string[], isRemote = false) {
     if (method !== 'worktree.list') {
       throw new Error(`unexpected method ${method}`)
     }
+
     return {
       result: { worktrees: paths.map(worktreeRecord), totalCount: paths.length, truncated: false }
     }
   })
+
   return { client: { isRemote, call } as unknown as RuntimeClient, call }
 }
 

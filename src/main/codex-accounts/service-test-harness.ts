@@ -28,6 +28,7 @@ export function registerCodexAccountsTestHomes(): void {
   afterEach(() => {
     rmSync(testState.userDataDir, { recursive: true, force: true })
     rmSync(testState.fakeHomeDir, { recursive: true, force: true })
+
     if (testState.previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
@@ -42,6 +43,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
 
 export function createStore(settings: GlobalSettings) {
   let resetLedger: CodexResetCreditAttemptLedger = { version: 1, attempts: [] }
+
   return {
     getSettings: vi.fn(() => settings),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
@@ -53,6 +55,7 @@ export function createStore(settings: GlobalSettings) {
           ...updates.notifications
         }
       }
+
       return settings
     }),
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
@@ -102,12 +105,15 @@ export function createManagedHome(
   const managedHomePath = join(rootDir, 'codex-accounts', accountId, 'home')
   mkdirSync(managedHomePath, { recursive: true })
   writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
+
   if (config) {
     writeFileSync(join(managedHomePath, 'config.toml'), config, 'utf-8')
   }
+
   if (auth) {
     writeFileSync(join(managedHomePath, 'auth.json'), auth, 'utf-8')
   }
+
   return managedHomePath
 }
 
@@ -117,6 +123,7 @@ export function createCodexAuthJson(
   refreshToken: string
 ): string {
   const payload = Buffer.from(JSON.stringify({ email })).toString('base64url')
+
   return `${JSON.stringify(
     {
       tokens: {

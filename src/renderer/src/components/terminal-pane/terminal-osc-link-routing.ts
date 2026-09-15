@@ -33,9 +33,11 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
   if (!event) {
     return false
   }
+
   if ('button' in event && event.button !== undefined && event.button !== 0) {
     return false
   }
+
   // Why: desktop xterm links must not open while the user is just placing the
   // cursor or selecting text. Mobile URL taps use a separate WebView path.
   return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
@@ -60,11 +62,13 @@ export function handleOscLink(
   if (!isDesktopOscLinkActivation(event)) {
     return false
   }
+
   const finish = (handled: boolean): boolean => {
     if (handled) {
       // Why: prevent anchor navigation without blocking xterm's document-level selection cleanup.
       event?.preventDefault?.()
     }
+
     return handled
   }
 
@@ -74,9 +78,11 @@ export function handleOscLink(
       deps.startupCwd || deps.worktreePath,
       deps.terminalHomePath
     )
+
     if (!resolved) {
       return false
     }
+
     return finish(
       handleTerminalFileLink(
         resolved.absolutePath,
@@ -101,6 +107,7 @@ export function handleOscLink(
   }
 
   let parsed: URL
+
   try {
     parsed = new URL(rawText)
   } catch {
@@ -134,10 +141,13 @@ export function handleOscLink(
       navigator.userAgent.includes('Windows') &&
       isWindowsAbsolutePathLike(deps.worktreePath) &&
       !deps.runtimeEnvironmentId
+
     const resolved = resolveTerminalFileUrlTarget(parsed, { allowUncHost })
+
     if (!resolved) {
       return false
     }
+
     return finish(
       handleTerminalFileLink(
         resolved.filePath,
@@ -150,5 +160,6 @@ export function handleOscLink(
       )
     )
   }
+
   return false
 }

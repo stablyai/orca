@@ -5,7 +5,9 @@ import type {
 } from './textmate-token-provider'
 
 type MonacoModule = typeof Monaco
+
 type TextMateTokensProvider = Monaco.languages.TokensProvider
+
 type TextMateTokenProviderModule = {
   createTextMateTokensProvider: typeof createTextMateTokensProviderType
 }
@@ -29,11 +31,13 @@ export function registerTextMateLanguage(
   const languageAlreadyRegistered = monaco.languages
     .getLanguages()
     .some((language) => language.id === registration.language.id)
+
   if (languageAlreadyRegistered) {
     return
   }
 
   monaco.languages.register(registration.language)
+
   if (registration.configuration) {
     monaco.languages.setLanguageConfiguration(registration.language.id, registration.configuration)
   }
@@ -51,6 +55,7 @@ export function registerTextMateLanguage(
           loadGrammar: registration.loadGrammar
         })
       )
+
       return tokensProviderPromise
     }
   })

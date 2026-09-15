@@ -107,19 +107,26 @@ export class BrowserHostLeaseRegistry {
     const pageInventory = snapshotBrowserHostPageInventory(input)
     assertBrowserHostReconnectNegotiation(input)
     const existing = this.leasesByClientId.get(input.browserHostClientId)
+
     if (existing && existing.lease.pairedDeviceId !== input.pairedDeviceId) {
       throw new Error('browser_host_identity_conflict')
     }
+
     assertBrowserHostLeaseAdmission(this.leasesByClientId.values(), input, existing)
     const restored = existing ? this.reconnects.restore(existing, input, pageInventory) : undefined
+
     if (restored && existing) {
       this.pageReconciliations.observeInventory(existing)
+
       return restored
     }
+
     const generation = this.generations.take('host')
+
     if (existing) {
       this.fenceLease(existing, 'replaced')
     }
+
     const state = createBrowserHostLeaseState({
       authorityRuntimeId: this.authorityRuntimeId,
       authorityEpoch: this.authorityEpoch,
@@ -127,7 +134,9 @@ export class BrowserHostLeaseRegistry {
       input,
       pageInventory
     })
+
     this.leasesByClientId.set(input.browserHostClientId, state)
+
     return this.reconnects.createHandle(state)
   }
 
@@ -239,9 +248,11 @@ export class BrowserHostLeaseRegistry {
     delivery: (event: BrowserClientHostCommandEvent) => void
   ): () => void {
     const ledger = this.requireLeaseState(identity).commandLedger
+
     if (!ledger) {
       throw new Error('browser_host_command_protocol_required')
     }
+
     return ledger.attach(delivery)
   }
 
@@ -253,6 +264,7 @@ export class BrowserHostLeaseRegistry {
     result: Promise<BrowserClientHostCommandResult>
   } {
     this.requireClientPage(authority)
+
     return issueBrowserHostClientPageCommand(authority, command, this.leasesByClientId)
   }
 
@@ -262,9 +274,11 @@ export class BrowserHostLeaseRegistry {
   ): boolean {
     const state = this.requireLeaseState(identity)
     const ledger = requireBrowserHostCommandResultLedger(state, identity)
+
     if (!ledger.isUnplacedPageResult(params)) {
       this.requireClientPage(params)
     }
+
     return ledger.settle(params)
   }
 
@@ -274,6 +288,7 @@ export class BrowserHostLeaseRegistry {
 
   getClientPageExecutionHostKey(browserPageId: string): string | undefined {
     const grant = this.clientPageExecutionHostGrants.get(browserPageId)
+
     return grant && this.pagePlacements.getPlacement(browserPageId) === grant.placement
       ? grant.executionHostKey
       : undefined

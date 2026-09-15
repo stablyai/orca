@@ -25,6 +25,7 @@ export function agentDotState(
   if (row.interrupted) {
     return 'interrupted'
   }
+
   switch (row.state) {
     case 'blocked':
     case 'waiting':
@@ -36,10 +37,12 @@ export function agentDotState(
       if (now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
         return 'idle'
       }
+
       return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
     case 'done':
       return 'done'
   }
+
   return 'idle'
 }
 
@@ -68,13 +71,17 @@ export function agentStateLabel(state: AgentDotState): string {
 // DashboardAgentRow displayLabel fallback chain.
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
   const message = row.lastAssistantMessage?.trim()
+
   if (message) {
     return message
   }
+
   const prompt = row.prompt.trim()
+
   if (prompt) {
     return prompt
   }
+
   return agentStateLabel(agentDotState(row, now))
 }
 
@@ -84,7 +91,9 @@ export function agentIdentityLabel(agentType: string | null): string {
   if (!agentType) {
     return ''
   }
+
   const normalized = agentType.toLowerCase()
+
   const known: Record<string, string> = {
     claude: 'CL',
     codex: 'CX',
@@ -96,23 +105,31 @@ export function agentIdentityLabel(agentType: string | null): string {
     opencode: 'OC',
     'mimo-code': 'MC'
   }
+
   return known[normalized] ?? normalized.slice(0, 2).toUpperCase()
 }
 
 // Relative time, matching desktop formatTimeAgo thresholds (just now / Xm / Xh / Xd).
 export function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
+
   if (delta < 60_000) {
     return 'just now'
   }
+
   const minutes = Math.floor(delta / 60_000)
+
   if (minutes < 60) {
     return `${minutes}m`
   }
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) {
     return `${hours}h`
   }
+
   const days = Math.floor(hours / 24)
+
   return `${days}d`
 }

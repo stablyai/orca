@@ -37,6 +37,7 @@ function openFrame(id: number, overrides: Record<string, unknown> = {}): Buffer 
 function responsePayload(buffer: Buffer): Record<string, unknown> {
   expect(buffer[0]).toBe(MessageType.Regular)
   const length = buffer.readUInt32BE(9)
+
   return JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
 }
 
@@ -68,6 +69,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       (data, onSettled) => {
         firstWrites.push(Buffer.from(data))
         firstSettlements.push(onSettled)
+
         return true
       },
       { supportsWriteCallback: true },
@@ -79,15 +81,18 @@ describe('SshPtyConsumerSessionAdapter', () => {
     await flushRequests()
 
     const secondWrites: Buffer[] = []
+
     const secondId = dispatcher.attachClient(
       (data, onSettled) => {
         secondWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       { ...endpointIdentity, principal: 'competitor' }
     )
+
     dispatcher.feedClient(secondId, openFrame(2))
     await flushRequests()
 
@@ -108,6 +113,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher = new RelayDispatcher(
       (_data, onSettled) => {
         onSettled({ ok: false, error: new Error('send failed') })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -118,15 +124,18 @@ describe('SshPtyConsumerSessionAdapter', () => {
     await flushRequests()
 
     const retryWrites: Buffer[] = []
+
     const retryId = dispatcher.attachClient(
       (data, onSettled) => {
         retryWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(retryId, openFrame(2, { clientInstanceId: 'client-1' }))
     await flushRequests()
 
@@ -144,6 +153,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       dispatcher = new RelayDispatcher(
         (_data, onSettled) => {
           onSettled({ ok: true })
+
           return true
         },
         { supportsWriteCallback: true },
@@ -152,15 +162,18 @@ describe('SshPtyConsumerSessionAdapter', () => {
       new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
 
       const ownerWrites: Buffer[] = []
+
       const ownerId = dispatcher.attachClient(
         (data, onSettled) => {
           ownerWrites.push(Buffer.from(data))
           onSettled({ ok: true })
+
           return true
         },
         { supportsWriteCallback: true },
         endpointIdentity
       )
+
       dispatcher.feedClient(ownerId, openFrame(1))
       await flushRequests()
       expect(responseResult(ownerWrites[0])).toMatchObject({ role: 'session-owner' })
@@ -168,15 +181,18 @@ describe('SshPtyConsumerSessionAdapter', () => {
       dispatcher.detachClient(ownerId, cause)
 
       const rivalWrites: Buffer[] = []
+
       const rivalId = dispatcher.attachClient(
         (data, onSettled) => {
           rivalWrites.push(Buffer.from(data))
           onSettled({ ok: true })
+
           return true
         },
         { supportsWriteCallback: true },
         { ...endpointIdentity, principal: 'competitor' }
       )
+
       // The first refusal is what applies the floor, so it has to happen before the clock moves.
       dispatcher.feedClient(rivalId, openFrame(2))
       await flushRequests()
@@ -185,15 +201,18 @@ describe('SshPtyConsumerSessionAdapter', () => {
       })
 
       vi.setSystemTime(Date.now() + PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS + 1)
+
       const retryId = dispatcher.attachClient(
         (data, onSettled) => {
           rivalWrites.push(Buffer.from(data))
           onSettled({ ok: true })
+
           return true
         },
         { supportsWriteCallback: true },
         { ...endpointIdentity, principal: 'competitor' }
       )
+
       dispatcher.feedClient(retryId, openFrame(3))
       await flushRequests()
 
@@ -214,6 +233,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher = new RelayDispatcher((data, onSettled) => {
       writes.push(Buffer.from(data))
       onSettled({ ok: true })
+
       return true
     })
     new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
@@ -224,6 +244,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
     const response = JSON.parse(
       writes[0].subarray(13, 13 + writes[0].readUInt32BE(9)).toString('utf8')
     )
+
     expect(response.error.message).toContain('authentication')
   })
 
@@ -233,6 +254,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -246,6 +268,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
     const response = JSON.parse(
       writes[0].subarray(13, 13 + writes[0].readUInt32BE(9)).toString('utf8')
     )
+
     expect(response.error.message).toContain('requestedRole')
   })
 
@@ -254,6 +277,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher = new RelayDispatcher(
       (_data, onSettled) => {
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -306,14 +330,17 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher = new RelayDispatcher(
       (_data, onSettled) => {
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', (id, paused) => {
       setPaused.push({ id, paused })
     })
+
     dispatcher.feed(
       openFrame(1, {
         capabilities: { outputFlowControl: { versions: [1], requestedWindowSu: 8 } }
@@ -344,6 +371,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
         )
       )
     }
+
     dispatcher.invalidateClient()
 
     expect(setPaused).toEqual([
@@ -357,14 +385,17 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher = new RelayDispatcher(
       (_data, onSettled) => {
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', (id, paused) => {
       setPaused.push({ id, paused })
     })
+
     dispatcher.feed(
       openFrame(1, {
         capabilities: { outputFlowControl: { versions: [1], requestedWindowSu: 8 } }
@@ -404,6 +435,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -432,6 +464,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -450,6 +483,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher = new RelayDispatcher(
       (_data, onSettled) => {
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -505,6 +539,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -560,6 +595,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       (data, onSettled) => {
         firstWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -586,15 +622,18 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher.invalidateClient()
 
     const recoveredWrites: Buffer[] = []
+
     const recoveredClientId = dispatcher.attachClient(
       (data, onSettled) => {
         recoveredWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       recoveredClientId,
       openFrame(2, {
@@ -625,6 +664,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       (data, onSettled) => {
         firstWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -645,11 +685,13 @@ describe('SshPtyConsumerSessionAdapter', () => {
     const recoveredClientId = dispatcher.attachClient(
       (_data, onSettled) => {
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       recoveredClientId,
       openFrame(2, {
@@ -671,6 +713,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
     dispatcher = new RelayDispatcher(
       (_data, onSettled) => {
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },

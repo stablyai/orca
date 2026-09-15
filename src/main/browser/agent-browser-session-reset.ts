@@ -17,11 +17,14 @@ export function canSkipAgentBrowserSessionReset(options: {
   sessionName: string
 }): boolean {
   const { socketDirectory, sessionName } = options
+
   if (!options.ownsSocketDirectory || !socketDirectory || !SAFE_SESSION_NAME.test(sessionName)) {
     return false
   }
+
   try {
     lstatSync(join(socketDirectory, `${sessionName}.sock`))
+
     return false
   } catch (error) {
     // Only a proven-absent socket is safe to skip; permission and other failures prove nothing.

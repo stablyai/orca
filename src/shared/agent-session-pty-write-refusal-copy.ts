@@ -7,6 +7,7 @@ export function structuredChatPtyWriteRefusalCopy(
   if (refusal.ownerRuntimeKind !== 'native') {
     return null
   }
+
   return action === 'worker-start'
     ? 'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca orchestration worker-start`.'
     : 'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca terminal send`.'

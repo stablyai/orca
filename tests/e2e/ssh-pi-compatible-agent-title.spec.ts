@@ -37,16 +37,20 @@ async function findTerminalByPtyId(page: Page, ptyId: string): Promise<string> {
       method: 'terminal.list',
       params: { limit: 50 }
     })
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     const terminals = (response.result as { terminals: RuntimeTerminalSummary[] }).terminals
     const terminal = terminals.find((candidate) => candidate.ptyId === ptyId)
+
     if (!terminal) {
       throw new Error(
         `No runtime terminal for PTY ${ptyId}; terminals=${JSON.stringify(terminals)}`
       )
     }
+
     return terminal.handle
   }, ptyId)
 }
@@ -60,9 +64,11 @@ async function readTerminalAgentStatus(
       method: 'terminal.agentStatus',
       params: { terminal }
     })
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     return (response.result as { agentStatus: RuntimeTerminalStatus }).agentStatus
   }, terminalHandle)
 }
@@ -76,6 +82,7 @@ test.describe('Docker SSH Pi-compatible agent titles', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)

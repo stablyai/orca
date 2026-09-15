@@ -29,13 +29,16 @@ import { getDefaultSettings } from '../../shared/constants'
 import { ArtifactCloudService } from './artifact-cloud-service'
 
 const createdPaths: string[] = []
+
 const apiUrl = 'http://localhost:3000'
+
 const cloudA: OrcaProfileCloudSummary = {
   cloudProfileId: 'cloud-a',
   userId: 'user-a',
   email: 'a@example.com',
   linkedAt: 1
 }
+
 const cloudB: OrcaProfileCloudSummary = {
   cloudProfileId: 'cloud-b',
   userId: 'user-b',
@@ -79,6 +82,7 @@ async function setup(sharingEnabled: { value: boolean } = { value: true }): Prom
   const active = ensureActiveOrcaProfile(userDataPath)
   linkOrcaProfileToCloud(active.profile.id, cloudA, userDataPath)
   recordSuccessfulCloudSessionLogin(cloudSessionIdentity(active.profile.id, cloudA), userDataPath)
+
   return {
     userDataPath,
     profileId: active.profile.id,
@@ -114,12 +118,14 @@ afterEach(async () => {
 describe('ArtifactCloudService record authorization', () => {
   it('passes an opaque cursor and returns the complete list page', async () => {
     const { service } = await setup()
+
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ artifacts: [], nextCursor: 'next-page' }), {
         status: 200,
         headers: { 'content-type': 'application/json' }
       })
     )
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -136,10 +142,12 @@ describe('ArtifactCloudService record authorization', () => {
 
   it('uses a distinct idempotency key for each logical share', async () => {
     const { service } = await setup()
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse('artifact-a'))
       .mockResolvedValueOnce(createResponse('artifact-b'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     await service.share(writeRequest)
@@ -154,10 +162,12 @@ describe('ArtifactCloudService record authorization', () => {
 
   it('creates once and updates on repeated publish', async () => {
     const { service } = await setup()
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse())
       .mockResolvedValueOnce(createResponse())
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(service.publish(writeRequest)).resolves.toMatchObject({
@@ -199,6 +209,7 @@ describe('ArtifactCloudService record authorization', () => {
   it('serializes concurrent publishes for the same source', async () => {
     const { service } = await setup()
     let resolveCreate: ((response: Response) => void) | undefined
+
     const fetchMock = vi
       .fn()
       .mockImplementationOnce(
@@ -208,6 +219,7 @@ describe('ArtifactCloudService record authorization', () => {
           })
       )
       .mockResolvedValueOnce(createResponse())
+
     vi.stubGlobal('fetch', fetchMock)
 
     const first = service.publish(writeRequest)
@@ -227,6 +239,7 @@ describe('ArtifactCloudService record authorization', () => {
   it('serializes manual publish with CLI share for the same source', async () => {
     const { service } = await setup()
     let resolvePublish: ((response: Response) => void) | undefined
+
     const fetchMock = vi
       .fn()
       .mockImplementationOnce(
@@ -236,6 +249,7 @@ describe('ArtifactCloudService record authorization', () => {
           })
       )
       .mockResolvedValueOnce(createResponse('artifact-b'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     const publish = service.publish(writeRequest)
@@ -254,6 +268,7 @@ describe('ArtifactCloudService record authorization', () => {
   it('serializes account deletion with a mapped source update', async () => {
     const { service } = await setup()
     let resolveUpdate: ((response: Response) => void) | undefined
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse())
@@ -264,6 +279,7 @@ describe('ArtifactCloudService record authorization', () => {
           })
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
+
     vi.stubGlobal('fetch', fetchMock)
     await service.share(writeRequest)
 
@@ -285,12 +301,14 @@ describe('ArtifactCloudService record authorization', () => {
 
   it('recreates an artifact when its stored public link was deleted elsewhere', async () => {
     const { service } = await setup()
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse('artifact-a'))
       .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'not_found' }), { status: 404 }))
       .mockResolvedValueOnce(createResponse('artifact-b'))
       .mockResolvedValueOnce(createResponse('artifact-b'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     await service.publish(writeRequest)
@@ -322,16 +340,20 @@ describe('ArtifactCloudService record authorization', () => {
       capabilities: { flags: {}, refreshedAt: Date.now() }
     })
     let artifactAttempts = 0
+
     const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
       const url = String(input)
+
       if (url === `${apiUrl}/v1/artifacts`) {
         artifactAttempts += 1
+
         return Promise.resolve(
           artifactAttempts === 1
             ? new Response(JSON.stringify({ code: 'invalid_access_token' }), { status: 401 })
             : createResponse()
         )
       }
+
       if (url === 'http://localhost:4100/v1/desktop/auth/refresh') {
         return Promise.resolve(
           new Response(
@@ -346,8 +368,10 @@ describe('ArtifactCloudService record authorization', () => {
           )
         )
       }
+
       throw new Error(`Unexpected URL: ${url}`)
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(service.share({ ...writeRequest, authToken: undefined })).resolves.toMatchObject({
@@ -445,10 +469,12 @@ describe('ArtifactCloudService record authorization', () => {
 
   it('cleans all matching source mappings after delete by slug', async () => {
     const { service } = await setup()
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse())
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
+
     vi.stubGlobal('fetch', fetchMock)
     await service.share(writeRequest)
     await service.delete('artifact-a', { apiUrl, authToken: 'token-a' })
@@ -462,6 +488,7 @@ describe('ArtifactCloudService record authorization', () => {
     vi.setSystemTime('2026-08-07T00:00:00.000Z')
     const { service } = await setup()
     let resolveUpdate: ((response: Response) => void) | undefined
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse('artifact-a', '2026-09-06T00:00:00.000Z'))
@@ -472,6 +499,7 @@ describe('ArtifactCloudService record authorization', () => {
           })
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
+
     vi.stubGlobal('fetch', fetchMock)
 
     await service.share(writeRequest)
@@ -533,6 +561,7 @@ describe('ArtifactCloudService publish capability gate', () => {
   it('keeps list, unshare, and delete working so links stay revocable after opting out', async () => {
     const sharing = { value: true }
     const { service } = await setup(sharing)
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse())
@@ -543,6 +572,7 @@ describe('ArtifactCloudService publish capability gate', () => {
         })
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
+
     vi.stubGlobal('fetch', fetchMock)
     await service.share(writeRequest)
 
@@ -582,5 +612,6 @@ function requestHeader(
   name: string
 ): string | null {
   const init = fetchMock.mock.calls[index]?.[1] as RequestInit | undefined
+
   return new Headers(init?.headers).get(name)
 }

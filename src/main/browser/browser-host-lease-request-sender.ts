@@ -16,5 +16,6 @@ export function requireBrowserHostLeaseSendRequest(
   if (!sendRequest) {
     throw new RemoteRuntimeClientError('remote_runtime_unavailable', unavailableMessage)
   }
+
   return sendRequest
 }

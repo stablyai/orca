@@ -10,12 +10,15 @@ import type * as ReactModule from 'react'
 import type { TabCreateEntryArgs, TabEntryOption } from './tab-create-entry-action'
 
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
+
 const pathLikeMock = vi.hoisted(() => ({ value: false }))
+
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
   createTabEntryAllowAbsolutePathsSelector: () => () => true,
   isTabEntryAbsolutePathLike: () => pathLikeMock.value
 }))
+
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({
     files: [],
@@ -24,6 +27,7 @@ vi.mock('../quick-open-file-list', () => ({
     truncated: false
   })
 }))
+
 vi.mock('@/lib/agent-catalog', () => ({ getAgentCatalog: () => [], AgentIcon: () => null }))
 
 // `hold` pins deferred rows to the query they were built from, standing in for
@@ -33,6 +37,7 @@ const historyStoreMock = vi.hoisted(() => ({
   hold: null as string | null,
   listeners: new Set<() => void>()
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) =>
@@ -44,8 +49,10 @@ vi.mock('@/store', () => ({
     { getState: () => ({ browserUrlHistory: historyStoreMock.entries }) }
   )
 }))
+
 vi.mock('react', async () => {
   const react = await vi.importActual<typeof ReactModule>('react')
+
   return {
     ...react,
     useDeferredValue: (value: string) => historyStoreMock.hold ?? value
@@ -53,6 +60,7 @@ vi.mock('react', async () => {
 })
 
 const tabResultsMock = vi.hoisted(() => ({ results: [] as OpenTabSearchResult[] }))
+
 vi.mock('./use-tab-create-entry-search-results', () => ({
   useTabCreateEntrySearchResults: ({ enabled }: { enabled: boolean }) =>
     enabled ? tabResultsMock.results : []
@@ -78,7 +86,9 @@ const linear = historyEntry({
 })
 
 let container: HTMLDivElement
+
 let root: Root
+
 let onOpenEntry: Mock<(args: TabCreateEntryArgs) => Promise<void>>
 
 function mount(): void {
@@ -93,13 +103,16 @@ function mount(): void {
 
 function setQuery(value: string): void {
   const input = container.querySelector('input')
+
   if (!input) {
     throw new Error('input not found')
   }
+
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
   )?.set
+
   act(() => {
     nativeSetter?.call(input, value)
     input.dispatchEvent(new window.Event('input', { bubbles: true }))
@@ -108,9 +121,11 @@ function setQuery(value: string): void {
 
 function pressKey(key: string): void {
   const form = container.querySelector('form')
+
   if (!form) {
     throw new Error('form not found')
   }
+
   act(() => {
     form.dispatchEvent(
       new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
@@ -120,9 +135,11 @@ function pressKey(key: string): void {
 
 function submitForm(): void {
   const form = container.querySelector('form')
+
   if (!form) {
     throw new Error('form not found')
   }
+
   act(() => {
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
   })

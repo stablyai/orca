@@ -11,45 +11,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -79,8 +95,10 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       markPtyLivenessUnverifiable: vi.fn(),
       markPtyLivenessLive: vi.fn()
     }
+
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     return {
       controller: runtime.setPtyController.mock.calls[0]?.[0] as never,
       runtime
@@ -118,6 +136,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     const ptyId = 'ssh-renderer-detached'
     setPtyOwnership(ptyId, 'ssh-dropped')
     const { runtime } = installController()
+
     try {
       await handlers.get('pty:kill')!(null, { id: ptyId })
 
@@ -135,6 +154,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     const ptyId = 'ssh-rejected-split'
     setPtyOwnership(ptyId, 'ssh-dropped')
     const { controller, runtime } = installController()
+
     try {
       controller.retireRejectedPty(ptyId, false)
 
@@ -165,13 +185,16 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   it('records provider-confirmed absence when the exit event was missed', async () => {
     const connectionId = 'ssh-confirmed-absent'
     const ptyId = 'ssh-confirmed-absent-pty'
+
     const provider = {
       onExit: vi.fn(() => () => {}),
       shutdown: vi.fn(async () => {}),
       listProcesses: vi.fn(async () => [])
     }
+
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+
     try {
       const { controller, runtime } = installController()
 
@@ -187,14 +210,17 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   it('reports lost contact when a registered provider drops during the stop', async () => {
     const connectionId = 'ssh-mid-stop-drop'
     const ptyId = 'ssh-mid-stop-pty'
+
     const provider = {
       onExit: vi.fn(() => () => {}),
       shutdown: vi.fn(async () => {
         throw new Error('relay disconnected during stop')
       })
     }
+
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+
     try {
       const { controller, runtime } = installController()
 
@@ -212,14 +238,17 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   it('preserves lost-contact evidence when fire-and-forget shutdown rejects', async () => {
     const connectionId = 'ssh-async-kill-drop'
     const ptyId = 'ssh-async-kill-pty'
+
     const provider = {
       onExit: vi.fn(() => () => {}),
       shutdown: vi.fn(async () => {
         throw new Error('relay disconnected during kill')
       })
     }
+
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+
     try {
       const { controller, runtime } = installController()
 
@@ -252,6 +281,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     } as never)
     setPtyOwnership(failedPtyId, failedConnectionId)
     setPtyOwnership(healthyPtyId, healthyConnectionId)
+
     try {
       const { controller, runtime } = installController()
 
@@ -277,13 +307,16 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   it('reports a provider-observed survivor as live', async () => {
     const connectionId = 'ssh-still-live'
     const ptyId = 'ssh-still-live-pty'
+
     const provider = {
       onExit: vi.fn(() => () => {}),
       shutdown: vi.fn(async () => {}),
       listProcesses: vi.fn(async () => [{ id: ptyId }])
     }
+
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+
     try {
       const { controller, runtime } = installController()
 

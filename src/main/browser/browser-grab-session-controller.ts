@@ -25,15 +25,19 @@ function isGuestCancellationPayload(rawPayload: unknown): boolean {
   if (!rawPayload || typeof rawPayload !== 'object') {
     return false
   }
+
   const payload = rawPayload as Record<string, unknown>
+
   if (payload.__orcaCancelled === true) {
     return true
   }
+
   // Why: old guest/Electron paths can serialize cancellation as a plain error
   // object, but valid grab payloads may also carry page-authored fields.
   if (payload.message !== 'cancelled') {
     return false
   }
+
   return !('page' in payload) && !('target' in payload) && !('payload' in payload)
 }
 
@@ -41,12 +45,15 @@ function getGuestErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message
   }
+
   if (err && typeof err === 'object') {
     const message = (err as Record<string, unknown>).message
+
     if (typeof message === 'string') {
       return message
     }
   }
+
   return 'Selection failed'
 }
 
@@ -59,9 +66,11 @@ export class BrowserGrabSessionController {
 
   cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void {
     const op = this.activeGrabOps.get(browserTabId)
+
     if (!op) {
       return
     }
+
     // Why: settleOnce (op.resolve) already calls op.cleanup() and deletes the
     // map entry. Calling them again here would double-inject the teardown script.
     op.resolve({ opId: op.opId, kind: 'cancelled', reason })
@@ -95,6 +104,7 @@ export class BrowserGrabSessionController {
     // Why: only one active grab operation per tab prevents race conditions
     // where a late click from a previous operation resolves the wrong Promise.
     const existing = this.activeGrabOps.get(browserTabId)
+
     if (existing) {
       // Why: skip teardown injection when replacing an op. The new op will
       // reuse the already-armed overlay. If we injected teardown here, it
@@ -112,6 +122,7 @@ export class BrowserGrabSessionController {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timeoutId)
         // Why: when the user successfully selects an element, keep the guest
@@ -130,29 +141,39 @@ export class BrowserGrabSessionController {
       const awaitGuestClick = async (): Promise<void> => {
         try {
           const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('awaitClick'))
+
           if (!rawPayload || typeof rawPayload !== 'object') {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+
             return
           }
+
           // Why: teardown cancellation is an expected user path. Classify it
           // before payload validation so it cannot surface as an invalid grab.
           if (isGuestCancellationPayload(rawPayload)) {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+
             return
           }
+
           // Why: the guest wraps right-click results in { __orcaContextMenu, payload }
           // so the renderer can show the full action dropdown instead of auto-copying.
           const isContextMenu =
             '__orcaContextMenu' in (rawPayload as Record<string, unknown>) &&
             (rawPayload as Record<string, unknown>).__orcaContextMenu === true
+
           const payloadSource = isContextMenu
             ? (rawPayload as Record<string, unknown>).payload
             : rawPayload
+
           const payload = clampGrabPayload(payloadSource)
+
           if (!payload) {
             settleOnce({ opId, kind: 'error', reason: 'Guest returned invalid payload structure' })
+
             return
           }
+
           settleOnce({
             opId,
             kind: isContextMenu ? 'context-selected' : 'selected',
@@ -160,6 +181,7 @@ export class BrowserGrabSessionController {
           })
         } catch (err) {
           const message = getGuestErrorMessage(err)
+
           if (message.includes('cancelled')) {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
           } else {
@@ -188,6 +210,7 @@ export class BrowserGrabSessionController {
       const timeoutId = setTimeout(() => {
         settleOnce({ opId, kind: 'cancelled', reason: 'timeout' })
       }, GRAB_OP_TIMEOUT_MS)
+
       // Why: the timeout prevents stale grab state, but an armed grab should
       // not keep Electron main alive after its owning tab/window is gone.
       if (typeof timeoutId.unref === 'function') {
@@ -205,12 +228,14 @@ export class BrowserGrabSessionController {
           // Why: the guest may already be destroyed during teardown.
           // Cleanup is best-effort.
         }
+
         // Why: skip teardown injection when (a) the op is being replaced by a
         // new op (skipTeardown), or (b) the selection succeeded and the overlay
         // should stay visible while the copy menu is shown (preserveOverlay).
         if (op.skipTeardown || preserveOverlay) {
           return
         }
+
         try {
           if (!guest.isDestroyed()) {
             void guest.executeJavaScript(buildGuestOverlayScript('teardown'))
@@ -227,6 +252,7 @@ export class BrowserGrabSessionController {
         resolve: settleOnce,
         cleanup
       }
+
       this.activeGrabOps.set(browserTabId, op)
       void awaitGuestClick()
     })

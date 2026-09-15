@@ -21,6 +21,7 @@ describe('splitNativeChatBlocks', () => {
       { type: 'tool-call', name: 'Bash', input: {} },
       { type: 'tool-result', output: 'ok' }
     ])
+
     expect(prose.map((b) => b.type)).toEqual(['text'])
     expect(tools.map((b) => b.type)).toEqual(['tool-call', 'tool-result'])
   })
@@ -34,6 +35,7 @@ describe('pairToolBlocks', () => {
       { type: 'tool-call', name: 'Edit', input: {} },
       { type: 'tool-result', output: 'ok' }
     ])
+
     expect(pairs).toHaveLength(2)
     expect(pairs[0]!.call?.name).toBe('Bash')
     expect(pairs[0]!.result?.output).toBe('a\nb')
@@ -51,6 +53,7 @@ describe('pairToolBlocks', () => {
       { type: 'tool-result', output: '1' },
       { type: 'tool-result', output: '2' }
     ])
+
     expect(pairs).toHaveLength(2)
     expect(pairs[1]!.call).toBeUndefined()
     expect(pairs[1]!.result?.output).toBe('2')
@@ -90,6 +93,7 @@ describe('pairToolBlocks', () => {
       { type: 'tool-call' as const, name: 'Bash', input: { index } },
       { type: 'tool-result' as const, output: String(index) }
     ]).flat()
+
     const pairs = pairToolBlocks(blocks, 6)
 
     expect(pairs).toHaveLength(6)
@@ -106,6 +110,7 @@ describe('foldToolMessages', () => {
       msg('assistant', [{ type: 'tool-call', name: 'Edit', input: {} }], 'a2'),
       msg('tool', [{ type: 'tool-result', output: 'ok' }], 't2')
     ])
+
     expect(folded).toHaveLength(1)
     expect(folded[0]!.blocks.map((b) => b.type)).toEqual([
       'text',
@@ -122,6 +127,7 @@ describe('foldToolMessages', () => {
       msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], 'a1'),
       msg('assistant', [{ type: 'text', text: 't2' }], 'a2')
     ])
+
     expect(folded.map((m) => m.id)).toEqual(['a0', 'a2'])
   })
 
@@ -136,15 +142,18 @@ describe('foldToolMessages', () => {
       msg('user', [{ type: 'text', text: 'q' }], 'u'),
       msg('tool', [{ type: 'tool-result', output: 'r' }], 't')
     ])
+
     expect(folded.map((m) => m.role)).toEqual(['assistant', 'user'])
   })
 
   it('folds a long tool run without mutating the source assistant', () => {
     const assistant = msg('assistant', [{ type: 'text', text: 'working' }], 'a')
+
     const tools = Array.from({ length: 1_000 }, (_unused, index) => [
       msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], `c-${index}`),
       msg('tool', [{ type: 'tool-result', output: String(index) }], `t-${index}`)
     ]).flat()
+
     const folded = foldToolMessages([assistant, ...tools])
 
     expect(folded[0].blocks).toHaveLength(2_001)

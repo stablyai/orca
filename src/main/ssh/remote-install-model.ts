@@ -88,18 +88,21 @@ function assertSafeDirPrefix(dirPrefix: string): void {
 
 export function remoteInstallDirName(model: RemoteInstallModel, fullVersion: string): string {
   assertSafeDirPrefix(model.dirPrefix)
+
   return `${model.dirPrefix}-${fullVersion}`
 }
 
 /** Matches a live version dir for exactly one model — never a tombstone, never a sibling model. */
 export function remoteInstallVersionDirRegex(model: RemoteInstallModel): RegExp {
   assertSafeDirPrefix(model.dirPrefix)
+
   return new RegExp(`^${model.dirPrefix}-(${VERSION_PATTERN})$`)
 }
 
 /** What the remote listing is allowed to return: live dirs plus their tombstones. */
 export function remoteInstallListingRegexSource(model: RemoteInstallModel): string {
   assertSafeDirPrefix(model.dirPrefix)
+
   return `^${model.dirPrefix}-(${VERSION_PATTERN})(${TOMBSTONE_PATTERN})?$`
 }
 
@@ -118,6 +121,7 @@ export function remoteInstallDirOwner(dirName: string): RemoteInstallModelId | n
       return model.id
     }
   }
+
   return null
 }
 
@@ -131,13 +135,16 @@ export type RemoteInstallInventory = Record<RemoteInstallModelId | 'unknown', st
 /** Group a raw `~/.orca-remote/` listing by owning model, for diagnostics and the client's choice. */
 export function inventoryRemoteInstallDirs(dirNames: readonly string[]): RemoteInstallInventory {
   const inventory: RemoteInstallInventory = { relay: [], orcad: [], unknown: [] }
+
   for (const name of dirNames) {
     const owner = remoteInstallDirOwner(name)
+
     if (owner) {
       inventory[owner].push(name)
     } else {
       inventory.unknown.push(name)
     }
   }
+
   return inventory
 }

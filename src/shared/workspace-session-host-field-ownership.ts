@@ -61,7 +61,9 @@ type MissingOwnership = Exclude<
   keyof WorkspaceSessionState,
   keyof typeof WORKSPACE_SESSION_FIELD_OWNERSHIP
 >
+
 const exhaustive: [MissingOwnership] extends [never] ? true : never = true
+
 void exhaustive
 
 export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
@@ -99,6 +101,7 @@ export function withoutRedundantPartitionGlobals<
   T extends Partial<Record<string, WorkspaceSessionState>>
 >(partitions: T, local: Partial<WorkspaceSessionState> | undefined): T {
   let pruned: Record<string, WorkspaceSessionState | undefined> | undefined
+
   for (const [hostId, slice] of Object.entries(partitions) as [
     string,
     WorkspaceSessionState | undefined
@@ -106,13 +109,17 @@ export function withoutRedundantPartitionGlobals<
     if (!slice) {
       continue
     }
+
     const next = withoutRedundantGlobalFields(slice, local)
+
     if (next === slice) {
       continue
     }
+
     pruned ||= { ...partitions }
     pruned[hostId] = next
   }
+
   return (pruned as T | undefined) ?? partitions
 }
 
@@ -129,12 +136,15 @@ export function withoutRedundantGlobalFields<T extends Partial<WorkspaceSessionS
   local: Partial<WorkspaceSessionState> | undefined
 ): T {
   let pruned: T | undefined
+
   for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
     if (local?.[field] === undefined || !Object.hasOwn(slice, field)) {
       continue
     }
+
     pruned ??= { ...slice }
     delete pruned[field]
   }
+
   return pruned ?? slice
 }

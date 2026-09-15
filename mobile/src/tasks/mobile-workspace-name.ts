@@ -33,6 +33,8 @@ export function getLinkedWorkItemSuggestedName(item: { title: string }): string 
     .replace(/\(#\d+\)/gi, '')
     .replace(/\b#\d+\b/g, '')
     .trim()
+
   const seed = withoutLeadingNumber || item.title.trim()
+
   return slugifyForWorkspaceName(seed)
 }

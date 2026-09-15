@@ -13,83 +13,107 @@ import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -101,15 +125,19 @@ describe('registerWorktreeHandlers', () => {
 
   it('fetches the same-repo PR head via the SSH tracking-ref RPC, not git.exec', async () => {
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const exec = vi.fn(async (args: string[]) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'def456\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     getSshGitProviderMock.mockReturnValue({ exec, fetchRemoteTrackingRef })
     store.getRepo.mockReturnValue({
       id: 'repo-1',
@@ -146,15 +174,19 @@ describe('registerWorktreeHandlers', () => {
   it('fetches a fork PR head via the SSH pull-head RPC, not git.exec', async () => {
     const durableLocalRef = `refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/42`
     const fetchGitHubPullRequestHead = vi.fn(async () => durableLocalRef)
+
     const exec = vi.fn(async (args: string[]) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args[2] === `${durableLocalRef}^{commit}`) {
         return { stdout: 'fork-head-sha\n', stderr: '' }
       }
+
       throw new Error(`unexpected git call: ${args.join(' ')}`)
     })
+
     getSshGitProviderMock.mockReturnValue({
       exec,
       fetchGitHubPullRequestHead,
@@ -189,6 +221,7 @@ describe('registerWorktreeHandlers', () => {
   it('fetches a fork PR head from origin, not the first remote, over SSH', async () => {
     const durableLocalRef = `refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/42`
     const fetchGitHubPullRequestHead = vi.fn(async () => durableLocalRef)
+
     // Why: `fork` is listed first, but fork PR heads live on the hosting remote (origin).
     const exec = vi.fn(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
@@ -197,14 +230,18 @@ describe('registerWorktreeHandlers', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'fork\norigin\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args[2] === `${durableLocalRef}^{commit}`) {
         return { stdout: 'fork-head-sha\n', stderr: '' }
       }
+
       throw new Error(`unexpected git call: ${args.join(' ')}`)
     })
+
     getSshGitProviderMock.mockReturnValue({
       exec,
       fetchGitHubPullRequestHead,
@@ -241,9 +278,11 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -281,12 +320,15 @@ describe('registerWorktreeHandlers', () => {
           'fatal: could not find remote ref refs/heads/feat/onboarding-model-choice-782'
         )
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -329,6 +371,7 @@ describe('registerWorktreeHandlers', () => {
       ) {
         throw new Error('fatal: unable to access repo: Could not resolve host: github.com')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -383,14 +426,17 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1',
       worktreeBaseRef: 'origin/main'
     }
+
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+
         if (args[0] === 'show-ref') {
           throw Object.assign(new Error('missing exact ref'), { code: 1 })
         }
+
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
@@ -413,10 +459,12 @@ describe('registerWorktreeHandlers', () => {
       ]),
       worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
+
     const mux = {
       request: vi.fn().mockResolvedValue(undefined),
       notify: vi.fn()
     }
+
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
     getSshGitProviderMock.mockReturnValue(provider)
@@ -478,14 +526,17 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1',
       worktreeBaseRef: 'origin/main'
     }
+
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+
         if (args[0] === 'show-ref') {
           throw Object.assign(new Error('missing exact ref'), { code: 1 })
         }
+
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
@@ -508,6 +559,7 @@ describe('registerWorktreeHandlers', () => {
       ]),
       worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
+
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
     getSshGitProviderMock.mockReturnValue(provider)

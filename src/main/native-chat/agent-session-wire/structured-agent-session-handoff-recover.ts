@@ -25,6 +25,8 @@ export async function requestStructuredManualRecovery(input: {
   if (!structuredManualRecoveryIsAdmissible(input.record, input.status)) {
     return false
   }
+
   beginStructuredManualRecovery(input)
+
   return true
 }

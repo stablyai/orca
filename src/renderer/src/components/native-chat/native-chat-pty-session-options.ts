@@ -59,16 +59,20 @@ export function createNativeChatPtySessionOptions(
   args: CreateNativeChatPtySessionOptionsArgs
 ): NativeChatPtySessionOptionsSurface | null {
   const catalog = getAgentSessionOptionCatalog(args.agent)
+
   if (!catalog) {
     return null
   }
+
   let models = [...(args.initialModels ?? catalog.models)]
   // The enrichment cache only ever holds probe output, so being handed a list at all
   // means `isDefault` below names the account's real default rather than the seed guess.
   let modelsAreDiscovered = args.initialModels !== undefined
+
   let record =
     readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey) ??
     createNativeChatSessionOptionRecord(args.agent)
+
   if (record.agent !== args.agent) {
     record = createNativeChatSessionOptionRecord(args.agent)
   }
@@ -76,6 +80,7 @@ export function createNativeChatPtySessionOptions(
   if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
     writeNativeChatSessionOptionCache(args.scopeKey, record)
   }
+
   /** Why: an authoritative probe proved this id gone; left tracked it would re-enter
    *  the picker via re-injection and re-persist the fatal `-m` on any later option
    *  write, undoing the settings retirement. */
@@ -83,17 +88,24 @@ export function createNativeChatPtySessionOptions(
     if (!catalog.discoveredModelsAreAuthoritative || !modelsAreDiscovered) {
       return false
     }
+
     const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
+
     if (!trackedId || models.some((model) => model.id === trackedId)) {
       return false
     }
+
     clearNativeChatSessionModel(record)
+
     return true
   }
+
   if (untrackRetiredModel()) {
     writeNativeChatSessionOptionCache(args.scopeKey, record)
   }
+
   const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
+
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
     models: activeModels(),
@@ -101,6 +113,7 @@ export function createNativeChatPtySessionOptions(
     mode: args.mode,
     liveTransport: 'catalog'
   })
+
   const listeners = new Set<(value: SessionOptionDescriptor[]) => void>()
 
   const publish = (): SessionOptionDescriptor[] => {
@@ -112,9 +125,11 @@ export function createNativeChatPtySessionOptions(
       mode: args.mode,
       liveTransport: 'catalog'
     })
+
     for (const listener of listeners) {
       listener(snapshot)
     }
+
     return snapshot
   }
 
@@ -149,9 +164,11 @@ export function createNativeChatPtySessionOptions(
   const modelIsAdoptableAsLaunchDefault = (modelId: string): boolean => {
     const listedIn = (list: readonly CatalogModel[]): boolean =>
       list.some((model) => model.id === modelId)
+
     if (!listedIn(models) && !listedIn(catalog.models)) {
       return false
     }
+
     return modelsAreDiscovered
       ? !catalog.discoveredModelsAreAuthoritative || listedIn(models)
       : record.model !== undefined
@@ -189,6 +206,7 @@ export function createNativeChatPtySessionOptions(
     invokeAction: appliers.invokeAction,
     subscribe: (listener) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     },
     recordOutgoingCommand: (command) => {
@@ -199,9 +217,11 @@ export function createNativeChatPtySessionOptions(
         command,
         persist
       })
+
       if (result.changed) {
         publish()
       }
+
       if (result.opensAgentPicker) {
         args.onAgentPicker?.()
       }

@@ -15,8 +15,10 @@ function firstPathKey(env: PathEnvironment): string | undefined {
 export function windowsPathSegmentKey(segment: string): string {
   const normalized = pathWin32.normalize(segment)
   const root = pathWin32.parse(normalized).root
+
   const withoutTrailingSlash =
     normalized.length > root.length ? normalized.replace(/[\\/]+$/, '') : normalized
+
   return withoutTrailingSlash.toLowerCase()
 }
 
@@ -26,12 +28,15 @@ function splitPath(pathValue: string): string[] {
 
 export function createWindowsPathKey(): (segment: string) => string {
   const keys = new Map<string, string>()
+
   return (segment) => {
     let key = keys.get(segment)
+
     if (key === undefined) {
       key = windowsPathSegmentKey(segment)
       keys.set(segment, key)
     }
+
     return key
   }
 }
@@ -40,8 +45,10 @@ function externalAdditions(application: AppliedWindowsPath, currentValue: string
   if (currentValue === application.appliedValue) {
     return []
   }
+
   // Why: forced Windows preflight appends newly installed registry paths after hydration.
   const appliedKeys = new Set(splitPath(application.appliedValue).map(windowsPathSegmentKey))
+
   return splitPath(currentValue).filter(
     (segment) => !appliedKeys.has(windowsPathSegmentKey(segment))
   )
@@ -56,9 +63,11 @@ export class WindowsShellPathOwnership {
 
   restore(env: PathEnvironment): void {
     const application = this.application
+
     if (!application) {
       return
     }
+
     const pathKey = firstPathKey(env) ?? application.pathKey
     const currentValue = env[pathKey] ?? ''
     const additions = externalAdditions(application, currentValue)

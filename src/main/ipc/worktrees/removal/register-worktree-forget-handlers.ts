@@ -47,12 +47,15 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
     ): Promise<RemoveWorktreeResult> => {
       const { repoId } = parseWorktreeId(args.worktreeId)
       const repoOwner = resolveWorktreeRemovalRepoOwner(store, repoId, args.hostId)
+
       if (!args.hostId && repoOwner.kind === 'ambiguous') {
         throw new Error(
           `Workspace identity is ambiguous across hosts: ${args.worktreeId}. Retry with an explicit host.`
         )
       }
+
       const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
+
       // Repo-first (unlike owner resolution below) so this key matches worktrees:remove's; meta only covers ownerless forgets.
       const inFlightKey = getWorktreeRemovalInFlightKey(
         args.worktreeId,
@@ -60,23 +63,28 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
           ? getRepoExecutionHostId(repo)
           : (args.hostId ?? store.getWorktreeMeta(args.worktreeId)?.hostId)
       )
+
       const optionsKey = 'forget-local'
       const inFlight = worktreeRemovalsInFlight.get(inFlightKey)
+
       if (inFlight) {
         if (inFlight.optionsKey === optionsKey) {
           return inFlight.promise
         }
+
         throw new Error(`Worktree deletion already in progress: ${args.worktreeId}`)
       }
 
       const forget = (async (): Promise<RemoveWorktreeResult> => {
         const isFolderRootOf = (candidate: Repo): boolean =>
           isFolderRepo(candidate) && args.worktreeId === getFolderWorkspaceRootId(candidate)
+
         const fallbackRepos = args.hostId
           ? store
               .getRepos()
               .filter((candidate) => getRepoExecutionHostId(candidate) === args.hostId)
           : store.getRepos()
+
         if (repo ? isFolderRootOf(repo) : fallbackRepos.some(isFolderRootOf)) {
           throw new Error(
             'Cannot delete the project root workspace. Remove the folder project instead.'
@@ -89,9 +97,12 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
           repo,
           args.hostId
         )
+
         const ownerHost = parseExecutionHostId(ownerHostId)
+
         const sshPtyProvider =
           ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
+
         const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
         // External host inventories must never sweep a same-id local workspace.
         await killAllProcessesForWorktree(args.worktreeId, {
@@ -126,6 +137,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
         )
         // Why: cached roots outlive the forgotten workspace, so an ownerless path stays filesystem-authorized until a rebuild.
         invalidateAuthorizedRootsCache()
+
         if (ownerHost?.id) {
           preservedBranchCleanupByScope.delete(
             preservedBranchCleanupScopeKey({ worktreeId: args.worktreeId, hostId: ownerHost.id })
@@ -137,10 +149,14 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
             }
           }
         }
+
         notifyWorktreesChanged(mainWindow, repoId)
+
         return {}
       })()
+
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: forget })
+
       try {
         return await forget
       } finally {
@@ -163,16 +179,20 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
       }
     ): Promise<ForceDeleteWorktreeBranchResult> => {
       const { repoId } = parseWorktreeId(args.worktreeId)
+
       const cleanupTarget = getPreservedBranchCleanupTarget(
         args.worktreeId,
         args.branchName,
         args.expectedHead,
         args.hostId
       )
+
       const repo = resolveRepoForExecutionHost(store, repoId, cleanupTarget.hostId)
+
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
+
       if (isFolderRepo(repo)) {
         throw new Error('Folder workspaces do not have local Git branches.')
       }
@@ -218,6 +238,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
           hostId: cleanupTarget.hostId
         })
       )
+
       return { deleted: true }
     }
   )

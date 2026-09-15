@@ -50,6 +50,7 @@ async function prefetchLocalWorktreeCreateBase(
 ): Promise<string | undefined> {
   // Keep host-routed calls at their original arity so they stay on the runtime's default options.
   const optionArgs: [] | [WorktreeCreateBaseGitOptions] = options.wslDistro ? [options] : []
+
   const resolvedBaseBranch = await resolveWorktreeCreateBase({
     requestedBaseBranch: baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
@@ -60,39 +61,48 @@ async function prefetchLocalWorktreeCreateBase(
         baseBranchCandidate,
         ...optionArgs
       )
+
       if (remoteTrackingBase) {
         if (await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase, ...optionArgs)) {
           return true
         }
+
         return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate, options)
       }
+
       return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate, options)
     }
   })
+
   if (!resolvedBaseBranch) {
     return undefined
   }
+
   if (
     isFullGitObjectId(resolvedBaseBranch) &&
     (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch, options))
   ) {
     return resolvedBaseBranch
   }
+
   const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(
     repo.path,
     resolvedBaseBranch,
     ...optionArgs
   )
+
   if (remoteTrackingBase) {
     const hasTrackingRef = await runtime.hasRemoteTrackingRef(
       repo.path,
       remoteTrackingBase,
       ...optionArgs
     )
+
     if (hasTrackingRef) {
       // Finalization revalidates the refreshed commit before exposing the checkout.
       prepareLocalCheckout(resolvedBaseBranch)
     }
+
     if (
       hasTrackingRef ||
       !(await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch, options))
@@ -102,9 +112,11 @@ async function prefetchLocalWorktreeCreateBase(
         remoteTrackingBase,
         ...optionArgs
       )
+
       return resolvedBaseBranch
     }
   }
+
   if (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch, options)) {
     // Why: hosted-review start points and local branch bases are already local; a broad remote fetch cannot make them fresher.
     return resolvedBaseBranch
@@ -114,6 +126,7 @@ async function prefetchLocalWorktreeCreateBase(
   // create that lands here reuses this fetch instead of repeating it. A create
   // that instead resolves an exact remote base still queues behind it.
   await runtime.fetchRemoteWithCache(repo.path, 'origin', ...optionArgs)
+
   return resolvedBaseBranch
 }
 
@@ -129,16 +142,22 @@ export async function prefetchWorktreeCreateBase(args: {
   if (isFolderRepo(args.repo)) {
     return undefined
   }
+
   if (args.repo.connectionId) {
     const provider = getSshGitProvider(args.repo.connectionId)
+
     if (!provider) {
       return undefined
     }
+
     await prefetchRemoteWorktreeCreateBase(provider, args.repo, { baseBranch: args.baseBranch })
+
     return undefined
   }
+
   const prepareCheckout = args.prepareCheckout
   let preparation: Promise<void> | undefined
+
   const prepare = (base: string): void => {
     if (!preparation && prepareCheckout) {
       preparation = Promise.resolve()
@@ -146,6 +165,7 @@ export async function prefetchWorktreeCreateBase(args: {
         .catch(() => {})
     }
   }
+
   try {
     const base = await prefetchLocalWorktreeCreateBase(
       args.repo,
@@ -154,9 +174,11 @@ export async function prefetchWorktreeCreateBase(args: {
       args.gitOptions,
       prepare
     )
+
     if (base) {
       prepare(base)
     }
+
     return base
   } finally {
     // Settle speculative work even if refresh fails; Create owns error reporting.

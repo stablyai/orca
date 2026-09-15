@@ -23,8 +23,10 @@ function installPs(stdout: string, outputTruncated = false): string[][] {
   const calls: string[][] = []
   runProcessMock.mockImplementation(async (spec: { program: string; args: readonly string[] }) => {
     calls.push([spec.program, ...spec.args])
+
     return { code: 0, signal: null, stdout, stderr: '', timedOut: false, outputTruncated }
   })
+
   return calls
 }
 
@@ -38,6 +40,7 @@ describe('parseCheapProcessTableRows', () => {
         ''
       ].join('\n')
     )
+
     expect(rows).toEqual([
       { pid: 1, ppid: 0, pgid: 1, tpgid: 0, stat: 'Ss', startTime: 'Tue Sep  1 01:49:39 2026' },
       {
@@ -63,6 +66,7 @@ describe('parseCheapProcessTableRows', () => {
     const rows = parseCheapProcessTableRows(
       '   2     0     0   -1 S\r\n 900   1   900  900 Ss+\r\n'
     )
+
     expect(rows).toEqual([
       { pid: 2, ppid: 0, pgid: 0, tpgid: -1, stat: 'S' },
       { pid: 900, ppid: 1, pgid: 900, tpgid: 900, stat: 'Ss+' }

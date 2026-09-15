@@ -9,6 +9,7 @@ import type * as WebSessionTerminalHandleEventsModule from './web-session-termin
 vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
   const actual = await importOriginal<typeof WebSessionTerminalHandleEventsModule>()
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return {
     ...actual,
     queueAcceptedWebSessionTerminalSnapshot: frameOrderingMocks.queueAcceptedSnapshot
@@ -17,6 +18,7 @@ vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
 
 vi.mock('./use-runtime-session-mirror-environment-key', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return {
     useRuntimeSessionMirrorEnvironmentKey: frameOrderingMocks.runtimeSessionMirrorEnvironmentKey
   }
@@ -24,12 +26,14 @@ vi.mock('./use-runtime-session-mirror-environment-key', async () => {
 
 vi.mock('./web-session-terminal-orphan-recovery', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return { recoverWebSessionTerminalOrphansBeforeApply: frameOrderingMocks.recoverSnapshot }
 })
 
 vi.mock('./web-runtime-session', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeSessionModule>()
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return { ...actual, createWebRuntimeSessionTerminal: frameOrderingMocks.createTerminal }
 })
 
@@ -129,6 +133,7 @@ describe('a global singular frame whose patch never lands', () => {
       OTHER_HOST_SURFACE_ID,
       OTHER_HOST_PARENT_TAB_ID
     ) as never as { tabs: Record<string, unknown>[] }
+
     malformed.tabs[0]!.terminal = undefined
     await publish(findSubscription('session.tabs.subscribeAll'), {
       type: 'snapshot',
@@ -368,6 +373,7 @@ describe('a host frame for a workspace the mirror never writes', () => {
 
   it('is left out of a partial initial inventory verdict', async () => {
     let resolveListAll: (response: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((request: { method: string }) =>
       request.method === 'session.tabs.listAll'
         ? new Promise((resolve) => {
@@ -450,13 +456,16 @@ describe('a store subscriber that throws after the commit', () => {
     // Why: throw exactly once — the drain this releases writes to the same
     // store, and a subscriber that kept throwing would take those writes down.
     let threw = false
+
     const unsubscribe = useAppStore.subscribe(() => {
       if (threw) {
         return
       }
+
       threw = true
       throw new Error('agent status subscriber failed')
     })
+
     try {
       await publish(findSubscription('session.tabs.subscribeAll'), {
         type: 'snapshot',

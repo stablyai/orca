@@ -13,7 +13,9 @@ type ViewerFixture = {
 }
 
 let tempHome = ''
+
 let fixtures = new Map<string, ViewerFixture>()
+
 let linearClientMock: ReturnType<typeof vi.fn>
 
 type SafeStorageMockOptions = {
@@ -65,6 +67,7 @@ function writeMultiWorkspaceFiles(
     }),
     { encoding: 'utf-8' }
   )
+
   for (const workspace of workspaces) {
     writeFileSync(workspaceTokenPath(workspace.id), workspace.token)
   }
@@ -77,9 +80,11 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     { apiKey }: { apiKey: string }
   ) {
     const fixture = fixtures.get(apiKey)
+
     if (!fixture) {
       throw new Error('Invalid API key')
     }
+
     this.viewer = Promise.resolve({
       displayName: fixture.displayName,
       email: fixture.email,
@@ -99,9 +104,12 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
   })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
+
     return { ...actual, homedir: () => tempHome }
   })
+
   class AuthenticationLinearError extends Error {}
+
   // Why: client.ts loads @linear/sdk lazily via ./linear-sdk (createRequire) to
   // keep it off the startup parse path; mock the loader, not the raw module.
   vi.doMock('./linear-sdk', () => ({
@@ -224,6 +232,7 @@ describe('Linear client workspace storage', () => {
       email: 'ada@example.com',
       organizationName: 'Alpha'
     })
+
     const linear = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
@@ -271,6 +280,7 @@ describe('Linear client workspace storage', () => {
       email: 'ada@example.com',
       organizationName: 'Alpha'
     })
+
     const linear = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
@@ -301,12 +311,14 @@ describe('Linear client workspace storage', () => {
       email: 'ada@example.com',
       organizationName: 'Alpha'
     })
+
     const linear = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
         if (!keychainApproved) {
           throw new Error('userCanceledErr')
         }
+
         return 'token-alpha'
       }
     })
@@ -358,6 +370,7 @@ describe('Linear client workspace storage', () => {
       organizationName: 'good',
       organizationUrlKey: 'good'
     })
+
     const linear = await loadClientModule({
       encryptionAvailable: true,
       // Why: the plaintext "token-good" falls back through the legacy path;
@@ -380,6 +393,7 @@ describe('Linear client workspace storage', () => {
       ],
       'bad'
     )
+
     const linear = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {

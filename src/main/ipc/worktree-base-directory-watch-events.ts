@@ -28,14 +28,18 @@ export function handleLocalWatchEvents(
   if (watch.disposed || watch.mainWindow.isDestroyed()) {
     return
   }
+
   if (error) {
     console.warn(`[worktree-base-watcher] watcher failed for ${watch.path}:`, error)
     invalidateActiveGitStatusRefResolution(watch, getActiveWatches)
+
     if (watch.watcherFailureRefresh.consume()) {
       scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
     }
+
     return
   }
+
   watch.watcherFailureRefresh.reset()
   invalidateGitStatusRefResolutionForPaths(
     watch,
@@ -43,6 +47,7 @@ export function handleLocalWatchEvents(
     getActiveWatches
   )
   const changes = collectLocalWorktreeBaseChanges(watch, events)
+
   if (hasCollectedWorktreeBaseChanges(changes)) {
     scheduleWorktreeBaseNotification(watch, changes)
   }
@@ -60,6 +65,7 @@ export function handleWatchOverflow(
   if (watch.disposed || watch.mainWindow.isDestroyed()) {
     return
   }
+
   invalidateActiveGitStatusRefResolution(watch, getActiveWatches)
   scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
 }
@@ -72,6 +78,7 @@ export function handleRemoteWatchEvents(
   if (watch.disposed || watch.mainWindow.isDestroyed()) {
     return
   }
+
   invalidateGitStatusRefResolutionForPaths(
     watch,
     events.flatMap((event) =>
@@ -80,10 +87,13 @@ export function handleRemoteWatchEvents(
     getActiveWatches
   )
   const changes = collectRemoteWorktreeBaseChanges(watch, events)
+
   if (changes.overflow) {
     handleWatchOverflow(watch, getActiveWatches)
+
     return
   }
+
   if (hasCollectedWorktreeBaseChanges(changes)) {
     scheduleWorktreeBaseNotification(watch, changes)
   }

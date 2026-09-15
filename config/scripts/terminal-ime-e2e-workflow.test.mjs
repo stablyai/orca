@@ -20,6 +20,7 @@ describe('terminal IME e2e workflow', () => {
     const runs = workflow.jobs['linux-x11'].steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
+
     const installRun = runs.find((run) => run.includes('apt-get install'))
 
     expect(installRun).toBeDefined()
@@ -36,9 +37,11 @@ describe('terminal IME e2e workflow', () => {
     const runs = workflow.jobs['linux-x11'].steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
+
     const deterministicIndex = runs.findIndex((run) =>
       run.includes('terminal-ime-exact-byte.spec.ts')
     )
+
     const nativeIndex = runs.findIndex((run) => run.includes('test:e2e:terminal-ime-native'))
 
     expect(deterministicIndex).toBeGreaterThanOrEqual(0)
@@ -72,9 +75,11 @@ describe('terminal IME e2e workflow', () => {
     const job = workflow.jobs['linux-wayland']
     expect(job.needs).toBeUndefined()
     const install = job.steps.find((step) => step.run?.includes('apt-get install')).run
+
     for (const tool of ['gnome-shell', 'ibus-hangul', 'fonts-noto-cjk', 'xwininfo']) {
       expect(install).toContain(tool === 'xwininfo' ? 'x11-utils' : tool)
     }
+
     expect(job.steps.find((step) => step.run?.includes('--nested-wayland')).run).toBe(
       'node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland'
     )

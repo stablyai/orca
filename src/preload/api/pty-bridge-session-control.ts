@@ -85,7 +85,9 @@ export const ptySessionControlApi = {
       _event: Electron.IpcRendererEvent,
       payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
     ): void => callback(payload)
+
     ipcRenderer.on('pty:writeUnavailable', handler)
+
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },
   resize: (id: string, cols: number, rows: number): void => {
@@ -116,7 +118,9 @@ export const ptySessionControlApi = {
   onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { requestId: number }) =>
       callback(payload)
+
     ipcRenderer.on('pty:requestDeliveryResync', listener)
+
     return () => ipcRenderer.removeListener('pty:requestDeliveryResync', listener)
   },
   respondDeliveryResync: (payload: {

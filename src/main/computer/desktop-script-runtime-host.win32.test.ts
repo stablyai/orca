@@ -33,9 +33,11 @@ describeOnWindows('runtime.ps1 serve mode', () => {
       warn: () => {},
       spawn: (spec) => {
         spawns++
+
         return spawnProcess(spec)
       }
     })
+
     return host
   }
 
@@ -107,15 +109,19 @@ function answerRawLine(raw: string): Promise<Record<string, unknown>> {
       {
         onLine: (line) => {
           let parsed: Record<string, unknown>
+
           try {
             parsed = JSON.parse(line) as Record<string, unknown>
           } catch {
             return
           }
+
           if (parsed.ready === true) {
             channel.write(`${raw}\n`, fail)
+
             return
           }
+
           channel.stop()
           settle(parsed)
         },

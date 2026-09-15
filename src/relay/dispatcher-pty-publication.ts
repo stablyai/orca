@@ -10,11 +10,13 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
     if (this.disposed) {
       return false
     }
+
     const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
       method: 'pty.data',
       params
     }
+
     return this.tryPublishToClients(
       this.activeClients().filter((client) => this.admitsPtyDataPublication(client.id, params)),
       msg,
@@ -30,6 +32,7 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
     if (this.disposed) {
       return false
     }
+
     return this.tryPublishToClients(
       this.activeClients().filter(
         (client) => matchesClient(client.id) && this.admitsPtyDataPublication(client.id, params)
@@ -47,6 +50,7 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
     if (this.disposed) {
       return false
     }
+
     return this.projectToClients(
       this.activeClients().filter(
         (client) => matchesClient(client.id) && this.admitsPtyDataPublication(client.id, params)
@@ -63,17 +67,24 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
   ): boolean {
     if (this.disposed) {
       onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
+
       return false
     }
+
     const client = this.clients.get(clientId)
+
     if (!client || client.closed) {
       onSettled({ ok: false, error: new Error('Relay client is not connected') })
+
       return false
     }
+
     if (!this.admitsPtyDataPublication(clientId, params)) {
       onSettled({ ok: false, error: new Error('PTY publication is not admitted') })
+
       return false
     }
+
     return this.publishToClient(
       client,
       { jsonrpc: '2.0', method: 'pty.data', params },
@@ -86,6 +97,7 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
     if (this.disposed) {
       return false
     }
+
     return this.tryPublishToClients(
       this.activeClients(),
       {
@@ -104,6 +116,7 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
     if (this.disposed) {
       return false
     }
+
     return this.tryPublishToClients(
       this.activeClients().filter((client) => matchesClient(client.id)),
       { jsonrpc: '2.0', method: 'pty.exit', params },
@@ -118,6 +131,7 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
     if (this.disposed) {
       return false
     }
+
     return this.projectToClients(
       this.activeClients().filter((client) => matchesClient(client.id)),
       { jsonrpc: '2.0', method: 'pty.exit', params },
@@ -132,13 +146,18 @@ export abstract class RelayDispatcherPtyPublication extends RelayDispatcherProdu
   ): boolean {
     if (this.disposed) {
       onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
+
       return false
     }
+
     const client = this.clients.get(clientId)
+
     if (!client || client.closed) {
       onSettled({ ok: false, error: new Error('Relay client is not connected') })
+
       return false
     }
+
     return this.publishToClient(
       client,
       { jsonrpc: '2.0', method: 'pty.exit', params },

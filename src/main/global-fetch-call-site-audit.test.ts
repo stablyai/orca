@@ -60,6 +60,7 @@ const SCANNED_ROOTS = ['main', 'cli', 'relay']
 
 function globalFetchLineCounts(srcRoot: string): Map<string, number> {
   const counts = new Map<string, number>()
+
   for (const root of SCANNED_ROOTS) {
     for (const entry of readdirSync(join(srcRoot, root), {
       recursive: true,
@@ -68,6 +69,7 @@ function globalFetchLineCounts(srcRoot: string): Map<string, number> {
       if (!entry.isFile() || !entry.name.endsWith('.ts')) {
         continue
       }
+
       if (
         entry.name.endsWith('.test.ts') ||
         entry.name.endsWith('.test-fixtures.ts') ||
@@ -75,17 +77,22 @@ function globalFetchLineCounts(srcRoot: string): Map<string, number> {
       ) {
         continue
       }
+
       const filePath = join(entry.parentPath, entry.name)
       const content = readFileSync(filePath, 'utf8')
+
       if (!GLOBAL_FETCH_LINE.test(content)) {
         continue
       }
+
       const hits = content.split('\n').filter((line) => GLOBAL_FETCH_LINE.test(line)).length
+
       if (hits > 0) {
         counts.set(relative(srcRoot, filePath).split(sep).join('/'), hits)
       }
     }
   }
+
   return counts
 }
 
@@ -97,6 +104,7 @@ describe('global fetch call-site audit (main, cli, relay)', () => {
       .filter(([file, count]) => AUDITED_GLOBAL_FETCH_LINES.get(file) !== count)
       .map(([file, count]) => `${file}: found ${count} line(s)`)
       .sort()
+
     expect(
       drifted,
       'Global fetch (bare, globalThis.fetch, or global.fetch) uses undici, ' +

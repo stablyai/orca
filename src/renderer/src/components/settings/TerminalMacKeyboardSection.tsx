@@ -14,6 +14,7 @@ export function TerminalMacKeyboardSection({
   updateSettings
 }: TerminalMacKeyboardSectionProps): React.JSX.Element {
   const detectedLayout = useDetectedOptionAsAlt()
+
   const detectedLayoutLabel =
     detectedLayout === 'us'
       ? 'US English — Option sends Alt/Esc sequences'

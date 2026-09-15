@@ -17,10 +17,12 @@ function resolvedKittyKeyboard(
   tabLaunchAgent: 'grok' | null = null
 ): boolean | undefined {
   const tuiAgent = resolvePaneKeyboardProtocolAgent(startup, tabLaunchAgent)
+
   const options = {
     ...buildDefaultTerminalOptions(),
     ...buildTerminalKeyboardProtocolOptions({ ...localWindowsConpty, tuiAgent })
   }
+
   return options.vtExtensions?.kittyKeyboard
 }
 

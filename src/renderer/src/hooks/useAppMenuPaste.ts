@@ -26,9 +26,11 @@ export function useAppMenuPaste(): void {
     }
 
     const unsubscribeAppMenuPaste = window.api.ui.onAppMenuPaste(() => handlePaste())
+
     const unsubscribeEditableContextPaste = window.api.ui.onEditableContextPaste((data) => {
       handlePaste({ mode: data.plainTextOnly ? 'paste-and-match-style' : 'paste' })
     })
+
     return () => {
       unsubscribeAppMenuPaste()
       unsubscribeEditableContextPaste()

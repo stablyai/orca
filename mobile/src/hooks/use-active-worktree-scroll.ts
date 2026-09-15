@@ -21,10 +21,12 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
   const activeWorktreeId = useMemo(() => {
     for (const section of sections) {
       const match = section.data.find((w) => w.isActive)
+
       if (match) {
         return match.worktreeId
       }
     }
+
     return null
   }, [sections])
 
@@ -37,6 +39,7 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
     (worktreeId: string): boolean => {
       for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
         const itemIndex = sections[sectionIndex].data.findIndex((w) => w.worktreeId === worktreeId)
+
         if (itemIndex !== -1) {
           sectionListRef.current?.scrollToLocation({
             sectionIndex,
@@ -44,9 +47,11 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
             viewPosition: 0.5,
             animated: true
           })
+
           return true
         }
       }
+
       return false
     },
     [sections]
@@ -56,6 +61,7 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
     if (!activeWorktreeId || activeWorktreeId === lastScrolledActiveIdRef.current) {
       return
     }
+
     if (scrollToWorktree(activeWorktreeId)) {
       lastScrolledActiveIdRef.current = activeWorktreeId
     }
@@ -64,9 +70,11 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
   const onScrollToIndexFailed = useCallback(
     (info: { averageItemLength: number }) => {
       const target = lastScrolledActiveIdRef.current
+
       if (!target) {
         return
       }
+
       setTimeout(
         () => {
           // Bail if the active selection moved on while we waited — otherwise we'd

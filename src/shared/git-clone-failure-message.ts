@@ -7,7 +7,9 @@ import { stripCredentialsFromMessage } from './git-remote-error'
 // fails — with nothing in the message saying the clone ran somewhere else, without their agent.
 const CLONE_HOST_NOTE =
   'The clone runs non-interactively (BatchMode=yes) on the machine that will hold the repository, using the SSH keys and agent on that machine rather than the ones on this computer.'
+
 const CLONE_KEY_HINT = `${CLONE_HOST_NOTE} A passphrase-protected key cannot prompt there, so load it into an agent on that machine (ssh-add) and retry.`
+
 const CLONE_HOST_KEY_HINT = `${CLONE_HOST_NOTE} It has not trusted this host key yet — connect once from a shell on that machine to record it in its known_hosts.`
 
 /** An ssh(1) diagnostic, i.e. a line only the SSH transport can have produced. */
@@ -30,12 +32,15 @@ function appendCloneTransportGuidance(message: string, scrubbedStderr: string): 
   if (message.includes(CLONE_HOST_NOTE)) {
     return message
   }
+
   if (/host key verification failed/i.test(scrubbedStderr)) {
     return `${message} ${CLONE_HOST_KEY_HINT}`
   }
+
   if (/permission denied \(([^)]*publickey[^)]*)\)/i.test(scrubbedStderr)) {
     return `${message} ${CLONE_KEY_HINT}`
   }
+
   // Every other SSH-transport failure still needs the one fact the reporter was missing — but only
   // once something proves the transport was SSH: git prints this same line for the HTTP remote
   // helper, where a note about keys and agents is simply wrong.
@@ -59,15 +64,20 @@ function getGitCloneFailureLine(
 
   for (const rawLine of iterateLinesFromEnd(scrubbedStderr)) {
     const line = stripAnsi(rawLine).trim()
+
     if (!line) {
       continue
     }
+
     fallbackLine ??= line
     const fatalIndex = line.indexOf('fatal:')
+
     if (fatalIndex !== -1) {
       return formatGitCloneFailureLine(line.slice(fatalIndex), options)
     }
+
     const errorIndex = line.indexOf('error:')
+
     if (errorIndex !== -1) {
       return formatGitCloneFailureLine(line.slice(errorIndex), options)
     }
@@ -82,6 +92,7 @@ function* iterateLinesFromEnd(value: string): Generator<string> {
 
   while (index >= 0) {
     const code = value.charCodeAt(index)
+
     if (code !== 10 && code !== 13) {
       index--
       continue
@@ -89,6 +100,7 @@ function* iterateLinesFromEnd(value: string): Generator<string> {
 
     const delimiterStart =
       code === 10 && index > 0 && value.charCodeAt(index - 1) === 13 ? index - 1 : index
+
     yield value.slice(index + 1, lineEnd)
     lineEnd = delimiterStart
     index = delimiterStart - 1
@@ -105,10 +117,13 @@ function formatGitCloneFailureLine(line: string, options: { clonePath?: string |
   const destinationMatch = line.match(
     /^fatal:\s+destination path '([^']+)' already exists and is not an empty directory\.$/
   )
+
   if (destinationMatch || /repository exists/i.test(line)) {
     const destination = options.clonePath?.trim() || destinationMatch?.[1] || null
     const target = destination ? `: ${destination}` : ''
+
     return `Destination already exists and is not empty${target}. Choose a different parent folder, delete the existing folder, or add the existing repository instead.`
   }
+
   return line
 }

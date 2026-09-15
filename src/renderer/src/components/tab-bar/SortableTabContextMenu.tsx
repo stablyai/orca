@@ -241,6 +241,7 @@ export function SortableTabContextMenu({
           <div className="flex flex-wrap gap-2">
             {TAB_COLORS.map((color) => {
               const isSelected = tab.color === color.value
+
               return (
                 <DropdownMenuItem
                   key={color.label}

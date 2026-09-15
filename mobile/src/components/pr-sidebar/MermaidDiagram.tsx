@@ -44,18 +44,24 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Pro
           if (request.url === 'about:blank' || request.url.startsWith('data:')) {
             return true
           }
+
           setFailed(true)
+
           return false
         }}
         onError={() => setFailed(true)}
         onHttpError={() => setFailed(true)}
         onMessage={(event) => {
           const data = event.nativeEvent.data
+
           if (data === 'error') {
             setFailed(true)
+
             return
           }
+
           const parsed = Number(data)
+
           if (Number.isFinite(parsed) && parsed > 0) {
             setHeight(Math.ceil(parsed))
           }
@@ -94,6 +100,7 @@ function encodeSourceForScript(source: string): string {
 // height (or "error") back to RN. Theme variables match the dark sidebar palette.
 export function buildHtml(source: string): string {
   const encoded = encodeSourceForScript(source)
+
   return `<!DOCTYPE html>
 <html>
 <head>

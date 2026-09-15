@@ -94,6 +94,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
 
   it('uses the GitLab review selected by Checks instead of stale GitHub metadata', () => {
     const gitLabWorktree = { ...worktree, linkedGitLabMR: 17 }
+
     const prKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,
@@ -103,6 +104,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
       repo.executionHostId,
       true
     )
+
     const reviewKey = getHostedReviewCacheKey(
       repo.path,
       'feature/search',
@@ -112,6 +114,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
       repo.executionHostId,
       true
     )
+
     const gitLabReview = makeGitLabReview()
 
     const reviews = buildWorktreeChecksReviewIndex({
@@ -127,6 +130,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
 
   it('records when a non-GitHub link suppresses stale GitHub metadata before its review loads', () => {
     const gitLabWorktree = { ...worktree, linkedGitLabMR: 17 }
+
     const prKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,
@@ -155,6 +159,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
       linkedPR: null,
       suppressedGitHubPR: 42
     }
+
     const prKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,
@@ -164,10 +169,12 @@ describe('buildWorktreeChecksReviewIndex', () => {
       repo.executionHostId,
       true
     )
+
     const prCache = {
       [prKey]: { data: makePR(), fetchedAt: 1 },
       [`${repo.path}::feature/search`]: { data: makePR(), fetchedAt: 1 }
     }
+
     const repoByHostIdentity = new Map([[getRepoHostIdentity(repo), repo]])
 
     const reviews = buildWorktreeChecksReviewIndex({
@@ -197,15 +204,18 @@ describe('buildWorktreeChecksReviewIndex', () => {
 
   it('filters matching suppression from a legacy-only local PR cache', () => {
     const localRepo = { ...repo, path: '/local/orca', executionHostId: 'local' as const }
+
     const suppressedWorktree = {
       ...worktree,
       hostId: 'local' as const,
       linkedPR: null,
       suppressedGitHubPR: 42
     }
+
     const prCache = {
       [`${localRepo.path}::feature/search`]: { data: makePR(), fetchedAt: 1 }
     }
+
     const repoByHostIdentity = new Map([[getRepoHostIdentity(localRepo), localRepo]])
 
     const reviews = buildWorktreeChecksReviewIndex({
@@ -239,6 +249,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
       linkedPR: null,
       suppressedGitHubPR: 42
     }
+
     const prKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,
@@ -248,7 +259,9 @@ describe('buildWorktreeChecksReviewIndex', () => {
       repo.executionHostId,
       true
     )
+
     const repoByHostIdentity = new Map([[getRepoHostIdentity(repo), repo]])
+
     const prCache = {
       [prKey]: {
         data: makePR({ number: 43, title: 'A different pull request' }),
@@ -277,6 +290,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
   it('keeps an explicit PR authoritative over stale branch-cache evidence', () => {
     const localRepo = { ...repo, path: '/local/orca', executionHostId: 'local' as const }
     const explicitWorktree = { ...worktree, hostId: 'local' as const, linkedPR: 42 }
+
     const prKey = getGitHubPRCacheKey(
       localRepo.path,
       localRepo.id,
@@ -286,12 +300,16 @@ describe('buildWorktreeChecksReviewIndex', () => {
       localRepo.executionHostId,
       true
     )
+
     const stalePR = makePR({ number: 43, title: 'Stale branch PR' })
+
     const prCache = {
       [prKey]: { data: stalePR, fetchedAt: 1 },
       [`${localRepo.path}::feature/search`]: { data: stalePR, fetchedAt: 1 }
     }
+
     const repoByHostIdentity = new Map([[getRepoHostIdentity(localRepo), localRepo]])
+
     const reviews = buildWorktreeChecksReviewIndex({
       worktrees: [explicitWorktree],
       repoByHostIdentity,
@@ -329,8 +347,10 @@ describe('buildWorktreeChecksReviewIndex', () => {
       path: '/local/orca',
       executionHostId: 'local'
     }
+
     const localWorktree: Worktree = { ...worktree, hostId: 'local' }
     const sshWorktree: Worktree = { ...worktree, hostId: 'ssh:staging' }
+
     const sshKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,
@@ -362,11 +382,13 @@ describe('buildWorktreeChecksReviewIndex', () => {
       path: '/remote/orca',
       executionHostId: 'runtime:paired-host'
     }
+
     const runtimeWorktree: Worktree = {
       ...worktree,
       linkedPR: null,
       runtimeOwnerEnvironmentId: 'paired-host'
     }
+
     const physicalKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,
@@ -381,6 +403,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
       [getRepoHostIdentity(repo), repo],
       [getRepoHostIdentity(runtimeRepo), runtimeRepo]
     ])
+
     const prCache = {
       [physicalKey]: { data: makePR(), fetchedAt: 1 },
       '/remote/orca::feature/search': {
@@ -388,6 +411,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
         fetchedAt: 1
       }
     }
+
     const reviews = buildWorktreeChecksReviewIndex({
       worktrees: [runtimeWorktree],
       repoByHostIdentity,

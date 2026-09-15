@@ -54,9 +54,11 @@ export function sshGArgsForHost(host: string): string[] {
   // config we fall back to passwd-home resolution, whose aliases the picker cannot
   // list — resolveUserSshConfigHost rejects those before trusting ssh -G.
   const homeConfigPath = join(homedir(), '.ssh', 'config')
+
   if (existsSync(homeConfigPath) && homeConfigPath !== passwdHomeSshConfigPath()) {
     return ['-F', homeConfigPath, '-G', '--', host]
   }
+
   return ['-G', '--', host]
 }
 
@@ -67,7 +69,9 @@ const SITE_SSH_CONFIG_FILES =
     : ['/etc/ssh/ssh_config']
 
 const STRICT_HOST_KEY_DIRECTIVE = /^\s*stricthostkeychecking\b/i
+
 const INCLUDE_DIRECTIVE = /^\s*include\s+(.+?)\s*$/i
+
 /** Glob syntax OpenSSH honours that expandSiteInclude does not expand; `*` is handled separately. */
 const OTHER_GLOB_METACHARACTER = /[?[\]]/
 
@@ -101,14 +105,18 @@ export async function siteConfigMayRestrictHostKeys(
   // One base for the whole walk, which holds only while SITE_SSH_CONFIG_FILES names a single
   // directory. A second entry elsewhere would need its own base tracked per queued file.
   const siteConfigDir = dirname(files[0] ?? SITE_SSH_CONFIG_FILES[0])
+
   // Bounded so an Include cycle cannot spin; OpenSSH allows nesting, we only need "any mention".
   for (let visited = 0; pending.length > 0 && visited < 32; visited += 1) {
     const file = pending.shift()
+
     if (!file || seen.has(file)) {
       continue
     }
+
     seen.add(file)
     let contents: string
+
     try {
       contents = await readFile(file, 'utf-8')
     } catch (error) {
@@ -116,22 +124,29 @@ export async function siteConfigMayRestrictHostKeys(
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         continue
       }
+
       return true
     }
+
     for (const line of contents.split(/\r?\n/)) {
       if (STRICT_HOST_KEY_DIRECTIVE.test(line)) {
         return true
       }
+
       const include = INCLUDE_DIRECTIVE.exec(line)
+
       if (include) {
         const expanded = await expandSiteInclude(include[1], siteConfigDir)
+
         if (expanded === null) {
           return true
         }
+
         pending.push(...expanded)
       }
     }
   }
+
   // Ran out of budget with files still queued: unresolved, so doubt wins.
   return pending.length > 0
 }
@@ -167,8 +182,10 @@ export function splitIncludeArguments(
   let current = ''
   let quote: '"' | "'" | null = null
   let started = false
+
   for (let index = 0; index < pattern.length; index += 1) {
     const char = pattern[index]
+
     if (char === '\\' && /\s/.test(pattern[index + 1] ?? '')) {
       // An escaped space, honoured on both platforms.
       current += pattern[index + 1]
@@ -184,6 +201,7 @@ export function splitIncludeArguments(
       if (started) {
         tokens.push(current)
       }
+
       current = ''
       started = false
     } else {
@@ -191,14 +209,17 @@ export function splitIncludeArguments(
       started = true
     }
   }
+
   // An unterminated quote means we cannot know where the path ended — OpenSSH rejects the whole
   // config for it — so there is no reading to trust and doubt wins.
   if (quote) {
     return null
   }
+
   if (started) {
     tokens.push(current)
   }
+
   return tokens
 }
 
@@ -206,9 +227,11 @@ export function splitIncludeArguments(
 async function expandSiteInclude(pattern: string, baseDir: string): Promise<string[] | null> {
   const resolved: string[] = []
   const tokens = splitIncludeArguments(pattern)
+
   if (tokens === null) {
     return null
   }
+
   for (const token of tokens) {
     // `~` and OpenSSH's `%d`/`%u`-style tokens both expand before the path is used. Resolving them
     // is not worth it for a question this coarse, but treating them as ordinary characters is what
@@ -217,23 +240,30 @@ async function expandSiteInclude(pattern: string, baseDir: string): Promise<stri
     if (token.startsWith('~') || token.includes('%')) {
       return null
     }
+
     const absolute = isAbsolute(token) ? token : join(baseDir, token)
+
     // `?` and `[…]` are globs to OpenSSH too, and it does honour them (verified against 10.2p1).
     // Only `*` is expanded below, so any other metacharacter is doubt rather than a literal — taking
     // it literally is the same fail-open as `~`: the path does not exist, so it reads as "nothing".
     if (OTHER_GLOB_METACHARACTER.test(absolute)) {
       return null
     }
+
     const star = absolute.indexOf('*')
+
     if (star === -1) {
       resolved.push(absolute)
       continue
     }
+
     // Only the trailing `dir/*` form OpenSSH ships by default is expanded; anything fancier is doubt.
     const dir = dirname(absolute.slice(0, star + 1))
+
     if (absolute.slice(star + 1).includes('/')) {
       return null
     }
+
     try {
       const entries = await readdir(dir)
       resolved.push(...entries.map((entry) => join(dir, entry)))
@@ -243,6 +273,7 @@ async function expandSiteInclude(pattern: string, baseDir: string): Promise<stri
       }
     }
   }
+
   return resolved
 }
 
@@ -259,9 +290,11 @@ export async function resolveWithSshG(host: string): Promise<SshResolvedConfig |
       args: sshGArgsForHost(host),
       timeoutMs: SSH_G_TIMEOUT_MS
     })
+
     if (result.code !== 0 || result.timedOut) {
       return null
     }
+
     return parseSshGOutput(result.stdout)
   } catch {
     return null
@@ -274,11 +307,14 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
 
   for (const line of stdout.split('\n')) {
     const spaceIdx = line.indexOf(' ')
+
     if (spaceIdx === -1) {
       continue
     }
+
     const key = line.substring(0, spaceIdx).toLowerCase()
     const value = line.substring(spaceIdx + 1).trim()
+
     if (key === 'identityfile') {
       identityFiles.push(resolveSshConfigHomePath(value))
     } else {
@@ -297,30 +333,37 @@ function parseKnownHostsFileList(value: string | undefined): string[] {
   if (!value) {
     return []
   }
+
   const paths: string[] = []
   let current = ''
   let inQuotes = false
   let hasToken = false
+
   for (const char of value) {
     if (char === '"') {
       inQuotes = !inQuotes
       hasToken = true
       continue
     }
+
     if (!inQuotes && /\s/.test(char)) {
       if (hasToken) {
         paths.push(current)
         current = ''
         hasToken = false
       }
+
       continue
     }
+
     current += char
     hasToken = true
   }
+
   if (hasToken) {
     paths.push(current)
   }
+
   return paths.map(resolveSshConfigHomePath)
 }
 
@@ -337,6 +380,7 @@ function buildSshResolvedConfig(
   const rawIdentityAgent = map.get('identityagent')
   const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
   const rawControlPath = map.get('controlpath')
+
   const controlPath =
     rawControlPath && rawControlPath !== 'none'
       ? resolveSshConfigHomePath(rawControlPath)

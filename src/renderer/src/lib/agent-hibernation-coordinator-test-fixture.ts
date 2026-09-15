@@ -19,6 +19,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../runtime/runtime-rpc-client'
 
 export const NOW = 10_000_000
+
 export const LEAF = '11111111-1111-4111-8111-111111111111'
 
 export type RuntimeEnvironmentCallStub = Mock<(args: RuntimeEnvironmentCallRequest) => unknown>
@@ -117,6 +118,7 @@ export function installEligibleState(
     now: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 60_000,
     idleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
   })
+
   return shutdownCompletedAgentPaneForHibernation
 }
 
@@ -147,14 +149,18 @@ export function installRuntimeListResponses(
   const queue = [...responses]
   mockRuntimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
     if (compatible) {
       return Promise.resolve(compatible)
     }
+
     if (args.method === 'terminal.list') {
       const response = queue.shift() ?? runtimeListResult(['pty-1'])
+
       if (response instanceof Error) {
         return Promise.reject(response)
       }
+
       return Promise.resolve({
         id: 'terminal-list',
         ok: true,
@@ -162,6 +168,7 @@ export function installRuntimeListResponses(
         _meta: { runtimeId: 'runtime-1' }
       })
     }
+
     return Promise.resolve({
       id: 'default',
       ok: true,
@@ -178,10 +185,12 @@ export function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 

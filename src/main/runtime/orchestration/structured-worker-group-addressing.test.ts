@@ -10,8 +10,11 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const { listAddressableStructuredWorkers, structuredWorkerAgentStatus } =
   await import('./structured-worker-group-addressing')
+
 const { resolveGroupAddress } = await import('./groups')
+
 const { sendGroupMessage } = await import('../rpc/methods/orchestration/messaging/send-group')
+
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -80,6 +83,7 @@ function registerWorker(worktreeId = 'wt_1'): string {
     worktreeId,
     hostScope: { kind: 'local', hostId: 'local' }
   })
+
   return handle
 }
 
@@ -183,6 +187,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
     const handle = registerWorker('wt_2')
     installHost({})
     const inserted: { to: string }[] = []
+
     const db = {
       getLegacyAdoptedRunMailboxOwner: () => null,
       getCurrentRunForPane: () => undefined,
@@ -190,9 +195,11 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       getRunMailboxOwnerIdsForHandle: () => [],
       insertMessages: (rows: { to: string }[]) => {
         inserted.push(...rows)
+
         return rows.map((row, index) => ({ id: `m${index}`, to_handle: row.to, type: 'status' }))
       }
     }
+
     const runtime = {
       // No PTY terminals at all: if the call site does not compose structured workers in, the
       // group resolves empty and this throws instead of delivering.
@@ -201,6 +208,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       getLiveTerminalPaneKey: () => structuredWorkerIdentities.get(handle)!.paneKey,
       notifyMessageArrived: () => {}
     }
+
     await sendGroupMessage({
       params: { subject: 's', body: 'b', type: 'status', priority: 'normal' },
       runtime: runtime as never,
@@ -224,6 +232,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
     const handle = registerWorker()
     installHost({})
     const inserted: { to: string }[] = []
+
     const db = {
       getLegacyAdoptedRunMailboxOwner: () => null,
       getCurrentRunForPane: () => undefined,
@@ -250,9 +259,11 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       getDispatchContextById: () => undefined,
       insertMessages: (rows: { to: string }[]) => {
         inserted.push(...rows)
+
         return rows.map((row, index) => ({ id: `m${index}`, to_handle: row.to, type: 'status' }))
       }
     }
+
     const runtime = {
       listTerminals: async () => ({
         terminals: [{ handle: 'term_claude', worktreeId: 'wt_1', agentIdentity: 'claude' }]
@@ -262,6 +273,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       getOrchestrationDb: () => db,
       notifyMessageArrived: () => {}
     }
+
     await sendGroupMessage({
       params: { subject: 's', body: 'b', type: 'status', priority: 'normal' },
       runtime: runtime as never,

@@ -12,6 +12,7 @@ export function HostWorkspaceListStates(
   }
 ) {
   const state = selectHostWorkspaceListState(props)
+
   if (state === 'loading') {
     return (
       <View style={styles.centered}>
@@ -19,6 +20,7 @@ export function HostWorkspaceListStates(
       </View>
     )
   }
+
   if (state === 'catalog-error') {
     return (
       <View style={styles.centered}>
@@ -29,6 +31,7 @@ export function HostWorkspaceListStates(
       </View>
     )
   }
+
   if (state === 'empty') {
     return (
       <View style={styles.centered}>
@@ -42,6 +45,7 @@ export function HostWorkspaceListStates(
       </View>
     )
   }
+
   return null
 }
 

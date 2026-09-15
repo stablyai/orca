@@ -15,6 +15,7 @@ export function appendMinidumpSignatureLines(
   if (typeof details.minidumpCheckMessage === 'string') {
     lines.push(`Check failure: ${details.minidumpCheckMessage}`)
   }
+
   if (typeof details.minidumpFaultingModule === 'string') {
     const offset = details.minidumpFaultingModuleOffset
     const suffix = typeof offset === 'string' ? `+${offset}` : ''

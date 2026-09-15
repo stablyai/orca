@@ -14,10 +14,13 @@ export function triggerPtySpawnPushTargetMaterialization(
   if (!args.worktreeId || !deps.store) {
     return
   }
+
   const parsed = splitWorktreeIdForFilesystem(args.worktreeId)
+
   if (!parsed) {
     return
   }
+
   // Why: never let a partial/fake Store (many pty:spawn unit tests supply a narrow one) or an
   // unexpected lookup failure turn this best-effort hook into a spawn-blocking exception.
   try {

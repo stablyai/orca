@@ -3,6 +3,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -14,6 +15,7 @@ type TestSubprocess = SubprocessHandle & {
 function createSubprocess(shellPath: string): TestSubprocess {
   let onData: ((data: string) => void) | null = null
   let onExit: ((code: number) => void) | null = null
+
   return {
     pid: 99_999,
     shellPath,
@@ -45,6 +47,7 @@ describe('TerminalHost PTY owner backend', () => {
 
   afterEach(async () => {
     await host?.dispose()
+
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -66,17 +69,20 @@ describe('TerminalHost PTY owner backend', () => {
         : { shellOverride: 'powershell.exe' }),
       streamClient: { onData, onExit: vi.fn() }
     })
+
     return subprocess
   }
 
   it('uses the spawned native shell over stale requested WSL metadata', async () => {
     const replyProducers: string[] = []
+
     const onData = vi.fn((data: string) => {
       if (data === '\x1b]10;?\x07') {
         replyProducers.push('renderer')
         host.write('owner-test', '\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
       }
     })
+
     const subprocess = await createSession('powershell.exe', 'Ubuntu', onData)
 
     subprocess.emitData('\x1b]10;?\x07')
@@ -89,12 +95,14 @@ describe('TerminalHost PTY owner backend', () => {
   it('keeps replies for an actually spawned WSL shell', async () => {
     const reply = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
     const replyProducers: string[] = []
+
     const onData = vi.fn((data: string) => {
       if (data === '\x1b]10;?\x07') {
         replyProducers.push('renderer')
         host.write('owner-test', reply)
       }
     })
+
     const subprocess = await createSession('wsl.exe', undefined, onData)
 
     subprocess.emitData('\x1b]10;?\x07')

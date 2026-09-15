@@ -25,9 +25,12 @@ export function getGitHubPRStackMergeScope(
   const entries = [...(stack.entries ?? [])]
     .filter((entry) => entry.position <= stack.position)
     .sort((a, b) => a.position - b.position)
+
   const count = stack.position
+
   const complete =
     entries.length === count && entries.every((entry, index) => entry.position === index + 1)
+
   return {
     count,
     complete,
@@ -56,6 +59,7 @@ export function getGitHubPRStackMergeBlocker(scope: GitHubPRStackMergeScope): st
         { pr: entry.number }
       )
     }
+
     if (entry.state === 'closed') {
       return translate(
         'auto.components.right.sidebar.github.pr.stack.merge.640fb50d9c',
@@ -63,6 +67,7 @@ export function getGitHubPRStackMergeBlocker(scope: GitHubPRStackMergeScope): st
         { pr: entry.number }
       )
     }
+
     if (entry.mergeable === 'CONFLICTING' || entry.mergeStateStatus === 'DIRTY') {
       return translate(
         'auto.components.right.sidebar.github.pr.stack.merge.46ffcbda75',
@@ -70,6 +75,7 @@ export function getGitHubPRStackMergeBlocker(scope: GitHubPRStackMergeScope): st
         { pr: entry.number }
       )
     }
+
     if (entry.reviewDecision === 'CHANGES_REQUESTED') {
       return translate(
         'auto.components.right.sidebar.github.pr.stack.merge.6dabefd63e',
@@ -77,6 +83,7 @@ export function getGitHubPRStackMergeBlocker(scope: GitHubPRStackMergeScope): st
         { pr: entry.number }
       )
     }
+
     if (entry.reviewDecision === 'REVIEW_REQUIRED') {
       return translate(
         'auto.components.right.sidebar.github.pr.stack.merge.2bb21fc326',
@@ -84,6 +91,7 @@ export function getGitHubPRStackMergeBlocker(scope: GitHubPRStackMergeScope): st
         { pr: entry.number }
       )
     }
+
     if (entry.mergeStateStatus === 'BEHIND') {
       return translate(
         'auto.components.right.sidebar.github.pr.stack.merge.c23faf74df',
@@ -91,6 +99,7 @@ export function getGitHubPRStackMergeBlocker(scope: GitHubPRStackMergeScope): st
         { pr: entry.number }
       )
     }
+
     if (entry.mergeStateStatus === 'BLOCKED') {
       return translate(
         'auto.components.right.sidebar.github.pr.stack.merge.f561e80968',
@@ -99,5 +108,6 @@ export function getGitHubPRStackMergeBlocker(scope: GitHubPRStackMergeScope): st
       )
     }
   }
+
   return null
 }

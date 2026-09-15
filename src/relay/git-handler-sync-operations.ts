@@ -21,6 +21,7 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
     const worktreePath = params.worktreePath as string
     // Why: mirror src/main/git/remote.ts — push to a configured upstream when present so SSH worktrees with non-origin targets aren't repointed.
     void params.publish
+
     try {
       try {
         const target = await resolveRelayPushTarget(
@@ -28,12 +29,14 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
           worktreePath,
           params.pushTarget
         )
+
         const args = [
           'push',
           ...(params.forceWithLease === true ? ['--force-with-lease'] : []),
           '--set-upstream',
           ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
         ]
+
         await this.git(args, worktreePath)
       } catch (error) {
         // Why: mirror local gitPush normalization so SSH users get "non-fast-forward / pull first" guidance instead of raw git stderr.
@@ -50,6 +53,7 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
     signal?: AbortSignal
   ) {
     const worktreePath = params.worktreePath as string
+
     return runWithGitWorktreeOperationLock(worktreePath, signal, () =>
       this.runPullWithArgsUnlocked(params, pullArgs)
     )
@@ -61,6 +65,7 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
   ): Promise<void> {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
+
     const runPull = async (effectiveArgs: string[]): Promise<void> => {
       if (params.pushTarget !== undefined) {
         assertGitPushTargetShape(params.pushTarget)
@@ -70,17 +75,22 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
           ['pull', ...effectiveArgs, pushTarget.remoteName, pushTarget.branchName],
           worktreePath
         )
+
         return
       }
+
       const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
+
       if (upstream && !upstream.isConfiguredUpstream) {
         // Why: legacy Orca branches may track origin/main while pushes target origin/<branch>; pull the same effective branch the UI reports.
         await this.git(
           ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
           worktreePath
         )
+
         return
       }
+
       await this.git(['pull', ...effectiveArgs], worktreePath)
     }
 
@@ -118,12 +128,15 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
     let rebaseRef: string | null = null
     const controller = new AbortController()
     const abortFromContext = () => controller.abort()
+
     if (context?.signal?.aborted) {
       controller.abort()
     } else {
       context?.signal?.addEventListener('abort', abortFromContext, { once: true })
     }
+
     const timeout = setTimeout(() => controller.abort(), REBASE_FROM_BASE_OPERATION_TIMEOUT_MS)
+
     try {
       try {
         const source = await resolveGitRemoteRebaseSource(
@@ -134,14 +147,17 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
             })) as GitCommandRunner,
           baseRef
         )
+
         let forkPoint: string | null = null
         let hasHead = true
+
         try {
           const { stdout } = await this.git(
             ['merge-base', '--fork-point', `refs/remotes/${source.displayName}`, 'HEAD'],
             worktreePath,
             { signal: controller.signal, terminationBarrier: true }
           )
+
           forkPoint = stdout.trim() || null
         } catch {
           // A first fetch or an unhelpful reflog falls back to Git's merge-base behavior.
@@ -154,13 +170,16 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
             hasHead = false
           }
         }
+
         // Why: concurrent fetches can replace FETCH_HEAD and remote-tracking refs between fetch and rebase.
         rebaseRef = `refs/orca/rebase/${randomUUID()}`
+
         const fetchArgs = [
           source.remoteName,
           `+refs/heads/${source.branchName}:${rebaseRef}`,
           `+refs/heads/${source.branchName}:refs/remotes/${source.displayName}`
         ]
+
         await this.gitCapabilities.runWithFallback(
           'fetch-no-write-fetch-head',
           () =>
@@ -197,6 +216,7 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
           // Cleanup must not hide the fetch or rebase result.
         }
       }
+
       clearTimeout(timeout)
       context?.signal?.removeEventListener('abort', abortFromContext)
       this.clearGitMutationReadCaches()

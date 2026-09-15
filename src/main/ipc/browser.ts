@@ -54,6 +54,7 @@ export function registerBrowserHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
+
     if (
       !args ||
       typeof args.browserPageId !== 'string' ||
@@ -63,8 +64,10 @@ export function registerBrowserHandlers(): void {
     ) {
       return false
     }
+
     if (repairPolicies) {
       const guest = webContents.fromId(args.webContentsId)
+
       if (
         !guest ||
         guest.isDestroyed() ||
@@ -73,26 +76,33 @@ export function registerBrowserHandlers(): void {
       ) {
         return false
       }
+
       browserManager.attachGuestPolicies(guest)
     }
+
     // Why: when Chromium swaps a guest's renderer process (navigation,
     // crash recovery), the renderer re-registers the same browserPageId
     // with a new webContentsId. The bridge must destroy the old session's
     // proxy (its webContents is gone) and let the next command recreate it.
     const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
     const profile = browserSessionRegistry.getProfile(args.sessionProfileId ?? 'default')
+
     const registered = browserManager.registerGuest({
       ...args,
       userAgentMode: profile?.userAgentMode,
       rendererWebContentsId: event.sender.id
     })
+
     if (!registered) {
       return false
     }
+
     if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
       agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
     }
+
     resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
+
     return true
   }
 
@@ -113,18 +123,24 @@ export function registerBrowserHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         throw new Error('browser_local_route_renderer_untrusted')
       }
+
       if (typeof args?.targetId !== 'string' || args.targetId.length === 0) {
         throw new Error('browser_local_route_target_invalid')
       }
+
       const { getSshConnectionStore } = await import('./ssh')
+
       const registered = getSshConnectionStore()
         ?.listTargets()
         .some((target) => target.id === args.targetId)
+
       if (!registered) {
         throw new Error('browser_local_route_target_invalid')
       }
+
       const { prepareLocalSshBrowserPartition } =
         await import('../browser/local-ssh-browser-partitions')
+
       return prepareLocalSshBrowserPartition({
         targetId: args.targetId,
         browserProfileId:
@@ -150,6 +166,7 @@ export function registerBrowserHandlers(): void {
       ) {
         return false
       }
+
       return (
         browserManager.getGuestWebContentsId(args.browserPageId) === args.webContentsId &&
         isLiveBrowserWebContentsId(args.webContentsId)
@@ -161,6 +178,7 @@ export function registerBrowserHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
+
     // Why the whole door and not just the manager call: a document page shares this renderer, and
     // the grab disposal below drops the intent an in-flight preview grab compares by identity —
     // that grab would then answer ok without ever arming. A document page withdraws by revoking
@@ -168,15 +186,19 @@ export function registerBrowserHandlers(): void {
     if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
       return false
     }
+
     // Why: notify bridge before unregistering so it can destroy the session
     // process and proxy. Must happen before unregisterGuest clears the mapping.
     const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
+
     if (wcId !== null && agentBrowserBridgeRef) {
       agentBrowserBridgeRef.onTabClosed(wcId)
     }
+
     cancelBrowserWebAuthnAccountRequests(args.browserPageId)
     browserManager.unregisterGuest(args.browserPageId)
     disposeGrabModeStateForPage(args.browserPageId)
+
     return true
   })
 
@@ -186,6 +208,7 @@ export function registerBrowserHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
       }
+
       return respondToBrowserWebAuthnAccountRequest(event.sender, response)
     }
   )
@@ -203,6 +226,7 @@ export function registerBrowserHandlers(): void {
       ) {
         return { ok: false, reason: 'missing' }
       }
+
       return browserCertificateTrustController.proceed(args.browserPageId, args.challengeId)
     }
   )
@@ -214,10 +238,13 @@ export function registerBrowserHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
+
     if (!agentBrowserBridgeRef) {
       return false
     }
+
     const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
+
     if (wcId !== null) {
       // Why: renderer tab changes are scoped to a worktree. If we only update
       // the global active guest, later worktree-scoped commands can still
@@ -227,6 +254,7 @@ export function registerBrowserHandlers(): void {
         browserManager.getWorktreeIdForTab(args.browserPageId)
       )
     }
+
     return true
   })
 

@@ -9,15 +9,19 @@ import { isENOENT } from './filesystem-path-containment'
  */
 export function rethrowWithUserMessage(error: unknown, targetPath: string): never {
   const name = basename(targetPath)
+
   if (error instanceof Error && 'code' in error) {
     const code = (error as NodeJS.ErrnoException).code
+
     if (code === 'EEXIST') {
       throw new Error(`A file or folder named '${name}' already exists in this location`)
     }
+
     if (code === 'EACCES' || code === 'EPERM') {
       throw new Error(`Permission denied: unable to create '${name}'`)
     }
   }
+
   throw error
 }
 

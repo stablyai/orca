@@ -45,9 +45,11 @@ process.stdin.on('data', (chunk) => {
 async function forceWebgl(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('Store unavailable')
     }
+
     window.__store?.setState({
       settings: {
         ...state.settings!,
@@ -55,12 +57,14 @@ async function forceWebgl(page: Page): Promise<void> {
       }
     })
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     manager?.setTerminalGpuAcceleration('on')
   })
@@ -70,21 +74,26 @@ async function patchAtlasCounter(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const webglAddon = pane?.webglAddon
+
     if (!pane || !webglAddon) {
       return false
     }
+
     const globalWithCounter = window as typeof window & {
       __imagePasteAtlasResetCount?: number
     }
+
     globalWithCounter.__imagePasteAtlasResetCount = 0
     const originalClearTextureAtlas = webglAddon.clearTextureAtlas.bind(webglAddon)
     webglAddon.clearTextureAtlas = () => {
@@ -92,7 +101,9 @@ async function patchAtlasCounter(page: Page): Promise<boolean> {
         (globalWithCounter.__imagePasteAtlasResetCount ?? 0) + 1
       originalClearTextureAtlas()
     }
+
     pane.terminal.refresh(0, pane.terminal.rows - 1)
+
     return true
   })
 }
@@ -102,6 +113,7 @@ async function readAtlasResetCount(page: Page): Promise<number> {
     const globalWithCounter = window as typeof window & {
       __imagePasteAtlasResetCount?: number
     }
+
     return globalWithCounter.__imagePasteAtlasResetCount ?? 0
   })
 }
@@ -126,19 +138,23 @@ test.describe('terminal image paste WebGL recovery @headful', () => {
       await waitForTerminalOutput(orcaPage, `READY_${marker}`, 10_000)
 
       await forceWebgl(orcaPage)
+
       const webglActive = await orcaPage
         .waitForFunction(
           () => {
             const state = window.__store?.getState()
             const worktreeId = state?.activeWorktreeId
+
             const tabId =
               state?.activeTabType === 'terminal'
                 ? state.activeTabId
                 : worktreeId
                   ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                   : null
+
             const manager = tabId ? window.__paneManagers?.get(tabId) : null
             const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
             return Boolean(pane?.webglAddon)
           },
           null,
@@ -146,6 +162,7 @@ test.describe('terminal image paste WebGL recovery @headful', () => {
         )
         .then(() => true)
         .catch(() => false)
+
       test.skip(!webglActive, 'WebGL was not active in this headful environment')
       expect(await patchAtlasCounter(orcaPage)).toBe(true)
 

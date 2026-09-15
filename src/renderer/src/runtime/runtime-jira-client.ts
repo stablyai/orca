@@ -22,14 +22,17 @@ import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
 import { getJiraRuntimeTarget, type RuntimeJiraSettings } from './runtime-jira-target'
 
 export { jiraLookupIssueSummary, jiraReadStatus } from './runtime-jira-summary-client'
+
 export {
   jiraCreateIssue,
   jiraListAssignableUsers,
   jiraSearchUsers
 } from './runtime-jira-user-fields-client'
+
 export type { RuntimeJiraSettings } from './runtime-jira-target'
 
 export type JiraConnectResult = { ok: true; viewer: JiraViewer } | { ok: false; error: string }
+
 export type JiraCommentResult = { ok: true; id: string } | { ok: false; error: string }
 
 async function readRemoteJiraPayload<TResult>(
@@ -44,6 +47,7 @@ async function readRemoteJiraPayload<TResult>(
     if (!(error instanceof RuntimeRpcCallError) || error.code !== 'method_not_found') {
       throw error
     }
+
     // Older runtimes predate image payload streaming but still return text-only
     // Jira details safely through the original one-shot method.
     return callRuntimeRpc<TResult>(target, fallbackMethod, args, { timeoutMs: 30_000 })
@@ -52,6 +56,7 @@ async function readRemoteJiraPayload<TResult>(
 
 export async function jiraStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
   const target = getJiraRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraConnectionStatus>(target, 'jira.status', undefined, { timeoutMs: 15_000 })
     : window.api.jira.status()
@@ -62,6 +67,7 @@ export async function jiraConnect(
   args: { siteUrl: string; email: string; apiToken: string; authType?: JiraAuthType }
 ): Promise<JiraConnectResult> {
   const target = getJiraRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraConnectResult>(target, 'jira.connect', args, { timeoutMs: 30_000 })
     : window.api.jira.connect(args)
@@ -72,12 +78,15 @@ export async function jiraDisconnect(
   siteId?: string | null
 ): Promise<void> {
   const target = getJiraRuntimeTarget(settings)
+
   if (target.kind === 'environment') {
     await callRuntimeRpc<{ ok: true }>(target, 'jira.disconnect', siteId ? { siteId } : undefined, {
       timeoutMs: 15_000
     })
+
     return
   }
+
   await window.api.jira.disconnect(siteId ? { siteId } : undefined)
 }
 
@@ -86,6 +95,7 @@ export async function jiraSelectSite(
   siteId: JiraSiteSelection
 ): Promise<JiraConnectionStatus> {
   const target = getJiraRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraConnectionStatus>(
         target,
@@ -101,6 +111,7 @@ export async function jiraTestConnection(
   siteId?: string | null
 ): Promise<JiraConnectResult> {
   const target = getJiraRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraConnectResult>(
         target,
@@ -121,14 +132,17 @@ export async function jiraSearchIssues(
   if (!isRuntimeProviderSearchQueryWithinLimit(jql)) {
     return []
   }
+
   const target = getJiraRuntimeTarget(settings)
   const args = { jql, limit, siteId: siteId ?? undefined }
+
   if (target.kind === 'environment') {
     return callRuntimeRpc<JiraIssue[]>(target, 'jira.searchIssues', args, {
       timeoutMs: 30_000,
       signal
     })
   }
+
   return signal ? searchLocalJiraIssues(args, signal) : window.api.jira.searchIssues(args)
 }
 
@@ -140,6 +154,7 @@ export async function jiraListIssues(
 ): Promise<JiraIssue[]> {
   const target = getJiraRuntimeTarget(settings)
   const args = { filter, limit, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraIssue[]>(target, 'jira.listIssues', args, { timeoutMs: 30_000 })
     : window.api.jira.listIssues(args)
@@ -152,6 +167,7 @@ export async function jiraGetIssue(
 ): Promise<JiraIssue | null> {
   const target = getJiraRuntimeTarget(settings)
   const args = { key, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? readRemoteJiraPayload<JiraIssue | null>(target, 'jira.getIssueStream', 'jira.getIssue', args)
     : window.api.jira.getIssue(args)
@@ -165,6 +181,7 @@ export async function jiraUpdateIssue(
 ): Promise<JiraMutationResult> {
   const target = getJiraRuntimeTarget(settings)
   const args = { key, updates, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraMutationResult>(target, 'jira.updateIssue', args, { timeoutMs: 30_000 })
     : window.api.jira.updateIssue(args)
@@ -178,6 +195,7 @@ export async function jiraAddIssueComment(
 ): Promise<JiraCommentResult> {
   const target = getJiraRuntimeTarget(settings)
   const args = { key, body, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraCommentResult>(target, 'jira.addIssueComment', args, {
         timeoutMs: 30_000
@@ -192,6 +210,7 @@ export async function jiraIssueComments(
 ): Promise<JiraComment[]> {
   const target = getJiraRuntimeTarget(settings)
   const args = { key, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? readRemoteJiraPayload<JiraComment[]>(
         target,
@@ -207,6 +226,7 @@ export async function jiraListProjects(
   siteId?: JiraSiteSelection | null
 ): Promise<JiraProject[]> {
   const target = getJiraRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraProject[]>(target, 'jira.listProjects', siteId ? { siteId } : undefined, {
         timeoutMs: 30_000
@@ -221,6 +241,7 @@ export async function jiraListIssueTypes(
 ): Promise<JiraIssueType[]> {
   const target = getJiraRuntimeTarget(settings)
   const args = { projectIdOrKey, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraIssueType[]>(target, 'jira.listIssueTypes', args, { timeoutMs: 30_000 })
     : window.api.jira.listIssueTypes(args)
@@ -234,6 +255,7 @@ export async function jiraListCreateFields(
 ): Promise<JiraCreateField[]> {
   const target = getJiraRuntimeTarget(settings)
   const args = { projectIdOrKey, issueTypeId, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraCreateField[]>(target, 'jira.listCreateFields', args, {
         timeoutMs: 30_000
@@ -246,6 +268,7 @@ export async function jiraListPriorities(
   siteId?: string | null
 ): Promise<JiraPriority[]> {
   const target = getJiraRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraPriority[]>(
         target,
@@ -264,6 +287,7 @@ export async function jiraListTransitions(
 ): Promise<JiraTransition[]> {
   const target = getJiraRuntimeTarget(settings)
   const args = { key, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraTransition[]>(target, 'jira.listTransitions', args, { timeoutMs: 30_000 })
     : window.api.jira.listTransitions(args)
@@ -276,6 +300,7 @@ export async function jiraGetProjectStatusOrder(
 ): Promise<JiraProjectStatusOrder> {
   const target = getJiraRuntimeTarget(settings)
   const args = { projectKey, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraProjectStatusOrder>(target, 'jira.getProjectStatusOrder', args, {
         timeoutMs: 30_000

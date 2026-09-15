@@ -64,22 +64,27 @@ export function createBrowserRouteGuestPopupController(input: {
   const preparePopupContents = (contents: WebContents): boolean => {
     let contentsPartition: string | null = null
     let popupWebContentsId = 0
+
     try {
       contentsPartition = input.dependencies.getPartitionForSession(contents.session)
       popupWebContentsId = contents.id
     } catch {
       contentsPartition = null
     }
+
     if (disposed || contentsPartition !== input.partition) {
       return false
     }
+
     // Fail closed exactly like guest admission: no WebRTC policy, no content — otherwise the STUN
     // UDP leak the route guests already close reopens through popups.
     if (!enforceBrowserRouteWebRtcPolicy(contents, () => {})) {
       return false
     }
+
     const gesture = trackBrowserRouteGuestPopupGesture(contents)
     gestures.add(gesture)
+
     try {
       // Descendants inherit the same envelope; nothing about being a popup relaxes it.
       contents.setWindowOpenHandler(buildWindowOpenHandler(gesture))
@@ -98,18 +103,22 @@ export function createBrowserRouteGuestPopupController(input: {
       releasePopupOwnership(popupWebContentsId)
       gestures.delete(gesture)
       gesture.dispose()
+
       return false
     }
+
     return true
   }
 
   const registerPopupOwnership = (popupWebContentsId: number): void => {
     let openerWebContentsId = 0
+
     try {
       openerWebContentsId = input.opener.id
     } catch {
       return
     }
+
     popupWebContentsIds.add(popupWebContentsId)
     registerBrowserRouteGuestPopup({ popupWebContentsId, openerWebContentsId })
   }
@@ -134,9 +143,11 @@ export function createBrowserRouteGuestPopupController(input: {
     const popup = openPopupWindow(options, targetUrl, preparePopupContents)
     popups.add(popup)
     popup.onClosed(() => popups.delete(popup))
+
     if (disposed) {
       popup.close()
     }
+
     return popup.contentWebContents
   }
 
@@ -145,6 +156,7 @@ export function createBrowserRouteGuestPopupController(input: {
   ): (details?: { url?: string }) => Electron.WindowOpenHandlerResponse {
     return (details) => {
       const normalized = normalizeRoutePopupUrl(details?.url)
+
       if (
         disposed ||
         !normalized ||
@@ -156,8 +168,10 @@ export function createBrowserRouteGuestPopupController(input: {
         if (!disposed) {
           reportBlockedPopup(details?.url)
         }
+
         return { action: 'deny' }
       }
+
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -178,6 +192,7 @@ export function createBrowserRouteGuestPopupController(input: {
   const closeAll = (): void => {
     for (const popup of popups) {
       popups.delete(popup)
+
       try {
         popup.close()
       } catch {}
@@ -190,11 +205,13 @@ export function createBrowserRouteGuestPopupController(input: {
     dispose: () => {
       disposed = true
       closeAll()
+
       // The opener is gone, so its popups own nothing: drop ownership now rather than waiting for
       // each popup's `destroyed`, which would leave a window for a download to route to a dead page.
       for (const popupWebContentsId of popupWebContentsIds) {
         releasePopupOwnership(popupWebContentsId)
       }
+
       for (const gesture of gestures) {
         gestures.delete(gesture)
         gesture.dispose()
@@ -208,11 +225,14 @@ function normalizeRoutePopupUrl(rawUrl: unknown): string | null {
   if (typeof rawUrl !== 'string') {
     return null
   }
+
   let normalized: string | null = null
+
   try {
     normalized = normalizeBrowserNavigationUrl(rawUrl)
   } catch {
     return null
   }
+
   return !normalized || normalized === ORCA_BROWSER_BLANK_URL ? null : normalized
 }

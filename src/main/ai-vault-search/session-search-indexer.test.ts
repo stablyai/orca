@@ -18,16 +18,23 @@ import {
 } from './session-search-indexer-test-fixture'
 
 const INTERVAL_MS = 20_000
+
 // chmod cannot deny root, and Windows ignores the mode bits entirely, so the
 // two refusal tests would assert on an unreached branch there.
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
+
 const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
 const OTHER_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
+
 const SETTLED_SESSION_ID = 'dddddddd-cccc-4ddd-8eee-ffffffffffff'
 
 let harness: SessionSearchIndexerHarness
+
 let clock: FakeSessionSearchClock
+
 let indexer: SessionSearchIndexer | null
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -58,6 +65,7 @@ function newIndexer(
     onError: (error) => errors.push(error),
     ...overrides
   })
+
   return indexer
 }
 
@@ -151,6 +159,7 @@ async function startAfterASweep(
  */
 function readsPerPass(files: number): { passDeadlineMs: number } {
   clock.costPerNowMs = 1_000
+
   return { passDeadlineMs: files * 1_000 }
 }
 
@@ -224,6 +233,7 @@ it.skipIf(!CAN_DENY_READ)(
     // The tree is gone from discovery's point of view, but the transcript itself
     // was never proven absent: an unreadable parent is not a deleted file.
     await chmod(harness.claudeProjectDir, 0o000)
+
     try {
       await nextCycle()
       expect(sessionsMatching('unverifiable')).toEqual([SESSION_ID])
@@ -241,9 +251,11 @@ it('resumes after close and reopen without re-reading what it already indexed', 
     OTHER_SESSION_ID
   )
   await newIndexer().start()
+
   const indexedRows = harness.read((db: SyncDatabase) =>
     db.prepare('SELECT count(*) AS n FROM messages').get()
   )
+
   indexer?.close()
 
   // A restart is a cold parse cache over a warm index; only the `files` table
@@ -297,6 +309,7 @@ it.skipIf(!CAN_DENY_READ)(
     await mkdir(blocked, { recursive: true })
     await writeClaudeTranscript(transcriptPath(), ['a readable claude session'], SESSION_ID)
     await chmod(harness.roots.codexSessionsDir ?? '', 0o000)
+
     try {
       await newIndexer().start()
       const status = indexer?.status()
@@ -320,6 +333,7 @@ it('reads what one pass has time for and finishes the rest on the next', async (
   // The sweep is behind us, so this is the reconciler fitting four new files
   // into a deadline that stops it after two.
   await startAfterASweep(readsPerPass(2))
+
   for (let index = 0; index < 4; index++) {
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     await writeClaudeTranscript(
@@ -328,6 +342,7 @@ it('reads what one pass has time for and finishes the rest on the next', async (
       session
     )
   }
+
   await indexer?.reconcile()
   expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesDue: 0 })
 
@@ -377,6 +392,7 @@ it('covers the whole machine over the passes that follow a truncated sweep', asy
     { length: 20 },
     (_unused, index) => `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
   )
+
   for (const session of sessions) {
     await writeClaudeTranscript(transcriptPath(session), [`sweepwide session ${session}`], session)
   }
@@ -454,9 +470,11 @@ it('keeps a sweep due when the one that was running threw', async () => {
     if (thrown || indexedSessionCount() === 0) {
       return
     }
+
     thrown = true
     throw new Error('the sweep fell over')
   }
+
   await indexer?.start()
   await indexer?.settled()
   clock.onNow = null
@@ -477,8 +495,10 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['a session behind the wrong mode bits'], SESSION_ID)
   await chmod(path, 0o000)
+
   try {
     await newIndexer().start()
+
     for (let cycle = 0; cycle < 4; cycle++) {
       await nextCycle()
     }
@@ -520,9 +540,11 @@ it('reports nothing to its owner when it is closed part way through a pass', asy
     if (closed || indexedSessionCount() === 0) {
       return
     }
+
     closed = true
     indexer?.close()
   }
+
   await indexer?.start()
   await indexer?.settled()
   clock.onNow = null
@@ -677,6 +699,7 @@ it.skipIf(!CAN_DENY_READ)(
     expect(sessionsMatching('removable')).toEqual([SESSION_ID])
 
     await chmod(harness.roots.claudeProjectsDir ?? '', 0o000)
+
     try {
       await indexer?.reconcile({ full: true })
       expect(sessionsMatching('removable')).toEqual([SESSION_ID])
@@ -697,10 +720,12 @@ it.skipIf(!CAN_DENY_READ)('keeps an unlistable root degraded across repeated swe
   await newIndexer().start()
 
   await chmod(harness.roots.claudeProjectsDir ?? '', 0o000)
+
   try {
     for (let sweep = 0; sweep < 5; sweep++) {
       await indexer?.reconcile({ full: true })
     }
+
     expect(sessionsMatching('removable')).toEqual([SESSION_ID])
     expect(indexer?.status().phase).toBe('degraded')
   } finally {
@@ -778,6 +803,7 @@ it('proves nothing from an empty directory above the configured root', async () 
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     await writeClaudeTranscript(transcriptPath(session), [`mounted session ${index}`], session)
   }
+
   await newIndexer().start()
   expect(sessionsMatching('mounted')).toHaveLength(3)
   indexer?.close()
@@ -925,6 +951,7 @@ it('stops the opening sweep at its deadline and drains the rest over the passes 
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     await writeClaudeTranscript(transcriptPath(session), [`backlogged session ${index}`], session)
   }
+
   await newIndexer(readsPerPass(2)).start()
   expect(indexer?.status().filesIndexed).toBe(2)
 
@@ -980,15 +1007,18 @@ it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable r
       `INSERT INTO files(path, byte_offset, mtime_ms, size_bytes, state)
        VALUES (?, 0, ?, 10, 'current')`
     )
+
     for (let index = 0; index < 520; index++) {
       insert.run(join(locked, `locked-${index}.jsonl`), 1_700_000_000_000 + index)
     }
+
     return insert.run(join(harness.claudeProjectDir, 'deleted.jsonl'), 1_700_000_999_000)
   })
   const deleted = join(harness.claudeProjectDir, 'deleted.jsonl')
   const holdsDeleted = (): boolean => rowFor(deleted) !== undefined
 
   await chmod(locked, 0o000)
+
   try {
     await indexer?.start()
 
@@ -1024,6 +1054,7 @@ it('proves deletions for the newest rows it holds, and leaves the tail to a swee
     const at = new Date(Date.now() - (total - index) * 60_000)
     await utimes(path, at, at)
   }
+
   await indexer?.reconcile({ full: true })
   expect(indexedSessionCount()).toBe(total)
 
@@ -1046,6 +1077,7 @@ it('runs another sweep when one is asked for during a sweep', async () => {
     const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     await writeClaudeTranscript(transcriptPath(session), [`recent session ${index}`], session)
   }
+
   const late = transcriptPath(OTHER_SESSION_ID)
 
   // Newest-one per root, so nothing but a second sweep can reach a file that
@@ -1059,6 +1091,7 @@ it('runs another sweep when one is asked for during a sweep', async () => {
     if (armed || indexedSessionCount() === 0) {
       return
     }
+
     armed = true
     mkdirSync(dirname(late), { recursive: true })
     writeFileSync(late, `${claudeLines(['a late conversation'], OTHER_SESSION_ID, 0).join('\n')}\n`)
@@ -1066,6 +1099,7 @@ it('runs another sweep when one is asked for during a sweep', async () => {
     utimesSync(late, backdated, backdated)
     void indexer?.reconcile({ full: true })
   }
+
   await indexer?.start()
   await indexer?.settled()
 
@@ -1080,6 +1114,7 @@ it('hands the rest of a pass back when it runs out of wall time', async () => {
     const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     await writeClaudeTranscript(transcriptPath(session), [`deadlined session ${index}`], session)
   }
+
   await newIndexer(readsPerPass(16)).start()
 
   expect(indexer?.status().filesIndexed).toBe(16)

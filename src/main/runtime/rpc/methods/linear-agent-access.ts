@@ -22,9 +22,11 @@ function parseLinearWriteId(writeId: string | undefined): string | undefined {
   if (writeId === undefined) {
     return undefined
   }
+
   if (!isLinearUuid(writeId)) {
     throw linearError('linear_invalid_write_id', '--write-id must be a UUID')
   }
+
   return writeId
 }
 

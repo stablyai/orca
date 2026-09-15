@@ -32,8 +32,11 @@ import {
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
 const MIN_SCALE = 0.25
+
 const MAX_SCALE = 5
+
 const SCALE_STEP = 1.25
+
 const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE, step: SCALE_STEP }
 
 // Why: these are the inputs that actually move this container's scroll; a
@@ -76,6 +79,7 @@ export default function PdfViewer({
   useEffect(() => {
     scalePreferenceRef.current = 'page-width'
     const viewer = pdfViewerRef.current
+
     if (viewer) {
       applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
     }
@@ -84,6 +88,7 @@ export default function PdfViewer({
   useEffect(() => {
     const container = containerRef.current
     const viewerDiv = viewerDivRef.current
+
     if (!container || !viewerDiv || !cleanedContent) {
       return
     }
@@ -92,13 +97,17 @@ export default function PdfViewer({
     let cancelled = false
 
     let binary: string
+
     try {
       binary = window.atob(cleanedContent)
     } catch {
       setPdfError('Failed to decode PDF content')
+
       return
     }
+
     const bytes = new Uint8Array(binary.length)
+
     for (let i = 0; i < binary.length; i += 1) {
       bytes[i] = binary.charCodeAt(i)
     }
@@ -120,6 +129,7 @@ export default function PdfViewer({
       textLayerMode: 1,
       removePageBorders: true
     })
+
     pdfViewerRef.current = viewer
 
     linkService.setViewer(viewer)
@@ -129,6 +139,7 @@ export default function PdfViewer({
         setScale(evt.scale)
       }
     }
+
     eventBus.on('scalechanging', handleScaleChanging)
 
     // Why: read the key from this effect's own closure, never a ref — the ref
@@ -147,6 +158,7 @@ export default function PdfViewer({
     let restored: ReturnType<typeof buildPdfScrollDestination> | null = null
     let userMoved = false
     let detachInputWatcher: (() => void) | null = null
+
     const markUserMoved = (): void => {
       userMoved = true
       detachInputWatcher?.()
@@ -156,12 +168,16 @@ export default function PdfViewer({
     const handlePagesInit = (): void => {
       const cached = scrollCacheKey ? pdfViewPositionCache.get(scrollCacheKey) : undefined
       const clamped = cached ? clampPdfViewPosition(cached, viewer.pagesCount) : null
+
       if (!clamped) {
         recorder?.arm()
+
         return
       }
+
       restored = buildPdfScrollDestination(clamped)
       viewer.scrollPageIntoView(restored)
+
       // Why: stays disarmed until the restore settles (below). pdf.js dispatches
       // updateviewarea synchronously after this handler, so arming here would
       // record the restore's own scroll — which on a mixed-page-size document is
@@ -170,8 +186,10 @@ export default function PdfViewer({
       for (const type of USER_SCROLL_INPUT_EVENTS) {
         container.addEventListener(type, markUserMoved, { passive: true })
       }
+
       detachInputWatcher = (): void => {
         detachInputWatcher = null
+
         for (const type of USER_SCROLL_INPUT_EVENTS) {
           container.removeEventListener(type, markUserMoved)
         }
@@ -179,16 +197,19 @@ export default function PdfViewer({
     }
 
     let visibilityObserver: ResizeObserver | null = null
+
     const disconnectVisibilityObserver = (): void => {
       visibilityObserver?.disconnect()
       visibilityObserver = null
     }
+
     // Why: a display:none pane regaining a layout box fires no scroll or resize
     // event — ResizeObserver's no-box/box transition is the only signal for it.
     const observeVisibility = (): void => {
       if (visibilityObserver) {
         return
       }
+
       visibilityObserver = new ResizeObserver(() => {
         if (container.clientHeight > 0) {
           handlePagesLoaded()
@@ -209,15 +230,19 @@ export default function PdfViewer({
       // — until the observer above sees this pane land on screen.
       if (container.clientHeight === 0) {
         observeVisibility()
+
         return
       }
+
       disconnectVisibilityObserver()
       const destination = restored
       restored = null
       detachInputWatcher?.()
+
       if (cancelled) {
         return
       }
+
       if (destination && !userMoved) {
         viewer.scrollPageIntoView(destination)
         // Why: scrollPageIntoView nulls pdf.js's own `_location` whenever
@@ -229,6 +254,7 @@ export default function PdfViewer({
         // would otherwise fire to do it for us.
         viewer.update()
       }
+
       recorder?.arm()
     }
 
@@ -246,8 +272,10 @@ export default function PdfViewer({
       .then((doc) => {
         if (cancelled) {
           loadingTask.destroy().catch(() => {})
+
           return
         }
+
         viewer.setDocument(doc)
         linkService.setDocument(doc)
         findController.setDocument(doc)
@@ -257,6 +285,7 @@ export default function PdfViewer({
         if (cancelled) {
           return
         }
+
         if (err?.name === 'PasswordException') {
           setPdfError('This PDF is password-protected')
         } else {
@@ -297,9 +326,11 @@ export default function PdfViewer({
 
   const closeFindBar = useCallback(() => {
     const eventBus = eventBusRef.current
+
     if (eventBus) {
       eventBus.dispatch('findbarclose', { source: null })
     }
+
     setFindOpen(false)
   }, [])
 
@@ -307,9 +338,11 @@ export default function PdfViewer({
   // preference so the next content reload restores it (see scalePreferenceRef).
   const stepZoom = useCallback((direction: 'in' | 'out') => {
     const viewer = pdfViewerRef.current
+
     if (!viewer) {
       return
     }
+
     const next = stepPdfScalePreference(viewer.currentScale, direction, SCALE_BOUNDS)
     viewer.currentScale = next.scale
     scalePreferenceRef.current = next.preference
@@ -320,9 +353,11 @@ export default function PdfViewer({
 
   const zoomReset = useCallback(() => {
     const viewer = pdfViewerRef.current
+
     if (!viewer) {
       return
     }
+
     scalePreferenceRef.current = 'page-width'
     applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
   }, [])
@@ -330,12 +365,15 @@ export default function PdfViewer({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       const platform = getShortcutPlatform()
+
       if (keybindingMatchesAction('editor.find', e, platform, keybindings)) {
         e.preventDefault()
         e.stopPropagation()
         setFindOpen(true)
+
         return
       }
+
       if (keybindingMatchesAction('zoom.in', e, platform, keybindings)) {
         e.preventDefault()
         zoomIn()
@@ -347,7 +385,9 @@ export default function PdfViewer({
         zoomReset()
       }
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [keybindings, zoomIn, zoomOut, zoomReset])
 

@@ -66,6 +66,7 @@ describe('pluginManifestSchema boundaries', () => {
     )
 
     expect(parsed.success).toBe(false)
+
     if (!parsed.success) {
       expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
         expect.arrayContaining(['duplicate panels id: dashboard', 'duplicate commands id: run'])
@@ -78,6 +79,7 @@ describe('pluginManifestSchema boundaries', () => {
       id: `command-${index}`,
       title: `Command ${index}`
     }))
+
     expect(
       parsePluginManifest(
         manifest({

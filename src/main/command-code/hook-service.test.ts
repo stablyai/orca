@@ -12,6 +12,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('os', async () => {
   const actual = (await vi.importActual('os')) as Record<string, unknown>
+
   return {
     ...actual,
     homedir: homedirMock
@@ -47,6 +48,7 @@ describe('CommandCodeHookService', () => {
     ) as {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
     }
+
     expect(Object.keys(config.hooks).sort()).toEqual(['PostToolUse', 'PreToolUse', 'Stop'].sort())
     expect(config.hooks.PreToolUse[0].matcher).toBe('.*')
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
@@ -54,9 +56,11 @@ describe('CommandCodeHookService', () => {
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
       process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /command-code-hook/
     )
+
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
     }
+
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(/^if \[ -f /)
     }
@@ -72,6 +76,7 @@ describe('CommandCodeHookService', () => {
       const spaceHome = join(tmpdir(), 'orca command-code home with spaces')
       mkdirSync(spaceHome, { recursive: true })
       homedirMock.mockReturnValue(spaceHome)
+
       try {
         expect(new CommandCodeHookService().install().state).toBe('installed')
 
@@ -92,6 +97,7 @@ describe('CommandCodeHookService', () => {
 
     const scriptFileName =
       process.platform === 'win32' ? 'command-code-hook.cmd' : 'command-code-hook.sh'
+
     const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', scriptFileName), 'utf8')
 
     if (process.platform === 'win32') {
@@ -129,6 +135,7 @@ describe('CommandCodeHookService', () => {
     )
 
     const requests: { body: string; token: string | string[] | undefined }[] = []
+
     const server = createServer((req, res) => {
       let body = ''
       req.setEncoding('utf8')
@@ -149,6 +156,7 @@ describe('CommandCodeHookService', () => {
       await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
       const address = server.address() as AddressInfo
       const scriptPath = join(homeDir, '.orca', 'agent-hooks', 'command-code-hook.sh')
+
       const child = spawn('/bin/sh', [scriptPath], {
         env: {
           ...process.env,
@@ -164,6 +172,7 @@ describe('CommandCodeHookService', () => {
         },
         stdio: ['pipe', 'ignore', 'pipe']
       })
+
       child.stdin.end(JSON.stringify({ hook_event_name: 'Stop' }))
 
       const exitCode = await new Promise<number | null>((resolve, reject) => {
@@ -196,9 +205,11 @@ describe('CommandCodeHookService', () => {
     service.install()
 
     const configPath = join(homeDir, '.commandcode', 'settings.json')
+
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
       hooks: Record<string, unknown>
     }
+
     delete config.hooks.Stop
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`)

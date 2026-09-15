@@ -15,18 +15,23 @@ export function racePairingCandidates(
     let failures = 0
     let settled = false
     let selectionQueued = false
+
     for (const candidate of candidates) {
       void candidate.client.sendRequest('status.get').then(
         (response) => {
           if (!response.ok) {
             failures++
             rejectIfFinished()
+
             return
           }
+
           successes.push(candidate)
+
           if (selectionQueued) {
             return
           }
+
           selectionQueued = true
           // Why: defer one microtask so simultaneous successes are visible and
           // direct deterministically wins the exact tie regardless of callback order.
@@ -34,13 +39,16 @@ export function racePairingCandidates(
             if (settled) {
               return
             }
+
             settled = true
             const winner = successes.find(({ path }) => path === 'direct') ?? successes[0]!
+
             for (const loser of candidates) {
               if (loser !== winner) {
                 loser.client.close()
               }
             }
+
             resolve(winner)
           })
         },

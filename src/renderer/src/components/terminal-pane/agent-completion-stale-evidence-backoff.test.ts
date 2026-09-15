@@ -19,6 +19,7 @@ import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS } from '../../../../shared/remote-foreground-evidence-admission'
 
 const SSH_PTY_ID = toAppSshPtyId('target-1', 'pty-1')
+
 const INCARNATION = 'inc-1'
 
 function liveRecord(capturedAgeMs: number): RuntimeTerminalProcessInspection {
@@ -77,12 +78,14 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     lastForegroundAgent: null,
     processSession: 1
   }
+
   const remoteInspection: RemoteInspectionState = {
     authorityGeneration: null,
     observationEpoch: -1,
     bindingKey: null,
     knownAuthorityGenerations: new Set<string>()
   }
+
   const started = performance.now()
   vi.spyOn(performance, 'now').mockReturnValue(started + roundTripMs)
   handleAgentCompletionInspectionResult({
@@ -106,6 +109,7 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     remoteInspection
   })
   vi.restoreAllMocks()
+
   return state
 }
 

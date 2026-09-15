@@ -71,6 +71,7 @@ describe('Agent Map motion lifecycle', () => {
 
   it('retains created and removed agents for anchored enter and exit motion', () => {
     const first = card()
+
     const added = card({
       paneKey: 'pane-2',
       ptyId: 'pty-2',
@@ -78,6 +79,7 @@ describe('Agent Map motion lifecycle', () => {
       leafId: 'leaf-2',
       conversationName: 'Agent beta'
     })
+
     const view = render(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
 
     vi.useFakeTimers()
@@ -99,6 +101,7 @@ describe('Agent Map motion lifecycle', () => {
 
   it('retains removed worktrees until their exit transition completes', () => {
     const first = card()
+
     const second = card({
       paneKey: 'pane-2',
       ptyId: 'pty-2',
@@ -108,21 +111,26 @@ describe('Agent Map motion lifecycle', () => {
       worktreeName: 'Motion branch',
       conversationName: 'Agent beta'
     })
+
     const view = render(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
 
     vi.useFakeTimers()
     view.rerender(<AgentMap cards={[first, second]} now={NOW} onOpenTerminal={vi.fn()} />)
+
     const enteringGroup = view.container
       .querySelector('[aria-label="Open Motion branch worktree details"]')
       ?.closest('.agent-map-worktree-group')
+
     expect(enteringGroup).toHaveClass('is-entering')
     act(() => vi.advanceTimersByTime(AGENT_MAP_ENTER_DURATION_MS))
     expect(enteringGroup).not.toHaveClass('is-entering')
 
     view.rerender(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
+
     const ring = view.container.querySelector<SVGCircleElement>(
       '[aria-label="Open Motion branch worktree details"]'
     )
+
     const exitingGroup = ring?.closest('.agent-map-worktree-group')
     const exitingAgent = exitingGroup?.querySelector('[data-agent-map-agent]')
     expect(exitingGroup).toHaveClass('is-exiting')
@@ -156,11 +164,13 @@ describe('Agent Map motion lifecycle', () => {
 
   it('commits a metadata-only layout update once', () => {
     let commitCount = 0
+
     const view = render(
       <Profiler id="agent-map" onRender={() => (commitCount += 1)}>
         <AgentMap cards={[card()]} now={NOW} onOpenTerminal={vi.fn()} />
       </Profiler>
     )
+
     commitCount = 0
 
     view.rerender(
@@ -174,6 +184,7 @@ describe('Agent Map motion lifecycle', () => {
 
   it('makes descendants non-interactive while their project exits', () => {
     const first = card()
+
     const removed = card({
       paneKey: 'pane-2',
       repoId: 'repo-2',
@@ -182,6 +193,7 @@ describe('Agent Map motion lifecycle', () => {
       worktreeName: 'Removed branch',
       conversationName: 'Agent beta'
     })
+
     const view = render(<AgentMap cards={[first, removed]} now={NOW} onOpenTerminal={vi.fn()} />)
 
     vi.useFakeTimers()

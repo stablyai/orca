@@ -7,6 +7,7 @@ import { buildSshPtySpawnEnv } from '../main/providers/ssh-pty-spawn-env'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
+
 const itWithBash = hasBash ? it : it.skip
 
 function runInteractiveBashRcfile(
@@ -31,6 +32,7 @@ function runInteractiveBashRcfile(
 
   expect(result.error).toBeUndefined()
   expect(result.status).toBe(0)
+
   return result.stdout
 }
 
@@ -39,6 +41,7 @@ function expectBashOsc133Lifecycle(output: string): void {
   const oscC = '\x1b]133;C\x07'
   const oscD = '\x1b]133;D;'
   const firstPromptMarker = output.indexOf(oscA)
+
   const lifecyclePattern = new RegExp(
     `${String.fromCharCode(27)}]133;(?:A|C|D;[0-9]+)${String.fromCharCode(7)}`,
     'g'
@@ -95,6 +98,7 @@ describe('getRelayShellLaunchConfig', () => {
         HOME: homeDir,
         ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
       })
+
       const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
 
       expect(config.args).toEqual(['-l'])
@@ -107,6 +111,7 @@ describe('getRelayShellLaunchConfig', () => {
       expect(zshenv).not.toContain('ORCA_USER_ZDOTDIR')
       expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
       expect(zshenv).toContain('builtin source -- "$_orca_user_zshenv"')
+
       for (const name of ['.zprofile', '.zshrc', '.zlogin']) {
         expect(existsSync(join(zshRoot, name))).toBe(false)
       }
@@ -150,6 +155,7 @@ describe('getRelayShellLaunchConfig', () => {
           sockPath: '/home/remote/.orca-relay/relay.sock'
         }
       })
+
       env.ORCA_HISTFILE = join(homeDir, 'orca-history', 'zsh_history')
 
       const config = getRelayShellLaunchConfig('/bin/zsh', env)
@@ -219,6 +225,7 @@ describe('getRelayShellLaunchConfig', () => {
         HOME: homeDir,
         ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
       })
+
       const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
       // Why .zshenv: the overlay restores live in the one epilogue defined there.
       const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
@@ -254,6 +261,7 @@ describe('getRelayShellLaunchConfig', () => {
       const config = getRelayShellLaunchConfig('/bin/zsh', { HOME: homeDir }, 'linux', {
         emitReadyMarker: true
       })
+
       const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
       const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
 
@@ -275,6 +283,7 @@ describe('getRelayShellLaunchConfig', () => {
       const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir }, 'linux', {
         emitReadyMarker: true
       })
+
       const bashRc = readFileSync(config.args[1] as string, 'utf8')
 
       expect(config.supportsReadyMarker).toBe(true)

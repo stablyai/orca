@@ -8,10 +8,13 @@ export function installApkArgs(
   options?: { reinstall?: boolean }
 ): string[] {
   const args = ['-s', serial, 'install']
+
   if (options?.reinstall) {
     args.push('-r')
   }
+
   args.push(apkPath)
+
   return args
 }
 
@@ -22,6 +25,7 @@ export function launchAppArgs(serial: string, packageName: string, activity?: st
   if (activity && activity.trim() !== '') {
     return ['-s', serial, 'shell', 'am', 'start', '-n', `${packageName}/${activity}`]
   }
+
   return [
     '-s',
     serial,

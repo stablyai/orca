@@ -21,21 +21,27 @@ export async function connectSshTestTarget(
   return page.evaluate(
     async ({ target, remotePath, displayName, seedInitialTab }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
         void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
       })
+
       try {
         const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
           target
         })
+
         store.getState().recordSshRepoReadoptions(repoReadoptions)
         const state = await window.api.ssh.connect({ targetId: createdTarget.id })
+
         if (!state || state.status !== 'connected') {
           throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
         }
+
         if (
           !state.providerEpoch ||
           !Number.isSafeInteger(state.connectionGeneration) ||
@@ -44,11 +50,13 @@ export async function connectSshTestTarget(
         ) {
           throw new Error(`SSH target returned incomplete authority: ${JSON.stringify(state)}`)
         }
+
         store.getState().setSshConnectionState(createdTarget.id, state)
         const labels = new Map(store.getState().sshTargetLabels)
         labels.set(createdTarget.id, createdTarget.label)
         store.getState().setSshTargetLabels(labels)
         const executionHostId = `ssh:${encodeURIComponent(createdTarget.id)}` as const
+
         const authority = {
           targetId: createdTarget.id,
           providerEpoch: state.providerEpoch,
@@ -60,9 +68,11 @@ export async function connectSshTestTarget(
           remotePath,
           displayName
         })
+
         if ('error' in result) {
           throw new Error(result.error)
         }
+
         const hasExpectedRepoOwner = (): boolean =>
           store
             .getState()
@@ -72,15 +82,18 @@ export async function connectSshTestTarget(
                 repo.connectionId === createdTarget.id &&
                 repo.executionHostId === executionHostId
             )
+
         const waitForRepoOwner = async (): Promise<void> => {
           if (hasExpectedRepoOwner()) {
             return
           }
+
           await new Promise<void>((resolve, reject) => {
             const timer = window.setTimeout(() => {
               unsubscribe()
               reject(new Error(`Remote repo owner did not hydrate for ${result.repo.path}`))
             }, 15_000)
+
             const unsubscribe = store.subscribe((next) => {
               if (
                 !next.repos.some(
@@ -92,26 +105,31 @@ export async function connectSshTestTarget(
               ) {
                 return
               }
+
               window.clearTimeout(timer)
               unsubscribe()
               resolve()
             })
           })
         }
+
         await store.getState().fetchRepos()
         await waitForRepoOwner()
         const currentState = store.getState().sshConnectionStates.get(createdTarget.id)
+
         if (
           currentState?.providerEpoch !== authority.providerEpoch ||
           currentState.connectionGeneration !== authority.connectionGeneration
         ) {
           throw new Error(`SSH authority rotated before worktree hydration for ${result.repo.path}`)
         }
+
         const worktreeResult = await store.getState().fetchWorktrees(result.repo.id, {
           executionHostId,
           directSshAuthority: authority,
           requireAuthoritative: true
         })
+
         if (
           worktreeResult.status !== 'complete' ||
           worktreeResult.repoId !== result.repo.id ||
@@ -125,17 +143,23 @@ export async function connectSshTestTarget(
             `Remote worktree hydration was not authoritative: ${JSON.stringify(worktreeResult)}`
           )
         }
+
         const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? []).find(
           (candidate) => candidate.hostId === executionHostId
         )
+
         if (!worktree) {
           throw new Error(`No remote worktree found for ${result.repo.path}`)
         }
+
         store.getState().setActiveWorktree(worktree.id)
+
         if (seedInitialTab && (store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
           store.getState().createTab(worktree.id)
         }
+
         store.getState().setActiveTabType('terminal')
+
         return {
           targetId: createdTarget.id,
           repoId: result.repo.id,

@@ -35,11 +35,13 @@ vi.mock('../emulator-pane/use-mobile-emulator-agent-setup-state', () => ({
 vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: ({ freshnessSkillName }: { freshnessSkillName?: string }) => {
     mocks.freshnessSkillName = freshnessSkillName
+
     return null
   }
 }))
 
 vi.mock('./SetupStepBadge', () => ({ StepBadge: () => null }))
+
 vi.mock('./MobileEmulatorExamples', () => ({ MobileEmulatorExamples: () => null }))
 
 describe('MobileEmulatorAgentControlRow freshness authority', () => {

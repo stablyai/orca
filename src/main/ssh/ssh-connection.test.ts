@@ -11,15 +11,19 @@ import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -61,6 +65,7 @@ describe('SshConnection', () => {
   it('ignores a late host fingerprint from an obsolete connect generation', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
+
     const firstVerifier = (
       clientInstances[0].lastConnectConfig as {
         hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined
@@ -69,11 +74,13 @@ describe('SshConnection', () => {
 
     const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
     await privateConn.attemptConnect()
+
     const secondVerifier = (
       clientInstances[1].lastConnectConfig as {
         hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined
       }
     ).hostVerifier
+
     expect(firstVerifier).toBeTypeOf('function')
     expect(secondVerifier).toBeTypeOf('function')
 
@@ -83,6 +90,7 @@ describe('SshConnection', () => {
       'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7',
       'base64'
     )
+
     secondVerifier?.(newerKey, () => {})
     const currentFingerprint = conn.getHostKeyFingerprint()
     firstVerifier?.(VALID_ED25519_HOST_KEY, () => {})
@@ -110,6 +118,7 @@ describe('SshConnection', () => {
 
   it('scopes lifecycle events and pending handshake timers to one mock client', async () => {
     vi.useFakeTimers()
+
     try {
       const { Client } = createSsh2Module()
       const first = new Client()
@@ -155,6 +164,7 @@ describe('SshConnection', () => {
     const privateConn = conn as unknown as {
       attemptConnect: () => Promise<void>
     }
+
     await privateConn.attemptConnect()
 
     expect(clientInstances).toHaveLength(2)
@@ -163,9 +173,11 @@ describe('SshConnection', () => {
 
   it('transitions through connecting → connected states', async () => {
     const states: string[] = []
+
     const callbacks = createCallbacks({
       onStateChange: vi.fn((_id, state) => states.push(state.status))
     })
+
     const conn = new SshConnection(createTarget(), callbacks)
 
     await conn.connect()
@@ -214,6 +226,7 @@ describe('SshConnection', () => {
     const clientCreated = new Promise<void>((resolve) => {
       ssh2Mock.notifyClientCreated = resolve
     })
+
     const connectResult = conn.connect().catch((error: Error) => error)
     await clientCreated
     expect(clientInstances).toHaveLength(1)
@@ -238,6 +251,7 @@ describe('SshConnection', () => {
     const clientCreated = new Promise<void>((resolve) => {
       ssh2Mock.notifyClientCreated = resolve
     })
+
     const connectResult = conn.connect().catch((error: Error) => error)
     await clientCreated
     expect(clientInstances).toHaveLength(1)

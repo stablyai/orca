@@ -17,6 +17,7 @@ let unavailableRootPath: string | null = null
 
 vi.mock('./skill-root-file-walk', async (importOriginal) => {
   const actual = await importOriginal<typeof SkillRootFileWalk>()
+
   return {
     ...actual,
     findSkillFiles: (rootPath: string, maxDepth: number, signal?: AbortSignal) => {
@@ -28,6 +29,7 @@ vi.mock('./skill-root-file-walk', async (importOriginal) => {
           })
         )
       }
+
       return actual.findSkillFiles(rootPath, maxDepth, signal)
     }
   }
@@ -119,6 +121,7 @@ describe('skill discovery', () => {
     expect(first.skills.map((skill) => skill.name)).toEqual(['Planning'])
 
     unavailableRootPath = stalledRoot
+
     const second = await discoverSkills({
       homeDir: home,
       cwd: join(root, 'missing-cwd'),
@@ -142,6 +145,7 @@ describe('skill discovery', () => {
 
     await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd'), refresh: true })
     unavailableRootPath = stalledRoot
+
     const result = await discoverSkills({
       homeDir: home,
       cwd: join(root, 'missing-cwd'),
@@ -163,6 +167,7 @@ describe('skill discovery', () => {
     const recordedAt = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(recordedAt + LAST_KNOWN_ROOT_SCAN_RETENTION_MS + 1)
     unavailableRootPath = stalledRoot
+
     const result = await discoverSkills({
       homeDir: home,
       cwd: join(root, 'missing-cwd'),
@@ -245,6 +250,7 @@ describe('skill discovery', () => {
       repos: [],
       sourceKinds: []
     })
+
     expect(unfiltered.skills.map((skill) => skill.name).sort()).toEqual([
       'Agent Orchestration',
       'computer-use',
@@ -289,9 +295,11 @@ describe('skill discovery', () => {
 
     expect(result.skills.map((skill) => skill.name)).toContain('ce-plan')
     expect(result.skills.map((skill) => skill.name)).not.toContain('old-plan')
+
     const pluginSource = result.sources.find(
       (source) => source.path === join(projectInstall, 'skills')
     )
+
     expect(pluginSource).toMatchObject({ sourceKind: 'plugin', owner: 'claude', exists: true })
   })
 
@@ -357,11 +365,13 @@ describe('skill discovery', () => {
     const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
 
     const skill = result.skills.find((entry) => entry.name === 'orchestration')
+
     // Why: renderer coverage looks each rootPath up in `sources` by path, so a
     // root with no matching source silently drops that agent back to uncovered.
     const owners = skill?.rootPaths
       ?.map((rootPath) => result.sources.find((source) => source.path === rootPath))
       .map((source) => source?.owner)
+
     expect(owners?.slice().sort()).toEqual(['claude', 'grok'])
   })
 
@@ -427,6 +437,7 @@ describe('skill discovery', () => {
         '/workspace/current/.augment/skills'
       ])
     )
+
     // Why: these live outside ~/.agents/skills, so they must carry the shared
     // agent-skills provider to feed per-agent orchestration coverage.
     for (const root of roots) {
@@ -434,6 +445,7 @@ describe('skill discovery', () => {
         expect(root.providers).toEqual(['agent-skills'])
       }
     }
+
     // Why: the native-chat picker admits a root when its owner is null, so leaving
     // OMP's home shared would leak OMP-only skills into every other agent's picker.
     expect(
@@ -465,6 +477,7 @@ describe('skill discovery', () => {
       cwd: '/workspace/current',
       repos: [makeRepo('/workspace/known')]
     })
+
     const explicitRoots = buildSkillDiscoverySources({
       homeDir: '/home/test',
       cwd: '/workspace/current',

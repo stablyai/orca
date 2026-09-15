@@ -57,6 +57,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
                   : behind > 0
                     ? 'Commit staged changes and try to push'
                     : 'Commit staged changes and push'))
+
   const commitPush: DropdownItem = {
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
@@ -76,27 +77,34 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     if (upstreamLoading) {
       return 'Checking branch status…'
     }
+
     if (publishBlockedByPRLoading) {
       return 'Checking PR status…'
     }
+
     if (publishBlockedByMergedPR) {
       return 'PR is already merged'
     }
+
     if (publishBlockedByDetachedHead) {
       return 'Check out a branch before syncing commits'
     }
+
     if (!hasUpstream) {
       // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
       return 'Publish the branch first to sync commits'
     }
+
     if (shouldForcePushWithLease) {
       return (
         commitDisabledReason ??
         'Use Commit & Force Push — remote only has older copies of local commits'
       )
     }
+
     return commitDisabledReason ?? 'Commit, then pull and push'
   })()
+
   const commitSync: DropdownItem = {
     kind: 'commit_sync',
     label: translate(

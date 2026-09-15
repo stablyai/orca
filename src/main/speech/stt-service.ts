@@ -34,17 +34,23 @@ export class SttService {
     if (this.state.stopping) {
       return
     }
+
     const currentOwner = this.state.activeOwner ?? this.state.startingOwner
+
     if (!currentOwner) {
       return
     }
+
     if (currentOwner !== owner) {
       throw new Error('dictation_owner_mismatch')
     }
+
     if (this.state.cloudSession) {
       this.state.cloudSession.feedAudio(samples, sampleRate)
+
       return
     }
+
     this.state.worker?.postMessage({ type: 'feed', samples, sampleRate }, [
       samples.buffer as ArrayBuffer
     ])

@@ -57,15 +57,18 @@ export function useSkillDeleteFlow(
   const confirm = useConfirmationDialog()
   const mountedRef = useMountedRef()
   const [probeGeneration, setProbeGeneration] = useState(0)
+
   const [capability, setCapability] = useState<
     'checking' | 'supported' | 'unsupported' | 'unavailable'
   >('checking')
+
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<SkillDeleteResult | null>(null)
 
   useEffect(() => {
     let current = true
     setCapability('checking')
+
     const probe = (attempt: number): void => {
       void runtimeTargetSupportsSkillDelete(runtimeTarget)
         .then((value) => {
@@ -77,6 +80,7 @@ export function useSkillDeleteFlow(
           if (!current || !mountedRef.current) {
             return
           }
+
           if (attempt < 2) {
             probe(attempt + 1)
           } else {
@@ -84,7 +88,9 @@ export function useSkillDeleteFlow(
           }
         })
     }
+
     probe(0)
+
     return () => {
       current = false
     }
@@ -95,11 +101,14 @@ export function useSkillDeleteFlow(
       if (!runtimeTarget || skills.length === 0) {
         return false
       }
+
       const request = toRequest(skills)
       setRunning(true)
+
       try {
         const plan = await previewSkillDeletionOnRuntimeTarget(runtimeTarget, request)
         const actionable = plan.skills.filter((skill) => !skill.blocked)
+
         if (actionable.length === 0) {
           // The preview already knows this would remove nothing. Offering a
           // destructive confirm here is what let a blocked row be "deleted"
@@ -107,8 +116,10 @@ export function useSkillDeleteFlow(
           // it persists long enough to act on.
           setResult(blockedOnlyResult(plan))
           toast.error(skillDeleteNothingToDoLabel(plan.skills.length))
+
           return false
         }
+
         const confirmed = await confirm({
           title: skillDeleteActionLabel(actionable.length),
           description: [
@@ -134,19 +145,26 @@ export function useSkillDeleteFlow(
           confirmLabel: skillDeleteActionLabel(actionable.length),
           confirmVariant: 'destructive'
         })
+
         if (!confirmed) {
           return false
         }
+
         const outcome = await deleteSkillsOnRuntimeTarget(runtimeTarget, request)
+
         if (!mountedRef.current) {
           return true
         }
+
         const deleted = outcome.skills.filter((skill) => skill.status === 'deleted').length
+
         if (deleted > 0) {
           toast.success(skillDeletedToast(deleted))
         }
+
         setResult(outcome)
         onDeleted(outcome)
+
         return true
       } catch (error) {
         toast.error(
@@ -154,6 +172,7 @@ export function useSkillDeleteFlow(
             ? error.message
             : translate('auto.components.skills.SkillDelete.failed', 'Could not delete skills')
         )
+
         return false
       } finally {
         if (mountedRef.current) {
@@ -203,6 +222,7 @@ function unsupportedReason(
       'Could not reach the selected machine. Refresh and try again.'
     )
   }
+
   return runtimeTarget
     ? translate(
         'auto.components.skills.SkillDelete.hostUpdateRequired',

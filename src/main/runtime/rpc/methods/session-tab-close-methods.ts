@@ -17,12 +17,14 @@ export const SESSION_TAB_CLOSE_METHODS = [
           params.worktree,
           context.pairedDeviceId
         )
+
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
           context.clientCapabilities,
           isStructuredNativeChatEnabled(context.runtime)
         )
+
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
           raw,
@@ -31,11 +33,13 @@ export const SESSION_TAB_CLOSE_METHODS = [
           context.clientCapabilities
         )
       }
+
       const requiresIntent =
         context.clientKind === undefined ||
         (context.clientKind === 'runtime' &&
           context.clientCapabilities?.includes(SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY) ===
             true)
+
       return withSpan(
         'runtime.session-tabs.close',
         async (span) => {
@@ -45,9 +49,12 @@ export const SESSION_TAB_CLOSE_METHODS = [
               params.worktree,
               params.tabId
             )
+
             span.setAttribute('decision', `refused-${result.refusalReason ?? 'missing-intent'}`)
+
             return result
           }
+
           const result = await context.runtime.closeMobileSessionTab(
             params.worktree,
             params.tabId,
@@ -56,10 +63,12 @@ export const SESSION_TAB_CLOSE_METHODS = [
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
+
           span.setAttribute(
             'decision',
             result.refused ? `refused-${result.refusalReason ?? 'unknown'}` : 'allowed'
           )
+
           return result
         },
         {
@@ -94,12 +103,14 @@ export const SESSION_TAB_CLOSE_METHODS = [
           params.worktree,
           context.pairedDeviceId
         )
+
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
           context.clientCapabilities,
           isStructuredNativeChatEnabled(context.runtime)
         )
+
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
           raw,
@@ -108,6 +119,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
           context.clientCapabilities
         )
       }
+
       return withSpan(
         'runtime.session-tabs.close-lifecycle',
         async (span) => {
@@ -121,10 +133,12 @@ export const SESSION_TAB_CLOSE_METHODS = [
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
+
           span.setAttribute(
             'decision',
             result.refused ? `refused-${result.refusalReason ?? 'unknown'}` : 'allowed'
           )
+
           return result
         },
         {

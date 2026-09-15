@@ -17,6 +17,7 @@ export function isCodexAppServerHandshakeExitUnprovenError(
     error instanceof Error && 'connection' in error
       ? (error.connection as Partial<CodexAppServerConnection> | null)
       : null
+
   return (
     error instanceof Error &&
     error.name === 'CodexAppServerHandshakeExitUnprovenError' &&

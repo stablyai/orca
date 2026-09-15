@@ -37,6 +37,7 @@ export function createAgentStatusLiveActions(
     requestFreshness,
     transactAgentStatuses
   } = runtime
+
   const setAgentStatus = (
     rawPaneKey: string,
     payload: AgentStatusPayload,
@@ -48,6 +49,7 @@ export function createAgentStatusLiveActions(
     const paneKey = resolveAgentPaneAuthorityKey(rawPaneKey)
     const updatedAt = timing?.updatedAt ?? Date.now()
     const current = get()
+
     if (
       paneKey in current.recentlyRetiredAgentStatusPaneKeys ||
       isRecentlyClosedAgentStatusTab(
@@ -57,6 +59,7 @@ export function createAgentStatusLiveActions(
     ) {
       return
     }
+
     let built: AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null = null
     let liveEntryDelta: FreshnessLiveEntryDelta | null = null
     set((state) => {
@@ -70,9 +73,11 @@ export function createAgentStatusLiveActions(
         metadata,
         updatedAt
       })
+
       if (!built.entry) {
         return state
       }
+
       const previousEntries = state.agentStatusByPaneKey
       const reduction = reduceAgentStatusLiveUpdate(state, built, updatedAt)
       liveEntryDelta = {
@@ -82,37 +87,48 @@ export function createAgentStatusLiveActions(
         replacedEntry: previousEntries[built.entry.paneKey],
         evictedEntries: reduction.evictedEntries
       }
+
       return reduction.patch
     })
+
     if (liveEntryDelta) {
       freshness.noteLiveEntryDelta(liveEntryDelta)
     }
+
     // Zustand's updater runs synchronously, but TypeScript cannot observe the closure assignment.
     const builtResult = built as AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null
+
     if (!builtResult?.entry) {
       // Keep standalone calls' deferred freshness contract when a stale event is rejected, but a
       // suppressed inherited-terminal frame returns without buying the deferred O(entries) scan.
       if (builtResult?.reason !== 'suppressed-inherited-terminal') {
         requestFreshness(false)
       }
+
       return
     }
+
     const { entry } = builtResult
+
     // Sticky orchestration titles are replaced only when they still describe this dispatch.
     const hasMatchingOrchestrationLabels = Boolean(
       (entry.orchestration?.displayName?.trim() || entry.orchestration?.taskTitle?.trim()) &&
       orchestrationLabelsMatchLiveDispatch(entry)
     )
+
     const liveIsDispatchPrompt = isOrcaDispatchPrompt(entry.prompt)
     const liveDispatchTaskId = liveIsDispatchPrompt ? getOrcaDispatchTaskId(entry.prompt) : null
     const stickyOrchestrationTaskId = entry.orchestration?.taskId?.trim() || null
+
     const isNewDispatchAgainstStickyOrchestration = Boolean(
       liveDispatchTaskId &&
       stickyOrchestrationTaskId &&
       liveDispatchTaskId !== stickyOrchestrationTaskId
     )
+
     const shouldReplaceGeneratedTitle =
       hasMatchingOrchestrationLabels || isNewDispatchAgainstStickyOrchestration
+
     const mayWriteGeneratedTitle =
       get().settings?.tabAutoGenerateTitle === true &&
       (shouldReplaceGeneratedTitle ||
@@ -121,16 +137,19 @@ export function createAgentStatusLiveActions(
           entry.tabId ?? getTabIdFromPaneKey(paneKey),
           entry.worktreeId
         ))
+
     const generatedTitlePrompt =
       liveIsDispatchPrompt && mayWriteGeneratedTitle
         ? getAgentRowGeneratedTitleText(entry)
         : entry.prompt
+
     applyGeneratedTabTitleUpdate({
       paneKey,
       prompt: generatedTitlePrompt,
       ...(shouldReplaceGeneratedTitle ? { options: { replaceExistingGeneratedTitle: true } } : {})
     })
     requestFreshness(true)
+
     if (builtResult.completionRefreshWorktreeId) {
       const worktreeId = builtResult.completionRefreshWorktreeId
       queueMicrotask(() => get().refreshGitHubForWorktreeIfStale(worktreeId))

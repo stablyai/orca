@@ -30,12 +30,15 @@ export function reclassifySkippedWorkspaceCleanupAncestors({
   const unblocked: WorkspaceCleanupCandidate[] = []
   const updatedFailures: WorkspaceCleanupFailure[] = []
   let changed = true
+
   while (changed) {
     changed = false
     let index = 0
+
     while (index < skippedAncestors.length) {
       const entry = skippedAncestors[index]
       const blockers = findBlockingDescendants(entry.candidate)
+
       if (blockers.length === 0) {
         skippedAncestors.splice(index, 1)
         removeArrayEntry(failedCandidates, entry.candidate)
@@ -45,26 +48,33 @@ export function reclassifySkippedWorkspaceCleanupAncestors({
         changed = true
         continue
       }
+
       const provisional = blockers.every((blocker) => provisionallyBlocked.has(blocker))
+
       if (provisional !== entry.provisional) {
         entry.provisional = provisional
         entry.failure.message = getSkippedAncestorMessage(provisional)
+
         if (provisional) {
           provisionallyBlocked.add(entry.candidate)
         } else {
           provisionallyBlocked.delete(entry.candidate)
         }
+
         updatedFailures.push(entry.failure)
         changed = true
       }
+
       index += 1
     }
   }
+
   return { unblocked, updatedFailures }
 }
 
 function removeArrayEntry<T>(entries: T[], entry: T): void {
   const index = entries.indexOf(entry)
+
   if (index !== -1) {
     entries.splice(index, 1)
   }

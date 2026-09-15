@@ -16,9 +16,11 @@ export async function getRuntimeRepoBaseRefDefault(
   hostId?: ExecutionHostId
 ): Promise<RuntimeRepoBaseRefDefault> {
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment') {
     return window.api.repos.getBaseRefDefault({ repoId, ...(hostId ? { hostId } : {}) })
   }
+
   return callRuntimeRpc<RuntimeRepoBaseRefDefault>(
     target,
     'repo.baseRefDefault',
@@ -37,16 +39,20 @@ export async function searchRuntimeRepoBaseRefs(
   if (!isRuntimeRepoRefSearchQueryWithinLimit(query)) {
     return []
   }
+
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment') {
     return window.api.repos.searchBaseRefs({ repoId, query, limit, ...(hostId ? { hostId } : {}) })
   }
+
   const result = await callRuntimeRpc<{ refs: string[]; truncated: boolean }>(
     target,
     'repo.searchRefs',
     { repo: repoId, query, limit },
     { timeoutMs: 15_000 }
   )
+
   return result.refs
 }
 
@@ -60,7 +66,9 @@ export async function searchRuntimeRepoBaseRefDetails(
   if (!isRuntimeRepoRefSearchQueryWithinLimit(query)) {
     return []
   }
+
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment') {
     return window.api.repos.searchBaseRefDetails({
       repoId,
@@ -69,10 +77,12 @@ export async function searchRuntimeRepoBaseRefDetails(
       ...(hostId ? { hostId } : {})
     })
   }
+
   const result = await callRuntimeRpc<{
     refs: string[]
     refDetails?: BaseRefSearchResult[]
     truncated: boolean
   }>(target, 'repo.searchRefs', { repo: repoId, query, limit }, { timeoutMs: 15_000 })
+
   return result.refDetails ?? result.refs.map(legacyBaseRefSearchResult)
 }

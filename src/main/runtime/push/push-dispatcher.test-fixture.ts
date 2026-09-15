@@ -30,12 +30,15 @@ export function createHarness(options: {
   const sends: SendCall[] = []
   const cleared: (string | null)[] = []
   let retry: (() => void) | null = null
+
   const client = {
     send: vi.fn(async (input: SendCall) => {
       sends.push(input)
+
       if (options.sendImpl) {
         return await options.sendImpl()
       }
+
       return {
         ok: true as const,
         results:
@@ -47,13 +50,16 @@ export function createHarness(options: {
       }
     })
   } as unknown as PushGatewayClient
+
   const registry: PushDispatcherRegistry = {
     listDevices: () => options.devices,
     setPushRegistration: (deviceId, value) => {
       cleared.push(value === null ? deviceId : null)
+
       return true
     }
   }
+
   return {
     dispatcher: new PushDispatcher({
       client,

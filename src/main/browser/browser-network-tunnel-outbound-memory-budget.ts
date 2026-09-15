@@ -1,12 +1,19 @@
 export const BROWSER_NETWORK_TUNNEL_HOST_MAX_OUTBOUND_BYTES = 32 * 1024 * 1024
+
 export const BROWSER_NETWORK_TUNNEL_PROCESS_MAX_OUTBOUND_BYTES = 128 * 1024 * 1024
 
 const DEFAULT_HOST_MAX_CLAIMS = 16_384
+
 const DEFAULT_PROCESS_MAX_CLAIMS = 65_536
+
 const DEFAULT_HOST_MAX_SOCKET_SOURCES = 8
+
 const DEFAULT_PROCESS_MAX_SOCKET_SOURCES = 32
+
 const DEFAULT_HOST_MAX_LEASES = 8
+
 const DEFAULT_PROCESS_MAX_LEASES = 64
+
 const DEFAULT_PROCESS_MAX_HOSTS = 32
 
 export type BrowserNetworkTunnelOutboundSocketMemory = {
@@ -80,20 +87,27 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
     ) {
       return null
     }
+
     let host = this.hosts.get(browserHostClientId)
+
     if (!host) {
       if (this.hosts.size >= this.processMaxHosts) {
         return null
       }
+
       host = { leases: 0, retainedBytes: 0, claims: 0, bufferedSources: new Set() }
       this.hosts.set(browserHostClientId, host)
     }
+
     if (host.leases >= this.hostMaxLeases) {
       this.deleteEmptyHost(browserHostClientId, host)
+
       return null
     }
+
     host.leases += 1
     this.leases += 1
+
     return this.createLease(browserHostClientId, host)
   }
 
@@ -120,14 +134,17 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
     host: BrowserHostMemoryState
   ): BrowserNetworkTunnelOutboundMemoryLease {
     let active = true
+
     const claim = (bytes: number): (() => void) | null => {
       if (!active || !this.canClaim(host, bytes)) {
         return null
       }
+
       host.retainedBytes += bytes
       host.claims += 1
       this.retainedBytes += bytes
       this.claims += 1
+
       return createRelease(() => {
         host.retainedBytes -= bytes
         host.claims -= 1
@@ -136,6 +153,7 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
         this.deleteEmptyHost(browserHostClientId, host)
       })
     }
+
     return {
       claimApplicationBytes: claim,
       claimQueuedBytes: claim,
@@ -147,10 +165,12 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
         ) {
           return null
         }
+
         const source = (): number => readBufferedAmount()
         host.bufferedSources.add(source)
         this.bufferedSources.add(source)
         let registered = true
+
         return {
           canSend: (bytes, alreadyRetained = false) =>
             registered && active && this.canFitBytes(host, bytes, alreadyRetained ? 0 : bytes),
@@ -183,8 +203,10 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
     if (!Number.isSafeInteger(bytes) || bytes < 0) {
       return false
     }
+
     const hostBufferedBytes = readBufferedBytes(host.bufferedSources)
     const processBufferedBytes = readBufferedBytes(this.bufferedSources)
+
     return (
       host.retainedBytes + hostBufferedBytes + addedBytes <= this.hostMaxBytes &&
       this.retainedBytes + processBufferedBytes + addedBytes <= this.processMaxBytes
@@ -205,13 +227,17 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
 
 function readBufferedBytes(sources: Set<() => number>): number {
   let total = 0
+
   for (const read of sources) {
     try {
       const bytes = read()
+
       if (!Number.isSafeInteger(bytes) || bytes < 0) {
         return Number.POSITIVE_INFINITY
       }
+
       total += bytes
+
       if (!Number.isSafeInteger(total)) {
         return Number.POSITIVE_INFINITY
       }
@@ -219,15 +245,18 @@ function readBufferedBytes(sources: Set<() => number>): number {
       return Number.POSITIVE_INFINITY
     }
   }
+
   return total
 }
 
 function createRelease(release: () => void): () => void {
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
     release()
   }

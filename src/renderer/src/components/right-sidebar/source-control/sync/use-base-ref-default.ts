@@ -23,6 +23,7 @@ export function useSourceControlBaseRefDefault({
     if (!isBranchVisible || !activeRepoId || isFolder) {
       return
     }
+
     // Why: reset to null so that effectiveBaseRef becomes falsy until the IPC resolves, so branch compare can't fire with a stale defaultBaseRef from a different repo (transient "invalid-base" on switch).
     setDefaultBaseRef(null)
     let stale = false
@@ -40,11 +41,13 @@ export function useSourceControlBaseRefDefault({
       })
       .catch((err) => {
         console.error('[SourceControl] getBaseRefDefault failed', err)
+
         // Why: leave defaultBaseRef null on failure (not a fabricated 'origin/main') so branch compare/PR fetch skip a possibly-nonexistent ref.
         if (!stale) {
           setDefaultBaseRef(null)
         }
       })
+
     return () => {
       stale = true
     }
@@ -57,5 +60,6 @@ export function useSourceControlBaseRefDefault({
     isBranchVisible,
     isFolder
   ])
+
   return defaultBaseRef
 }

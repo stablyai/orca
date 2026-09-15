@@ -24,6 +24,7 @@ export function AutomationListEmptyView({
 }: AutomationListEmptyViewProps): React.JSX.Element | null {
   const state = resolveAutomationListEmptyState(input)
   const recovery = state.recovery
+
   if (state.kind === 'rows') {
     return null
   }

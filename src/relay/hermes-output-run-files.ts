@@ -5,26 +5,35 @@ import { HERMES_HOME, HERMES_OUTPUT_DIR } from './external-automation-storage-pa
 import type { HermesOutputRunRef } from './hermes-run-correlation'
 
 const HERMES_OUTPUT_FILE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})\.md$/
+
 const MAX_REFERENCED_LOG_BYTES = 5 * 1024 * 1024
+
 const REFERENCED_LOG_HEADING = '## Latest log file'
+
 const LATEST_LOG_PATH_PATTERN =
   /\bLatest log path:\s*(?<path>(?:[A-Za-z]:[\\/]|\/)[^\r\n]*?)(?=\s+Run summary:|\r?\n|$)/i
 
 function runAtFromHermesOutputFile(filename: string): string | null {
   const match = HERMES_OUTPUT_FILE_PATTERN.exec(filename)
+
   if (!match) {
     return null
   }
+
   const [, year, month, day, hour, minute, second] = match
+
   return `${year}-${month}-${day}T${hour}:${minute}:${second}`
 }
 
 function runKeyFromHermesOutputFile(filename: string): string | null {
   const match = HERMES_OUTPUT_FILE_PATTERN.exec(filename)
+
   if (!match) {
     return null
   }
+
   const [, year, month, day, hour, minute, second] = match
+
   return `${year}${month}${day}_${hour}${minute}${second}`
 }
 
@@ -36,9 +45,11 @@ function cleanRunPreview(value: string): string | null {
     .replaceAll(']', ' ')
     .replace(/\s+/g, ' ')
     .trim()
+
   if (!normalized) {
     return null
   }
+
   return normalized.length > 180 ? `${normalized.slice(0, 177)}...` : normalized
 }
 
@@ -52,6 +63,7 @@ function parseHermesOutput(content: string): {
   const errorMatch = /##\s+Error\s+```([\s\S]*?)```/m.exec(content)
   const responseMatch = /##\s+Response\s+([\s\S]*)$/m.exec(content)
   const error = errorMatch ? cleanRunPreview(errorMatch[1]) : null
+
   return {
     status: failed ? 'failed' : responseMatch ? 'completed' : 'unknown',
     outputPreview: cleanRunPreview(responseMatch?.[1] ?? errorMatch?.[1] ?? content),
@@ -62,9 +74,11 @@ function parseHermesOutput(content: string): {
 
 function extractLatestLogPath(content: string): string | null {
   const rawPath = LATEST_LOG_PATH_PATTERN.exec(content)?.groups?.path?.trim()
+
   if (!rawPath) {
     return null
   }
+
   return rawPath.replace(/^`|`$/g, '').trim()
 }
 
@@ -74,13 +88,16 @@ export async function readHermesReferencedLogFile(content: string): Promise<{
   truncated: boolean
 } | null> {
   const logPath = extractLatestLogPath(content)
+
   if (!logPath || !isAbsolute(logPath)) {
     return null
   }
+
   try {
     const homeRealPath = await realpath(HERMES_HOME)
     const logRealPath = await realpath(logPath)
     const relativeToHermesHome = relative(resolve(homeRealPath), resolve(logRealPath))
+
     if (
       relativeToHermesHome === '..' ||
       relativeToHermesHome.startsWith(`..${sep}`) ||
@@ -88,10 +105,13 @@ export async function readHermesReferencedLogFile(content: string): Promise<{
     ) {
       return null
     }
+
     const logStat = await stat(logPath)
+
     if (!logStat.isFile()) {
       return null
     }
+
     if (logStat.size <= MAX_REFERENCED_LOG_BYTES) {
       return {
         path: logPath,
@@ -99,10 +119,13 @@ export async function readHermesReferencedLogFile(content: string): Promise<{
         truncated: false
       }
     }
+
     const file = await open(logPath, 'r')
+
     try {
       const buffer = Buffer.alloc(MAX_REFERENCED_LOG_BYTES)
       await file.read(buffer, 0, MAX_REFERENCED_LOG_BYTES, logStat.size - MAX_REFERENCED_LOG_BYTES)
+
       return {
         path: logPath,
         content: buffer.toString('utf-8'),
@@ -120,13 +143,17 @@ async function appendReferencedLogFile(content: string): Promise<string> {
   if (content.includes(REFERENCED_LOG_HEADING)) {
     return content
   }
+
   const logFile = await readHermesReferencedLogFile(content)
+
   if (!logFile) {
     return content
   }
+
   const note = logFile.truncated
     ? `Showing the last ${MAX_REFERENCED_LOG_BYTES} bytes because the log file is larger.`
     : null
+
   return [
     content,
     '---',
@@ -144,10 +171,13 @@ async function appendReferencedLogFile(content: string): Promise<string> {
 
 export async function readHermesOutputFileRunRefs(jobId: string): Promise<HermesOutputRunRef[]> {
   const outputDir = join(HERMES_OUTPUT_DIR, jobId)
+
   if (!existsSync(outputDir)) {
     return []
   }
+
   const entries = await readdir(outputDir, { withFileTypes: true })
+
   return entries
     .filter((entry) => entry.isFile() && HERMES_OUTPUT_FILE_PATTERN.test(entry.name))
     .map((entry) => ({
@@ -165,6 +195,7 @@ export async function readHermesOutputFileRun(ref: HermesOutputRunRef): Promise<
     const content = await readFile(ref.output_path, 'utf-8')
     const parsed = parseHermesOutput(content)
     const outputContent = await appendReferencedLogFile(parsed.outputContent)
+
     return {
       id: ref.id,
       job_id: ref.job_id,

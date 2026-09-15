@@ -6,7 +6,9 @@ import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-launch-env'
+
 let directory: string
 
 function request(overrides: Partial<AgentSessionReserveRequest> = {}): AgentSessionReserveRequest {
@@ -73,6 +75,7 @@ describe('agent session launch environment admission', () => {
 
   it('rejects an environment that could not be validated before writing', async () => {
     const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+
     const launchEnv = Object.fromEntries(
       Array.from({ length: 257 }, (_, index) => [`KEY_${index}`, 'value'])
     )

@@ -29,6 +29,7 @@ function promptClient() {
     },
     _meta: { runtimeId: 'runtime-1' }
   })
+
   const client = {
     call,
     getCliStatus: vi.fn().mockResolvedValue({
@@ -41,6 +42,7 @@ function promptClient() {
       }
     })
   } as unknown as RuntimeClient
+
   return { client, call }
 }
 
@@ -49,6 +51,7 @@ async function sendWith(
 ): Promise<{ error: unknown; call: ReturnType<typeof vi.fn> }> {
   const { client, call } = promptClient()
   vi.spyOn(console, 'log').mockImplementation(() => {})
+
   const error = await TERMINAL_HANDLERS['terminal send']({
     flags: parseArgs(argv, PATHS).flags,
     client,
@@ -57,6 +60,7 @@ async function sendWith(
   })
     .then(() => undefined)
     .catch((caught: unknown) => caught)
+
   return { error, call }
 }
 
@@ -66,6 +70,7 @@ describe('--retry-request and --wait-submit value damage', () => {
       ['terminal', 'send', '--terminal', 'term-1', '--text', 'hi', '--enter', '--retry-request'],
       PATHS
     )
+
     expect(parsed.flags.get('retry-request')).toBe(true)
   })
 
@@ -80,6 +85,7 @@ describe('--retry-request and --wait-submit value damage', () => {
       '--enter',
       '--retry-request'
     ])
+
     expect(error).toMatchObject({ code: 'invalid_argument' })
     expect((error as Error).message).toContain('--retry-request requires a value')
     expect(call).not.toHaveBeenCalled()
@@ -96,6 +102,7 @@ describe('--retry-request and --wait-submit value damage', () => {
       '--enter',
       '--retry-request='
     ])
+
     expect(error).toMatchObject({ code: 'invalid_argument' })
     expect((error as Error).message).toContain('--retry-request must be the UUID')
     expect(call).not.toHaveBeenCalled()
@@ -121,6 +128,7 @@ describe('--retry-request and --wait-submit value damage', () => {
       '--enter',
       '--wait-submit'
     ])
+
     expect(error).toMatchObject({ code: 'invalid_argument' })
     expect((error as Error).message).toContain('--wait-submit requires a value')
     expect(call).not.toHaveBeenCalled()
@@ -129,6 +137,7 @@ describe('--retry-request and --wait-submit value damage', () => {
   it('rejects a damaged --retry-request on an orchestration verb', async () => {
     const call = vi.fn()
     const client = { call } as unknown as RuntimeClient
+
     for (const value of [true as const, 'worker-stop-1']) {
       const error = await ORCHESTRATION_HANDLERS['orchestration worker-stop']({
         flags: new Map<string, string | boolean>([
@@ -141,8 +150,10 @@ describe('--retry-request and --wait-submit value damage', () => {
       })
         .then(() => undefined)
         .catch((caught: unknown) => caught)
+
       expect(error).toMatchObject({ code: 'invalid_argument' })
     }
+
     expect(call).not.toHaveBeenCalled()
   })
 })

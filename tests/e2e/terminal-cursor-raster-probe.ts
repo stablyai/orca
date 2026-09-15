@@ -30,10 +30,12 @@ function isCursorProbePixel(red: number, green: number, blue: number, alpha: num
   }
 
   const isRawProbeColor = Math.abs(red - 35) <= 2 && green >= 253 && Math.abs(blue - 69) <= 2
+
   // Why: WebGL can composite the forced cursor color over the terminal
   // background before Playwright captures pixels, especially on macOS.
   const isCompositedProbeColor =
     Math.abs(red - 121) <= 3 && green >= 249 && Math.abs(blue - 100) <= 3
+
   return isRawProbeColor || isCompositedProbeColor
 }
 
@@ -47,14 +49,18 @@ export function analyzeRasterCursorCells(
   const scaleY = viewport ? image.height / viewport.height : image.height / target.clip.height
   const originX = viewport ? Math.round(target.clip.x * scaleX) : 0
   const originY = viewport ? Math.round(target.clip.y * scaleY) : 0
+
   const maxX = viewport
     ? Math.min(image.width, originX + Math.round(target.clip.width * scaleX))
     : image.width
+
   const maxY = viewport
     ? Math.min(image.height, originY + Math.round(target.clip.height * scaleY))
     : image.height
+
   const cellWidth = Math.max(1, target.cellWidth * scaleX)
   const cellHeight = Math.max(1, target.cellHeight * scaleY)
+
   const cells = new Map<
     string,
     RasterCursorCell & { columnRuns: Map<number, number>; activeRunByColumn: Map<number, number> }
@@ -67,13 +73,16 @@ export function analyzeRasterCursorCells(
       const green = image.data[offset + 1] ?? 0
       const blue = image.data[offset + 2] ?? 0
       const alpha = image.data[offset + 3] ?? 0
+
       if (!isCursorProbePixel(red, green, blue, alpha)) {
         continue
       }
+
       const cellX = Math.max(0, Math.min(target.cols - 1, Math.floor((x - originX) / cellWidth)))
       const cellY = Math.max(0, Math.min(target.rows - 1, Math.floor((y - originY) / cellHeight)))
       const key = `${cellX},${cellY}`
       let cell = cells.get(key)
+
       if (!cell) {
         cell = {
           cellX,
@@ -89,6 +98,7 @@ export function analyzeRasterCursorCells(
         }
         cells.set(key, cell)
       }
+
       cell.pixelCount += 1
       cell.minX = Math.min(cell.minX, x)
       cell.minY = Math.min(cell.minY, y)

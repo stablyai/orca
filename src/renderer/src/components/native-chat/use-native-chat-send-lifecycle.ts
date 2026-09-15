@@ -17,33 +17,43 @@ export function useNativeChatSendLifecycle(
       { cleanupTimer: ReturnType<typeof setTimeout> | null; pendingId?: string }
     >()
   )
+
   const cancelPendingSends = useCallback(() => {
     for (const [handle, entry] of pendingSendHandlesRef.current) {
       const { cleanupTimer, pendingId } = entry
+
       if (cleanupTimer !== null) {
         clearTimeout(cleanupTimer)
       }
+
       handle.cancel()
+
       if (pendingId) {
         onPendingSendCanceled?.(pendingId)
       }
     }
+
     pendingSendHandlesRef.current.clear()
   }, [onPendingSendCanceled])
+
   const trackPendingSend = useCallback((handle: NativeChatSendHandle, pendingId?: string) => {
     const entry = {
       cleanupTimer: null as ReturnType<typeof setTimeout> | null,
       ...(pendingId ? { pendingId } : {})
     }
+
     pendingSendHandlesRef.current.set(handle, entry)
+
     if (handle.settled) {
       void handle.settled.then(() => {
         if (pendingSendHandlesRef.current.get(handle) === entry) {
           pendingSendHandlesRef.current.delete(handle)
         }
       })
+
       return
     }
+
     entry.cleanupTimer = setTimeout(() => {
       pendingSendHandlesRef.current.delete(handle)
     }, handle.settleAfterMs)

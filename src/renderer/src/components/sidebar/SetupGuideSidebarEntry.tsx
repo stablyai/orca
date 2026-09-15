@@ -49,15 +49,19 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   const setupProgress = useSetupGuideProgress(true, false, false)
   const setupComplete = isSetupGuideSidebarComplete(setupProgress)
   const setupActive = activeModal === 'setup-guide'
+
   const showSetupGuideEntry = shouldShowSetupGuideEntry({
     ready: getSetupGuideSidebarEntryReady(persistedUIReady, setupProgress.ready),
     setupComplete,
     dismissed: setupGuideSidebarDismissed
   })
+
   const lastVisibleProgressRef = React.useRef<FeatureWallSetupProgress | null>(null)
+
   if (showSetupGuideEntry) {
     lastVisibleProgressRef.current = setupProgress
   }
+
   // Why: host/workspace switches can briefly refresh setup probes. Once the
   // checklist is visibly available, keep that stable row through the refresh.
   const renderedProgress = showSetupGuideEntry
@@ -65,6 +69,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
     : !setupProgress.ready && !setupGuideSidebarDismissed
       ? lastVisibleProgressRef.current
       : null
+
   const handleHideSetupGuide = React.useCallback(() => {
     setSetupGuideSidebarDismissed(true)
   }, [setSetupGuideSidebarDismissed])
@@ -72,6 +77,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   if (!renderedProgress) {
     return null
   }
+
   const firstUnfinishedSetupStepId: FeatureWallSetupStepId =
     getFirstIncompleteFeatureWallSetupStepId(renderedProgress.stepDone)
 

@@ -46,22 +46,28 @@ export function appendMissingWorktreesForHost<
   options: WorktreeHostMatchOptions
 ): T[] {
   const existing = current ?? []
+
   const existingHostIds = new Set(
     existing
       .filter((worktree) => worktreeMatchesHost(worktree, hostId, options))
       .map(({ id }) => id)
   )
+
   const missing = incoming.filter((worktree) => !existingHostIds.has(worktree.id))
+
   if (missing.length === 0) {
     return [...existing]
   }
+
   // Why: land inside the host's block like mergeWorktreesForHost does, else these rows sit past sibling hosts and visibly jump once the authoritative scan splices them back.
   const lastHostIndex = existing.findLastIndex((worktree) =>
     worktreeMatchesHost(worktree, hostId, options)
   )
+
   if (lastHostIndex === -1) {
     return [...existing, ...missing]
   }
+
   return [...existing.slice(0, lastHostIndex + 1), ...missing, ...existing.slice(lastHostIndex + 1)]
 }
 
@@ -94,13 +100,17 @@ export async function fetchKnownSshWorktreesForRepo(
 ): Promise<DetectedWorktreeListResult | null> {
   const coalesceKey = `${repoId}\0${executionHostId}`
   const inflight = inflightKnownSshWorktreeFetches.get(coalesceKey)
+
   if (inflight) {
     return await inflight
   }
+
   const request = runKnownSshWorktreeFetch(set, repoId, executionHostId).finally(() => {
     inflightKnownSshWorktreeFetches.delete(coalesceKey)
   })
+
   inflightKnownSshWorktreeFetches.set(coalesceKey, request)
+
   return await request
 }
 
@@ -111,15 +121,20 @@ export async function runKnownSshWorktreeFetch(
 ): Promise<DetectedWorktreeListResult | null> {
   // Why: reads the local store only, so a runtime-hub session (whose repo ids live on the hub) always gets 'rejected' and keeps the pre-existing no-op.
   const listKnown = window.api.worktrees.listKnownForExecutionHost
+
   if (typeof listKnown !== 'function') {
     return null
   }
+
   const result = await listKnown({ repoId, executionHostId })
+
   if (!isAdmittedKnownSshWorktreeResult(result, repoId, executionHostId)) {
     return null
   }
+
   // Why: persisted SSH metadata outlives the remote worktree, so drop rows a completed scan already proved gone.
   const suppressedIds = getAuthoritativelyRemovedWorktreeIds(executionHostId)
+
   const known =
     suppressedIds && suppressedIds.size > 0
       ? {
@@ -127,6 +142,7 @@ export async function runKnownSshWorktreeFetch(
           worktrees: result.result.worktrees.filter((worktree) => !suppressedIds.has(worktree.id))
         }
       : result.result
+
   let admitted = false
   set((state) => {
     // Why: the provider can connect during the await; authoritative rows already replaced this host, so appending stale metadata would resurrect purged worktrees.
@@ -136,13 +152,17 @@ export async function runKnownSshWorktreeFetch(
     ) {
       return state
     }
+
     admitted = true
     const setup = getProjectHostSetupForRepoHost(state, repoId, executionHostId)
     const matchOptions = worktreeHostMatchOptions(state, repoId, executionHostId)
+
     const incomingDetected = known.worktrees.map((worktree) =>
       withRepoHostOwnership(worktree, executionHostId, setup)
     )
+
     const priorDetected = state.detectedWorktreesByRepo[repoId]
+
     // Why: only the rows are ours to merge. This entry is keyed by repo alone, so adopting the fallback's
     // authoritative/source would demote a sibling host's completed scan and blank every authoritative-gated surface.
     const detected = {
@@ -154,20 +174,25 @@ export async function runKnownSshWorktreeFetch(
         matchOptions
       )
     }
+
     const worktrees = appendMissingWorktreesForHost(
       state.worktreesByRepo[repoId],
       toVisibleWorktrees(known, executionHostId, setup),
       executionHostId,
       matchOptions
     )
+
     const worktreesChanged = !areWorktreesEqual(state.worktreesByRepo[repoId], worktrees)
+
     const detectedChanged = !areDetectedWorktreeResultsEqual(
       state.detectedWorktreesByRepo[repoId],
       detected
     )
+
     if (!worktreesChanged && !detectedChanged) {
       return state
     }
+
     return {
       ...(worktreesChanged
         ? {
@@ -180,6 +205,7 @@ export async function runKnownSshWorktreeFetch(
         : {})
     }
   })
+
   return admitted ? known : null
 }
 
@@ -202,24 +228,29 @@ export function acquireDirectSshDetectedWorktreeRefresh(
 ): DirectSshDetectedWorktreeRefresh {
   const requestStartedState = store.getState()
   const requestStartedWorktrees = requestStartedState.worktreesByRepo[request.repoId]
+
   const ownerWasMissingAtStart = !requestStartedState.repos.some(
     (repo) => repo.id === request.repoId
   )
+
   const setup = getProjectHostSetupForRepoHost(
     requestStartedState,
     request.repoId,
     request.executionHostId
   )
+
   const settings = settingsForRepoOwner(
     requestStartedState,
     request.repoId,
     request.executionHostId
   )
+
   const options: DetectedWorktreeRefreshOptions = {
     executionHostId: request.executionHostId,
     directSshAuthority: request.authority,
     requireAuthoritative: request.requireAuthoritative
   }
+
   const lease = acquireDetectedWorktreeRefreshLeaseForRepo(settings, request.repoId, options)
   let mergedResult: HostQualifiedDetectedWorktreeResult | undefined
 
@@ -232,6 +263,7 @@ export function acquireDirectSshDetectedWorktreeRefresh(
       if (mergedResult) {
         return mergedResult
       }
+
       if (
         !qualifiedProviderResultIsAdmitted(
           providerResult,
@@ -245,12 +277,16 @@ export function acquireDirectSshDetectedWorktreeRefresh(
           lease.providerRequestId,
           request.executionHostId
         )
+
         return mergedResult
       }
+
       if (request.requireAuthoritative && providerResult.status !== 'complete') {
         mergedResult = providerResult
+
         return mergedResult
       }
+
       const refresh: AdmittedDetectedWorktreeRefresh = {
         status: 'admitted',
         result: providerResult.result,
@@ -258,6 +294,7 @@ export function acquireDirectSshDetectedWorktreeRefresh(
         executionHostId: request.executionHostId,
         directSshAuthority: request.authority
       }
+
       const admitted = mergeFetchedWorktrees(
         store.setState as Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
         {
@@ -269,9 +306,11 @@ export function acquireDirectSshDetectedWorktreeRefresh(
           refresh
         }
       )
+
       mergedResult = admitted
         ? providerResult
         : (staleDetectedWorktreeProviderResult(refresh) ?? providerResult)
+
       return mergedResult
     }
   }

@@ -39,15 +39,20 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
 
   const removeIndex = (id: string): void => {
     const connectionId = connectionByEntry.get(id)
+
     if (!connectionId) {
       return
     }
+
     connectionByEntry.delete(id)
     const set = byConnection.get(connectionId)
+
     if (!set) {
       return
     }
+
     set.delete(id)
+
     if (set.size === 0) {
       byConnection.delete(connectionId)
     }
@@ -55,26 +60,33 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
 
   const cleanupAndWait = (id: string): Promise<void> => {
     const cleanup = cleanups.get(id)
+
     if (!cleanup) {
       return Promise.resolve()
     }
+
     // Mirrors cleanupSubscriptionAndWait: join an in-flight attempt for this exact owner.
     const existing = inFlight.get(id)
+
     if (existing?.cleanup === cleanup) {
       return existing.promise
     }
+
     let result: void | Promise<void>
+
     try {
       result = cleanup()
     } catch (error) {
       result = Promise.reject(error)
     }
+
     const promise = Promise.resolve(result)
       .then(() => {
         // Only the generation that registered this callback may retire it.
         if (cleanups.get(id) !== cleanup) {
           return
         }
+
         cleanups.delete(id)
         removeIndex(id)
       })
@@ -83,7 +95,9 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
           inFlight.delete(id)
         }
       })
+
     inFlight.set(id, { cleanup, promise })
+
     return promise
   }
 
@@ -96,6 +110,7 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
     if (cleanups.get(id) !== expected) {
       return
     }
+
     cleanupSubscription(id)
   }
 
@@ -105,19 +120,25 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
     connectionId?: string
   ): void => {
     const existing = cleanups.get(id)
+
     if (existing) {
       removeIndex(id)
       cleanupOwned(id, existing)
     }
+
     cleanups.set(id, cleanup)
+
     if (!connectionId) {
       return
     }
+
     let set = byConnection.get(connectionId)
+
     if (!set) {
       set = new Set()
       byConnection.set(connectionId, set)
     }
+
     set.add(id)
     connectionByEntry.set(id, connectionId)
   }
@@ -126,6 +147,7 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
     registerSubscriptionCleanup,
     registerOwnedSubscriptionCleanup: (id, cleanup, connectionId) => {
       registerSubscriptionCleanup(id, cleanup, connectionId)
+
       return {
         releaseIfCurrent: () => cleanupOwned(id, cleanup)
       }
@@ -134,31 +156,40 @@ export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
     cleanupSubscriptionIfOwnedByConnection: (id, connectionId) => {
       if (!connectionId) {
         cleanupSubscription(id)
+
         return true
       }
+
       // Mirrors the production early-out: an unregistered id is already gone, not refused.
       if (!cleanups.has(id)) {
         return true
       }
+
       if (connectionByEntry.get(id) !== connectionId) {
         return false
       }
+
       cleanupSubscription(id)
+
       return true
     },
     cleanupSubscriptionsForConnection: (connectionId) => {
       const set = byConnection.get(connectionId)
+
       if (!set) {
         return
       }
+
       for (const id of Array.from(set)) {
         // A rebound id now belongs to another connection; skip it.
         if (connectionByEntry.get(id) !== connectionId) {
           set.delete(id)
           continue
         }
+
         cleanupSubscription(id)
       }
+
       if (set.size === 0) {
         byConnection.delete(connectionId)
       }

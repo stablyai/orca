@@ -24,6 +24,7 @@ describe('resolvePaneTitleDecision', () => {
       rendererOwnerAgentType: 'omp',
       userGpuMode: 'auto'
     })
+
     expect(decision.displayTitle).toBe('OMP ready')
     expect(decision.rawTitle).toBe('✦ Gemini CLI')
     // Why: the OMP owner renames the label and vetoes the Gemini glyph fallback.
@@ -40,6 +41,7 @@ describe('resolvePaneTitleDecision', () => {
       rendererOwnerAgentType: undefined,
       userGpuMode: 'auto'
     })
+
     expect(decision.displayTitle).toBe('OMP ready')
     expect(decision.rendererPolicy.gpuEnabled).toBe(false)
     expect(decision.rendererPolicy.reason).toBe('agent-compatibility')
@@ -53,6 +55,7 @@ describe('resolvePaneTitleDecision', () => {
       rendererOwnerAgentType: 'gemini',
       userGpuMode: 'auto'
     })
+
     expect(decision.rawTitle).toBe('✦ Gemini CLI')
     expect(decision.rendererPolicy.gpuEnabled).toBe(false)
     expect(decision.rendererPolicy.reason).toBe('agent-compatibility')

@@ -36,6 +36,7 @@ export function startMobileEndpointLifecycle(
     if (stopped) {
       return
     }
+
     const supervisor = createSupervisor(logical, host, onLog)
     owner.stop()
     owner = supervisor
@@ -70,6 +71,7 @@ export function startMobileEndpointLifecycle(
       if (reason !== 'network-change') {
         foreground = true
       }
+
       owner.nudge(reason)
     },
     stop() {

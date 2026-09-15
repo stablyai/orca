@@ -17,6 +17,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
 
   function withHome(run: (home: string) => void): void {
     const home = freshHome()
+
     try {
       run(home)
     } finally {
@@ -30,6 +31,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
         HOME: home,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
+
       const source = '// orca opencode status plugin\nexport const Plugin = () => ({})\n'
       const res = install({ opencodePluginSource: source })
 
@@ -48,6 +50,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
         HOME: home,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
+
       const source = '// v1\n'
       const dir = install({ opencodePluginSource: source }).overlayDirs.opencode as string
 
@@ -89,6 +92,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
         HOME: home,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
+
       const source = '// v1\n'
       const dir = install({ opencodePluginSource: source }).overlayDirs.opencode as string
       // Why: a rebuild that failed after the wipe leaves the dir but not the plugin;
@@ -106,6 +110,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
         HOME: home,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
+
       install({ opencodePluginSource: '// v1\n' })
       // Why: a mid-session Orca upgrade ships new plugin source; future spawns must see it.
       const dir = install({ opencodePluginSource: '// v2\n' }).overlayDirs.opencode as string
@@ -119,6 +124,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
         HOME: home,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
+
       const source = '// v1\n'
       const dir = install({ opencodePluginSource: source }).overlayDirs.opencode as string
       rmSync(dir, { recursive: true, force: true })
@@ -141,6 +147,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
         ORCA_OPENCODE_SOURCE_CONFIG_DIR: userConfig,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
+
       const dir = install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode as string
 
       expect(readFileSync(join(dir, 'opencode.json'), 'utf8')).toBe('{"model":"user-set"}')
@@ -161,6 +168,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
         HOME: home,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
+
       const dir = install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode as string
 
       expect(existsSync(join(dir, 'opencode.json'))).toBe(false)
@@ -171,9 +179,11 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
   it('rejects a source that exceeds the byte cap before writing anything', () => {
     withHome((home) => {
       const overlay = new PluginOverlayManager({ homeDir: home })
+
       const install = createInstallPluginsHandler(overlay, {
         HOME: home
       } as NodeJS.ProcessEnv)
+
       const tooBig = 'a'.repeat(PLUGIN_SOURCE_MAX_BYTES + 1)
       expect(() => install({ opencodePluginSource: tooBig })).toThrow(/byte cap/)
       expect(overlay.hasOpenCodeSource()).toBe(false)
@@ -185,6 +195,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home
       } as NodeJS.ProcessEnv)
+
       const res = install({})
       expect(res.installed.opencode).toBe(false)
       expect(res.overlayDirs.opencode).toBeUndefined()

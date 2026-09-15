@@ -20,6 +20,7 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
     if (session.disposed) {
       return
     }
+
     const unregisterSerializer = registerPtySerializer(
       ptyId,
       async (opts) => {
@@ -27,12 +28,15 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
           if (isTerminalWritePipelineCertifiedDead(session.pane.terminal)) {
             return null
           }
+
           await waitForTerminalOutputParsed(session.pane.terminal)
+
           // Certification can land while the serializer waits for an older
           // write; never publish a fossil frame from a dead renderer.
           if (isTerminalWritePipelineCertifiedDead(session.pane.terminal)) {
             return null
           }
+
           // Why serializeWithAbsoluteCursor: SerializeAddon's relative
           // cursor restore lands one column short when replay of a
           // margin-filling final row leaves the target wrap-pending.
@@ -48,8 +52,10 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
             session.pane.terminal,
             { scrollback: opts?.scrollbackRows }
           )
+
           const orderedSeq =
             session.rendererOrderedPtyId === ptyId ? session.rendererOrderedSeq : null
+
           // Why snapshotFlags and not `flags`: this pane may itself have
           // consumed an old-host snapshot that proved nothing, and its
           // conservative `0` fallback must not be republished downstream as
@@ -57,6 +63,7 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
           const provenKittyFlags = session.kittyKeyboardModes.hasProvenBaseline
             ? session.kittyKeyboardModes.snapshotFlags
             : undefined
+
           return {
             data,
             cols: session.pane.terminal.cols,
@@ -76,12 +83,15 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
         clearTerminalScrollbackAndFollowOutput(session.pane.terminal)
       }
     )
+
     const unregisterTitleSource = registerPtyTitleSource(ptyId, (handler) =>
       session.pane.terminal.onTitleChange(handler)
     )
+
     const origOnDataDisposableDispose = session.onDataDisposable.dispose.bind(
       session.onDataDisposable
     )
+
     session.onDataDisposable.dispose = () => {
       unregisterTitleSource()
       unregisterSerializer()

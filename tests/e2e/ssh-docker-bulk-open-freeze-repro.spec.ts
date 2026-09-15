@@ -29,8 +29,11 @@ import { startRendererLagProbe } from './paired-runtime-retention-metrics'
 import { HARD_FREEZE_LAG_MS, SOFT_FREEZE_LAG_MS } from './helpers/remote-session-bulk-open-oracle'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const REPORT_DIR = path.join(process.cwd(), 'test-results', 'freeze-repro')
+
 const SESSION_SPLITS = 5
+
 const FLOOD_READ_CHARS = 80_000
 
 function shellQuote(value: string): string {
@@ -47,6 +50,7 @@ function continuousFloodCommand(runId: string, index: number): string {
     "setInterval(()=>{f++;process.stdout.write('BG:'+id+':'+f+':'+c+'\\n')},8)",
     'process.stdin.resume()'
   ].join(';')
+
   return `node -e ${shellQuote(script)}`
 }
 
@@ -61,6 +65,7 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
   }, testInfo) => {
     test.setTimeout(420_000)
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       registerPostElectronShutdownCleanup(async () => {
@@ -113,12 +118,14 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
       // Burst open: return to terminal and cycle panes rapidly.
       const openProbe = await startRendererLagProbe(orcaPage)
       await orcaPage.evaluate(() => window.__store?.getState().setActiveView('terminal'))
+
       for (let pass = 0; pass < 3; pass += 1) {
         for (let i = 0; i < SESSION_SPLITS; i += 1) {
           await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+]' : 'Control+]')
           await orcaPage.waitForTimeout(50)
         }
       }
+
       await orcaPage.waitForTimeout(3_000)
       const bulkOpenMaxLagMs = await openProbe.evaluate((probe) => probe.stop())
       await openProbe.dispose()
@@ -135,6 +142,7 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
         await new Promise<void>((r) =>
           requestAnimationFrame(() => requestAnimationFrame(() => r()))
         )
+
         return performance.now() - started
       })
 
@@ -165,6 +173,7 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
         target,
         `ps aux | grep -c '[n]ode -e' || true`
       )
+
       expect(Number(hostFrames) || 0).toBeGreaterThan(0)
 
       if (report.hardFreeze) {
@@ -172,6 +181,7 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
           `HARD FREEZE on Docker SSH: lag=${bulkOpenMaxLagMs.toFixed(0)}ms interaction=${interactionProbeMs.toFixed(0)}ms`
         )
       }
+
       if (report.softFreeze) {
         throw new Error(
           `SOFT FREEZE on Docker SSH: lag=${bulkOpenMaxLagMs.toFixed(0)}ms interaction=${interactionProbeMs.toFixed(0)}ms`

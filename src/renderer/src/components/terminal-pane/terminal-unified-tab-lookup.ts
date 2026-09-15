@@ -17,20 +17,24 @@ export function getCachedUnifiedTerminalTabForWorktree(
   terminalTabId: string
 ): Tab | null {
   const unifiedTabs = unifiedTabsByWorktree[worktreeId]
+
   if (!unifiedTabs) {
     return null
   }
 
   let lookup = terminalTabLookupByUnifiedTabs.get(unifiedTabs)
+
   if (!lookup) {
     // Why: every retained TerminalPane reads this tab on every store update.
     // Share one immutable-array index instead of repeating linear scans.
     lookup = new Map()
+
     for (const tab of unifiedTabs) {
       if (tab.contentType === 'terminal') {
         lookup.set(tab.entityId, tab)
       }
     }
+
     terminalTabLookupByUnifiedTabs.set(unifiedTabs, lookup)
   }
 
@@ -64,6 +68,7 @@ export function selectUnifiedTerminalTabChatFields(
     worktreeId,
     terminalTabId
   )
+
   return {
     unifiedTabId: tab?.id,
     structuredSessionAgent: tab?.agentSessionAgent,

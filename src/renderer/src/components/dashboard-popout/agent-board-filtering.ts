@@ -57,6 +57,7 @@ function workspaceMatchesFilters(
   filters: DashboardFilters
 ): boolean {
   const reviewState = workspace.review?.state ?? (workspace.hasReview ? null : 'none')
+
   return (
     (normalizedQuery.length === 0 || workspaceSearchText(workspace).includes(normalizedQuery)) &&
     (filters.projects.length === 0 || filters.projects.includes(workspace.repoId)) &&
@@ -74,8 +75,10 @@ export function filterDashboardCards(
   filters: DashboardFilters
 ): DashboardCard[] {
   const normalizedQuery = query.trim().toLocaleLowerCase()
+
   return cards.filter((card) => {
     const reviewState = card.review?.state ?? (card.hasReview ? null : 'none')
+
     return (
       (normalizedQuery.length === 0 || cardSearchText(card).includes(normalizedQuery)) &&
       (filters.projects.length === 0 || filters.projects.includes(card.repoId)) &&
@@ -94,6 +97,7 @@ export function filterDashboardWorkspaces(
   filters: DashboardFilters
 ): DashboardWorkspace[] {
   const normalizedQuery = query.trim().toLocaleLowerCase()
+
   return workspaces.filter((workspace) =>
     workspaceMatchesFilters(workspace, normalizedQuery, filters)
   )

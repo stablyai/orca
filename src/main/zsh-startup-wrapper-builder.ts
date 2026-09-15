@@ -71,8 +71,11 @@ const AGENT_TEAMS_PATH_RESTORE_BLOCK = `__orca_restore_agent_teams_path() {
 __orca_restore_agent_teams_path`
 
 const OPENCODE_CONFIG_DIR_RESTORE = `[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"`
+
 const MIMOCODE_HOME_RESTORE = `[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"`
+
 const REMOTE_CLI_BIN_DIR_RESTORE = `[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac`
+
 const CODEX_HOME_RESTORE = `# Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"`
 
@@ -109,9 +112,11 @@ function indentBlock(block: string, indent: string): string {
 /** One hook feature: `if __orca_has_feature <name>; then ... fi`. */
 function featureGuard(name: string, body: (string | null)[]): string | null {
   const blocks = body.filter((block): block is string => block !== null)
+
   if (blocks.length === 0) {
     return null
   }
+
   return `  if __orca_has_feature ${name}; then\n${indentBlock(joinBlocks(blocks).replace(/\n$/, ''), '    ')}\n  fi`
 }
 
@@ -149,6 +154,7 @@ function buildDeferredInit(spec: ZshStartupHookSpec): string {
     precmd_functions=(\${precmd_functions:#__orca_deferred_init})
   fi`
     : `  precmd_functions=(\${precmd_functions:#__orca_deferred_init})`
+
   const lineInitRegistration = spec.startupCommandDelivery
     ? `  if __orca_has_feature ready || __orca_has_feature startup; then
     __orca_emit_ready_marker=""

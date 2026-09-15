@@ -43,17 +43,23 @@ function legacySelectForWorktree(
   const tabs = (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []
   const tabIds = new Set(tabs.map((tab) => tab.id))
   const out: Record<string, AgentStatusOrchestrationContext> = Object.create(null)
+
   const runtimeAgentOrchestrationByPaneKey =
     state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_RECORD
+
   const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
   const retainedAgentsByPaneKey = state.retainedAgentsByPaneKey ?? EMPTY_RECORD
+
   for (const [paneKey, orchestration] of Object.entries(runtimeAgentOrchestrationByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
+
     const parsedParent = orchestration.parentPaneKey
       ? parsePaneKey(orchestration.parentPaneKey)
       : null
+
     const liveEntry = agentStatusByPaneKey[paneKey]
     const retainedEntry = retainedAgentsByPaneKey[paneKey]
+
     if (
       (parsed && tabIds.has(parsed.tabId)) ||
       (parsedParent && tabIds.has(parsedParent.tabId)) ||
@@ -63,6 +69,7 @@ function legacySelectForWorktree(
       out[paneKey] = orchestration
     }
   }
+
   return out
 }
 
@@ -73,12 +80,14 @@ function createRandom(seed: number): () => number {
   // small integer keeps the first output under 0.019, so `1 + pick(5)` was 1 for
   // every seed here and the suite only ever built single-worktree stores.
   let state = Math.imul(seed >>> 0 || 1, 0x9e37_79b1) >>> 0 || 1
+
   return () => {
     state ^= state << 13
     state >>>= 0
     state ^= state >> 17
     state ^= state << 5
     state >>>= 0
+
     return state / 0x1_00_00_00_00
   }
 }
@@ -127,9 +136,11 @@ describe('selectWorktreeAgentOrchestration', () => {
       const worktreeIds = Array.from({ length: worktreeCount }, (_, index) => `wt-${index}`)
       const tabsByWorktree: Record<string, TerminalTab[]> = {}
       const tabIds: string[] = []
+
       for (const worktreeId of worktreeIds) {
         const tabCount = pick(3)
         const tabs: TerminalTab[] = []
+
         for (let tabIndex = 0; tabIndex < tabCount; tabIndex += 1) {
           // Why a small shared id space: tab ids collide across worktrees on
           // 131 of these 300 seeds, which is the multi-attribution path.
@@ -137,6 +148,7 @@ describe('selectWorktreeAgentOrchestration', () => {
           tabs.push(makeTab(tabId))
           tabIds.push(tabId)
         }
+
         tabsByWorktree[worktreeId] = tabs
       }
 
@@ -144,29 +156,36 @@ describe('selectWorktreeAgentOrchestration', () => {
       const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {}
       const retainedAgentsByPaneKey: Record<string, RetainedAgentEntry> = {}
       const contextCount = pick(8)
+
       for (let index = 0; index < contextCount; index += 1) {
         const ownerTabId =
           random() < 0.7 && tabIds.length > 0 ? tabIds[pick(tabIds.length)] : 'tab-orphan'
+
         // Why malformed runtime keys: a pane key that is not `tab:uuid` reaches
         // this selector unvalidated, and `__proto__` is the one that changes
         // meaning depending on how the output record is built.
         const keyRoll = random()
+
         const paneKey =
           keyRoll < 0.08
             ? MALFORMED_RUNTIME_KEYS[pick(MALFORMED_RUNTIME_KEYS.length)]
             : paneKeyFor(ownerTabId, index)
+
         const parentRoll = random()
+
         const parentPaneKey =
           parentRoll < 0.3 && tabIds.length > 0
             ? paneKeyFor(tabIds[pick(tabIds.length)], 900 + index)
             : parentRoll < 0.4
               ? 'malformed:parent:key'
               : undefined
+
         defineKey(runtimeAgentOrchestrationByPaneKey, paneKey, {
           taskId: `task-${index}`,
           dispatchId: `dispatch-${index}`,
           ...(parentPaneKey === undefined ? {} : { parentPaneKey })
         })
+
         if (random() < 0.35) {
           defineKey(
             agentStatusByPaneKey,
@@ -174,6 +193,7 @@ describe('selectWorktreeAgentOrchestration', () => {
             makeEntry(paneKey, `wt-${pick(worktreeCount + 1)}`)
           )
         }
+
         if (random() < 0.25) {
           defineKey(
             retainedAgentsByPaneKey,
@@ -196,6 +216,7 @@ describe('selectWorktreeAgentOrchestration', () => {
         const expected = legacySelectForWorktree(state, worktreeId)
         const actual = selectWorktreeAgentOrchestration(state, worktreeId)
         expect(Object.keys(actual), `seed ${seed} / ${worktreeId}`).toEqual(Object.keys(expected))
+
         for (const paneKey of Object.keys(expected)) {
           expect(actual[paneKey], `seed ${seed} / ${worktreeId} / ${paneKey}`).toBe(
             expected[paneKey]
@@ -223,6 +244,7 @@ describe('selectWorktreeAgentOrchestration', () => {
 
   it('keeps record identity stable across publications that change nothing it reads', () => {
     const context = { taskId: 't', dispatchId: 'd' }
+
     const base = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
       runtimeAgentOrchestrationByPaneKey: { [paneKeyFor('tab-1', 0)]: context },
@@ -239,12 +261,14 @@ describe('selectWorktreeAgentOrchestration', () => {
       ...base,
       agentStatusByPaneKey: { unrelated: makeEntry('unrelated', 'wt-9') }
     } as unknown as IndexState
+
     expect(selectWorktreeAgentOrchestration(liveChurn, 'wt-1')).toBe(first)
 
     const retainedChurn = {
       ...liveChurn,
       retainedAgentsByPaneKey: { unrelated: makeRetained('unrelated', 'wt-9') }
     } as unknown as IndexState
+
     expect(selectWorktreeAgentOrchestration(retainedChurn, 'wt-1')).toBe(first)
   })
 
@@ -256,6 +280,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     const context = { taskId: 't', dispatchId: 'd' }
     const tabsByWorktree = { 'wt-1': [makeTab('tab-1')] }
     const runtimeAgentOrchestrationByPaneKey = { [paneKey]: context }
+
     const publish = (agentStatusByPaneKey: Record<string, AgentStatusEntry>): IndexState =>
       ({
         tabsByWorktree,
@@ -268,6 +293,7 @@ describe('selectWorktreeAgentOrchestration', () => {
       publish({ [paneKey]: makeEntry(paneKey, 'wt-1') }),
       'wt-1'
     )
+
     const buildsAfterFirst = _getWorktreeAgentOrchestrationIndexBuildCountForTest()
 
     for (let tick = 0; tick < 25; tick += 1) {
@@ -277,8 +303,10 @@ describe('selectWorktreeAgentOrchestration', () => {
         [paneKey]: makeEntry(paneKey, 'wt-1'),
         [`unrelated-${tick}`]: makeEntry(`unrelated-${tick}`, 'wt-9')
       })
+
       expect(selectWorktreeAgentOrchestration(published, 'wt-1')).toBe(first)
     }
+
     expect(_getWorktreeAgentOrchestrationIndexBuildCountForTest()).toBe(buildsAfterFirst)
 
     // ...and the projection is still load-bearing: moving that pane must re-attribute it.
@@ -295,26 +323,32 @@ describe('selectWorktreeAgentOrchestration', () => {
     const contextCount = 6
     const tabsByWorktree: Record<string, TerminalTab[]> = {}
     const runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext> = {}
+
     for (let index = 0; index < cardCount; index += 1) {
       tabsByWorktree[`wt-${index}`] = [makeTab(`tab-${index}`)]
     }
+
     for (let index = 0; index < contextCount; index += 1) {
       runtimeAgentOrchestrationByPaneKey[paneKeyFor(`tab-${index}`, index)] = {
         taskId: `t-${index}`,
         dispatchId: `d-${index}`
       }
     }
+
     let liveReads = 0
     let retainedReads = 0
+
     const countReads = (target: object, onRead: () => void): object =>
       new Proxy(target, {
         get(source, key, receiver) {
           if (typeof key === 'string') {
             onRead()
           }
+
           return Reflect.get(source, key, receiver)
         }
       })
+
     const state = {
       tabsByWorktree,
       runtimeAgentOrchestrationByPaneKey,
@@ -329,6 +363,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     for (let card = 0; card < cardCount; card += 1) {
       selectWorktreeAgentOrchestration(state, `wt-${card}`)
     }
+
     expect({ liveReads, retainedReads }).toEqual({
       liveReads: contextCount,
       retainedReads: contextCount
@@ -338,19 +373,23 @@ describe('selectWorktreeAgentOrchestration', () => {
   it('rebuilds when a source it reads actually changes', () => {
     const context = { taskId: 't', dispatchId: 'd' }
     const paneKey = paneKeyFor('tab-1', 0)
+
     const base = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
       runtimeAgentOrchestrationByPaneKey: { [paneKey]: context },
       agentStatusByPaneKey: {},
       retainedAgentsByPaneKey: {}
     } as unknown as IndexState
+
     selectWorktreeAgentOrchestration(base, 'wt-1')
 
     const replacement = { taskId: 't2', dispatchId: 'd2' }
+
     const replaced = {
       ...base,
       runtimeAgentOrchestrationByPaneKey: { [paneKey]: replacement }
     } as unknown as IndexState
+
     expect(selectWorktreeAgentOrchestration(replaced, 'wt-1')[paneKey]).toBe(replacement)
 
     // Why: moving the tab to another worktree must re-attribute, which only
@@ -359,6 +398,7 @@ describe('selectWorktreeAgentOrchestration', () => {
       ...replaced,
       tabsByWorktree: { 'wt-2': [makeTab('tab-1')] }
     } as unknown as IndexState
+
     expect(selectWorktreeAgentOrchestration(movedTab, 'wt-1')).toBe(
       EMPTY_WORKTREE_AGENT_ORCHESTRATION
     )
@@ -367,18 +407,22 @@ describe('selectWorktreeAgentOrchestration', () => {
 
   it('treats a missing or emptied orchestration map as empty without reading other slices', () => {
     let forbiddenReads = 0
+
     const coldState = {
       runtimeAgentOrchestrationByPaneKey: {},
       get tabsByWorktree() {
         forbiddenReads += 1
+
         return {}
       },
       get agentStatusByPaneKey() {
         forbiddenReads += 1
+
         return {}
       },
       get retainedAgentsByPaneKey() {
         forbiddenReads += 1
+
         return {}
       }
     } as unknown as IndexState
@@ -394,6 +438,7 @@ describe('selectWorktreeAgentOrchestration', () => {
 
   it('does not attribute unowned panes to a nullish worktree id', () => {
     const paneKey = paneKeyFor('tab-orphan', 0)
+
     const state = {
       tabsByWorktree: {},
       runtimeAgentOrchestrationByPaneKey: { [paneKey]: { taskId: 't', dispatchId: 'd' } },
@@ -427,6 +472,7 @@ describe('selectWorktreeAgentOrchestration', () => {
 
     const stateA = buildState('a')
     const stateB = buildState('b')
+
     for (let round = 0; round < 4; round += 1) {
       for (const [state, suffix] of [
         [stateA, 'a'],
@@ -448,6 +494,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     // Why: writing this key into a normal object silently drops the entry and
     // repoints the record's prototype at the orchestration context.
     const context = { taskId: 't', dispatchId: 'd' }
+
     const state = {
       tabsByWorktree: {},
       runtimeAgentOrchestrationByPaneKey: Object.fromEntries([['__proto__', context]]),
@@ -465,15 +512,18 @@ describe('selectWorktreeAgentOrchestration', () => {
     // Why: the empty map is the common case, so re-enumerating it per card is
     // exactly the per-publication cost this index exists to remove.
     let enumerations = 0
+
     const runtimeAgentOrchestrationByPaneKey = new Proxy(
       {},
       {
         ownKeys(target) {
           enumerations += 1
+
           return Reflect.ownKeys(target)
         }
       }
     )
+
     const state = {
       tabsByWorktree: {},
       runtimeAgentOrchestrationByPaneKey,
@@ -486,6 +536,7 @@ describe('selectWorktreeAgentOrchestration', () => {
         EMPTY_WORKTREE_AGENT_ORCHESTRATION
       )
     }
+
     expect(enumerations).toBe(1)
   })
 
@@ -494,6 +545,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     // build's record. A mounted card holds that object across renders, so a later
     // build writing into it would break React's snapshot contract silently.
     const paneKey = paneKeyFor('tab-1', 0)
+
     const base = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
       runtimeAgentOrchestrationByPaneKey: { [paneKey]: { taskId: 't', dispatchId: 'd' } },
@@ -505,6 +557,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     const heldKeys = Object.keys(held)
 
     const secondPaneKey = paneKeyFor('tab-1', 1)
+
     const grown = {
       ...base,
       runtimeAgentOrchestrationByPaneKey: {
@@ -512,6 +565,7 @@ describe('selectWorktreeAgentOrchestration', () => {
         [secondPaneKey]: { taskId: 't2', dispatchId: 'd2' }
       }
     } as unknown as IndexState
+
     expect(Object.keys(selectWorktreeAgentOrchestration(grown, 'wt-1'))).toHaveLength(2)
     expect(Object.keys(held)).toEqual(heldKeys)
   })

@@ -20,12 +20,14 @@ export function PendingCredentialCleanupCard() {
     useCallback(() => {
       let active = true
       setCredentialRetryFailed(false)
+
       const refresh = () => {
         const generation = ++credentialRefreshGenerationRef.current
         void loadPendingHostCredentialCleanup().then((state) => {
           if (active && generation === credentialRefreshGenerationRef.current) {
             setPendingCredentialIds(state.ids)
             setCredentialStorageUnreadable(state.storageUnreadable)
+
             // Why: neutral copy once the queue is confirmed empty so a later
             // pending set does not inherit a previous Retry failure message.
             if (state.ids.length === 0 && !state.storageUnreadable) {
@@ -34,8 +36,10 @@ export function PendingCredentialCleanupCard() {
           }
         })
       }
+
       const unsubscribe = subscribePendingHostCredentialCleanup(refresh)
       refresh()
+
       return () => {
         active = false
         credentialRefreshGenerationRef.current += 1
@@ -48,8 +52,10 @@ export function PendingCredentialCleanupCard() {
     if (retryingCredentialCleanup) {
       return
     }
+
     setCredentialRetryFailed(false)
     setRetryingCredentialCleanup(true)
+
     try {
       const result = await retryPendingHostCredentialCleanup()
       setPendingCredentialIds(result.remainingIds)
@@ -63,6 +69,7 @@ export function PendingCredentialCleanupCard() {
   }, [retryingCredentialCleanup])
 
   const pendingCredentialCount = pendingCredentialIds.length
+
   // Why: show the cleanup card whenever cleanup is pending OR the durable queue
   // is unreadable — an unreadable queue can hide an orphaned token, so keep a
   // retry affordance rather than a silently-empty (hidden) section.

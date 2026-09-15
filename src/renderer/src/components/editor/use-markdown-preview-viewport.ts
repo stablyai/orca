@@ -19,6 +19,7 @@ function clearMarkdownPreviewTimeout(timeoutRef: MutableRefObject<number | null>
   if (timeoutRef.current === null) {
     return
   }
+
   window.clearTimeout(timeoutRef.current)
   timeoutRef.current = null
 }
@@ -71,8 +72,10 @@ export function useMarkdownPreviewViewport({
       if (matchesRef.current.length === 0) {
         return
       }
+
       setActiveMatchIndex((cur) => {
         const base = cur >= 0 ? cur : direction === 1 ? -1 : 0
+
         return (base + direction + matchesRef.current.length) % matchesRef.current.length
       })
     },
@@ -124,6 +127,7 @@ export function useMarkdownPreviewViewport({
     (node: HTMLDivElement | null) => {
       rootRef.current = node
       reviewNotesCopyMountedRef.current = node !== null
+
       if (node === null) {
         cleanupPreviewSurfaceTimers()
       }
@@ -135,24 +139,28 @@ export function useMarkdownPreviewViewport({
     (rawAnchor: string): boolean => {
       const container = rootRef.current
       const body = bodyRef.current
+
       if (!container || !body) {
         return false
       }
 
       const decodedAnchor = decodeMarkdownPreviewAnchor(rawAnchor)
       let target: HTMLElement | null = null
+
       for (const candidate of body.querySelectorAll<HTMLElement>('[id]')) {
         if (candidate.id === decodedAnchor) {
           target = candidate
           break
         }
       }
+
       if (!target) {
         return false
       }
 
       container.scrollTo({ top: getMarkdownPreviewAnchorScrollTop(container, target) })
       target.focus({ preventScroll: true })
+
       return true
     },
     [bodyRef, rootRef]
@@ -167,6 +175,7 @@ export function useMarkdownPreviewViewport({
 
   useEffect(() => {
     const body = bodyRef.current
+
     if (!body) {
       return
     }
@@ -177,6 +186,7 @@ export function useMarkdownPreviewViewport({
       matchesRef.current = []
       setMatchCount(0)
       clearMarkdownPreviewSearchHighlights(instanceId)
+
       return
     }
 
@@ -220,22 +230,26 @@ export function useMarkdownPreviewViewport({
     const tryRevealAnchor = (): void => {
       if (scrollToAnchor(initialAnchor)) {
         lastAppliedInitialAnchorRef.current = initialAnchor
+
         return
       }
 
       attempts += 1
+
       if (attempts < 30) {
         frameId = window.requestAnimationFrame(tryRevealAnchor)
       }
     }
 
     tryRevealAnchor()
+
     return () => window.cancelAnimationFrame(frameId)
   }, [content, initialAnchor, lastAppliedInitialAnchorRef, scrollToAnchor])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       const root = rootRef.current
+
       if (!root) {
         return
       }
@@ -250,6 +264,7 @@ export function useMarkdownPreviewViewport({
         event.preventDefault()
         event.stopPropagation()
         openSearch()
+
         return
       }
 
@@ -263,21 +278,27 @@ export function useMarkdownPreviewViewport({
         root,
         selection: window.getSelection()
       })
+
       if (reviewNoteKey.action === 'consume') {
         event.preventDefault()
         event.stopPropagation()
+
         return
       }
+
       if (reviewNoteKey.action === 'clear-stale-and-ignore') {
         activeAnnotationBlockKeyRef.current = null
         setActiveAnnotationBlockKey(null)
+
         return
       }
+
       if (reviewNoteKey.action === 'open') {
         event.preventDefault()
         event.stopPropagation()
         activeAnnotationBlockKeyRef.current = reviewNoteKey.blockKey
         setActiveAnnotationBlockKey(reviewNoteKey.blockKey)
+
         return
       }
 
@@ -294,6 +315,7 @@ export function useMarkdownPreviewViewport({
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [
     activeAnnotationBlockKeyRef,

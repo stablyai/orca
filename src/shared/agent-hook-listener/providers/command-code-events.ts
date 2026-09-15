@@ -19,6 +19,7 @@ export function normalizeCommandCodeEvent(
       : eventName === 'Stop'
         ? 'done'
         : null
+
   if (!stateName) {
     return null
   }

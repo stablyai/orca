@@ -23,23 +23,30 @@ export async function publishMultiplexInitialSnapshot(
   const { runtime, streams, emit } = state
   const { ptyId } = stream
   const isMobile = stream.isMobile
+
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
+
   let read = await runtime.readTerminal(request.terminal)
   let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+
   if (state.closed || streams.get(request.streamId) !== stream) {
     return null
   }
+
   let initialOutputOverflowed = forcedInitialSnapshotTruncated
+
   if (stream.pendingOutputOverflowed) {
     stream.pendingOutput.splice(0)
     stream.pendingOutputBytes = 0
     stream.pendingOutputOverflowed = false
     read = await runtime.readTerminal(request.terminal)
     serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+
     if (state.closed || streams.get(request.streamId) !== stream) {
       return null
     }
+
     if (stream.pendingOutputOverflowed) {
       initialOutputOverflowed = true
       stream.pendingOutput.splice(0)
@@ -47,6 +54,7 @@ export async function publishMultiplexInitialSnapshot(
       stream.pendingOutputOverflowed = false
     }
   }
+
   const size = runtime.getTerminalSize(ptyId)
   const displayMode = runtime.getMobileDisplayMode(ptyId)
   const layoutSeq = runtime.getLayout(ptyId)?.seq
@@ -84,6 +92,7 @@ export async function publishMultiplexInitialSnapshot(
           'initial-snapshot'
         )
       : null
+
   const snapshotPublication = sendSnapshotFrames(
     (opcode, payload) => state.sendFrame(request.streamId, opcode, payload),
     {
@@ -104,8 +113,10 @@ export async function publishMultiplexInitialSnapshot(
       data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
     }
   )
+
   const replacement = stream.sourceRangeReplacement
   stream.sourceRangeReplacement = null
+
   if (replacement) {
     const committed =
       snapshotPublication.published &&
@@ -115,6 +126,7 @@ export async function publishMultiplexInitialSnapshot(
         source: serialized.source,
         seq: serialized.seq
       })
+
     if (!committed) {
       runtime.rollbackRemoteTerminalSourceRangeReplacement(
         replacement,
@@ -122,20 +134,25 @@ export async function publishMultiplexInitialSnapshot(
       )
     }
   }
+
   // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
   stream.lastResizeCols = serialized?.cols ?? size?.cols
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)
+
   if (!initialOutputOverflowed) {
     for (const chunk of pendingOutput) {
       const uncovered = getOutputAfterSnapshotSeq(chunk, snapshotOutputSeq)
+
       if (uncovered) {
         stream.outputBatcher.push(uncovered.data, uncovered.meta)
       }
     }
   }
+
   stream.pendingOutputBytes = 0
   stream.pendingOutputOverflowed = false
   stream.outputBatcher.flush()
+
   return { isMobile, size, displayMode }
 }

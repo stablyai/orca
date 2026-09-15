@@ -20,7 +20,9 @@ export type PreflightSlice = {
 }
 
 let nonForcedPreflightRequest: { key: string; promise: Promise<void> } | null = null
+
 let forcedPreflightRequest: { key: string; promise: Promise<void> } | null = null
+
 let latestPreflightRequestId = 0
 
 function getErrorMessage(error: unknown): string {
@@ -34,9 +36,11 @@ function buildPreflightArgs(
   const wslDistro = context?.wslDistro
   const wslDefault = context?.wslDefault === true
   const projectRuntime = context?.projectRuntime
+
   if (!force && !wslDistro && !wslDefault && !projectRuntime) {
     return undefined
   }
+
   return {
     ...(force ? { force: true } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
@@ -69,12 +73,15 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     const force = options?.force === true
     const context = getLocalPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
+
     if (!force && forcedPreflightRequest?.key === contextKey) {
       return forcedPreflightRequest.promise
     }
+
     if (!force && nonForcedPreflightRequest?.key === contextKey) {
       return nonForcedPreflightRequest.promise
     }
+
     if (force && forcedPreflightRequest?.key === contextKey) {
       return forcedPreflightRequest.promise
     }
@@ -91,6 +98,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     })
 
     const localPreflightCheck = window.api?.preflight?.check
+
     const request = (
       runtimeTarget.kind === 'environment'
         ? callRuntimeRpc<PreflightStatus>(runtimeTarget, 'preflight.check', force ? { force } : {})
@@ -102,6 +110,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
         if (requestId !== latestPreflightRequestId) {
           return
         }
+
         set({
           preflightStatus: status,
           preflightStatusChecked: true,
@@ -114,6 +123,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
         if (requestId !== latestPreflightRequestId) {
           return
         }
+
         set({
           preflightStatusChecked: true,
           preflightStatusContextKey: contextKey,
@@ -125,6 +135,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
         if (!force && nonForcedPreflightRequest?.promise === request) {
           nonForcedPreflightRequest = null
         }
+
         if (force && forcedPreflightRequest?.promise === request) {
           forcedPreflightRequest = null
         }

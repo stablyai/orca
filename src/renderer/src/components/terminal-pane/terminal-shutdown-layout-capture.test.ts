@@ -4,6 +4,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
+
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const
 
 // Why: capture now appends an absolute cursor restore (see
@@ -69,6 +70,7 @@ function mockRootForPane(paneId: number, leafId: string = LEAF_ID): HTMLDivEleme
     classList: ['pane'],
     dataset: { paneId: String(paneId), leafId }
   })
+
   return new MockHTMLElement({ firstElementChild: pane }) as unknown as HTMLDivElement
 }
 
@@ -78,15 +80,18 @@ function mockRootForSplit(firstPaneId = 1, secondPaneId = 2): HTMLDivElement {
     dataset: { paneId: String(firstPaneId), leafId: LEAF_ID },
     style: { flex: '1' }
   })
+
   const second = new MockHTMLElement({
     classList: ['pane'],
     dataset: { paneId: String(secondPaneId), leafId: LEAF_ID_2 },
     style: { flex: '1' }
   })
+
   const split = new MockHTMLElement({
     classList: ['pane-split'],
     children: [first, second]
   })
+
   return new MockHTMLElement({ firstElementChild: split }) as unknown as HTMLDivElement
 }
 
@@ -96,12 +101,14 @@ describe('captureTerminalShutdownLayout', () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const measure = vi.spyOn(byteLimits, 'measureUtf8ByteLength')
     const contents = 'x'.repeat(32 * 1024)
+
     const pane = {
       id: 1,
       leafId: LEAF_ID,
       terminal: mockTerminal(5_000),
       serializeAddon: { serialize: vi.fn(() => contents) }
     }
+
     try {
       const layout = captureTerminalShutdownLayout({
         manager: { getPanes: () => [pane], getActivePane: () => pane } as never,
@@ -111,6 +118,7 @@ describe('captureTerminalShutdownLayout', () => {
         paneTitlesByPaneId: {},
         existingLayout: undefined
       })
+
       expect(layout.buffersByLeafId).toEqual({ [LEAF_ID]: `${contents}${CURSOR_HOME}` })
       expect(pane.serializeAddon.serialize).toHaveBeenCalledExactlyOnceWith({ scrollback: 5_000 })
       expect(measure.mock.calls.length).toBe(0)
@@ -123,21 +131,27 @@ describe('captureTerminalShutdownLayout', () => {
     'preserves exact-cap decisions and probe options for %j',
     async (unit) => {
       const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+
       for (const delta of [-1, 0, 1]) {
         const payloadBytes =
           TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + delta - CURSOR_HOME.length
+
         const unitBytes = Buffer.byteLength(unit)
+
         const contents =
           unit.repeat(Math.floor(payloadBytes / unitBytes)) + 'x'.repeat(payloadBytes % unitBytes)
+
         const serialize = vi.fn((options?: { scrollback?: number }) =>
           options?.scrollback === 5_000 ? contents : 'short'
         )
+
         const pane = Object.freeze({
           id: 1,
           leafId: LEAF_ID,
           terminal: mockTerminal(5_000),
           serializeAddon: { serialize }
         })
+
         const layout = captureTerminalShutdownLayout({
           manager: { getPanes: () => [pane], getActivePane: () => pane } as never,
           container: mockRootForPane(1),
@@ -146,6 +160,7 @@ describe('captureTerminalShutdownLayout', () => {
           paneTitlesByPaneId: {},
           existingLayout: undefined
         })
+
         const expected = delta <= 0 ? contents : 'short'
         expect(layout.buffersByLeafId).toEqual({ [LEAF_ID]: `${expected}${CURSOR_HOME}` })
         expect(serialize.mock.calls.map(([options]) => options?.scrollback)).toEqual(
@@ -158,10 +173,12 @@ describe('captureTerminalShutdownLayout', () => {
   it('flushes queued terminal output before serializing shutdown scrollback', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const order: string[] = []
+
     const terminal = {
       ...mockTerminal(1_000),
       pendingOutput: ''
     }
+
     const pane = {
       id: 1,
       leafId: LEAF_ID,
@@ -170,14 +187,17 @@ describe('captureTerminalShutdownLayout', () => {
       serializeAddon: {
         serialize: vi.fn(() => {
           order.push('serialize')
+
           return `snapshot:${terminal.pendingOutput}`
         })
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       getActivePane: vi.fn(() => pane)
     }
+
     mocks.flushTerminalOutput.mockImplementation((target: typeof terminal) => {
       expect(target).toBe(terminal)
       order.push('flush')
@@ -206,6 +226,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('skips local shutdown scrollback serialization while preserving layout metadata', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+
     const pane = {
       id: 1,
       leafId: LEAF_ID,
@@ -215,6 +236,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => 'x'.repeat(512 * 1024))
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       getActivePane: vi.fn(() => pane)
@@ -245,6 +267,7 @@ describe('captureTerminalShutdownLayout', () => {
   it('caps shutdown scrollback snapshots by UTF-8 bytes', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const multibyteRow = 'é'.repeat(1024)
+
     const pane = {
       id: 1,
       leafId: LEAF_ID,
@@ -256,6 +279,7 @@ describe('captureTerminalShutdownLayout', () => {
         )
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       getActivePane: vi.fn(() => pane)
@@ -275,20 +299,24 @@ describe('captureTerminalShutdownLayout', () => {
     expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
       TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
     )
+
     // Each 'e-acute' row is 2048 UTF-8 bytes; the CUP suffix joins the byte
     // accounting, so one fewer row fits than the bare limit would allow.
     const fittingRows = Math.floor(
       (TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT - CURSOR_HOME.length) / 2048
     )
+
     expect(buffer).toHaveLength(fittingRows * 1024 + CURSOR_HOME.length)
   })
 
   it('bounds serialize probes while capping an oversized buffer by UTF-8 bytes', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const multibyteRow = 'é'.repeat(1024)
+
     const serialize = vi.fn((options?: { scrollback?: number }) =>
       multibyteRow.repeat(options?.scrollback ?? 0)
     )
+
     const pane = {
       id: 1,
       leafId: LEAF_ID,
@@ -296,6 +324,7 @@ describe('captureTerminalShutdownLayout', () => {
       terminal: mockTerminal(512),
       serializeAddon: { serialize }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       getActivePane: vi.fn(() => pane)
@@ -323,11 +352,14 @@ describe('captureTerminalShutdownLayout', () => {
     // build/agent run) makes bytes-per-row wildly non-uniform, which a pure secant step creeps on.
     const DENSE_ROWS = 1_000
     const DENSE_ROW = 'x'.repeat(600)
+
     const serialize = vi.fn((options?: { scrollback?: number }) => {
       const rows = options?.scrollback ?? 0
       const dense = Math.min(rows, DENSE_ROWS)
+
       return '.'.repeat(Math.max(rows - DENSE_ROWS, 0)) + DENSE_ROW.repeat(dense)
     })
+
     const pane = {
       id: 1,
       leafId: LEAF_ID,
@@ -335,6 +367,7 @@ describe('captureTerminalShutdownLayout', () => {
       terminal: mockTerminal(5_000),
       serializeAddon: { serialize }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       getActivePane: vi.fn(() => pane)
@@ -357,6 +390,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('does not preserve prior scrollback buffers or refs for a cleared leaf', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+
     const pane = {
       id: 1,
       leafId: LEAF_ID,
@@ -366,6 +400,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => '')
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       getActivePane: vi.fn(() => pane)
@@ -395,6 +430,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('does not preserve stale prior PTY bindings as shutdown focus targets', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+
     const deadPane = {
       id: 1,
       leafId: LEAF_ID,
@@ -404,6 +440,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => 'dead scrollback')
       }
     }
+
     const livePane = {
       id: 2,
       leafId: LEAF_ID_2,
@@ -413,6 +450,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => 'live scrollback')
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [deadPane, livePane]),
       getActivePane: vi.fn(() => deadPane)
@@ -442,6 +480,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('preserves prior PTY bindings while current pane transports are still attaching', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+
     const firstPane = {
       id: 1,
       leafId: LEAF_ID,
@@ -451,6 +490,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => 'first scrollback')
       }
     }
+
     const secondPane = {
       id: 2,
       leafId: LEAF_ID_2,
@@ -460,6 +500,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => 'second scrollback')
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [firstPane, secondPane]),
       getActivePane: vi.fn(() => secondPane)
@@ -491,6 +532,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('does not persist a no-PTY pane as active when another split pane is bound', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+
     const paneWithoutPty = {
       id: 1,
       leafId: LEAF_ID,
@@ -500,6 +542,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => '')
       }
     }
+
     const paneWithPty = {
       id: 2,
       leafId: LEAF_ID_2,
@@ -509,6 +552,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => '')
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
       getActivePane: vi.fn(() => paneWithoutPty)
@@ -529,6 +573,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('does not preserve a stale prior PTY binding for active shutdown focus', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+
     const paneWithoutPty = {
       id: 1,
       leafId: LEAF_ID,
@@ -538,6 +583,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => '')
       }
     }
+
     const paneWithPty = {
       id: 2,
       leafId: LEAF_ID_2,
@@ -547,6 +593,7 @@ describe('captureTerminalShutdownLayout', () => {
         serialize: vi.fn(() => '')
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
       getActivePane: vi.fn(() => paneWithoutPty)

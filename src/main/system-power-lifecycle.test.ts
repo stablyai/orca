@@ -24,6 +24,7 @@ describe('system power lifecycle', () => {
   it('atomically replays a transition to a subscriber added during publication', () => {
     const lateListener = { onSuspend: vi.fn(), onResume: vi.fn() }
     let unsubscribeLate: (() => void) | undefined
+
     const unsubscribeFirst = subscribeSystemPowerLifecycle({
       onSuspend: () => {
         unsubscribeLate = subscribeSystemPowerLifecycle(lateListener)
@@ -40,12 +41,14 @@ describe('system power lifecycle', () => {
 
   it('isolates a failing listener from the remaining subscribers', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const unsubscribeFailing = subscribeSystemPowerLifecycle({
       onSuspend: () => {
         throw new Error('listener failed')
       },
       onResume: vi.fn()
     })
+
     const healthyListener = { onSuspend: vi.fn(), onResume: vi.fn() }
     const unsubscribeHealthy = subscribeSystemPowerLifecycle(healthyListener)
 

@@ -11,6 +11,7 @@ import {
   taskPageWorkItemKeyOrderSignature,
   taskPageWorkItemPaginationBoundary
 } from './task-page-work-item-signatures'
+
 export {
   findTaskPageLinearDrawerIssue,
   findTaskPageLinearIssue,
@@ -44,6 +45,7 @@ export type TaskPageWorkItemsFetchOptions = {
 }
 
 type WorkItemsCache = Record<string, CacheEntry<readonly GitHubWorkItem[]>>
+
 export type TaskPageWorkItemPages = readonly (GitHubWorkItem[] | null)[]
 
 export function deriveTaskPageGitHubWorkItemsFetchOptions(
@@ -76,6 +78,7 @@ export function buildTaskPageRepoSourceState(
 ): TaskPageRepoSourceState[] {
   return repos.map((repo, index) => {
     const entry = entries[index]
+
     return {
       repoId: repo.id,
       repoPath: repo.path,
@@ -107,8 +110,10 @@ export function selectTaskPageUnresolvedSourceRepos(
 ): TaskPageUnresolvedSourceRepo[] {
   const stateByRepoId = new Map(sourceState.map((state) => [state.repoId, state]))
   const unresolved: TaskPageUnresolvedSourceRepo[] = []
+
   for (const repo of repos) {
     const state = stateByRepoId.get(repo.id)
+
     if (state?.sources && !state.sources.issues && !state.sources.prs && !state.error) {
       unresolved.push({
         repoId: repo.id,
@@ -117,6 +122,7 @@ export function selectTaskPageUnresolvedSourceRepos(
       })
     }
   }
+
   return unresolved
 }
 
@@ -129,6 +135,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
   entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
 ): (GitHubWorkItem[] | null)[] {
   const cachedItems = new Map<string, GitHubWorkItem>()
+
   for (const entry of entries) {
     for (const item of entry?.data ?? []) {
       cachedItems.set(taskPageWorkItemCacheKey(item), item)
@@ -136,20 +143,27 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
   }
 
   let changed = false
+
   const nextPages = pages.map((page) => {
     if (!page) {
       return null
     }
+
     let pageChanged = false
+
     const nextPage = page.map((item) => {
       const cached = cachedItems.get(taskPageWorkItemCacheKey(item))
+
       if (!cached || cached === item) {
         return item
       }
+
       pageChanged = true
       changed = true
+
       return cached
     })
+
     return pageChanged ? nextPage : page
   })
 
@@ -163,12 +177,15 @@ export function shouldReplaceTaskPageItemsAfterRefresh(
   if (currentItems.length !== refreshedItems.length) {
     return true
   }
+
   const currentKeys = new Set(currentItems.map(taskPageWorkItemKey))
+
   for (const item of refreshedItems) {
     if (!currentKeys.has(taskPageWorkItemKey(item))) {
       return true
     }
   }
+
   return false
 }
 
@@ -182,17 +199,22 @@ export function reconcileTaskPageItemsAfterLandingRefresh(
 
   const refreshedByKey = new Map(refreshedItems.map((item) => [taskPageWorkItemKey(item), item]))
   let changed = false
+
   const next = currentItems.map((item) => {
     const refreshed = refreshedByKey.get(taskPageWorkItemKey(item))
+
     if (
       !refreshed ||
       taskPageWorkItemStatusSignature(item) === taskPageWorkItemStatusSignature(refreshed)
     ) {
       return item
     }
+
     changed = true
+
     return refreshed
   })
+
   return changed ? next : (currentItems as GitHubWorkItem[])
 }
 
@@ -203,12 +225,14 @@ export function shouldResetTaskPagePaginationAfterLandingRefresh(
   if (shouldReplaceTaskPageItemsAfterRefresh(currentFirstPage, refreshedItems)) {
     return true
   }
+
   if (
     taskPageWorkItemKeyOrderSignature(currentFirstPage) !==
     taskPageWorkItemKeyOrderSignature(refreshedItems)
   ) {
     return true
   }
+
   return (
     taskPageWorkItemPaginationBoundary(currentFirstPage) !==
     taskPageWorkItemPaginationBoundary(refreshedItems)
@@ -220,13 +244,17 @@ export function reconcileTaskPagePagesAfterLandingRefresh(
   refreshedItems: readonly GitHubWorkItem[]
 ): (GitHubWorkItem[] | null)[] {
   const firstPage = pages[0] ?? []
+
   if (shouldResetTaskPagePaginationAfterLandingRefresh(firstPage, refreshedItems)) {
     return [[...refreshedItems]]
   }
+
   const nextFirstPage = reconcileTaskPageItemsAfterLandingRefresh(firstPage, refreshedItems)
+
   if (nextFirstPage === firstPage) {
     return pages as (GitHubWorkItem[] | null)[]
   }
+
   return [nextFirstPage, ...pages.slice(1)]
 }
 
@@ -242,9 +270,11 @@ export function findTaskPageDialogWorkItem(
     const found = entry?.data?.find(
       (wi) => wi.id === dialogWorkItemKey.id && wi.repoId === dialogWorkItemKey.repoId
     )
+
     if (found) {
       return found
     }
   }
+
   return null
 }

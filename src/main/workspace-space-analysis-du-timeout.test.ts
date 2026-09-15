@@ -17,6 +17,7 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('node:process', async () => {
   const actual = await vi.importActual<typeof NodeProcess>('node:process')
+
   return { ...actual, platform: 'darwin' }
 })
 
@@ -59,6 +60,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
 
   afterEach(async () => {
     vi.useRealTimers()
+
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true })
       tempDir = null
@@ -77,6 +79,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     listRepoWorktreesMock.mockResolvedValue([
       {
         path: repoPath,
@@ -91,8 +94,10 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
 
     vi.useFakeTimers()
     let settled = false
+
     const scanPromise = analyzeWorkspaceSpace(createStore([repo])).then((scan) => {
       settled = true
+
       return scan
     })
 
@@ -118,6 +123,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
   it('runs one local du traversal at a time across repos', async () => {
     const repoPaths = [join(tempDir!, 'repo-one'), join(tempDir!, 'repo-two')]
     await Promise.all(repoPaths.map((repoPath) => mkdir(repoPath, { recursive: true })))
+
     const repos: Repo[] = repoPaths.map((repoPath, index) => ({
       id: `repo-${index}`,
       path: repoPath,
@@ -125,6 +131,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
       badgeColor: '#000',
       addedAt: 0
     }))
+
     listRepoWorktreesMock.mockImplementation(async (repo: Repo) => [
       {
         path: repo.path,
@@ -151,6 +158,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
           active -= 1
           callback(null, `1\t${rootPath}\n`)
         })
+
         return { kill: vi.fn() }
       }
     )

@@ -21,6 +21,7 @@ function snapshot(
 describe('captureWindowsDescendantSnapshot', () => {
   it('does not claim an older process whose former parent PID was reused by the root', async () => {
     const olderProcess = { pid: 50244, ppid: 36084, creationTimeMs: 1788659167395 }
+
     const captured = await captureWindowsDescendantSnapshot(36084, {
       readTable: async () => [
         { pid: 36084, ppid: 60976, creationTimeMs: 1788733587893 },

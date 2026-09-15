@@ -32,6 +32,7 @@ function makeRepos(): Repo[] {
 
 function createRuntime() {
   const repos = makeRepos()
+
   const removeProject = vi.fn((id: string) => {
     for (let index = repos.length - 1; index >= 0; index -= 1) {
       if (repos[index].id === id) {
@@ -39,16 +40,20 @@ function createRuntime() {
       }
     }
   })
+
   const removeProjectForHost = vi.fn((id: string, hostId: string) => {
     for (let index = repos.length - 1; index >= 0; index -= 1) {
       const repo = repos[index]
+
       const repoHostId =
         repo.executionHostId ?? (repo.connectionId ? `ssh:${repo.connectionId}` : 'local')
+
       if (repo.id === id && repoHostId === hostId) {
         repos.splice(index, 1)
       }
     }
   })
+
   const runtime = new OrcaRuntimeService({
     getRepos: () => [...repos],
     getRepo: (id: string) => repos.find((repo) => repo.id === id) ?? null,
@@ -60,6 +65,7 @@ function createRuntime() {
     removeProject,
     removeProjectForHost
   } as never)
+
   return { runtime, repos, removeProject, removeProjectForHost }
 }
 

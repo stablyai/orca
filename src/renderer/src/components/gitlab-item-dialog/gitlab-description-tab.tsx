@@ -43,21 +43,26 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
     setTitleDraft,
     titleDraft
   } = state
+
   const { handleCancelDetailsEdit, handleSaveDetails, handleStartDetailsEdit } = detailsEditing
   const { handleSetReviewers, loadGitLabReviewerOptions } = reviewActions
   const isMR = item.type === 'mr'
   const visibleLabels = normalizeGitLabLabels(details?.item.labels ?? item.labels ?? [])
+
   const labelSuggestionOptions = normalizeGitLabLabels([
     ...(labelOptions ?? []),
     ...visibleLabels,
     ...parseGitLabLabelDraft(labelDraft)
   ])
+
   const currentReviewers = dedupeGitLabUsers(details?.reviewers ?? [])
   const currentReviewerKeys = new Set(currentReviewers.map(gitLabUserKey))
+
   const reviewerOptionRows = dedupeGitLabUsers([
     ...(reviewerOptions ?? []),
     ...currentReviewers
   ]).filter((user) => !currentReviewerKeys.has(gitLabUserKey(user)))
+
   const approvalState = details?.approvalState
 
   return (
@@ -162,6 +167,7 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
                   const reviewer = reviewerOptionRows.find(
                     (user) => gitLabUserKey(user) === reviewerDraftId
                   )
+
                   if (reviewer) {
                     void handleSetReviewers([...currentReviewers, reviewer])
                   }
@@ -247,6 +253,7 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
                   const selected = parseGitLabLabelDraft(labelDraft).some(
                     (item) => item.toLowerCase() === label.toLowerCase()
                   )
+
                   return (
                     <button
                       key={label}

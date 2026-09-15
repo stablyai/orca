@@ -4,9 +4,11 @@ import type { HostProfile } from './types'
 
 function deferred() {
   let resolve: (hosts: HostProfile[]) => void = () => {}
+
   const promise = new Promise<HostProfile[]>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 

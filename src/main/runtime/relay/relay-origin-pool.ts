@@ -57,9 +57,11 @@ export class RelayOriginPool {
 
   applyAssignmentMetadata(assignment: RelayAssignment): boolean {
     const current = this.assignment
+
     if (!this.isCurrent() || !current || assignment.assignmentEpoch < current.assignmentEpoch) {
       return false
     }
+
     if (assignment.assignmentEpoch > current.assignmentEpoch || this.rotationPromise) {
       if (
         !this.deferredAssignment ||
@@ -67,13 +69,17 @@ export class RelayOriginPool {
       ) {
         this.deferredAssignment = assignment
       }
+
       return true
     }
+
     if (assignment.cellUrl !== current.cellUrl) {
       return false
     }
+
     this.assignment = assignment
     this.activeOrigin?.updateAssignment(assignment)
+
     return true
   }
 
@@ -90,6 +96,7 @@ export class RelayOriginPool {
 
   refreshAuthorization(relayJwt: string): void {
     this.relayJwt = relayJwt
+
     for (const origin of this.origins) {
       origin.refreshAuthorization(relayJwt)
     }
@@ -99,13 +106,16 @@ export class RelayOriginPool {
     if (this.closed) {
       return
     }
+
     this.closed = true
     this.rotation.cancel()
     this.drainRetry.reset()
     this.retirement.clear()
+
     for (const origin of this.origins) {
       origin.closeNow(hostCloseReason)
     }
+
     this.origins.clear()
     this.activeOrigin = null
   }
@@ -124,6 +134,7 @@ export class RelayOriginPool {
         if (this.basisOrigins.get(connectionId) === origin) {
           this.basisOrigins.delete(connectionId)
         }
+
         this.retirement.maybeClose(origin)
       },
       onDrain: (origin, message) => this.handleDrain(origin, message),
@@ -145,10 +156,13 @@ export class RelayOriginPool {
     if (!this.isCurrent() || !this.origins.has(origin)) {
       return
     }
+
     if (!this.retirement.adopt(origin, message)) {
       return
     }
+
     this.options.onStatus('draining')
+
     if (!this.rotationPromise && !this.drainRetry.pending) {
       this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
         this.rotationPromise = null
@@ -164,8 +178,10 @@ export class RelayOriginPool {
       if (!this.relayJwt) {
         throw new Error('relay_authorization_unavailable')
       }
+
       const preferredRegion = await this.options.resolvePreferredRegion?.().catch(() => undefined)
       this.assertCurrent()
+
       // Why: only the configured director can choose a migration target.
       let assignment = await requestRelayAssignment({
         directorUrl: this.options.directorUrl,
@@ -178,16 +194,21 @@ export class RelayOriginPool {
         isCurrent: () => this.isCurrent(),
         fetch: this.options.fetch
       })
+
       this.assertCurrent()
+
       if (
         this.deferredAssignment &&
         this.deferredAssignment.assignmentEpoch > assignment.assignmentEpoch
       ) {
         assignment = this.deferredAssignment
       }
+
       this.deferredAssignment = null
+
       if (assignment.cellUrl === origin.cellUrl) {
         let rebound = false
+
         try {
           await origin.rebind(this.relayJwt, assignment)
           rebound = true
@@ -196,6 +217,7 @@ export class RelayOriginPool {
           // after rebind fails, a fresh generation is the only recoverable path.
           await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
         }
+
         if (rebound) {
           this.assertCurrent()
           this.activeOrigin = origin
@@ -205,6 +227,7 @@ export class RelayOriginPool {
       } else {
         await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
       }
+
       this.options.onStatus('registered')
       this.drainRetry.reset()
       this.rotation.schedule()
@@ -230,6 +253,7 @@ export class RelayOriginPool {
   ): Promise<void> {
     const target = this.createOrigin(assignment, relayJwt)
     this.origins.add(target)
+
     try {
       await target.open()
       this.assertCurrent()
@@ -238,6 +262,7 @@ export class RelayOriginPool {
       target.closeNow()
       throw error
     }
+
     this.activeOrigin = target
     this.assignment = assignment
     this.retirement.schedule(origin, graceMs)

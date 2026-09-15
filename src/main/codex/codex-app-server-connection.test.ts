@@ -16,6 +16,7 @@ const originalCodexHome = process.env.CODEX_HOME
 
 afterEach(() => {
   vi.useRealTimers()
+
   if (originalCodexHome === undefined) {
     delete process.env.CODEX_HOME
   } else {
@@ -101,9 +102,11 @@ function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
       }
     }
   })
+
   if (options.exitOnStdinEnd !== false) {
     child.stdin.on('finish', () => child.emit('exit', 0, null))
   }
+
   return { child, spawnImpl: (() => child) as unknown as typeof spawnProcess, written }
 }
 
@@ -139,15 +142,19 @@ function commandCompletionFixture(
       item: { id: itemId, type: 'commandExecution', aggregated_output: '' }
     }
   }
+
   const emptyBytes = Buffer.byteLength(JSON.stringify(frame), 'utf8')
   const remaining = targetBytes - emptyBytes
+
   if (remaining < 0) {
     throw new Error(`target ${targetBytes} is smaller than fixture envelope ${emptyBytes}`)
   }
+
   const output = `${'\n'.repeat(Math.floor(remaining / 2))}${remaining % 2 ? 'x' : ''}`
   frame.params.item.aggregated_output = output
   const line = JSON.stringify(frame)
   expect(Buffer.byteLength(line, 'utf8')).toBe(targetBytes)
+
   return { line: `${line}\n`, output }
 }
 
@@ -161,6 +168,7 @@ function responseLine(targetBytes: number, id: number): string {
   frame.result.data = 'x'.repeat(targetBytes - emptyBytes)
   const line = JSON.stringify(frame)
   expect(Buffer.byteLength(line, 'utf8')).toBe(targetBytes)
+
   return `${line}\n`
 }
 
@@ -184,6 +192,7 @@ describe('openCodexAppServerConnection', () => {
 
   it('completes the handshake and keeps the child alive across calls', async () => {
     const notifications: { method: string; params: unknown }[] = []
+
     const connection = await openFakeServer({
       onNotification: (method, params) => notifications.push({ method, params })
     })
@@ -224,9 +233,11 @@ describe('openCodexAppServerConnection', () => {
   it('routes a server request to the handler and writes the reply back', async () => {
     const requests: { id: number | string; method: string }[] = []
     let resolveAnswered: (params: unknown) => void = () => {}
+
     const answered = new Promise<unknown>((resolve) => {
       resolveAnswered = resolve
     })
+
     const connection = await openFakeServer({
       onServerRequest: (request) => {
         requests.push({ id: request.id, method: request.method })
@@ -263,6 +274,7 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild()
     answerInitialize(child)
     const notifications: unknown[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       { onNotification: (_method, params) => notifications.push(params) },
@@ -273,6 +285,7 @@ describe('openCodexAppServerConnection', () => {
       `${JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: '日本語' } })}\n`,
       'utf8'
     )
+
     const split = payload.indexOf(Buffer.from('日', 'utf8')) + 1
     child.stdout.write(payload.subarray(0, split))
     child.stdout.write(payload.subarray(split))
@@ -286,6 +299,7 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild()
     answerInitialize(child)
     const frames: { kind: string; payload: unknown }[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       { onUnhandledFrame: (kind, payload) => frames.push({ kind, payload }) },
@@ -304,6 +318,7 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const exits: string[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       { onExit: (error) => exits.push(error.message) },
@@ -323,6 +338,7 @@ describe('openCodexAppServerConnection', () => {
 
   it('classifies a CLI without the app-server subcommand as unsupported', async () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
+
     const opening = openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {},
@@ -345,6 +361,7 @@ describe('openCodexAppServerConnection', () => {
         `${JSON.stringify({ id: 1, error: { code: -32602, message: 'initialize failed' } })}\n`
       )
     })
+
     const opening = rejection(
       openCodexAppServerConnection({ command: 'codex', args: ['app-server'] }, {}, spawnImpl)
     )
@@ -362,6 +379,7 @@ describe('openCodexAppServerConnection', () => {
     vi.useFakeTimers()
     const { child, spawnImpl } = stubChild()
     answerInitialize(child)
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {},
@@ -380,13 +398,16 @@ describe('openCodexAppServerConnection', () => {
     vi.useFakeTimers()
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {},
       spawnImpl
     )
+
     child.kill.mockImplementation(() => {
       child.emit('exit', null, 'SIGKILL')
+
       return true
     })
 
@@ -400,6 +421,7 @@ describe('openCodexAppServerConnection', () => {
   it('reports unproven close when forced termination did not produce an exit event', async () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {},
@@ -413,13 +435,16 @@ describe('openCodexAppServerConnection', () => {
     vi.useFakeTimers()
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {},
       spawnImpl
     )
+
     child.kill.mockImplementation(() => {
       setTimeout(() => child.emit('exit', null, 'SIGKILL'), 10)
+
       return true
     })
 
@@ -435,6 +460,7 @@ describe('openCodexAppServerConnection', () => {
     vi.useFakeTimers()
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {},
@@ -455,6 +481,7 @@ describe('openCodexAppServerConnection', () => {
       const { child, spawnImpl } = stubChild()
       answerInitialize(child)
       const completed: unknown[] = []
+
       const connection = await openCodexAppServerConnection(
         { command: 'codex', args: ['app-server'] },
         {
@@ -487,6 +514,7 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild()
     answerInitialize(child)
     const completed: { item: { id: string; aggregated_output: string } }[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {
@@ -498,6 +526,7 @@ describe('openCodexAppServerConnection', () => {
       },
       spawnImpl
     )
+
     const fixtures = [
       commandCompletionFixture(1_090_188, 'item-large-a'),
       commandCompletionFixture(2_900_090, 'item-large-b')
@@ -518,6 +547,7 @@ describe('openCodexAppServerConnection', () => {
   it('accepts a response beyond the daemon wire limit and keeps the provider alive', async () => {
     const { child, spawnImpl } = stubChild()
     answerInitialize(child)
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {},
@@ -541,6 +571,7 @@ describe('openCodexAppServerConnection', () => {
     answerInitialize(child)
     const frames: { kind: string; payload: unknown }[] = []
     const notifications: string[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {
@@ -571,6 +602,7 @@ describe('openCodexAppServerConnection', () => {
       {
         onNotification: (method) => {
           notifications.push(method)
+
           if (notifications.length === 1) {
             connection.pauseReading?.()
           }
@@ -602,9 +634,11 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const exits: string[] = []
+
     const fail = (): never => {
       throw new Error('structured sink failed')
     }
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {
@@ -614,8 +648,10 @@ describe('openCodexAppServerConnection', () => {
       },
       spawnImpl
     )
+
     child.kill.mockImplementation(() => {
       child.emit('exit', null, 'SIGKILL')
+
       return true
     })
 
@@ -633,6 +669,7 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const exits: string[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       { onExit: (error) => exits.push(error.message) },
@@ -655,6 +692,7 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const exits: string[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       {
@@ -682,13 +720,16 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const exits: string[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       { onExit: (error) => exits.push(error.message) },
       spawnImpl
     )
+
     child.kill.mockImplementation(() => {
       child.emit('exit', null, 'SIGKILL')
+
       return true
     })
 
@@ -709,14 +750,17 @@ describe('openCodexAppServerConnection', () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const exits: string[] = []
+
     const connection = await openCodexAppServerConnection(
       { command: 'codex', args: ['app-server'] },
       { onExit: (error) => exits.push(error.message) },
       spawnImpl
     )
+
     child.stdin.on('finish', () => child.stdin.emit('error', new Error('write EPIPE')))
     child.kill.mockImplementation(() => {
       child.emit('exit', null, 'SIGKILL')
+
       return true
     })
 

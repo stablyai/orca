@@ -19,12 +19,14 @@ afterEach(() => {
 function createUserDataDir(): string {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'orca-home-isolation-test-'))
   tempDirs.push(tempDir)
+
   return tempDir
 }
 
 describe('createElectronHomeIsolation', () => {
   it('strips ambient home and Codex state before forcing a disposable home', () => {
     const userDataDir = createUserDataDir()
+
     const isolation = createElectronHomeIsolation({
       inheritedEnv: {
         HOME: '/real/home',

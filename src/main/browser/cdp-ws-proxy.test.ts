@@ -34,6 +34,7 @@ describe('CdpWsProxy', () => {
     const result = response.result as Record<string, unknown>
     expect(result.data).toBe('')
     expect(result.stream).toEqual(expect.stringMatching(/^orca-pdf-[\da-f-]{36}-\d+$/))
+
     return result.stream as string
   }
 
@@ -63,6 +64,7 @@ describe('CdpWsProxy', () => {
 
     const ws = connect(endpoint)
     const client = await ws
+
     const response = await sendAndReceive(client, {
       id: 42,
       method: 'Accessibility.getFullAXTree',
@@ -78,6 +80,7 @@ describe('CdpWsProxy', () => {
     mock.webContents.debugger.sendCommand.mockRejectedValueOnce(new Error('Node not found'))
 
     const client = await connect(endpoint)
+
     const response = await sendAndReceive(client, {
       id: 7,
       method: 'DOM.describeNode',
@@ -210,6 +213,7 @@ describe('CdpWsProxy', () => {
     const rootEventPromise = new Promise<Record<string, unknown>>((resolve) => {
       client.once('message', (data) => resolve(JSON.parse(data.toString())))
     })
+
     mock.emit('message', {}, 'Runtime.executionContextCreated', { context: { id: 1 } })
 
     const rootEvent = await rootEventPromise
@@ -258,6 +262,7 @@ describe('CdpWsProxy', () => {
 
   it('handles concurrent requests with correct correlation', async () => {
     let resolveFirst: (v: unknown) => void
+
     const firstPromise = new Promise((r) => {
       resolveFirst = r
     })
@@ -265,6 +270,7 @@ describe('CdpWsProxy', () => {
     mock.webContents.debugger.sendCommand
       .mockImplementationOnce(async () => {
         await firstPromise
+
         return { result: 'slow' }
       })
       .mockResolvedValueOnce({ result: 'fast' })
@@ -514,6 +520,7 @@ describe('CdpWsProxy', () => {
       if (method === 'Network.enable') {
         return new Promise(() => {})
       }
+
       return Promise.resolve({})
     })
 
@@ -533,6 +540,7 @@ describe('CdpWsProxy', () => {
       if (method === 'Network.enable') {
         return new Promise(() => {})
       }
+
       return Promise.resolve({})
     })
 
@@ -632,6 +640,7 @@ describe('CdpWsProxy', () => {
       method: 'Page.printToPDF',
       params: { transferMode: 'ReturnAsStream' }
     })
+
     const handle = expectPdfStreamHandle(printResponse)
 
     const firstRead = await sendAndReceive(client, {
@@ -639,16 +648,19 @@ describe('CdpWsProxy', () => {
       method: 'IO.read',
       params: { handle, size: 2 }
     })
+
     const secondRead = await sendAndReceive(client, {
       id: 23,
       method: 'IO.read',
       params: { handle }
     })
+
     const closeResponse = await sendAndReceive(client, {
       id: 24,
       method: 'IO.close',
       params: { handle }
     })
+
     const readAfterClose = await sendAndReceive(client, {
       id: 25,
       method: 'IO.read',
@@ -681,6 +693,7 @@ describe('CdpWsProxy', () => {
       method: 'Page.printToPDF',
       params: { transferMode: 'ReturnAsStream' }
     })
+
     const handle = expectPdfStreamHandle(printResponse)
 
     expect(printResponse.id).toBe(26)
@@ -688,6 +701,7 @@ describe('CdpWsProxy', () => {
     await new Promise((resolve) => setTimeout(resolve, 10))
 
     const nextClient = await connect(endpoint)
+
     const staleRead = await sendAndReceive(nextClient, {
       id: 27,
       method: 'IO.read',
@@ -703,15 +717,18 @@ describe('CdpWsProxy', () => {
 
   it('does not register a PDF stream when the client disconnects mid-print', async () => {
     let resolvePrint: (buf: Buffer<ArrayBuffer>) => void = () => {}
+
     mock.webContents.printToPDF.mockImplementationOnce(
       () =>
         new Promise<Buffer<ArrayBuffer>>((resolve) => {
           resolvePrint = resolve
         })
     )
+
     const store = (
       proxy as unknown as { pageCapture: { pdfStreams: { create: (b: Buffer) => string } } }
     ).pageCapture.pdfStreams
+
     const createSpy = vi.spyOn(store, 'create')
 
     const client = await connect(endpoint)
@@ -745,6 +762,7 @@ describe('CdpWsProxy', () => {
       method: 'IO.read',
       params: { handle: 'trace-stream', size: 64 }
     })
+
     const closeResponse = await sendAndReceive(client, {
       id: 29,
       method: 'IO.close',
@@ -776,6 +794,7 @@ describe('CdpWsProxy', () => {
 
     await new Promise<void>((resolve) => {
       client.on('close', () => resolve())
+
       if (client.readyState === WebSocket.CLOSED) {
         resolve()
       }
@@ -791,6 +810,7 @@ describe('CdpWsProxy', () => {
     client.close()
 
     const start = Date.now()
+
     while (
       (proxy as unknown as { client: WebSocket | null }).client &&
       Date.now() - start < 2_000

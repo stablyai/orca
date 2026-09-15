@@ -54,6 +54,7 @@ export function WorktreeCardParentContent({
     canUnlinkReview,
     handleUnlinkReview
   } = card
+
   const {
     titleOnlyCard,
     parentContentMarginLeft,
@@ -73,6 +74,7 @@ export function WorktreeCardParentContent({
       {presentation.hasMetaRow && <WorktreeCardMetaRow card={card} presentation={presentation} />}
     </div>
   )
+
   // Why: status glyphs and agent rows own their tooltips; only identity content should open the larger details card.
   const identityContentWithHover =
     hasHoverDetails && !titleRenaming ? (

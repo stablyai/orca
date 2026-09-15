@@ -45,6 +45,7 @@ export function useMobileNativeChatSessionLane({
     sessionId: structured ? null : sessionId,
     transcriptPath: structured ? null : transcriptPath
   })
+
   const structuredSession = useMobileStructuredAgentSession({
     client,
     sessionId: structured ? sessionId : null,
@@ -58,6 +59,7 @@ export function useMobileNativeChatSessionLane({
     agent: structured ? agent : null,
     onSendError
   })
+
   return {
     structuredSession,
     session: structured ? structuredSession.session : bridgeSession

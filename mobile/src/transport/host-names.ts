@@ -9,11 +9,13 @@ export function getNextHostNameFromHosts(hosts: readonly HostNameSource[]): stri
 
   for (const host of hosts) {
     const match = HOST_NUMBER_PATTERN.exec(host.name)
+
     if (!match) {
       continue
     }
 
     const hostNumber = Number.parseInt(match[1]!, 10)
+
     if (hostNumber > largestHostNumber) {
       largestHostNumber = hostNumber
     }

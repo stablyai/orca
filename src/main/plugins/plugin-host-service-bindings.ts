@@ -38,12 +38,15 @@ export function bindPluginHostServices(input: {
   subscribeEvents: (pluginKey: string, events: PluginEventName[]) => PluginEventName[]
 }): PluginHostServices {
   const { delegate, pluginsDataDir, subscribeEvents } = input
+
   return {
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
+
       if (!context) {
         return null
       }
+
       // Why: retain the internal id only for host-side terminal membership;
       // the public handler projects it out because it embeds provider paths.
       return {
@@ -58,6 +61,7 @@ export function bindPluginHostServices(input: {
         PLUGIN_WORKSPACE_TERMINAL_LIMIT,
         { includeVisualLayouts: false }
       )
+
       return result.terminals
         .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
         .map((terminal) => ({ id: terminal.handle }))
@@ -65,6 +69,7 @@ export function bindPluginHostServices(input: {
     sendTerminalText: async (terminalId, action) => {
       try {
         const result = await delegate.sendTerminal(terminalId, action)
+
         return { accepted: result.accepted }
       } catch (error) {
         // Why: the plugin API carries only `accepted`, so a lease refusal would read as a silent
@@ -72,6 +77,7 @@ export function bindPluginHostServices(input: {
         if (isAgentSessionPtyWriteRefusedError(error)) {
           throw new Error(describeAgentSessionPtyWriteRefusal(error.refusal))
         }
+
         throw error
       }
     },

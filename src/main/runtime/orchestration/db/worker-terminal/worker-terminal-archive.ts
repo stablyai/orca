@@ -39,14 +39,17 @@ export function commitWorkerTerminalArchiveForRelease(
   }
 ): WorkerTerminalResourceRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const resource = this.getWorkerTerminalResource(params.resourceId)
+
     if (!resource) {
       throw new OrchestrationError(
         'dispatch_not_found',
         `Worker terminal resource ${params.resourceId} was not found.`
       )
     }
+
     if (
       resource.owner_dispatch_id === params.dispatchId &&
       resource.ownership_state === 'owned' &&
@@ -60,13 +63,16 @@ export function commitWorkerTerminalArchiveForRelease(
           content: params.content
         })
       }
+
       const archive = this.getWorkerTerminalArchive(params.dispatchId)
+
       if (!archive || archive.resource_id !== params.resourceId) {
         throw new OrchestrationError(
           'archive_failed',
           `Output could not be preserved for Dispatch ${params.dispatchId}; the terminal was retained.`
         )
       }
+
       this.db
         .prepare(
           `UPDATE worker_terminal_resources
@@ -77,8 +83,10 @@ export function commitWorkerTerminalArchiveForRelease(
         )
         .run(params.archiveSource, params.archiveStatus, params.resourceId, params.dispatchId)
     }
+
     const updated = this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
     this.db.exec('COMMIT')
+
     return updated
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -108,6 +116,7 @@ export function settleWorkerTerminalRelease(
        WHERE id = ? AND release_state IN ('requested', 'releasing', 'unknown')`
     )
     .run(resourceId)
+
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
@@ -123,6 +132,7 @@ export function markWorkerTerminalReleaseUnknown(
        WHERE id = ? AND release_state IN ('requested', 'releasing')`
     )
     .run(reason, resourceId)
+
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
@@ -138,6 +148,7 @@ export function revertWorkerTerminalReleaseToRetained(
        WHERE id = ? AND release_state IN ('requested', 'releasing')`
     )
     .run(reason, resourceId)
+
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
@@ -150,27 +161,37 @@ export function retainWorkerTerminalResource(
   | { disposition: 'release_committed'; resource: WorkerTerminalResourceRow }
   | { disposition: 'no_owned_resource'; resource: null } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
+
     if (!dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
+
     const worker = this.getWorkerDispatch(dispatchId)
+
     if (!worker && !['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} is ${dispatch.status}; only a settled dispatch can retain.`
       )
     }
+
     const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
+
     if (!resource) {
       this.db.exec('COMMIT')
+
       return { disposition: 'no_owned_resource', resource: null }
     }
+
     if (resource.release_state === 'released') {
       this.db.exec('COMMIT')
+
       return { disposition: 'already_released', resource }
     }
+
     this.db
       .prepare(
         `UPDATE worker_terminal_resources
@@ -180,12 +201,16 @@ export function retainWorkerTerminalResource(
       )
       .run(resource.id)
     const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+
     if (updated.release_state !== 'retained') {
       this.db.exec('COMMIT')
+
       return { disposition: 'release_committed', resource: updated }
     }
+
     this.db.prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?').run(dispatchId)
     this.db.exec('COMMIT')
+
     return { disposition: 'retained', resource: updated }
   } catch (error) {
     this.db.exec('ROLLBACK')

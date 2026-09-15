@@ -1,4 +1,5 @@
 import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',

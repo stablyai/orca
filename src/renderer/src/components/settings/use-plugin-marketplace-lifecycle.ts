@@ -48,11 +48,14 @@ export function usePluginMarketplaceLifecycle({
   const reloadAfterMutation = async (pluginKey: string): Promise<void> => {
     try {
       const nextPlugins = await window.api.plugins.list()
+
       if (!mountedRef.current) {
         return
       }
+
       applyCompletedMutation(nextPlugins)
       const changedPlugin = nextPlugins.find((plugin) => plugin.pluginKey === pluginKey)
+
       if (changedPlugin?.needsReconsent || changedPlugin?.status === 'pending') {
         setConsentPluginId(pluginKey)
       }
@@ -66,17 +69,22 @@ export function usePluginMarketplaceLifecycle({
   const confirmRollback = async (pluginKey: string): Promise<void> => {
     setBusyPluginKeys((current) => new Set(current).add(pluginKey))
     setRollbackError(null)
+
     try {
       const result = await window.api.plugins.rollbackMarketplacePlugin({ pluginKey })
+
       if (!result.ok) {
         throw new Error(result.error)
       }
+
       await reloadAfterMutation(pluginKey)
+
       if (mountedRef.current) {
         setRollbackPluginId(null)
       }
     } catch (cause) {
       console.warn('[plugins] marketplace rollback failed:', cause)
+
       if (mountedRef.current) {
         setRollbackError(
           translate(
@@ -90,6 +98,7 @@ export function usePluginMarketplaceLifecycle({
         setBusyPluginKeys((current) => {
           const next = new Set(current)
           next.delete(pluginKey)
+
           return next
         })
       }

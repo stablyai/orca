@@ -25,9 +25,13 @@ import {
 } from './review-head-tracking-ref'
 
 const execFileAsync = promisify(execFile)
+
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
+
 const binary = process.env.ORCA_GIT_COMPAT_BINARY
+
 const expectedVersion = process.env.ORCA_GIT_COMPAT_VERSION
+
 const describeBinaryCompatibility = image || binary ? describe : describe.skip
 
 type GitResult = { stdout: string; stderr: string }
@@ -42,6 +46,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         typeof process.getuid === 'function' && typeof process.getgid === 'function'
           ? ['--user', `${process.getuid()}:${process.getgid()}`]
           : []
+
       return execFileAsync(
         'docker',
         [
@@ -64,6 +69,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         { maxBuffer: 2 * 1024 * 1024 }
       )
     }
+
     return execFileAsync(binary!, args, {
       cwd: repoPath,
       env: env ? { ...process.env, ...env } : undefined,
@@ -126,6 +132,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     const missingObject = 'a'.repeat(40)
     const refPath = join(repoPath, '.git', 'refs', 'heads', 'quiet-probe-dangling')
     await writeFile(refPath, `${missingObject}\n`)
+
     try {
       await expect(
         runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling'])
@@ -162,6 +169,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       '--show-toplevel',
       '--git-common-dir'
     ])
+
     expect(hasUnsupportedRevParsePathFormatEcho(preferred.stdout)).toBe(!supports(2, 31))
     await expect(
       runGit(['rev-parse', '--show-toplevel', '--git-common-dir'])
@@ -175,11 +183,13 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   // message on every supported Git rather than something a caller could read off stdout.
   it('refuses to delete a branch another worktree holds, on stderr, in a recognized wording', async () => {
     await runGit(['worktree', 'add', '-b', 'compat-held', 'held-wt'])
+
     try {
       const refusal = await runGit(['branch', '-d', '--', 'compat-held']).then(
         () => null,
         (error: unknown) => error
       )
+
       expect(refusal).not.toBeNull()
       expect(isBranchCheckedOutInWorktreeError(refusal)).toBe(true)
       const streams = refusal as { stdout?: string; stderr?: string }
@@ -251,6 +261,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     const tree = (await runGit(['rev-parse', 'HEAD^{tree}'])).stdout.trim()
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     const ahead1 = (await runGit(['commit-tree', tree, '-p', head, '-m', 'drift 1'])).stdout.trim()
+
     const ahead2 = (
       await runGit(['commit-tree', tree, '-p', ahead1, '-m', 'drift 2'])
     ).stdout.trim()
@@ -295,12 +306,15 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       'remote.compat-multi.pushurl',
       'https://push.example.invalid/b/repo.git'
     ])
+
     try {
       const fetchUrls = parseGitRemoteFetchUrls((await runGit(['remote', '-v'])).stdout)
+
       for (const name of ['compat-single', 'compat-multi']) {
         const getUrl = (await runGit(['remote', 'get-url', name])).stdout.trim()
         expect(fetchUrls.get(name)).toBe(getUrl)
       }
+
       expect(fetchUrls.get('compat-single')).toBe('git@example.invalid:a/repo.git')
       // A `pushurl` must not displace the fetch URL the scan compares against.
       expect(fetchUrls.get('compat-multi')).toBe('git@example.invalid:b/repo.git')
@@ -326,6 +340,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     // that split rests on `*` not crossing `/` under wildmatch, which only a
     // real binary can prove.
     const commitOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+
     for (const ref of [
       'refs/remotes/origin/main',
       'refs/remotes/origin/compat-nested/HEAD',
@@ -334,9 +349,11 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ]) {
       await runGit(['update-ref', ref, commitOid])
     }
+
     await runGit(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
     await runGit(['symbolic-ref', 'refs/remotes/foo/bar/HEAD', 'refs/remotes/foo/bar/main'])
     const exactRemoteHeadExclude = '--exclude=refs/remotes/foo/bar/HEAD'
+
     const shippedExcludeArgv = [
       'for-each-ref',
       '--format=%(refname)',
@@ -345,12 +362,14 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       '--count=100',
       'refs/remotes/**'
     ]
+
     const wildcardExcludeArgv = shippedExcludeArgv.filter((arg) => arg !== exactRemoteHeadExclude)
     await expectPreferredOrRecognizedFallback(
       shippedExcludeArgv,
       supports(2, 42),
       isForEachRefExcludeUnsupportedError
     )
+
     if (supports(2, 42)) {
       const listRefs = async (argv: string[]): Promise<string[]> =>
         (await runGit(argv)).stdout.split(/\r?\n/).filter(Boolean)
@@ -365,6 +384,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       // is the whole reason the exact excludes are emitted alongside it.
       expect(await listRefs(wildcardExcludeArgv)).toContain('refs/remotes/foo/bar/HEAD')
     }
+
     await expect(
       runGit(['for-each-ref', '--format=%(refname)', '--count=10'])
     ).resolves.toBeDefined()
@@ -374,6 +394,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       supports(2, 38),
       isUnsupportedMergeTreeWriteTreeError
     )
+
     if (supports(2, 38)) {
       const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
       const legacyArgs = ['merge-tree', '--write-tree', '--name-only', '-z', '--no-messages']

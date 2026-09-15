@@ -58,18 +58,26 @@ export function loadInitialWebSessionTabs({
       ) {
         return
       }
+
       if (response.ok === false) {
         console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
+
         return
       }
+
       const result = response.result
+
       if (!isSessionTabsListAllResult(result)) {
         console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
+
         return
       }
+
       const runtimeId = getSessionTabsRuntimeIdFromResponse(response)
+
       const latestReceivedFrame =
         latestReceivedSessionTabsFrameByEnvironment.get(environmentId) ?? 0
+
       if (
         runtimeId &&
         latestReceivedFrame <= requestReceivedFrame &&
@@ -77,7 +85,9 @@ export function loadInitialWebSessionTabs({
       ) {
         return
       }
+
       recordReceivedWebSessionTabsEnvironmentFrame(environmentId, requestReceivedFrame)
+
       const receivedFrames = result.snapshots.map((snapshot) =>
         recordReceivedWebSessionTabsSnapshot(
           environmentId,
@@ -87,6 +97,7 @@ export function loadInitialWebSessionTabs({
           'bootstrap'
         )
       )
+
       const finishRecoveries = result.snapshots.map((snapshot, index) =>
         beginWebSessionTabsSnapshotRecovery(
           environmentId,
@@ -94,6 +105,7 @@ export function loadInitialWebSessionTabs({
           receivedFrames[index]!
         )
       )
+
       try {
         const recovered = await Promise.all(
           result.snapshots.map((snapshot) =>
@@ -109,15 +121,18 @@ export function loadInitialWebSessionTabs({
             )
           )
         )
+
         if (
           !isCurrent() ||
           getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
         ) {
           return
         }
+
         const initialInventorySuperseded =
           (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) >
           requestReceivedFrame
+
         const applicable = recovered.filter(
           (snapshot, index): snapshot is RuntimeMobileSessionTabsResult =>
             snapshot !== null &&
@@ -129,14 +144,18 @@ export function loadInitialWebSessionTabs({
               runtimeId
             )
         )
+
         const decisions = applicable.map((snapshot) =>
           decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
         )
+
         const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
+
         const initialInventoryStillCurrent =
           latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
           (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
             requestReceivedFrame
+
         settleHydration = applyWebSessionTabsStorePatch(
           (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
           {

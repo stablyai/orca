@@ -13,9 +13,11 @@ export function getMobileEmulatorCliStepBadgeState(input: {
   if (input.cliEnabled) {
     return 'done'
   }
+
   if (input.cliBusy || input.cliPathNeedsAttention) {
     return 'in-progress'
   }
+
   return 'pending'
 }
 

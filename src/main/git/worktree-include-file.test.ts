@@ -18,12 +18,15 @@ function mockCheckIgnore(ignored?: string[]): void {
     if (!args.includes('check-ignore')) {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     }
+
     const requested = (execOptions.stdin ?? '').split('\0').filter(Boolean)
     const ignoredSet = new Set(ignored ?? requested)
     const matched = requested.filter((path) => ignoredSet.has(path))
+
     if (matched.length === 0) {
       throw Object.assign(new Error('no matches'), { code: 1 })
     }
+
     return { stdout: matched.map((path) => `${path}\0`).join(''), stderr: '' }
   })
 }
@@ -33,6 +36,7 @@ describe('parseWorktreeIncludeFile', () => {
     const entries = parseWorktreeIncludeFile(
       '# secrets\n\n.env\n  \n# more\n./config/secrets.json\n.vscode/\n.env\n'
     )
+
     expect(entries).toEqual(['.env', 'config/secrets.json', '.vscode'])
   })
 
@@ -127,9 +131,11 @@ describe('resolveWorktreeIncludePaths', () => {
 
   it('stops after 1000 entries so one repo file cannot request unbounded work', async () => {
     const names = Array.from({ length: 1001 }, (_, index) => `ignored-${index}.env`)
+
     for (const name of names) {
       writeFileSync(join(repo, name), 'A=1')
     }
+
     writeInclude(`${names.join('\n')}\n`)
     mockCheckIgnore()
 

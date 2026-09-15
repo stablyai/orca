@@ -22,6 +22,7 @@ export function createRunningGuardedTranscriptNativeWatcher(
   onRetry: () => void
 ): TranscriptNativeWatcher {
   const isWslPath = isWslTranscriptWatcherPath(filePath)
+
   if (isWslPath) {
     return {
       bind: () => false,
@@ -30,6 +31,7 @@ export function createRunningGuardedTranscriptNativeWatcher(
       needsRebind: () => false
     }
   }
+
   let watcher: TranscriptNativeWatcher
   watcher = createTranscriptNativeWatcher(
     filePath,
@@ -42,5 +44,6 @@ export function createRunningGuardedTranscriptNativeWatcher(
       onRetry()
     }
   )
+
   return watcher
 }

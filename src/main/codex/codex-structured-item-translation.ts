@@ -16,12 +16,14 @@ import {
   readTextContent
 } from './codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+
 export {
   codexItemIdentity,
   isCodexMessageItemType,
   readCodexThreadItem,
   type CodexThreadItem
 } from './codex-thread-item-identity'
+
 export {
   CodexTurnOrdinals,
   MAX_CODEX_TURN_ORDINAL_BYTES,
@@ -36,19 +38,26 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
     item.type === 'agentMessage'
       ? (readString(item, 'text') ?? readTextContent(item, 'content'))
       : readString(item, 'text')
+
   if (text !== null) {
     return [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
   }
+
   const content = item.content
+
   if (!Array.isArray(content)) {
     return []
   }
+
   const blocks: NativeChatBlock[] = []
+
   for (const part of content) {
     if (typeof part !== 'object' || part === null) {
       continue
     }
+
     const partText = readString(part as Record<string, unknown>, 'text')
+
     if (partText !== null) {
       blocks.push({
         type: 'text',
@@ -56,13 +65,16 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
       })
       continue
     }
+
     const record = part as Record<string, unknown>
+
     if (record.type === 'image' && typeof record.url === 'string') {
       blocks.push({ type: 'image-ref', url: record.url })
     } else if (record.type === 'localImage' && typeof record.path === 'string') {
       blocks.push({ type: 'image-ref', path: record.path })
     }
   }
+
   return blocks
 }
 
@@ -70,13 +82,17 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
  *  only thing that makes a finished command a success. */
 function commandState(item: CodexThreadItem): 'running' | 'completed' | 'failed' {
   const status = readString(item, 'status')
+
   if (status === null || status === 'inProgress') {
     return 'running'
   }
+
   if (status !== 'completed') {
     return 'failed'
   }
+
   const exitCode = item.exitCode
+
   return typeof exitCode === 'number' && exitCode !== 0 ? 'failed' : 'completed'
 }
 
@@ -93,6 +109,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
   const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
   const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   const parsed = commandActionFacts(item)
+
   return {
     body: {
       kind: 'tool-call',
@@ -117,9 +134,11 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
         const path = readString(record, 'path')
         const diff = readString(record, 'diff')
+
         return path && diff ? [{ path, diff }] : []
       })
     : []
+
   if (changes.length === 0) {
     return {
       body: {
@@ -132,8 +151,10 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
+
   const patch = changes.map((change) => change.diff).join('\n')
   const bounded = boundInlineText(patch, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
+
   return {
     body: {
       kind: 'diff',
@@ -151,6 +172,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
 function mcpToolCallName(item: CodexThreadItem): string {
   const tool = readString(item, 'tool')
   const server = readString(item, 'server')
+
   return tool === null ? 'mcp' : server === null ? tool : `${server}/${tool}`
 }
 
@@ -164,6 +186,7 @@ function mcpToolArguments(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) {
     return value === null || value === undefined ? null : { arguments: value }
   }
+
   return Array.isArray(value) ? { arguments: value } : Object.keys(value).length > 0 ? value : null
 }
 
@@ -173,6 +196,7 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
   const failure = readString(readRecord(item.error), 'message')
   const text = failure ?? readTextContent(readRecord(item.result), 'content')
   const bounded = text === null ? null : boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+
   return {
     body: {
       kind: 'tool-call',
@@ -193,14 +217,17 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
  *  label key, so it names only an action that carries nothing better. */
 function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
   const action = readRecord(item.action)
+
   const fields: [string, unknown][] = [
     ['url', readString(action, 'url')],
     ['pattern', readString(action, 'pattern')],
     ['description', readString(action, 'type')],
     ['action', item.action ?? null]
   ]
+
   const query = readString(item, 'query') ?? readString(action, 'query')
   const present = fields.filter(([, value]) => value !== null)
+
   // A blank `query` is the run header's "this call has no brief argument"
   // signal; drop the key and the header stands the row's raw JSON in for one.
   return query === null && present.length === 0
@@ -216,6 +243,7 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
   const results = toolWebSearchResults(item.results)
   const hits = Array.isArray(item.results) && item.results.length > 0 ? item.results : null
   const bounded = hits && boundInlineText(JSON.stringify(hits), DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+
   return {
     body: {
       kind: 'tool-call',
@@ -239,6 +267,7 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
 export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
     const blocks = codexMessageBlocks(item)
+
     return {
       body:
         blocks.length === 0
@@ -247,23 +276,30 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
+
   if (item.type === 'commandExecution') {
     return commandItem(item)
   }
+
   if (item.type === 'fileChange') {
     return fileChangeItem(item)
   }
+
   if (item.type === 'mcpToolCall') {
     return mcpToolCallItem(item)
   }
+
   if (item.type === 'webSearch') {
     return webSearchItem(item)
   }
+
   if (item.type === 'imageView' || item.type === 'imageGeneration') {
     return { body: codexImageItemBody(item), handled: true }
   }
+
   if (item.type === 'plan') {
     const text = readTextContent(item, 'text')
+
     return {
       body:
         text === null
@@ -276,11 +312,13 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
+
   if (item.type === 'reasoning') {
     const text =
       readTextContent(item, 'text') ??
       readTextContent(item, 'summary') ??
       readTextContent(item, 'content')
+
     return {
       body:
         text === null
@@ -289,7 +327,9 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
+
   const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
+
   return unhandled ? { body: unhandled.body, handled: false } : { body: null, handled: true }
 }
 
@@ -311,19 +351,24 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
   if (item.type === 'agentMessage') {
     return { body: codexStreamingMessageBody(text), handled: true }
   }
+
   if (item.type === 'commandExecution') {
     return commandItem({ ...item, aggregatedOutput: text })
   }
+
   if (item.type === 'fileChange') {
     const path = Array.isArray(item.changes)
       ? readString(readRecord(item.changes[0]), 'path')
       : null
+
     const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
+
     return {
       body: { kind: 'diff', path: path ?? 'pending patch', patch: bounded },
       handled: true
     }
   }
+
   if (item.type === 'plan') {
     return {
       body: {
@@ -334,7 +379,9 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
       handled: true
     }
   }
+
   const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+
   return {
     body:
       item.type === 'reasoning'

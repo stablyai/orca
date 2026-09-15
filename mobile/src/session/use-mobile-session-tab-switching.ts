@@ -26,14 +26,17 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     readMarkdownTab,
     readFileTab
   } = scope
+
   // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one.
   const switchTab = useCallback(
     (handle: string) => {
       triggerSelection()
+
       const matchingTab = sessionTabs.find(
         (tab): tab is Extract<MobileSessionTab, { type: 'terminal' }> =>
           tab.type === 'terminal' && tab.terminal === handle
       )
+
       terminalDiagnosticsRef.current.tabSwitch('terminal', matchingTab?.id ?? '', false, handle)
       pendingActiveSessionTabIdRef.current = matchingTab?.id ?? null
       pendingActiveTerminalHandleRef.current = handle
@@ -43,16 +46,20 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       const prev = activeHandleRef.current
       activeHandleRef.current = handle
       setActiveHandle(handle)
+
       if (prev && prev !== handle) {
         unsubscribeTerminal(prev)
         initializedHandlesRef.current.delete(prev)
       }
+
       // Force a fresh subscribe even if eagerly subscribed without viewport
       if (terminalUnsubsRef.current.has(handle)) {
         unsubscribeTerminal(handle)
         initializedHandlesRef.current.delete(handle)
       }
+
       subscribeToTerminal(handle)
+
       if (client) {
         if (matchingTab) {
           void activateMobileSessionTab(client, {
@@ -80,8 +87,10 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)
+
           return
         }
+
         terminalDiagnosticsRef.current.tabSwitch('terminal', tab.id, true)
         triggerSelection()
         pendingActiveSessionTabIdRef.current = tab.id
@@ -89,12 +98,15 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         activeSessionTabTypeRef.current = 'terminal'
         setActiveSessionTabId(tab.id)
         const prev = activeHandleRef.current
+
         if (prev) {
           unsubscribeTerminal(prev)
           initializedHandlesRef.current.delete(prev)
         }
+
         activeHandleRef.current = null
         setActiveHandle(null)
+
         if (client) {
           void activateMobileSessionTab(client, {
             worktree: `id:${worktreeId}`,
@@ -104,6 +116,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
             intent: 'user'
           }).catch(() => {})
         }
+
         return
       }
 
@@ -114,12 +127,15 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       activeSessionTabTypeRef.current = tab.type
       setActiveSessionTabId(tab.id)
       const prev = activeHandleRef.current
+
       if (prev) {
         unsubscribeTerminal(prev)
         initializedHandlesRef.current.delete(prev)
       }
+
       activeHandleRef.current = null
       setActiveHandle(null)
+
       if (client) {
         void activateMobileSessionTab(client, {
           worktree: `id:${worktreeId}`,
@@ -129,27 +145,36 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
           intent: 'user'
         }).catch(() => {})
       }
+
       if (tab.type === 'browser') {
         return
       }
+
       if (tab.type === 'file') {
         void readFileTab(tab)
+
         return
       }
+
       if (tab.type === 'agent-session') {
         return
       }
+
       const cached = markdownDocs.get(tab.id)
+
       if (cached?.status === 'ready' && cached.isDirty) {
         return
       }
+
       // Why: tab list lacks a reliable version for desktop clean saves; re-read on revisit unless the phone has a draft.
       void readMarkdownTab(tab)
     },
     [client, markdownDocs, readFileTab, readMarkdownTab, switchTab, unsubscribeTerminal, worktreeId]
   )
+
   // Ref to latest switchSessionTab so fetchSessionTabs can activate a synced browser tab without a dependency cycle.
   switchSessionTabRef.current = switchSessionTab
+
   return {
     switchTab,
     switchSessionTab

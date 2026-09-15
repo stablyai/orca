@@ -27,6 +27,7 @@ describe('migration unsupported PTY state', () => {
   afterEach(() => {
     setMigrationUnsupportedPtyListener(null)
     setMigrationUnsupportedPtyPersistenceListener(null)
+
     for (const entry of getMigrationUnsupportedPtySnapshot()) {
       clearMigrationUnsupportedPty(entry.ptyId)
     }

@@ -10,6 +10,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -17,15 +18,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -34,12 +39,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -81,11 +88,14 @@ describe('AgentBrowserBridge', () => {
 
   it('acquires an automation visibility lease while running snapshot commands', async () => {
     const lifecycleEvents: string[] = []
+
     const restore = vi.fn(() => {
       lifecycleEvents.push('restore-100')
     })
+
     const acquireAutomationVisibility = vi.fn(async (webContentsId: number) => {
       lifecycleEvents.push(`acquire-${webContentsId}`)
+
       return restore
     })
 
@@ -94,6 +104,7 @@ describe('AgentBrowserBridge', () => {
         acquireAutomationVisibility
       })
     )
+
     b.setActiveTab(100)
 
     let releaseSnapshot: (() => void) | null = null
@@ -101,15 +112,19 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
+
           return
         }
+
         if (args.includes('snapshot')) {
           lifecycleEvents.push('command-snapshot')
           releaseSnapshot = () => {
             cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
           }
+
           return
         }
+
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
     )
@@ -136,30 +151,37 @@ describe('AgentBrowserBridge', () => {
       if (id === 100) {
         return wc100
       }
+
       if (id === 200) {
         return wc200
       }
+
       return null
     })
 
     const acquireAutomationVisibility = vi.fn(async () => {
       tabs.set('tab-1', 200)
+
       return vi.fn()
     })
+
     const b = new AgentBrowserBridge(
       mockBrowserManager(tabs, undefined, {
         acquireAutomationVisibility
       })
     )
+
     b.setActiveTab(100)
 
     succeedWith({ snapshot: 'tree' })
     await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
 
     expect(acquireAutomationVisibility).toHaveBeenCalledWith(100)
+
     const createdProxyIds = CdpWsProxyMock.instances.map(
       (instance) => (instance as { _wc?: { id?: number } })._wc?.id
     )
+
     expect(createdProxyIds).toEqual([100, 200])
   })
 
@@ -171,24 +193,30 @@ describe('AgentBrowserBridge', () => {
       if (id === 100) {
         return wc100
       }
+
       if (id === 200) {
         return wc200
       }
+
       return null
     })
 
     let reregisterOnVisibility = false
+
     const acquireAutomationVisibility = vi.fn(async () => {
       if (reregisterOnVisibility) {
         tabs.set('tab-1', 200)
       }
+
       return vi.fn()
     })
+
     const b = new AgentBrowserBridge(
       mockBrowserManager(tabs, undefined, {
         acquireAutomationVisibility
       })
     )
+
     b.setActiveTab(100)
 
     const commandCalls: string[][] = []
@@ -206,6 +234,7 @@ describe('AgentBrowserBridge', () => {
     const routeCalls = commandCalls.filter(
       (args) => args.includes('network') && args.includes('route')
     )
+
     expect(routeCalls).toHaveLength(2)
     expect(routeCalls.at(-1)).toContain('https://old.example/**')
     expect(routeCalls.at(-1)).toContain('--cdp')
@@ -221,24 +250,30 @@ describe('AgentBrowserBridge', () => {
       if (id === 100) {
         return wc100
       }
+
       if (id === 200) {
         return wc200
       }
+
       return null
     })
 
     let reregisterOnVisibility = false
+
     const acquireAutomationVisibility = vi.fn(async () => {
       if (reregisterOnVisibility) {
         tabs.set('tab-1', 200)
       }
+
       return vi.fn()
     })
+
     const b = new AgentBrowserBridge(
       mockBrowserManager(tabs, undefined, {
         acquireAutomationVisibility
       })
     )
+
     b.setActiveTab(100)
 
     succeedWith({ snapshot: 'before' })
@@ -255,27 +290,34 @@ describe('AgentBrowserBridge', () => {
     const createdProxyIds = CdpWsProxyMock.instances.map(
       (instance) => (instance as { _wc?: { id?: number } })._wc?.id
     )
+
     expect(createdProxyIds).toEqual([100, 200])
   })
 
   it('serializes screenshot visibility prep across sessions', async () => {
     vi.useFakeTimers()
+
     try {
       const tabs = new Map([
         ['tab-1', 1],
         ['tab-2', 2]
       ])
+
       const worktrees = new Map([
         ['tab-1', 'wt-1'],
         ['tab-2', 'wt-2']
       ])
+
       const lifecycleEvents: string[] = []
+
       const acquireAutomationVisibilityMock = vi.fn(async (webContentsId: number) => {
         lifecycleEvents.push(`acquire-${webContentsId}`)
+
         return () => {
           lifecycleEvents.push(`restore-${webContentsId}`)
         }
       })
+
       const wc1 = mockWebContents(1)
       const wc2 = mockWebContents(2)
       webContentsFromIdMock.mockImplementation((id: number) =>
@@ -290,6 +332,7 @@ describe('AgentBrowserBridge', () => {
           acquireAutomationVisibility: acquireAutomationVisibilityMock
         })
       )
+
       b.setActiveTab(1, 'wt-1')
       b.setActiveTab(2, 'wt-2')
 
@@ -298,24 +341,31 @@ describe('AgentBrowserBridge', () => {
         (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
           if (args.includes('close')) {
             cb(null, JSON.stringify({ success: true, data: null }), '')
+
             return
           }
+
           if (args.includes('screenshot')) {
             const sessionName = args[args.indexOf('--session') + 1]
             lifecycleEvents.push(`command-${sessionName}`)
+
             if (sessionName === 'orca-tab-tab-1' && !releaseFirstScreenshot) {
               releaseFirstScreenshot = () => {
                 cb(null, JSON.stringify({ success: true, data: { path: '/tmp/tab-1.png' } }), '')
               }
+
               return
             }
+
             cb(
               null,
               JSON.stringify({ success: true, data: { path: `/tmp/${sessionName}.png` } }),
               ''
             )
+
             return
           }
+
           cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
         }
       )
@@ -357,6 +407,7 @@ describe('AgentBrowserBridge', () => {
 
   it('captures full-page screenshots directly through CDP using CSS layout bounds', async () => {
     vi.useFakeTimers()
+
     try {
       const wc = mockWebContents(100)
       wc.debugger.sendCommand.mockImplementation((method: string) => {
@@ -366,9 +417,11 @@ describe('AgentBrowserBridge', () => {
             contentSize: { width: 1200.4, height: 1800.8 }
           })
         }
+
         if (method === 'Page.captureScreenshot') {
           return Promise.resolve({ data: 'full-cdp-shot' })
         }
+
         return Promise.resolve({})
       })
       webContentsFromIdMock.mockReturnValue(wc)
@@ -393,9 +446,11 @@ describe('AgentBrowserBridge', () => {
         captureBeyondViewport: true,
         clip: { x: 0, y: 0, width: 601, height: 901, scale: 1 }
       })
+
       const screenshotCall = execFileMock.mock.calls.find((call: unknown[]) =>
         (call[1] as string[]).includes('screenshot')
       )
+
       expect(screenshotCall).toBeUndefined()
     } finally {
       vi.useRealTimers()

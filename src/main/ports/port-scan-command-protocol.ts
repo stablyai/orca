@@ -4,6 +4,7 @@
 // can never drag the other side's dependencies across the boundary.
 
 export const PORT_SCAN_COMMAND_TIMEOUT_MS = 4_000
+
 // Node's own execFile timeout is the primary killer; the manual watchdog only
 // covers "the callback never arrived", so it must fire strictly later.
 export const WATCHDOG_GRACE_MS = 1_000

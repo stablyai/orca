@@ -21,12 +21,16 @@ function collectLayoutLeafIds(
   if (!node) {
     return leafIds
   }
+
   if (node.type === 'leaf') {
     leafIds.add(node.leafId)
+
     return leafIds
   }
+
   collectLayoutLeafIds(node.first, leafIds)
   collectLayoutLeafIds(node.second, leafIds)
+
   return leafIds
 }
 
@@ -38,8 +42,10 @@ export function layoutCoversLeaves(
   if (!root) {
     return false
   }
+
   const treeLeafIds = collectLayoutLeafIds(root)
   const known = new Set(leafIds)
+
   return (
     leafIds.every((leafId) => treeLeafIds.has(leafId)) &&
     [...treeLeafIds].every((leafId) => known.has(leafId))
@@ -59,10 +65,13 @@ function synthesizeDegenerateLayout(
   if (leafIds.length === 0) {
     return null
   }
+
   if (leafIds.length === 1) {
     return { type: 'leaf', leafId: leafIds[0]! }
   }
+
   onSynthesize?.(leafIds.length)
+
   // No known direction: stack left-to-right as a flat chain. This is a visible
   // fallback, not a guess we want to win — see invariant above.
   return leafIds.slice(1).reduce<TerminalPaneLayoutNode>(
@@ -91,8 +100,10 @@ export function resolveTerminalLayoutRoot(args: {
   if (layoutCoversLeaves(args.authoritativeRoot, args.leafIds)) {
     return args.authoritativeRoot ?? null
   }
+
   if (layoutCoversLeaves(args.existingRoot, args.leafIds)) {
     return args.existingRoot ?? null
   }
+
   return synthesizeDegenerateLayout(args.leafIds, args.onSynthesize)
 }

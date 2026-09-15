@@ -59,6 +59,7 @@ describe('resolveDirectSshTargetScope', () => {
       connectionId: 'target-a',
       executionHostId: 'ssh:target-a' as const
     }
+
     const scope = resolveDirectSshTargetScope({
       ...baseInput,
       repos: [duplicate, { ...duplicate }],

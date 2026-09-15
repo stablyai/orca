@@ -42,16 +42,20 @@ export function createLinearCustomViewDetailActions(
     ) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
+
       const cacheKey = scopedLinearCacheKey(
         scope,
         linearCollectionCacheKey(workspaceId, 'custom-view-detail', model, viewId)
       )
+
       const cached = get().linearCustomViewDetailCache[cacheKey]
+
       if (!options?.force && isFresh(cached)) {
         return cached.data
       }
 
       const inflight = inflightCustomViewDetailRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -64,6 +68,7 @@ export function createLinearCustomViewDetailActions(
       let entry: InflightLinearDetailRequest<LinearCustomViewSummary | null>
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearGetCustomView(scope.settings, viewId, model, workspaceId, {
         force: options?.force
       })
@@ -85,10 +90,12 @@ export function createLinearCustomViewDetailActions(
               })
             }))
           }
+
           return view
         })
         .catch((error) => {
           console.warn('[linear] fetchLinearCustomView failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -101,19 +108,24 @@ export function createLinearCustomViewDetailActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           if (options?.force) {
             throw error
           }
+
           const cachedResult = get().linearCustomViewDetailCache[cacheKey]
+
           if (cachedResult) {
             return cachedResult.data
           }
+
           throw error
         })
         .finally(() => {
           if (inflightCustomViewDetailRequests.get(cacheKey) === entry) {
             inflightCustomViewDetailRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -135,6 +147,7 @@ export function createLinearCustomViewDetailActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightCustomViewDetailRequests.set(cacheKey, entry)
+
       return promise
     }
   }

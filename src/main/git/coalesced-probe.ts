@@ -9,6 +9,7 @@
  */
 
 export type CoalescedProbe<T> = { startedAt: number; token: object; promise: Promise<T> }
+
 export type CoalescedProbes<T> = Map<string, CoalescedProbe<T>>
 
 /** Every step under a probe is bounded well inside this, so an older one is wedged, not slow. */
@@ -27,20 +28,26 @@ export async function runCoalescedProbe<T>(
 ): Promise<T> {
   const now = Date.now()
   const existing = probes.get(key)
+
   if (existing && now - existing.startedAt < staleAfterMs) {
     return existing.promise
   }
+
   if (existing) {
     // The abandoned probe keeps running; nothing here will await it again.
     void existing.promise.catch(() => {})
   }
+
   const token = {}
+
   const entry: CoalescedProbe<T> = {
     startedAt: now,
     token,
     promise: createProbe(() => probes.get(key)?.token === token)
   }
+
   probes.set(key, entry)
+
   try {
     return await entry.promise
   } finally {

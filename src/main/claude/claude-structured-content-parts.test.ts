@@ -8,11 +8,13 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 
 function sinkState() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body) => items.push({ identity, body }),
     appendTombstone: () => {},
     publish: vi.fn()
   }
+
   return { sink, items }
 }
 
@@ -62,11 +64,13 @@ describe('Claude message content parts', () => {
   it('keeps tool results in an injected skill message', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
+
     const event = userMessageWith({
       type: 'tool_result',
       tool_use_id: 'skill-call',
       content: 'Skill loaded'
     })
+
     translator.handle({ ...event, message: { ...event.message, isMeta: true } })
     expect(state.items.map((item) => item.body)).toEqual([
       expect.objectContaining({
@@ -100,6 +104,7 @@ describe('Claude message content parts', () => {
   it('does not render user echoes even without metadata flags', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
+
     for (const content of ['/example-skill', '# Skill instructions']) {
       const event = userMessageWith(null)
       translator.handle({
@@ -107,6 +112,7 @@ describe('Claude message content parts', () => {
         message: { ...event.message, message: { role: 'user', content } }
       })
     }
+
     expect(state.items.flatMap(({ body }) => (body.kind === 'message' ? body.blocks : []))).toEqual(
       []
     )

@@ -37,6 +37,7 @@ type FakeWatcher = {
 
 function makeWatcher(): FakeWatcher {
   let errorListener: (() => void) | undefined
+
   return {
     close: vi.fn(),
     on: vi.fn((event: string, listener: () => void) => {
@@ -50,6 +51,7 @@ function makeWatcher(): FakeWatcher {
 
 function makeSender(id: number) {
   let destroyedListener: (() => void) | undefined
+
   return {
     id,
     send: vi.fn(),
@@ -81,6 +83,7 @@ describe('local log tail IPC', () => {
     let emitChange: ((eventType: 'change' | 'rename') => void) | undefined
     watchMock.mockImplementation((_path: string, listener: typeof emitChange) => {
       emitChange = listener
+
       return watcher
     })
     const sender = makeSender(7)

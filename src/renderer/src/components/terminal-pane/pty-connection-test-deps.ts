@@ -75,12 +75,14 @@ export function buildPaneConnectionDeps(
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn((tabId: string, ptyId: string, replacedPtyId?: string) => {
       const current = getState().ptyIdsByTabId?.[tabId] ?? []
+
       const next =
         replacedPtyId && current.includes(replacedPtyId)
           ? current.map((candidate) => (candidate === replacedPtyId ? ptyId : candidate))
           : current.includes(ptyId)
             ? current
             : [...current, ptyId]
+
       getState().ptyIdsByTabId = { ...getState().ptyIdsByTabId, [tabId]: next }
     }),
     markWorktreeUnread: vi.fn(),
@@ -94,6 +96,7 @@ export function buildPaneConnectionDeps(
     setCacheTimerStartedAt: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn((paneId: number, ptyId: string) => {
       const layout = getState().terminalLayoutsByTabId?.['tab-1']
+
       if (layout) {
         layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [leafIdForPane(paneId)]: ptyId }
       }
@@ -118,13 +121,17 @@ export function buildDirectSshSplitRetryCommit(
         [tabId]: currentPtyIds.includes(ptyId) ? currentPtyIds : [...currentPtyIds, ptyId]
       }
       const pending = getState().directSshPaneRetryByTabId?.[tabId]
+
       if (!pending || pending.attemptId !== directSshRetryAttemptId) {
         return
       }
+
       const tab = getState().tabsByWorktree['wt-1'].find((candidate) => candidate.id === tabId)
+
       if (tab && !tab.ptyId) {
         tab.ptyId = ptyId
       }
+
       getState().directSshPaneRetryByTabId = {}
       getState().directSshLivePtyBindingByTabId = {
         [tabId]: {

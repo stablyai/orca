@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const cleanupPaths: string[] = []
+
 const validationModuleUrl = pathToFileURL(
   path.resolve('config/scripts/run-codex-real-account-validation.mjs')
 ).href
@@ -19,6 +20,7 @@ afterEach(async () => {
 describe('Codex real-account validation harness', () => {
   it('forces home and Codex routing variables after stripping ambient values', async () => {
     const primaryHome = path.join(os.tmpdir(), 'orca-primary-home-sentinel')
+
     const { layout, env } = runValidationModule<{
       layout: { tempRoot: string; homeDir: string }
       env: Record<string, string | undefined>
@@ -39,6 +41,7 @@ describe('Codex real-account validation harness', () => {
       `,
       [primaryHome]
     )
+
     cleanupPaths.push(layout.tempRoot)
 
     expect(env.HOME).toBe(layout.homeDir)
@@ -74,6 +77,7 @@ describe('Codex real-account validation harness', () => {
       `,
       [path.join(os.tmpdir(), 'orca-primary-home-sentinel')]
     )
+
     cleanupPaths.push(layout.tempRoot)
 
     expect(snapshot.throwawayCodex.auth.sha256).toMatch(/^[a-f0-9]{64}$/)
@@ -85,6 +89,7 @@ describe('Codex real-account validation harness', () => {
   it('honors a disposable temp parent override outside the primary home', async () => {
     const tempParent = await mkdtemp(path.join(os.tmpdir(), 'orca-temp-parent-'))
     cleanupPaths.push(tempParent)
+
     const { layout } = runValidationModule<{ layout: { tempRoot: string } }>(
       `
         const { createValidationLayout } = await import(process.argv[1])
@@ -177,6 +182,7 @@ describe('Codex real-account validation harness', () => {
   it('fails clearly when the repo-local electron-vite entry is unavailable', async () => {
     const emptyRoot = await mkdtemp(path.join(os.tmpdir(), 'orca-no-electron-vite-'))
     cleanupPaths.push(emptyRoot)
+
     const { error } = runValidationModule<{ error: string | null }>(
       `
         const { resolveElectronViteBuildCommand } = await import(process.argv[1])
@@ -204,5 +210,6 @@ function runValidationModule<T>(source: string, args: string[], env?: Record<str
       env: { ...process.env, ORCA_CODEX_VALIDATION_TEMP_PARENT: '', ...env }
     }
   )
+
   return JSON.parse(stdout.trim()) as T
 }

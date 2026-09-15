@@ -72,9 +72,15 @@ export const DAEMON_AUDIT_PROCESS_REASON_VALUES = [
 ] as const
 
 export type DaemonAuditTrigger = (typeof DAEMON_AUDIT_TRIGGER_VALUES)[number]
+
 export type DaemonAuditFailureTrigger = Exclude<DaemonAuditTrigger, 'inventory_answered'>
+
 export type DaemonEvidenceSource = (typeof DAEMON_EVIDENCE_SOURCE_VALUES)[number]
+
 export type DaemonProcessPresentReason = (typeof DAEMON_PROCESS_PRESENT_REASON_VALUES)[number]
+
 export type DaemonProcessGoneReason = (typeof DAEMON_PROCESS_GONE_REASON_VALUES)[number]
+
 export type DaemonProcessUnknownReason = (typeof DAEMON_PROCESS_UNKNOWN_REASON_VALUES)[number]
+
 export type DaemonAuditGoneReason = (typeof DAEMON_AUDIT_GONE_REASON_VALUES)[number]

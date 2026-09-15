@@ -18,6 +18,7 @@ import { PushRegisterThrottle } from './push-register-throttle'
 import type { PushUnregisterOutbox } from './push-unregister-outbox'
 
 const OUTBOX_RETRY_BASE_MS = 30_000
+
 const OUTBOX_RETRY_MAX_MS = 10 * 60_000
 
 type RegisterStorageFailure = 'not_mobile' | 'registration_storage_failed'
@@ -75,11 +76,14 @@ export class DesktopPushService {
   static create(options: DesktopPushServiceOptions): DesktopPushService | null {
     const keypair = options.runtimeRpc.getE2EEKeypair()
     const registry = options.runtimeRpc.getDeviceRegistry()
+
     if (!keypair || !registry) {
       return null
     }
+
     const client =
       options.client ?? new PushGatewayClient({ gatewayUrl: options.gatewayUrl, keypair })
+
     return new DesktopPushService(options, registry, client)
   }
 
@@ -110,12 +114,15 @@ export class DesktopPushService {
   async test(deviceId: string): Promise<MobilePushTestResult> {
     const device = this.registry.getDevice(deviceId)
     const registration = device?.pushRegistration
+
     if (device?.scope !== 'mobile' || !registration || registration.expiresAt <= Date.now()) {
       return { accepted: false, reason: 'not_registered' }
     }
+
     if (this.stopped) {
       return { accepted: false, reason: 'unavailable' }
     }
+
     // Explicit tests target only the caller and bypass automatic activity filters.
     const result = await this.client.send({
       registrationIds: [registration.registrationId],
@@ -131,18 +138,22 @@ export class DesktopPushService {
         sound: registration.filter.sound !== false
       }
     })
+
     if (!result.ok) {
       return {
         accepted: false,
         reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected'
       }
     }
+
     const status = result.results.find(
       (entry) => entry.registrationId === registration.registrationId
     )?.status
+
     if (status === 'queued') {
       return { accepted: true }
     }
+
     return {
       accepted: false,
       reason:
@@ -158,11 +169,13 @@ export class DesktopPushService {
     if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile') {
       return { registered: false, reason: 'not_mobile' }
     }
+
     // Unregister needs no bucket: with nothing registered it is a lookup, and
     // with something registered it can only run once per successful register.
     if (!this.registerThrottle.allow(input.deviceId)) {
       return { registered: false, reason: 'throttled' }
     }
+
     return runKeyedSerializedOperation(this.deviceOperations, input.deviceId, () =>
       this.registerAfterCleanup(input)
     )
@@ -174,33 +187,43 @@ export class DesktopPushService {
     if (this.outbox.isUnreadable()) {
       return { registered: false, reason: 'registration_storage_failed' }
     }
+
     // A stable gateway ID must not inherit a delete from an earlier registration.
     for (const item of this.outbox.pending().filter((entry) => entry.deviceId === input.deviceId)) {
       if (!(await this.deleteQueued(item.reqId, item.registrationId))) {
         this.scheduleFlushRetry()
+
         return { registered: false, reason: 'gateway_unreachable' }
       }
     }
+
     if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile') {
       return { registered: false, reason: 'not_mobile' }
     }
+
     if (this.stopped) {
       return { registered: false, reason: 'gateway_unreachable' }
     }
+
     const result = await this.client.registerDevice(input)
+
     if (!result.ok) {
       return {
         registered: false,
         reason: result.reason === 'unreachable' ? 'gateway_unreachable' : 'gateway_rejected'
       }
     }
+
     const failure = this.storeRegistration(input, result.registrationId)
+
     if (failure) {
       // Why: the gateway now holds a token this host will never push to. Queue its
       // delete instead of leaking it until the phone happens to register again.
       this.outbox.enqueue({ registrationId: result.registrationId, deviceId: input.deviceId })
     }
+
     void this.flushUnregisterOutbox()
+
     return failure
       ? { registered: false, reason: failure }
       : { registered: true, registrationId: result.registrationId }
@@ -214,16 +237,20 @@ export class DesktopPushService {
 
   private unregisterCurrent(deviceId: string): { unregistered: boolean } {
     const registrationId = this.registry.getDevice(deviceId)?.pushRegistration?.registrationId
+
     if (!registrationId) {
       return { unregistered: false }
     }
+
     // Persist cleanup before forgetting its ID; neither write waits on the gateway.
     this.outbox.enqueue({ registrationId, deviceId })
+
     try {
       this.registry.setPushRegistration(deviceId, null)
     } finally {
       void this.flushUnregisterOutbox()
     }
+
     return { unregistered: true }
   }
 
@@ -232,6 +259,7 @@ export class DesktopPushService {
     if (this.stopped) {
       return
     }
+
     this.flushRequested = true
     this.flushLoop ??= this.runFlushLoop()
     await this.flushLoop
@@ -242,6 +270,7 @@ export class DesktopPushService {
       while (this.flushRequested && !this.stopped) {
         // Cleared before the pass, so a delete queued mid-drain earns another one.
         this.flushRequested = false
+
         if (await this.drainPending()) {
           this.scheduleFlushRetry()
         } else {
@@ -265,11 +294,13 @@ export class DesktopPushService {
         filter: input.filter,
         expiresAt: Date.now() + 7 * 24 * 60 * 60_000
       })
+
       // False means the device was removed or left mobile scope while the gateway
       // call was in flight.
       return stored ? null : 'not_mobile'
     } catch (error) {
       console.warn('[push] Failed to persist a push registration:', error)
+
       return 'registration_storage_failed'
     }
   }
@@ -277,6 +308,7 @@ export class DesktopPushService {
   /** Returns true when the pass left behind an item the gateway may still accept. */
   private async drainPending(): Promise<boolean> {
     let retryable = false
+
     // Every enqueue requests a flush; the outer loop owns work added during this pass.
     for (const item of this.outbox.pending()) {
       try {
@@ -291,9 +323,11 @@ export class DesktopPushService {
             ) {
               return Promise.resolve(false)
             }
+
             return this.deleteQueued(item.reqId, item.registrationId)
           }
         )
+
         if (!deleted) {
           retryable = true
         }
@@ -303,6 +337,7 @@ export class DesktopPushService {
         retryable = true
       }
     }
+
     return retryable
   }
 
@@ -310,11 +345,15 @@ export class DesktopPushService {
     if (!this.outbox.pending().some((item) => item.reqId === reqId)) {
       return true
     }
+
     const deleted = await this.client.deleteDevice(registrationId)
+
     if (!deleted) {
       return false
     }
+
     this.outbox.remove(reqId)
+
     return true
   }
 
@@ -322,6 +361,7 @@ export class DesktopPushService {
     if (this.retryArmed || this.stopped) {
       return
     }
+
     this.retryArmed = true
     const delayMs = this.retryDelayMs
     this.retryDelayMs = Math.min(delayMs * 2, OUTBOX_RETRY_MAX_MS)

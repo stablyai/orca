@@ -37,15 +37,19 @@ export type TerminalQuickCommandHostsSlice = {
 }
 
 const mutationChains = new Map<string, Promise<void>>()
+
 const mutationRevisions = new Map<string, number>()
+
 const loadRequests = new Map<string, { connectionGeneration: number; request: Promise<void> }>()
 
 function readCommands(result: unknown): TerminalQuickCommand[] {
   const raw = (result as { terminalQuickCommands?: unknown } | null)?.terminalQuickCommands
   const commands = parseNormalizedTerminalQuickCommands(raw)
+
   if (!commands) {
     throw new Error('Remote Orca returned invalid quick commands.')
   }
+
   return commands
 }
 
@@ -57,6 +61,7 @@ function updateEntry(
   set((state) => {
     const next = new Map(state.runtimeTerminalQuickCommands)
     next.set(environmentId, update(next.get(environmentId)))
+
     return { runtimeTerminalQuickCommands: next }
   })
 }
@@ -69,6 +74,7 @@ async function mutateLocalCommands(
     const current = get().settings?.terminalQuickCommands ?? []
     const next = applyTerminalQuickCommandMutation(current, mutation)
     await get().updateSettingsOrThrow({ terminalQuickCommands: next })
+
     return true
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to save quick command.'
@@ -79,6 +85,7 @@ async function mutateLocalCommands(
       ),
       { description: message }
     )
+
     return false
   }
 }
@@ -91,8 +98,10 @@ async function mutateRemoteCommands(
   mutationRevisions.set(environmentId, (mutationRevisions.get(environmentId) ?? 0) + 1)
   const previous = mutationChains.get(environmentId) ?? Promise.resolve()
   let succeeded = false
+
   const request = previous.then(async () => {
     const connectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+
     try {
       const result = await callRuntimeRpc<{ terminalQuickCommands: unknown }>(
         { kind: 'environment', environmentId },
@@ -100,10 +109,13 @@ async function mutateRemoteCommands(
         { mutation },
         { timeoutMs: 15_000 }
       )
+
       const commands = readCommands(result)
+
       if (getRuntimeEnvironmentConnectionGeneration(environmentId) !== connectionGeneration) {
         return
       }
+
       updateEntry(set, environmentId, (current) => ({
         ...current,
         commands,
@@ -118,6 +130,7 @@ async function mutateRemoteCommands(
       if (getRuntimeEnvironmentConnectionGeneration(environmentId) !== connectionGeneration) {
         return
       }
+
       const message = error instanceof Error ? error.message : 'Failed to save quick command.'
       updateEntry(set, environmentId, (current) => ({
         commands: current?.commands ?? [],
@@ -136,11 +149,14 @@ async function mutateRemoteCommands(
       )
     }
   })
+
   mutationChains.set(environmentId, request)
   await request
+
   if (mutationChains.get(environmentId) === request) {
     mutationChains.delete(environmentId)
   }
+
   return succeeded
 }
 
@@ -154,11 +170,14 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
 
   loadRuntimeTerminalQuickCommands: async (environmentId, options) => {
     const trimmed = environmentId.trim()
+
     if (!trimmed) {
       return
     }
+
     const connectionGeneration = getRuntimeEnvironmentConnectionGeneration(trimmed)
     const current = get().runtimeTerminalQuickCommands.get(trimmed)
+
     if (
       !options?.force &&
       current?.ready &&
@@ -166,10 +185,13 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
     ) {
       return
     }
+
     const existing = loadRequests.get(trimmed)
+
     if (existing?.connectionGeneration === connectionGeneration) {
       return existing.request
     }
+
     const request = (async () => {
       updateEntry(set, trimmed, (entry) => ({
         commands:
@@ -182,15 +204,18 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
         supported:
           entry?.connectionGeneration === connectionGeneration ? (entry.supported ?? null) : null
       }))
+
       try {
         const supported = await runtimeEnvironmentSupportsCapability(
           trimmed,
           TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
           15_000
         )
+
         if (getRuntimeEnvironmentConnectionGeneration(trimmed) !== connectionGeneration) {
           return
         }
+
         if (!supported) {
           updateEntry(set, trimmed, () => ({
             commands: [],
@@ -200,22 +225,27 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
             ready: true,
             supported: false
           }))
+
           return
         }
+
         await (mutationChains.get(trimmed) ?? Promise.resolve())
         const mutationRevision = mutationRevisions.get(trimmed) ?? 0
+
         const result = await callRuntimeRpc<{ terminalQuickCommands: unknown }>(
           { kind: 'environment', environmentId: trimmed },
           'settings.getTerminalQuickCommands',
           undefined,
           { timeoutMs: 15_000 }
         )
+
         if (
           getRuntimeEnvironmentConnectionGeneration(trimmed) !== connectionGeneration ||
           (mutationRevisions.get(trimmed) ?? 0) !== mutationRevision
         ) {
           return
         }
+
         updateEntry(set, trimmed, () => ({
           commands: readCommands(result),
           connectionGeneration,
@@ -228,6 +258,7 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
         if (getRuntimeEnvironmentConnectionGeneration(trimmed) !== connectionGeneration) {
           return
         }
+
         updateEntry(set, trimmed, (entry) => ({
           commands: entry?.commands ?? [],
           connectionGeneration,
@@ -238,8 +269,10 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
         }))
       }
     })()
+
     const trackedRequest = { connectionGeneration, request }
     loadRequests.set(trimmed, trackedRequest)
+
     try {
       await request
     } finally {
@@ -251,17 +284,21 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
 
   upsertTerminalQuickCommand: async (hostId, command) => {
     const parsed = parseExecutionHostId(hostId)
+
     if (!parsed || parsed.kind !== 'runtime') {
       return mutateLocalCommands(get, { type: 'upsert', command })
     }
+
     return mutateRemoteCommands(set, parsed.environmentId, { type: 'upsert', command })
   },
 
   deleteTerminalQuickCommand: async (hostId, commandId) => {
     const parsed = parseExecutionHostId(hostId)
+
     if (!parsed || parsed.kind !== 'runtime') {
       return mutateLocalCommands(get, { type: 'delete', id: commandId })
     }
+
     return mutateRemoteCommands(set, parsed.environmentId, { type: 'delete', id: commandId })
   },
 
@@ -270,6 +307,7 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
     set((state) => {
       const next = new Map(state.runtimeTerminalQuickCommands)
       let changed = false
+
       for (const id of next.keys()) {
         if (!keep.has(id)) {
           next.delete(id)
@@ -279,6 +317,7 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
           changed = true
         }
       }
+
       return changed ? { runtimeTerminalQuickCommands: next } : state
     })
   }

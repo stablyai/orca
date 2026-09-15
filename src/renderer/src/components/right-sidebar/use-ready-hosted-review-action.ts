@@ -29,12 +29,15 @@ export function useReadyHostedReviewAction({
   handleMarkReadyForReview: () => Promise<void>
 } {
   const [readying, setReadying] = useState(false)
+
   const handleMarkReadyForReview = useCallback(async () => {
     if (readying) {
       return
     }
+
     setReadying(true)
     setActionError(null)
+
     try {
       const result = isGitLab
         ? await markGitLabHostedReviewReadyForReview({ repo, mrNumber: reviewNumber })
@@ -43,11 +46,14 @@ export function useReadyHostedReviewAction({
             prNumber: reviewNumber,
             prRepo: githubPR?.prRepo ?? null
           })
+
       if (!result.ok) {
         setActionError(result.error)
         toast.error(result.error)
+
         return
       }
+
       toast.success(
         translate(
           'auto.components.right.sidebar.HostedReviewActions.readyToast',
@@ -59,6 +65,7 @@ export function useReadyHostedReviewAction({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : `Failed to mark ${reviewLabel} ready for review`
+
       setActionError(message)
       toast.error(message)
     } finally {

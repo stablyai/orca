@@ -67,8 +67,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -92,9 +95,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -230,6 +235,7 @@ describe('LocalPtyProvider', () => {
       const dataHandler = vi.fn()
       provider.configure({ onData: runtimeData })
       provider.onData(dataHandler)
+
       const { id } = await provider.spawn({
         cols: 80,
         rows: 24,
@@ -238,6 +244,7 @@ describe('LocalPtyProvider', () => {
           deadlineMs: 5_000
         }
       })
+
       const onDataCb = mockProc.onData.mock.calls[0][0]
       const query = '\x1b]10;?\x07'
       const echo = ']10;rgb:2e2e/3434/3434\\'
@@ -269,11 +276,13 @@ describe('LocalPtyProvider', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const dataHandler = vi.fn()
       provider.onData(dataHandler)
+
       const { id } = await provider.spawn({
         cols: 80,
         rows: 24,
         shellOverride: 'powershell.exe'
       })
+
       const onDataCb = mockProc.onData.mock.calls[0][0]
       const query = '\x1b]10;?\x07'
 
@@ -291,12 +300,14 @@ describe('LocalPtyProvider', () => {
 
     it('keeps forwarded OSC color replies for a Windows-owned WSL PTY', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       const { id } = await provider.spawn({
         cols: 80,
         rows: 24,
         shellOverride: 'wsl.exe',
         terminalWindowsWslDistro: 'Ubuntu'
       })
+
       const onDataCb = mockProc.onData.mock.calls[0][0]
       const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
 

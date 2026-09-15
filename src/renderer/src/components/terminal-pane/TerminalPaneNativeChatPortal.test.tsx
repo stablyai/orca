@@ -26,6 +26,7 @@ vi.mock('@/store', () => ({
 vi.mock('../native-chat/NativeChatView', () => ({
   default: (props: { isFocusedGroup: boolean }) => {
     mocks.nativeChatViewProps = props
+
     return <span data-focused-group={String(props.isFocusedGroup)} />
   }
 }))
@@ -46,6 +47,7 @@ describe('TerminalPaneNativeChatPortal', () => {
     (_, structured) => {
       const portalContainer = document.createElement('div')
       document.body.appendChild(portalContainer)
+
       const view = render(
         <TerminalPaneNativeChatPortal
           controller={makeController(portalContainer, {
@@ -78,6 +80,7 @@ function makeController(
     leafId: '11111111-1111-4111-8111-111111111111',
     container: portalContainer
   }
+
   return {
     chatPane,
     chatPaneLaunchAgent: null,

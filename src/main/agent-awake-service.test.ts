@@ -27,10 +27,12 @@ function workingStatus(overrides: Partial<AgentAwakeStatus> = {}): AgentAwakeSta
 function createBlocker() {
   const startedIds = new Set<number>()
   let nextId = 1
+
   return {
     start: vi.fn(() => {
       const id = nextId++
       startedIds.add(id)
+
       return id
     }),
     stop: vi.fn((id: number) => {
@@ -59,6 +61,7 @@ function createLinuxAssertion() {
 
 function createPowerMonitor() {
   const listeners = new Set<() => void>()
+
   return {
     on: vi.fn((_event: 'resume', listener: () => void) => {
       listeners.add(listener)

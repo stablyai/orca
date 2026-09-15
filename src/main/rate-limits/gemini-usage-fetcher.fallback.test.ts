@@ -55,9 +55,11 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({ 'opencode-go': { type: 'api', key: 'k' } })
       }
+
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(validCreds)
       }
+
       throw { code: 'ENOENT' }
     })
     netFetchMock
@@ -76,9 +78,11 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
       }
+
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(validCreds)
       }
+
       throw { code: 'ENOENT' }
     })
     netFetchMock
@@ -94,6 +98,7 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     const quotaCall = netFetchMock.mock.calls.find(
       (call) => typeof call[0] === 'string' && call[0].includes('retrieveUserQuota')
     )
+
     expect(quotaCall).toBeDefined()
     const quotaBody = JSON.parse((quotaCall![1] as RequestInit).body as string)
     expect(quotaBody.project).toBe('cli-proj-456')
@@ -104,9 +109,11 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
       }
+
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(expiredCreds)
       }
+
       throw { code: 'ENOENT' }
     })
     netFetchMock
@@ -125,6 +132,7 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     const refreshCall = netFetchMock.mock.calls.find(
       (call) => typeof call[0] === 'string' && call[0].includes('oauth2.googleapis.com')
     )
+
     expect(refreshCall).toBeDefined()
     const refreshBody = new URLSearchParams((refreshCall![1] as RequestInit).body as string)
     expect(refreshBody.get('client_id')).toBe('client-id-123')
@@ -136,9 +144,11 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
       }
+
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(expiredCreds)
       }
+
       throw { code: 'ENOENT' }
     })
     // Simulate: no Gemini CLI installed, so the extractor returns null and
@@ -162,9 +172,11 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
       }
+
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(validCreds)
       }
+
       throw { code: 'ENOENT' }
     })
     netFetchMock.mockResolvedValueOnce(makeResponse('Internal Server Error', 500))

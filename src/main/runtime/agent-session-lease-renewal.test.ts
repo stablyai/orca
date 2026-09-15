@@ -7,7 +7,9 @@ import { AgentSessionRecordStore } from './agent-session-record-store'
 import { agentSessionStorePath } from './agent-session-record-store-file'
 
 const NOW = 1_800_000_000_000
+
 const MATCHED = { outcome: 'identity-matched', matchedOn: ['spawn-token'] } as const
+
 const directories: string[] = []
 
 async function establishOwner(
@@ -17,6 +19,7 @@ async function establishOwner(
 ): Promise<AgentSessionRecord> {
   const sessionId = `session-${suffix}`
   const spawnToken = `spawn-${suffix}`
+
   const reserved = await store.reserveOwner({
     sessionId,
     location: {
@@ -40,6 +43,7 @@ async function establishOwner(
     },
     now: NOW
   })
+
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
     sessionId,
@@ -47,6 +51,7 @@ async function establishOwner(
     process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW - 1_000, spawnToken },
     now: NOW
   })
+
   return store.proveOwner({
     sessionId,
     fence,
@@ -67,6 +72,7 @@ async function liveStore(): Promise<{ directory: string; store: AgentSessionReco
   const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
   await establishOwner(store, directory, 'a')
   await establishOwner(store, directory, 'b')
+
   return { directory, store }
 }
 

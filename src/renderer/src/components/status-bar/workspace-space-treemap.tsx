@@ -19,6 +19,7 @@ function getTreemapFill(rect: TreemapRect, selected: boolean): string {
   if (selected) {
     return 'color-mix(in srgb, var(--ring) 40%, var(--card))'
   }
+
   return TREEMAP_FILLS[rect.index % TREEMAP_FILLS.length]
 }
 
@@ -38,11 +39,14 @@ export function WorkspaceSpaceTreemap({
   onZoomChange: (worktreeId: string | null) => void
 }): React.JSX.Element {
   const selectedWorktree = rows.find((row) => row.worktreeId === selectedWorktreeId) ?? null
+
   const canZoomSelected =
     !!selectedWorktree &&
     selectedWorktree.status === 'ok' &&
     selectedWorktree.topLevelItems.length > 0
+
   const isZoomed = !!zoomedWorktree
+
   const rects = useMemo(
     () =>
       buildTreemapLayout(
@@ -133,6 +137,7 @@ export function WorkspaceSpaceTreemap({
       {rects.map((rect) => {
         const area = rect.width * rect.height
         const selected = !isZoomed && rect.id === selectedWorktreeId
+
         const rectStyle = {
           left: `${rect.x}%`,
           top: `${rect.y}%`,
@@ -140,6 +145,7 @@ export function WorkspaceSpaceTreemap({
           height: `${rect.height}%`,
           background: getTreemapFill(rect, selected)
         }
+
         const rectContent =
           area >= 80 ? (
             <span className="block min-w-0 text-[11px] font-medium leading-tight text-foreground">

@@ -17,6 +17,7 @@ function createBarrier(opts?: {
 }) {
   const released: PtyIngressEmission[] = []
   const confirm = vi.fn(opts?.confirm ?? (async () => true))
+
   const barrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: confirm,
     release: (emission) => released.push(emission),
@@ -24,6 +25,7 @@ function createBarrier(opts?: {
     ...(opts?.maxQueuedBytes !== undefined ? { maxQueuedBytes: opts.maxQueuedBytes } : {}),
     ...(opts?.maxPendingMs !== undefined ? { maxPendingMs: opts.maxPendingMs } : {})
   })
+
   return { barrier, released, confirm }
 }
 
@@ -40,6 +42,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('pauses at the unclean-death boundary and delivers the queued prompt after the injected reset', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
     const { barrier, released, confirm } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve))
     })
@@ -69,6 +72,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('queues later emissions during an episode and preserves order', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
     const { barrier, released } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve))
     })
@@ -90,6 +94,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('flushes unmodified with no injection when the proof is refuted', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
     const { barrier, released } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve))
     })
@@ -104,6 +109,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('bails out on timeout and ignores a late confirmation', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
     const { barrier, released } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve)),
       maxPendingMs: 20
@@ -135,6 +141,7 @@ describe('TerminalShellRecoveryBarrier', () => {
   it('does not inject when the session died while the proof settled', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
     let alive = true
+
     const { barrier, released } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve)),
       isAlive: () => alive
@@ -151,6 +158,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('handles a second unclean episode queued behind the first', async () => {
     const confirms: ((confirmed: boolean) => void)[] = []
+
     const { barrier, released, confirm } = createBarrier({
       confirm: () => new Promise((resolve) => void confirms.push(resolve))
     })
@@ -192,9 +200,11 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('proves clean alternate-screen exits without pausing the stream', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
     const { barrier, released, confirm } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve))
     })
+
     const emission = passthrough('\x1b[?1049hTUI\x1b[?1049l\x1b]133;D;0\x07PROMPT')
 
     barrier.accept(emission)
@@ -208,6 +218,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('rejects a clean-exit proof superseded by a later command start', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
     const { barrier } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve))
     })
@@ -231,6 +242,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('resolves idle() at each episode boundary', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
     const { barrier } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve))
     })
@@ -239,9 +251,11 @@ describe('TerminalShellRecoveryBarrier', () => {
 
     barrier.accept(passthrough(TRIGGER))
     let idled = false
+
     const idle = barrier.idle().then(() => {
       idled = true
     })
+
     await Promise.resolve()
     expect(idled).toBe(false)
 
@@ -251,12 +265,14 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('skips the episode for a transformed emission it cannot split', () => {
     const { barrier, released, confirm } = createBarrier()
+
     const emission: PtyIngressEmission = {
       data: `${TRIGGER}prompt`,
       rawStartSeq: 0,
       rawEndSeq: 4,
       transformed: true
     }
+
     barrier.accept(emission)
 
     expect(released).toEqual([emission])
@@ -289,12 +305,14 @@ describe('TerminalShellRecoveryBarrier', () => {
   it('survives a throwing downstream client without losing the queue or wedging attach', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
     const released: PtyIngressEmission[] = []
+
     const barrier = new TerminalShellRecoveryBarrier({
       confirmShellForeground: () => new Promise((resolve) => void (resolveConfirm = resolve)),
       release: (emission) => {
         if (emission.data === 'poison') {
           throw new Error('client transport died')
         }
+
         released.push(emission)
       },
       isAlive: () => true
@@ -331,6 +349,7 @@ describe('TerminalShellRecoveryBarrier', () => {
       barrier.accept(prompt)
       expect(released.at(-1)).toBe(prompt)
     }
+
     expect(confirm).toHaveBeenCalledTimes(1)
 
     // A fresh alternate-screen entry re-arms recovery.
@@ -356,6 +375,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     const released: PtyIngressEmission[] = []
     const confirm = vi.fn(() => new Promise<boolean>((resolve) => void (resolveConfirm = resolve)))
     let headThrown = false
+
     const barrier = new TerminalShellRecoveryBarrier({
       confirmShellForeground: confirm,
       release: (emission) => {
@@ -363,6 +383,7 @@ describe('TerminalShellRecoveryBarrier', () => {
           headThrown = true
           throw new Error('client transport died mid-broadcast')
         }
+
         released.push(emission)
       },
       isAlive: () => true

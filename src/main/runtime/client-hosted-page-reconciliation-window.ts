@@ -47,13 +47,17 @@ export class ClientHostedPageReconciliationWindow {
     now: number
   ): T {
     const hold = this.isUnreconciled(pairedDeviceId, now)
+
     if (hold === (result.clientHostedPagesUnreconciled === true)) {
       return result
     }
+
     if (hold) {
       return { ...result, clientHostedPagesUnreconciled: true as const }
     }
+
     const { clientHostedPagesUnreconciled: _held, ...released } = result
+
     return released as T
   }
 }

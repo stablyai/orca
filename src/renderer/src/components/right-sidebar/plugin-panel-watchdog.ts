@@ -48,6 +48,7 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
       // A ping is already outstanding; its deadline will fire first.
       return
     }
+
     // Why: an "unresponsive" badge on a hidden panel is invisible — detect it on resume
     // before the user can interact. getWindowParkVisible, not raw visibilityState: macOS can
     // wedge the latter at 'hidden' with no further visibilitychange, which would park the
@@ -55,16 +56,19 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
     if (!getWindowParkVisible()) {
       return
     }
+
     awaitedPingId = nextPingId++
     options.sendPing(awaitedPingId)
     const deadlineGeneration = generation
     deadlineTimer = setTimeout(() => {
       if (active && generation === deadlineGeneration && awaitedPingId !== null) {
         active = false
+
         if (pingTimer) {
           clearInterval(pingTimer)
           pingTimer = null
         }
+
         deadlineTimer = null
         awaitedPingId = null
         options.onUnresponsive()
@@ -77,6 +81,7 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
       if (active) {
         return
       }
+
       // React StrictMode intentionally runs effect setup → cleanup → setup.
       // A stopped watchdog must be reusable by the second real setup.
       generation += 1
@@ -99,10 +104,12 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
       generation += 1
       unsubscribeVisibility?.()
       unsubscribeVisibility = null
+
       if (pingTimer) {
         clearInterval(pingTimer)
         pingTimer = null
       }
+
       clearDeadline()
       awaitedPingId = null
     },

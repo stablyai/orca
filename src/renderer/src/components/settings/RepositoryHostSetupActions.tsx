@@ -67,15 +67,20 @@ export function RepositoryHostSetupActions({
   const [isSettingUp, setIsSettingUp] = useState(false)
   const [isCloning, setIsCloning] = useState(false)
   const [isCreatingPendingSetup, setIsCreatingPendingSetup] = useState(false)
+
   const defaultSetupHostOption =
     setupHostOptions.find((option) => option.isAvailable && option.canUsePathActions) ??
     setupHostOptions.find((option) => option.isAvailable) ??
     setupHostOptions[0] ??
     null
+
   const setupTargetHostId = selectedSetupHostId ?? defaultSetupHostOption?.id ?? null
+
   const setupTargetHostOption =
     setupHostOptions.find((option) => option.id === setupTargetHostId) ?? null
+
   const canUseSetupTargetHost = setupTargetHostOption?.isAvailable ?? false
+
   const canUsePathActions =
     canUseSetupTargetHost && (setupTargetHostOption?.canUsePathActions ?? false)
 
@@ -96,7 +101,9 @@ export function RepositoryHostSetupActions({
     if (!setupTargetHostId || !canUsePathActions || !setupPath.trim()) {
       return
     }
+
     setIsSettingUp(true)
+
     try {
       const result = await setupProjectExistingFolder({
         projectId: selectedProjectHostSetup.projectId,
@@ -105,6 +112,7 @@ export function RepositoryHostSetupActions({
         kind: setupKind,
         displayName: repoDisplayName
       })
+
       if (result) {
         resetFlow()
         onSetupReady(setupTargetHostId)
@@ -118,7 +126,9 @@ export function RepositoryHostSetupActions({
     if (!setupTargetHostId || !canUsePathActions || !cloneUrl.trim() || !cloneDestination.trim()) {
       return
     }
+
     setIsCloning(true)
+
     try {
       const result = await setupProjectClone({
         projectId: selectedProjectHostSetup.projectId,
@@ -127,6 +137,7 @@ export function RepositoryHostSetupActions({
         destination: cloneDestination.trim(),
         displayName: repoDisplayName
       })
+
       if (result) {
         resetFlow()
         onSetupReady(setupTargetHostId)
@@ -140,7 +151,9 @@ export function RepositoryHostSetupActions({
     if (!setupTargetHostId || !canUseSetupTargetHost) {
       return
     }
+
     setIsCreatingPendingSetup(true)
+
     try {
       const result = await createProjectHostSetup({
         projectId: selectedProjectHostSetup.projectId,
@@ -149,6 +162,7 @@ export function RepositoryHostSetupActions({
         setupState: 'not-set-up',
         setupMethod: 'provisioned'
       })
+
       if (result) {
         resetFlow()
       }

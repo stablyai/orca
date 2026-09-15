@@ -1,7 +1,9 @@
 export const TERMINAL_ACCESSORY_REPEAT_DELAY_MS = 400
+
 export const TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS = 45
 
 type TerminalAccessoryRepeatSender<TInput> = (input: TInput) => Promise<boolean>
+
 type TerminalAccessoryRepeatSendToTerminal<TInput> = (
   input: TInput,
   targetHandle: string,
@@ -17,6 +19,7 @@ export function createTerminalAccessoryRepeatSender<TInput>(
     if (!targetHandle || !isDeliveryTargetCurrent(targetHandle)) {
       return Promise.resolve(false)
     }
+
     return sendToTerminal(input, targetHandle, () => isDeliveryTargetCurrent(targetHandle))
   }
 }
@@ -27,6 +30,7 @@ export function createTerminalAccessoryRepeatController<TInput>() {
 
   const stop = () => {
     generation += 1
+
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
@@ -43,9 +47,11 @@ export function createTerminalAccessoryRepeatController<TInput>() {
     const schedule = (delayMs: number) => {
       timer = setTimeout(() => {
         timer = null
+
         if (generation !== activeGeneration) {
           return
         }
+
         void send(input).then(
           (sent) => {
             if (sent && generation === activeGeneration) {

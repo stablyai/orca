@@ -23,23 +23,29 @@ vi.mock('./browser-session-registry', () => ({
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
+
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
       copyFileSyncMock(...args)
+
       return actual.copyFileSync(...args)
     }
   }
 })
+
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -63,7 +69,9 @@ import { importCookiesFromBrowser, type DetectedBrowser } from './browser-cookie
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 
 const routePartition = `persist:orca-browser-v1-${'b'.repeat(64)}`
+
 let tmpDir = ''
+
 let cookiesSetMock: ReturnType<typeof vi.fn>
 
 function chromeBrowser(cookiesPath: string): DetectedBrowser {
@@ -116,6 +124,7 @@ describe('importCookiesFromBrowser into a client-hosted route partition', () => 
   // userData forever and still report a lossy import as a clean success.
   it('refuses the restart fallback instead of staging a plaintext cookie database', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+
     const targetCookiesPath = join(
       tmpDir,
       'userData',
@@ -124,6 +133,7 @@ describe('importCookiesFromBrowser into a client-hosted route partition', () => 
       'Network',
       'Cookies'
     )
+
     createChromiumCookieTestDatabase(sourceCookiesPath, [
       { name: 'sid', value: 'source-value' }
     ]).close()
@@ -132,6 +142,7 @@ describe('importCookiesFromBrowser into a client-hosted route partition', () => 
     cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
     try {
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),

@@ -71,11 +71,13 @@ function createSpawnedProcess(result: 'spawn' | 'error' = 'spawn'): {
           callback(result === 'error' ? new Error('launcher unavailable') : undefined)
         })
       }
+
       return child
     }),
     off: vi.fn(() => child),
     unref: vi.fn()
   }
+
   return child
 }
 
@@ -95,6 +97,7 @@ function createSshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
 describe('registerShellHandlers', () => {
   const settings = { activeRuntimeEnvironmentId: null as string | null }
   const sshTargets = new Map<string, SshTarget>()
+
   const store = {
     getSettings: () => settings,
     getSshTarget: (id: string) => sshTargets.get(id)
@@ -124,9 +127,11 @@ describe('registerShellHandlers', () => {
   function getHandler(channel: string): (event: unknown, ...args: unknown[]) => Promise<unknown> {
     registerShellHandlers(store as never)
     const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === channel)
+
     if (!call) {
       throw new Error(`${channel} handler not registered`)
     }
+
     return call[1] as (event: unknown, ...args: unknown[]) => Promise<unknown>
   }
 

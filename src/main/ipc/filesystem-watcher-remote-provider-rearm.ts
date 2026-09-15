@@ -35,15 +35,18 @@ export function reinstallRemoteWatchersForConnectionCore(
   if (watcherLifecycleState.remoteWatchersClosed) {
     return
   }
+
   for (const [key, desired] of Array.from(watcherLifecycleState.desiredRemoteWatchers)) {
     if (desired.connectionId !== connectionId) {
       continue
     }
+
     for (const [senderId, sender] of Array.from(desired.listeners)) {
       if (sender.isDestroyed()) {
         desired.listeners.delete(senderId)
       }
     }
+
     if (desired.listeners.size === 0) {
       watcherLifecycleState.desiredRemoteWatchers.delete(key)
       continue
@@ -52,28 +55,35 @@ export function reinstallRemoteWatchersForConnectionCore(
     // Why: drop the entry the dead transport left behind first — installRemoteWatcher treats an
     // existing entry as already-installed and would hand back a watcher that can never fire again.
     const stale = watcherLifecycleState.remoteWatchers.get(key)
+
     if (stale) {
       watcherLifecycleState.remoteWatchers.delete(key)
       stale.batch.close()
+
       try {
         stale.unwatch()
       } catch {
         // Why: the handle belongs to the replaced transport; failing to close it is expected.
       }
     }
+
     const retryTimer = watcherLifecycleState.pendingRemoteWatcherRetries.get(key)
+
     if (retryTimer) {
       clearTimeout(retryTimer)
       watcherLifecycleState.pendingRemoteWatcherRetries.delete(key)
       watcherLifecycleState.pendingRemoteWatcherRetryListeners.delete(key)
     }
+
     // Why: a pending watch belongs to the replaced transport; joiners must retry on the new provider.
     const inFlight = watcherLifecycleState.inFlightRemoteInstalls.get(key)
+
     if (inFlight) {
       inFlight.listeners.clear()
       inFlight.cancelled = true
       inFlight.abortController.abort()
     }
+
     // Why: this reinstall supersedes the pending backoff; leaving it armed double-installs the key.
     clearDormantRemoteWatcher(key)
     watcherLifecycleState.loggedUnavailableRemoteWatchers.delete(key)
@@ -91,10 +101,13 @@ export function reinstallRemoteWatchersForConnectionCore(
           desired.worktreePath,
           listeners.filter((_, index) => results[index] === 'installed')
         )
+
         if (results.some((result) => result === 'capacity')) {
           dependencies.scheduleDormant(desired.connectionId, desired.worktreePath)
+
           return
         }
+
         if (results.some((result) => result === 'unavailable')) {
           for (const listener of listeners) {
             dependencies.scheduleRetry(
@@ -111,6 +124,7 @@ export function reinstallRemoteWatchersForConnectionCore(
         if (isWatcherRemovalInProgressError(error)) {
           return
         }
+
         for (const listener of listeners) {
           dependencies.scheduleRetry(
             listener,

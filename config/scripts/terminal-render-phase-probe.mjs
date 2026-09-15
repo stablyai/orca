@@ -3,19 +3,25 @@ export function installTerminalRenderPhaseProbe() {
   if (window.__orcaRenderPhaseProbe || !window.__orcaLiveRenderPanes) {
     throw new Error('Missing verified pane references, or another probe is active')
   }
+
   const events = []
   const cleanup = []
   let dropped = 0
   const startedAt = performance.now()
+
   function record(pane, kind, extra = {}) {
     if (!pane.terminal.element?.contains(document.activeElement)) {
       return
     }
+
     const core = pane.terminal._core
+
     if (events.length >= 5000) {
       dropped++
+
       return
     }
+
     events.push({
       at: performance.now(),
       leafId: pane.leafId,
@@ -25,11 +31,14 @@ export function installTerminalRenderPhaseProbe() {
       ...extra
     })
   }
+
   function wrap(object, key, makeWrapper) {
     const original = object?.[key]
+
     if (typeof original !== 'function') {
       return
     }
+
     const wrapped = makeWrapper(original)
     object[key] = wrapped
     cleanup.push(() => {
@@ -38,18 +47,23 @@ export function installTerminalRenderPhaseProbe() {
       }
     })
   }
+
   function subscribe(object, key, listener) {
     const disposable = object?.[key]?.(listener)
+
     if (disposable) {
       cleanup.push(() => disposable.dispose())
     }
   }
+
   for (const pane of window.__orcaLiveRenderPanes) {
     const terminal = pane.terminal
     const service = terminal?._core?._renderService
+
     if (!service) {
       continue
     }
+
     subscribe(terminal, 'onData', (data) => record(pane, 'dispatch', { bytes: data.length }))
     subscribe(terminal, 'onWriteParsed', () => record(pane, 'parsed'))
     subscribe(terminal, 'onRender', () => record(pane, 'public-render'))
@@ -62,11 +76,13 @@ export function installTerminalRenderPhaseProbe() {
           if (terminal.element?.contains(document.activeElement)) {
             const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
             const controls = [...text.matchAll(/\x1b\[([0-?]*)([ -/]*)([@-~])/g)]
+
             const withoutControls = text
               .replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\)/g, '')
               .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
               .replace(/\x1b[()][0-~]/g, '')
               .replace(/[\x00-\x1f\x7f]/g, '')
+
             record(pane, 'write', {
               bytes: data.length,
               printableChars: withoutControls.length,
@@ -75,6 +91,7 @@ export function installTerminalRenderPhaseProbe() {
               csiFinals: controls.map((c) => c[3]).join('')
             })
           }
+
           return original.call(this, data, ...args)
         }
     )
@@ -89,6 +106,7 @@ export function installTerminalRenderPhaseProbe() {
             synchronous: !!sync,
             redrawOnly: !!redrawOnly
           })
+
           return original.call(this, start, end, sync, redrawOnly)
         }
     )
@@ -101,18 +119,22 @@ export function installTerminalRenderPhaseProbe() {
           const before = performance.now()
           const result = original.apply(this, args)
           record(pane, 'render-rows', { duration: performance.now() - before })
+
           return result
         }
     )
   }
+
   const keydown = (event) => {
     const pane = window.__orcaLiveRenderPanes.find((p) =>
       p.terminal.element?.contains(event.target)
     )
+
     if (pane) {
       record(pane, 'keydown', { eventAt: event.timeStamp, trusted: event.isTrusted })
     }
   }
+
   document.addEventListener('keydown', keydown, true)
   cleanup.push(() => document.removeEventListener('keydown', keydown, true))
   window.__orcaRenderPhaseProbe = {
@@ -120,10 +142,13 @@ export function installTerminalRenderPhaseProbe() {
       for (const dispose of cleanup.toReversed()) {
         dispose()
       }
+
       delete window.__orcaRenderPhaseProbe
       delete window.__orcaLiveRenderPanes
+
       return { startedAt, endedAt: performance.now(), events, dropped }
     }
   }
+
   return { startedAt, panes: window.__orcaLiveRenderPanes.length }
 }

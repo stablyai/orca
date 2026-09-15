@@ -207,13 +207,16 @@ describe('createRepoRowExecutionHostLookup', () => {
     rows: readonly ExecutionHostOwnerRow[]
   ): { repos: ExecutionHostOwnerRow[]; idReads: () => number } => {
     let idReads = 0
+
     const repos = rows.map(({ id, ...rest }) => ({
       ...rest,
       get id(): string {
         idReads += 1
+
         return id
       }
     }))
+
     return { repos, idReads: () => idReads }
   }
 
@@ -223,6 +226,7 @@ describe('createRepoRowExecutionHostLookup', () => {
       { id: 'b', connectionId: 'm4air' },
       { id: 'c' }
     ])
+
     const lookup = createRepoRowExecutionHostLookup(repos)
     // One grouping pass over the list — a Map get plus a set per row — and then never again.
     const afterBuild = idReads()
@@ -233,6 +237,7 @@ describe('createRepoRowExecutionHostLookup', () => {
       lookup.byId('missing')
       lookup.byHost('b', 'ssh:m4air')
     }
+
     expect(idReads()).toBe(afterBuild)
   })
 

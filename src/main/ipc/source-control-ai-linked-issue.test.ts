@@ -4,8 +4,11 @@ import type { Store } from '../persistence'
 import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
 
 const LOCAL_PATH = path.resolve('/workspace/repo-feature')
+
 const LOCAL_ID = `repo-1::${LOCAL_PATH}`
+
 const REMOTE_PATH = '/home/tester/wt'
+
 const REMOTE_ID = `repo-1::${REMOTE_PATH}`
 
 function makeStore(meta: Record<string, { linkedIssue?: number | null }>): Store {
@@ -110,6 +113,7 @@ describe('resolveSourceControlAiLinkedIssue', () => {
   it('matches SSH remote paths from a Windows host without path rewriting', () => {
     const original = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       const store = makeStore({ [REMOTE_ID]: { linkedIssue: 77 } })
 
@@ -148,6 +152,7 @@ describe('resolveSourceControlAiLinkedIssue', () => {
         worktreePath: LOCAL_PATH
       })
     ).toBeNull()
+
     for (const linkedIssue of [null, undefined, Number.NaN, 0, -7, 12.9]) {
       expect(
         resolveSourceControlAiLinkedIssue(makeStore({ [LOCAL_ID]: { linkedIssue } }), {

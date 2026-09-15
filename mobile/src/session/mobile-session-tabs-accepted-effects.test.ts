@@ -15,6 +15,7 @@ describe('runAcceptedMobileSessionTabsEffects', () => {
     (source) => {
       let pendingPageId: string | null = 'page-1'
       const activateBrowserTab = vi.fn()
+
       const options = {
         effectiveTabs: [
           {
@@ -59,12 +60,14 @@ describe('runAcceptedMobileSessionTabsEffects', () => {
 
   it('marks only an effective active dirty markdown stream tab stale', () => {
     const markActiveMarkdownStale = vi.fn()
+
     const base = {
       getPendingBrowserPageId: () => null,
       clearPendingBrowserPageId: vi.fn(),
       activateBrowserTab: vi.fn(),
       markActiveMarkdownStale
     }
+
     const markdown: Tab = {
       id: 'markdown-1',
       type: 'markdown',

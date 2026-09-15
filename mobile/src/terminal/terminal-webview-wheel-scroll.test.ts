@@ -5,12 +5,14 @@ import { XTERM_HTML } from './terminal-webview-html'
 function iifeSource(): string {
   const start = XTERM_HTML.indexOf('(function() {')
   const end = XTERM_HTML.lastIndexOf('})();')
+
   return XTERM_HTML.slice(start, end + '})();'.length)
 }
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
   const end = XTERM_HTML.indexOf('<script>', start)
+
   return XTERM_HTML.slice(start, end)
 }
 
@@ -21,6 +23,7 @@ type BufferState = {
 }
 
 type TerminalStub = ReturnType<typeof makeTerminal>
+
 type RegisteredWindowListener = {
   listener: EventListenerOrEventListenerObject
   options?: boolean | AddEventListenerOptions
@@ -28,8 +31,11 @@ type RegisteredWindowListener = {
 }
 
 const CELL_HEIGHT = 15
+
 const ESC = '\u001b'
+
 const ESC_ARROW_DOWN = `${ESC}[B`
+
 const ESC_APP_ARROW_UP = `${ESC}OA`
 
 function makeTerminal(buffer: BufferState, scrollLines: (lines: number) => void) {
@@ -86,14 +92,17 @@ function makeTerminal(buffer: BufferState, scrollLines: (lines: number) => void)
     onWriteParsed: () => ({ dispose() {} }),
     dispose() {}
   }
+
   return terminal
 }
 
 function dispatchWheel(deltaY: number, init: WheelEventInit = {}): WheelEvent {
   const surface = document.getElementById('terminal-surface')
+
   if (!surface) {
     throw new Error('terminal surface missing')
   }
+
   const event = new WheelEvent('wheel', {
     bubbles: true,
     cancelable: true,
@@ -103,11 +112,14 @@ function dispatchWheel(deltaY: number, init: WheelEventInit = {}): WheelEvent {
     deltaY,
     ...init
   })
+
   if (init.ctrlKey) {
     // Why: happy-dom drops modifier flags from the WheelEvent init dict.
     Object.defineProperty(event, 'ctrlKey', { value: true })
   }
+
   surface.dispatchEvent(event)
+
   return event
 }
 
@@ -135,6 +147,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
       })
     )
+
     // Why: init commits the replacement surface on the next animation frame.
     while (animationFrames.length > 0) {
       animationFrames.shift()?.()
@@ -164,19 +177,23 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     }) as typeof window.addEventListener)
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
       animationFrames.push(callback)
+
       return animationFrames.length
     })
     vi.stubGlobal('cancelAnimationFrame', () => {})
     Object.defineProperty(window, 'innerWidth', { value: 381, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 612, configurable: true })
     postMessage = vi.fn()
+
     const webWindow = window as unknown as {
       Terminal: new () => TerminalStub
       ReactNativeWebView: { postMessage: (data: string) => void }
     }
+
     webWindow.Terminal = function () {
       const terminal = makeTerminal(buffer, scrollLines)
       terminals.push(terminal)
+
       return terminal
     } as unknown as new () => TerminalStub
     webWindow.ReactNativeWebView = { postMessage }
@@ -186,6 +203,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     for (const { type, listener, options } of registeredWindowListeners) {
       window.removeEventListener(type, listener as EventListener, options)
     }
+
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -206,9 +224,11 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     buffer = { baseY: 0, type: 'alternate', viewportY: 0 }
     boot()
     const terminal = terminals[0]
+
     if (!terminal) {
       throw new Error('terminal missing')
     }
+
     ;(terminal.modes as Record<string, unknown>).applicationCursorKeysMode = true
 
     dispatchWheel(-2 * CELL_HEIGHT)
@@ -220,9 +240,11 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     buffer = { baseY: 0, type: 'alternate', viewportY: 0 }
     boot()
     const terminal = terminals[0]
+
     if (!terminal) {
       throw new Error('terminal missing')
     }
+
     terminal.modes.mouseTrackingMode = 'any'
 
     dispatchWheel(CELL_HEIGHT)

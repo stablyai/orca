@@ -23,13 +23,16 @@ export function TerminalSplitWorkspaceSurfaces({
     renderedActiveWorktreeId,
     workspaceSurfaces
   } = controller
+
   // Why: this and TerminalSurface are both strict ancestors of every browser <webview>, so a
   // remote controller needs each to drop `hidden` — the per-worktree surface hatch below cannot
   // override an ancestor that stopped compositing.
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!effectiveActiveLayout)
+
   if (!anyMountedWorktreeHasLayout) {
     return null
   }
+
   return (
     <div
       className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${
@@ -44,16 +47,21 @@ export function TerminalSplitWorkspaceSurfaces({
         .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
         .map((workspace) => {
           const layout = getEffectiveLayoutForWorktree(workspace.id)
+
           if (!layout) {
             return null
           }
+
           const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+
           const shouldMeasureHiddenWorktree =
             !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
+
           const shouldColdParkTerminalPanes =
             !isVisible &&
             !shouldMeasureHiddenWorktree &&
             effectiveParkedTerminalWorktreeIds.has(workspace.id)
+
           return (
             <WorktreeSplitSurface
               key={`tab-groups-${workspace.id}`}

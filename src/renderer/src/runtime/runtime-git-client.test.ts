@@ -26,25 +26,45 @@ import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
 
 const gitStatus = vi.fn()
+
 const gitCancelStatus = vi.fn()
+
 const gitCheckIgnored = vi.fn()
+
 const gitSubmoduleStatus = vi.fn()
+
 const gitDiff = vi.fn()
+
 const gitBranchCompare = vi.fn()
+
 const gitHistory = vi.fn()
+
 const gitBulkStage = vi.fn()
+
 const gitBulkDiscard = vi.fn()
+
 const gitCommit = vi.fn()
+
 const gitFetch = vi.fn()
+
 const gitFastForward = vi.fn()
+
 const gitPush = vi.fn()
+
 const gitRebaseFromBase = vi.fn()
+
 const gitGenerateCommitMessage = vi.fn()
+
 const gitGeneratePullRequestFields = vi.fn()
+
 const gitDiscoverCommitMessageModels = vi.fn()
+
 const gitCancelGenerateCommitMessage = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const runtimeCall = vi.fn()
 
 beforeEach(() => {
@@ -162,6 +182,7 @@ describe('runtime git client', () => {
     gitDiff.mockResolvedValue({ hunks: [] })
     gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
     const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+
     const context = {
       settings: { activeRuntimeEnvironmentId: null },
       worktreeId: `folder-repo::/home/user::workspace:${workspaceId}`,
@@ -213,6 +234,7 @@ describe('runtime git client', () => {
       entries: [{ path: 'src/a.ts', status: 'modified', area: 'unstaged', added: 3, removed: 2 }],
       conflictOperation: 'unknown'
     }
+
     gitStatus.mockResolvedValue(oldHostResult)
 
     const result = await getRuntimeGitStatus(
@@ -281,6 +303,7 @@ describe('runtime git client', () => {
       },
       { reuseLineStats: true, signal: controller.signal }
     )
+
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalled())
     const statusArgs = gitStatus.mock.calls[0]?.[0] as { requestToken?: string }
     controller.abort()
@@ -482,6 +505,7 @@ describe('runtime git client', () => {
       entries: [{ path: 'src/a.ts', status: 'modified', area: 'unstaged', added: 3, removed: 2 }],
       conflictOperation: 'unknown'
     }
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
@@ -616,6 +640,7 @@ describe('runtime git client', () => {
       result: { success: true },
       _meta: { runtimeId: 'remote-runtime' }
     })
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'wt-1',
@@ -710,6 +735,7 @@ describe('runtime git client', () => {
       customPrompt: 'Prefer concise subjects.',
       customAgentCommand: ''
     }
+
     const agentCmdOverrides = { codex: 'codex --profile work' }
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -748,6 +774,7 @@ describe('runtime git client', () => {
       thinkingLevel: 'high',
       customPrompt: 'Use Conventional Commits.'
     }
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
@@ -822,6 +849,7 @@ describe('runtime git client', () => {
     // Why: the meta key keeps the `::workspace:<uuid>` suffix that the cwd path strips.
     const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
     const worktreeId = `folder-repo::/home/user::workspace:${workspaceId}`
+
     const context = {
       settings: { activeRuntimeEnvironmentId: null },
       worktreeId,

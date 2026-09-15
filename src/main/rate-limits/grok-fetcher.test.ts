@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
+
 const authState = vi.hoisted<{
   file: string | null
   readError: Error | null
@@ -16,9 +17,11 @@ vi.mock('node:fs', () => ({
     if (authState.readError) {
       throw authState.readError
     }
+
     if (authState.file === null) {
       throw new Error('ENOENT')
     }
+
     return authState.file
   }
 }))
@@ -373,6 +376,7 @@ describe('fetchGrokRateLimits', () => {
     let requestSignal: AbortSignal | undefined
     netFetchMock.mockImplementationOnce((_url, init: RequestInit) => {
       requestSignal = init.signal as AbortSignal
+
       return new Promise((_resolve, reject) => {
         requestSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
           once: true

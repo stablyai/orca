@@ -29,12 +29,14 @@ describe('native chat session option enrichment', () => {
 
   it('keeps reads synchronous while one host-scoped probe is in flight', async () => {
     let resolveDiscovery: ((models: CatalogModel[]) => void) | undefined
+
     const discover = vi.fn(
       () =>
         new Promise<CatalogModel[]>((resolve) => {
           resolveDiscovery = resolve
         })
     )
+
     const listener = vi.fn()
     subscribeNativeChatEnrichedModels('cursor', 'ssh:one', listener)
 
@@ -121,6 +123,7 @@ describe('native chat session option enrichment', () => {
         }
       ]
     })
+
     const discover = vi.fn(() =>
       discoverNativeChatCatalogModels('claude', {
         settings: {},
@@ -128,6 +131,7 @@ describe('native chat session option enrichment', () => {
         worktreePath: '/worktree'
       })
     )
+
     const listener = vi.fn()
     subscribeNativeChatEnrichedModels('claude', 'ssh:host', listener)
 
@@ -169,6 +173,7 @@ describe('native chat session option enrichment', () => {
         { id: 'grok-5', label: 'Grok 5', isDefault: true }
       ]
     })
+
     const discover = vi.fn(() =>
       discoverNativeChatCatalogModels('grok', {
         settings: {},
@@ -176,6 +181,7 @@ describe('native chat session option enrichment', () => {
         worktreePath: '/worktree'
       })
     )
+
     const listener = vi.fn()
     subscribeNativeChatEnrichedModels('grok', 'ssh:host', listener)
 
@@ -204,6 +210,7 @@ describe('native chat session option enrichment', () => {
       catalogOrigin: 'probe',
       models: [{ id: 'grok-4.5', label: 'Grok 4.5' }]
     })
+
     const discover = vi.fn(() =>
       discoverNativeChatCatalogModels('grok', {
         settings: {},
@@ -211,6 +218,7 @@ describe('native chat session option enrichment', () => {
         worktreePath: '/worktree'
       })
     )
+
     const listener = vi.fn()
     subscribeNativeChatEnrichedModels('grok', 'ssh:legacy', listener)
 
@@ -281,6 +289,7 @@ describe('native chat session option enrichment', () => {
     const persisted = {
       grok: { model: 'grok-4.5', valuesByModel: { 'grok-4.5': { effort: 'low' } } }
     }
+
     // No probe data: the pick is honored — absence of data is not proof of absence.
     expect(resolveNativeChatLaunchSessionOptions(persisted, 'grok')).toMatchObject({
       model: 'grok-4.5',

@@ -9,12 +9,15 @@ it('reads actual Expo APNs payloads when content.data is null', () => {
     notificationSeq: 4,
     notificationEpoch: 'epoch'
   }
+
   const data = readNativeNotificationData({
     content: { data: null },
     trigger: { type: 'push', payload: { aps: {}, orca } }
   })
+
   expect(readOrcaPushPayload(data)).toMatchObject(orca)
 })
+
 it('keeps Android push and local notification data', () => {
   const data = { hostId: 'host', notificationId: 'done' }
   expect(readNativeNotificationData({ content: { data }, trigger: { type: 'push' } })).toBe(data)

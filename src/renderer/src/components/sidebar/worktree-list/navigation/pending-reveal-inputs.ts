@@ -67,48 +67,59 @@ export function expandGroupsForWorktreeReveal(
       defaultHostId: args.defaultHostId
     }
   )
+
   if (folderGroupKeys.length > 0) {
     for (const groupKey of folderGroupKeys) {
       if (args.collapsedGroups.has(groupKey)) {
         args.toggleGroup(groupKey)
       }
     }
+
     return
   }
+
   const targetWorktree = args.worktrees.find(
     (worktree) =>
       worktree.id === worktreeId &&
       (!executionHostId || !worktree.hostId || worktree.hostId === executionHostId)
   )
+
   if (!targetWorktree) {
     return
   }
+
   const targetRepo = args.repoMap.get(targetWorktree.repoId)
   const hostGroupKey = `host:${getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)}`
+
   if (args.collapsedGroups.has(hostGroupKey)) {
     args.toggleGroup(hostGroupKey)
   }
 
   const hostWorktreeMap = new Map<string, Worktree>()
   const hostLineageById: Record<string, WorktreeLineage> = {}
+
   for (const worktree of args.worktrees) {
     if (executionHostId && worktree.hostId && worktree.hostId !== executionHostId) {
       continue
     }
+
     hostWorktreeMap.set(worktree.id, worktree)
     const projected = args.worktreeLineageById[worktree.id]
     const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
     const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
+
     if (lineage) {
       hostLineageById[worktree.id] = lineage
     }
   }
+
   for (const parent of getWorktreeLineageAncestors(
     targetWorktree,
     hostLineageById,
     hostWorktreeMap
   )) {
     const lineageGroupKey = getWorktreeLineageGroupKey(parent)
+
     if (args.collapsedGroups.has(lineageGroupKey)) {
       args.toggleGroup(lineageGroupKey)
     }
@@ -137,6 +148,7 @@ export function expandGroupsForWorktreeReveal(
           args.projectGroups,
           args.projectGrouping
         )
+
   for (const groupKey of groupKeys) {
     if (args.collapsedGroups.has(groupKey)) {
       args.toggleGroup(groupKey)
@@ -151,5 +163,6 @@ export function resolvePendingSidebarReveal(args: {
   if (args.targetIndex !== -1) {
     return 'scroll-and-clear'
   }
+
   return args.targetWorktreeStillExists ? 'keep-pending' : 'clear'
 }

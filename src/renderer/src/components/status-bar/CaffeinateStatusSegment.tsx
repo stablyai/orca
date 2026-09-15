@@ -39,19 +39,23 @@ export function CaffeinateStatusSegment({
 }): React.JSX.Element | null {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
+
   const configuredMode = normalizeComputerAwakeMode(
     settings?.computerAwakeMode,
     settings?.keepComputerAwakeWhileAgentsRun
   )
+
   const [serviceStatus, setServiceStatus] = useState<ComputerAwakeStatus>(INACTIVE_STATUS)
 
   useEffect(() => {
     let mounted = true
+
     const unsubscribe = window.api.agentAwake.onChanged((status) => {
       if (mounted) {
         setServiceStatus(status)
       }
     })
+
     void window.api.agentAwake
       .getStatus()
       .then((status) => {
@@ -60,6 +64,7 @@ export function CaffeinateStatusSegment({
         }
       })
       .catch(() => {})
+
     return () => {
       mounted = false
       unsubscribe()
@@ -71,10 +76,13 @@ export function CaffeinateStatusSegment({
   }
 
   const mode = serviceStatus.mode === configuredMode ? serviceStatus.mode : configuredMode
+
   const active =
     serviceStatus.mode === configuredMode ? serviceStatus.active : configuredMode === 'on'
+
   const title = getAgentAwakeTitle()
   const statusText = `${getAgentAwakeModeLabel(mode)} · ${activityLabel(active)}`
+
   const ariaLabel = translate(
     'auto.components.status.bar.CaffeinateStatusSegment.ariaLabel',
     '{{title}}, {{status}}',

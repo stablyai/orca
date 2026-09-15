@@ -18,6 +18,7 @@ describe('useNativeChatSendLifecycle', () => {
     const first = handle()
     const second = handle()
     const onPendingSendCanceled = vi.fn()
+
     const { result, rerender, unmount } = renderHook(
       ({ targetPtyId }) => useNativeChatSendLifecycle('tab-1', targetPtyId, onPendingSendCanceled),
       { initialProps: { targetPtyId: 'pty-1' as string | null } }
@@ -38,6 +39,7 @@ describe('useNativeChatSendLifecycle', () => {
     vi.useFakeTimers()
     const pending = handle()
     const onPendingSendCanceled = vi.fn()
+
     const { result, unmount } = renderHook(() =>
       useNativeChatSendLifecycle('tab-1', 'pty-1', onPendingSendCanceled)
     )
@@ -55,6 +57,7 @@ describe('useNativeChatSendLifecycle', () => {
     vi.useFakeTimers()
     const settled = handle(800)
     const onPendingSendCanceled = vi.fn()
+
     const { result } = renderHook(() =>
       useNativeChatSendLifecycle('tab-1', 'pty-1', onPendingSendCanceled)
     )
@@ -70,13 +73,16 @@ describe('useNativeChatSendLifecycle', () => {
   it('keeps a renderer-stalled send cancelable past its nominal schedule', async () => {
     vi.useFakeTimers()
     let resolveSettled!: () => void
+
     const stalled = {
       ...handle(640),
       settled: new Promise<void>((resolve) => {
         resolveSettled = resolve
       })
     }
+
     const onPendingSendCanceled = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ targetPtyId }) => useNativeChatSendLifecycle('tab-1', targetPtyId, onPendingSendCanceled),
       { initialProps: { targetPtyId: 'pty-1' as string | null } }

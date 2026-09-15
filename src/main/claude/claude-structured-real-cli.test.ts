@@ -15,34 +15,42 @@ import {
 } from './claude-structured-session-adapter'
 
 const command = resolveClaudeCommand()
+
 const versionLaunch = getSpawnArgsForWindows(command, ['--version'])
+
 const realClaudeAvailable =
   spawnSync(versionLaunch.spawnCmd, versionLaunch.spawnArgs, {
     stdio: 'ignore',
     windowsHide: true,
     timeout: 5_000
   }).status === 0
+
 const authStatusLaunch = getSpawnArgsForWindows(command, ['auth', 'status', '--json'])
+
 /** The CLI's own account report — the only source of truth for where it writes that
  *  is not derived from Orca's own path expressions. */
 const realClaudeAuthStatus = (() => {
   if (!realClaudeAvailable) {
     return null
   }
+
   const result = spawnSync(authStatusLaunch.spawnCmd, authStatusLaunch.spawnArgs, {
     encoding: 'utf8',
     windowsHide: true,
     timeout: 5_000
   })
+
   if (result.status !== 0) {
     return null
   }
+
   try {
     return JSON.parse(result.stdout) as { loggedIn?: boolean; projectsDirectory?: string }
   } catch {
     return null
   }
 })()
+
 const realClaudeAuthenticated = realClaudeAuthStatus?.loggedIn === true
 
 function realAdapter(
@@ -84,12 +92,15 @@ async function waitForResolvedTranscript(
   timeoutMs = 15_000
 ): Promise<string | null> {
   const deadline = Date.now() + timeoutMs
+
   for (;;) {
     // No options: the exact call transcript-read-cache.ts makes for mobile.
     const resolved = await resolveSessionFilePath('claude', providerSessionId)
+
     if (resolved || Date.now() >= deadline) {
       return resolved
     }
+
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
 }
@@ -115,6 +126,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
           fence: 1,
           spawnToken: 'real-cli'
         })
+
         const observedSubtypes = events.flatMap((event) =>
           event.type === 'message' ? [event.message.subtype] : []
         )
@@ -161,9 +173,11 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
           fence: 1,
           spawnToken: 'real-cli-effort'
         })
+
         const published = events.flatMap((event) =>
           event.type === 'message' ? [event.message] : []
         )
+
         const options = await adapter.readOptions({ sessionId: 'real-cli-handshake', fence: 1 })
 
         expect(published.length).toBeGreaterThan(0)
@@ -199,6 +213,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
       const cliProjectsDir = realClaudeAuthStatus?.projectsDirectory as string
 
       let transcriptPath: string | null = null
+
       try {
         await adapter.acquire({
           identity: identity(providerSessionId),
@@ -263,6 +278,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
         })
         const deadline = Date.now() + 60_000
         let frames: Record<string, unknown>[] = []
+
         for (;;) {
           frames = events
             .slice(before)
@@ -273,9 +289,11 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
                 ? [event.message]
                 : []
             )
+
           if (frames.length > 0 || Date.now() >= deadline) {
             break
           }
+
           await new Promise((resolve) => setTimeout(resolve, 250))
         }
 

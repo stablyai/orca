@@ -1,4 +1,5 @@
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000]
+
 const FIXED_RETRY_DELAY_MS = 10_000
 
 function retryDelayMs(attempt: number): number {
@@ -12,12 +13,14 @@ export type NativeChatReadRetryTimer = {
 
 export function createNativeChatReadRetryTimer(): NativeChatReadRetryTimer {
   let timer: ReturnType<typeof setTimeout> | null = null
+
   const cancel = (): void => {
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
   }
+
   return {
     schedule(attempt, retry): void {
       cancel()

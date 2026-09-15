@@ -25,6 +25,7 @@ describe('cleanupHiddenRateLimitPty', () => {
     const dataDisposable = { dispose: vi.fn() }
     const exitDisposable = { dispose: vi.fn() }
     const killMock = vi.fn()
+
     const term = {
       kill: killMock,
       destroy: vi.fn()
@@ -46,6 +47,7 @@ describe('cleanupHiddenRateLimitPty', () => {
   it('releases the PTY fd without killing again after natural exit', () => {
     setPlatform('darwin')
     const killMock = vi.fn()
+
     const term = {
       kill: killMock,
       destroy: vi.fn()
@@ -60,6 +62,7 @@ describe('cleanupHiddenRateLimitPty', () => {
   it('neutralizes POSIX destroy-time SIGHUP after the intentional kill', () => {
     setPlatform('linux')
     const killMock = vi.fn()
+
     const term = {
       kill: killMock,
       destroy: vi.fn(() => {
@@ -75,6 +78,7 @@ describe('cleanupHiddenRateLimitPty', () => {
 
   it('does not destroy after an intentional Windows kill because destroy kills again', () => {
     setPlatform('win32')
+
     const term = {
       kill: vi.fn(),
       destroy: vi.fn(() => {
@@ -90,6 +94,7 @@ describe('cleanupHiddenRateLimitPty', () => {
 
   it('destroys a Windows PTY after natural exit so ConPTY cleanup still runs', () => {
     setPlatform('win32')
+
     const term = {
       kill: vi.fn(),
       destroy: vi.fn(() => {
@@ -105,10 +110,12 @@ describe('cleanupHiddenRateLimitPty', () => {
 
   it('removes registered hidden PTYs when cleanup kills them', () => {
     setPlatform('darwin')
+
     const term = {
       kill: vi.fn(),
       destroy: vi.fn()
     }
+
     const registration = registerHiddenRateLimitPty(term)
 
     expect(getActiveHiddenRateLimitPtyCount()).toBe(1)
@@ -120,10 +127,12 @@ describe('cleanupHiddenRateLimitPty', () => {
 
   it('removes registered hidden PTYs after natural exit cleanup', () => {
     setPlatform('darwin')
+
     const term = {
       kill: vi.fn(),
       destroy: vi.fn()
     }
+
     const registration = registerHiddenRateLimitPty(term)
 
     expect(getActiveHiddenRateLimitPtyCount()).toBe(1)

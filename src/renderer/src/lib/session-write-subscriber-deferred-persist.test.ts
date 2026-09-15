@@ -37,11 +37,13 @@ function terminalTab(id: string, worktreeId: string): AppState['tabsByWorktree']
  *  the way the apply's suppression tail fires it. */
 function createTestPersistGate(isOpen: () => boolean) {
   const listeners: (() => void)[] = []
+
   return {
     deps: {
       shouldSchedulePersist: isOpen,
       subscribeToPersistGateOpen: (onGateOpen: () => void) => {
         listeners.push(onGateOpen)
+
         return () => {
           listeners.length = 0
         }
@@ -70,6 +72,7 @@ describe('session write subscriber defers writes across a closed persistence gat
   it('writes a mutation made while the gate was closed once a later mutation reopens it', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let gateOpen = true
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
@@ -121,6 +124,7 @@ describe('session write subscriber defers writes across a closed persistence gat
   it('writes a mutation whose debounce expired inside the apply window', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let gateOpen = true
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
@@ -156,6 +160,7 @@ describe('session write subscriber defers writes across a closed persistence gat
   it('keeps an unrelated target’s tab close across another target’s apply', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let gateOpen = true
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
@@ -206,6 +211,7 @@ describe('session write subscriber defers writes across a closed persistence gat
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let gateOpen = true
     const gate = createTestPersistGate(() => gateOpen)
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
@@ -240,6 +246,7 @@ describe('session write subscriber defers writes across a closed persistence gat
   it('arms no timer while the gate stays closed', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let gateOpen = true
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
@@ -267,6 +274,7 @@ describe('session write subscriber defers writes across a closed persistence gat
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let gateOpen = true
     const gate = createTestPersistGate(() => gateOpen)
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,

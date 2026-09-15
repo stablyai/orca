@@ -18,14 +18,18 @@ test('terminal pane context menu copies its agent session ID', async ({ orcaPage
   await ensureTerminalVisible(orcaPage)
 
   const tabId = await getActiveTabId(orcaPage)
+
   if (!tabId) {
     throw new Error('No active terminal tab')
   }
+
   const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
   const leafId = snapshot.panes[0]?.leafId
+
   if (!leafId) {
     throw new Error('No active terminal pane')
   }
+
   const paneKey = `${tabId}:${leafId}`
 
   // Keep this independent of an installed provider CLI while exercising the
@@ -33,9 +37,11 @@ test('terminal pane context menu copies its agent session ID', async ({ orcaPage
   await orcaPage.evaluate(
     ({ paneKey, tabId, worktreeId, sessionId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Store unavailable')
       }
+
       state.recordAgentProviderSession(
         paneKey,
         'claude',

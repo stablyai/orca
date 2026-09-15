@@ -6,8 +6,10 @@ export function collectRuntimeWorktreeAgentSources(
   args: Parameters<typeof collectRuntimeWorktreePtyAgentSources>[0]
 ): ReadonlyMap<string, RuntimeWorktreeAgentSource> {
   const sources = new Map<string, RuntimeWorktreeAgentSource>()
+
   for (const source of collectRuntimeWorktreePtyAgentSources(args)) {
     sources.set(source.paneKey, source)
   }
+
   return sources
 }

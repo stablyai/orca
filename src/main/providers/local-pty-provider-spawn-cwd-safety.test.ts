@@ -67,8 +67,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -92,9 +95,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -242,16 +247,19 @@ describe('LocalPtyProvider', () => {
         if (platform) {
           Object.defineProperty(process, 'platform', platform)
         }
+
         if (originalUserProfile === undefined) {
           delete process.env.USERPROFILE
         } else {
           process.env.USERPROFILE = originalUserProfile
         }
+
         if (originalHomeDrive === undefined) {
           delete process.env.HOMEDRIVE
         } else {
           process.env.HOMEDRIVE = originalHomeDrive
         }
+
         if (originalHomePath === undefined) {
           delete process.env.HOMEPATH
         } else {

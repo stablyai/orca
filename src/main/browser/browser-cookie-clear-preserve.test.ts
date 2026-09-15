@@ -17,12 +17,14 @@ import { importedDomainScope } from './browser-cookie-import-policy'
  */
 function jar(initial: Cookie[]) {
   let cookies = [...initial]
+
   const removeMock = vi.fn(async (url: string, name: string) => {
     const host = new URL(url).hostname
     cookies = cookies.filter(
       (c) => !(c.name === name && (c.domain ?? '').replace(/^\./, '') === host.replace(/^\./, ''))
     )
   })
+
   const snapshotMock = vi.fn(async (items: readonly { cookie: Cookie; url: string }[]) =>
     items.map(({ cookie, url }) => ({
       url,
@@ -32,6 +34,7 @@ function jar(initial: Cookie[]) {
       path: cookie.path
     }))
   )
+
   const session: CookieClearSession = {
     cookies: {
       get: async () => [...cookies],
@@ -40,6 +43,7 @@ function jar(initial: Cookie[]) {
     snapshotClearIdentities: snapshotMock,
     restoreClearIdentities: async () => undefined
   } as unknown as CookieClearSession
+
   return {
     session,
     removeMock,
@@ -114,9 +118,11 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
     )
 
     const removed = coordinatesOf(target.removeMock.mock.calls)
+
     const snapshotted = target.snapshotMock.mock.calls.flatMap(([items]) =>
       items.map(({ cookie: c, url }) => `${url}|${c.name}`)
     )
+
     expect(removed).toEqual(['https://other.example/|stale'])
     expect(snapshotted).toEqual(removed)
   })
@@ -143,14 +149,17 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
     // restore set with it. That is what keeps a preserved cookie out of every mutation — including
     // the unconditional Network.setCookie that rollback performs.
     const snapshotted: string[] = []
+
     const target = jar([
       cookie('.mixed.example', 'live-session'),
       cookie('.other.example', 'stale')
     ])
+
     const session = {
       ...target.session,
       snapshotClearIdentities: async (items: { cookie: Cookie; url: string }[]) => {
         snapshotted.push(...items.map((i) => i.cookie.name))
+
         return items.map(({ cookie: c, url }) => ({
           url,
           name: c.name,
@@ -211,21 +220,26 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
 
   it('keeps skip-path removals at concurrency eight', async () => {
     let releaseRemovals: (() => void) | undefined
+
     const removalsReleased = new Promise<void>((resolve) => {
       releaseRemovals = resolve
     })
+
     let active = 0
     let maxActive = 0
+
     const remove = vi.fn(async (_url: string, _name: string) => {
       active++
       maxActive = Math.max(maxActive, active)
       await removalsReleased
       active--
     })
+
     const cookies = [
       cookie('.preserved.example', 'live-session'),
       ...Array.from({ length: 12 }, (_, index) => cookie('.other.example', `stale-${index}`))
     ]
+
     const session = {
       cookies: { get: async () => cookies, remove },
       snapshotClearIdentities: async (items: { cookie: Cookie; url: string }[]) =>
@@ -238,6 +252,7 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
       new Set(['preserved.example']),
       importedDomainScope(['preserved.example', 'other.example'])
     )
+
     await vi.waitFor(() => expect(remove).toHaveBeenCalledTimes(8))
     expect(maxActive).toBe(8)
     releaseRemovals?.()

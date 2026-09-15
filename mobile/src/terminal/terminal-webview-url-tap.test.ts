@@ -105,10 +105,12 @@ function createInjectedFileTapResolvers(): {
       'this.__resolveTerminalFileUrlTap = resolveTerminalFileUrlTap;\n' +
       'this.__resolveTerminalOscFileTap = resolveTerminalOscFileTap;'
   ).runInContext(context)
+
   const injected = context as {
     __resolveTerminalFileUrlTap: InjectedFileTapResolver
     __resolveTerminalOscFileTap: InjectedFileTapResolver
   }
+
   return {
     resolveTerminalFileUrlTap: injected.__resolveTerminalFileUrlTap,
     resolveTerminalOscFileTap: injected.__resolveTerminalOscFileTap
@@ -131,6 +133,7 @@ describe.each([
     if (expected === null) {
       return
     }
+
     expect(resolvers.resolveTerminalOscFileTap(uri)).toEqual(expected)
   })
 })

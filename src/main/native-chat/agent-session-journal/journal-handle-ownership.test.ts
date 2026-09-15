@@ -31,7 +31,9 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let base: string
+
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 function item(ordinal: number): AgentJournalItemIdentity {
@@ -80,6 +82,7 @@ describe('the standalone probe owns its own connection', () => {
       const loaded = await loadJournal(root, IDENTITY.sessionId)
       expect(loaded?.readOnly).toBe(false)
     }
+
     await expectNothingHoldsTheDirectory()
   })
 
@@ -95,6 +98,7 @@ describe('the standalone probe owns its own connection', () => {
       // reopen, so probing repeatedly leaves nothing on a file we must not touch.
       expect((await loadJournal(root, IDENTITY.sessionId))?.readOnly).toBe(true)
     }
+
     // A read-only connection cannot remove the sidecars it materialized, so only
     // the rename/remove half is expected to hold here.
     const moved = `${root}-recovered-vtest`
@@ -128,12 +132,14 @@ describe('failure paths inside the open call', () => {
     blocker.db.pragma('user_version = 0')
     blocker.db.exec('BEGIN IMMEDIATE')
     blocker.db.exec("INSERT INTO journal_sessions VALUES ('other', 'e', 1)")
+
     try {
       expect(() => openJournalDatabase(journalDatabaseFile(root))).toThrow()
     } finally {
       blocker.db.exec('ROLLBACK')
       blocker.db.close()
     }
+
     await expectNothingHoldsTheDirectory()
   }, 60_000)
 
@@ -149,6 +155,7 @@ describe('failure paths inside the open call', () => {
     const exec = vi.spyOn(Database.prototype, 'prepare').mockImplementation(() => {
       throw new Error('replay cannot read this journal')
     })
+
     try {
       await expect(journals.open({ identity: IDENTITY, journalDir: root })).rejects.toThrow(
         'replay cannot read this journal'
@@ -156,6 +163,7 @@ describe('failure paths inside the open call', () => {
     } finally {
       exec.mockRestore()
     }
+
     await expectNothingHoldsTheDirectory()
   })
 })

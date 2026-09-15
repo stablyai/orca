@@ -21,5 +21,6 @@ export function isScreenCursorContext(brand, enValue, key) {
   if (brand !== 'Cursor') {
     return false
   }
+
   return SCREEN_CURSOR_ENVALUES.has(enValue) || SCREEN_CURSOR_KEYS.has(key)
 }

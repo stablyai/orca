@@ -21,6 +21,7 @@ export function createNativeDiagnosticsOperations(
       const platform = `${Platform.OS} ${Platform.Version ?? ''}`.trim()
       const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(host.id))
       const snapshot = await readConnectionDiagnosticsSnapshot(context, connectionLogStore, host.id)
+
       return {
         report: buildConnectionDiagnosticsReport({
           hostName: host.name,

@@ -6,6 +6,7 @@ type SeedWorktree = {
   isMainWorktree: boolean
   hostId?: string
 }
+
 type SeedRepo = { id: string; connectionId?: string | null; executionHostId?: string | null }
 
 const mocks = vi.hoisted(() => {
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => {
     deleteStateByWorktreeId: {} as Record<string, { isDeleting?: boolean }>,
     worktreeMap: new Map<string, SeedWorktree>()
   }
+
   return { state }
 })
 
@@ -49,11 +51,14 @@ function seed(
     isMainWorktree: worktree.isMainWorktree ?? false,
     ...(worktree.hostId ? { hostId: worktree.hostId } : {})
   }))
+
   mocks.state.worktreeMap = new Map(normalized.map((worktree) => [worktree.id, worktree]))
   const byRepo: Record<string, SeedWorktree[]> = {}
+
   for (const worktree of normalized) {
     ;(byRepo[worktree.repoId] ??= []).push(worktree)
   }
+
   mocks.state.worktreesByRepo = byRepo
   // A repo per referenced repoId so getRepoMapFromState resolves (host info comes via worktree.hostId).
   mocks.state.repos = [...new Set(normalized.map((w) => w.repoId))].map((id) => ({ id }))
@@ -64,12 +69,15 @@ function seed(
 // cleared, and activeWorktreeId is nulled only when it was the deleted worktree.
 function simulateDelete(worktreeId: string, nulledActive: boolean): void {
   mocks.state.worktreeMap.delete(worktreeId)
+
   for (const repoId of Object.keys(mocks.state.worktreesByRepo)) {
     mocks.state.worktreesByRepo[repoId] = mocks.state.worktreesByRepo[repoId].filter(
       (worktree) => worktree.id !== worktreeId
     )
   }
+
   delete mocks.state.lastVisitedAtByWorktreeId[worktreeId]
+
   if (nulledActive) {
     mocks.state.activeWorktreeId = null
   }

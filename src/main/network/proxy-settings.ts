@@ -18,8 +18,11 @@ import { defaultProxySession, type ProxySession } from './electron-default-proxy
 import { resolveProxyPolicyWithoutSession, type ProxyApplyResult } from './proxy-policy-resolution'
 
 export { setDefaultProxySessionResolver } from './electron-default-proxy-session'
+
 export type { ProxyApplyResult } from './proxy-policy-resolution'
+
 const PROXY_PROBE_URL = 'https://api.anthropic.com/'
+
 type SessionProxyApplicationState = {
   appliedKey: string | null
   settledKey: string | null
@@ -29,6 +32,7 @@ type SessionProxyApplicationState = {
   readiness: 'ready' | 'pending' | 'failed'
   retired: boolean
 }
+
 let sessionProxyApplications = new WeakMap<ProxySession, SessionProxyApplicationState>()
 
 function proxyMemoKey(result: ProxyApplyResult): string {
@@ -49,9 +53,11 @@ export function resetSessionProxyApplicationForTests(proxySession: ProxySession)
 
 export function clearProxySessionCredentials(proxySession: ProxySession): void {
   const state = sessionProxyApplications.get(proxySession)
+
   if (state) {
     state.credentials = null
   }
+
   clearElectronProxyCredentialsForSession(proxySession)
 }
 
@@ -59,18 +65,23 @@ export function clearProxySessionCredentials(proxySession: ProxySession): void {
 export async function awaitProxySessionApplication(proxySession: ProxySession): Promise<boolean> {
   while (true) {
     const state = sessionProxyApplications.get(proxySession)
+
     if (!state || state.retired) {
       return !state
     }
+
     const observed = state.tail
+
     try {
       await observed
     } catch {
       if (state.tail === observed) {
         return false
       }
+
       continue
     }
+
     if (state.tail === observed) {
       return !state.retired
     }
@@ -81,15 +92,19 @@ export function getProxySessionApplicationReadiness(
   proxySession: ProxySession
 ): boolean | Promise<boolean> {
   const state = sessionProxyApplications.get(proxySession)
+
   if (!state) {
     return true
   }
+
   if (state.retired || state.readiness === 'failed') {
     return false
   }
+
   if (state.readiness === 'ready') {
     return true
   }
+
   return awaitProxySessionApplication(proxySession)
 }
 
@@ -102,6 +117,7 @@ export async function releaseProxySessionApplication(
     async (state) => {
       await releaseSessionProxyPin(proxySession, state)
       clearElectronProxyCredentialsForSession(proxySession)
+
       return { source: 'none' }
     },
     allowRetired
@@ -112,6 +128,7 @@ export async function releaseProxySessionApplication(
 export async function retireProxySessionApplication(proxySession: ProxySession): Promise<void> {
   const state = getSessionProxyApplicationState(proxySession)
   state.retired = true
+
   try {
     await releaseProxySessionApplication(proxySession, true)
   } finally {
@@ -121,6 +138,7 @@ export async function retireProxySessionApplication(proxySession: ProxySession):
 
 function getSessionProxyApplicationState(proxySession: ProxySession): SessionProxyApplicationState {
   let state = sessionProxyApplications.get(proxySession)
+
   if (!state) {
     state = {
       appliedKey: null,
@@ -133,6 +151,7 @@ function getSessionProxyApplicationState(proxySession: ProxySession): SessionPro
     }
     sessionProxyApplications.set(proxySession, state)
   }
+
   return state
 }
 
@@ -142,12 +161,15 @@ async function enqueueSessionProxyApplication(
   allowRetired = false
 ): Promise<ProxyApplyResult> {
   const state = getSessionProxyApplicationState(proxySession)
+
   if (state.retired && !allowRetired) {
     throw new Error('Proxy session is retired')
   }
+
   const operation = state.tail
     .catch(() => {})
     .then(() => runBoundedProxyApplication(() => apply(state)))
+
   state.tail = operation
   state.readiness = 'pending'
   void operation.then(
@@ -162,6 +184,7 @@ async function enqueueSessionProxyApplication(
       }
     }
   )
+
   return operation
 }
 
@@ -184,26 +207,32 @@ async function resolveAndApplySessionProxy(
 ): Promise<ProxyApplyResult> {
   const env = options.env ?? process.env
   const configured = normalizeProxyUrl(settings.httpProxyUrl)
+
   if (configured.ok && configured.value) {
     const { proxyRules, credentials } = separateElectronProxyCredentials(configured.value)
     const bypassRules = normalizeProxyBypassRules(settings.httpProxyBypassRules)
+
     const result: ProxyApplyResult = {
       source: 'settings',
       proxyRules,
       ...(bypassRules ? { proxyBypassRules: bypassRules } : {})
     }
+
     return applySessionProxyResult(proxySession, state, result, credentials)
   }
 
   const envProxy = getProxyUrlFromEnvironment(env)
+
   if (envProxy.ok && envProxy.value) {
     const { proxyRules, credentials } = separateElectronProxyCredentials(envProxy.value)
     const bypassRules = normalizeProxyBypassRules(getProxyBypassRulesFromEnvironment(env))
+
     const result: Extract<ProxyApplyResult, { source: 'env' }> = {
       source: 'env',
       proxyRules,
       ...(bypassRules ? { proxyBypassRules: bypassRules } : {})
     }
+
     if (
       state.settledKey === proxyMemoKey(result) &&
       haveSameElectronProxyCredentials(state.credentials, credentials)
@@ -214,18 +243,22 @@ async function resolveAndApplySessionProxy(
 
   // Why: a pinned session resolves to its own pin, so release it before probing the system proxy.
   await releaseSessionProxyPin(proxySession, state)
+
   if ((await proxySession.resolveProxy(options.probeUrl ?? PROXY_PROBE_URL)) !== 'DIRECT') {
     return { source: 'system' }
   }
+
   if (!envProxy.ok) {
     return { source: configured.ok ? 'invalid-env' : 'invalid-settings' }
   }
+
   if (!envProxy.value) {
     return { source: configured.ok ? 'none' : 'invalid-settings' }
   }
 
   const { proxyRules, credentials } = separateElectronProxyCredentials(envProxy.value)
   const bypassRules = normalizeProxyBypassRules(getProxyBypassRulesFromEnvironment(env))
+
   return applySessionProxyResult(
     proxySession,
     state,
@@ -245,6 +278,7 @@ async function releaseSessionProxyPin(
   if (state.appliedKey === null) {
     return
   }
+
   await proxySession.setProxy({ mode: 'system' })
   // Why: keep the pin marker until stale pooled connections are closed so a retry cannot skip them.
   state.settledKey = null
@@ -262,12 +296,14 @@ async function applySessionProxyResult(
   credentials: ElectronProxyCredentials | null
 ): Promise<ProxyApplyResult> {
   const key = proxyMemoKey(result)
+
   if (
     state.settledKey === key &&
     haveSameElectronProxyCredentials(state.credentials, credentials)
   ) {
     return result
   }
+
   await proxySession.setProxy({
     mode: 'fixed_servers',
     proxyRules: result.proxyRules,
@@ -280,6 +316,7 @@ async function applySessionProxyResult(
   setElectronProxyCredentialsForSession(proxySession, credentials)
   await proxySession.closeAllConnections?.()
   state.settledKey = key
+
   return result
 }
 
@@ -292,16 +329,20 @@ export async function ensureElectronProxyFromEnvironment(
   } = {}
 ): Promise<ProxyApplyResult> {
   const proxySession = options.proxySession ?? defaultProxySession()
+
   if (!proxySession) {
     return resolveProxyPolicyWithoutSession({}, options.env ?? process.env)
   }
+
   return enqueueSessionProxyApplication(proxySession, (state) => {
     if (!options.force && state.appliedResult !== null) {
       if (state.settledKey === proxyMemoKey(state.appliedResult)) {
         return Promise.resolve(state.appliedResult)
       }
+
       return applySessionProxyResult(proxySession, state, state.appliedResult, state.credentials)
     }
+
     return resolveAndApplySessionProxy(proxySession, state, {}, options)
   })
 }
@@ -315,9 +356,11 @@ export function applyElectronProxySettings(
   } = {}
 ): Promise<ProxyApplyResult> {
   const proxySession = options.proxySession ?? defaultProxySession()
+
   if (!proxySession) {
     return Promise.resolve(resolveProxyPolicyWithoutSession(settings, options.env ?? process.env))
   }
+
   return applyProxySettingsToSession(proxySession, settings, {
     env: options.env,
     probeUrl: options.probeUrl

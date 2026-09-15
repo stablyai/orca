@@ -10,6 +10,7 @@ import {
 describe('new worktree agent selection', () => {
   it('picks the preferred detected agent when there is no user override', () => {
     const selected = newWorktreeAgentOptionFor('claude')
+
     const resolved = resolveNewWorktreeAgentSelection({
       visible: true,
       selectedAgent: selected,
@@ -26,6 +27,7 @@ describe('new worktree agent selection', () => {
 
   it('keeps an available user override', () => {
     const selected = newWorktreeAgentOptionFor('codex')
+
     const resolved = resolveNewWorktreeAgentSelection({
       visible: true,
       selectedAgent: selected,
@@ -84,6 +86,7 @@ describe('new worktree agent selection', () => {
 
   it('leaves closed modal state untouched', () => {
     const selected = newWorktreeAgentOptionFor('codex')
+
     const resolved = resolveNewWorktreeAgentSelection({
       visible: false,
       selectedAgent: selected,

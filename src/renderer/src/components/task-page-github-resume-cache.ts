@@ -1,7 +1,9 @@
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 export const TASK_PAGE_GITHUB_RESUME_CACHE_LIMIT = 5
+
 export const TASK_PAGE_GITHUB_RESUME_CACHE_TTL_MS = 10 * 60_000
+
 export const TASK_PAGE_GITHUB_RESUME_FRESH_MS = 30_000
 
 type CachedPage<T> = {
@@ -52,11 +54,14 @@ export function createTaskPageResumePageCache<T>(options: TaskPageResumePageCach
       pruneExpired(now)
       const key = keyFor(contextKey, page)
       const entry = entries.get(key)
+
       if (!entry) {
         return null
       }
+
       entries.delete(key)
       entries.set(key, { ...entry, lastAccessedAt: now })
+
       return { items: [...entry.items], cachedAt: entry.cachedAt }
     },
     write(contextKey, page, items, now = Date.now()) {
@@ -64,11 +69,14 @@ export function createTaskPageResumePageCache<T>(options: TaskPageResumePageCach
       const key = keyFor(contextKey, page)
       entries.delete(key)
       entries.set(key, { items: [...items], cachedAt: now, lastAccessedAt: now })
+
       while (entries.size > maxEntries) {
         const oldestKey = entries.keys().next().value
+
         if (oldestKey === undefined) {
           break
         }
+
         entries.delete(oldestKey)
       }
     },

@@ -16,6 +16,7 @@ afterEach(async () => {
 async function userDataPath(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-ssh-client-test-'))
   roots.push(root)
+
   return root
 }
 
@@ -53,13 +54,16 @@ describe('installSkillOnSshHost', () => {
     const secondRpc = vi.fn(async (_method: string) => ({ capabilities: [] }))
     const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
     let currentProvider: IPtyProvider
+
     const firstRpc = vi.fn(async (method: string) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.v1'] }
       }
+
       currentProvider = secondProvider
       throw new Error('disconnected-provider-generation')
     })
+
     currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
 
     await expect(
@@ -93,46 +97,61 @@ describe('installSkillOnSshHost', () => {
     const beginRequests: unknown[] = []
     let chunkAttempts = 0
     let commitAttempts = 0
+
     const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
       if (method === 'relay.status') {
         return {
           capabilities: ['skills.install.v1', 'skills.upload.v1', 'skills.manage.v1']
         }
       }
+
       if (method === 'skills.install') {
         const ingress = (params as { request: ReturnType<typeof request> }).request.ingress
+
         if (ingress.kind === 'download-grant') {
           throw Object.assign(new Error('skill-download-transport-failed'), { code: -32000 })
         }
+
         return result()
       }
+
       if (method === 'skills.beginUpload') {
         beginRequests.push(params)
         beginAttempts += 1
+
         if (beginAttempts === 1) {
           throw new Error('connection dropped after receiver began upload')
         }
+
         return { uploadId: 'upload_1', chunkBytes: 256 * 1024 }
       }
+
       if (method === 'skills.uploadChunk') {
         chunkAttempts += 1
         const chunk = params as { offset: number; bytesBase64: string }
         received = chunk.offset + Buffer.from(chunk.bytesBase64, 'base64').length
+
         if (chunkAttempts === 1) {
           throw new Error('connection dropped after receiver write')
         }
+
         return { acknowledgedOffset: received }
       }
+
       if (method === 'skills.commitUpload') {
         commitAttempts += 1
+
         if (commitAttempts === 1) {
           throw new Error('connection dropped after receiver commit')
         }
+
         return { ok: true }
       }
+
       if (method === 'skills.cancelUpload') {
         return { ok: true }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -184,17 +203,22 @@ describe('installSkillOnSshHost', () => {
   it('retries an idempotent direct install after its response is lost', async () => {
     const bytes = Buffer.from('private skill archive')
     let installAttempts = 0
+
     const requestHostRpc = vi.fn(async (method: string) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.v1', 'skills.upload.v1'] }
       }
+
       if (method === 'skills.install') {
         installAttempts += 1
+
         if (installAttempts === 1) {
           throw new Error('connection dropped after host commit')
         }
+
         return { ...result(), status: 'unchanged' }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -213,31 +237,42 @@ describe('installSkillOnSshHost', () => {
     const bytes = Buffer.from('private skill archive')
     let uploadSequence = 0
     let stagedInstallAttempts = 0
+
     const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.v1', 'skills.upload.v1'] }
       }
+
       if (method === 'skills.install') {
         const ingress = (params as { request: ReturnType<typeof request> }).request.ingress
+
         if (ingress.kind === 'download-grant') {
           throw Object.assign(new Error('skill-download-transport-failed'), { code: -32000 })
         }
+
         stagedInstallAttempts += 1
+
         if (stagedInstallAttempts === 1) {
           throw new Error('connection dropped after staged host commit')
         }
+
         return { ...result(), status: 'unchanged' }
       }
+
       if (method === 'skills.beginUpload') {
         uploadSequence += 1
+
         return { uploadId: `upload_${uploadSequence}`, chunkBytes: 256 * 1024 }
       }
+
       if (method === 'skills.uploadChunk') {
         const chunk = params as { offset: number; bytesBase64: string }
+
         return {
           acknowledgedOffset: chunk.offset + Buffer.from(chunk.bytesBase64, 'base64').length
         }
       }
+
       return { ok: true }
     })
 
@@ -259,26 +294,34 @@ describe('installSkillOnSshHost', () => {
 
   it('uses a configured development origin through the client', async () => {
     const bytes = Buffer.from('private development archive')
+
     const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.v1', 'skills.upload.v1'] }
       }
+
       if (method === 'skills.install') {
         const ingress = (params as { request: ReturnType<typeof request> }).request.ingress
+
         if (ingress.kind === 'download-grant') {
           throw Object.assign(new Error('skill-download-url-rejected'), { code: -32000 })
         }
+
         return result()
       }
+
       if (method === 'skills.beginUpload') {
         return { uploadId: 'upload_1', chunkBytes: 256 * 1024 }
       }
+
       if (method === 'skills.uploadChunk') {
         const chunk = params as { offset: number; bytesBase64: string }
+
         return {
           acknowledgedOffset: chunk.offset + Buffer.from(chunk.bytesBase64, 'base64').length
         }
       }
+
       return { ok: true }
     })
 

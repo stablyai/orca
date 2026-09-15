@@ -17,15 +17,19 @@ const store = {
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
+
 vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
   ensureWorktreeHasInitialTerminal: mocks.ensureWorktreeHasInitialTerminal
 }))
+
 vi.mock('@/lib/worktree-creation-completion', () => ({
   completeWorktreeCreation: mocks.completeWorktreeCreation
 }))
+
 vi.mock('@/lib/web-runtime-worktree-terminal-after-wake', () => ({
   ensureWebRuntimeWorktreeTerminalAfterWake: mocks.ensureWebRuntimeWorktreeTerminalAfterWake
 }))

@@ -43,5 +43,6 @@ function isCliPlausiblyAvailable(authPreparation?: ClaudeRuntimeAuthPreparation)
   if (authPreparation?.runtime === 'wsl') {
     return Boolean(authPreparation.wslDistro && authPreparation.wslLinuxConfigDir)
   }
+
   return true
 }

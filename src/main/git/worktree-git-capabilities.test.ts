@@ -34,6 +34,7 @@ describe('worktree Git capabilities', () => {
           })
         )
       }
+
       return Promise.resolve({ stdout: WORKTREE_LIST_OUTPUT })
     })
 
@@ -58,6 +59,7 @@ describe('worktree Git capabilities', () => {
             })
           )
         }
+
         return Promise.resolve({
           stdout: `worktree ${options.cwd}\nHEAD abc123\nbranch refs/heads/main\n`
         })
@@ -86,6 +88,7 @@ describe('worktree Git capabilities', () => {
           stdout: 'worktree /git-store/project.git\nHEAD abc123\nbranch refs/heads/main\n'
         })
       }
+
       if (args.includes('--path-format=absolute')) {
         return Promise.reject(
           Object.assign(new Error('unknown option: --path-format=absolute'), {
@@ -93,6 +96,7 @@ describe('worktree Git capabilities', () => {
           })
         )
       }
+
       return Promise.resolve({ stdout: '/repo\n/git-store/project.git\n' })
     })
 
@@ -102,6 +106,7 @@ describe('worktree Git capabilities', () => {
     const revParseCalls = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => (args as string[])[0] === 'rev-parse'
     )
+
     expect(revParseCalls.map(([args]) => args)).toEqual([
       ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
       ['rev-parse', '--show-toplevel', '--git-common-dir'],
@@ -116,11 +121,13 @@ describe('worktree Git capabilities', () => {
           stdout: 'worktree /git-store/project.git\nHEAD abc123\nbranch refs/heads/main\n'
         })
       }
+
       if (args.includes('--path-format=absolute')) {
         return Promise.resolve({
           stdout: '--path-format=absolute\n/repo\n/git-store/project.git\n'
         })
       }
+
       return Promise.resolve({ stdout: '/repo\n/git-store/project.git\n' })
     })
 
@@ -130,6 +137,7 @@ describe('worktree Git capabilities', () => {
     const revParseCalls = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => (args as string[])[0] === 'rev-parse'
     )
+
     expect(revParseCalls.map(([args]) => args)).toEqual([
       ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
       ['rev-parse', '--show-toplevel', '--git-common-dir']

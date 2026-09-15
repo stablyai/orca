@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
+
 const unregisterPushMock = vi.hoisted(() => vi.fn(async () => vi.fn()))
 
 vi.mock('./host-store', () => ({

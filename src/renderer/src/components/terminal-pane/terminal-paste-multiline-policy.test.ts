@@ -24,12 +24,14 @@ function terminalTarget(): TerminalPasteTarget {
 describe('terminal paste multiline policy', () => {
   it('uses coordinator metadata to bracket only multiline Windows paste text', async () => {
     const pasteText = vi.fn()
+
     const multilinePlan = planTerminalPaste({
       text: 'one\r\ntwo',
       source: 'keyboard',
       target: terminalTarget(),
       forceBracketedPasteForMultiline: true
     })
+
     const singleLinePlan = planTerminalPaste({
       text: 'one',
       source: 'keyboard',

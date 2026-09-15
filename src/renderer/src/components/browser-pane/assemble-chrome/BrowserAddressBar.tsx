@@ -64,13 +64,16 @@ export default function BrowserAddressBar({
   // so measuring it here (not the form) cannot oscillate with the overlay.
   useEffect(() => {
     const slot = slotRef.current
+
     if (!slot || typeof ResizeObserver === 'undefined') {
       return
     }
+
     const syncWidth = (): void => setInlineWidth(slot.getBoundingClientRect().width)
     syncWidth()
     const observer = new ResizeObserver(syncWidth)
     observer.observe(slot)
+
     return () => observer.disconnect()
   }, [])
 
@@ -87,6 +90,7 @@ export default function BrowserAddressBar({
     if (!resumedChrome) {
       return
     }
+
     // Why after the fact rather than as the initial state: the pane resumes in its own layout
     // effect, which runs after this bar has already mounted (and after the focus it takes has
     // opened the dropdown the way a fresh click would). This is what puts it back as the user
@@ -95,6 +99,7 @@ export default function BrowserAddressBar({
       prePreviewValueRef.current = resumedChrome.preview.typedQuery
       setSelectedValueOverride(resumedChrome.preview.previewedUrl)
     }
+
     openedAtRef.current = Date.now()
     setOpen(resumedChrome.suggestionsOpen)
   }, [resumedChrome])
@@ -103,15 +108,18 @@ export default function BrowserAddressBar({
   // its DOM is gone, and by then document.activeElement is the body — every edit would read idle.
   useLayoutEffect(() => {
     const input = inputRef.current
+
     if (!editSessionPageId || !input) {
       return
     }
+
     return () => {
       // Why only a focused bar: an idle one has no edit to hand on, and resuming it would seize
       // focus and reopen a dropdown for a user who was reading the page.
       if (document.activeElement !== input) {
         return
       }
+
       const typedQuery = prePreviewValueRef.current
       saveBrowserAddressBarEditSession(editSessionPageId, {
         draft: liveEditRef.current.value,
@@ -134,6 +142,7 @@ export default function BrowserAddressBar({
       window.clearTimeout(blurCloseTimerRef.current)
       blurCloseTimerRef.current = null
     }
+
     if (closingResetTimerRef.current !== null) {
       window.clearTimeout(closingResetTimerRef.current)
       closingResetTimerRef.current = null
@@ -180,6 +189,7 @@ export default function BrowserAddressBar({
       if (prePreviewValueRef.current === null) {
         prePreviewValueRef.current = autocompleteQuery
       }
+
       setSelectedValueOverride(url)
       onChange(url)
     },
@@ -189,17 +199,21 @@ export default function BrowserAddressBar({
   const selectSuggestionAtIndex = useCallback(
     (index: number): void => {
       const suggestion = suggestions[index]
+
       if (!suggestion) {
         return
       }
+
       if (index === 0 && suggestion.isSearch) {
         // Why: the search row mirrors what Enter already does with the typed
         // query — keep the input on the typed text instead of the search URL.
         prePreviewValueRef.current = null
         setSelectedValueOverride(null)
         onChange(autocompleteQuery)
+
         return
       }
+
       previewSuggestion(suggestion.url)
     },
     [autocompleteQuery, onChange, previewSuggestion, suggestions]
@@ -207,9 +221,11 @@ export default function BrowserAddressBar({
 
   const restoreTypedQuery = useCallback((): void => {
     const typed = prePreviewValueRef.current
+
     if (typed === null) {
       return
     }
+
     prePreviewValueRef.current = null
     setSelectedValueOverride(null)
     onChange(typed)
@@ -220,6 +236,7 @@ export default function BrowserAddressBar({
       window.clearTimeout(blurCloseTimerRef.current)
       blurCloseTimerRef.current = null
     }
+
     restoreTypedQuery()
     setOpen(false)
   }, [restoreTypedQuery])
@@ -238,13 +255,16 @@ export default function BrowserAddressBar({
     if (closingRef.current) {
       return
     }
+
     if (blurCloseTimerRef.current !== null) {
       window.clearTimeout(blurCloseTimerRef.current)
       blurCloseTimerRef.current = null
     }
+
     if (!initialMouseDownRef.current) {
       inputRef.current?.select()
     }
+
     openedAtRef.current = Date.now()
     setOpen(true)
   }, [inputRef])
@@ -262,14 +282,18 @@ export default function BrowserAddressBar({
     // — producing the "flash then disappear" on first click.
     const elapsed = Date.now() - openedAtRef.current
     const grace = elapsed < 400
+
     if (blurCloseTimerRef.current !== null) {
       window.clearTimeout(blurCloseTimerRef.current)
     }
+
     blurCloseTimerRef.current = window.setTimeout(() => {
       blurCloseTimerRef.current = null
+
       if (grace && inputRef.current && document.activeElement === inputRef.current) {
         return
       }
+
       restoreTypedQuery()
       setOpen(false)
     }, 200)
@@ -280,19 +304,23 @@ export default function BrowserAddressBar({
       closingRef.current = true
       setOpen(false)
       clearSuggestionPreview()
+
       // Why looked up by row: a workspace-doc suggestion opens on a fresh grant instead of
       // navigating; its url is the document's path, so even the fallback routes via detection.
       const docLocation = suggestions.find(
         (suggestion) => suggestion.url === url && suggestion.docLocation
       )?.docLocation
+
       if (docLocation && onOpenWorkspaceDoc) {
         onOpenWorkspaceDoc(docLocation)
       } else {
         onNavigate(url)
       }
+
       if (closingResetTimerRef.current !== null) {
         window.clearTimeout(closingResetTimerRef.current)
       }
+
       closingResetTimerRef.current = window.setTimeout(() => {
         closingResetTimerRef.current = null
         closingRef.current = false
@@ -305,6 +333,7 @@ export default function BrowserAddressBar({
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape') {
         cancelSuggestionPreview()
+
         return
       }
 
@@ -315,6 +344,7 @@ export default function BrowserAddressBar({
         setOpen(false)
         clearSuggestionPreview()
         onSubmit()
+
         return
       }
 
@@ -333,6 +363,7 @@ export default function BrowserAddressBar({
         // of redundantly previewing the search row Enter already covers.
         const next = startIdx < suggestions.length - 1 ? startIdx + 1 : 0
         selectSuggestionAtIndex(next)
+
         return
       }
 
@@ -340,15 +371,20 @@ export default function BrowserAddressBar({
         event.preventDefault()
         const idx = suggestions.findIndex((s) => s.url === selectedValue)
         const startIdx = Math.max(idx, 0)
+
         if (!isPreviewing) {
           const next = startIdx > 0 ? startIdx - 1 : suggestions.length - 1
           selectSuggestionAtIndex(next)
+
           return
         }
+
         if (startIdx <= 0) {
           restoreTypedQuery()
+
           return
         }
+
         selectSuggestionAtIndex(startIdx - 1)
       }
     },
@@ -370,7 +406,9 @@ export default function BrowserAddressBar({
     if (!dismissSuggestionsRef) {
       return
     }
+
     dismissSuggestionsRef.current = dismissSuggestions
+
     return () => {
       dismissSuggestionsRef.current = null
     }
@@ -394,9 +432,11 @@ export default function BrowserAddressBar({
           if (!next && inputRef.current && document.activeElement === inputRef.current) {
             return
           }
+
           if (!next) {
             restoreTypedQuery()
           }
+
           setOpen(next)
         }}
       >
@@ -434,10 +474,12 @@ export default function BrowserAddressBar({
               }}
               onClick={(event) => {
                 const input = event.currentTarget
+
                 // Preserve native drag selection; only expand a collapsed initial click.
                 if (initialMouseDownRef.current && input.selectionStart === input.selectionEnd) {
                   input.select()
                 }
+
                 initialMouseDownRef.current = false
               }}
               onBlur={handleBlur}

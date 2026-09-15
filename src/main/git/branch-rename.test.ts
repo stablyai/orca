@@ -18,11 +18,14 @@ describe('probeBranchUpstream', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         return { stdout: 'origin/feature\n', stderr: '' }
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
+
     expect(await probeBranchUpstream(exec)).toEqual({ outcome: 'has-upstream' })
   })
 
@@ -31,14 +34,18 @@ describe('probeBranchUpstream', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw noUpstreamError
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         throw new Error('not found')
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
+
     expect(await probeBranchUpstream(exec)).toEqual({ outcome: 'no-upstream' })
   })
 
@@ -47,14 +54,18 @@ describe('probeBranchUpstream', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw noUpstreamError
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         return { stdout: '', stderr: '' }
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
+
     expect(await probeBranchUpstream(exec)).toEqual({ outcome: 'has-upstream' })
   })
 
@@ -74,6 +85,7 @@ describe('probeBranchUpstream', () => {
       .mockRejectedValue(
         new Error('fatal: unable to access https://user:hunter2@example.com/repo.git/: timed out')
       )
+
     expect(await probeBranchUpstream(exec)).toEqual({
       outcome: 'probe-failed',
       message: 'fatal: unable to access https://example.com/repo.git/: timed out'
@@ -86,11 +98,13 @@ describe('probeBranchUpstream', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       throw new Error(
         'Command failed: git rev-parse --abbrev-ref HEAD@{u}\n' +
           "Schwerwiegend: Kein Upstream-Branch für Branch 'feature' konfiguriert."
       )
     })
+
     const probe = await probeBranchUpstream(exec)
     expect(probe.outcome).toBe('probe-failed')
   })
@@ -108,11 +122,14 @@ describe('resolveUniqueBranchName', () => {
   it('suffixes when the first candidate already exists', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       const ref = args.at(-1)
+
       if (ref === 'refs/heads/you/fix-auth') {
         return { stdout: '', stderr: '' } // exists
       }
+
       throw new Error('not found')
     })
+
     const result = await resolveUniqueBranchName(exec, 'fix-auth', compute, 'you/Nautilus')
     expect(result).toBe('you/fix-auth-2')
   })

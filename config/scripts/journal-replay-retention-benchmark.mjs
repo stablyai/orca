@@ -9,15 +9,21 @@ import { build } from 'esbuild'
 
 // Pass a directory containing journal-open.ts and journal-row-table.ts from the base commit.
 const baselineDir = process.argv[2]
+
 assert.ok(
   baselineDir,
   'Usage: node --expose-gc journal-replay-retention-benchmark.mjs BASELINE_DIR'
 )
+
 assert.ok(global.gc, 'Run with --expose-gc to measure live backing memory during replay')
+
 const root = fileURLToPath(new URL('../..', import.meta.url))
+
 const fixture = await mkdtemp(join(tmpdir(), 'orca-journal-replay-bench-'))
+
 try {
   const implementations = {}
+
   for (const arm of ['baseline', 'current']) {
     const outfile = join(fixture, `${arm}.cjs`)
     await build({
@@ -38,21 +44,25 @@ try {
               { filter: /journal-(?:open|row-table|reducer)\.ts$/ },
               async ({ path }) => {
                 const leaf = basename(path)
+
                 let source = await readFile(
                   arm === 'baseline' && leaf !== 'journal-reducer.ts'
                     ? join(baselineDir, leaf)
                     : path,
                   'utf8'
                 )
+
                 if (leaf === 'journal-reducer.ts') {
                   const marker =
                     'export function applyJournalRow(state: JournalReducerState, row: JournalRow): void {'
+
                   assert.ok(source.includes(marker))
                   source = source.replace(
                     marker,
                     `${marker}\nglobalThis.__replayMemoryProbe?.(row.seq);`
                   )
                 }
+
                 return { contents: source, loader: 'ts', resolveDir: dirname(path) }
               }
             )
@@ -62,6 +72,7 @@ try {
     })
     implementations[arm] = createRequire(import.meta.url)(outfile)
   }
+
   const identity = {
     sessionId: 'benchmark',
     workspaceId: 'fixture',
@@ -69,10 +80,12 @@ try {
     agent: 'codex',
     providerHandle: { kind: 'codex', threadId: 'thread' }
   }
+
   const journalDir = join(fixture, 'session')
   const journal = await implementations.current.openAgentSessionJournal({ identity, journalDir })
   const item = { provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }
   const text = 'x'.repeat(32768)
+
   for (let revision = 0; revision < 2000; revision++) {
     await journal.appendItem(
       item,
@@ -84,7 +97,9 @@ try {
       { fence: 1 }
     )
   }
+
   await journal.close()
+
   for (const arm of ['baseline', 'current', 'current', 'baseline']) {
     global.gc()
     const start = performance.now()
@@ -100,9 +115,11 @@ try {
       if (sequence !== 1 && sequence % 256 !== 0) {
         return
       }
+
       global.gc()
       peakLiveHeap = Math.max(peakLiveHeap, process.memoryUsage().heapUsed)
     }
+
     loaded = implementations[arm].loadJournal(journalDir, identity.sessionId)
     delete globalThis.__replayMemoryProbe
     assert.equal(loaded.state.items.size, 1)

@@ -16,8 +16,11 @@ export type GitHubOwnerRepoResolution =
   | { kind: 'indeterminate' }
 
 const SSH_HOSTNAME_CACHE_TTL_MS = 60_000
+
 const SSH_HOSTNAME_FAILURE_CACHE_TTL_MS = 5_000
+
 const SSH_HOSTNAME_CACHE_MAX = 256
+
 const SSH_G_TIMEOUT_MS = 5_000
 
 export type SshConfigResolutionContext = {
@@ -33,6 +36,7 @@ type SshHostnameCacheEntry = {
 }
 
 const sshHostnameCache = new Map<string, SshHostnameCacheEntry>()
+
 const sshHostnameInFlight = new Map<string, Promise<SshHostnameCacheEntry>>()
 
 /** @internal - tests only */
@@ -47,11 +51,14 @@ function pruneSshHostnameCache(now: number): void {
       sshHostnameCache.delete(key)
     }
   }
+
   while (sshHostnameCache.size > SSH_HOSTNAME_CACHE_MAX) {
     const oldest = sshHostnameCache.keys().next().value
+
     if (oldest === undefined) {
       return
     }
+
     sshHostnameCache.delete(oldest)
   }
 }
@@ -59,19 +66,24 @@ function pruneSshHostnameCache(now: number): void {
 function sshRuntimeCacheKey(context: SshConfigResolutionContext): string {
   if (context.connectionId) {
     const generation = getSshGitProviderGeneration(context.connectionId)
+
     return `ssh:${context.connectionId}:${generation}`
   }
+
   const distro = context.wslDistro ?? parseWslPath(context.repoPath)?.distro
+
   return `local:${distro?.toLowerCase() ?? 'host'}`
 }
 
 function parseSshGHostname(stdout: string): string | null {
   for (const line of stdout.split(/\r?\n/)) {
     const match = line.match(/^hostname\s+(.+)$/i)
+
     if (match?.[1].trim()) {
       return match[1].trim()
     }
   }
+
   return null
 }
 
@@ -81,9 +93,11 @@ async function resolveSshHostnameInRuntime(
 ): Promise<string | null> {
   if (context.connectionId) {
     const provider = getSshGitProvider(context.connectionId)
+
     if (!provider) {
       return null
     }
+
     try {
       const result = await provider.execNonInteractive(
         'ssh',
@@ -91,6 +105,7 @@ async function resolveSshHostnameInRuntime(
         context.repoPath,
         SSH_G_TIMEOUT_MS
       )
+
       return result.exitCode === 0 && !result.timedOut && !result.canceled
         ? parseSshGHostname(result.stdout)
         : null
@@ -100,15 +115,18 @@ async function resolveSshHostnameInRuntime(
   }
 
   const wslDistro = context.wslDistro ?? parseWslPath(context.repoPath)?.distro
+
   if (!wslDistro) {
     return (await resolveWithSshG(host))?.hostname?.trim() || null
   }
+
   try {
     const { stdout } = await commandExecFileAsync('ssh', ['-G', '--', host], {
       cwd: context.repoPath,
       timeout: SSH_G_TIMEOUT_MS,
       wslDistro
     })
+
     return parseSshGHostname(stdout)
   } catch {
     return null
@@ -127,30 +145,41 @@ export async function resolveSshConfigHostname(
   const now = Date.now()
   pruneSshHostnameCache(now)
   const cached = sshHostnameCache.get(cacheKey)
+
   if (cached && cached.expiresAt > now) {
     return { hostname: cached.hostname, resolved: cached.resolved }
   }
+
   const inFlight = sshHostnameInFlight.get(cacheKey)
+
   if (inFlight) {
     const entry = await inFlight
+
     return { hostname: entry.hostname, resolved: entry.resolved }
   }
+
   const probe = (async (): Promise<SshHostnameCacheEntry> => {
     const hostname = await resolveSshHostnameInRuntime(host, context)
     const resolved = hostname != null && hostname.length > 0
+
     const entry: SshHostnameCacheEntry = {
       hostname: resolved ? hostname : null,
       resolved,
       expiresAt:
         Date.now() + (resolved ? SSH_HOSTNAME_CACHE_TTL_MS : SSH_HOSTNAME_FAILURE_CACHE_TTL_MS)
     }
+
     sshHostnameCache.set(cacheKey, entry)
     pruneSshHostnameCache(Date.now())
+
     return entry
   })()
+
   sshHostnameInFlight.set(cacheKey, probe)
+
   try {
     const entry = await probe
+
     return { hostname: entry.hostname, resolved: entry.resolved }
   } finally {
     if (sshHostnameInFlight.get(cacheKey) === probe) {
@@ -165,18 +194,25 @@ export async function classifyGitHubOwnerRepoFromRemoteUrl(
   context: SshConfigResolutionContext = { repoPath: '' }
 ): Promise<GitHubOwnerRepoResolution> {
   const direct = parseGitHubOwnerRepo(remoteUrl)
+
   if (direct) {
     return { kind: 'github', ownerRepo: direct }
   }
+
   const aliasHost = gitHubSshConfigHostAlias(remoteUrl)
+
   if (!aliasHost) {
     return { kind: 'not-github', cacheWithGitConfigSignature: true }
   }
+
   const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
+
   if (!resolved || !hostname) {
     return { kind: 'indeterminate' }
   }
+
   const ownerRepo = parseGitHubOwnerRepoWithResolvedSshHostname(remoteUrl, hostname)
+
   return ownerRepo
     ? { kind: 'github', ownerRepo }
     : { kind: 'not-github', cacheWithGitConfigSignature: false }
@@ -188,5 +224,6 @@ export async function resolveGitHubOwnerRepoFromRemoteUrl(
   context: SshConfigResolutionContext = { repoPath: '' }
 ): Promise<GitHubOwnerRepo | null> {
   const result = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, context)
+
   return result.kind === 'github' ? result.ownerRepo : null
 }

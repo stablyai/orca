@@ -22,17 +22,20 @@ const SUGGESTION: LocalBaseRefUpdateSuggestion = {
   localBranch: 'main',
   behind: 2
 }
+
 const TOAST_ID = 'local-base-ref-update-suggestion:origin/main:main'
 
 const mountedRoots: Root[] = []
 
 function makeDeps(overrides: Partial<{ enabled: boolean }> = {}) {
   let enabled = overrides.enabled ?? false
+
   const updateSettings = vi.fn(async (updates: Record<string, unknown>) => {
     if (typeof updates.refreshLocalBaseRefOnWorktreeCreate === 'boolean') {
       enabled = updates.refreshLocalBaseRefOnWorktreeCreate
     }
   })
+
   return {
     updateSettings: updateSettings as unknown as AppState['updateSettings'],
     getSettings: () => ({ refreshLocalBaseRefOnWorktreeCreate: enabled }) as AppState['settings'],
@@ -46,6 +49,7 @@ function makeDeps(overrides: Partial<{ enabled: boolean }> = {}) {
 function renderToastBody(): HTMLElement {
   const description = vi.mocked(toast.info).mock.calls.at(-1)?.[1]
     ?.description as React.ReactElement
+
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -53,6 +57,7 @@ function renderToastBody(): HTMLElement {
   act(() => {
     root.render(description)
   })
+
   return container
 }
 
@@ -60,9 +65,11 @@ function clickButton(container: HTMLElement, label: string): void {
   const button = [...container.querySelectorAll('button')].find(
     (el) => el.textContent?.trim() === label
   )
+
   if (!button) {
     throw new Error(`button "${label}" not found`)
   }
+
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -129,9 +136,11 @@ describe('showLocalBaseRefUpdateSuggestionToast', () => {
       sectionId: 'git-keep-local-main-up-to-date'
     })
     expect(toast.dismiss).toHaveBeenCalledWith(TOAST_ID)
+
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
     }
+
     options.onDismiss()
   })
 
@@ -141,9 +150,11 @@ describe('showLocalBaseRefUpdateSuggestionToast', () => {
     const body = renderToastBody()
 
     clickButton(body, 'Settings › Keep Local Main Up to Date')
+
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
     }
+
     options.onDismiss()
     await Promise.resolve()
 

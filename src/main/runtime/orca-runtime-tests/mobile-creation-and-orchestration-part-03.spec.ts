@@ -13,6 +13,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('leaves rows a live filtered waiter reserved out of the pushed batch', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -41,26 +42,32 @@ describe('OrcaRuntimeService', () => {
         typeFilter: ['worker_done'],
         timeoutMs: 5_000
       })
+
       const status = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
         subject: 'unclaimed status',
         type: 'status'
       })
+
       runtime.notifyMessageArrived(terminal.handle, 'status')
+
       const done = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
         subject: 'reserved completion',
         type: 'worker_done'
       })
+
       runtime.notifyMessageArrived(terminal.handle, 'worker_done')
 
       await expect(waitPromise).resolves.toBe('notified')
       await vi.advanceTimersByTimeAsync(600)
+
       const payloads = write.mock.calls
         .map(([, data]) => data)
         .filter((data): data is string => typeof data === 'string')
+
       expect(payloads).toContain(
         '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_test`.\n'
       )
@@ -75,6 +82,7 @@ describe('OrcaRuntimeService', () => {
 
   it('skips rows claimed by a waiter that registered after the notify', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -101,14 +109,17 @@ describe('OrcaRuntimeService', () => {
         subject: 'claimed late',
         type: 'status'
       })
+
       // Why: the notify snapshot is empty — no waiter existed yet. A check that
       // blocks before the deferred push runs still owns this row, so only the
       // push-time read of live waiters can keep it out of the pane.
       runtime.notifyMessageArrived(terminal.handle, 'status')
+
       const waitPromise = runtime.waitForMessage(mailbox, {
         typeFilter: ['status'],
         timeoutMs: 5_000
       })
+
       await Promise.resolve()
 
       expect(write).not.toHaveBeenCalled()
@@ -124,6 +135,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not carry pty-record live authority into a rebuilt leaf after a same-id respawn', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -138,6 +150,7 @@ describe('OrcaRuntimeService', () => {
       // parsePaneKey(pty.paneKey).leafId to the republished leafId, and a non-UUID
       // id falls back to `tabId:paneRuntimeId`, so it is always fenced after exit.
       const leafId = '11111111-1111-1111-8111-111111111111'
+
       const syncUuidLeaf = (): void => {
         runtime.attachWindow(1)
         runtime.syncWindowGraph(1, {
@@ -162,6 +175,7 @@ describe('OrcaRuntimeService', () => {
           ]
         })
       }
+
       syncUuidLeaf()
 
       const [terminal] = (await runtime.listTerminals()).terminals
@@ -186,6 +200,7 @@ describe('OrcaRuntimeService', () => {
           >
         }
       ).leaves
+
       expect(leaves.size).toBeGreaterThan(0)
       const rebuilt = [...leaves.values()][0]
       expect(rebuilt.lastAgentStatus).toBe('idle')
@@ -194,11 +209,13 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       const [republished] = (await runtime.listTerminals()).terminals
       bindSinglePtyRun(db, republished.handle)
+
       const message = db.insertMessage({
         from: 'sender',
         to: republished.handle,
         subject: 'rebuilt leaf'
       })
+
       runtime.notifyMessageArrived(republished.handle, 'status')
       await Promise.resolve()
 
@@ -213,6 +230,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps live idle authority across a renderer graph republish', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -239,6 +257,7 @@ describe('OrcaRuntimeService', () => {
       syncSinglePty(runtime)
 
       const [republished] = (await runtime.listTerminals()).terminals
+
       const message = db.insertMessage({
         from: 'sender',
         to: republished.handle,
@@ -262,6 +281,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not reuse the dead process live idle authority after a same-id respawn', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -287,6 +307,7 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
       setInMemoryOrchestrationMessages(runtime, db)
       bindSinglePtyRun(db, terminal.handle)
+
       const message = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
@@ -318,6 +339,7 @@ describe('OrcaRuntimeService', () => {
 
   it('pushes to an idle pane when the only live waiter filters out the message type', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -344,12 +366,14 @@ describe('OrcaRuntimeService', () => {
         typeFilter: ['worker_done'],
         timeoutMs: 5_000
       })
+
       const message = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
         subject: 'unfiltered status',
         type: 'status'
       })
+
       write.mockClear()
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
@@ -373,6 +397,7 @@ describe('OrcaRuntimeService', () => {
 
   it('resolves a registered waiter without PTY-injecting when the leaf is already idle', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -391,11 +416,13 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+
       const message = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
         subject: 'for check wait'
       })
+
       write.mockClear()
 
       // Why: blocked orchestration.check --wait is an explicit pull; push must
@@ -414,6 +441,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not re-inject the same message when notify fires again during Enter delay', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -442,6 +470,7 @@ describe('OrcaRuntimeService', () => {
       const pointerWrites = write.mock.calls.filter(
         ([, payload]) => typeof payload === 'string' && payload.includes('orchestration check')
       )
+
       expect(pointerWrites).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(500)
@@ -462,6 +491,7 @@ describe('OrcaRuntimeService', () => {
 
   it('delivers a second message parked during Enter delay once the flight settles', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -564,6 +594,7 @@ describe('OrcaRuntimeService', () => {
       typeFilter: ['worker_done', 'escalation'],
       timeoutMs: 5000
     })
+
     let settled = false
     void waitPromise.then(() => {
       settled = true
@@ -588,6 +619,7 @@ describe('OrcaRuntimeService', () => {
       timeoutMs: 5000,
       signal: controller.signal
     })
+
     runtime.notifyMessageArrived('term_abc')
     await waitPromise
 
@@ -596,6 +628,7 @@ describe('OrcaRuntimeService', () => {
 
   it('resolves message waiters on timeout when no message arrives', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const wait = runtime.waitForMessage('term_abc', { timeoutMs: 100 })
@@ -617,6 +650,7 @@ describe('OrcaRuntimeService', () => {
 
   it('allows only one exclusive mailbox waiter and supports explicit cancellation', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const first = runtime.waitForMessage('run:run_1', {
       timeoutMs: 5000,
       exclusive: true
@@ -631,6 +665,7 @@ describe('OrcaRuntimeService', () => {
 
   it('rejects leaf PTY waits when the request signal aborts', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const controller = new AbortController()
@@ -641,10 +676,12 @@ describe('OrcaRuntimeService', () => {
         .catch((error: Error) => error.message)
 
       controller.abort()
+
       const outcomePromise = Promise.race([
         waitPromise,
         new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
       ])
+
       await vi.advanceTimersByTimeAsync(0)
 
       expect(await outcomePromise).toBe('request_aborted')

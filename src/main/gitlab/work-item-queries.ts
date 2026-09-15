@@ -34,8 +34,10 @@ export async function getWorkItemByProjectRef(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabWorkItem | null> {
   await acquire()
+
   try {
     const resource = type === 'mr' ? 'merge_requests' : 'issues'
+
     const { stdout } = await glabExecFileAsync(
       [
         'api',
@@ -45,10 +47,13 @@ export async function getWorkItemByProjectRef(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = JSON.parse(stdout)
+
     if (type === 'mr') {
       return mapMRToWorkItem(data, projectRef.path, projectRef)
     }
+
     return mapIssueToWorkItem(data, projectRef.path, projectRef)
   } catch {
     return null
@@ -83,6 +88,7 @@ export async function listWorkItems(
 ): Promise<GitLabPagedResult<GitLabWorkItem>> {
   const issueState = mrStateToIssueState(state)
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
+
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -90,6 +96,7 @@ export async function listWorkItems(
     connectionId,
     localGitOptions
   )
+
   if (!projectRef) {
     return {
       items: [],
@@ -103,6 +110,7 @@ export async function listWorkItems(
       }
     }
   }
+
   // Why: fan out both reads so latency is the slower of the two, not the sum.
   // Why read the raw issues API (not listIssues): IssueInfo strips updated_at, which the combined sort needs.
   const [mrs, issues] = await Promise.all([
@@ -132,11 +140,14 @@ export async function listWorkItems(
           localGitOptions
         )
   ])
+
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
   )
+
   // Why: MR-side error wins — issues can be disabled per project, making its error less informative.
   const error: ClassifiedError | undefined = mrs.error ?? issues.error
+
   return {
     items: merged,
     page,
@@ -159,9 +170,11 @@ export async function fetchIssuesAsWorkItems(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ items: GitLabWorkItem[]; error: ClassifiedError | undefined }> {
   await acquire()
+
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
     const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
+
     const { stdout } = await glabExecFileAsync(
       [
         'api',
@@ -170,7 +183,9 @@ export async function fetchIssuesAsWorkItems(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = parseGlabJsonList<Parameters<typeof mapIssueToWorkItem>[0]>(stdout)
+
     return {
       items: data.map((d) => mapIssueToWorkItem(d, projectRef.path, projectRef)),
       error: undefined
@@ -200,10 +215,13 @@ export async function listTodos(
     connectionId,
     localGitOptions
   )
+
   if (connectionId && !projectRef) {
     return []
   }
+
   await acquire()
+
   try {
     // Why: per_page=50 keeps this cross-project view cheap; the UI only shows top-priority todos.
     const { stdout } = await glabExecFileAsync(
@@ -214,6 +232,7 @@ export async function listTodos(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     type RESTTodo = {
       id?: number
       action_name?: string
@@ -229,7 +248,9 @@ export async function listTodos(
       updated_at?: string
       state?: string
     }
+
     const data = JSON.parse(stdout) as RESTTodo[]
+
     return data.map<GitLabTodo>((t) => ({
       id: t.id ?? 0,
       actionName: t.action_name ?? '',

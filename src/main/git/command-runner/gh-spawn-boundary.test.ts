@@ -20,7 +20,9 @@ const GH_SPAWN_PATTERN =
 
 // Why trailing slash: a sibling like command-runner-extras.ts is scanned, not exempted.
 const OWNER_DIRECTORY = 'src/main/git/command-runner/'
+
 const SCANNED_EXTENSIONS = ['.ts', '.tsx']
+
 const IGNORED_DIRECTORIES = new Set([
   'node_modules',
   'dist',
@@ -37,30 +39,37 @@ function isTestFile(path: string): boolean {
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
   let entries: string[]
+
   try {
     entries = readdirSync(root)
   } catch {
     return found
   }
+
   for (const entry of entries) {
     if (IGNORED_DIRECTORIES.has(entry)) {
       continue
     }
+
     const full = join(root, entry)
+
     if (statSync(full).isDirectory()) {
       found = found.concat(collectSourceFiles(full))
       continue
     }
+
     if (SCANNED_EXTENSIONS.some((extension) => full.endsWith(extension))) {
       found.push(full)
     }
   }
+
   return found
 }
 
 describe('gh spawn boundary', () => {
   it('routes every gh invocation through ghExecFileAsync', () => {
     const repoRoot = resolve(__dirname, '..', '..', '..', '..')
+
     const offenders = collectSourceFiles(join(repoRoot, 'src'))
       .map((path) => relative(repoRoot, path).split('\\').join('/'))
       .filter((path) => !isTestFile(path) && !path.startsWith(OWNER_DIRECTORY))

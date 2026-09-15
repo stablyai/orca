@@ -32,6 +32,7 @@ export function selectWindowVisibilityActions(
     reportVisibleGitHubPRRefreshCandidates: state.reportVisibleGitHubPRRefreshCandidates,
     bumpGitHubPRVisibleRefreshGeneration: state.bumpGitHubPRVisibleRefreshGeneration
   }
+
   return cachedActions
 }
 

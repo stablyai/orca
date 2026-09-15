@@ -6,6 +6,7 @@ import EmulatorPane from './EmulatorPane'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+
 const EMPTY_GROUPS: readonly TabGroup[] = []
 
 type SimulatorOverlaySlotProps = {
@@ -22,6 +23,7 @@ const SimulatorOverlaySlot = memo(function SimulatorOverlaySlot({
   onFocusOwningGroup
 }: SimulatorOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName
@@ -68,7 +70,9 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
     }))
   )
+
   const focusGroup = useAppStore((state) => state.focusGroup)
+
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
     [focusGroup, worktreeId]
@@ -76,9 +80,11 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
 
   const groupActiveTabById = useMemo(() => {
     const lookup: Record<string, string | null | undefined> = {}
+
     for (const group of groups) {
       lookup[group.id] = group.activeTabId
     }
+
     return lookup
   }, [groups])
 
@@ -92,6 +98,7 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
       {simulatorTabs.map((tab) => {
         const isActiveInGroup = groupActiveTabById[tab.groupId] === tab.id
         const isActive = Boolean(isWorktreeActive && isActiveInGroup)
+
         return (
           <SimulatorOverlaySlot
             key={tab.id}

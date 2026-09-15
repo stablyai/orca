@@ -46,6 +46,7 @@ describe('automation host picker groups', () => {
       desktopSsh('t1', 'web-01'),
       runtimeSelf('env-a', 'Alpha box')
     ]
+
     const groups = groupAutomationHostEntriesByAuthority(entries)
 
     expect(groups.map((group) => group.authorityLabel)).toEqual([
@@ -68,6 +69,7 @@ describe('automation host picker groups', () => {
       stableKey: 'host:runtime:env-a:ssh:t1',
       authorityLabel: 'Alpha box'
     }
+
     const groups = groupAutomationHostEntriesByAuthority([
       desktopSsh('t1', 'web-01'),
       collidingRuntime
@@ -88,6 +90,7 @@ describe('automation host picker groups', () => {
     const keys = [desktopSsh('t1', 'web-01'), runtimeSelf('env-a', 'Alpha box')].map(
       (entry) => entry.stableKey
     )
+
     expect(keys).not.toContain(ALL_HOSTS_OPTION_VALUE)
     expect(keys.every((key) => key.startsWith('host:'))).toBe(true)
   })

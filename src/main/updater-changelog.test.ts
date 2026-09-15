@@ -45,6 +45,7 @@ describe('fetchChangelog', () => {
       { version: '1.1.20' },
       { version: '1.1.19' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.1.19')
@@ -68,6 +69,7 @@ describe('fetchChangelog', () => {
       { version: '1.1.16' },
       { version: '1.1.15' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.1.15')
@@ -92,6 +94,7 @@ describe('fetchChangelog', () => {
       },
       { version: '1.1.15' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.1.15')
@@ -109,6 +112,7 @@ describe('fetchChangelog', () => {
       { version: '1.1.20', description: '' },
       { version: '1.1.19', description: '' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.1.19')
@@ -123,6 +127,7 @@ describe('fetchChangelog', () => {
       { version: '1.1.20', description: 'Minor tweaks' },
       { version: '1.1.19' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.1.19')
@@ -141,6 +146,7 @@ describe('fetchChangelog', () => {
         mediaUrl: 'https://onorca.dev/media/old.gif'
       }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.20', '1.1.18')
@@ -162,6 +168,7 @@ describe('fetchChangelog', () => {
       },
       { version: '1.1.17' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.20', '1.1.18')
@@ -180,6 +187,7 @@ describe('fetchChangelog', () => {
         mediaUrl: 'https://onorca.dev/media/demo.gif'
       }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.0.0')
@@ -203,6 +211,7 @@ describe('fetchChangelog', () => {
         mediaUrl: 'https://onorca.dev/media/old.gif'
       }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.26', '1.1.25')
@@ -240,6 +249,7 @@ describe('fetchChangelog', () => {
       },
       { version: '1.1.15' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.1.15')
@@ -254,6 +264,7 @@ describe('fetchChangelog', () => {
       { version: '1.1.17', description: 'Feature', mediaUrl: 'https://onorca.dev/media/demo.gif' },
       { version: '1.1.15' }
     ])
+
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.1.15')

@@ -57,6 +57,7 @@ type AutomationPersistenceRuntime = Pick<
 >
 
 const automationPersistenceContext = Symbol('AutomationPersistence')
+
 type AutomationPersistenceContext = {
   runtime: AutomationPersistenceRuntime
   flushBarriers: WriteFlushBarrierOperations
@@ -80,6 +81,7 @@ export class AutomationPersistence {
 
   listAutomationsForScope(params?: AutomationListParams | null): AutomationListResult {
     const runtime = this[automationPersistenceContext].runtime
+
     const projection = listAutomationsForScopeOperation({
       state: runtime.state,
       storageAuthority: runtime.storageAuthority,
@@ -87,22 +89,27 @@ export class AutomationPersistence {
       params,
       cache: runtime.automationListProjectionCache
     })
+
     runtime.automationListProjectionCache = projection.cache
+
     return projection.result
   }
 
   automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
     const runtime = this[automationPersistenceContext].runtime
+
     return automationOwnerPreconditionOperation(runtime.state, runtime.storageAuthority, id)
   }
 
   automationChangeSelector(id: string): AutomationChangeSelector | null {
     const runtime = this[automationPersistenceContext].runtime
+
     return automationChangeSelectorOperation(runtime.state, runtime.storageAuthority, id)
   }
 
   automationCapturedHostIssue(automation: Automation): AutomationCapturedHostIssue | null {
     const runtime = this[automationPersistenceContext].runtime
+
     return automationCapturedHostIssueOperation(runtime.state, runtime.storageAuthority, automation)
   }
 
@@ -112,6 +119,7 @@ export class AutomationPersistence {
     operation: AutomationOwnerFenceOperation
   }): Automation {
     const runtime = this[automationPersistenceContext].runtime
+
     return assertAutomationOwnerFenceOperation({
       state: runtime.state,
       storageAuthority: runtime.storageAuthority,
@@ -236,6 +244,7 @@ export function getAutomationRunWorkspaceDisplayName(
   if (!workspaceId) {
     return null
   }
+
   return normalizeAutomationRunWorkspaceDisplayName(
     owner[automationPersistenceContext].runtime.state.worktreeMeta[workspaceId]?.displayName ??
       getWorktreePathBasenameFromId(workspaceId)

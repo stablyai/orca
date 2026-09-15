@@ -22,6 +22,7 @@ class LookupOnlyRepoMap extends Map<string, Repo> {
 
 function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
   const { id, ...rest } = overrides
+
   return {
     id,
     repoId: repo.id,
@@ -240,12 +241,14 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     ['known project', { projectId: 'project-b' }, { projectId: 'project-a' }]
   ])('excludes nested PRs across a %s boundary', (_boundary, childOverrides, parentOverrides) => {
     const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
+
     const nested = makeWorktree({
       id: 'nested',
       instanceId: 'nested',
       linkedPR: 4,
       ...childOverrides
     })
+
     const nestedRepo = { ...repo, id: nested.repoId }
 
     const display = getFolderWorkspaceCardPrDisplay({

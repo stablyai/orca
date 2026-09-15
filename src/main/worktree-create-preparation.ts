@@ -77,7 +77,9 @@ export async function prepareWorktreeCreateForRepo(
   if (repo.connectionId || isFolderRepo(repo)) {
     return
   }
+
   const options = getLocalProjectWorktreeGitOptions(store, repo)
+
   // Resolving a WSL repo's root spawns `wsl.exe`, and this runs while the create composer is open,
   // so it must not block the main thread. Key lookup and insert stay in one sync run after the await.
   // The mirror distro must be threaded exactly as createLocalWorktree threads it, or the two sides
@@ -86,13 +88,16 @@ export async function prepareWorktreeCreateForRepo(
     repo.path,
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
   )
+
   const canonicalBase = await canonicalBaseRef(repo.path, baseBranch, options)
+
   const existing = findPreparation(
     preparationPathKey(repo.path),
     preparationPathKey(workspaceRoot),
     canonicalBase,
     options.wslDistro ?? ''
   )
+
   if (existing) {
     return existing.ready
   }
@@ -120,25 +125,30 @@ async function claimPreparedWorktree(
     wslDistro: options.wslDistro ?? '',
     baseBranch: args.baseBranch
   }
+
   let selection = selectPreparationForCreate(listPreparations(), {
     ...request,
     canonicalBase: null
   })
+
   if (selection.kind === 'needs-canonical-base') {
     // The probe is the only await here, and the pool is re-read after it, so the select-and-take
     // below stays one synchronous run and no other create can hold the same entry.
     const canonicalBase = await canonicalBaseRef(args.repoPath, args.baseBranch, options)
     selection = selectPreparationForCreate(listPreparations(), { ...request, canonicalBase })
   }
+
   if (selection.kind !== 'exact' && selection.kind !== 'retarget') {
     return {
       status: 'miss',
       reason: selection.kind === 'miss' ? selection.reason : 'base_mismatch'
     }
   }
+
   if (selection.kind === 'retarget') {
     const candidate = selection.candidate
     const { canonicalBase } = selection
+
     const divergence = await measureRetargetDivergence(
       args.repoPath,
       candidate.canonicalBase,
@@ -149,26 +159,33 @@ async function claimPreparedWorktree(
         ...(options.signal ? { signal: options.signal } : {})
       }
     )
+
     if (divergence !== 'within') {
       return {
         status: 'miss',
         reason: divergence === 'exceeded' ? 'retarget_too_divergent' : 'retarget_unverifiable'
       }
     }
+
     // Re-select after the walk: the pool may have gained an exact match or lost this entry. A
     // different retarget candidate is left for the next create rather than claimed unverified.
     selection = selectPreparationForCreate(listPreparations(), { ...request, canonicalBase })
+
     if (selection.kind === 'miss' || selection.kind === 'needs-canonical-base') {
       return { status: 'miss', reason: 'base_mismatch' }
     }
+
     if (selection.kind === 'retarget' && selection.candidate !== candidate) {
       return { status: 'miss', reason: 'base_mismatch' }
     }
   }
+
   const entry = selection.candidate
   takePreparation(entry)
+
   try {
     await entry.ready
+
     return {
       status: 'claimed',
       entry,
@@ -193,12 +210,14 @@ function rearmPreparation(
   // Record first: a prefetch that re-armed this key while we finalized would otherwise swallow the
   // consume, and the next create would look isolated when it is really the middle of a burst.
   const continuesBurst = recordPreparationConsume(entry.key)
+
   if (
     !continuesBurst ||
     findPreparation(entry.repoPathKey, entry.workspaceRootKey, canonicalBase, entry.wslDistro)
   ) {
     return
   }
+
   void startPreparation({
     repoPath: entry.repoPath,
     workspaceRoot: entry.workspaceRoot,
@@ -215,15 +234,20 @@ export async function consumePreparedWorktreeCreate(
 ): Promise<PreparedWorktreeCreateAttempt> {
   const options = args.options ?? {}
   const claim = await claimPreparedWorktree(args, options)
+
   if (claim.status === 'miss') {
     return { status: 'miss', reason: claim.reason }
   }
+
   const { entry } = claim
+
   try {
     const parentDir = isWindowsAbsolutePathLike(args.worktreePath)
       ? win32.dirname(args.worktreePath)
       : posix.dirname(args.worktreePath)
+
     await mkdir(toHostFilesystemPath(parentDir), { recursive: true })
+
     // Finalize resolves the requested base itself and resets the prepared checkout onto that
     // commit, so a retargeted claim is handed over at the requested commit or not at all.
     const result = await finalizePreparedWorktree(
@@ -235,9 +259,11 @@ export async function consumePreparedWorktreeCreate(
       args.refreshLocalBaseRef,
       options
     )
+
     // Consuming the only prepared checkout leaves the next create cold. Re-arm for a user who is
     // creating in a burst; the TTL and the preparation limit still bound an unused replacement.
     rearmPreparation(entry, args.baseBranch, claim.canonicalBase)
+
     return { status: 'hit', retargeted: claim.retargeted, result }
   } catch (error) {
     await discardPreparedWorktree(args.repoPath, entry.preparedPath, options).catch(() => {})
@@ -245,6 +271,7 @@ export async function consumePreparedWorktreeCreate(
       '[worktree-create] prepared checkout could not be finalized; using normal add',
       error
     )
+
     return { status: 'miss', reason: 'finalize_failed' }
   }
 }

@@ -5,8 +5,10 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -20,9 +22,13 @@ import {
 import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo1::/path/degraded'
+
 const TERMINAL_ID = 'terminal-degraded'
+
 const EDITOR_FILE_ID = '/path/degraded/src/App.tsx'
+
 const BROWSER_ID = 'browser-degraded'
+
 const GROUP_ID = 'group-degraded'
 
 function makeBrowserTab(): BrowserTab {
@@ -130,6 +136,7 @@ function makeTerminalFreeDegradedRepoSession(): WorkspaceSessionState {
     tabOrder: [EDITOR_FILE_ID, BROWSER_ID],
     recentTabIds: [EDITOR_FILE_ID, BROWSER_ID]
   }))
+
   return session
 }
 
@@ -202,6 +209,7 @@ it('keeps a terminal-free degraded workspace selected through hydration and pers
 
 it('keeps chrome when a non-authoritative fallback lists only some of the repo worktrees', () => {
   const store = createTestStore()
+
   // Why: an SSH metadata fallback can be non-empty yet partial (host-less metas are skipped on multi-owner
   // repos, agent-scratch stays hidden). A partial list must not read as proof the missing worktree was deleted.
   const sibling = makeWorktree({
@@ -209,6 +217,7 @@ it('keeps chrome when a non-authoritative fallback lists only some of the repo w
     repoId: 'repo1',
     path: '/path/sibling'
   })
+
   store.setState({
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: { repo1: [sibling] },

@@ -21,7 +21,9 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 
 export const SESSION = 'session-alpha'
+
 export const FINGERPRINT = 'f'.repeat(64)
+
 export const OPERATION = '1800000000000-00000000000000000000000000000001'
 
 export function envelope(overrides: Record<string, unknown> = {}) {
@@ -65,6 +67,7 @@ function request(method: string, params: unknown): RpcRequest {
 }
 
 export const hostCalls: Record<string, ReturnType<typeof vi.fn>> = {}
+
 export const runtimeCalls: Record<string, ReturnType<typeof vi.fn>> = {}
 
 function reset(record: Record<string, ReturnType<typeof vi.fn>>): void {
@@ -74,6 +77,7 @@ function reset(record: Record<string, ReturnType<typeof vi.fn>>): void {
 }
 
 export const STATUS_SESSION = 'session-status'
+
 export const STATUS_ITEMS: AgentJournalRenderItem[] = [
   {
     itemId: 'user-1',
@@ -206,6 +210,7 @@ export function hostStub(): StructuredAgentSessionHost {
     unsubscribe: vi.fn(),
     release: vi.fn()
   })
+
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 
@@ -235,6 +240,7 @@ export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcD
     })),
     publishStructuredAgentSessionTab: vi.fn()
   })
+
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
@@ -244,6 +250,7 @@ export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcD
     ...runtimeCalls,
     ...runtimeOverrides
   }
+
   return new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
     methods: STRUCTURED_AGENT_SESSION_METHODS
@@ -270,9 +277,11 @@ export async function call(
     client
   )
   const first = replies[0]
+
   if (!first) {
     throw new Error(`no reply for ${method}`)
   }
+
   return first
 }
 
@@ -283,6 +292,7 @@ export const STRUCTURED_CLIENT = {
     AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
   ]
 }
+
 export const STRUCTURED_MOBILE_CLIENT = {
   clientKind: 'mobile' as const,
   clientCapabilities: [

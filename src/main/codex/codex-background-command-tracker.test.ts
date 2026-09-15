@@ -56,6 +56,7 @@ describe('persistent command ownership', () => {
 
   it('keeps the journal running across turn completion and accepts late output and exit', () => {
     const rows: { key: string; body: AgentJournalItemBody }[] = []
+
     const translator = createCodexJournalTranslator({
       primaryThreadId: () => 'root',
       sink: {
@@ -64,11 +65,14 @@ describe('persistent command ownership', () => {
         publish: () => {}
       }
     })
+
     const tracker = new CodexBackgroundCommandTracker('root')
+
     const deliver = (event: Extract<CodexStructuredSessionEvent, { type: 'notification' }>) => {
       expect(translator.handle(event)).toEqual({ accepted: true })
       tracker.observe(event)
     }
+
     deliver(notification('turn/started', { turn: { id: 'turn' } }))
     deliver(command('item/started'))
     const originalKey = rows.find(({ body }) => body.kind === 'tool-call')?.key
@@ -115,10 +119,12 @@ describe('persistent command ownership', () => {
   it('retains live commands while recycling bounded settled history', () => {
     const tracker = new CodexBackgroundCommandTracker('root')
     tracker.observe(command('item/started', 'long-lived'))
+
     for (let index = 0; index < 300; index += 1) {
       tracker.observe(command('item/started', `short-${index}`))
       tracker.observe(command('item/completed', `short-${index}`))
     }
+
     expect(tracker.tasks()).toEqual([
       { id: 'codex-command:primary:long-lived', kind: 'command', description: 'sleep 30' }
     ])

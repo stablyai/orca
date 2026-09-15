@@ -3,8 +3,11 @@ import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const TRANSCRIPT_PANE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const TRANSCRIPT_PANE_TAB_ID = 'tab-1'
+
 const TRANSCRIPT_PANE_WORKTREE_ID = 'wt-1'
+
 export const TRANSCRIPT_PANE_PTY_ID = 'pty-1'
 
 export type TranscriptPaneOptions = {
@@ -23,9 +26,11 @@ export async function createTranscriptPane(
   runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
 ): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
   const runtime = new OrcaRuntimeService(null, undefined, runtimeDeps)
+
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
+
   vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: TRANSCRIPT_PANE_WORKTREE_ID,
     path: '/repo/app',
@@ -39,16 +44,19 @@ export async function createTranscriptPane(
     kill: () => true,
     getForegroundProcess: (): Promise<string | null> => {
       options.onForegroundProbe?.()
+
       return options.foregroundProbeHangs === true
         ? new Promise<string | null>(() => {})
         : Promise.resolve(options.foregroundProcess)
     }
   })
+
   const terminal = await runtime.createTerminal(`id:${TRANSCRIPT_PANE_WORKTREE_ID}`, {
     tabId: TRANSCRIPT_PANE_TAB_ID,
     leafId: TRANSCRIPT_PANE_LEAF_ID,
     title: 'Terminal'
   })
+
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -71,10 +79,12 @@ export async function createTranscriptPane(
       }
     ]
   })
+
   // Why the guard: a restore seed is only applied to a never-written record, so the restore
   // cases must not write an empty chunk first.
   if (options.data.length > 0) {
     runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, options.data, Date.now())
   }
+
   return { runtime, handle: terminal.handle }
 }

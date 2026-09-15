@@ -7,6 +7,7 @@ vi.mock('electron', () => ({
     getAppPath: () => '/host/app'
   }
 }))
+
 vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/host/user-data'
 }))
@@ -23,11 +24,13 @@ it('relays typed dispatch refusal codes from the host CLI unchanged', async () =
     stdin: { end: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> }
     kill: ReturnType<typeof vi.fn>
   }
+
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
   child.stdin = { end: vi.fn(), on: vi.fn() }
   child.kill = vi.fn()
   const spawn = vi.fn(() => child)
+
   const refusal = {
     id: 'rpc_1',
     ok: false,

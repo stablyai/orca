@@ -36,17 +36,22 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
 }): Promise<EphemeralVmCleanupSummary> {
   const destroyedSshTargetIds = new Set<string>()
   const retainedSshTargetIds = new Set<string>()
+
   try {
     const workspaceIdSet = new Set(args.workspaceIds ?? [])
+
     const sshTargetIdSet = new Set(
       (args.runtimeOwnedSshTargetIds ?? []).filter((id) => isRuntimeOwnedSshTargetId(id))
     )
+
     const hostScopedWorkspaceIdentities = new Set(
       (args.hostScopedWorkspaces ?? []).map((target) =>
         composeWorktreeHostIdentity(target.executionHostId, target.workspaceId)
       )
     )
+
     const runtimes = await window.api.ephemeralVm.listRuntimes()
+
     const matchingRuntimes = runtimes.filter(
       (runtime) =>
         (runtime.cleanupStatus !== 'succeeded' || runtime.sshTargetId !== undefined) &&
@@ -68,15 +73,18 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
                 )))) ||
           (runtime.sshTargetId !== undefined && sshTargetIdSet.has(runtime.sshTargetId)))
     )
+
     for (const runtime of matchingRuntimes) {
       try {
         const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+
         if (runtime.sshTargetId) {
           const targetIds = cleaned.sshTargetId ? retainedSshTargetIds : destroyedSshTargetIds
           targetIds.add(runtime.sshTargetId)
         }
       } catch (error) {
         console.error('Failed to clean up ephemeral VM runtime for deleted workspace:', error)
+
         if (runtime.sshTargetId) {
           retainedSshTargetIds.add(runtime.sshTargetId)
         }
@@ -84,12 +92,14 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
     }
   } catch (error) {
     console.error('Failed to clean up ephemeral VM runtime for deleted workspace:', error)
+
     for (const targetId of args.runtimeOwnedSshTargetIds ?? []) {
       if (isRuntimeOwnedSshTargetId(targetId)) {
         retainedSshTargetIds.add(targetId)
       }
     }
   }
+
   return {
     destroyedSshTargetIds: [...destroyedSshTargetIds],
     retainedSshTargetIds: [...retainedSshTargetIds]

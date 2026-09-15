@@ -16,12 +16,16 @@ export function readGitCommandFailureText(error: unknown): string {
   if (typeof error !== 'object' || error === null) {
     return String(error)
   }
+
   const parts: string[] = []
+
   for (const field of ['message', 'stderr', 'stdout'] as const) {
     const value = (error as Record<string, unknown>)[field]
+
     if (typeof value === 'string' && value) {
       parts.push(value)
     }
   }
+
   return parts.join('\n')
 }

@@ -26,15 +26,19 @@ type WorktreeCardStatusSlotProps = {
 }
 
 const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
+
 // Why: a missing review display can also mean provider state is unavailable,
 // so the passive label names the identity cue without claiming no review exists.
 function getDefaultBranchIdentityLabel(): string {
   return translate('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
 }
+
 // Why: branch-style SVGs are optically left-heavy; this keeps them aligned with
 // the centered activity dots in the shared status column.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
+
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
+
 // Why: a left-edge badge overlays unread on the status glyph without widening
 // the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
 const newCardUnreadAlertClassName =
@@ -65,24 +69,31 @@ function overlayNewCardUnreadStatus(
 
 function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
+
   if (review.state === 'merged') {
     return `${label}: Merged`
   }
+
   if (review.state === 'closed') {
     return `${label}: Closed`
   }
+
   if (review.state === 'draft') {
     return `${label}: Draft`
   }
+
   if (review.status === 'failure') {
     return `${label} checks: Failed`
   }
+
   if (review.status === 'pending') {
     return `${label} checks: Pending`
   }
+
   if (review.status === 'success') {
     return `${label} checks: Passing`
   }
+
   return `${label}: Open`
 }
 
@@ -102,31 +113,38 @@ export function WorktreeCardStatusSlot({
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
+
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
     prDisplay !== null &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
+
   const canShowBranchStatus =
     newCardStyle &&
     showStatus &&
     hasBranchIdentity &&
     prDisplay === null &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
+
   const passiveStatusLabel =
     canShowReviewStatus && prDisplay
       ? getReviewStatusLabel(prDisplay)
       : canShowBranchStatus
         ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
         : statusLabel
+
   const passiveStatusAnnouncement =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
+
   // Why: working and permission already own the new-card status lane, but
   // unread state should still surface to assistive technology and reappear afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
+
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
+
   const passiveStatus =
     canShowReviewStatus && prDisplay ? (
       <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
@@ -168,6 +186,7 @@ export function WorktreeCardStatusSlot({
   }
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
+
   const tooltip =
     showStatus && !isUnread ? `${passiveStatusLabel} · ${unreadTooltip}` : unreadTooltip
 

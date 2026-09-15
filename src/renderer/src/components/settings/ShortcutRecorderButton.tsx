@@ -36,9 +36,11 @@ type ShortcutRecorderButtonProps = {
 // 1-9, so the trailing number cap renders the whole range.
 function toDigitRangeKeys(keys: string[]): string[] {
   const last = keys.at(-1)
+
   if (last === undefined || !/^[1-9]$/.test(last)) {
     return keys
   }
+
   return [...keys.slice(0, -1), `${last}–9`]
 }
 
@@ -59,6 +61,7 @@ export function ShortcutRecorderButton({
 }: ShortcutRecorderButtonProps): React.JSX.Element {
   const recordButtonRef = useRef<HTMLButtonElement | null>(null)
   const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
+
   if (!doubleTapDetectorRef.current) {
     doubleTapDetectorRef.current = new ModifierDoubleTapDetector()
   }
@@ -80,6 +83,7 @@ export function ShortcutRecorderButton({
         event.preventDefault()
         onStartRecording(actionId, bindingIndex)
       }
+
       return
     }
 
@@ -90,6 +94,7 @@ export function ShortcutRecorderButton({
       doubleTapDetectorRef.current?.reset()
       onClearError(actionId)
       onCancelRecording()
+
       return
     }
 
@@ -109,11 +114,13 @@ export function ShortcutRecorderButton({
         }),
         Date.now()
       )
+
       if (detected) {
         onClearError(actionId)
         onCapture(actionId, { doubleTapModifier: detected.modifier })
         doubleTapDetectorRef.current?.reset()
       }
+
       return
     }
 
@@ -133,6 +140,7 @@ export function ShortcutRecorderButton({
     if (!recording) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     doubleTapDetectorRef.current?.process(

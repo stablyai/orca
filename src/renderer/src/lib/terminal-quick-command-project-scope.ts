@@ -22,18 +22,23 @@ function resolveProject(
   allowAnyHostFallback: boolean
 ): ProjectResolution {
   const hostMatches = setups.filter((setup) => setup.hostId === hostId && setup.repoId === repoId)
+
   // Why: commands belong to a settings host, while its repo can execute through that host's SSH.
   const candidates =
     hostMatches.length > 0 || !allowAnyHostFallback
       ? hostMatches
       : setups.filter((s) => s.repoId === repoId)
+
   const projectIds = new Set(candidates.map((setup) => setup.projectId))
+
   if (projectIds.size === 0) {
     return { kind: 'unknown' }
   }
+
   if (projectIds.size > 1) {
     return { kind: 'ambiguous' }
   }
+
   return { kind: 'resolved', projectId: [...projectIds][0] }
 }
 
@@ -42,12 +47,15 @@ export function terminalQuickCommandMatchesWorkspaceProject(
   context: TerminalQuickCommandProjectContext
 ): boolean {
   const scope = getTerminalQuickCommandScope(command)
+
   if (scope.type === 'global') {
     return true
   }
+
   if (context.targetRepoId === null) {
     return false
   }
+
   if (context.commandHostId === context.targetHostId && scope.repoId === context.targetRepoId) {
     return true
   }
@@ -58,17 +66,21 @@ export function terminalQuickCommandMatchesWorkspaceProject(
     scope.repoId,
     true
   )
+
   const targetProject = resolveProject(
     context.projectHostSetups,
     context.targetHostId,
     context.targetRepoId,
     false
   )
+
   if (commandProject.kind === 'ambiguous' || targetProject.kind === 'ambiguous') {
     return false
   }
+
   if (commandProject.kind === 'resolved' && targetProject.kind === 'resolved') {
     return commandProject.projectId === targetProject.projectId
   }
+
   return scope.repoId === context.targetRepoId
 }

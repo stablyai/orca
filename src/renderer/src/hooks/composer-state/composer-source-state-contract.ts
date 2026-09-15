@@ -1,4 +1,5 @@
 import type { ComposerModel } from './composer-model'
+
 export type ComposerSourceState = {
   sourceIdentityActions: Pick<
     ComposerModel,

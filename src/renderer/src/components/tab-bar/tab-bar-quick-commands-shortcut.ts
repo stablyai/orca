@@ -20,11 +20,13 @@ type UseTabBarQuickCommandsShortcutParams = {
 function targetHasClass(target: EventTarget | null, className: string): boolean {
   const classList = (target as { classList?: { contains?: (value: string) => boolean } } | null)
     ?.classList
+
   return typeof classList?.contains === 'function' && classList.contains(className)
 }
 
 function targetMatchesClosest(target: EventTarget | null, selector: string): boolean {
   const closest = (target as { closest?: (value: string) => unknown } | null)?.closest
+
   return typeof closest === 'function' && Boolean(closest.call(target, selector))
 }
 
@@ -37,9 +39,11 @@ export function useTabBarQuickCommandsShortcut({
   onOpenChange
 }: UseTabBarQuickCommandsShortcutParams): void {
   const keybindings = useAppStore((s) => s.keybindings)
+
   const terminalShortcutPolicy = useAppStore(
     (s) => s.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
+
   const activeView = useAppStore((s) => s.activeView)
 
   // Why: this hook only runs in the focused tab group's menu component, so the
@@ -48,25 +52,32 @@ export function useTabBarQuickCommandsShortcut({
     if (activeView !== 'terminal') {
       return
     }
+
     const platform = getShortcutPlatform()
     const doubleTapDetector = new ModifierDoubleTapDetector()
+
     const matchesShortcut = (input: KeybindingInput, target: EventTarget | null): boolean => {
       const context = getQuickCommandsShortcutContext(target)
+
       return keybindingMatchesAction('tab.openQuickCommandsMenu', input, platform, keybindings, {
         context,
         terminalShortcutPolicy
       })
     }
+
     const toggleMenu = (e: KeyboardEvent): void => {
       e.preventDefault()
       e.stopImmediatePropagation()
       onOpenChange(!menuOpen)
     }
+
     const onKeyDown = (e: KeyboardEvent): void => {
       if (targetMatchesClosest(e.target, '[data-shortcut-recorder-active]')) {
         doubleTapDetector.reset()
+
         return
       }
+
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyDown',
@@ -80,15 +91,19 @@ export function useTabBarQuickCommandsShortcut({
         }),
         Date.now()
       )
+
       if (detected) {
         if (matchesShortcut({ doubleTapModifier: detected.modifier }, e.target)) {
           toggleMenu(e)
         }
+
         return
       }
+
       if (e.repeat) {
         return
       }
+
       if (
         !matchesShortcut(
           {
@@ -104,13 +119,17 @@ export function useTabBarQuickCommandsShortcut({
       ) {
         return
       }
+
       toggleMenu(e)
     }
+
     const onKeyUp = (e: KeyboardEvent): void => {
       if (targetMatchesClosest(e.target, '[data-shortcut-recorder-active]')) {
         doubleTapDetector.reset()
+
         return
       }
+
       doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyUp',
@@ -124,10 +143,12 @@ export function useTabBarQuickCommandsShortcut({
         Date.now()
       )
     }
+
     const onBlur = (): void => doubleTapDetector.reset()
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', onBlur)
+
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
@@ -139,10 +160,13 @@ export function useTabBarQuickCommandsShortcut({
     if (activeView !== 'terminal') {
       return
     }
+
     const onToggleQuickCommandsMenu = (): void => {
       onOpenChange(!menuOpen)
     }
+
     window.addEventListener(TOGGLE_QUICK_COMMANDS_MENU_EVENT, onToggleQuickCommandsMenu)
+
     return () => {
       window.removeEventListener(TOGGLE_QUICK_COMMANDS_MENU_EVENT, onToggleQuickCommandsMenu)
     }

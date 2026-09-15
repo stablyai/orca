@@ -22,6 +22,7 @@ import {
 
 export function getHermesHome(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.HERMES_HOME?.trim()
+
   return explicit ? explicit : join(homedir(), '.hermes')
 }
 
@@ -45,6 +46,7 @@ export function readConfigFile(configPath: string): ConfigParseResult {
   if (!existsSync(configPath)) {
     return { ok: true, config: {} }
   }
+
   return parseHermesConfig(readFileSync(configPath, 'utf-8'))
 }
 
@@ -52,6 +54,7 @@ export function writeConfigFile(configPath: string, config: HermesConfig): void 
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
   const serialized = serializeHermesConfig(config)
+
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === serialized) {
@@ -63,11 +66,14 @@ export function writeConfigFile(configPath: string, config: HermesConfig): void 
   }
 
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
+
   try {
     writeFileSync(tmpPath, serialized, 'utf-8')
+
     if (existsSync(configPath)) {
       copyFileSync(configPath, `${configPath}.bak`)
     }
+
     renameSync(tmpPath, configPath)
   } finally {
     if (existsSync(tmpPath)) {
@@ -87,13 +93,16 @@ export function getPluginFilesState(pluginDir = getPluginDir()): {
 } {
   const manifestPath = getManifestPath(pluginDir)
   const initPath = getInitPath(pluginDir)
+
   if (!existsSync(manifestPath) || !existsSync(initPath)) {
     return { present: false, managed: false, detail: 'Managed Hermes plugin files are missing' }
   }
+
   try {
     const manifest = readFileSync(manifestPath, 'utf-8')
     const init = readFileSync(initPath, 'utf-8')
     const managed = manifest.includes(HERMES_PLUGIN_MARKER) && init.includes(HERMES_PLUGIN_MARKER)
+
     return {
       present: true,
       managed,

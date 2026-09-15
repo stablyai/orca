@@ -16,6 +16,7 @@ const { existsSyncMock, forkMock, mkdtempSyncMock, rmSyncMock } = vi.hoisted(() 
 }))
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
+
 vi.mock('node:fs', () => ({
   existsSync: existsSyncMock,
   mkdtempSync: mkdtempSyncMock,
@@ -46,18 +47,21 @@ describe('watcher native unsubscribe timeout', () => {
 
   it('restarts the shard and restores a healthy sibling', async () => {
     vi.useFakeTimers()
+
     try {
       const firstPromise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
       const first = currentChild()
       ackSubscribe(first, 0)
       const firstSubscription = await firstPromise
       const siblingInterruption = vi.fn()
+
       const siblingPromise = subscribeViaWatcherProcess(
         '/sibling',
         vi.fn(),
         {},
         { onInterruption: siblingInterruption }
       )
+
       ackSubscribe(first)
       await siblingPromise
 
@@ -85,6 +89,7 @@ describe('watcher native unsubscribe timeout', () => {
 
   it('spawns a fresh child after the idle kill misses the exit deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
       const first = currentChild()
@@ -122,6 +127,7 @@ describe('watcher native unsubscribe timeout', () => {
 
   it('spawns a fresh child for a subscribe queued before an idle exit deadline miss', async () => {
     vi.useFakeTimers()
+
     try {
       const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
       const first = currentChild()
@@ -154,6 +160,7 @@ describe('watcher native unsubscribe timeout', () => {
 
   it('rejects only after an unkillable child reaches its exit deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const firstPromise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
       const child = currentChild()

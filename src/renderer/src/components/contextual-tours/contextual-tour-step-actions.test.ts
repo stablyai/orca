@@ -134,9 +134,11 @@ describe('performContextualTourStepAction', () => {
 
     expect(finishTour).toHaveBeenCalledTimes(1)
     expect(openClientHostedBrowserSettings).not.toHaveBeenCalled()
+
     for (const callback of scheduled) {
       callback()
     }
+
     expect(openClientHostedBrowserSettings).toHaveBeenCalledTimes(1)
   })
 })

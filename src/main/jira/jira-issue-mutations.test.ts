@@ -93,9 +93,11 @@ describe('Jira issue mutations', () => {
 
     const [, path, init] = jiraRequestMock.mock.calls[0]
     expect(path).toBe('/rest/api/2/issue')
+
     const body = JSON.parse((init as { body: string }).body) as {
       fields: { description: unknown }
     }
+
     // REST v2 rejects ADF documents; the description must stay a plain string.
     expect(body.fields.description).toBe('Body text')
   })

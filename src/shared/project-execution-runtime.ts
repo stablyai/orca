@@ -101,6 +101,7 @@ export function normalizeProjectRuntimePreference(value: unknown): LocalWindowsR
 
   if (value.kind === 'wsl') {
     const distro = normalizeDistro(value.distro)
+
     return distro ? { kind: 'wsl', distro } : { kind: 'inherit-global' }
   }
 
@@ -124,6 +125,7 @@ export function deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
   context: LegacyWindowsRuntimeMigrationContext = {}
 ): LegacyWindowsRuntimeDefaultMigration {
   const selectedRuntime = settings?.localAgentRuntime
+
   if (selectedRuntime === 'host') {
     return { defaultRuntime: { kind: 'windows-host' }, fallbackReason: null }
   }
@@ -132,10 +134,13 @@ export function deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
     const distro =
       normalizeDistro(settings?.localAgentWslDistro) ??
       normalizeDistro(settings?.terminalWindowsWslDistro)
+
     const fallbackReason = getLegacyWslFallbackReason(distro, context)
+
     if (fallbackReason) {
       return { defaultRuntime: { kind: 'windows-host' }, fallbackReason }
     }
+
     return { defaultRuntime: { kind: 'wsl', distro }, fallbackReason: null }
   }
 
@@ -159,6 +164,7 @@ export function resolveProjectExecutionRuntime(
   }
 
   const projectPreference = normalizeProjectRuntimePreference(args.projectRuntimePreference)
+
   if (projectPreference.kind === 'windows-host') {
     return resolvedWindowsHost(args.projectId, 'project-override')
   }
@@ -168,6 +174,7 @@ export function resolveProjectExecutionRuntime(
   }
 
   const globalDefault = normalizeGlobalWindowsRuntimeDefault(args.globalWindowsRuntimeDefault)
+
   if (globalDefault.kind === 'wsl') {
     return resolveWslRuntime(args, globalDefault.distro, 'global-default')
   }
@@ -197,6 +204,7 @@ function resolveWslRuntime(
     wslAvailable: args.wslAvailable,
     availableWslDistros: args.availableWslDistros
   })
+
   if (repairReason) {
     return {
       status: 'repair-required',
@@ -211,6 +219,7 @@ function resolveWslRuntime(
   }
 
   const resolvedDistro = distro
+
   return {
     status: 'resolved',
     runtime: {
@@ -247,9 +256,11 @@ function getLegacyWslFallbackReason(
   if (context.wslAvailable === false) {
     return 'legacy-wsl-unavailable'
   }
+
   if (distro && isKnownMissingDistro(distro, context.availableWslDistros)) {
     return 'legacy-wsl-distro-missing'
   }
+
   return null
 }
 
@@ -260,9 +271,11 @@ function getWslRepairReason(
   if (context.wslAvailable === false) {
     return 'wsl-unavailable'
   }
+
   if (isKnownMissingDistro(distro, context.availableWslDistros)) {
     return 'wsl-distro-missing'
   }
+
   return null
 }
 
@@ -281,7 +294,9 @@ function normalizeDistro(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
+
   const trimmed = value.trim()
+
   return trimmed ? trimmed : null
 }
 
@@ -289,6 +304,8 @@ function isWslShell(value: unknown): boolean {
   if (typeof value !== 'string') {
     return false
   }
+
   const shellName = value.trim().split(/[\\/]/).pop()?.toLowerCase()
+
   return shellName === 'wsl.exe' || shellName === 'wsl'
 }

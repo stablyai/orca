@@ -15,14 +15,17 @@ function measuredCircles(count = 80): {
   coordinateReads: () => number
 } {
   let reads = 0
+
   const worktrees = circles(count).map(({ id, radius }) => {
     let x = 0
     let y = 0
+
     return {
       id,
       radius,
       get x() {
         reads += 1
+
         return x
       },
       set x(value: number) {
@@ -30,6 +33,7 @@ function measuredCircles(count = 80): {
       },
       get y() {
         reads += 1
+
         return y
       },
       set y(value: number) {
@@ -37,6 +41,7 @@ function measuredCircles(count = 80): {
       }
     }
   })
+
   return { worktrees, coordinateReads: () => reads }
 }
 
@@ -46,6 +51,7 @@ describe('packAgentMapWorktrees', () => {
     const second = packAgentMapWorktrees(circles())
 
     expect(second).toEqual(first)
+
     for (const [index, worktree] of first.entries()) {
       for (const other of first.slice(index + 1)) {
         expect(Math.hypot(worktree.x - other.x, worktree.y - other.y)).toBeGreaterThanOrEqual(
@@ -66,6 +72,7 @@ describe('packAgentMapWorktrees', () => {
     )
 
     expect(packed.some((worktree) => worktree.x < 0 || worktree.y < 0)).toBe(true)
+
     for (const [index, worktree] of packed.entries()) {
       for (const other of packed.slice(index + 1)) {
         expect(Math.hypot(worktree.x - other.x, worktree.y - other.y)).toBeGreaterThanOrEqual(
@@ -84,6 +91,7 @@ describe('packAgentMapWorktrees', () => {
       Math.max(...first.map((worktree) => Math.hypot(worktree.x, worktree.y) + worktree.radius))
     ).toBeLessThan(1_500)
     let minimumGap = Number.POSITIVE_INFINITY
+
     for (const [index, worktree] of first.entries()) {
       for (const other of first.slice(index + 1)) {
         minimumGap = Math.min(
@@ -92,6 +100,7 @@ describe('packAgentMapWorktrees', () => {
         )
       }
     }
+
     expect(minimumGap).toBeGreaterThanOrEqual(AGENT_MAP_WORKTREE_GAP - 0.001)
   })
 
@@ -115,6 +124,7 @@ describe('packAgentMapWorktrees', () => {
     expect(coordinateReads()).toBeLessThan(10_000_000)
     expect(packAgentMapWorktrees(circles(1_000))).toEqual(positions)
     let minimumGap = Number.POSITIVE_INFINITY
+
     for (const [index, worktree] of positions.entries()) {
       for (const other of positions.slice(index + 1)) {
         minimumGap = Math.min(
@@ -123,6 +133,7 @@ describe('packAgentMapWorktrees', () => {
         )
       }
     }
+
     expect(minimumGap).toBeGreaterThanOrEqual(AGENT_MAP_WORKTREE_GAP - 0.001)
   })
 
@@ -145,8 +156,10 @@ describe('packAgentMapWorktrees', () => {
       if (typeof key === 'number') {
         numericMapSets += 1
       }
+
       return Reflect.apply(set, this, [key, value])
     } as typeof Map.prototype.set
+
     try {
       const packed = packAgentMapWorktrees(
         Array.from({ length: 5 }, (_, index) => ({

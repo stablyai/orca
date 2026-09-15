@@ -74,6 +74,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     if (!repoId || !selectedRepoIsGit || !canPrefetchSelectedRepoWorkItems) {
       return
     }
+
     void prefetchWorktreeCreateBase(repoId, baseBranch)
   }, [
     baseBranch,
@@ -88,6 +89,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     if (!selectedRepoIsGit || !selectedRepo?.path || !canPrefetchSelectedRepoWorkItems) {
       return
     }
+
     prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
   }, [
     canPrefetchSelectedRepoWorkItems,
@@ -102,22 +104,29 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
   useEffect(() => {
     if (shouldWaitForSetupCheck) {
       setSetupDecision(null)
+
       return
     }
+
     if (!setupConfig) {
       setSetupDecision(null)
+
       return
     }
+
     if (setupPolicy === 'ask') {
       setSetupDecision(null)
+
       return
     }
+
     setSetupDecision(setupPolicy === 'run-by-default' ? 'run' : 'skip')
   }, [setupConfig, setupPolicy, shouldWaitForSetupCheck, setSetupDecision])
 
   // Link popover: debounce + load recent items + resolve direct number.
   useEffect(() => {
     const timeout = window.setTimeout(() => setLinkDebouncedQuery(linkQuery), 250)
+
     return () => window.clearTimeout(timeout)
   }, [linkQuery, setLinkDebouncedQuery])
 
@@ -142,6 +151,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
               envelope.errors.issues
             )
           }
+
           setLinkItems(
             envelope.items.map((it) => ({
               ...it,
@@ -175,6 +185,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     ) {
       setLinkDirectItem(null)
       setLinkDirectLoading(false)
+
       return
     }
 
@@ -182,6 +193,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     setLinkDirectLoading(true)
     // Why: a full URL carries issue-vs-PR intent, so preserve the URL route instead of probing by number only.
     const lookupRepoId = selectedRepo.id
+
     const lookup =
       normalizedLinkQuery.directLink !== undefined
         ? lookupGitHubWorkItemByOwnerRepoForSource({
@@ -202,6 +214,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
             sourceContext: selectedRepoGitHubSourceContext,
             number: normalizedLinkQuery.directNumber
           })
+
     void lookup
       .then((item) => {
         if (!cancelled) {

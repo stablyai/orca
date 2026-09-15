@@ -19,6 +19,7 @@ export function resolveWebRuntimeSessionEnvironmentId(
   if (requested === undefined) {
     return focused?.trim() || null
   }
+
   return requested?.trim() || null
 }
 

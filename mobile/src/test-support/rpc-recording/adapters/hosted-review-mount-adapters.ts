@@ -19,8 +19,10 @@ export function hostedReviewMountAdapters(
       const preparation = modules.load<
         typeof import('../../../source-control/mobile-hosted-review-git-preparation')
       >('mobile/src/source-control/mobile-hosted-review-git-preparation.ts')
+
       let status: unknown = 'unread'
       let committed: unknown = 'uncommitted'
+
       return {
         action(name) {
           if (name === 'commit') {
@@ -28,11 +30,14 @@ export function hostedReviewMountAdapters(
               .commitMobileHostedReviewStagedChanges(client, WORKTREE, 'recorded message')
               .then((value) => {
                 committed = value
+
                 return value
               })
           }
+
           return preparation.readMobileHostedReviewGitStatus(client, WORKTREE).then((value) => {
             status = value
+
             return value
           })
         },
@@ -46,10 +51,13 @@ export function hostedReviewMountAdapters(
       >(
         'mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts'
       ).applyMobileHostedReviewRemotePrerequisite
+
       let outcome: unknown = 'unapplied'
+
       return {
         action(name, args) {
           const patchEquivalent = args.patchEquivalent === true
+
           return apply(
             context.client,
             WORKTREE,
@@ -65,6 +73,7 @@ export function hostedReviewMountAdapters(
             }
           ).then((value) => {
             outcome = value
+
             return value
           })
         },
@@ -76,8 +85,10 @@ export function hostedReviewMountAdapters(
       const service = modules.load<
         typeof import('../../../source-control/mobile-hosted-review-service')
       >('mobile/src/source-control/mobile-hosted-review-service.ts')
+
       let eligibility: unknown = 'unfetched'
       let prefill: unknown = 'unresolved'
+
       return {
         action(name) {
           if (name === 'prefill') {
@@ -88,13 +99,16 @@ export function hostedReviewMountAdapters(
               })
               .then((value) => {
                 prefill = value
+
                 return value
               })
           }
+
           return service
             .fetchMobileHostedReviewEligibility(client, WORKTREE, { branch: 'feature' })
             .then((value) => {
               eligibility = value
+
               return value
             })
         },
@@ -106,7 +120,9 @@ export function hostedReviewMountAdapters(
       const create = modules.load<
         typeof import('../../../source-control/mobile-hosted-review-service')
       >('mobile/src/source-control/mobile-hosted-review-service.ts').createMobileHostedReview
+
       let outcome: unknown = 'uncreated'
+
       return {
         action: (_name, args) =>
           create(client, WORKTREE, {
@@ -119,6 +135,7 @@ export function hostedReviewMountAdapters(
             pushBeforeCreate: args.pushBeforeCreate === true
           }).then((value) => {
             outcome = value
+
             return value
           }),
         state: () => ({ outcome }),
@@ -131,7 +148,9 @@ export function hostedReviewMountAdapters(
       >(
         'mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts'
       ).runMobileHostedReviewCreateIntent
+
       let outcome: unknown = 'unrun'
+
       return {
         action: (_name, args) =>
           run(context.client, WORKTREE, {
@@ -145,6 +164,7 @@ export function hostedReviewMountAdapters(
             onProgress: (progress) => context.effect('progress', progress)
           }).then((value) => {
             outcome = value
+
             return value
           }),
         state: () => ({ outcome }),

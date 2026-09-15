@@ -5,6 +5,7 @@ export function buildUnambiguousWorktreeIdIndex(
 ): Map<string, Worktree> {
   const index = new Map<string, Worktree>()
   const ambiguous = new Set<string>()
+
   for (const worktree of worktrees) {
     if (index.has(worktree.id)) {
       index.delete(worktree.id)
@@ -13,5 +14,6 @@ export function buildUnambiguousWorktreeIdIndex(
       index.set(worktree.id, worktree)
     }
   }
+
   return index
 }

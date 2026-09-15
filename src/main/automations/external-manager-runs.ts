@@ -40,6 +40,7 @@ async function requestRemoteExternalRuns(
     if (isRelayMethodNotFoundError(error)) {
       throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.runsUnsupported)
     }
+
     throw error
   }
 }
@@ -49,9 +50,11 @@ export async function listExternalAutomationRuns(
 ): Promise<ExternalAutomationRunsPage> {
   assertExternalAutomationJobId(input.jobId)
   const page = Number.isFinite(input.page) ? Math.max(1, Math.floor(input.page)) : 1
+
   const pageSize = Number.isFinite(input.pageSize)
     ? Math.min(100, Math.max(1, Math.floor(input.pageSize)))
     : 25
+
   const identity = {
     managerId: input.managerId,
     provider: input.provider,
@@ -60,9 +63,11 @@ export async function listExternalAutomationRuns(
     page,
     pageSize
   }
+
   if (input.provider !== 'hermes') {
     return { ...identity, total: 0, runs: [] }
   }
+
   const result =
     input.target.type === 'local'
       ? await readHermesCronOutputRunsPage(input.jobId, { page, pageSize })
@@ -72,6 +77,7 @@ export async function listExternalAutomationRuns(
           page,
           pageSize
         })
+
   return {
     ...identity,
     total: typeof result.total === 'number' && Number.isFinite(result.total) ? result.total : 0,

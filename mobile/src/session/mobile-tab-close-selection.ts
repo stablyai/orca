@@ -24,12 +24,15 @@ export function selectBulkCloseTabs<T extends BulkClosableTab>(
   mode: BulkTabCloseMode
 ): T[] {
   const anchorIndex = tabs.findIndex((tab) => tab.id === anchorTabId)
+
   if (anchorIndex === -1) {
     return []
   }
+
   const candidates =
     mode === 'others'
       ? tabs.filter((_, index) => index !== anchorIndex)
       : tabs.slice(0, anchorIndex)
+
   return candidates.filter((tab) => tab.isDirty !== true && tab.isPinned !== true)
 }

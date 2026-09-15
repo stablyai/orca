@@ -8,6 +8,7 @@ describe('headless PTY registry hydration ordering', () => {
       join(process.cwd(), 'src/main/window/attach-main-window-services.ts'),
       'utf8'
     )
+
     const start = source.indexOf('const localPtyProviderStartupReady =')
     const end = source.indexOf('registerSshHandlers(', start)
     const hydration = source.slice(start, end)
@@ -25,6 +26,7 @@ describe('headless PTY registry hydration ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
       'utf8'
     )
+
     const serve = source.indexOf('async function launchServeMode(')
     const provider = source.indexOf('await state.localPtyProviderStartupReady', serve)
     const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', provider)

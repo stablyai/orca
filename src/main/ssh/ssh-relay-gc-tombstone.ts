@@ -9,6 +9,7 @@ import {
 } from './ssh-remote-platform'
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
+
 const RELAY_GC_TOMBSTONE_REGEX =
   /^relay-(?:v?\d+\.\d+\.\d+(?:\+[0-9a-f]+)?)\.gc-tombstone\.\d+\.\d+$/
 

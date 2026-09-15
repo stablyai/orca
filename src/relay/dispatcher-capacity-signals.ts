@@ -9,6 +9,7 @@ import { RelayDispatcherClientLifecycle } from './dispatcher-client-lifecycle'
 export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClientLifecycle {
   onLegacyPtyCapacity(listener: () => void): () => void {
     this.legacyCapacityListeners.add(listener)
+
     return () => this.legacyCapacityListeners.delete(listener)
   }
 
@@ -23,17 +24,22 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
    */
   onClientCapacity(clientId: number, listener: () => void): (() => void) | null {
     const client = this.clients.get(clientId)
+
     if (this.disposed || !client) {
       return null
     }
+
     const listeners = this.clientCapacityListeners.get(clientId) ?? new Set<() => void>()
     listeners.add(listener)
     this.clientCapacityListeners.set(clientId, listeners)
+
     return () => {
       const current = this.clientCapacityListeners.get(clientId)
+
       if (!current?.delete(listener) || current.size > 0) {
         return
       }
+
       this.clientCapacityListeners.delete(clientId)
     }
   }
@@ -48,9 +54,11 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
 
   canAdmitControlFrame(clientId: number, estimatedBytes: number): boolean {
     const client = this.clients.get(clientId)
+
     if (this.disposed || !client || client.closed) {
       return false
     }
+
     return client.writer.canEnqueueControl(estimatedBytes)
   }
 
@@ -65,9 +73,11 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
    */
   producerRetentionBelowLowWater(clientId: number): boolean {
     const client = this.clients.get(clientId)
+
     if (!client || client.closed) {
       return false
     }
+
     return this.publicationLedger.belowLowWater([this.clientKey(client)])
   }
 
@@ -75,6 +85,7 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
     if (this.disposed || this.primaryClient.closed) {
       return false
     }
+
     return this.primaryClient.writer.enqueue(lane, () => data, data.length)
   }
 
@@ -105,18 +116,22 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
     const writer = new DispatcherClientWriter(write, sinkOptions, (error) => {
       this.closeClient(client, error, client !== this.primaryClient)
     })
+
     writer.onCapacity(() => {
       this.notifyLegacyCapacityIfLow()
       this.notifyClientCapacity(client.id)
     })
+
     return writer
   }
 
   protected notifyClientCapacity(clientId: number): void {
     const listeners = this.clientCapacityListeners.get(clientId)
+
     if (!listeners?.size) {
       return
     }
+
     for (const listener of Array.from(listeners)) {
       try {
         listener()
@@ -136,11 +151,14 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
     if (this.publicationTransactionDepth > 0) {
       this.deferredForcedLegacyCapacity ||= force
       this.deferredLegacyCapacity ||= !force
+
       return
     }
+
     if (!force && !this.publicationLedger.belowLowWater(this.activeClientKeys())) {
       return
     }
+
     for (const listener of this.legacyCapacityListeners) {
       listener()
     }
@@ -148,15 +166,18 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
 
   protected runPublicationTransaction<T>(operation: () => T): T {
     this.publicationTransactionDepth++
+
     try {
       return operation()
     } finally {
       this.publicationTransactionDepth--
+
       if (this.publicationTransactionDepth === 0) {
         const force = this.deferredForcedLegacyCapacity
         const low = this.deferredLegacyCapacity
         this.deferredForcedLegacyCapacity = false
         this.deferredLegacyCapacity = false
+
         if (force || low) {
           this.notifyLegacyCapacity(force)
         }

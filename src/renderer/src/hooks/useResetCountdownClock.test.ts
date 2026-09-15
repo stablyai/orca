@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useResetCountdownClock } from './useResetCountdownClock'
 
 const START = 1_000_000_000
+
 const MIN = 60_000
 
 describe('useResetCountdownClock', () => {

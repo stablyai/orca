@@ -33,16 +33,21 @@ export function useNativeChatFontScale(enabled: boolean): ChatFontScaleControls 
     if (!enabled) {
       return
     }
+
     const isMac = isMacPlatform()
+
     const onKeyDown = (e: KeyboardEvent): void => {
       const action = chatFontScaleActionForEvent(e, isMac)
+
       if (!action) {
         return
       }
+
       // Why: capture-phase + preventDefault so the chord drives chat zoom instead
       // of the host (Electron) page zoom, and only while chat is active.
       e.preventDefault()
       e.stopPropagation()
+
       if (action === 'increase') {
         increase()
       } else if (action === 'decrease') {
@@ -51,7 +56,9 @@ export function useNativeChatFontScale(enabled: boolean): ChatFontScaleControls 
         reset()
       }
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [enabled, increase, decrease, reset])
 

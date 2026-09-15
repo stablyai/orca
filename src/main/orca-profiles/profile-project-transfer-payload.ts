@@ -46,22 +46,27 @@ export function createTargetRepo(
     !copy && !targetState.repos.some((repo) => repo.id === sourceRepo.id)
       ? sourceRepo.id
       : createUniqueRepoId(targetState)
+
   const repo: Repo = {
     ...sourceRepo,
     id: targetRepoId,
     projectGroupId: null,
     addedAt: copy ? Date.now() : sourceRepo.addedAt
   }
+
   delete repo.projectGroupOrder
+
   return repo
 }
 
 function createUniqueRepoId(state: TransferProfileState): string {
   const existingRepoIds = new Set(state.repos.map((repo) => repo.id))
   let candidate = randomUUID()
+
   while (existingRepoIds.has(candidate)) {
     candidate = randomUUID()
   }
+
   return candidate
 }
 
@@ -73,11 +78,13 @@ function rekeyWorktreeIdRecord<T>(
   mapValue: (value: T) => T = (value) => structuredClone(value)
 ): Record<string, T> {
   const next: Record<string, T> = {}
+
   for (const [oldKey, value] of Object.entries(record)) {
     if (worktreeIds.has(oldKey)) {
       next[rekeyWorktreeId(oldRepoId, newRepoId, oldKey)] = mapValue(value)
     }
   }
+
   return next
 }
 
@@ -88,10 +95,12 @@ function rekeyLineageRecord(
   newRepoId: string
 ): PersistedState['worktreeLineageById'] {
   const next: PersistedState['worktreeLineageById'] = {}
+
   for (const [oldKey, lineage] of Object.entries(record)) {
     if (!worktreeIds.has(oldKey) && !worktreeIds.has(lineage.parentWorktreeId)) {
       continue
     }
+
     const newKey = rekeyWorktreeId(oldRepoId, newRepoId, oldKey)
     next[newKey] = {
       ...structuredClone(lineage),
@@ -99,6 +108,7 @@ function rekeyLineageRecord(
       parentWorktreeId: rekeyWorktreeId(oldRepoId, newRepoId, lineage.parentWorktreeId)
     }
   }
+
   return next
 }
 
@@ -108,18 +118,22 @@ function rekeyWorkspaceLineageRecord(
   newRepoId: string
 ): PersistedState['workspaceLineageByChildKey'] {
   const next: PersistedState['workspaceLineageByChildKey'] = {}
+
   for (const [oldKey, lineage] of Object.entries(record)) {
     const newChildKey = rekeyWorkspaceKey(oldRepoId, newRepoId, oldKey as WorkspaceKey)
     const newParentKey = rekeyWorkspaceKey(oldRepoId, newRepoId, lineage.parentWorkspaceKey)
+
     if (newChildKey === oldKey && newParentKey === lineage.parentWorkspaceKey) {
       continue
     }
+
     next[newChildKey] = {
       ...structuredClone(lineage),
       childWorkspaceKey: newChildKey,
       parentWorkspaceKey: newParentKey
     }
   }
+
   return next
 }
 
@@ -134,8 +148,10 @@ export function createTransferPayload(args: {
   const newRepoId = targetRepo.id
   const worktreeIds = collectTransferWorktreeIds(sourceState, oldRepoId)
   const targetProjection = projectHostSetupProjectionFromRepos([targetRepo])
+
   const targetProjectId =
     targetProjection.setups[0]?.projectId ?? targetProjection.projects[0]?.id ?? null
+
   return {
     repo: targetRepo,
     sparsePresets: (sourceState.sparsePresetsByRepo[oldRepoId] ?? []).map((preset) => ({
@@ -219,22 +235,26 @@ export function applyPayloadToTarget(
     },
     sshTargets: mergeSshTargets(targetState.sshTargets, payload.sshTargets)
   }
+
   if (payload.workspaceSession) {
     next.workspaceSession = mergeWorkspaceSessions(
       targetState.workspaceSession,
       payload.workspaceSession
     )
   }
+
   if (payload.workspaceSessionsByHostId) {
     next.workspaceSessionsByHostId = mergeHostWorkspaceSessions(
       targetState.workspaceSessionsByHostId,
       payload.workspaceSessionsByHostId
     )
   }
+
   return rebuildRepoBackedProjectState(next)
 }
 
 function mergeSshTargets(existing: SshTarget[], incoming: SshTarget[]): SshTarget[] {
   const existingIds = new Set(existing.map((target) => target.id))
+
   return [...existing, ...incoming.filter((target) => !existingIds.has(target.id))]
 }

@@ -15,9 +15,11 @@ type InstalledSubscription = {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => undefined
+
   const promise = new Promise<void>((nextResolve) => {
     resolve = nextResolve
   })
+
   return { promise, resolve }
 }
 
@@ -35,8 +37,10 @@ class FakeSupervisor {
     if (this.subscribeError) {
       throw this.subscribeError
     }
+
     const unsubscribe = vi.fn(async () => undefined)
     this.subscriptions.push({ dir, hooks, unsubscribe })
+
     return { unsubscribe }
   }
 }
@@ -51,6 +55,7 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
@@ -84,6 +89,7 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
@@ -92,6 +98,7 @@ describe('RuntimeWatcherProcessPool', () => {
     await pool.subscribe('/a', vi.fn(), {}, { onTerminalError: firstError })
     await pool.subscribe('/b', vi.fn(), {}, { onTerminalError: secondError })
     const failedShard = supervisors[0]
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
@@ -101,6 +108,7 @@ describe('RuntimeWatcherProcessPool', () => {
     for (const installed of failedShard.subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
+
     await pool.subscribe('/a', vi.fn(), {}, {})
     await pool.subscribe('/b', vi.fn(), {}, {})
 
@@ -114,6 +122,7 @@ describe('RuntimeWatcherProcessPool', () => {
   it('does not assign a replacement until the failed child physically exits', async () => {
     const physicalExit = deferred()
     await pool.subscribe('/held', vi.fn(), {}, {})
+
     const failure = new WatcherProcessFailure(
       'file watcher process did not exit after termination deadline',
       'supervisor',
@@ -140,14 +149,18 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
     const roots = Array.from({ length: 9 }, (_, index) => `/root-${index}`)
+
     for (const root of roots) {
       await pool.subscribe(root, vi.fn(), {}, {})
     }
+
     const failedShard = supervisors[0]
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
@@ -157,6 +170,7 @@ describe('RuntimeWatcherProcessPool', () => {
     for (const installed of failedShard.subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
+
     const recoveries = roots.map((root) => pool.subscribe(root, vi.fn(), {}, {}))
     const queueOverflow = expect(recoveries[8]).rejects.toThrow('quarantine capacity exhausted')
     const active = await Promise.all(recoveries.slice(0, 4))
@@ -170,6 +184,7 @@ describe('RuntimeWatcherProcessPool', () => {
       await active[index].unsubscribe()
       await expect(recoveries[index + 4]).resolves.toBeDefined()
     }
+
     await queueOverflow
 
     expect(supervisors).toHaveLength(5)
@@ -185,16 +200,20 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     await pool.subscribe('/poison', vi.fn(), {}, {})
     await pool.subscribe('/healthy', vi.fn(), {}, {})
+
     for (const installed of supervisors[0].subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
@@ -213,6 +232,7 @@ describe('RuntimeWatcherProcessPool', () => {
 
   it('bounds how long a root can wait for quarantine capacity', async () => {
     vi.useFakeTimers()
+
     try {
       pool = new RuntimeWatcherProcessPool({
         maxSharedSupervisors: 1,
@@ -220,19 +240,24 @@ describe('RuntimeWatcherProcessPool', () => {
         createSupervisor: () => {
           const supervisor = new FakeSupervisor()
           supervisors.push(supervisor)
+
           return supervisor
         }
       })
+
       const failure = new WatcherProcessFailure(
         'file watcher process crashed repeatedly',
         'supervisor',
         'supervisor_crash_fuse'
       )
+
       await pool.subscribe('/occupied', vi.fn(), {}, {})
       await pool.subscribe('/waiting', vi.fn(), {}, {})
+
       for (const installed of supervisors[0].subscriptions) {
         installed.hooks.onTerminalError?.(failure)
       }
+
       await pool.subscribe('/occupied', vi.fn(), {}, {})
 
       const waiting = pool.subscribe('/waiting', vi.fn(), {}, { subscribeTimeoutMs: 25 })
@@ -255,19 +280,24 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     await pool.subscribe('/occupied', vi.fn(), {}, {})
     await pool.subscribe('/same', vi.fn(), {}, {})
+
     for (const installed of supervisors[0].subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
+
     const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
     const first = pool.subscribe('/same', vi.fn(), {}, {})
     const second = pool.subscribe('/same', vi.fn(), {}, {})
@@ -292,19 +322,24 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     await pool.subscribe('/occupied', vi.fn(), {}, {})
     await pool.subscribe('/same', vi.fn(), {}, {})
+
     for (const installed of supervisors[0].subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
+
     const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
     const firstController = new AbortController()
     const first = pool.subscribe('/same', vi.fn(), {}, { signal: firstController.signal })
@@ -326,19 +361,24 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     await pool.subscribe('/occupied', vi.fn(), {}, {})
     await pool.subscribe('/same', vi.fn(), {}, {})
+
     for (const installed of supervisors[0].subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
+
     const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
     const controller = new AbortController()
     const abandoned = pool.subscribe('/same', vi.fn(), {}, { signal: controller.signal })
@@ -360,19 +400,24 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     await pool.subscribe('/occupied', vi.fn(), {}, {})
     await pool.subscribe('/same', vi.fn(), {}, {})
+
     for (const installed of supervisors[0].subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
+
     const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
     const first = pool.subscribe('/same', vi.fn(), {}, {})
     const secondController = new AbortController()
@@ -400,20 +445,25 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     for (const root of ['/occupied', '/aborted', '/following']) {
       await pool.subscribe(root, vi.fn(), {}, {})
     }
+
     for (const installed of supervisors[0].subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
+
     const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
     const controller = new AbortController()
     const aborted = pool.subscribe('/aborted', vi.fn(), {}, { signal: controller.signal })
@@ -437,14 +487,18 @@ describe('RuntimeWatcherProcessPool', () => {
       'subscription',
       'subscribe_timeout'
     )
+
     pool = new RuntimeWatcherProcessPool({
       maxSharedSupervisors: 1,
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
+
         if (supervisors.length === 0) {
           supervisor.subscribeError = timeout
         }
+
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
@@ -462,12 +516,14 @@ describe('RuntimeWatcherProcessPool', () => {
       'subscription',
       'subscribe_timeout'
     )
+
     pool = new RuntimeWatcherProcessPool({
       maxSharedSupervisors: 1,
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisor.subscribeError = timeout
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
@@ -486,6 +542,7 @@ describe('RuntimeWatcherProcessPool', () => {
       'subscription',
       'subscribe_timeout'
     )
+
     const onTerminalError = vi.fn()
     await pool.subscribe('/slow-recovery', vi.fn(), {}, { onTerminalError })
 
@@ -503,19 +560,23 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const fused = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     const timeout = new WatcherProcessFailure(
       'file watcher resubscription timed out',
       'subscription',
       'subscribe_timeout'
     )
+
     await pool.subscribe('/slow-recovery', vi.fn(), {}, {})
     supervisors[0].subscriptions[0].hooks.onTerminalError?.(fused)
     await pool.subscribe('/slow-recovery', vi.fn(), {}, {})
@@ -534,6 +595,7 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
@@ -542,6 +604,7 @@ describe('RuntimeWatcherProcessPool', () => {
     await pool.subscribe('/gone', vi.fn(), {}, { onTerminalError })
     const shared = supervisors[0]
     const failed = shared.subscriptions.find(({ dir }) => dir === '/gone')
+
     const failure = new WatcherProcessFailure(
       'root unavailable',
       'subscription',
@@ -563,14 +626,17 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     await pool.subscribe('/unstable', vi.fn(), {}, {})
     supervisors[0].subscriptions[0].hooks.onTerminalError?.(failure)
     await pool.subscribe('/unstable', vi.fn(), {}, {})
@@ -588,14 +654,17 @@ describe('RuntimeWatcherProcessPool', () => {
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
+
         return supervisor
       }
     })
+
     const failure = new WatcherProcessFailure(
       'file watcher process crashed repeatedly',
       'supervisor',
       'supervisor_crash_fuse'
     )
+
     await pool.subscribe('/unstable', vi.fn(), {}, {})
     supervisors[0].subscriptions[0].hooks.onTerminalError?.(failure)
     await pool.subscribe('/unstable', vi.fn(), {}, {})

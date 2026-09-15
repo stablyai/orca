@@ -54,31 +54,41 @@ export function clearSourceControlAiModelChoiceForHost(
   if (!choice) {
     return undefined
   }
+
   const selectedModelByAgent = { ...choice.selectedModelByAgent }
+
   if (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY) {
     delete selectedModelByAgent[agentId]
   }
+
   const selectedModelByAgentByHost = { ...choice.selectedModelByAgentByHost }
   const hostModels = { ...selectedModelByAgentByHost[hostKey] }
   delete hostModels[agentId]
+
   if (Object.keys(hostModels).length > 0) {
     selectedModelByAgentByHost[hostKey] = hostModels
   } else {
     delete selectedModelByAgentByHost[hostKey]
   }
+
   const nextChoice: SourceControlAiModelChoice = {}
+
   if (Object.keys(selectedModelByAgent).length > 0) {
     nextChoice.selectedModelByAgent = selectedModelByAgent
   }
+
   if (Object.keys(selectedModelByAgentByHost).length > 0) {
     nextChoice.selectedModelByAgentByHost = selectedModelByAgentByHost
   }
+
   const hasModelSelection =
     nextChoice.selectedModelByAgent !== undefined ||
     nextChoice.selectedModelByAgentByHost !== undefined
+
   if (hasModelSelection && Object.keys(choice.selectedThinkingByModel ?? {}).length > 0) {
     nextChoice.selectedThinkingByModel = choice.selectedThinkingByModel
   }
+
   return hasModelSelection ? nextChoice : undefined
 }
 
@@ -87,9 +97,11 @@ export function mergeSelectedModelByAgentByHost(
   override: Partial<Record<string, Partial<Record<TuiAgent, string>>>> | undefined
 ): Partial<Record<string, Partial<Record<TuiAgent, string>>>> {
   const merged = base === undefined ? {} : structuredClone(base)
+
   for (const [hostKey, hostModels] of Object.entries(override ?? {})) {
     merged[hostKey] = { ...merged[hostKey], ...hostModels }
   }
+
   return merged
 }
 
@@ -120,6 +132,7 @@ export function selectPersistedModelId(args: {
   defaultModelId: string
 }): string {
   const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
+
   return (
     readSourceControlAiModelChoiceForHost(
       repoOverrides?.modelOverridesByOperation?.[operation],
@@ -157,6 +170,7 @@ export function resolveThinkingLevel(args: {
   if (!args.model.thinkingLevels?.length) {
     return undefined
   }
+
   const persisted =
     args.repoOverrides?.modelOverridesByOperation?.[args.operation]?.selectedThinkingByModel?.[
       args.model.id
@@ -166,6 +180,7 @@ export function resolveThinkingLevel(args: {
     ] ??
     args.source.selectedThinkingByModel[args.model.id] ??
     args.legacy?.selectedThinkingByModel?.[args.model.id]
+
   return args.model.thinkingLevels.some((level) => level.id === persisted)
     ? persisted
     : args.model.defaultThinkingLevel

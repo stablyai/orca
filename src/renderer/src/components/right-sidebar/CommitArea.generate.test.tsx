@@ -30,6 +30,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
 
 function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
+
   return {
     worktreeId: 'wt-1',
     groupId: 'group-1',
@@ -75,9 +76,11 @@ function buttonByLabel(markup: string, label: string): string {
   const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
     .map((match) => match[0])
     .find((entry) => entry.includes(`aria-label="${label}"`))
+
   if (!button) {
     throw new Error(`button not found: ${label}`)
   }
+
   return button
 }
 
@@ -97,6 +100,7 @@ describe('CommitArea AI generation', () => {
 
   it('enables AI generation only when an agent is configured, changes are staged, and the message is empty', () => {
     const props = baseProps({ hasMessage: false })
+
     const markup = renderCommitArea({
       ...props,
       commitMessage: '',
@@ -121,6 +125,7 @@ describe('CommitArea AI generation', () => {
 
   it('keeps AI generation discoverable when the configured agent needs attention', () => {
     const settings = getDefaultSettings('/tmp')
+
     const resolved = resolveSourceControlAiForOperation({
       settings: {
         ...settings,
@@ -138,12 +143,14 @@ describe('CommitArea AI generation', () => {
       repo: null,
       operation: 'commitMessage'
     })
+
     expect(resolved).toMatchObject({
       ok: false,
       error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
     })
 
     const props = baseProps({ hasMessage: false })
+
     const markup = renderCommitArea({
       ...props,
       commitMessage: '',
@@ -157,6 +164,7 @@ describe('CommitArea AI generation', () => {
 
   it('turns the generating icon into a stop affordance', () => {
     const props = baseProps({ hasMessage: false })
+
     const markup = renderCommitArea({
       ...props,
       commitMessage: '',
@@ -186,12 +194,14 @@ describe('CommitArea AI generation', () => {
       ...baseProps(),
       aiAgentConfigured: true
     })
+
     expect(markup).toContain('Commit')
     expect(markup).toContain('aria-label="Generate commit message with AI"')
   })
 
   it('renders a single commit-message AI entry point in the composer', () => {
     const props = baseProps({ hasMessage: false })
+
     const markup = renderCommitArea({
       ...props,
       commitMessage: '',

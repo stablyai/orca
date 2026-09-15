@@ -72,6 +72,7 @@ describe('parseClaudeModelList', () => {
         { value: 'sonnet', displayName: 'Sonnet (duplicate)' },
         { value: '  ', displayName: 'Blank' }
       ])}\r\n`
+
     expect(parseClaudeModelList(stdout)).toEqual([
       { id: 'sonnet', label: 'Sonnet', effortLevels: [], supportsFastMode: false }
     ])
@@ -88,6 +89,7 @@ describe('parseClaudeModelList', () => {
     // Captured from `claude` 2.1.100: unsupported subtype still exits 0.
     const stdout =
       '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
+
     expect(parseClaudeModelList(stdout)).toEqual([])
   })
 
@@ -119,6 +121,7 @@ describe('parseClaudeModelList', () => {
         }
       ])
     )
+
     expect(parsed.map(({ id }) => id)).toEqual(['sonnet'])
   })
 
@@ -126,6 +129,7 @@ describe('parseClaudeModelList', () => {
     const parsed = parseClaudeModelList(
       controlResponseLine([{ value: 'fable', displayName: 'Fable', disabled: false }])
     )
+
     expect(parsed.map(({ id }) => id)).toEqual(['fable'])
   })
 
@@ -135,6 +139,7 @@ describe('parseClaudeModelList', () => {
         { value: 'haiku', displayName: 'Haiku', supportedEffortLevels: ['low', 'high'] }
       ])
     )
+
     expect(parsed[0]?.effortLevels).toEqual([])
   })
 })

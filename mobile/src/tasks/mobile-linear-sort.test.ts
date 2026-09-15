@@ -6,6 +6,7 @@ import { taskTime } from './mobile-tasks-item-mapping'
 import { getLinearPriorityRank } from './mobile-tasks-hosted-review'
 
 vi.mock('./mobile-tasks-dependencies', () => import('../theme/mobile-theme'))
+
 afterEach(() => vi.restoreAllMocks())
 
 const issues: LinearIssue[] = Array.from({ length: 60 }, (_, i) => ({
@@ -21,15 +22,18 @@ const issues: LinearIssue[] = Array.from({ length: 60 }, (_, i) => ({
   state: { name: i % 2 ? 'Todo' : 'Done', type: 'started', color: '' },
   team: { id: `${i % 3}`, name: `Team ${i % 3}`, key: 'ENG' }
 }))
+
 function originalSort(input: readonly LinearIssue[], mode: LinearOrderBy): LinearIssue[] {
   return [...input].sort((a, b) => {
     if (mode === 'updated') {
       return taskTime(b.updatedAt) - taskTime(a.updatedAt)
     }
+
     if (mode === 'identifier') {
       // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
       return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
     }
+
     return (
       getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority) ||
       taskTime(b.updatedAt) - taskTime(a.updatedAt)
@@ -47,11 +51,14 @@ describe('mobile Linear sorting', () => {
       expect(actual).toEqual(expected)
       actual.forEach((issue, index) => expect(issue).toBe(expected[index]))
       expect(input).toEqual(issues)
+
       for (const groupBy of ['none', 'status', 'priority', 'team', 'assignee'] as const) {
         const groups = groupLinearIssues([...input], groupBy, mode)
+
         for (const group of groups) {
           expect(group.issues).toEqual(expected.filter((issue) => group.issues.includes(issue)))
         }
+
         expect(groups.flatMap((group) => group.issues)).toHaveLength(input.length)
       }
     }
@@ -60,9 +67,11 @@ describe('mobile Linear sorting', () => {
   it.each(['updated', 'identifier', 'priority'] as const)('bounds %s setup to one pass', (mode) => {
     const parse = vi.spyOn(Date, 'parse')
     const NativeCollator = Intl.Collator
+
     const collator = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       return new NativeCollator(locales, options)
     })
+
     const compare = vi.spyOn(String.prototype, 'localeCompare')
     sortLinearIssues(issues, mode)
     expect(parse).toHaveBeenCalledTimes(mode === 'identifier' ? 0 : issues.length)
@@ -73,9 +82,11 @@ describe('mobile Linear sorting', () => {
   it('skips setup for empty and singleton inputs and returns fresh arrays', () => {
     const parse = vi.spyOn(Date, 'parse')
     const NativeCollator = Intl.Collator
+
     const collator = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       return new NativeCollator(locales, options)
     })
+
     for (const mode of ['updated', 'identifier', 'priority'] as const) {
       for (const input of [[], [issues[0]]]) {
         const actual = sortLinearIssues(input, mode)
@@ -83,6 +94,7 @@ describe('mobile Linear sorting', () => {
         expect(actual).not.toBe(input)
       }
     }
+
     expect(parse).not.toHaveBeenCalled()
     expect(collator).not.toHaveBeenCalled()
   })

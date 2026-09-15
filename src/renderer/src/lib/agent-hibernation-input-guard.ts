@@ -16,22 +16,28 @@ export function lastInputBlocksHibernation(entry: AgentStatusEntry, inputAt: num
     if (entry.state === 'working' || entry.state === 'done') {
       return true
     }
+
     if (inputAt > entry.stateStartedAt) {
       return false
     }
   }
+
   for (let i = entry.stateHistory.length - 1; i >= 0; i--) {
     const past = entry.stateHistory[i]
+
     if (!past || inputAt < past.startedAt) {
       continue
     }
+
     if (past.state === 'working') {
       return true
     }
+
     if (inputAt > past.startedAt) {
       return false
     }
   }
+
   // Input older than all recorded segments predates anything still at risk.
   return false
 }

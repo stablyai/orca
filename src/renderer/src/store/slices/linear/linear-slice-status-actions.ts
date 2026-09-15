@@ -21,15 +21,18 @@ export function createLinearStatusActions(
     checkLinearConnection: async (force = false) => {
       const contextKey = getProviderRuntimeContextKey(get().settings)
       const inflightStatusRequest = getInflightStatusRequest()
+
       if (inflightStatusRequest && !force && inflightStatusRequest.contextKey === contextKey) {
         return inflightStatusRequest.promise
       }
+
       if (get().linearStatusContextKey !== contextKey && get().linearStatusChecked) {
         set({ linearStatusChecked: false })
       }
 
       const mutationGeneration = getLinearMutationGeneration()
       const statusReadGeneration = nextLinearStatusReadGeneration()
+
       const request = linearStatus(get().settings)
         .then((status) => {
           if (
@@ -39,10 +42,12 @@ export function createLinearStatusActions(
           ) {
             return
           }
+
           const typedStatus = status as LinearConnectionStatus
           const prev = get().linearStatus
           const prevScopeSignature = linearStatusScopeSignature(prev)
           const nextScopeSignature = linearStatusScopeSignature(typedStatus)
+
           if (prevScopeSignature !== nextScopeSignature) {
             invalidateLinearCaches()
             set({
@@ -75,6 +80,7 @@ export function createLinearStatusActions(
           ) {
             return
           }
+
           if (get().linearStatus.connected) {
             invalidateLinearCaches()
             set({
@@ -107,6 +113,7 @@ export function createLinearStatusActions(
             setInflightStatusRequest(null)
           }
         })
+
       setInflightStatusRequest({ contextKey, promise: request })
 
       return request

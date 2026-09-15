@@ -13,12 +13,15 @@ export async function exportActiveMarkdownToPdf(options: {
   const toastId = toast.loading(
     translate('auto.components.editor.export.active.markdown.d4a901e0ad', 'Exporting PDF...')
   )
+
   try {
     const payload = await getActiveMarkdownExportPayload(options)
+
     if (!payload) {
       // Why: stale panel refs can survive a dropdown click; keep export defensive
       // even though the local Markdown menu disables unreachable states.
       toast.dismiss(toastId)
+
       return
     }
 
@@ -26,6 +29,7 @@ export async function exportActiveMarkdownToPdf(options: {
       html: payload.html,
       title: payload.title
     })
+
     if (result.success) {
       toast.success(
         translate(
@@ -35,14 +39,18 @@ export async function exportActiveMarkdownToPdf(options: {
         ),
         { id: toastId }
       )
+
       return
     }
+
     if (result.cancelled) {
       // Why: user pressed Cancel in the save dialog — clear the loading toast
       // without surfacing an error.
       toast.dismiss(toastId)
+
       return
     }
+
     toast.error(
       result.error ??
         translate(

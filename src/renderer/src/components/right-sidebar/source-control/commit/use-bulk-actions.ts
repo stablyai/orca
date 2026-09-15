@@ -46,10 +46,12 @@ export function useSourceControlBulkActions({
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
   // Why: reset during render so a worktree switch never paints the previous bulk-busy state.
   const [bulkActionsWorktreeId, setBulkActionsWorktreeId] = useState(activeWorktreeId)
+
   if (bulkActionsWorktreeId !== activeWorktreeId) {
     setBulkActionsWorktreeId(activeWorktreeId)
     setIsExecutingBulk(false)
   }
+
   const selectedEntries = useMemo(
     () =>
       Array.from(selectedKeys)
@@ -81,7 +83,9 @@ export function useSourceControlBulkActions({
     if (!worktreePath || isExecutingBulk || bulkStagePaths.length === 0) {
       return
     }
+
     setIsExecutingBulk(true)
+
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await bulkStageRuntimeGitPaths(
@@ -115,7 +119,9 @@ export function useSourceControlBulkActions({
     if (!worktreePath || isExecutingBulk || bulkUnstagePaths.length === 0) {
       return
     }
+
     setIsExecutingBulk(true)
+
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await bulkUnstageRuntimeGitPaths(
@@ -150,7 +156,9 @@ export function useSourceControlBulkActions({
       if (!worktreePath || isExecutingBulk || paths.length === 0) {
         return
       }
+
       setIsExecutingBulk(true)
+
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await bulkStageRuntimeGitPaths(
@@ -186,7 +194,9 @@ export function useSourceControlBulkActions({
       if (!worktreePath || isExecutingBulk || paths.length === 0) {
         return
       }
+
       setIsExecutingBulk(true)
+
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await bulkUnstageRuntimeGitPaths(
@@ -222,14 +232,18 @@ export function useSourceControlBulkActions({
     if (!worktreePath || isExecutingBulk) {
       return
     }
+
     const filePaths = [
       ...getStageAllPaths(grouped.unstaged, 'unstaged'),
       ...getStageAllPaths(grouped.untracked, 'untracked')
     ]
+
     if (filePaths.length === 0) {
       return
     }
+
     setIsExecutingBulk(true)
+
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await bulkStageRuntimeGitPaths(

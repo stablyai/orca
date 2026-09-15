@@ -45,6 +45,7 @@ describe('artifact list search', () => {
       item(),
       item({ slug: 'notes', title: 'Notes', sourceContentType: 'text/markdown' })
     ]
+
     const filtered = filterArtifactsBySearchQuery(items, 'notes')
     expect(filtered).toHaveLength(1)
     expect(filtered[0]?.artifact.slug).toBe('notes')

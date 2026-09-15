@@ -5,17 +5,22 @@ import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 function routerFixture() {
   let foreground = false
+
   const logical = {
     getActivePath: vi.fn(() => 'relay'),
     getState: vi.fn(() => 'connected'),
     getGeneration: vi.fn(() => 1),
     sendRequest: vi.fn(async () => ({}))
   } as unknown as StableLogicalRpcClient
+
   const handleActiveNudge = vi.fn(() => 'probe' as const)
+
   const setForeground = vi.fn((next: boolean) => {
     foreground = next
   })
+
   const scheduleDirectProbe = vi.fn()
+
   const router = new MobileEndpointNudgeRouter({
     logical,
     controller: { handleActiveNudge } as unknown as RelayReconnectController,
@@ -25,6 +30,7 @@ function routerFixture() {
     replaceRelay: vi.fn(),
     scheduleDirectProbe
   })
+
   return { handleActiveNudge, logical, router, scheduleDirectProbe, setForeground }
 }
 

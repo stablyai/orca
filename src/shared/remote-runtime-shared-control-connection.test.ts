@@ -23,6 +23,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('routes multiple one-shot RPCs over one authenticated WebSocket', async () => {
     const server = await createServer()
     const states: string[] = []
+
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
       onDiagnosticsChanged: ({ state }) => states.push(state)
     })
@@ -50,6 +51,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('preserves orchestration authority fields on shared-control requests', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
     const envelope = {
       orchestrationCapability: 'capability',
       orchestrationContractVersion: 1,
@@ -89,12 +91,14 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       deviceToken: 'token',
       publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
     })
+
     const unsafe = connection as unknown as {
       state: string
       ws: { readyState: number; send: () => void; close: () => void } | null
       sharedKey: Uint8Array | null
       pendingRequests: Map<string, unknown>
     }
+
     unsafe.state = 'ready'
     unsafe.ws = {
       readyState: 1,
@@ -123,15 +127,18 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       deviceToken: 'token',
       publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
     })
+
     const close = vi.fn()
     const cleanup = vi.fn()
     const open = vi.fn()
+
     const unsafe = connection as unknown as {
       state: string
       ws: { readyState: number; close: () => void } | null
       socketCleanup: (() => void) | null
       open: () => void
     }
+
     unsafe.state = 'awaiting_ready'
     unsafe.ws = { readyState: 0, close }
     unsafe.socketCleanup = cleanup
@@ -170,6 +177,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('logs unknown response ids without breaking pending requests', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const server = await createServer({ sendUnknownResponseBeforeResponse: true })
+
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
       environmentId: 'env-test'
     })
@@ -199,6 +207,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse: onAccounts,
       onError: vi.fn()
     })
+
     await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
       onResponse: onEvents,
       onError: vi.fn()
@@ -224,10 +233,12 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('cleans up one all-session-tabs subscription by logical request id', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
     const subscription = await connection.subscribe('session.tabs.subscribeAll', null, 1000, {
       onResponse: vi.fn(),
       onError: vi.fn()
     })
+
     await vi.waitFor(() =>
       expect(server.requests.map((request) => request.method)).toEqual([
         'session.tabs.subscribeAll'
@@ -252,6 +263,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('keeps many logical subscriptions on one authenticated WebSocket', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
     const subscriptions = await Promise.all(
       Array.from({ length: 35 }, (_value, index) =>
         connection.subscribe('runtime.clientEvents.subscribe', { index }, 1000, {
@@ -314,6 +326,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       }
       subscriptions: Map<string, unknown>
     }
+
     unsafe.reconnect.attempt = 7
     unsafe.subscriptions.set('sub-1', {
       requestId: 'sub-1',
@@ -340,6 +353,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
   it('resets reconnect attempts after a stable authenticated ready period', async () => {
     const server = await createServer()
+
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
       reconnectStableResetMs: 50
     })
@@ -358,6 +372,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('removes ready waiters when a one-shot request times out during handshake', async () => {
     const server = await createServer({ suppressReadyFrame: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
     const unsafe = connection as unknown as {
       readyWaiters: unknown[]
       pendingRequests: Map<string, unknown>
@@ -379,6 +394,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse: onAccounts,
       onError: vi.fn()
     })
+
     await vi.waitFor(() =>
       expect(server.requests.map((request) => request.method)).toEqual(['accounts.subscribe'])
     )
@@ -410,6 +426,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse,
       onError: vi.fn()
     })
+
     await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
 
     subscription.close()
@@ -434,6 +451,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         onError: vi.fn()
       }
     )
+
     await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
 
     subscription.close()
@@ -468,6 +486,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       sendKeepaliveBeforeResponse: true,
       keepaliveDelayMs: 20
     })
+
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
 
     await expect(connection.request('worktree.hang', undefined, 60)).rejects.toThrow('Timed out')
@@ -514,6 +533,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse: vi.fn(),
       onError: vi.fn()
     })
+
     await vi.waitFor(() => expect(server.requests).toHaveLength(1))
 
     expect(subscription.sendBinary(new Uint8Array([1, 2, 3]))).toBe(false)
@@ -526,9 +546,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     // half-open devtunnel scenario from #7718: edge-triggered reconnect never
     // fires, so client liveness must terminate the socket itself.
     const server = await createServer({ disableAutoPong: true })
+
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
       liveness: { pingIntervalMs: 50, livenessTimeoutMs: 200 }
     })
+
     const onResponse = vi.fn()
     const onClose = vi.fn()
 
@@ -572,7 +594,9 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       silentMethods: ['worktree.hang'],
       delayedMethods: ['worktree.ps']
     })
+
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
     const unsafe = connection as unknown as {
       pendingRequests: Map<
         string,
@@ -588,10 +612,12 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     await vi.waitFor(() =>
       expect(server.requests.map(({ method }) => method)).toContain('worktree.hang')
     )
+
     const survivor = connection.request('worktree.ps', undefined, 1000).then(
       (response) => ({ ok: true as const, response }),
       (error: unknown) => ({ ok: false as const, error })
     )
+
     await vi.waitFor(() =>
       expect(server.requests.map(({ method }) => method)).toContain('worktree.ps')
     )
@@ -629,6 +655,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const server = await createServer({ silentMethods: ['worktree.large'] })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
@@ -637,7 +664,9 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         params
       })
     )
+
     const admittedCount = Math.floor(REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES / retainedBytes)
+
     const pendingRequests = (
       connection as unknown as {
         pendingRequests: Map<
@@ -646,9 +675,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         >
       }
     ).pendingRequests
+
     const requests = Array.from({ length: admittedCount }, () =>
       connection.request('worktree.large', params, 60_000).catch(() => undefined)
     )
+
     await vi.waitFor(() => expect(server.requests).toHaveLength(admittedCount))
 
     expect(

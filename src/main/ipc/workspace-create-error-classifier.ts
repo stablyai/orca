@@ -22,6 +22,7 @@ export function classifyWorkspaceCreateError(error: unknown): WorkspaceCreateErr
   if (text.includes('could not resolve a default base ref')) {
     return 'base_ref_missing'
   }
+
   if (
     text.includes('already exists locally') ||
     text.includes('already exists on a remote') ||
@@ -31,9 +32,11 @@ export function classifyWorkspaceCreateError(error: unknown): WorkspaceCreateErr
   ) {
     return 'path_collision'
   }
+
   if (text.includes('eacces') || text.includes('eperm') || text.includes('permission denied')) {
     return 'permission_denied'
   }
+
   // Why: anchors are intentionally specific to true git failures from
   // worktree-remote.ts. Bare 'git ' / 'worktree' would mis-bucket SSH-relay
   // and sparse-checkout validation errors (which the design doc routes to
@@ -49,5 +52,6 @@ export function classifyWorkspaceCreateError(error: unknown): WorkspaceCreateErr
   ) {
     return 'git_failed'
   }
+
   return 'unknown'
 }

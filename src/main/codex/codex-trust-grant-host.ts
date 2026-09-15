@@ -18,6 +18,7 @@ import {
 // Why: native sessions finish in ~100ms; WSL also pays cold-distro and
 // login-shell startup, but both stay hard-bounded on launch prep.
 const NATIVE_GRANT_TIMEOUT_MS = 10_000
+
 const WSL_GRANT_TIMEOUT_MS = 30_000
 
 export type CodexTrustGrantHost =
@@ -70,11 +71,13 @@ export function resolveNativeCodexTrustGrantHost(): ResolvedCodexTrustGrantHost 
   // Why: command resolution scans PATH/version-manager directories. Resolve
   // once per grant and reuse it for both the binary stamp and invocation.
   const command = resolveCodexCommand()
+
   return {
     binaryStamp: command === 'codex' ? null : buildNativeCodexBinaryStamp(command),
     buildRequest: (input) => {
       const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, ['app-server'])
       const useDefaultCodexHome = input.useDefaultCodexHome === true
+
       return {
         invocation: {
           command: spawnCmd,
@@ -100,23 +103,29 @@ async function buildWslCodexBinaryStamp(
     // Why: WSL PATH resolution happens inside the distro's login shell. The
     // resolved path plus CLI version detects upgrades without assuming UNC access.
     const probe = buildWslCodexIdentityProbe(distro)
+
     const result = await runProcess({
       program: 'wsl.exe',
       args: probe.args,
       timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
     })
+
     if (result.code !== 0 || result.timedOut) {
       return null
     }
+
     // Why: the split below is positional, so login-shell rc output ahead of the
     // payload would silently become the "path" and destabilize the stamp.
     const output = probe.readStdout(result.stdout)
+
     if (output === null) {
       return null
     }
+
     const lineBreak = output.indexOf('\n')
     const path = lineBreak === -1 ? '' : output.slice(0, lineBreak).trim()
     const version = lineBreak === -1 ? '' : output.slice(lineBreak + 1).trim()
+
     return path && version ? { kind: 'wsl', distro, path, version } : null
   } catch {
     return null
@@ -128,6 +137,7 @@ export function readCodexTrustGrantLedgerHomeMatchingStamp(
   currentStamp: CodexTrustGrantBinaryStamp | null
 ): CodexTrustGrantLedgerHome | null {
   const home = readCodexTrustGrantLedgerHome(runtimeHomePath)
+
   return home && binaryStampsMatch(home.binary, currentStamp) ? home : null
 }
 
@@ -138,11 +148,13 @@ export function readCurrentNativeCodexTrustGrantLedgerHome(
 ): CodexTrustGrantLedgerHome | null {
   try {
     const home = readCodexTrustGrantLedgerHome(runtimeHomePath)
+
     if (!home) {
       // Why: fallback-only installs have no ledger. Avoid a synchronous PATH
       // and version-manager scan when there is no recorded stamp to validate.
       return null
     }
+
     return binaryStampsMatch(home.binary, resolveNativeCodexTrustGrantHost().binaryStamp)
       ? home
       : null

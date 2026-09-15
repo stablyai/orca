@@ -79,6 +79,7 @@ async function readManifestDir(
   installedContentHash?: string
 ): Promise<DiscoveredPlugin> {
   let rawText: string
+
   try {
     rawText = await readPluginManifestText(rootDir)
   } catch (error) {
@@ -91,7 +92,9 @@ async function readManifestDir(
       isDev
     }
   }
+
   let raw: unknown
+
   try {
     raw = JSON.parse(rawText)
   } catch (error) {
@@ -101,12 +104,16 @@ async function readManifestDir(
       isDev
     }
   }
+
   const parsed = parsePluginManifest(raw)
+
   if (!parsed.ok) {
     return { rootDir, error: `invalid manifest: ${parsed.error}`, isDev }
   }
+
   const manifest = parsed.manifest
   const pluginKey = qualifiedPluginKey(manifest)
+
   if (!satisfiesOrcaEngineRange(hostVersion, manifest.engines.orca)) {
     return {
       pluginKey,
@@ -115,7 +122,9 @@ async function readManifestDir(
       isDev
     }
   }
+
   const artifacts = await validateDeclaredPluginArtifacts(rootDir, manifest)
+
   if (!artifacts.ok) {
     return {
       pluginKey,
@@ -124,17 +133,23 @@ async function readManifestDir(
       isDev
     }
   }
+
   let consentContentIdentity: string | undefined
+
   if (installedContentHash && hasInstructionalPluginContributions(manifest)) {
     consentContentIdentity = installedContentHash
   }
+
   if (isDev && hasInstructionalPluginContributions(manifest)) {
     const treeHash = await hashPluginTree(rootDir)
+
     if (!treeHash.ok) {
       return { pluginKey, rootDir, error: treeHash.error, isDev }
     }
+
     consentContentIdentity = treeHash.hash
   }
+
   return {
     pluginKey,
     rootDir,
@@ -152,6 +167,7 @@ async function readInstalledPlugin(
   hostVersion: string
 ): Promise<DiscoveredPlugin> {
   let contentHash: string
+
   try {
     contentHash = (await readPluginCurrentPointer(pluginDir)) ?? ''
   } catch {
@@ -162,6 +178,7 @@ async function readInstalledPlugin(
       isDev: false
     }
   }
+
   // The pointer names a sibling directory; refuse anything path-like so a
   // corrupted pointer cannot address content outside the plugin dir.
   if (!PLUGIN_CONTENT_HASH_PATTERN.test(contentHash)) {
@@ -172,11 +189,14 @@ async function readInstalledPlugin(
       isDev: false
     }
   }
+
   const versionDir = join(pluginDir, contentHash)
   const discovered = await readManifestDir(versionDir, hostVersion, false, contentHash)
+
   if (isInvalidDiscoveredPlugin(discovered)) {
     return { ...discovered, pluginKey: dirName }
   }
+
   // Why: the directory name is the install key (and the uninstall target); a
   // mismatched manifest identity would let two dirs claim the same plugin.
   if (discovered.pluginKey !== dirName) {
@@ -187,6 +207,7 @@ async function readInstalledPlugin(
       isDev: false
     }
   }
+
   return { ...discovered, contentHash }
 }
 
@@ -197,6 +218,7 @@ async function readInstalledPlugins(
 ): Promise<DiscoveredPlugin[]> {
   const results = Array.from({ length: entries.length }) as DiscoveredPlugin[]
   let nextIndex = 0
+
   const readers = Array.from(
     { length: Math.min(INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY, entries.length) },
     async () => {
@@ -211,7 +233,9 @@ async function readInstalledPlugins(
       }
     }
   )
+
   await Promise.all(readers)
+
   return results
 }
 
@@ -222,21 +246,26 @@ export async function discoverPlugins(options: {
 }): Promise<DiscoveredPlugin[]> {
   const discovered: DiscoveredPlugin[] = []
   let entries: Dirent[] = []
+
   try {
     entries = await readdir(options.pluginsDir, { withFileTypes: true })
   } catch {
     // A missing plugins dir just means no plugins are installed yet.
   }
+
   const installedEntries = entries.filter(
     (entry) => entry.isDirectory() && isQualifiedPluginKey(entry.name)
   )
+
   // Installed manifests are independent immutable trees. Read them in
   // a bounded pool so startup latency stays low without exhausting handles.
   discovered.push(
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
+
   for (const devPath of options.devPluginPaths) {
     const plugin = await readManifestDir(devPath, options.hostVersion, true)
+
     // A dev path that duplicates an installed plugin's identity wins — that
     // is the point of dev mode — but two dev paths must not collide.
     if (!isInvalidDiscoveredPlugin(plugin)) {
@@ -244,11 +273,14 @@ export async function discoverPlugins(options: {
         (existing) =>
           !isInvalidDiscoveredPlugin(existing) && existing.pluginKey === plugin.pluginKey
       )
+
       if (collision) {
         discovered.splice(discovered.indexOf(collision), 1)
       }
     }
+
     discovered.push(plugin)
   }
+
   return discovered
 }

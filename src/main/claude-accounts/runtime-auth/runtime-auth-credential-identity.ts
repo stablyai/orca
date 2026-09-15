@@ -8,12 +8,15 @@ import type {
 export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileStorage {
   protected readIdentityFromCredentials(credentialsJson: string): ClaudeAuthIdentity | null {
     let parsed: Record<string, unknown>
+
     try {
       parsed = JSON.parse(credentialsJson) as Record<string, unknown>
     } catch {
       return null
     }
+
     const oauth = this.asRecord(parsed.claudeAiOauth)
+
     return {
       accountUuid: this.normalizeField(
         this.readString(oauth, 'accountUuid') ?? this.readString(oauth, 'accountId')
@@ -29,6 +32,7 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
     try {
       const parsed = this.asRecord(JSON.parse(credentialsJson))
       const oauth = this.asRecord(parsed?.claudeAiOauth)
+
       return this.normalizeField(this.readString(oauth, 'accessToken')) !== null
     } catch {
       return false
@@ -41,6 +45,7 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
   ): boolean {
     const runtimeFreshness = this.readFreshnessFromCredentials(runtimeCredentialsJson)
     const managedFreshness = this.readFreshnessFromCredentials(managedCredentialsJson)
+
     return (
       runtimeFreshness !== null && managedFreshness !== null && runtimeFreshness > managedFreshness
     )
@@ -52,6 +57,7 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
   ): boolean {
     const runtimeFreshness = this.readFreshnessFromCredentials(runtimeCredentialsJson)
     const managedFreshness = this.readFreshnessFromCredentials(managedCredentialsJson)
+
     return (
       runtimeFreshness !== null && managedFreshness !== null && runtimeFreshness < managedFreshness
     )
@@ -69,24 +75,29 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
     return candidates.reduce((freshest, candidate) => {
       const candidateFreshness = this.readFreshnessFromCredentials(candidate.credentialsJson)
       const freshestFreshness = this.readFreshnessFromCredentials(freshest.credentialsJson)
+
       if (
         candidateFreshness !== null &&
         (freshestFreshness === null || candidateFreshness > freshestFreshness)
       ) {
         return candidate
       }
+
       return freshest
     })
   }
 
   protected readFreshnessFromCredentials(credentialsJson: string): number | null {
     let parsed: Record<string, unknown>
+
     try {
       parsed = JSON.parse(credentialsJson) as Record<string, unknown>
     } catch {
       return null
     }
+
     const oauth = this.asRecord(parsed.claudeAiOauth)
+
     return (
       this.readNumber(oauth, 'expiresAt') ??
       this.readNumber(oauth, 'expires_at') ??
@@ -101,9 +112,11 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
   ): ClaudeRefreshTokenComparison {
     const runtimeRefreshToken = this.readRefreshTokenFromCredentials(runtimeCredentialsJson)
     const managedRefreshToken = this.readRefreshTokenFromCredentials(managedCredentialsJson)
+
     if (!runtimeRefreshToken || !managedRefreshToken) {
       return 'missing'
     }
+
     return runtimeRefreshToken === managedRefreshToken ? 'same' : 'different'
   }
 
@@ -111,6 +124,7 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
     try {
       const parsed = JSON.parse(credentialsJson) as Record<string, unknown>
       const oauth = this.asRecord(parsed.claudeAiOauth)
+
       return this.normalizeField(this.readString(oauth, 'refreshToken'))
     } catch {
       return null
@@ -119,6 +133,7 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
 
   protected readIdentityFromOauthAccount(oauthAccount: unknown): ClaudeAuthIdentity {
     const oauth = this.asRecord(oauthAccount)
+
     return {
       accountUuid: this.normalizeField(
         this.readString(oauth, 'accountUuid') ?? this.readString(oauth, 'accountId')
@@ -136,23 +151,29 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return null
     }
+
     return value as Record<string, unknown>
   }
 
   protected readString(value: Record<string, unknown> | null, key: string): string | null {
     const candidate = value?.[key]
+
     return typeof candidate === 'string' ? candidate : null
   }
 
   protected readNumber(value: Record<string, unknown> | null, key: string): number | null {
     const candidate = value?.[key]
+
     if (typeof candidate === 'number' && Number.isFinite(candidate)) {
       return candidate
     }
+
     if (typeof candidate === 'string') {
       const parsed = Number(candidate)
+
       return Number.isFinite(parsed) ? parsed : null
     }
+
     return null
   }
 
@@ -160,7 +181,9 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
     if (!value) {
       return null
     }
+
     const trimmed = value.trim()
+
     return trimmed === '' ? null : trimmed
   }
 
@@ -175,10 +198,13 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
     if (Array.isArray(value)) {
       return value.map((item) => this.sortJsonValue(item))
     }
+
     const record = this.asRecord(value)
+
     if (!record) {
       return value
     }
+
     return Object.fromEntries(
       Object.entries(record)
         .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))

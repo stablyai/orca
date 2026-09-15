@@ -188,6 +188,7 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
 
   it('caps preserved SSH buffers so session JSON cannot scale with raw scrollback', () => {
     const hugeScrollback = `start-${'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 10)}`
+
     const result = pruneLocalTerminalScrollbackBuffers(
       makeSession({
         terminalLayoutsByTabId: {
@@ -210,6 +211,7 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
   it('caps preserved SSH buffers by UTF-8 bytes for multibyte scrollback', () => {
     const multibyteRow = 'é'.repeat(1024)
     const hugeScrollback = multibyteRow.repeat(512)
+
     const result = pruneLocalTerminalScrollbackBuffers(
       makeSession({
         terminalLayoutsByTabId: {
@@ -324,6 +326,7 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
 
   it('keeps persisted session size from scaling with local scrollback buffers', () => {
     const largeScrollback = 'x'.repeat(8 * 1024)
+
     const tabs = Array.from({ length: 8 }, (_, index) => ({
       id: `local-tab-${index}`,
       title: `local ${index}`,
@@ -334,6 +337,7 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
       ptyId: `local-pty-${index}`,
       worktreeId: 'local-repo::/local/worktree'
     }))
+
     const session = makeSession({
       tabsByWorktree: {
         'local-repo::/local/worktree': tabs
@@ -353,9 +357,11 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     })
 
     const originalBytes = Buffer.byteLength(JSON.stringify(session))
+
     const result = pruneLocalTerminalScrollbackBuffers(session, [
       { id: 'local-repo', connectionId: null }
     ])
+
     const prunedBytes = Buffer.byteLength(JSON.stringify(result))
 
     expect(JSON.stringify(result)).not.toContain(largeScrollback)

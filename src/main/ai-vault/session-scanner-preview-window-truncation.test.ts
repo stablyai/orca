@@ -15,9 +15,11 @@ function accumulatorWithUserTurns(count: number): SessionAccumulator {
     file: { path: '/tmp/session-1.jsonl', mtimeMs: 0, modifiedAt: new Date(0).toISOString() },
     sessionId: 'session-1'
   })
+
   for (let index = 0; index < count; index += 1) {
     addPreviewMessage(accumulator, { role: 'user', text: `turn ${index}` })
   }
+
   return accumulator
 }
 

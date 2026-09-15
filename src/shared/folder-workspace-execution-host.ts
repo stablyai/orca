@@ -51,6 +51,7 @@ export function normalizeConnectionId(value: string | null | undefined): string 
  */
 function getRepoScopeConnectionId(repo: Repo): string | null {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   return host?.kind === 'ssh' ? host.targetId : normalizeConnectionId(repo.connectionId)
 }
 
@@ -66,26 +67,32 @@ function getFolderScopeCandidateRepos(args: {
   // projectGroupId twice before applying the same path predicate.
   const groupRepos: Repo[] = []
   const pathRepos: Repo[] = []
+
   for (const repo of args.repos) {
     const projectGroupId = repo.projectGroupId
+
     if (typeof projectGroupId === 'string' && groupIds.has(projectGroupId)) {
       groupRepos.push(repo)
     } else if (isPathInsideOrEqual(args.folderPath, repo.path)) {
       pathRepos.push(repo)
     }
   }
+
   if (args.connectionId) {
     return [
       ...groupRepos,
       ...pathRepos.filter((repo) => getRepoScopeConnectionId(repo) === args.connectionId)
     ]
   }
+
   if (groupRepos.length === 0) {
     return pathRepos
   }
+
   // Both sides resolved: comparing a resolved path repo against a raw group read would reintroduce
   // the same mismatch from the other direction.
   const groupConnectionIds = new Set(groupRepos.map(getRepoScopeConnectionId))
+
   return [
     ...groupRepos,
     ...pathRepos.filter((repo) => groupConnectionIds.has(getRepoScopeConnectionId(repo)))
@@ -97,10 +104,13 @@ export function findFolderWorkspaceCandidateRepos(
   folderWorkspaceId: string
 ): Repo[] {
   const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+
   if (!workspace) {
     return []
   }
+
   const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
+
   return getFolderScopeCandidateRepos({
     folderPath: workspace.folderPath,
     projectGroupId: workspace.projectGroupId,
@@ -115,10 +125,13 @@ export function resolveFolderWorkspaceHost(
   folderWorkspaceId: string
 ): FolderWorkspaceHost {
   const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+
   if (!workspace) {
     return { kind: 'missing' }
   }
+
   const explicitHost = parseExecutionHostId(workspace.executionHostId)
+
   if (explicitHost) {
     // A `runtime:` workspace deliberately answers `local`, and `FolderWorkspaceHost` has no runtime
     // variant to answer with instead. That omission is known: a runtime environment's own server
@@ -130,34 +143,43 @@ export function resolveFolderWorkspaceHost(
       ? { kind: 'ssh', targetId: explicitHost.targetId }
       : { kind: 'local' }
   }
+
   const scopeConnectionId = normalizeConnectionId(
     workspace.connectionId ??
       state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId
   )
+
   const candidateRepos = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
   let hasLocalRepo = false
   const connectionIds = new Set<string>()
+
   for (const repo of candidateRepos) {
     const connectionId = getRepoScopeConnectionId(repo)
+
     if (connectionId) {
       connectionIds.add(connectionId)
     } else {
       hasLocalRepo = true
     }
   }
+
   if (scopeConnectionId) {
     const hasDifferentSshConnection = [...connectionIds].some(
       (connectionId) => connectionId !== scopeConnectionId
     )
+
     return hasLocalRepo || hasDifferentSshConnection
       ? { kind: 'ambiguous' }
       : { kind: 'ssh', targetId: scopeConnectionId }
   }
+
   if (candidateRepos.length === 0 || connectionIds.size === 0) {
     return { kind: 'local' }
   }
+
   if (hasLocalRepo || connectionIds.size > 1) {
     return { kind: 'ambiguous' }
   }
+
   return { kind: 'ssh', targetId: [...connectionIds][0] }
 }

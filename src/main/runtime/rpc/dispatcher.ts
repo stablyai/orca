@@ -55,6 +55,7 @@ export class RpcDispatcher {
   async dispatch(request: RpcRequest, options?: DispatchCallOptions): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
+
     if (!method) {
       return errorResponse(
         request.id,
@@ -65,11 +66,13 @@ export class RpcDispatcher {
     }
 
     const migrationFence = orchestrationMigrationFence(request, meta)
+
     if (migrationFence) {
       return migrationFence
     }
 
     const parsedParams = parseRpcRequestParams(request, method, meta)
+
     if (parsedParams.error) {
       return parsedParams.error
     }
@@ -86,6 +89,7 @@ export class RpcDispatcher {
     if (request.method.startsWith('emulator.')) {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
+
     try {
       const result = await invokeDispatcherUnaryMethod({
         runtime: this.runtime,
@@ -107,11 +111,13 @@ export class RpcDispatcher {
         orchestrationMutations: this.orchestrationMutations,
         legacyOrchestration: this.legacyOrchestration
       })
+
       return successResponse(request.id, meta, result)
     } catch (error) {
       if (request.method.startsWith('emulator.')) {
         emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
       }
+
       return mapDispatcherError(request, meta, error)
     }
   }

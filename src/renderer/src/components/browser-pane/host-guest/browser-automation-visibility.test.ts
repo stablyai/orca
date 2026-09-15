@@ -6,6 +6,7 @@ describe('browser automation visibility leases', () => {
     vi.stubGlobal('window', {
       requestAnimationFrame: (callback: FrameRequestCallback) => {
         callback(0)
+
         return 1
       }
     })
@@ -22,6 +23,7 @@ describe('browser automation visibility leases', () => {
       onBrowserAutomationVisibilityChange,
       releaseBrowserAutomationVisibility
     } = await import('./browser-automation-visibility')
+
     const listener = vi.fn()
     const unsubscribe = onBrowserAutomationVisibilityChange(listener)
 
@@ -47,6 +49,7 @@ describe('browser automation visibility leases', () => {
     vi.stubGlobal('window', {
       requestAnimationFrame: (callback: FrameRequestCallback) => {
         animationFrameCallbacks.push(callback)
+
         return animationFrameCallbacks.length
       }
     })
@@ -81,6 +84,7 @@ describe('browser automation visibility leases', () => {
     vi.stubGlobal('window', {
       requestAnimationFrame: () => 1
     })
+
     try {
       const { isBrowserAutomationVisible } = await import('./browser-automation-visibility')
 

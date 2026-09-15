@@ -6,6 +6,7 @@ import {
   getTaskPageJiraStatusOrderScopeKey
 } from '@/components/task-page-jira-status-order'
 import { sortJiraIssues } from './jira-issue-sorter'
+
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {
     jiraTaskSourceContext,
@@ -17,6 +18,7 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     jiraOrderDirection,
     jiraPrioritiesBySite
   } = model
+
   const displayedJiraIssues = useMemo(
     () =>
       jiraIssues.map(
@@ -33,17 +35,21 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
       ),
     [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache, jiraTaskSourceContext]
   )
+
   const displayedJiraProjectScope = useMemo(
     () => getSingleJiraProjectScope(displayedJiraIssues),
     [displayedJiraIssues]
   )
+
   const displayedJiraStatusOrderScopeKey = displayedJiraProjectScope
     ? getTaskPageJiraStatusOrderScopeKey(jiraTaskSourceScopeKey, displayedJiraProjectScope)
     : null
+
   const displayedJiraStatusOrder =
     jiraProjectStatusOrder && displayedJiraStatusOrderScopeKey === jiraProjectStatusOrder.scopeKey
       ? jiraProjectStatusOrder.order
       : null
+
   const sortedJiraIssues = useMemo(() => {
     return sortJiraIssues(
       displayedJiraIssues,
@@ -52,6 +58,7 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
       jiraPrioritiesBySite
     )
   }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, jiraPrioritiesBySite])
+
   // New Linear project dialog state
   const nextModel = model as typeof model & {
     displayedJiraIssues: typeof displayedJiraIssues
@@ -60,11 +67,14 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     displayedJiraStatusOrder: typeof displayedJiraStatusOrder
     sortedJiraIssues: typeof sortedJiraIssues
   }
+
   nextModel.displayedJiraIssues = displayedJiraIssues
   nextModel.displayedJiraProjectScope = displayedJiraProjectScope
   nextModel.displayedJiraStatusOrderScopeKey = displayedJiraStatusOrderScopeKey
   nextModel.displayedJiraStatusOrder = displayedJiraStatusOrder
   nextModel.sortedJiraIssues = sortedJiraIssues
+
   return nextModel
 }
+
 export type TaskPageJiraListProjectionModel = ReturnType<typeof useTaskPageJiraListProjection>

@@ -10,8 +10,11 @@ import { buildRelayCommandEnv } from './relay-command-env'
 import { relayLogLine } from './relay-diagnostic-log'
 
 const SYSTEM_PORTS_TO_EXCLUDE = new Set([22])
+
 const MAX_DETECTED_PORTS = 50
+
 const WINDOWS_PORT_SCAN_TIMEOUT_MS = 5_000
+
 // Wide enough for `netstat -ano` on a busy host: it prints every connection, not
 // just the listeners, and a truncated table silently drops the tail.
 const WINDOWS_PORT_SCAN_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -38,14 +41,18 @@ const WINDOWS_PORT_SCAN_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
  */
 export async function scanWindowsListeningPorts(signal?: AbortSignal): Promise<DetectedPort[]> {
   const netstatPorts = await readWindowsNetstatPorts(signal)
+
   if (netstatPorts) {
     return normalizeWindowsDetectedPorts(await attachWindowsProcessNames(netstatPorts, signal))
   }
+
   if (signal?.aborted) {
     return []
   }
+
   try {
     const json = await runWindowsPortScanPowerShell(signal)
+
     return normalizeWindowsDetectedPorts(parseWindowsPowerShellPortRows(json))
   } catch {
     return []
@@ -55,6 +62,7 @@ export async function scanWindowsListeningPorts(signal?: AbortSignal): Promise<D
 /** Rows, or null when netstat could not answer and the fallback should run. */
 async function readWindowsNetstatPorts(signal?: AbortSignal): Promise<DetectedPort[] | null> {
   let stdout: string
+
   try {
     const result = await runProcess({
       program: windowsSystem32Binary('netstat.exe'),
@@ -66,9 +74,11 @@ async function readWindowsNetstatPorts(signal?: AbortSignal): Promise<DetectedPo
       maxOutputBytes: WINDOWS_PORT_SCAN_MAX_OUTPUT_BYTES,
       signal
     })
+
     if (result.timedOut || result.code !== 0) {
       return null
     }
+
     // A capped read still exits 0 and its head still parses, so nothing
     // downstream can tell a partial table from a whole one. netstat prints IPv4
     // TCP, then IPv6 TCP, then UDP, so the rows lost first are exactly the
@@ -76,19 +86,25 @@ async function readWindowsNetstatPorts(signal?: AbortSignal): Promise<DetectedPo
     // whole read rather than publish its head.
     if (Buffer.byteLength(result.stdout) >= WINDOWS_PORT_SCAN_MAX_OUTPUT_BYTES) {
       reportWindowsNetstatUnusable('output hit the capture cap and was truncated')
+
       return null
     }
+
     stdout = result.stdout
   } catch {
     return null
   }
+
   const ports = parseWindowsNetstatOutput(stdout)
+
   // Windows always has a listener (RPC endpoint mapper, SMB), so an exit-0 scan
   // that parses to nothing is a reader that was blocked, not an idle host.
   if (ports.length === 0) {
     reportWindowsNetstatUnusable('exited 0 but no listening row parsed')
+
     return null
   }
+
   return ports
 }
 
@@ -114,6 +130,7 @@ function reportWindowsNetstatUnusable(reason: string): void {
   if (reportedNetstatFailures.has(reason)) {
     return
   }
+
   reportedNetstatFailures.add(reason)
   relayLogLine(`[ports] netstat unusable on this host (${reason}); falling back to PowerShell`)
 }
@@ -146,12 +163,15 @@ async function attachWindowsProcessNames(
   signal?: AbortSignal
 ): Promise<DetectedPort[]> {
   const pids = new Set(ports.flatMap((port) => (port.pid == null ? [] : [port.pid])))
+
   // The shared snapshot takes no signal and must not be cancelled on one
   // caller's behalf, so an abandoned scan declines to wait for it instead.
   if (pids.size === 0 || signal?.aborted) {
     return ports
   }
+
   let names: Map<number, string>
+
   try {
     const rows = await readWindowsProcessTable()
     names = new Map(
@@ -162,8 +182,10 @@ async function attachWindowsProcessNames(
   } catch {
     return ports
   }
+
   return ports.map((port) => {
     const processName = port.pid == null ? undefined : names.get(port.pid)
+
     return processName ? { ...port, processName } : port
   })
 }
@@ -207,20 +229,24 @@ async function runWindowsPortScanPowerShell(signal?: AbortSignal): Promise<strin
         maxOutputBytes: WINDOWS_PORT_SCAN_MAX_OUTPUT_BYTES,
         signal
       })
+
       if (signal?.aborted) {
         throw new Error('windows port scan aborted')
       }
+
       if (result.timedOut || result.code !== 0) {
         lastError ??= new Error(
           `windows port scan PowerShell failed (code=${result.code} timedOut=${result.timedOut})`
         )
         continue
       }
+
       return result.stdout
     } catch (error) {
       if (signal?.aborted) {
         throw error
       }
+
       lastError ??= error
     }
   }
@@ -230,11 +256,13 @@ async function runWindowsPortScanPowerShell(signal?: AbortSignal): Promise<strin
 
 export function parseWindowsPowerShellPortRows(json: string): DetectedPort[] {
   const trimmed = json.trim()
+
   if (!trimmed) {
     return []
   }
 
   let parsed: unknown
+
   try {
     parsed = JSON.parse(trimmed)
   } catch {
@@ -242,6 +270,7 @@ export function parseWindowsPowerShellPortRows(json: string): DetectedPort[] {
   }
 
   const rows = Array.isArray(parsed) ? parsed : [parsed]
+
   return rows.flatMap((row) => parseWindowsPortRow(row))
 }
 
@@ -263,9 +292,11 @@ export function parseWindowsPowerShellPortRows(json: string): DetectedPort[] {
 export function parseWindowsNetstatOutput(output: string): DetectedPort[] {
   const { rows, tcpRows } = scanWindowsNetstatTcpRows(output)
   const byStateWord = rows.filter((row) => row.state === 'LISTENING')
+
   if (byStateWord.length > 0 || tcpRows === 0) {
     return byStateWord.map((row) => row.port)
   }
+
   return readDominantZeroPeerState(rows)
 }
 
@@ -286,15 +317,19 @@ export function parseWindowsNetstatOutput(output: string): DetectedPort[] {
  */
 function readDominantZeroPeerState(rows: NetstatTcpRow[]): DetectedPort[] {
   const countByState = new Map<string, number>()
+
   for (const row of rows) {
     if (row.zeroPeer) {
       countByState.set(row.state, (countByState.get(row.state) ?? 0) + 1)
     }
   }
+
   const largest = Math.max(0, ...countByState.values())
+
   const dominant = new Set(
     [...countByState].filter(([, count]) => count === largest).map(([state]) => state)
   )
+
   return rows.flatMap((row) => (row.zeroPeer && dominant.has(row.state) ? [row.port] : []))
 }
 
@@ -307,15 +342,19 @@ function scanWindowsNetstatTcpRows(output: string): { rows: NetstatTcpRow[]; tcp
 
   for (const line of output.split(/\r?\n/)) {
     const fields = getProcessOutputFields(line, 5)
+
     if (fields.length < 5 || fields[0].toUpperCase() !== 'TCP') {
       continue
     }
+
     tcpRows += 1
     const hostPort = parseWindowsNetstatAddress(fields[1])
     const pid = Number.parseInt(fields[4], 10)
+
     if (!hostPort || !Number.isSafeInteger(pid) || pid <= 0) {
       continue
     }
+
     rows.push({
       state: fields[3].toUpperCase(),
       zeroPeer: readWindowsNetstatPort(fields[2]) === 0,
@@ -330,6 +369,7 @@ function parseWindowsPortRow(row: unknown): DetectedPort[] {
   if (!row || typeof row !== 'object') {
     return []
   }
+
   const value = row as {
     host?: unknown
     LocalAddress?: unknown
@@ -340,13 +380,16 @@ function parseWindowsPortRow(row: unknown): DetectedPort[] {
     processName?: unknown
     ProcessName?: unknown
   }
+
   const host = readString(value.host ?? value.LocalAddress)
   const port = readInteger(value.port ?? value.LocalPort)
   const pid = readInteger(value.pid ?? value.OwningProcess)
   const processName = readString(value.processName ?? value.ProcessName)
+
   if (!host || port == null || pid == null) {
     return []
   }
+
   return [
     {
       host,
@@ -368,6 +411,7 @@ function readInteger(value: unknown): number | undefined {
       : typeof value === 'string'
         ? Number.parseInt(value, 10)
         : Number.NaN
+
   return Number.isSafeInteger(parsed) ? parsed : undefined
 }
 
@@ -376,22 +420,29 @@ function readWindowsNetstatPort(value: string): number | null {
   const ipv6Match = /^\[.*\]:(\d+)$/.exec(value)
   const portText = ipv6Match?.[1] ?? value.slice(value.lastIndexOf(':') + 1)
   const port = Number.parseInt(portText, 10)
+
   return Number.isSafeInteger(port) ? port : null
 }
 
 function parseWindowsNetstatAddress(value: string): { host: string; port: number } | null {
   const port = readWindowsNetstatPort(value)
+
   if (port == null || port <= 0) {
     return null
   }
+
   const ipv6Match = /^\[(.*)\]:\d+$/.exec(value)
+
   if (ipv6Match) {
     return { host: ipv6Match[1], port }
   }
+
   const idx = value.lastIndexOf(':')
+
   if (idx <= 0) {
     return null
   }
+
   return { host: value.slice(0, idx), port }
 }
 
@@ -404,6 +455,7 @@ function normalizeWindowsDetectedPorts(ports: DetectedPort[]): DetectedPort[] {
   for (const port of ports) {
     const processName = port.processName?.toLowerCase()
     const key = `${port.host}:${port.port}:${port.pid ?? ''}`
+
     if (
       seen.has(key) ||
       SYSTEM_PORTS_TO_EXCLUDE.has(port.port) ||
@@ -413,10 +465,12 @@ function normalizeWindowsDetectedPorts(ports: DetectedPort[]): DetectedPort[] {
     ) {
       continue
     }
+
     seen.add(key)
     normalized.push(port)
   }
 
   normalized.sort((a, b) => a.port - b.port || a.host.localeCompare(b.host))
+
   return normalized.slice(0, MAX_DETECTED_PORTS)
 }

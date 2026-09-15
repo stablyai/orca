@@ -10,11 +10,13 @@ export function callOrchestrationMutation<TResult>(
   options?: { timeoutMs?: number; orchestrationCapability?: string }
 ) {
   const requestId = readRetryRequestFlag(flags)
+
   const result = requestId
     ? client.call<TResult>(method, params, { ...options, orchestrationRequestId: requestId })
     : options
       ? client.call<TResult>(method, params, options)
       : client.call<TResult>(method, params)
+
   return result.catch((error) => {
     throw orchestrationMutationRecoveryError(error)
   })

@@ -28,6 +28,7 @@ export function buildDocPreviewDocumentIdentity({
   // workspace-relative form, and a bare filename would strip the only context the reader has.
   const displayPath = getRelativePathInsideRoot(filePath, worktreeRoot) ?? filePath
   const fileName = basename(displayPath)
+
   return {
     absolutePath: filePath,
     // Sliced rather than rebuilt from dirname so the owner's own separator survives on Windows.

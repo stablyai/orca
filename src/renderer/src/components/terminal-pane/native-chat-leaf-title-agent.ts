@@ -24,18 +24,23 @@ export function resolveNativeChatLeafTitleAgent({
   if (!leafId) {
     return null
   }
+
   const targetPane = panes.find((pane) => pane.leafId === leafId)
+
   const paneAgent = targetPane
     ? resolveCommittedTitleAgentType(runtimePaneTitlesByPaneId[targetPane.id] ?? '')
     : null
+
   if (paneAgent) {
     return paneAgent
   }
+
   // Tab titles can lag pane focus in split layouts, so use them only when there
   // is no sibling leaf they could accidentally describe.
   if (panes.length > 1) {
     return null
   }
+
   return (
     resolveCommittedTitleAgentType(tabLabel ?? '') ??
     resolveCommittedTitleAgentType(terminalTitle ?? '')

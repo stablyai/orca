@@ -14,18 +14,23 @@ const getAllProcessesMock = vi.fn()
 
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import { queryWindowsProcessDescendants } from './windows-foreground-process-rows'
+
 // A real snapshot always contains the process doing the querying; the reader
 // rejects a table without it, because that is what a blocked
 // CreateToolhelp32Snapshot looks like (an empty list, not an error).
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
   ...rows
 ]
 
 const ACTIVE_POLL_INTERVAL_MS = 750
+
 const PANE_COUNT = 6
+
 const WINDOW_SECONDS = 30
+
 const TICKS = Math.floor((WINDOW_SECONDS * 1000) / ACTIVE_POLL_INTERVAL_MS)
 
 const shellPid = (pane: number): number => 100 + pane * 1000
@@ -35,6 +40,7 @@ const shellPid = (pane: number): number => 100 + pane * 1000
 // descendant from the single scan.
 const NATIVE_ROWS = Array.from({ length: PANE_COUNT }, (_, pane) => {
   const shell = shellPid(pane)
+
   return [
     {
       pid: shell,
@@ -72,6 +78,7 @@ describe('windows agent foreground inspection process-table scan volume', () => 
   afterEach(() => {
     vi.useRealTimers()
     __setWindowsProcessTreeLoaderForTests()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -82,12 +89,14 @@ describe('windows agent foreground inspection process-table scan volume', () => 
   it('bounds process-table scans by poll ticks, not by pane count, while resolving every pane', async () => {
     for (let tick = 0; tick < TICKS; tick++) {
       vi.setSystemTime(tick * ACTIVE_POLL_INTERVAL_MS)
+
       // All panes inspect concurrently within the tick (worst case).
       const resolved = await Promise.all(
         Array.from({ length: PANE_COUNT }, (_, pane) =>
           queryWindowsProcessDescendants(shellPid(pane))
         )
       )
+
       // Caching must not change the answer: every pane still finds its foreground
       // node child as the sole descendant of its shell.
       for (let pane = 0; pane < PANE_COUNT; pane++) {

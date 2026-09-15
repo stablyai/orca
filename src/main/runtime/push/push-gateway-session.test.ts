@@ -4,6 +4,7 @@ import { buildPushChallengeFixture, createPushHostKeypair } from './push-host-ch
 import { PushGatewaySession, type PushSessionOutcome } from './push-gateway-session'
 
 const GATEWAY_ORIGIN = 'https://push.onorca.dev'
+
 const NOW = 1_770_000_000_000
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -26,10 +27,12 @@ function createSessionHarness(
   now: { value: number }
 } {
   const hostKeypair = createPushHostKeypair()
+
   const hostFingerprint = createHash('sha256')
     .update(hostKeypair.publicKey)
     .digest('base64url')
     .slice(0, 16)
+
   const now = { value: NOW }
   let issued = 0
   let requests = 0
@@ -38,10 +41,12 @@ function createSessionHarness(
   const fetchImpl = (async (input: string, init?: RequestInit): Promise<Response> => {
     const url = String(input)
     requests += 1
+
     if (url.endsWith('/v1/host/challenge')) {
       if (options.challengeStatus) {
         return jsonResponse(options.challengeStatus, { error: 'rate_limited' })
       }
+
       const built = buildPushChallengeFixture({
         hostKeypair,
         gatewayOrigin: GATEWAY_ORIGIN,
@@ -49,16 +54,22 @@ function createSessionHarness(
         issuedAt: now.value,
         challengeId: `challenge-${++issued}`
       })
+
       pendingProof = built.proof
+
       return jsonResponse(200, built.challenge)
     }
+
     if (options.sessionStatus) {
       return jsonResponse(options.sessionStatus, { error: 'nope' })
     }
+
     const body = init?.body ? (JSON.parse(String(init.body)) as { proofB64: string }) : null
+
     if (body?.proofB64 !== pendingProof) {
       return jsonResponse(401, { error: 'bad_proof' })
     }
+
     return jsonResponse(200, {
       sessionToken: `session-${issued}`,
       expiresAt: now.value + 24 * 60 * 60_000,
@@ -127,6 +138,7 @@ describe('PushGatewaySession', () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error('network down')
     }) as unknown as typeof globalThis.fetch
+
     const session = new PushGatewaySession({
       origin: GATEWAY_ORIGIN,
       keypair: createPushHostKeypair(),

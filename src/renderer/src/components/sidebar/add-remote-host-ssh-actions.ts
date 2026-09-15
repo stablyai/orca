@@ -49,6 +49,7 @@ export async function saveNewSshHostFromForm({
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<'saved' | 'validation-failed' | 'failed'> {
   const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
+
   if (!host) {
     toast.error(
       translate(
@@ -56,8 +57,10 @@ export async function saveNewSshHostFromForm({
         'Host or SSH config alias is required.'
       )
     )
+
     return 'validation-failed'
   }
+
   if (Number.isNaN(port) || port < 1 || port > 65535) {
     toast.error(
       translate(
@@ -65,9 +68,12 @@ export async function saveNewSshHostFromForm({
         'Port must be between 1 and 65535.'
       )
     )
+
     return 'validation-failed'
   }
+
   const graceSeconds = parseRelayGracePeriodSeconds(form)
+
   if (!isRelayGracePeriodValid(form, graceSeconds)) {
     toast.error(
       translate(
@@ -76,6 +82,7 @@ export async function saveNewSshHostFromForm({
         { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
       )
     )
+
     return 'validation-failed'
   }
 
@@ -83,6 +90,7 @@ export async function saveNewSshHostFromForm({
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
     configHost,
@@ -99,6 +107,7 @@ export async function saveNewSshHostFromForm({
 
   try {
     const existingTargets = await ssh.listTargets()
+
     if (
       isDuplicateSshTargetAlias({
         existingTargets,
@@ -113,6 +122,7 @@ export async function saveNewSshHostFromForm({
           'That SSH host is already in Orca.'
         )
       )
+
       return 'validation-failed'
     }
 
@@ -123,6 +133,7 @@ export async function saveNewSshHostFromForm({
     toast.success(
       translate('auto.components.sidebar.AddRemoteHostDialog.sshSaved', 'SSH host added.')
     )
+
     return 'saved'
   } catch (error) {
     toast.error(
@@ -133,6 +144,7 @@ export async function saveNewSshHostFromForm({
             'Failed to add SSH host.'
           )
     )
+
     return 'failed'
   }
 }
@@ -152,11 +164,15 @@ export async function prefillFormFromSshConfigHost(
       )
     )
   }
+
   const resolved = await ssh.resolveConfigHost({ alias: host.alias })
+
   if (!resolved) {
     return null
   }
+
   const form = getEditingTargetFromSshConfigHost(resolved)
+
   return {
     form,
     preferAdvancedOpen: hasAdvancedConnectionValues(form)
@@ -183,6 +199,7 @@ export async function addAllSshConfigHostsToOrca({
     recordSshRepoReadoptions(result.repoReadoptions)
     setSshTargetsMetadata(await ssh.listTargets())
     recordFeatureInteraction('ssh')
+
     if (result.targets.length === 0) {
       toast(
         translate(
@@ -190,8 +207,10 @@ export async function addAllSshConfigHostsToOrca({
           '~/.ssh/config already in sync.'
         )
       )
+
       return { kind: 'already-synced' }
     }
+
     toast.success(
       translate(
         'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced',
@@ -199,6 +218,7 @@ export async function addAllSshConfigHostsToOrca({
         { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
       )
     )
+
     return { kind: 'added', count: result.targets.length }
   } catch (error) {
     toast.error(
@@ -209,6 +229,7 @@ export async function addAllSshConfigHostsToOrca({
             'Failed to import SSH config.'
           )
     )
+
     return { kind: 'failed' }
   }
 }
@@ -220,9 +241,11 @@ export async function loadSshConfigHostsForPicker(
   try {
     const listed: unknown = await ssh.listConfigHosts(args)
     const result = normalizeSshConfigHostListResult(listed)
+
     if (!result) {
       throw new Error('Invalid SSH config host response')
     }
+
     return { ok: true, result }
   } catch (error) {
     return {
@@ -242,6 +265,7 @@ function normalizeSshConfigHostListResult(value: unknown): SshConfigHostListResu
   // Why: a renderer hot reload can briefly outlive the preload that returned the legacy array.
   if (Array.isArray(value)) {
     const hosts = value.slice(0, SSH_CONFIG_HOST_RESULT_LIMIT) as SshConfigHostSummary[]
+
     return {
       hosts,
       totalHostCount: value.length,
@@ -253,10 +277,13 @@ function normalizeSshConfigHostListResult(value: unknown): SshConfigHostListResu
       hasMore: value.length > hosts.length
     }
   }
+
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const result = value as Partial<SshConfigHostListResult>
+
   return Array.isArray(result.hosts) &&
     typeof result.totalHostCount === 'number' &&
     typeof result.newHostCount === 'number' &&

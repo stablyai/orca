@@ -9,9 +9,11 @@ export async function cleanupBrowserRouteTcpEgressFixture(
   sockets: Set<Socket>
 ): Promise<unknown[]> {
   const failures: unknown[] = []
+
   for (const client of webSocket.clients) {
     client.terminate()
   }
+
   try {
     await closeWithTimeout(
       new Promise<void>((resolve, reject) =>
@@ -22,13 +24,16 @@ export async function cleanupBrowserRouteTcpEgressFixture(
   } catch (error) {
     failures.push(error)
   }
+
   for (const socket of sockets) {
     socket.destroy()
   }
+
   for (const server of servers) {
     if (!server?.listening) {
       continue
     }
+
     try {
       await closeWithTimeout(
         new Promise<void>((resolve, reject) =>
@@ -40,11 +45,13 @@ export async function cleanupBrowserRouteTcpEgressFixture(
       failures.push(error)
     }
   }
+
   try {
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   } catch (error) {
     failures.push(error)
   }
+
   return failures
 }
 

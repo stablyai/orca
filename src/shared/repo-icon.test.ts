@@ -8,10 +8,12 @@ const { dataUriValidations } = vi.hoisted(() => ({ dataUriValidations: { count: 
 
 vi.mock('./image-data-uri', async (importOriginal) => {
   const actual = await importOriginal<typeof ImageDataUriModule>()
+
   return {
     ...actual,
     validateRasterImageDataUri: (dataUri: string) => {
       dataUriValidations.count += 1
+
       return actual.validateRasterImageDataUri(dataUri)
     }
   }
@@ -19,6 +21,7 @@ vi.mock('./image-data-uri', async (importOriginal) => {
 
 const PNG_1X1_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
+
 const WEBP_1X1_BASE64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
 
 function pngBase64(width: number, height: number): string {
@@ -28,6 +31,7 @@ function pngBase64(width: number, height: number): string {
   bytes.write('IHDR', 12, 'ascii')
   bytes.writeUInt32BE(width, 16)
   bytes.writeUInt32BE(height, 20)
+
   return bytes.toString('base64')
 }
 
@@ -214,10 +218,12 @@ describe('repo icon source validation memo', () => {
 
   it('validates each distinct icon src once across repeated hydrations', () => {
     const icons = [uploadIcon(2), uploadIcon(3), uploadIcon(4)]
+
     // Warm the memo the way the first hydration would, then measure steady state.
     for (const icon of icons) {
       sanitizeRepoIcon(icon)
     }
+
     dataUriValidations.count = 0
 
     for (let hydration = 0; hydration < HYDRATIONS; hydration += 1) {
@@ -255,9 +261,11 @@ describe('repo icon source validation memo', () => {
   it('keeps a verdict for every live icon, however many repos have one', () => {
     const LIVE_ICONS = 200
     const icons = Array.from({ length: LIVE_ICONS }, (_, index) => uploadIcon(1000 + index))
+
     for (const icon of icons) {
       sanitizeRepoIcon(icon)
     }
+
     dataUriValidations.count = 0
 
     for (const icon of icons) {

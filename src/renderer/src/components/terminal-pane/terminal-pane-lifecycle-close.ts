@@ -23,20 +23,25 @@ export function applyTerminalPaneCloseRequest(args: {
   ) {
     return 'ignored'
   }
+
   const paneRuntimeId =
     args.detail.paneRuntimeId ??
     (args.detail.leafId ? args.manager.getNumericIdForLeaf(args.detail.leafId) : null)
+
   if (paneRuntimeId === null || paneRuntimeId === undefined) {
     return 'ignored'
   }
+
   if (args.manager.getPanes().length <= 1) {
     if (args.detail.preservePty) {
       args.closeTabPreservingPty()
     } else {
       args.closeTab()
     }
+
     return 'tab'
   }
+
   if (args.detail.preservePty) {
     if (args.detail.retireSurface) {
       args.manager.retirePanePreservingPty(paneRuntimeId)
@@ -46,6 +51,7 @@ export function applyTerminalPaneCloseRequest(args: {
   } else {
     args.manager.closePane(paneRuntimeId)
   }
+
   return 'pane'
 }
 
@@ -54,9 +60,11 @@ export function suppressIntentionalPaneCloseExit(
   suppressPtyExit: (ptyId: string) => void
 ): string | null {
   const ptyId = transport?.getPtyId() ?? null
+
   if (ptyId) {
     suppressPtyExit(ptyId)
   }
+
   return ptyId
 }
 
@@ -86,6 +94,7 @@ export function retireMountedTerminalPaneSurface(args: {
   args.retireAgentPaneAuthority(args.paneKey, {
     preserveSleepingAgentSession: true
   })
+
   if (args.ptyId) {
     if (args.clearExitedPanePtyLayoutBindingForLeaf) {
       // Match the old PTY before clearing so an overlapping successor cannot lose its binding.
@@ -95,8 +104,10 @@ export function retireMountedTerminalPaneSurface(args: {
     } else {
       args.syncPanePtyLayoutBinding(args.paneId, null)
     }
+
     args.clearTabPtyId(args.tabId, args.ptyId)
   }
+
   args.transport?.detach?.({ preserveExitObserver: false })
 }
 

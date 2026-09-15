@@ -18,6 +18,7 @@ function deferredInventory(): {
   resolve: (inventory: Inventory) => void
 } {
   let resolve!: (inventory: Inventory) => void
+
   return {
     promise: new Promise<Inventory>((settle) => {
       resolve = settle
@@ -106,6 +107,7 @@ function deferredPtyInventory(): {
   resolve: (inventory: PtyInventory) => void
 } {
   let resolve!: (inventory: PtyInventory) => void
+
   return {
     promise: new Promise<PtyInventory>((settle) => {
       resolve = settle
@@ -121,6 +123,7 @@ function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot
   const internals = runtime as unknown as RuntimeInventoryInternals
   vi.spyOn(internals, 'refreshMobileSessionPtyInventory').mockReturnValue(census.promise)
   const emit = vi.fn<(event: unknown) => void>()
+
   const pending = subscribeSessionTabsInventory(
     {
       runtime,
@@ -131,6 +134,7 @@ function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot
     },
     emit
   )
+
   return {
     census,
     emit,
@@ -138,6 +142,7 @@ function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot
     pending,
     publish: (snapshots: RuntimeMobileSessionTabsSnapshot[], flush = true): void => {
       runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+
       if (flush) {
         internals.mobileSessionTabsNotifyCoalescer.flushAll()
       }
@@ -152,9 +157,11 @@ function createHarness() {
   const unsubscribe = vi.fn<() => void>()
   const cleanup = vi.fn<() => void>()
   let changeSequence = 0
+
   let listener:
     | ((value: RuntimeMobileSessionTabsResult, changeSequence: number) => void)
     | undefined
+
   const runtime = {
     supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
     listAllMobileSessionTabsInventory: vi.fn(() => census.promise),
@@ -164,6 +171,7 @@ function createHarness() {
     onMobileSessionTabsChanged: vi.fn(
       (nextListener: (value: RuntimeMobileSessionTabsResult, changeSequence: number) => void) => {
         listener = nextListener
+
         return unsubscribe
       }
     ),
@@ -408,6 +416,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
     )
     const callerEmit = vi.fn<(event: unknown) => void>()
     const bystanderEmit = vi.fn<(event: unknown) => void>()
+
     const callerPending = subscribeSessionTabsInventory(
       {
         runtime,
@@ -417,6 +426,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
       },
       callerEmit
     )
+
     const bystanderPending = subscribeSessionTabsInventory(
       {
         runtime,
@@ -426,6 +436,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
       },
       bystanderEmit
     )
+
     const followed = snapshot(1, [terminalTab('followed')])
     const latest = snapshot(2, [terminalTab('latest')])
     const internals = runtime as unknown as RuntimeInventoryInternals
@@ -472,6 +483,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
       () => census.promise
     )
     const emit = vi.fn<(event: unknown) => void>()
+
     const pending = subscribeSessionTabsInventory(
       {
         runtime,
@@ -481,6 +493,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
       },
       emit
     )
+
     const selected = snapshot(1, [terminalTab('selected')])
     const internals = runtime as unknown as RuntimeInventoryInternals
 
@@ -498,9 +511,11 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
     const created = runtimeSnapshot('wt-census-race', 1)
     const first: number[] = []
     const second: number[] = []
+
     const unsubscribeFirst = runtime.onMobileSessionTabsChanged((_snapshot, sequence) =>
       first.push(sequence)
     )
+
     const unsubscribeSecond = runtime.onMobileSessionTabsChanged((_snapshot, sequence) =>
       second.push(sequence)
     )
@@ -521,6 +536,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
     const internals = runtime as unknown as RuntimeInventoryInternals
     vi.spyOn(internals, 'refreshMobileSessionPtyInventory').mockReturnValue(census.promise)
     const controller = new AbortController()
+
     const pending = subscribeSessionTabsInventory(
       {
         runtime,
@@ -652,11 +668,13 @@ describe('session tabs inventory census boundary', () => {
 
   it('delivers a post-boundary projected-state change without a new snapshot revision', async () => {
     const harness = createHarness()
+
     const pendingTab = {
       ...terminalTab('derived'),
       status: 'pending-handle' as const,
       terminal: null
     }
+
     const initial = snapshot(2, [pendingTab])
     const ready = snapshot(2, [terminalTab('derived')])
     const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
@@ -674,10 +692,12 @@ describe('session tabs inventory census boundary', () => {
 
   it('replays buffered follow intent before the later ordinary snapshot', async () => {
     const harness = createHarness()
+
     const followed = {
       ...snapshot(1, [terminalTab('followed')]),
       navigationIntent: 'follow' as const
     }
+
     const latest = snapshot(2, [terminalTab('latest')])
     const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
 
@@ -771,25 +791,30 @@ describe('session tabs inventory census boundary', () => {
     const firstCensus = deferredInventory()
     const secondCensus = deferredInventory()
     const emit = vi.fn<(event: unknown) => void>()
+
     let listener:
       | ((value: RuntimeMobileSessionTabsResult, changeSequence: number) => void)
       | undefined
+
     const collect = vi
       .fn()
       .mockImplementationOnce(() => firstCensus.promise)
       .mockImplementationOnce(() => secondCensus.promise)
+
     const runtime = {
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
       listAllMobileSessionTabsInventoryWithChangeSequence: collect,
       onMobileSessionTabsChanged: vi.fn(
         (nextListener: (value: RuntimeMobileSessionTabsResult, sequence: number) => void) => {
           listener = nextListener
+
           return vi.fn()
         }
       ),
       registerSubscriptionCleanup: vi.fn(),
       cleanupSubscription: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const pending = subscribeSessionTabsInventory(
       {
         runtime,
@@ -800,9 +825,11 @@ describe('session tabs inventory census boundary', () => {
     )
 
     await Promise.resolve()
+
     for (let sequence = 1; sequence <= 300; sequence += 1) {
       listener?.(snapshot(sequence, sequence % 2 === 0 ? [terminalTab('stable')] : []), sequence)
     }
+
     firstCensus.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
     await vi.waitFor(() => expect(collect).toHaveBeenCalledTimes(2))
     const settled = snapshot(300, [terminalTab('stable')])
@@ -819,22 +846,28 @@ describe('session tabs inventory census boundary', () => {
     const emit = vi.fn<(event: unknown) => void>()
     const unsubscribe = vi.fn()
     let cleanup = vi.fn()
+
     let listener:
       | ((value: RuntimeMobileSessionTabsResult, changeSequence: number) => void)
       | undefined
+
     const collect = vi.fn((..._args: unknown[]) => {
       const census = censuses[collect.mock.calls.length - 1]
+
       if (!census) {
         throw new Error('unexpected extra census')
       }
+
       return census.promise
     })
+
     const runtime = {
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
       listAllMobileSessionTabsInventoryWithChangeSequence: collect,
       onMobileSessionTabsChanged: vi.fn(
         (nextListener: (value: RuntimeMobileSessionTabsResult, sequence: number) => void) => {
           listener = nextListener
+
           return unsubscribe
         }
       ),
@@ -843,6 +876,7 @@ describe('session tabs inventory census boundary', () => {
       }),
       cleanupSubscription: vi.fn(() => cleanup())
     } as unknown as OrcaRuntimeService
+
     const pending = subscribeSessionTabsInventory(
       {
         runtime,
@@ -851,7 +885,9 @@ describe('session tabs inventory census boundary', () => {
       },
       emit
     )
+
     let changeSequence = 0
+
     const overflowBuffer = (): void => {
       for (let index = 0; index <= 256; index += 1) {
         changeSequence += 1
@@ -863,6 +899,7 @@ describe('session tabs inventory census boundary', () => {
     }
 
     await Promise.resolve()
+
     for (let censusIndex = 0; censusIndex < censuses.length; censusIndex += 1) {
       overflowBuffer()
       censuses[censusIndex]?.resolve({
@@ -870,6 +907,7 @@ describe('session tabs inventory census boundary', () => {
         authoritative: true,
         changeSequence
       })
+
       if (censusIndex < censuses.length - 1) {
         await vi.waitFor(() => expect(collect).toHaveBeenCalledTimes(censusIndex + 2))
       }

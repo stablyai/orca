@@ -25,6 +25,7 @@ export function slugifyForWorkspaceName(input: string): string {
     .trim()
     .toLowerCase()
     .replace(/[\\/]+/g, '-')
+
   return (
     foldWorkspaceNameWhitespaceToHyphen(normalized)
       .replace(/[^a-z0-9._-]+/g, '-')
@@ -40,6 +41,7 @@ export function slugifyForWorkspaceName(input: string): string {
 
 export function getLinkedWorkItemSuggestedName(item: { title: string }): string {
   const seed = getLinkedWorkItemTitleSubject(item) || item.title.trim()
+
   return slugifyForWorkspaceName(seed)
 }
 
@@ -105,23 +107,30 @@ function detectIntentAction(sourceText: string): string | null {
       return label
     }
   }
+
   return null
 }
 
 function titleCaseWord(word: string): string {
   const normalized = normalizeApostrophes(word)
+
   if (/^[A-Z]{2,}\d*$/.test(normalized) || /^[A-Z]+-\d+$/i.test(normalized)) {
     return normalized.toUpperCase()
   }
+
   const acronymPossessive = normalized.match(/^([A-Z]{2,}\d*)'([sS])$/)
+
   if (acronymPossessive) {
     return `${acronymPossessive[1].toUpperCase()}'s`
   }
+
   const lower = normalized.toLowerCase()
   const apostropheParts = lower.split("'")
+
   if (apostropheParts.length === 2 && apostropheParts[0].length === 1 && apostropheParts[1]) {
     return `${apostropheParts[0].toUpperCase()}'${apostropheParts[1]}`
   }
+
   return lower.charAt(0).toUpperCase() + lower.slice(1)
 }
 
@@ -133,25 +142,30 @@ function compactWords(input: string, maxWords = 4): string {
     maxWords,
     STOP_WORDS
   )
+
   return words.map(titleCaseWord).join(' ')
 }
 
 function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
   const identifier = item.linearIdentifier ?? item.jiraIdentifier
+
   let withoutPrefix = title
     .trim()
     .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
     .replace(/\([#!]?\d+\)/g, '')
     .replace(/^[^:]{1,32}:\s*/, '')
     .trim()
+
   if (item.number > 0) {
     withoutPrefix = withoutPrefix.replace(new RegExp(`\\b[#!]?${item.number}\\b`, 'g'), '').trim()
   }
+
   if (identifier) {
     withoutPrefix = withoutPrefix
       .replace(new RegExp(`^${escapeRegex(identifier)}\\s*[:-]?\\s*`, 'i'), '')
       .trim()
   }
+
   return compactWords(withoutPrefix || title, 3)
 }
 
@@ -159,15 +173,19 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
   if (item.linearIdentifier) {
     return item.linearIdentifier.toUpperCase()
   }
+
   if (item.jiraIdentifier) {
     return item.jiraIdentifier.toUpperCase()
   }
+
   if (item.type === 'pr') {
     return `PR ${item.number}`
   }
+
   if (item.type === 'mr') {
     return `MR ${item.number}`
   }
+
   return `Issue ${item.number}`
 }
 
@@ -176,16 +194,20 @@ export function getLinkedWorkItemWorkspaceName(
 ): WorkspaceIntentName | null {
   const identifier = item.linearIdentifier ?? item.jiraIdentifier
   let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
+
   if (identifier) {
     subject = subject
       .replace(new RegExp(`^${escapeRegex(identifier)}\\s*[:-]?\\s*`, 'i'), '')
       .trim()
   }
+
   const displayName = [identifier, subject].filter(Boolean).join(' ') || workItemIdentity(item)
   const seedName = slugifyForWorkspaceName(displayName)
+
   if (!seedName) {
     return null
   }
+
   return { displayName, seedName }
 }
 
@@ -210,6 +232,7 @@ export function getWorkspaceIntentName(args: {
   if (item) {
     const action = detectIntentAction(sourceText) ?? defaultActionForWorkItem(item)
     const identity = workItemIdentity(item)
+
     if (action) {
       displayName = `${action} ${identity}`
     } else {
@@ -224,29 +247,36 @@ export function getWorkspaceIntentName(args: {
   if (!displayName && args.fallbackName?.trim()) {
     displayName = args.fallbackName.trim()
   }
+
   if (!displayName) {
     return null
   }
 
   const seedName = slugifyForWorkspaceName(displayName)
+
   if (!seedName) {
     return null
   }
+
   return { displayName, seedName }
 }
 
 export function getLinearIssueWorkspaceName(issue: { identifier: string; title: string }): string {
   const key = slugifyForWorkspaceName(issue.identifier)
   const titleSlug = getLinkedWorkItemSuggestedName(issue)
+
   if (!key) {
     return titleSlug
   }
+
   let dedupedTitleSlug = titleSlug
+
   if (titleSlug === key) {
     dedupedTitleSlug = ''
   } else if (titleSlug.startsWith(`${key}-`)) {
     dedupedTitleSlug = titleSlug.slice(key.length + 1)
   }
+
   return slugifyForWorkspaceName([key, dedupedTitleSlug].filter(Boolean).join('-'))
 }
 

@@ -27,7 +27,9 @@ export type SpeechServiceFactories = {
 }
 
 let factories: SpeechServiceFactories | null = null
+
 let modelManager: ModelManager | null = null
+
 let sttService: SttService | null = null
 
 export function setSpeechServiceFactories(next: SpeechServiceFactories | null): void {
@@ -40,6 +42,7 @@ function requireFactories(): SpeechServiceFactories {
   if (!factories) {
     throw new Error('speech_unavailable: this host has no speech services')
   }
+
   return factories
 }
 
@@ -49,6 +52,7 @@ export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager 
     const customDir = settings.voice?.modelsDir || undefined
     modelManager = requireFactories().createModelManager(customDir || undefined)
   }
+
   return modelManager
 }
 
@@ -56,5 +60,6 @@ export function getSpeechSttService(store: SpeechSettingsStore): SttService {
   if (!sttService) {
     sttService = requireFactories().createSttService(getSpeechModelManager(store))
   }
+
   return sttService
 }

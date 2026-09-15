@@ -36,13 +36,17 @@ vi.mock('../wsl-unc-delete', () => ({
 import { deleteAiVaultSessionFile } from './session-delete'
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
+
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
+
 const CLAUDE_ROOT = join(HOME, '.claude', 'projects')
+
 const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
 
 function enoent(): NodeJS.ErrnoException {
   const error = new Error('not found') as NodeJS.ErrnoException
   error.code = 'ENOENT'
+
   return error
 }
 

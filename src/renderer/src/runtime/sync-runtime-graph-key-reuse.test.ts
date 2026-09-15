@@ -52,7 +52,9 @@ describe('runtime mobile session sync key projection reuse', () => {
       openFiles: [makeOpenMarkdownFile()],
       editorDrafts: { '/repo/README.md': '# draft' }
     })
+
     const baseKey = getRuntimeMobileSessionSyncKey(base)
+
     const titleTick = makeState({
       ...base,
       runtimePaneTitlesByTabId: {
@@ -79,7 +81,9 @@ describe('runtime mobile session sync key projection reuse', () => {
       openFiles: [makeOpenMarkdownFile()],
       editorDrafts: { '/repo/README.md': '# draft' }
     })
+
     const baseKey = getRuntimeMobileSessionSyncKey(base)
+
     const titleTick = makeState({
       ...base,
       tabsByWorktree: {
@@ -104,7 +108,9 @@ describe('runtime mobile session sync key projection reuse', () => {
         'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null }]
       } as unknown as AppState['tabsByWorktree']
     })
+
     const baseKey = getRuntimeMobileSessionSyncKey(base)
+
     const activated = makeState({
       ...base,
       activeTabId: 'term-1'
@@ -123,6 +129,7 @@ describe('runtime mobile session sync key projection reuse', () => {
 
   it('reuses unchanged worktree tab projections when one worktree title changes', () => {
     const unchangedTitle = vi.fn(() => 'Unchanged agent')
+
     const unchangedTab = {
       id: 'term-unchanged',
       customTitle: null,
@@ -130,12 +137,14 @@ describe('runtime mobile session sync key projection reuse', () => {
         return unchangedTitle()
       }
     }
+
     const base = makeState({
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null }],
         'wt-2': [unchangedTab]
       } as unknown as AppState['tabsByWorktree']
     })
+
     const baseKey = getRuntimeMobileSessionSyncKey(base)
     expect(unchangedTitle).toHaveBeenCalled()
     unchangedTitle.mockClear()
@@ -162,7 +171,9 @@ describe('mobile session snapshot reuse', () => {
       length: 1,
       charCodeAt: vi.fn(() => 120)
     } as unknown as string
+
     const draftSpy = (draft as unknown as { charCodeAt: ReturnType<typeof vi.fn> }).charCodeAt
+
     const base = makeState({
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null }]
@@ -240,6 +251,7 @@ describe('mobile session snapshot reuse', () => {
         snapshot
       ])
     )
+
     const after = new Map(
       buildMobileSessionTabSnapshots(makeTwoWorktreeState('Codex done')).map((snapshot) => [
         snapshot.worktree,

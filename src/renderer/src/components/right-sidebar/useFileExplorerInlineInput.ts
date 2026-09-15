@@ -50,6 +50,7 @@ export function useFileExplorerInlineInput({
     if (scrollFocusFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(scrollFocusFrameRef.current)
     scrollFocusFrameRef.current = null
   }, [])
@@ -68,6 +69,7 @@ export function useFileExplorerInlineInput({
     if (!inlineInput || inlineInput.type === 'rename') {
       return -1
     }
+
     return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, worktreePath)
   }, [inlineInput, rowProjection, worktreePath])
 
@@ -76,6 +78,7 @@ export function useFileExplorerInlineInput({
       if (activeWorktreeId && parentPath !== worktreePath && !expanded.has(parentPath)) {
         toggleDir(activeWorktreeId, parentPath)
       }
+
       setInlineInput({
         parentPath,
         type,
@@ -108,14 +111,19 @@ export function useFileExplorerInlineInput({
     (value: string) => {
       if (!inlineInput || !value.trim() || !activeWorktreeId || !worktreePath) {
         setInlineInput(null)
+
         return
       }
+
       const name = value.trim()
+
       // No-op if the user submitted the same name (e.g. blur without editing)
       if (inlineInput.type === 'rename' && name === inlineInput.existingName) {
         setInlineInput(null)
+
         return
       }
+
       const run = async (): Promise<void> => {
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
           await renameFileOnDisk({
@@ -128,12 +136,15 @@ export function useFileExplorerInlineInput({
           })
         } else {
           const fullPath = joinPath(inlineInput.parentPath, name)
+
           try {
             const operationGuard = captureFileExplorerOperationGuard(
               activeWorktreeId,
               inlineInput.operationOwner
             )
+
             const operationRoute = operationGuard.route
+
             const fileContext = {
               settings: operationRoute.settings,
               worktreeId: activeWorktreeId,
@@ -143,6 +154,7 @@ export function useFileExplorerInlineInput({
               expectedSshTargetId: operationRoute.expectedSshTargetId,
               expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
             }
+
             operationGuard.assertCurrent()
             await createRuntimePath(
               fileContext,
@@ -150,6 +162,7 @@ export function useFileExplorerInlineInput({
               inlineInput.type === 'folder' ? 'directory' : 'file'
             )
             const parentForRefresh = inlineInput.parentPath
+
             if (inlineInput.type === 'folder') {
               commitFileExplorerOp({
                 undo: async () => {
@@ -208,10 +221,13 @@ export function useFileExplorerInlineInput({
                 }
               })
             }
+
             await refreshDir(inlineInput.parentPath)
+
             if (inlineInput.type === 'file') {
               const runtimeEnvironmentId =
                 fileContext.settings.activeRuntimeEnvironmentId?.trim() || null
+
               openFile(
                 {
                   filePath: fullPath,
@@ -231,6 +247,7 @@ export function useFileExplorerInlineInput({
           }
         }
       }
+
       void run()
       setInlineInput(null)
       scheduleScrollFocus()

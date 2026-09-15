@@ -13,6 +13,7 @@ function blockedCreateResultForReason(
 ): CreateHostedReviewResult | null {
   const copy = reviewCopy(provider)
   const baseLabel = submittedBase?.trim() ? `"${submittedBase.trim()}" ` : ''
+
   const blockedCreateResultByReason = {
     auth_required: {
       ok: false,
@@ -67,6 +68,7 @@ function blockedCreateResultForReason(
   } satisfies Partial<
     Record<NonNullable<HostedReviewCreationBlockedReason>, CreateHostedReviewResult>
   >
+
   return blockedCreateResultByReason[reason] ?? null
 }
 
@@ -77,8 +79,10 @@ export function blockedEligibilityToCreateResult(
   if (eligibility.canCreate) {
     return null
   }
+
   if (eligibility.review?.url) {
     const copy = reviewCopy(eligibility.provider)
+
     return {
       ok: false,
       code: 'already_exists',
@@ -86,6 +90,7 @@ export function blockedEligibilityToCreateResult(
       existingReview: eligibility.review
     }
   }
+
   if (eligibility.blockedReason) {
     return blockedCreateResultForReason(
       eligibility.blockedReason,
@@ -93,7 +98,9 @@ export function blockedEligibilityToCreateResult(
       submittedBase
     )
   }
+
   const copy = reviewCopy(eligibility.provider)
+
   return {
     ok: false,
     code: 'validation',

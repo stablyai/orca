@@ -19,6 +19,7 @@ import { resolveRepoWorktreeRows } from '../../src/main/runtime/repo-worktree-ro
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-folder-upgrade-store-'))
 })
+
 afterEach(() => {
   rmSync(testState.dir, { recursive: true, force: true })
 })
@@ -42,13 +43,17 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
   const reloaded = createStore()
   const repo = reloaded.getRepo(owner.id)
   expect(repo?.folderUpgradeGitRootPath).toBe('C:/projects/draft')
+
   if (!repo) {
     throw new Error('registered repo missing')
   }
+
   const worktrees = [
     { path: 'C:/projects/draft', branch: 'main', head: 'abc', isMainWorktree: true, isBare: false }
   ]
+
   const detected = buildDetectedGitWorktrees(reloaded, repo, worktrees)
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The purge reader only reads these catalog fields when session hydration is complete.
   const state = {
     repos: [owner],
@@ -56,6 +61,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
     detectedWorktreesByRepo: {},
     hasHydratedWorktreePurge: true
   } as unknown as AppState
+
   expect(
     getRemovedWorktreeIdsAfterAuthoritativeScan(
       state,
@@ -69,6 +75,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
     activeTabId: 'omp-tab',
     tabsByWorktree: { [id]: [{ id: 'omp-tab', worktreeId: id }] }
   })
+
   const runtime = await resolveRepoWorktreeRows(
     {
       store: reloaded,
@@ -79,6 +86,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
     reloaded.getAllWorktreeMeta(),
     new Map()
   )
+
   for (const rows of [detected, runtime]) {
     expect(rows[0]).toMatchObject({
       id,
@@ -87,6 +95,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
       hostId: 'local'
     })
   }
+
   expect(reloaded.getWorktreeMetaForHost(id, 'ssh:builder')?.comment).toBe('other host')
   reloaded.flush()
   expect(createStore().getWorktreeMetaForHost(id, 'local')?.instanceId).toBe(before.instanceId)

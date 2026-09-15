@@ -18,6 +18,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
       lineage: null,
       lastActivityAt: 0
     } as unknown as ResolvedWorktree
+
     const store = {
       getRepos: () => [],
       getWorktreeMeta: () => ({ hostId: 'ssh:persisted-host' }),

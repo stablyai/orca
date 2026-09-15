@@ -19,18 +19,29 @@ vi.mock('electron', () => ({
 }))
 
 const TAB_ID = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
+
 const PTY_ID = 'pty-sta-4325'
+
 const TERMINAL_HANDLE = 'term_sta_4325'
+
 const REMINTED_TERMINAL_HANDLE = 'term_sta_4325_reminted'
+
 const WORKTREE_ID = 'repo-sta-4325::/tmp/sta-4325'
+
 const LAUNCH_TOKEN = 'sta-4325-launch'
+
 const temporaryDirectories: string[] = []
+
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
+
 const itIfCliBuilt = existsSync(CLI_PATH) ? it : it.skip
 
 type MessageResult = { id: string; type: string; read: number }
+
 type CheckResult = {
   runId: string
   deliveryId: string | null
@@ -55,6 +66,7 @@ function createDatabase(prefix: string): { db: OrchestrationDb; path: string } {
   const directory = mkdtempSync(join(tmpdir(), prefix))
   temporaryDirectories.push(directory)
   const path = join(directory, 'orchestration.db')
+
   return { db: new OrchestrationDb(path), path }
 }
 
@@ -69,6 +81,7 @@ function createRuntime(
     attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
       paneKey === PANE_KEY ? { paneKey, source: 'current_hook' } : null
   })
+
   const write = vi.fn(() => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
@@ -105,6 +118,7 @@ function createRuntime(
       }
     ]
   })
+
   return { runtime, write }
 }
 
@@ -120,6 +134,7 @@ async function check(
   params: Record<string, unknown> = {}
 ): Promise<CheckResult> {
   const terminal = typeof params.terminal === 'string' ? params.terminal : TERMINAL_HANDLE
+
   const response = await new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }).dispatch({
     id: `req-sta-4325-${Math.random()}`,
     authToken: 'test-auth-token',
@@ -132,10 +147,13 @@ async function check(
     },
     params: { terminal, ...params }
   })
+
   expect(response.ok).toBe(true)
+
   if (!response.ok) {
     throw new Error(response.error.message)
   }
+
   return response.result as CheckResult
 }
 
@@ -158,22 +176,26 @@ async function runBuiltCli(
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
+
   const stdout: string[] = []
   const stderr: string[] = []
   child.stdout.setEncoding('utf8')
   child.stderr.setEncoding('utf8')
   child.stdout.on('data', (chunk) => stdout.push(chunk))
   child.stderr.on('data', (chunk) => stderr.push(chunk))
+
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.once('close', (code) => resolve(code ?? 1))
     child.once('error', reject)
   })
+
   return { exitCode, stdout: stdout.join(''), stderr: stderr.join('') }
 }
 
 describe('STA-4325 message and delivery identity', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -183,11 +205,13 @@ describe('STA-4325 message and delivery identity', () => {
     vi.useFakeTimers()
     const { db } = createDatabase('orca-sta-4325-identity-')
     const { runtime, write } = createRuntime(db)
+
     const run = db.createRun({
       objective: 'STA-4325 identity',
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     const status = db.insertMessage({
       from: 'term_worker_a',
       to: TERMINAL_HANDLE,
@@ -196,6 +220,7 @@ describe('STA-4325 message and delivery identity', () => {
       runId: run.id,
       deliveryContract: 'current_delivery'
     })
+
     const dispatch = db.insertMessage({
       from: 'term_worker_b',
       to: `run:${run.id}`,
@@ -204,6 +229,7 @@ describe('STA-4325 message and delivery identity', () => {
       runId: run.id,
       deliveryContract: 'current_delivery'
     })
+
     const done = db.insertMessage({
       from: 'term_worker_c',
       to: TERMINAL_HANDLE,
@@ -239,9 +265,11 @@ describe('STA-4325 message and delivery identity', () => {
     const deliveryRowsBeforeAck = sqliteFor(db)
       .prepare('SELECT id, status, message_ids FROM deliveries ORDER BY rowid')
       .all() as { id: string; status: string; message_ids: string }[]
+
     expect(deliveryRowsBeforeAck).toEqual([
       { id: first.deliveryId, status: 'outstanding', message_ids: JSON.stringify(expectedIds) }
     ])
+
     for (const id of expectedIds) {
       expect(db.getMessageById(id)).toMatchObject({ to_handle: `run:${run.id}`, read: 0 })
     }
@@ -261,9 +289,11 @@ describe('STA-4325 message and delivery identity', () => {
     expect(sqliteFor(db).prepare('SELECT id, status FROM deliveries ORDER BY rowid').all()).toEqual(
       [{ id: first.deliveryId, status: 'acknowledged' }]
     )
+
     for (const id of expectedIds) {
       expect(db.getMessageById(id)?.read).toBe(1)
     }
+
     db.close()
   })
 
@@ -271,11 +301,13 @@ describe('STA-4325 message and delivery identity', () => {
     vi.useFakeTimers()
     const fixture = createDatabase('orca-sta-4325-restart-')
     const firstRuntime = createRuntime(fixture.db)
+
     const run = fixture.db.createRun({
       objective: 'STA-4325 restart',
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     const status = fixture.db.insertMessage({
       from: 'term_worker',
       to: TERMINAL_HANDLE,
@@ -284,6 +316,7 @@ describe('STA-4325 message and delivery identity', () => {
       runId: run.id,
       deliveryContract: 'current_delivery'
     })
+
     await driveToLiveIdle(firstRuntime.runtime)
     const beforeRestart = await check(firstRuntime.runtime)
     expect(beforeRestart.messages.map((message) => message.id)).toEqual([status.id])
@@ -303,21 +336,26 @@ describe('STA-4325 message and delivery identity', () => {
       terminal: REMINTED_TERMINAL_HANDLE,
       ack: afterRestart.deliveryId
     })
+
     const waiting = check(restarted.runtime, {
       terminal: REMINTED_TERMINAL_HANDLE,
       wait: true,
       types: 'worker_done',
       timeoutMs: 5_000
     })
+
     const internals = restarted.runtime as unknown as {
       messageWaitersByHandle: Map<string, Set<unknown>>
     }
+
     for (let attempt = 0; attempt < 20; attempt += 1) {
       if (internals.messageWaitersByHandle.has(`run:${run.id}`)) {
         break
       }
+
       await Promise.resolve()
     }
+
     expect(internals.messageWaitersByHandle.has(`run:${run.id}`)).toBe(true)
 
     const done = reopened.insertMessage({
@@ -328,6 +366,7 @@ describe('STA-4325 message and delivery identity', () => {
       runId: run.id,
       deliveryContract: 'current_delivery'
     })
+
     restarted.runtime.notifyMessageArrived(done.to_handle, done.type)
     await vi.advanceTimersByTimeAsync(5_000)
 
@@ -342,11 +381,13 @@ describe('STA-4325 message and delivery identity', () => {
 
   it('routes the complete direct backlog before rebinding forgets its old handle', () => {
     const fixture = createDatabase('orca-sta-4325-rebind-backlog-')
+
     const first = fixture.db.createRun({
       objective: 'Old coordinator',
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     for (let index = 0; index < 125; index += 1) {
       const message = fixture.db.insertMessage({
         from: 'term_worker',
@@ -356,10 +397,12 @@ describe('STA-4325 message and delivery identity', () => {
         runId: first.id,
         deliveryContract: 'current_delivery'
       })
+
       sqliteFor(fixture.db)
         .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
         .run(TERMINAL_HANDLE, message.id)
     }
+
     const plan = sqliteFor(fixture.db)
       .prepare(
         `EXPLAIN QUERY PLAN UPDATE messages SET to_handle = ?
@@ -367,6 +410,7 @@ describe('STA-4325 message and delivery identity', () => {
            AND delivery_contract = 'current_delivery'`
       )
       .all(`run:${first.id}`, first.id, TERMINAL_HANDLE) as { detail: string }[]
+
     expect(plan.map((row) => row.detail).join(' ')).toMatch(
       /SEARCH messages USING INDEX (idx_messages_delivery_contract|idx_messages_unread_current_inbox)/
     )
@@ -392,16 +436,19 @@ describe('STA-4325 message and delivery identity', () => {
 
   it('repairs committed mail sent to a forgotten handle after restart', async () => {
     const fixture = createDatabase('orca-sta-4325-late-old-handle-')
+
     const run = fixture.db.createRun({
       objective: 'Late old-handle arrival',
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     fixture.db.bindRun({
       runId: run.id,
       coordinatorHandle: REMINTED_TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     const done = fixture.db.insertMessage({
       from: 'term_worker',
       to: TERMINAL_HANDLE,
@@ -410,6 +457,7 @@ describe('STA-4325 message and delivery identity', () => {
       runId: run.id,
       deliveryContract: 'current_delivery'
     })
+
     expect(fixture.db.getMessageById(done.id)?.to_handle).toBe(`run:${run.id}`)
     expect(
       fixture.db
@@ -446,11 +494,13 @@ describe('STA-4325 message and delivery identity', () => {
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === TERMINAL_HANDLE ? PANE_KEY : null
       )
+
       const run = db.createRun({
         objective: 'STA-4325 built CLI',
         coordinatorHandle: TERMINAL_HANDLE,
         coordinatorPaneKey: PANE_KEY
       })
+
       const status = db.insertMessage({
         from: 'term_worker',
         to: TERMINAL_HANDLE,
@@ -459,6 +509,7 @@ describe('STA-4325 message and delivery identity', () => {
         runId: run.id,
         deliveryContract: 'current_delivery'
       })
+
       const done = db.insertMessage({
         from: 'term_worker',
         to: `run:${run.id}`,
@@ -467,6 +518,7 @@ describe('STA-4325 message and delivery identity', () => {
         runId: run.id,
         deliveryContract: 'current_delivery'
       })
+
       const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
       await server.start()
 
@@ -503,6 +555,7 @@ describe('STA-4325 message and delivery identity', () => {
           firstPayload.result.deliveryId!,
           '--json'
         ])
+
         expect(acknowledged.exitCode, acknowledged.stderr).toBe(0)
         expect(JSON.parse(acknowledged.stdout)).toMatchObject({
           result: { count: 0, deliveryId: null, acknowledged: firstPayload.result.deliveryId }

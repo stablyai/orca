@@ -12,6 +12,7 @@ export type SourceControlGenerationPlanResult =
 
 const SYNTHETIC_COMMIT_PROMPT =
   'Generate a concise git commit message for a synthetic dry-run diff. Return only the commit message.'
+
 const SYNTHETIC_PULL_REQUEST_PROMPT =
   'Generate a hosted review title and description for a synthetic branch diff. Preserve any existing pull request or merge request template in the current description. Return structured pull request fields.'
 
@@ -67,6 +68,7 @@ export function planSourceControlTextGeneration(
           SYNTHETIC_TEXT_GENERATION_CONTEXT[actionId]
         )
       : SYNTHETIC_BASE_PROMPTS[actionId]
+
   if (!prompt.trim()) {
     return {
       ok: false,
@@ -76,14 +78,18 @@ export function planSourceControlTextGeneration(
       )
     }
   }
+
   const planned = planCommitMessageGeneration(params, prompt)
+
   if (!planned.ok) {
     return { ok: false, error: planned.error }
   }
+
   const delivery =
     planned.plan.stdinPayload === null
       ? 'Prompt is delivered as command arguments.'
       : 'Prompt is piped to the agent over stdin.'
+
   return {
     ok: true,
     commandLabel: [planned.plan.binary, ...planned.plan.args].join(' '),

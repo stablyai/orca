@@ -187,10 +187,12 @@ describe('addWorktreeOp', () => {
 
   it('warns and unsets stale branch base config when SSH base persistence fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'config' && args[2] === '--replace-all') {
         throw new Error('config locked')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -227,6 +229,7 @@ describe('removeWorktreeOp', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         return {
           stdout: `${worktreeList(
@@ -236,6 +239,7 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -251,13 +255,17 @@ describe('removeWorktreeOp', () => {
   it('deletes the now-unused branch after removing an SSH worktree', async () => {
     const calls: string[] = []
     let listCount = 0
+
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
+
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
+
         return {
           stdout:
             listCount === 1
@@ -269,6 +277,7 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -285,13 +294,17 @@ describe('removeWorktreeOp', () => {
   it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
     const calls: string[] = []
     let listCount = 0
+
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
+
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
+
         return {
           stdout:
             listCount === 1
@@ -303,11 +316,13 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'worktree' && args[1] === 'remove' && !args.includes('--force')) {
         throw Object.assign(new Error('git worktree remove failed'), {
           stderr: 'fatal: working trees containing submodules cannot be moved or removed'
         })
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -328,6 +343,7 @@ describe('removeWorktreeOp', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         return {
           stdout: worktreeList(
@@ -337,14 +353,17 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'worktree' && args[1] === 'remove') {
         throw Object.assign(new Error('git worktree remove failed'), {
           stderr: 'fatal: working trees containing submodules cannot be moved or removed'
         })
       }
+
       if (args[0] === 'status') {
         return { stdout: ' M sub\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -362,6 +381,7 @@ describe('removeWorktreeOp', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         return {
           stdout: worktreeList(
@@ -371,11 +391,13 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'worktree' && args[1] === 'remove') {
         throw Object.assign(new Error('git worktree remove failed'), {
           stderr: 'fatal: working trees containing submodules cannot be moved or removed'
         })
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -395,12 +417,15 @@ describe('removeWorktreeOp', () => {
 
   it('preserves the branch (does not throw) when `branch -d` refuses an unmerged branch', async () => {
     let listCount = 0
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
+
         return {
           stdout:
             listCount === 1
@@ -412,9 +437,11 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'branch' && args[1] === '-d') {
         throw new Error('error: the branch feature/test is not fully merged')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -431,12 +458,15 @@ describe('removeWorktreeOp', () => {
 
   it('force-deletes the just-created branch during failed sparse setup rollback', async () => {
     let listCount = 0
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
+
         return {
           stdout:
             listCount === 1
@@ -448,6 +478,7 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -470,6 +501,7 @@ describe('removeWorktreeOp', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         return {
           stdout: `${worktreeList(
@@ -479,6 +511,7 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -494,11 +527,14 @@ describe('removeWorktreeOp', () => {
 
   it('skips branch deletion entirely when deleteBranch is false', async () => {
     const calls: string[] = []
+
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
+
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         return {
           stdout: worktreeList(
@@ -508,6 +544,7 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -525,12 +562,15 @@ describe('removeWorktreeOp', () => {
 
   it('keeps the branch when Git reports another SSH worktree still uses it', async () => {
     let listCount = 0
+
     const git = vi.fn<GitExec>(async (args, _cwd) => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
+
         return {
           stdout:
             listCount === 1
@@ -545,11 +585,13 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'branch' && args[1] === '-d') {
         throw new Error(
           "error: cannot delete branch 'feature/test' used by worktree at '/repo-other'"
         )
       }
+
       return { stdout: '', stderr: '' }
     })
 

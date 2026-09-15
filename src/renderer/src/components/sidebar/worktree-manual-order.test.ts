@@ -432,6 +432,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
 
   it('reorders a very large visible group without overflowing argument limits', () => {
     const ids = Array.from({ length: 130_000 }, (_, index) => `wt-${index}`)
+
     const rankByWorktreeId = new Map(
       ids.map((id, index) => [id, (ids.length - index) * 1000] as const)
     )

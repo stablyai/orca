@@ -16,14 +16,18 @@ type ComposerNativeFileDropArgs = {
 export async function applyComposerNativeFileDrop(args: ComposerNativeFileDropArgs): Promise<void> {
   try {
     const uploaded = await args.uploadPaths(args.paths)
+
     if (!args.isCurrentOwner()) {
       return
     }
+
     if (uploaded) {
       args.addAttachments(uploaded.filePaths)
       args.insertFolderPaths(uploaded.folderPaths)
+
       return
     }
+
     await args.applyLocalPaths(args.paths, args.isCurrentOwner)
   } catch (error) {
     // Why: an unmounted composer no longer owns the user-facing failure.

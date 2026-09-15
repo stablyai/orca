@@ -31,6 +31,7 @@ import {
 import type { AutomationPaneTab } from './automation-page-state'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -206,6 +207,7 @@ describe('AutomationsListPanel flat table layout', () => {
         enabled: true
       })
     })
+
     renderPanel([row], '')
 
     expect(container.textContent).toContain('Name')
@@ -222,6 +224,7 @@ describe('AutomationsListPanel enter key navigation', () => {
     const row = makeAutomationListRow({
       automation: makeAutomation({ id: 'auto-1', name: 'First Auto' })
     })
+
     let selectedKey: string | null = null
     let detailOpened = false
 
@@ -243,6 +246,7 @@ describe('AutomationsListPanel enter key navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     input?.dispatchEvent(enter)
 
     expect(enter.defaultPrevented).toBe(true)
@@ -254,9 +258,11 @@ describe('AutomationsListPanel enter key navigation', () => {
     const row1 = makeAutomationListRow({
       automation: makeAutomation({ id: 'auto-1', name: 'First Auto' })
     })
+
     const row2 = makeAutomationListRow({
       automation: makeAutomation({ id: 'auto-2', name: 'Second Auto' })
     })
+
     let selectedKey: string | null = null
     let detailOpened = false
 
@@ -278,6 +284,7 @@ describe('AutomationsListPanel enter key navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     input?.dispatchEvent(enter)
 
     expect(enter.defaultPrevented).toBe(true)
@@ -302,6 +309,7 @@ describe('AutomationsListPanel enter key navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     input?.dispatchEvent(enter)
 
     expect(detailOpened).toBe(false)
@@ -310,9 +318,11 @@ describe('AutomationsListPanel enter key navigation', () => {
   it('opens the selected external row on its overview tab', () => {
     const [entry] = buildExternalAutomationListEntries([makeScopedExternalManager()])
     expect(entry).toBeDefined()
+
     if (!entry) {
       return
     }
+
     const localSelections: (string | null)[] = []
     const externalSelections: (string | null)[] = []
     const paneTabs: AutomationPaneTab[] = []
@@ -334,6 +344,7 @@ describe('AutomationsListPanel enter key navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     searchField()?.dispatchEvent(enter)
 
     expect(enter.defaultPrevented).toBe(true)

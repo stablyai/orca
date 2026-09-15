@@ -35,26 +35,31 @@ export async function verifyUnstoppedPtys(
   const verifyBudgetMs = Math.max(WORKTREE_TEARDOWN_VERIFY_GRACE_MS, sweepBudgetMs)
   const verifyDeadline = Date.now() + verifyBudgetMs
   let listError: unknown
+
   const sessions = await settleBeforeDeadline(
     async () => {
       try {
         return await provider.listProcesses({ deadlineMs: verifyDeadline })
       } catch (error) {
         listError = error
+
         return null
       }
     },
     null,
     verifyDeadline
   )
+
   if (!sessions) {
     return {
       status: 'unverifiable',
       reason: listError instanceof Error ? listError.message : 'the process list timed out'
     }
   }
+
   const livePtyIds = new Set(sessions.map((session) => session.id))
   const stillLive = failedPtyIds.filter((ptyId) => livePtyIds.has(ptyId))
+
   return stillLive.length > 0 ? { status: 'live', ptyIds: stillLive } : { status: 'exited' }
 }
 
@@ -69,10 +74,12 @@ export function unverifiableStopVerdict(
 ): UnstoppedPtyVerdict | null {
   for (const ptyId of failedPtyIds) {
     const verdict = runtime?.getPtyLivenessVerdict?.(ptyId)
+
     if (verdict?.status === 'unverifiable') {
       return verdict
     }
   }
+
   return null
 }
 
@@ -86,6 +93,7 @@ export async function resolveUnstoppedPtyVerdict(
   if (failedPtyIds.length === 0) {
     return { status: 'exited' }
   }
+
   if (!providerObservesOwningHost) {
     return (
       unverifiableStopVerdict(failedPtyIds, runtime) ?? {
@@ -94,6 +102,7 @@ export async function resolveUnstoppedPtyVerdict(
       }
     )
   }
+
   return verifyUnstoppedPtys(failedPtyIds, provider, sweepBudgetMs)
 }
 
@@ -107,6 +116,7 @@ export function describeUnstoppedPtys(
     verdict.status === 'live'
       ? `${STILL_LIVE_DETAIL_PREFIX} ${verdict.ptyIds.join(', ')}`
       : `could not verify these exited: ${failedPtyIds.join(', ')} (${verdict.reason})`
+
   return `${UNSTOPPED_PTY_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${detail}`
 }
 

@@ -33,6 +33,7 @@ export function useEditorExternalWatch(): void {
   const latestTargetsRef = useRef<EditorExternalWatchTarget[]>(targets)
   latestTargetsRef.current = targets
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
+
   const fsChangedHandlerRef = useRef<
     ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
   >(null)
@@ -43,9 +44,11 @@ export function useEditorExternalWatch(): void {
     const previousTargets = targetsRef.current
     const previousKeys = new Set(previousTargets.map(getEditorExternalWatchTargetKey))
     const nextKeys = new Set(nextTargets.map(getEditorExternalWatchTargetKey))
+
     const removed = previousTargets.filter(
       (target) => !nextKeys.has(getEditorExternalWatchTargetKey(target))
     )
+
     const added = nextTargets.filter(
       (target) => !previousKeys.has(getEditorExternalWatchTargetKey(target))
     )
@@ -53,6 +56,7 @@ export function useEditorExternalWatch(): void {
     for (const target of removed) {
       const key = getEditorExternalWatchTargetKey(target)
       const remoteUnsubscribe = remoteWatchUnsubsRef.current.get(key)
+
       if (remoteUnsubscribe) {
         remoteUnsubscribe()
         remoteWatchUnsubsRef.current.delete(key)
@@ -63,11 +67,13 @@ export function useEditorExternalWatch(): void {
         })
       }
     }
+
     for (const target of added) {
       if (target.runtimeEnvironmentId) {
         subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef)
         continue
       }
+
       void window.api.fs
         .watchWorktree({
           worktreePath: target.worktreePath,
@@ -78,6 +84,7 @@ export function useEditorExternalWatch(): void {
           warnExternalWatchFailure(target, err)
         })
     }
+
     targetsRef.current = nextTargets
     // Why: final unmount cleanup owns teardown so target changes remain differential.
   }, [targetsKey])
@@ -85,6 +92,7 @@ export function useEditorExternalWatch(): void {
   // Why: one stable fs:changed listener prevents target-key changes from opening an event-loss gap.
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
+
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
       (worktreePath, runtimeEnvironmentId) =>
         targetsRef.current.find(
@@ -94,6 +102,7 @@ export function useEditorExternalWatch(): void {
             target.runtimeEnvironmentId === runtimeEnvironmentId
         )
     )
+
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
     fsChangedHandlerRef.current = handleFsChanged
 
@@ -101,9 +110,11 @@ export function useEditorExternalWatch(): void {
       unsubscribe()
       dispose()
       fsChangedHandlerRef.current = null
+
       for (const target of targetsRef.current) {
         const key = getEditorExternalWatchTargetKey(target)
         const remoteUnsubscribe = remoteWatchUnsubs.get(key)
+
         if (remoteUnsubscribe) {
           remoteUnsubscribe()
         } else {
@@ -113,6 +124,7 @@ export function useEditorExternalWatch(): void {
           })
         }
       }
+
       remoteWatchUnsubs.clear()
       targetsRef.current = []
       // Why: module-scoped reload timers survive StrictMode's synthetic cleanup; a late reload dispatch is harmless.
@@ -129,9 +141,11 @@ function subscribeRuntimeTarget(
 ): void {
   const key = getEditorExternalWatchTargetKey(target)
   let cancelled = false
+
   const pendingUnsubscribe = (): void => {
     cancelled = true
   }
+
   remoteWatchUnsubs.set(key, pendingUnsubscribe)
   void subscribeRuntimeFileChanges(
     {
@@ -146,8 +160,10 @@ function subscribeRuntimeTarget(
     .then((unsubscribe) => {
       if (cancelled) {
         unsubscribe()
+
         return
       }
+
       if (remoteWatchUnsubs.get(key) === pendingUnsubscribe) {
         remoteWatchUnsubs.set(key, unsubscribe)
       } else {
@@ -158,6 +174,7 @@ function subscribeRuntimeTarget(
       if (remoteWatchUnsubs.get(key) === pendingUnsubscribe) {
         remoteWatchUnsubs.delete(key)
       }
+
       warnExternalWatchFailure(target, err)
     })
 }

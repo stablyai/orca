@@ -83,17 +83,21 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane')
     }
+
     const renderingDiagnostics = manager
       ?.getRenderingDiagnostics()
       .find((diagnostic) => diagnostic.paneId === pane.id)
@@ -101,9 +105,11 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
     const cursorElements = Array.from(
       pane.container.querySelectorAll<HTMLElement>('.xterm-cursor, .xterm-cursor-layer *')
     )
+
     const cursorVisibleElementCount = cursorElements.filter((element) => {
       const style = window.getComputedStyle(element)
       const rect = element.getBoundingClientRect()
+
       return (
         style.display !== 'none' &&
         style.visibility !== 'hidden' &&
@@ -118,6 +124,7 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
         coreService?: { isCursorHidden?: boolean }
       }
     }
+
     const cursorElement = pane.container.querySelector<HTMLElement>('.xterm-cursor')
     const cursorStyle = cursorElement ? window.getComputedStyle(cursorElement) : null
     const rowContainer = pane.container.querySelector<HTMLElement>('.xterm-rows')
@@ -154,17 +161,21 @@ async function forceCursorProbeTheme(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane')
     }
+
     pane.terminal.options.theme = {
       ...pane.terminal.options.theme,
       cursor: '#23ff45',
@@ -181,23 +192,30 @@ async function readActiveTerminalRasterTarget(page: Page): Promise<TerminalRaste
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane')
     }
+
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
     const dimensions = pane.terminal._core?._renderService?.dimensions?.css?.cell
+
     if (!screen || !dimensions) {
       throw new Error('Active terminal has no measurable xterm screen')
     }
+
     const rect = screen.getBoundingClientRect()
+
     return {
       clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
       cellWidth: dimensions.width,
@@ -213,10 +231,12 @@ async function sampleCursorBlink(page: Page): Promise<CursorBlinkSample[]> {
   const target = await readActiveTerminalRasterTarget(page)
   const viewport = page.viewportSize() ?? undefined
   const start = performance.now()
+
   for (let index = 0; index < 9; index += 1) {
     if (index > 0) {
       await page.waitForTimeout(200)
     }
+
     const screenshot = await page.screenshot()
     const cells = analyzeRasterCursorCells(Buffer.from(screenshot), target, viewport)
     samples.push({
@@ -224,15 +244,18 @@ async function sampleCursorBlink(page: Page): Promise<CursorBlinkSample[]> {
       paintedCursorCellCount: cells.length
     })
   }
+
   return samples
 }
 
 async function enableRiskyTerminalRendererPath(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store unavailable')
     }
+
     const state = store.getState()
     store.setState({
       settings: {
@@ -242,12 +265,14 @@ async function enableRiskyTerminalRendererPath(page: Page): Promise<void> {
       }
     })
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     manager?.setTerminalGpuAcceleration('auto')
   })
@@ -270,6 +295,7 @@ test.describe('OpenCode emoji table terminal rendering', () => {
     const marker = `${EMOJI_TABLE_MARKER}_${runId}`
     const scriptPath = path.join(testRepoPath, `.orca-opencode-emoji-table-${runId}.mjs`)
     writeFileSync(scriptPath, emojiTableScript(marker))
+
     try {
       await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([scriptPath])}\r`)
       await waitForTerminalOutput(orcaPage, marker, 10_000)
@@ -288,11 +314,13 @@ test.describe('OpenCode emoji table terminal rendering', () => {
       expect(renderState.hasComplexScriptOutput).toBe(false)
       expect(renderState.renderer).toBe(renderState.hasWebglCanvas ? 'webgl' : 'dom')
       expect(renderState.coreCursorHidden).toBe(false)
+
       if (!renderState.hasWebglCanvas) {
         expect(renderState.cursorVisibleElementCount).toBeGreaterThan(0)
         expect(renderState.cursorBlink).toBe(true)
         expect(renderState.cursorAnimationName).not.toBe('none')
       }
+
       expect(blinkSamples.some((sample) => sample.paintedCursorCellCount > 0)).toBe(true)
       expect(blinkSamples.some((sample) => sample.paintedCursorCellCount === 0)).toBe(true)
     } finally {
@@ -320,6 +348,7 @@ test.describe('OpenCode emoji table terminal rendering', () => {
       ptyId,
       'opencode run --demo --interactive "Give me markdown table dummy data a long table with emojis in it"\r'
     )
+
     try {
       await waitForTerminalOutput(orcaPage, 'Give me markdown table', 15_000)
       await waitForTerminalOutput(orcaPage, 'Emoji', 60_000)

@@ -23,7 +23,9 @@ export type UnavailableWorkspacePortHost = {
 // workspace-port-actions module into this pure helper. Splitting on the last
 // `:all` keeps environment ids that themselves contain colons intact.
 const ENVIRONMENT_SCAN_KEY_PREFIX = 'environment:'
+
 const SCAN_KEY_SUFFIX = ':all'
+
 const LOCAL_SCAN_KEY = `local${SCAN_KEY_SUFFIX}`
 
 /** Host a per-host scan key names; `unknown` for any other key shape. */
@@ -31,13 +33,16 @@ export function workspacePortHostForScanKey(scanKey: string): WorkspacePortHostR
   if (scanKey === LOCAL_SCAN_KEY) {
     return { kind: 'local' }
   }
+
   if (!scanKey.endsWith(SCAN_KEY_SUFFIX) || !scanKey.startsWith(ENVIRONMENT_SCAN_KEY_PREFIX)) {
     return { kind: 'unknown' }
   }
+
   const environmentId = scanKey.slice(
     ENVIRONMENT_SCAN_KEY_PREFIX.length,
     scanKey.length - SCAN_KEY_SUFFIX.length
   )
+
   return environmentId ? { kind: 'environment', environmentId } : { kind: 'unknown' }
 }
 

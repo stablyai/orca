@@ -68,6 +68,7 @@ class WedgedWebSocket {
 }
 
 const sockets: WedgedWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function lastSocket(): WedgedWebSocket {
@@ -132,9 +133,11 @@ describe('synthesized close diagnostics', () => {
     // The native layer finally reports the dead socket's close, 200ms into the replacement's life.
     await vi.advanceTimersByTimeAsync(200)
     wedged.deliverClose(1006)
+
     const staleCloseLog = logSpy.mock.calls.findLast(
       (call) => call[0] === '[net] ws.onclose'
     )?.[1] as Record<string, unknown> | undefined
+
     expect(staleCloseLog?.constructToCloseMs).toBe(5_700)
     expect(staleCloseLog?.aliveMs).toBeNull()
     expect(staleCloseLog?.inboundIdleMs).toBe(5_600)
@@ -142,9 +145,11 @@ describe('synthesized close diagnostics', () => {
     // The replacement's own close must still be able to date itself against its open.
     await vi.advanceTimersByTimeAsync(300)
     lastSocket().deliverClose(1006)
+
     const closeLog = logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1] as
       | Record<string, unknown>
       | undefined
+
     expect(closeLog?.constructToCloseMs).toBe(500)
     expect(closeLog?.aliveMs).toBe(500)
     expect(closeLog?.inboundIdleMs).toBe(500)
@@ -175,6 +180,7 @@ describe('synthesized close diagnostics', () => {
       socket.open()
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
       socket.deliverClose(4001, 'Unauthorized')
+
       if (rejection === 0) {
         await vi.advanceTimersByTimeAsync(2_500)
       }

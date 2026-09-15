@@ -24,6 +24,7 @@ type PluginMarketplaceSourceDialogProps = {
 
 function sourceError(cause: unknown, fallback: string): string {
   console.warn('[plugins] marketplace source action failed:', cause)
+
   return fallback
 }
 
@@ -50,8 +51,10 @@ export function PluginMarketplaceSourceDialog({
     if (!url.trim() || !gitRef.trim() || busyAction) {
       return
     }
+
     setBusyAction('add')
     setError(null)
+
     try {
       await window.api.plugins.addMarketplace({
         kind: 'git',
@@ -79,6 +82,7 @@ export function PluginMarketplaceSourceDialog({
   const refresh = async (sourceId: string): Promise<void> => {
     setBusyAction(`refresh:${sourceId}`)
     setError(null)
+
     try {
       await window.api.plugins.refreshMarketplaces({ sourceId })
       await onChanged()
@@ -100,6 +104,7 @@ export function PluginMarketplaceSourceDialog({
   const remove = async (sourceId: string): Promise<void> => {
     setBusyAction(`remove:${sourceId}`)
     setError(null)
+
     try {
       await window.api.plugins.removeMarketplace({ sourceId })
       await onChanged()
@@ -230,6 +235,7 @@ export function PluginMarketplaceSourceDialog({
               {sources.map((source) => {
                 const refreshing = busyAction === `refresh:${source.id}`
                 const removing = busyAction === `remove:${source.id}`
+
                 return (
                   <div
                     key={source.id}

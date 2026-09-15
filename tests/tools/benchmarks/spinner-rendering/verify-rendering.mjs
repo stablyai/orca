@@ -6,6 +6,7 @@ async function waitForPhase(page) {
     .waitForFunction(() =>
       [...document.querySelectorAll('[data-agent-spinner]')].every((element) => {
         const animations = element.getAnimations({ subtree: true })
+
         return (
           animations.length === 1 &&
           animations[0].startTime === 0 &&
@@ -44,6 +45,7 @@ export async function verifyRendering(app, page, outputDir) {
   await page.waitForFunction(() =>
     [...document.querySelectorAll('[data-agent-spinner]')].every((element) => {
       const ring = getComputedStyle(element)
+
       return (
         element.getAnimations({ subtree: true }).length === 0 &&
         ring.borderTopColor === ring.borderLeftColor
@@ -76,25 +78,32 @@ export async function verifyRendering(app, page, outputDir) {
     document.querySelector('#grid').style.display = 'grid'
   })
   await waitForPhase(page)
+
   const iterationEvents = await page.evaluate(async () => {
     window.spinnerBenchmark.render({ count: 4, paired: true })
     const events = { baseline: 0, candidate: 0 }
+
     const count = (event) => {
       if (event.animationName === 'spinner-benchmark-spin') {
         events.baseline++
       }
+
       if (event.animationName === 'agent-spinner-rotate') {
         events.candidate++
       }
     }
+
     document.addEventListener('animationiteration', count, true)
+
     try {
       await new Promise((resolve) => setTimeout(resolve, 1250))
     } finally {
       document.removeEventListener('animationiteration', count, true)
     }
+
     return events
   })
+
   assert.ok(iterationEvents.baseline >= 2)
   assert.equal(iterationEvents.candidate, 0)
   assert.ok(
@@ -102,6 +111,7 @@ export async function verifyRendering(app, page, outputDir) {
       BrowserWindow.getAllWindows().every((window) => !window.isVisible() && !window.isFocused())
     )
   )
+
   return {
     pixelComparisons,
     iterationEvents,

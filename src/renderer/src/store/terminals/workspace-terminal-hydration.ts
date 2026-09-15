@@ -38,6 +38,7 @@ export function createWorkspaceTerminalHydrationActions(
             )
           )
         : null
+
       const ownershipTransfersByTabId = new Map<string, TerminalLayoutPtyOwnershipTransfer[]>()
       set((s) => {
         const runtimeSessionPlaceholders = buildRuntimeSessionPlaceholders({
@@ -45,6 +46,7 @@ export function createWorkspaceTerminalHydrationActions(
           runtimeHostIdByWorkspaceSessionKey: options?.runtimeHostIdByWorkspaceSessionKey ?? {},
           worktreesByRepo: s.worktreesByRepo
         })
+
         const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
           {
             repos: runtimeSessionPlaceholders.repos,
@@ -53,13 +55,17 @@ export function createWorkspaceTerminalHydrationActions(
           },
           collectPersistedWorktreeIdsForSessionHydration(session)
         )
+
         const knownRepoIds = new Set(runtimeSessionPlaceholders.repos.map((r) => r.id))
         // Why: the Floating Workspace isn't a repo worktree, but its tabs use the normal session pipeline so daemon PTYs survive app restart.
         validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+
         for (const workspace of s.folderWorkspaces) {
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
+
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
+
         const {
           canonicalTabIdBySubsumedTabId,
           reconnectPtyIdByRetainedTabId,
@@ -68,6 +74,7 @@ export function createWorkspaceTerminalHydrationActions(
           tabsByWorktree,
           validTabIds
         } = buildWorkspaceTerminalRowPlan(session, validWorktreeIds, options)
+
         const fallbackActiveWorktreeId =
           !session.activeWorktreeId &&
           session.activeRepoId &&
@@ -78,13 +85,16 @@ export function createWorkspaceTerminalHydrationActions(
               runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.[0]?.id ??
               null)
             : null
+
         const activeWorktreeId = (() => {
           if (session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)) {
             return session.activeWorktreeId
           }
+
           // Why: a workspace with no tabs is still valid; fall back from the active repo to avoid a blank landing screen when tabs were pruned or never created.
           return fallbackActiveWorktreeId
         })()
+
         const activeWorkspaceKey: WorkspaceKey | null =
           session.activeWorkspaceKey && validWorktreeIds.has(session.activeWorkspaceKey)
             ? session.activeWorkspaceKey
@@ -93,22 +103,27 @@ export function createWorkspaceTerminalHydrationActions(
                 ? (activeWorktreeId as WorkspaceKey)
                 : worktreeWorkspaceKey(activeWorktreeId)
               : null
+
         const activeWorkspaceExecutionHostId =
           activeWorkspaceKey && session.activeWorkspaceExecutionHostId
             ? session.activeWorkspaceExecutionHostId
             : null
+
         // Why: follow a subsumed row to the canonical twin that inherited its PTY, else the app
         // restarts with no active terminal even though the same session is still mounted.
         const restoredActiveTabId = session.activeTabId
           ? (canonicalTabIdBySubsumedTabId.get(session.activeTabId) ?? session.activeTabId)
           : null
+
         const activeTabId =
           restoredActiveTabId && validTabIds.has(restoredActiveTabId) ? restoredActiveTabId : null
+
         const activeRepoId =
           session.activeRepoId &&
           runtimeSessionPlaceholders.repos.some((repo) => repo.id === session.activeRepoId)
             ? session.activeRepoId
             : null
+
         const {
           pendingReconnectPtyIdByTabId,
           pendingReconnectTabByWorktree,
@@ -122,18 +137,22 @@ export function createWorkspaceTerminalHydrationActions(
           validWorktreeIds,
           worktreesByRepo: runtimeSessionPlaceholders.worktreesByRepo
         })
+
         // Restore per-worktree active tab; validate ids when the map exists, else derive for legacy sessions.
         let activeTabIdByWorktree: Record<string, string | null> = {}
+
         if (session.activeTabIdByWorktree) {
           for (const [wId, tabId] of Object.entries(session.activeTabIdByWorktree)) {
             if (!validWorktreeIds.has(wId) || !tabId) {
               continue
             }
+
             // Why: a subsumed row's canonical twin holds the same PTY, so follow the pointer there
             // instead of forgetting which terminal the workspace last focused.
             const restored = validTabIds.has(tabId)
               ? tabId
               : canonicalTabIdBySubsumedTabId.get(tabId)
+
             if (restored && validTabIds.has(restored)) {
               activeTabIdByWorktree[wId] = restored
             }
@@ -143,26 +162,32 @@ export function createWorkspaceTerminalHydrationActions(
           if (activeWorktreeId && activeTabId) {
             activeTabIdByWorktree[activeWorktreeId] = activeTabId
           }
+
           for (const [wId, tabs] of Object.entries(tabsByWorktree)) {
             if (!activeTabIdByWorktree[wId] && tabs.length > 0) {
               activeTabIdByWorktree[wId] = tabs[0].id
             }
           }
         }
+
         const worktreesByRepo = addHydratedSshWorktreePlaceholders(
           runtimeSessionPlaceholders.repos,
           runtimeSessionPlaceholders.worktreesByRepo,
           tabsByWorktree
         )
+
         // Why: record restored active worktrees to avoid suppressing later real activity.
         const nextEverActivated = new Set(s.everActivatedWorktreeIds)
+
         if (activeWorktreeId) {
           nextEverActivated.add(activeWorktreeId)
         }
+
         // Why indexed: the layout map below looks up a tab per persisted layout, and
         // re-flattening tabsByWorktree per entry is O(tabs x layouts).
         const allTabs = Object.values(tabsByWorktree).flat()
         const tabById = buildByIdIndex(allTabs)
+
         const hydrated: WorkspaceHydrationPatch = {
           activeRepoId,
           activeWorktreeId,
@@ -215,10 +240,12 @@ export function createWorkspaceTerminalHydrationActions(
             validTabIds
           })
         }
+
         return options?.replaceWorkspaceKeys
           ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)
           : hydrated
       })
+
       for (const [tabId, transfers] of ownershipTransfersByTabId) {
         transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, transfers)
       }

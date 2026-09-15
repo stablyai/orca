@@ -14,9 +14,11 @@ export class SshAgentSessionCapabilities {
   async supportsClaims(options: { signal?: AbortSignal } = {}): Promise<boolean> {
     const probe = this.claimProbe ?? proveSshAgentSessionClaimCapability(this.mux)
     this.claimProbe = probe
+
     try {
       await waitForSshCapabilityProbe(probe, options.signal)
       this.claimSupported = true
+
       return true
     } catch {
       if (!options.signal?.aborted && this.claimProbe === probe) {
@@ -24,6 +26,7 @@ export class SshAgentSessionCapabilities {
         this.claimProbe = null
         this.claimSupported = false
       }
+
       return false
     }
   }
@@ -36,16 +39,19 @@ export class SshAgentSessionCapabilities {
     const probe = this.createOperationProbe ?? sshSupportsAgentSessionCreateOperations(this.mux)
     this.createOperationProbe = probe
     let supported: boolean
+
     try {
       supported = await waitForSshCapabilityProbe(probe, options.signal)
     } catch {
       // Why: one canceled waiter must not cancel or evict the shared physical probe used by peers.
       return false
     }
+
     if (!supported && this.createOperationProbe === probe) {
       // Why: negative capability results must follow a relay upgraded on the same connection.
       this.createOperationProbe = null
     }
+
     return supported
   }
 
@@ -62,20 +68,26 @@ export class SshAgentSessionCapabilities {
         })
         .then((value) => {
           const capabilities = value as { foregroundProcessEvidenceVersion?: unknown }
+
           return capabilities.foregroundProcessEvidenceVersion === 1
         })
         .catch(() => false)
+
     this.foregroundEvidenceProbe = probe
+
     try {
       const supported = await waitForSshCapabilityProbe(probe, options.signal)
+
       if (!supported && this.foregroundEvidenceProbe === probe) {
         this.foregroundEvidenceProbe = null
       }
+
       return supported
     } catch {
       if (!options.signal?.aborted && this.foregroundEvidenceProbe === probe) {
         this.foregroundEvidenceProbe = null
       }
+
       return false
     }
   }

@@ -12,6 +12,7 @@ export function buildAgentNotificationId({
   if (!worktreeId || !paneKey || typeof stateStartedAt !== 'number') {
     return null
   }
+
   if (!Number.isFinite(stateStartedAt)) {
     return null
   }

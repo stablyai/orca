@@ -26,8 +26,11 @@ export interface ExpoTwoWayAudioEventMap {
 
 // These are useful for defining `useCallback` types inline
 export type MicrophoneDataCallback = (event: MicrophoneDataEvent) => void
+
 export type VolumeLevelCallback = (event: VolumeLevelEvent) => void
+
 export type RecordingChangeCallback = (event: RecordingChangeEvent) => void
+
 export type AudioInterruptionCallback = (event: AudioInterruptionEvent) => void
 
 export function addExpoTwoWayAudioEventListener<K extends keyof ExpoTwoWayAudioEventMap>(

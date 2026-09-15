@@ -27,6 +27,7 @@ it('preserves verification distinctions and emulator cleanup', () => {
   expect(text).toContain('unverified (accessibility action unasserted)')
   expect(text).toContain('unverified (synthetic input)')
   expect(text).toContain('Missing verification metadata is unverified')
+
   for (const name of ['orca-emulator', 'orca-emulator-android']) {
     expect(readGuide(name)).toContain('Run `kill` when you are done')
   }

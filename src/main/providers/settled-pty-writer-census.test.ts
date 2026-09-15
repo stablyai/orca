@@ -47,6 +47,7 @@ function declaredProviderFiles(): string[] {
     cwd: REPO_ROOT,
     encoding: 'utf8'
   })
+
   // Tests may name the clause while pinning it; only production declarations count.
   return output
     .split('\n')
@@ -59,6 +60,7 @@ function settledWriterBody(file: string): string {
   const start = source.indexOf('writeWithSettlement')
   expect(start, `${file} declares no settled writer`).toBeGreaterThan(-1)
   const end = source.indexOf('\n  }', start)
+
   return source.slice(start, end === -1 ? source.length : end)
 }
 
@@ -70,6 +72,7 @@ describe('settled PTY writer census', () => {
   it('exposes a settled writer on every production provider instance', () => {
     const daemonClient = { isConnected: () => false, onEvent: vi.fn(() => vi.fn()) }
     const adapter = new DaemonPtyAdapter(daemonClient as never)
+
     const instances = [
       new LocalPtyProvider({} as never),
       new SshPtyProvider('conn-census', createMockMux() as never),
@@ -81,6 +84,7 @@ describe('settled PTY writer census', () => {
       }),
       adapter
     ]
+
     for (const provider of instances) {
       expect(typeof provider.writeWithSettlement, provider.constructor.name).toBe('function')
     }

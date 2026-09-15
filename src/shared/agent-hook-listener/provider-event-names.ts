@@ -4,6 +4,7 @@ export function normalizeHookEventName(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
   }
+
   return value
     .trim()
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')

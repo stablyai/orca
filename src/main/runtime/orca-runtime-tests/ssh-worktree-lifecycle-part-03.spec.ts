@@ -21,6 +21,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+
     const fsProvider = {
       readFile: vi.fn(async (filePath: string) => ({
         content: filePath.endsWith('orca.yaml')
@@ -34,6 +35,7 @@ describe('OrcaRuntimeService', () => {
       createDir: vi.fn().mockResolvedValue(undefined),
       deletePath: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 

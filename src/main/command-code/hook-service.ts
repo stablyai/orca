@@ -67,7 +67,9 @@ function buildInstalledConfig(
     if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -78,10 +80,12 @@ function buildInstalledConfig(
   for (const event of COMMAND_CODE_EVENTS) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     const definition: HookDefinition = {
       ...event.definition,
       hooks: [buildManagedCommandHook(command)]
     }
+
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
@@ -97,6 +101,7 @@ export class CommandCodeHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'command-code',
@@ -110,13 +115,16 @@ export class CommandCodeHookService {
     const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
+
     for (const event of COMMAND_CODE_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
+
       const hasCommand = definitions.some((definition) =>
         (definition.hooks ?? []).some((hook) => hook.command === command)
       )
+
       if (hasCommand) {
         presentCount += 1
       } else {
@@ -127,6 +135,7 @@ export class CommandCodeHookService {
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+
     if (missing.length === 0) {
       state = 'installed'
       detail = null
@@ -137,6 +146,7 @@ export class CommandCodeHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return { agent: 'command-code', state, configPath, managedHooksPresent, detail }
   }
 
@@ -144,6 +154,7 @@ export class CommandCodeHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'command-code',
@@ -157,6 +168,7 @@ export class CommandCodeHookService {
     buildInstalledConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
     writeManagedScript(scriptPath, buildCommandCodeManagedScript())
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 
@@ -164,8 +176,10 @@ export class CommandCodeHookService {
     const home = remoteHome.replace(/\/$/, '')
     const remoteConfigPath = `${home}/.commandcode/settings.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/command-code-hook.sh`
+
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
       if (!config) {
         return {
           agent: 'command-code',
@@ -201,6 +215,7 @@ export class CommandCodeHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'command-code',
@@ -213,11 +228,14 @@ export class CommandCodeHookService {
 
     const nextHooks = { ...config.hooks }
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
@@ -227,6 +245,7 @@ export class CommandCodeHookService {
 
     config.hooks = nextHooks
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 
 const NATIVE_CHAT_SEND_ERROR_HOLD_MS = 4000
+
 const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600
 
 /** Holds the newest native-chat send failure for the composer's inline banner.
@@ -30,19 +31,23 @@ export function useMobileNativeChatSendError(args: {
   const liveScopeRef = useRef(args.scopeKey)
   liveScopeRef.current = args.scopeKey
   const scopeKey = args.scopeKey
+
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
   }, [])
+
   const clear = useCallback(() => {
     if (liveScopeRef.current !== scopeKey) {
       return
     }
+
     clearTimer()
     setMessage(null)
   }, [clearTimer, scopeKey])
+
   const show = useCallback(
     (next: string) => {
       // Why: deferred failures can land after the user left chat (banner unmounted)
@@ -50,8 +55,10 @@ export function useMobileNativeChatSendError(args: {
       // both must fall back to the toast instead of being swallowed or misattributed.
       if (liveScopeRef.current !== scopeKey || !bannerMountedRef.current) {
         showToastRef.current(next, NATIVE_CHAT_SEND_ERROR_TOAST_MS)
+
         return
       }
+
       clearTimer()
       setMessage(next)
       timerRef.current = setTimeout(() => {
@@ -61,6 +68,7 @@ export function useMobileNativeChatSendError(args: {
     },
     [clearTimer, scopeKey]
   )
+
   // A held failure describes the scope it was raised on; drop it when that changes.
   useEffect(() => {
     clearTimer()
@@ -76,5 +84,6 @@ export function useMobileNativeChatSendError(args: {
     },
     [clearTimer]
   )
+
   return { message, show, clear, bannerMountedRef }
 }

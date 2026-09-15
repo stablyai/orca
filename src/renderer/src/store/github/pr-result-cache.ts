@@ -23,14 +23,18 @@ export function applyPRCacheResult(
   if (preserveExisting) {
     return cache
   }
+
   if (accepted) {
     return withBoundedCacheEntry(cache, cacheKey, { data: pr, fetchedAt })
   }
+
   if (!cache[cacheKey]) {
     return cache
   }
+
   const next = { ...cache }
   delete next[cacheKey]
+
   return next
 }
 
@@ -50,15 +54,20 @@ export function setPRRefreshStartedHostedReviewEntry(
 ): void {
   if (entry === undefined) {
     prRefreshStartedHostedReviewEntries.delete(key)
+
     return
   }
+
   prRefreshStartedHostedReviewEntries.delete(key)
   prRefreshStartedHostedReviewEntries.set(key, entry)
+
   while (prRefreshStartedHostedReviewEntries.size > PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX) {
     const oldest = prRefreshStartedHostedReviewEntries.keys().next()
+
     if (oldest.done) {
       return
     }
+
     prRefreshStartedHostedReviewEntries.delete(oldest.value)
   }
 }
@@ -93,6 +102,7 @@ export function setGitHubPRResultCaches(
     fallbackPRNumber: args.fallbackPRNumber,
     fallbackPRSource: args.fallbackPRSource
   })
+
   const hostedReviewSync = syncHostedReviewCacheFromGitHubPRResult({
     cache: state.hostedReviewCache,
     repoPath: args.repoPath,
@@ -111,6 +121,7 @@ export function setGitHubPRResultCaches(
     requestStartedAt: args.requestStartedAt,
     requestStartedEntry: args.requestStartedEntry
   })
+
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     args.repoPath,
     args.branch,
@@ -120,6 +131,7 @@ export function setGitHubPRResultCaches(
     args.executionHostId,
     args.hasRepoOwner === true
   )
+
   const nextPRCache = applyPRCacheResult(
     state.prCache,
     args.prCacheKey,
@@ -134,6 +146,7 @@ export function setGitHubPRResultCaches(
     }),
     preserveExistingPRForFallbackMiss
   )
+
   return {
     ...(nextPRCache === state.prCache ? {} : { prCache: nextPRCache }),
     ...(hostedReviewSync.cache === state.hostedReviewCache
@@ -175,6 +188,7 @@ export function applyGitHubPRResultToCaches(args: {
     fallbackPRNumber: args.fallbackPRNumber,
     fallbackPRSource: args.fallbackPRSource
   })
+
   const hostedReviewSync = syncHostedReviewCacheFromGitHubPRResult({
     cache: args.hostedReviewCache,
     repoPath: args.repoPath,
@@ -193,6 +207,7 @@ export function applyGitHubPRResultToCaches(args: {
     requestStartedAt: args.requestStartedAt,
     requestStartedEntry: args.requestStartedEntry
   })
+
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     args.repoPath,
     args.branch,
@@ -202,6 +217,7 @@ export function applyGitHubPRResultToCaches(args: {
     args.executionHostId,
     args.hasRepoOwner === true
   )
+
   return {
     prCache: applyPRCacheResult(
       args.prCache,
@@ -220,6 +236,7 @@ export function applyGitHubPRResultToCaches(args: {
     hostedReviewCache: hostedReviewSync.cache
   }
 }
+
 export function shouldPreserveExistingPRForFallbackMiss(args: {
   currentPR: PRInfo | null | undefined
   nextPR: PRInfo | null
@@ -238,9 +255,11 @@ export function shouldPreserveExistingPRForFallbackMiss(args: {
   ) {
     return false
   }
+
   // Why: gate the global worktree scan so batched refresh aliases don't multiply full scans (common paths don't need it).
   const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
   const worktreeHead = worktree?.head
+
   // Why: keep a merged PR only when its cached head matches the worktree head — exactly or a confirmed-contained commit.
   const preservesMergedPRForCurrentHead =
     typeof worktreeHead === 'string' &&

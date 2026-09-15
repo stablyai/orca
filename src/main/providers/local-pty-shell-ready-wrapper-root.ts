@@ -20,6 +20,7 @@ function getShellReadyWrapperBaseDir(): string {
   // would leave a relative base dir, so wrapper trees would be written under
   // whatever the process cwd happens to be.
   const userDataPath = process.env.ORCA_USER_DATA_PATH
+
   // Why not the legacy `shell-ready/`: daemons of older builds still write that
   // path unconditionally, so this build's trees live out of their reach. Why the
   // fallback is namespaced: os.tmpdir() is a shared world-writable /tmp on
@@ -39,12 +40,14 @@ let cachedShellReadyWrapperRoot: { baseDir: string; root: string } | null = null
 
 export function getShellReadyWrapperRoot(): string {
   const baseDir = getShellReadyWrapperBaseDir()
+
   if (cachedShellReadyWrapperRoot?.baseDir !== baseDir) {
     cachedShellReadyWrapperRoot = {
       baseDir,
       root: resolveShellWrapperRoot(baseDir, buildLocalShellReadyWrapperFiles)
     }
   }
+
   return cachedShellReadyWrapperRoot.root
 }
 

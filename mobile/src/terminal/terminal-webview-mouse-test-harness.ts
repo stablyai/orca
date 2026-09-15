@@ -5,12 +5,14 @@ import { XTERM_HTML } from './terminal-webview-html'
 function iifeSource(): string {
   const start = XTERM_HTML.indexOf('(function() {')
   const end = XTERM_HTML.lastIndexOf('})();')
+
   return XTERM_HTML.slice(start, end + '})();'.length)
 }
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
   const end = XTERM_HTML.indexOf('<script>', start)
+
   return XTERM_HTML.slice(start, end)
 }
 
@@ -21,6 +23,7 @@ type BufferState = {
 }
 
 type TerminalStub = ReturnType<typeof makeTerminal>
+
 type RegisteredEventListener = {
   listener: EventListenerOrEventListenerObject
   options?: boolean | AddEventListenerOptions
@@ -28,6 +31,7 @@ type RegisteredEventListener = {
 }
 
 type PointerEventType = 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel'
+
 type PointerEventInit = {
   button?: number
   buttons?: number
@@ -35,10 +39,13 @@ type PointerEventInit = {
   x?: number
   y?: number
 }
+
 type PostMessage = Mock<(data: string) => void>
+
 type Select = Mock<(col: number, row: number, len: number) => void>
 
 export const ESC = '\u001b'
+
 export const DEFAULT_MOUSE_REPORT_RE = new RegExp(`${ESC}\\[M[\\s\\S]{3}`, 'g')
 
 function makeTerminal(buffer: BufferState, select: Select) {
@@ -95,14 +102,17 @@ function makeTerminal(buffer: BufferState, select: Select) {
     onWriteParsed: () => ({ dispose() {} }),
     dispose() {}
   }
+
   return terminal
 }
 
 function terminalSurface(): HTMLElement {
   const surface = document.getElementById('terminal-surface')
+
   if (!surface) {
     throw new Error('terminal surface missing')
   }
+
   return surface
 }
 
@@ -115,6 +125,7 @@ function dispatchPointer(type: PointerEventType, init: PointerEventInit = {}): v
     button: init.button ?? 0,
     buttons: init.buttons ?? 0
   })
+
   // Why: happy-dom's PointerEvent init drops pointerType; grafting it onto a
   // MouseEvent exercises the same duck-typed reads the WebView handler does.
   Object.defineProperty(event, 'pointerType', { value: init.pointerType ?? 'mouse' })
@@ -163,6 +174,7 @@ export function useTerminalMouseWebViewHarness() {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
       })
     )
+
     // Why: init commits the replacement surface on the next animation frame.
     while (animationFrames.length > 0) {
       animationFrames.shift()?.()
@@ -171,9 +183,11 @@ export function useTerminalMouseWebViewHarness() {
 
   function activeTerminal(): TerminalStub {
     const terminal = terminals.at(-1)
+
     if (!terminal) {
       throw new Error('terminal missing')
     }
+
     return terminal
   }
 
@@ -204,19 +218,23 @@ export function useTerminalMouseWebViewHarness() {
     }) as typeof window.addEventListener)
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
       animationFrames.push(callback)
+
       return animationFrames.length
     })
     vi.stubGlobal('cancelAnimationFrame', () => {})
     Object.defineProperty(window, 'innerWidth', { value: 381, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 612, configurable: true })
     postMessage = vi.fn<(data: string) => void>()
+
     const webWindow = window as unknown as {
       Terminal: new () => TerminalStub
       ReactNativeWebView: { postMessage: (data: string) => void }
     }
+
     webWindow.Terminal = function () {
       const terminal = makeTerminal(buffer, select)
       terminals.push(terminal)
+
       return terminal
     } as unknown as new () => TerminalStub
     webWindow.ReactNativeWebView = { postMessage }
@@ -226,9 +244,11 @@ export function useTerminalMouseWebViewHarness() {
     for (const { type, listener, options } of registeredDocumentListeners) {
       document.removeEventListener(type, listener as EventListener, options)
     }
+
     for (const { type, listener, options } of registeredWindowListeners) {
       window.removeEventListener(type, listener as EventListener, options)
     }
+
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })

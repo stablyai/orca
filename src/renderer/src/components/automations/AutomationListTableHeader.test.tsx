@@ -61,6 +61,7 @@ describe('AutomationListTableHeader sorting', () => {
     const { rerender } = render(
       <AutomationListTableHeader sort={{ field: 'name', direction: 'asc' }} onSort={() => {}} />
     )
+
     expect(screen.getByRole('button', { name: 'Name, sorted ascending' })).toBeDefined()
     expect(screen.getByRole('button', { name: 'Last run' })).toBeDefined()
 

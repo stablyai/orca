@@ -13,6 +13,7 @@ export function useNativeChatStatusEntry(
         : findTabAgentEntry(state.agentStatusByPaneKey, terminalTabId)
     )
   )
+
   return {
     entry,
     paneKey: preferredPaneKey ?? entry?.paneKey ?? `${terminalTabId}:`

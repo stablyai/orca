@@ -15,14 +15,18 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 import { liveRemoteEvidence } from './codex-session-restart-test-fixture'
 
 const ACCOUNT_A = 'account-a@example.com'
+
 const ACCOUNT_B = 'account-b@example.com'
+
 const ACCOUNT_C = 'account-c@example.com'
 
 function setLaunchAgentOnFirstTab(launchAgent: TuiAgent): void {
   const [tab, ...rest] = useAppStore.getState().tabsByWorktree.wt1 ?? []
+
   if (!tab) {
     throw new Error('expected a seeded tab')
   }
+
   useAppStore.setState({ tabsByWorktree: { wt1: [{ ...tab, launchAgent }, ...rest] } })
 }
 
@@ -167,6 +171,7 @@ describe('markLiveCodexSessionsForRestart', () => {
     vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (ptyId) => {
       const foregroundProcess =
         ptyId === 'pty-1' ? 'codex' : ptyId === 'pty-3' ? 'codex-aarch64-ap' : 'zsh'
+
       return { foregroundProcess, hasChildProcesses: false }
     })
 
@@ -259,6 +264,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       if (ptyId === 'pty-stale') {
         throw new Error('terminal_gone')
       }
+
       return { foregroundProcess: 'codex', hasChildProcesses: true }
     })
 
@@ -522,6 +528,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
 
   afterEach(() => {
     useAppStore.setState({ settings: null as never, worktreesByRepo: {} as never })
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -774,6 +781,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
       ['the preload predates the lookup', undefined]
     ])('still cards a local host pane when %s', async (_label, recorded) => {
       seedPanes([{ ptyId: 'pty-1' }])
+
       if (recorded === null) {
         vi.mocked(window.api.codexAccounts.listRecordedPaneLanes).mockRejectedValue(
           new Error('no handler')

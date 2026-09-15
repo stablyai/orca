@@ -22,20 +22,24 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
     useRef: <T>(value: T) => ({ current: value }),
     useState: <T>(initial: T | (() => T)) => {
       const index = mocks.stateIndex++
+
       const value =
         index in mocks.stateValues
           ? mocks.stateValues[index]
           : typeof initial === 'function'
             ? (initial as () => T)()
             : initial
+
       const setter = vi.fn()
       mocks.stateSetters[index] = setter
+
       return [value as T, setter]
     }
   }
@@ -87,6 +91,7 @@ describe('useAddRepoServerPathFlow', () => {
       onGitRepoReady: mocks.onGitRepoReady,
       setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
     })
+
     await result.handleAddServerPath('folder')
 
     expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder', {
@@ -123,6 +128,7 @@ describe('useAddRepoServerPathFlow', () => {
       onGitRepoReady: mocks.onGitRepoReady,
       setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
     })
+
     await result.handleAddServerPath('git')
 
     expect(mocks.scanNestedRepos).toHaveBeenCalledWith(

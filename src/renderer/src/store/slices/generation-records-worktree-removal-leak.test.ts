@@ -24,6 +24,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -52,10 +53,15 @@ import {
 } from './commit-message-generation'
 
 const REPO = 'repo1'
+
 const WT = 'repo1::/path/wt1'
+
 const WT_PATH = '/path/wt1'
+
 const OTHER = 'repo1::/path/wt2'
+
 const OTHER_PATH = '/path/wt2'
+
 const BRANCH = 'refs/heads/feature'
 
 function prRecord(worktreeId: string, worktreePath: string): PullRequestGenerationRecord {
@@ -88,17 +94,21 @@ function prKey(worktreeId: string, worktreePath: string): string {
     repoId: REPO,
     branch: BRANCH
   })
+
   if (!key) {
     throw new Error('expected a PR generation key')
   }
+
   return key
 }
 
 function commitKey(worktreeId: string, worktreePath: string): string {
   const key = getCommitMessageGenerationRecordKey(worktreeId, worktreePath)
+
   if (!key) {
     throw new Error('expected a commit generation key')
   }
+
   return key
 }
 

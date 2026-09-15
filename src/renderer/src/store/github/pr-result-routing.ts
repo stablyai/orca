@@ -29,7 +29,9 @@ export function githubHostedReviewFallbackPRNumber(
     executionHostId,
     hasRepoOwner
   )
+
   const hostedReview = state.hostedReviewCache[hostedReviewCacheKey]?.data
+
   return hostedReview?.provider === 'github' ? hostedReview.number : null
 }
 
@@ -40,9 +42,11 @@ export function shouldClearHostedReviewForNoGitHubPR(
   if (!entry) {
     return false
   }
+
   if (entry.data?.provider === 'github') {
     return true
   }
+
   return entry.data === null && isGitHubLinkedReviewHintKey(entry.linkedReviewHintKey)
 }
 
@@ -57,6 +61,7 @@ export function prLookupHintKey(
   if (linkedPRNumber !== null) {
     return `linked:${linkedPRNumber}`
   }
+
   return fallbackPRNumber !== null ? `fallback:${fallbackPRNumber}` : ''
 }
 
@@ -68,6 +73,7 @@ export function linkedReviewHintKeyForNoGitHubPR(
       ? entry.linkedReviewHintKey
       : linkedReviewHintKey({ linkedGitHubPR: entry.data.number })
   }
+
   return entry?.linkedReviewHintKey
 }
 
@@ -98,6 +104,7 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
     args.executionHostId,
     args.hasRepoOwner === true
   )
+
   if (
     args.requestStartedAt !== undefined &&
     hasNewerHostedReviewCacheEntry(
@@ -109,7 +116,9 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
   ) {
     return { cache: args.cache, accepted: false }
   }
+
   const hostedReviewEntry = args.cache[hostedReviewCacheKey]
+
   if (
     args.requestStartedAt === undefined &&
     hostedReviewEntry !== undefined &&
@@ -117,9 +126,11 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
   ) {
     return { cache: args.cache, accepted: false }
   }
+
   if (args.pr && hostedReviewEntry?.data && hostedReviewEntry.data.provider !== 'github') {
     return { cache: args.cache, accepted: false }
   }
+
   // Why: a hosted-review row survives an authoritative miss only when the paired PR cache preserves a terminal, head-current PR.
   if (
     !args.pr &&
@@ -133,9 +144,11 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
   ) {
     return { cache: args.cache, accepted: false }
   }
+
   if (!args.pr && !shouldClearHostedReviewForNoGitHubPR(hostedReviewEntry)) {
     return { cache: args.cache, accepted: hostedReviewEntry?.data == null }
   }
+
   // Why: hosted-review fallbacks may be stale exact links; inherit branch provenance only when already proven.
   const branchLookupGitHubPRNumber =
     args.pr &&
@@ -145,6 +158,7 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
       hostedReviewEntry?.branchLookupGitHubPRNumber === args.pr.number)
       ? args.pr.number
       : undefined
+
   // Why: the key embeds the branch, so this write path grows with every distinct
   // (host, repo, branch) a session refreshes. Share the hosted-review slice's bound.
   return {
@@ -171,7 +185,9 @@ export function shouldWritePRCacheForHostedReviewSync(args: {
   if (args.hostedReviewSyncAccepted) {
     return true
   }
+
   const exactPRNumber = args.linkedPRNumber ?? args.fallbackPRNumber ?? null
+
   return (
     exactPRNumber !== null &&
     args.pr?.number === exactPRNumber &&

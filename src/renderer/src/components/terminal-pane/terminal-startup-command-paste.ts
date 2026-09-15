@@ -32,6 +32,7 @@ export async function executeTerminalStartupCommandPaste({
   isTargetCurrent
 }: ExecuteTerminalStartupCommandPasteArgs): Promise<TerminalPasteExecutionResult> {
   const isCurrent = (): boolean => isTargetCurrent?.(ptyId) ?? true
+
   const plan = await planTerminalPasteWithYield({
     text: command,
     source: 'programmatic',

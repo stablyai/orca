@@ -41,7 +41,7 @@
     "anti-slop/no-unknown-type-aliases": "off",
     "anti-slop/no-unsafe-dictionary-type": "off",
     "anti-slop/no-widen-then-assert": "off",
-    "anti-slop/require-readable-spacing": "off",
+    "anti-slop/require-readable-spacing": "error",
     "anti-slop/require-safety-comment-for-type-assertion": "off"
   },
   "overrides": [

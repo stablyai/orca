@@ -267,9 +267,11 @@ describe('registerNotificationHandlers', () => {
     const options = (
       notificationCtorMock.mock.calls as unknown as [{ title: string; body: string }][]
     )[0]?.[0]
+
     if (!options) {
       throw new Error('Expected notification options')
     }
+
     expect(options).toMatchObject({
       title: 'feat/notis - builder agent finished'
     })

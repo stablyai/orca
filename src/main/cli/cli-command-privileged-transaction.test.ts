@@ -28,6 +28,7 @@ import { CliInstaller } from './cli-installer'
 import { buildUnixDevLauncher } from './cli-dev-launcher'
 
 const createdRoots: string[] = []
+
 const protectedDirectories: string[] = []
 
 afterEach(async () => {
@@ -48,15 +49,18 @@ async function createPrivilegedFixture() {
   await mkdir(protectedDirectory)
   await mkdir(join(appPath, 'out', 'cli'), { recursive: true })
   await writeFile(join(appPath, 'out', 'cli', 'index.js'), 'console.log("orca")\n')
+
   return { root, protectedDirectory, commandPath, userDataPath, appPath }
 }
 
 async function executePrivilegedShell(command: string): Promise<void> {
   const result = await runProcess({ program: '/bin/sh', args: ['-c', command] })
+
   if (result.code !== 0) {
     const error = new Error(
       result.stderr || result.stdout || `Privileged shell exited ${result.code}.`
     )
+
     Object.assign(error, { code: result.code, stderr: result.stderr })
     throw error
   }
@@ -80,6 +84,7 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
     it('installs and removes through the generated no-overwrite shell transaction', async () => {
       const fixture = await createPrivilegedFixture()
       const commands: string[] = []
+
       const installer = new CliInstaller({
         ...fixtureInstallerOptions(fixture),
         privilegedRunner: async (command) => {
@@ -108,15 +113,18 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       await symlink(staleTarget, fixture.commandPath)
       const original = await lstat(fixture.commandPath, { bigint: true })
       let raced = false
+
       const installer = new CliInstaller({
         ...fixtureInstallerOptions(fixture),
         privilegedRunner: async (command) => {
           await chmod(fixture.protectedDirectory, 0o700)
+
           if (!raced) {
             raced = true
             await unlink(fixture.commandPath)
             await symlink(foreignTarget, fixture.commandPath)
           }
+
           const replacement = await lstat(fixture.commandPath, { bigint: true })
           await executePrivilegedShell(
             command.replace(
@@ -144,14 +152,17 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       )
       const foreignContent = 'foreign command written into the inspected inode'
       let raced = false
+
       const installer = new CliInstaller({
         ...fixtureInstallerOptions(fixture),
         privilegedRunner: async (command) => {
           await chmod(fixture.protectedDirectory, 0o700)
+
           if (!raced) {
             raced = true
             await writeFile(fixture.commandPath, foreignContent)
           }
+
           await executePrivilegedShell(command)
         }
       })
@@ -168,6 +179,7 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       const fixture = await createPrivilegedFixture()
       const staleTarget = join(fixture.userDataPath, 'cli', 'bin', 'old', 'orca')
       await symlink(staleTarget, fixture.commandPath)
+
       const installer = new CliInstaller({
         ...fixtureInstallerOptions(fixture),
         privilegedRunner: async (command) => {

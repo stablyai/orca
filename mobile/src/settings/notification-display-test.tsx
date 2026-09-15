@@ -16,49 +16,65 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       .then((hosts) => setHostIds(hosts.map((host) => host.id)))
       .catch(() => setMessage('Could not load paired desktops.'))
   }, [])
+
   const run = async () => {
     if (busy.current) {
       return
     }
+
     busy.current = true
     setSending(true)
     setMessage(null)
+
     try {
       if (hostIds.length === 0) {
         throw new Error('Pair a desktop and try again.')
       }
+
       const connected = clients.filter((entry) => entry.state === 'connected')
+
       if (connected.length === 0) {
         throw new Error('Connect a desktop and try again.')
       }
+
       let unavailable = 'Update your desktop to run this test.'
+
       for (const { client } of connected) {
         const response = await client.sendRequest('notifications.testPush', null, {
           timeoutMs: 20000,
           failWhenDisconnected: true
         })
+
         if (!response.ok) {
           const code = response.error?.code
+
           if (code === 'forbidden' || code === 'method_not_found') {
             continue
           }
+
           throw new Error('Could not reach the desktop. Try again.')
         }
+
         const result = response.result as MobilePushTestResult
+
         if (result?.accepted) {
           setMessage('Accepted by Orca’s push service. Check for the notification.')
+
           return
         }
+
         if (result?.reason === 'not_registered') {
           unavailable = 'Reconnect to register this phone for notifications.'
           continue
         }
+
         throw new Error(
           result?.reason === 'rate_limited'
             ? 'Too many notifications. Try again later.'
             : 'Could not send through Orca’s push service. Try again.'
         )
       }
+
       throw new Error(unavailable)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not send push test.')
@@ -67,6 +83,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       setSending(false)
     }
   }
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>Having trouble receiving alerts?</Text>
@@ -101,6 +118,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
     </View>
   )
 }
+
 const styles = StyleSheet.create({
   container: { marginTop: spacing.xl, gap: spacing.sm },
   label: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },

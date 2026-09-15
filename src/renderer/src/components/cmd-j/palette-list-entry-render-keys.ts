@@ -13,10 +13,12 @@ function escapeReservedNamespace(entryId: string): string {
 
 export function buildPaletteListEntryRenderKeys(entryIds: readonly string[]): string[] {
   const occurrences = new Map<string, number>()
+
   return entryIds.map((entryId) => {
     const occurrence = occurrences.get(entryId) ?? 0
     occurrences.set(entryId, occurrence + 1)
     const escaped = escapeReservedNamespace(entryId)
+
     // Why keep the first key bare: stable ids must survive re-renders untouched.
     // Later occurrences encode their index, so (id, occurrence) maps one-to-one to a key.
     return occurrence === 0 ? escaped : `${DUPLICATE_KEY_NAMESPACE}${occurrence}:${escaped}`

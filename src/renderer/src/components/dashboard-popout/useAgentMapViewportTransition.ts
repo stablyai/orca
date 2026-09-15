@@ -19,18 +19,24 @@ export function useAgentMapViewportTransition({
   stop: () => void
 } {
   const cancelRef = useRef<(() => void) | null>(null)
+
   const stop = useCallback((): void => {
     cancelRef.current?.()
     cancelRef.current = null
   }, [])
+
   const animate = useCallback(
     (from: AgentMapViewport, to: AgentMapViewport): void => {
       stop()
+
       if (reducedMotion) {
         onFrame(to)
+
         return
       }
+
       let cancel = (): void => {}
+
       cancel = startAgentMapViewportTransition({
         from,
         to,
@@ -46,6 +52,8 @@ export function useAgentMapViewportTransition({
     },
     [durationMs, onFrame, reducedMotion, stop]
   )
+
   useEffect(() => stop, [stop])
+
   return { animate, stop }
 }

@@ -55,6 +55,7 @@ export function resolveStructuredWorkerForDispatch(
   const handle =
     db.getWorkerDispatch(dispatchId)?.agent_terminal_handle ??
     db.getDispatchContextById(dispatchId)?.assignee_handle
+
   return handle ? resolveStructuredWorkerIdentity(handle, db) : null
 }
 
@@ -100,9 +101,11 @@ export function readStructuredWorkerOutput(args: {
   limit?: number
 }): OrchestrationWorkerReadTranscriptResult | null {
   const identity = resolveStructuredWorkerForDispatch(args.db, args.dispatchId)
+
   if (!identity) {
     return null
   }
+
   if (args.source === 'terminal') {
     throw new OrchestrationError(
       'archive_unavailable',
@@ -111,6 +114,7 @@ export function readStructuredWorkerOutput(args: {
       `Worker Dispatch ${args.dispatchId} has no terminal output; read it with --source auto or --source transcript.`
     )
   }
+
   return readStructuredWorkerJournal({
     identity,
     dispatchId: args.dispatchId,
@@ -133,17 +137,22 @@ export function readStructuredWorkerJournal(args: {
   limit?: number
 }): OrchestrationWorkerReadTranscriptResult {
   const page = readStructuredJournalPage(args.identity.sessionId)
+
   if (!page) {
     throw new OrchestrationError(
       'transcript_required',
       `The transcript for Dispatch ${args.dispatchId} could not be read; its session is not attached.`
     )
   }
+
   const bounded = boundWorkerTranscriptMessages(projectStructuredItemsToNativeChat(page.items))
+
   // Identity of the PREFIX the caller already holds — see `structuredJournalPrefixIdentity`.
   const identityAt = (position: number): string =>
     structuredJournalPrefixIdentity({ identity: args.identity, page, position })
+
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
+
   if (
     cursor &&
     (cursor.source !== 'transcript' || cursor.sourceIdentity !== identityAt(cursor.position))
@@ -153,6 +162,7 @@ export function readStructuredWorkerJournal(args: {
       'The worker output source changed. Start a fresh worker-read without the old cursor.'
     )
   }
+
   return pageMessages({
     messages: bounded.messages,
     warnings: [
@@ -203,6 +213,7 @@ function structuredJournalPrefixIdentity(args: {
   const projected = args.page.items.filter(
     (item) => projectStructuredItemToNativeChat(item) !== null
   )
+
   return createWorkerOutputSourceIdentity([
     'structured-journal',
     args.identity.processIncarnation,
@@ -218,6 +229,7 @@ export function captureStructuredWorkerArchive(
   agent: AgentType
 ): WorkerStructuredJournalArchive {
   const page = readStructuredJournalPage(identity.sessionId)
+
   if (page) {
     return buildStructuredJournalArchive({
       agent,
@@ -226,6 +238,7 @@ export function captureStructuredWorkerArchive(
       hasOlder: page.hasOlder
     })
   }
+
   // An unreadable journal is `archive_failed`, and release retains the worker so the evidence can
   // still be preserved later — the same contract the PTY path keeps. It holds only while the
   // evidence might still arrive. A session PROVEN gone detaches its journal for good, and closing
@@ -241,12 +254,14 @@ export function captureStructuredWorkerArchive(
       'Output could not be preserved for this structured worker; the session was retained.'
     )
   }
+
   const empty = buildStructuredJournalArchive({
     agent,
     processIncarnation: identity.processIncarnation,
     items: [],
     hasOlder: false
   })
+
   return {
     ...empty,
     warnings: [
@@ -273,13 +288,16 @@ export function readArchivedStructuredJournal(args: {
     args.archive.processIncarnation,
     args.createdAt
   ])
+
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
+
   if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
     throw new OrchestrationError(
       'source_changed',
       'The worker output source changed. Start a fresh worker-read without the old cursor.'
     )
   }
+
   return pageMessages({
     messages: args.archive.messages,
     warnings: args.archive.warnings,
@@ -321,6 +339,7 @@ function pageMessages(input: {
   // recomputes and compares — so a later in-place revision below it is caught.
   const sourceIdentity = input.identityAt(end)
   const nextCursor = encodeWorkerOutputCursor(input.dispatchId, 'transcript', sourceIdentity, end)
+
   return {
     dispatchId: input.dispatchId,
     source: 'transcript',

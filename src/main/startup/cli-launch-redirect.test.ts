@@ -11,6 +11,7 @@ const linux = {
     return posix.join(this.resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
   }
 }
+
 const windows = {
   resourcesPath: 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources',
   execPath: 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\Orca.exe',
@@ -20,6 +21,7 @@ const windows = {
 }
 
 const linuxOptions = { platform: 'linux' as const, isPackaged: true, commandNames: COMMAND_NAMES }
+
 const windowsOptions = { platform: 'win32' as const, isPackaged: true, commandNames: COMMAND_NAMES }
 
 describe('CLI launch redirect: entry-path form', () => {

@@ -11,17 +11,29 @@ const {
 } = await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 warmUpdaterModule()
@@ -34,6 +46,7 @@ describe('updater', () => {
   it('ignores stale updater events while a new check is still in feed preflight', async () => {
     vi.useFakeTimers()
     let resolveSecondTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock
       .mockResolvedValueOnce({ tags: [], state: 'no-newer' })
       .mockImplementationOnce(
@@ -90,12 +103,15 @@ describe('updater', () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('update-not-available')
         })
+
         return Promise.resolve(undefined)
       }
+
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
@@ -134,6 +150,7 @@ describe('updater', () => {
   it('does not let a stale pending update-available block a later silent settle', async () => {
     vi.useFakeTimers()
     let resolveChangelog: (value: null) => void = () => {}
+
     fetchChangelogMock.mockImplementation(
       () =>
         new Promise<null>((resolve) => {
@@ -144,11 +161,13 @@ describe('updater', () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
       autoUpdaterMock.emit('checking-for-update')
+
       if (callCount === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('update-available', { version: '1.0.52' })
         })
       }
+
       return Promise.resolve(undefined)
     })
     const sendMock = vi.fn()
@@ -206,6 +225,7 @@ describe('updater', () => {
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
         return Promise.resolve(undefined)
       }
+
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
@@ -248,6 +268,7 @@ describe('updater', () => {
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
         return Promise.resolve(undefined)
       }
+
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
@@ -284,6 +305,7 @@ describe('updater', () => {
   it('ignores a stale error event after a new check starts preflight', async () => {
     vi.useFakeTimers()
     let resolveSecondTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock
       .mockResolvedValueOnce({ tags: [], state: 'no-newer' })
       .mockImplementationOnce(
@@ -361,6 +383,7 @@ describe('updater', () => {
   it('does not launch electron-updater after a manual preflight timeout settles', async () => {
     vi.useFakeTimers()
     let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock.mockImplementation(
       () =>
         new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
@@ -392,7 +415,9 @@ describe('updater', () => {
   it('runs a fresh prerelease check when Shift-click promotes an in-flight stable check', async () => {
     vi.useFakeTimers()
     let resolveStableTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     let resolveStableCheck: () => void = () => {}
+
     fetchNewerReleaseTagsMock
       .mockImplementationOnce(
         () =>
@@ -453,6 +478,7 @@ describe('updater', () => {
 
   it('keeps promoted background promise failures user-initiated after a paired error event', async () => {
     let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock.mockImplementation(
       () =>
         new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
@@ -464,6 +490,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('error', new Error('net::ERR_FAILED'))
       })
+
       return Promise.reject(new Error('net::ERR_FAILED'))
     })
     const sendMock = vi.fn()
@@ -479,6 +506,7 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual(
         expect.objectContaining({
           state: 'error',
@@ -509,6 +537,7 @@ describe('updater', () => {
 
   it('deduplicates repeated manual checks while the immediate checking status is active', async () => {
     let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock.mockImplementation(
       () =>
         new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {

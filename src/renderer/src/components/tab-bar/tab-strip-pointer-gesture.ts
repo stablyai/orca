@@ -8,6 +8,7 @@ export function beginTabStripPointerGesture(): () => void {
     if (released) {
       return
     }
+
     released = true
     activeTabStripPointerGestureCount = Math.max(0, activeTabStripPointerGestureCount - 1)
   }

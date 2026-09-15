@@ -4,6 +4,7 @@ import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -19,6 +20,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -64,6 +66,7 @@ describe('createTab tabId hint', () => {
     })
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const tab = store.getState().createTab(wt, undefined, undefined, { id: existingId })
       expect(tab.id).not.toBe(existingId)
@@ -94,6 +97,7 @@ describe('createTab tabId hint', () => {
     })
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const tab = store.getState().createTab(wtA, undefined, undefined, { id: existingId })
       expect(tab.id).not.toBe(existingId)
@@ -116,6 +120,7 @@ describe('createTab tabId hint', () => {
     })
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const tab = store.getState().createTab(wt, undefined, undefined, { id: '' })
       expect(tab.id).not.toBe('')
@@ -139,6 +144,7 @@ describe('createTab tabId hint', () => {
 
     const hintedId = 'web-terminal-host-tab-1'
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const tab = store.getState().createTab(wt, undefined, undefined, { id: hintedId })
       expect(tab.id).not.toBe(hintedId)

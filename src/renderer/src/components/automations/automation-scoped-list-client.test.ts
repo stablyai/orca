@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/protocol-version'
 
 const callRuntimeRpc = vi.fn()
+
 const getRuntimeEnvironmentStatus = vi.fn()
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
@@ -19,7 +20,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 const DESKTOP = { kind: 'desktop' } as const
+
 const RUNTIME = { kind: 'runtime', environmentId: 'env-1', pairingRevision: 4 } as const
+
 const SSH_OWNER = {
   authority: RUNTIME,
   selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 }
@@ -142,6 +145,7 @@ describe('capability probe dedupe', () => {
     const { listScopedAutomations } = await client()
     getRuntimeEnvironmentStatus.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
+
       return ALL_CAPABILITIES
     })
     callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
@@ -195,6 +199,7 @@ describe('capability probe dedupe', () => {
   // `expectedOwner`, so a confirmation must not outlive its observation window.
   it('re-asks once a confirmation ages out', async () => {
     vi.useFakeTimers()
+
     try {
       const { listScopedAutomations, AUTHORITY_CAPABILITY_CONFIRMATION_TTL_MS } = await client()
       getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
@@ -231,6 +236,7 @@ describe('capability probe dedupe', () => {
         { kind: 'self' }
       )
     }
+
     await listScopedAutomations(
       { kind: 'runtime', environmentId: 'env-overflow', pairingRevision: 1 },
       { kind: 'self' }
@@ -418,9 +424,11 @@ describe('orphan-fenced mutations', () => {
 describe('matchAutomationOwnerConflict', () => {
   it('classifies a conflict rewrapped by Electron IPC', async () => {
     const { matchAutomationOwnerConflict } = await client()
+
     const wrapped = new Error(
       `Error invoking remote method 'automations:update': Error: This automation's host changed. Reload it before continuing.: ${AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged}`
     )
+
     expect(matchAutomationOwnerConflict(wrapped)).toBe(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
   })
 

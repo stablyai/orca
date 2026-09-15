@@ -38,27 +38,34 @@ export async function fetchInactiveClaudeAccountUsage(
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   const location = resolveClaudeManagedCredentialsLocation(account)
   let credentialsJson = location ? await readClaudeManagedCredentialsJson(location) : null
+
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   if (!location || !credentialsJson) {
     return noClaudeManagedCredentialsResult()
   }
 
   let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
+
   if (isOauthTokenExpiring(credentialsJson)) {
     const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+
     if (options.signal?.aborted) {
       return abortedClaudeRateLimitResult()
     }
+
     if (refreshed) {
       try {
         await writeClaudeManagedCredentialsJson(location, refreshed)
       } catch {
         // Keep the refreshed token for this fetch; a later poll can persist it.
       }
+
       credentialsJson = refreshed
       token = parseClaudeOAuthCredentialsJson(refreshed, 'credentials-file').token
     }
@@ -67,10 +74,13 @@ export async function fetchInactiveClaudeAccountUsage(
   if (!token) {
     return noClaudeManagedCredentialsResult()
   }
+
   const oauthLimits = await fetchClaudeOAuthUsage(token, options.signal)
+
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   if (
     !canSupplementClaudeOAuthUsage({
       oauthLimits,
@@ -99,6 +109,7 @@ export async function fetchInactiveClaudeAccountUsage(
       parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file'),
       error
     )
+
     return oauthLimits
   }
 }

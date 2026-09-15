@@ -4,10 +4,12 @@ import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-worksp
 describe('reconcileHydratedWorkspaceTabModels', () => {
   it('reconciles every workspace the session hydrated, in session order, in one call', () => {
     const reconcile = vi.fn()
+
     const reconciled = reconcileHydratedWorkspaceTabModels(
       { tabsByWorktree: { 'wt-a': [], 'wt-b': [], 'wt-c': [] } },
       reconcile
     )
+
     expect(reconcile).toHaveBeenCalledTimes(1)
     expect(reconcile.mock.calls[0]?.[0]).toEqual(['wt-a', 'wt-b', 'wt-c'])
     expect(reconciled).toEqual(['wt-a', 'wt-b', 'wt-c'])

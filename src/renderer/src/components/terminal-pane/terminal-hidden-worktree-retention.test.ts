@@ -31,18 +31,23 @@ describe('createTerminalWorktreeTopologyProjection', () => {
 
   it('keeps the parking dependency stable for a title-only change across 300 worktrees', () => {
     const inspected: string[] = []
+
     const projector = createTerminalWorktreeTopologyProjection((worktreeId) =>
       inspected.push(worktreeId)
     )
+
     const tabs = Object.fromEntries(
       Array.from({ length: 300 }, (_, index) => {
         const worktreeId = `wt-${index}`
+
         return [worktreeId, [tab(worktreeId)]]
       })
     )
+
     const first = projector.project(tabs)
     inspected.length = 0
     const changedWorktreeId = 'wt-173'
+
     const second = projector.project({
       ...tabs,
       [changedWorktreeId]: [{ ...tabs[changedWorktreeId][0], title: 'Updated display title' }]
@@ -73,11 +78,14 @@ describe('createTerminalWorktreeTopologyProjection', () => {
   it('changes for add, remove, and move transitions', () => {
     const projector = createTerminalWorktreeTopologyProjection()
     const first = projector.project({ 'wt-1': [tab('wt-1', 'tab-1')], 'wt-2': [] })
+
     const added = projector.project({
       'wt-1': [tab('wt-1', 'tab-1'), tab('wt-1', 'tab-2')],
       'wt-2': []
     })
+
     const removed = projector.project({ 'wt-1': [tab('wt-1', 'tab-2')], 'wt-2': [] })
+
     const moved = projector.project({
       'wt-1': [],
       'wt-2': [tab('wt-2', 'tab-2')]
@@ -186,6 +194,7 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
     const worktrees = [
       retentionCandidate('wt-1', nowMs - TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS)
     ]
+
     expect(
       selectRetentionForceParkedTerminalWorktrees({ ...base, worktrees, parkingEnabled: false })
     ).toEqual(new Set())
@@ -205,6 +214,7 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
       retentionCandidate('wt-3', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
       retentionCandidate('wt-4', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS)
     ]
+
     // Why limit 2: wt-4 is last-active exempt, wt-3 fills the remaining slot; the two oldest evict.
     expect(
       selectRetentionForceParkedTerminalWorktrees({ ...base, worktrees, retentionLimit: 2 })
@@ -216,6 +226,7 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
       retentionCandidate('wt-old', nowMs - TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS),
       retentionCandidate('wt-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS)
     ]
+
     expect(selectRetentionForceParkedTerminalWorktrees({ ...base, worktrees })).toEqual(
       new Set(['wt-old'])
     )
@@ -229,9 +240,11 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
     expect(selectRetentionForceParkedTerminalWorktrees({ ...base, worktrees: lone })).toEqual(
       new Set(['wt-lone'])
     )
+
     const insideTtl = [
       retentionCandidate('wt-lone', nowMs - TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS + 1)
     ]
+
     expect(selectRetentionForceParkedTerminalWorktrees({ ...base, worktrees: insideTtl })).toEqual(
       new Set()
     )
@@ -239,6 +252,7 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
 
   it('never force-parks visible, measuring, portaled, covered, pending, or fresh candidates', () => {
     const aged = nowMs - TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS
+
     const worktrees = [
       retentionCandidate('wt-visible', aged, { isVisible: true }),
       retentionCandidate('wt-measure', aged, { shouldMeasureHiddenWorktree: true }),
@@ -248,6 +262,7 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
       retentionCandidate('wt-fresh', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS + 1),
       retentionCandidate('wt-unhidden', null)
     ]
+
     expect(selectRetentionForceParkedTerminalWorktrees({ ...base, worktrees })).toEqual(new Set())
   })
 
@@ -283,17 +298,21 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
       retentionCandidate('wt-3', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
       retentionCandidate('wt-4', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS)
     ]
+
     const first = selectRetentionForceParkedTerminalWorktrees({
       ...base,
       worktrees,
       retentionLimit: 2
     })
+
     const second = selectRetentionForceParkedTerminalWorktrees({
       ...base,
       worktrees,
       retentionLimit: 2
     })
+
     expect(second).toEqual(first)
+
     // Why: with unchanged inputs, a later evaluation may only ADD members —
     // a verdict that oscillates with time is the React-#185 ingredient.
     for (const laterMs of [nowMs + 1_000, nowMs + TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS]) {
@@ -303,6 +322,7 @@ describe('selectRetentionForceParkedTerminalWorktrees', () => {
         retentionLimit: 2,
         nowMs: laterMs
       })
+
       for (const id of first) {
         expect(later.has(id)).toBe(true)
       }

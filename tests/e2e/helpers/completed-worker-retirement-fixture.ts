@@ -20,10 +20,13 @@ import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scanner'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-retired-worker-'))
+
 const lifecycleLedgerPath = path.join(fakeCliDir, 'codex-lifecycle.jsonl')
+
 export const completedWorkerFakeCodexCommand = buildFakeAgentCommandOverride(
   path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 )
+
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const ledger = process.env.ORCA_E2E_CODEX_LIFECYCLE_LEDGER
@@ -62,6 +65,7 @@ setInterval(() => {}, 60_000)
 
 function installCompletedWorkerFakeCodex(): void {
   mkdirSync(fakeCliDir, { recursive: true })
+
   if (process.platform === 'win32') {
     writeFileSync(path.join(fakeCliDir, 'fake-codex.js'), fakeCodexSource)
     writeFileSync(
@@ -109,11 +113,14 @@ export function readCompletedWorkerLedger(): LifecycleEvent[] {
   if (!existsSync(lifecycleLedgerPath)) {
     return []
   }
+
   const contents = readFileSync(lifecycleLedgerPath, 'utf8')
   const lastCompleteLine = contents.lastIndexOf('\n')
+
   if (lastCompleteLine === -1) {
     return []
   }
+
   return contents
     .slice(0, lastCompleteLine)
     .split(/\r?\n/)
@@ -126,6 +133,7 @@ export function readCompletedWorkerDispatchCapability(): string | null {
     .filter((event) => event.event === 'input')
     .map((event) => event.input ?? '')
     .join('')
+
   return input.match(/--dispatch-capability\s+(\S+)/)?.[1] ?? null
 }
 
@@ -139,9 +147,11 @@ export function runBuiltOrcaCli(
     ORCA_USER_DATA_PATH: _userDataPath,
     ...cleanEnv
   } = process.env
+
   void _environment
   void _pairingCode
   void _userDataPath
+
   const output = execFileSync(
     process.execPath,
     [path.join(process.cwd(), 'out', 'cli', 'index.js'), ...args],
@@ -152,6 +162,7 @@ export function runBuiltOrcaCli(
       timeout: 30_000
     }
   )
+
   return JSON.parse(output) as unknown
 }
 
@@ -161,6 +172,7 @@ export function seedCurrentCodexTranscript(
   cwd: string
 ): string {
   const now = new Date()
+
   const transcriptDir = path.join(
     isolatedHome,
     '.codex',
@@ -169,6 +181,7 @@ export function seedCurrentCodexTranscript(
     String(now.getUTCMonth() + 1).padStart(2, '0'),
     String(now.getUTCDate()).padStart(2, '0')
   )
+
   mkdirSync(transcriptDir, { recursive: true })
   const transcriptPath = path.join(transcriptDir, `rollout-${providerSessionId}.jsonl`)
   writeFileSync(
@@ -179,11 +192,13 @@ export function seedCurrentCodexTranscript(
       payload: { id: providerSessionId, cwd }
     })}\n`
   )
+
   return transcriptPath
 }
 
 export function terminalIdentity(terminal: RuntimeTerminalSummary): TerminalIdentity {
   const { handle, incarnationId, leafId, ptyId, tabId, worktreeId } = terminal
+
   return { handle, incarnationId, leafId, ptyId, tabId, worktreeId }
 }
 
@@ -200,9 +215,11 @@ export function readPersistedWorkerRecoveryRecord(userDataDir: string, paneKey: 
     DEFAULT_LOCAL_ORCA_PROFILE_ID,
     'orca-data.json'
   )
+
   if (!existsSync(dataPath)) {
     return null
   }
+
   const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
     workspaceSession?: {
       sleepingAgentSessionsByPaneKey?: Record<
@@ -215,5 +232,6 @@ export function readPersistedWorkerRecoveryRecord(userDataDir: string, paneKey: 
       >
     }
   }
+
   return data.workspaceSession?.sleepingAgentSessionsByPaneKey?.[paneKey] ?? null
 }

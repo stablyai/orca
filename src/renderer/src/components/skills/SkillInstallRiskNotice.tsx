@@ -11,9 +11,11 @@ function cautionDescription(summary: SkillInstallRiskSummary): string {
       'This skill includes scripts or binary files.'
     )
   }
+
   const shownNames = summary.cautionSkillNames.slice(0, 3)
   const remainingCount = summary.cautionSkillNames.length - shownNames.length
   const affected = `${shownNames.join(', ')}${remainingCount ? ` +${remainingCount} more` : ''}`
+
   return translate(
     'auto.components.skills.install.runnableWarning',
     '{{affectedCount}} of {{selectedCount}} selected skills include scripts or binary files: {{affected}}.',
@@ -31,6 +33,7 @@ export function SkillInstallRiskNotice({
   summary: SkillInstallRiskSummary
 }): React.JSX.Element {
   const hasAdditionalFiles = summary.additionalFileCount > 0
+
   const title = summary.requiresAcknowledgement
     ? translate(
         'auto.components.skills.install.reviewRunnableFiles',

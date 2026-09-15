@@ -45,6 +45,7 @@ describe('Cmd+J Linear issue intent', () => {
 
   it('targets the workspace named by the URL before falling back to all workspaces', () => {
     const intent = { identifier: 'STA-4084', organizationUrlKey: 'stably' }
+
     const workspaces = [
       { id: 'workspace-other', organizationUrlKey: 'other' },
       { id: 'workspace-stably', organizationUrlKey: 'Stably' }

@@ -6,6 +6,7 @@ import type { Store } from '../../../persistence'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 
 const { triggerMock } = vi.hoisted(() => ({ triggerMock: vi.fn() }))
+
 vi.mock('../../../runtime/runtime-terminal-spawn-push-target-materialization', () => ({
   triggerTerminalSpawnPushTargetMaterialization: triggerMock
 }))
@@ -13,13 +14,17 @@ vi.mock('../../../runtime/runtime-terminal-spawn-push-target-materialization', (
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
 
 const REPO_ID = 'repo-1'
+
 const WORKTREE_PATH = '/repo/worktree'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
+
 const FORK_TARGET: GitPushTarget = {
   remoteName: 'pr-contributor-orca',
   branchName: 'contributor/fix',
   remoteUrl: 'git@github.com:contributor/orca.git'
 }
+
 const REPO = { id: REPO_ID, path: '/repo', connectionId: null } as unknown as Repo
 
 function depsWithStore(overrides: Partial<Store> = {}): PtySpawnIpcDeps {

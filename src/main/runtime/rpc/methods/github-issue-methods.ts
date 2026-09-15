@@ -20,6 +20,7 @@ export const GITHUB_ISSUE_METHODS = [
         params.labels !== undefined || params.assignees !== undefined
           ? { labels: params.labels, assignees: params.assignees }
           : undefined
+
       return fields
         ? runtime.createRepoIssue(params.repo, params.title, params.body, fields)
         : runtime.createRepoIssue(params.repo, params.title, params.body)

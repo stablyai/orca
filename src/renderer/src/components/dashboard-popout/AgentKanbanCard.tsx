@@ -25,17 +25,23 @@ import { DashboardHostBadge } from './DashboardHostBadge'
 /** Compact "started N ago" (the card is glanceable — coarse units are fine). */
 function formatStartedAgo(startedAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
+
   if (seconds < 60) {
     return translate('dashboardPopout.card.time.justNow', 'just now')
   }
+
   const minutes = Math.floor(seconds / 60)
+
   if (minutes < 60) {
     return translate('dashboardPopout.card.time.minutes', '{{count}}m', { count: minutes })
   }
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) {
     return translate('dashboardPopout.card.time.hours', '{{count}}h', { count: hours })
   }
+
   return translate('dashboardPopout.card.time.days', '{{count}}d', {
     count: Math.floor(hours / 24)
   })
@@ -57,18 +63,23 @@ function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagent
   if (a === b) {
     return true
   }
+
   if (!a || !b || a.length !== b.length) {
     return false
   }
+
   for (let index = 0; index < a.length; index += 1) {
     if (!(index in a) || !(index in b)) {
       if (index in a !== index in b) {
         return false
       }
+
       continue
     }
+
     const subagent = a[index]
     const other = b[index]
+
     if (
       subagent.id !== other.id ||
       subagent.name !== other.name ||
@@ -77,6 +88,7 @@ function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagent
       return false
     }
   }
+
   return true
 }
 
@@ -136,8 +148,10 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
   if (!card.review) {
     return null
   }
+
   const presentation = REVIEW_PRESENTATION[card.review.state]
   const Icon = presentation.icon
+
   const title = (() => {
     switch (card.review.state) {
       case 'open':
@@ -150,6 +164,7 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
         return translate('dashboardPopout.card.review.closed', 'Closed review')
     }
   })()
+
   return (
     <span
       role="img"
@@ -170,16 +185,21 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
   if (a === b) {
     return true
   }
+
   if (!a || !b || a.type !== b.type) {
     return false
   }
+
   if (a.type === 'lucide') {
     return a.name === (b as typeof a).name
   }
+
   if (a.type === 'emoji') {
     return a.emoji === (b as typeof a).emoji
   }
+
   const image = b as typeof a
+
   return a.src === image.src && a.source === image.source && a.label === image.label
 }
 

@@ -13,6 +13,7 @@ const { listRepoWorktreesMock } = vi.hoisted(() => ({
 
 vi.mock('node:process', async () => {
   const actual = await vi.importActual<typeof NodeProcess>('node:process')
+
   return { ...actual, platform: 'win32' }
 })
 
@@ -20,6 +21,7 @@ vi.mock('../shared/workspace-space-scan-budget', async () => {
   const actual = await vi.importActual<typeof WorkspaceSpaceScanBudgetModule>(
     '../shared/workspace-space-scan-budget'
   )
+
   return {
     ...actual,
     createWorkspaceSpaceScanBudget: () => actual.createWorkspaceSpaceScanBudget({ maxEntries: 2 })
@@ -59,6 +61,7 @@ describe('analyzeWorkspaceSpace capacity', () => {
 
   afterEach(async () => {
     listRepoWorktreesMock.mockReset()
+
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true })
       tempDir = null
@@ -70,6 +73,7 @@ describe('analyzeWorkspaceSpace capacity', () => {
     const repoPath = join(tempDir, 'repo')
     await mkdir(repoPath, { recursive: true })
     await Promise.all(['one', 'two', 'three'].map((name) => writeFile(join(repoPath, name), name)))
+
     const repo: Repo = {
       id: 'repo-1',
       path: repoPath,
@@ -77,6 +81,7 @@ describe('analyzeWorkspaceSpace capacity', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     listRepoWorktreesMock.mockResolvedValue([
       {
         path: repoPath,

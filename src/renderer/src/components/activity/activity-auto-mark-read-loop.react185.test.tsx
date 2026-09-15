@@ -13,8 +13,11 @@ import ActivityPrototypePage from './ActivityPrototypePage'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+
 const TAB_A = 'tab-a'
+
 const PANE_A = makePaneKey(TAB_A, LEAF_A)
+
 const PROMPT = 'turn stamped by the execution host'
 
 const repo: Repo = {
@@ -57,7 +60,9 @@ const tab: TerminalTab = {
 }
 
 const initialState = useAppStore.getInitialState()
+
 let root: Root
+
 let seededContainer: HTMLElement
 
 beforeEach(() => {
@@ -128,6 +133,7 @@ async function selectSeededThread(): Promise<void> {
   const row = Array.from(seededContainer.querySelectorAll<HTMLElement>('[role="listitem"]')).find(
     (element) => element.textContent?.includes(PROMPT)
   )
+
   expect(row).toBeDefined()
   await act(async () => {
     row?.click()
@@ -137,11 +143,13 @@ async function selectSeededThread(): Promise<void> {
 
 function countAcknowledgeWrites(): { readonly count: () => number; stop: () => void } {
   let writes = 0
+
   const unsubscribe = useAppStore.subscribe((next, prev) => {
     if (next.acknowledgedAgentsByPaneKey !== prev.acknowledgedAgentsByPaneKey) {
       writes += 1
     }
   })
+
   return { count: () => writes, stop: unsubscribe }
 }
 
@@ -174,6 +182,7 @@ describe('Activity auto mark-read loop (React #185)', () => {
       await act(async () => {
         useAppStore.setState((s) => {
           const previous = s.retainedAgentsByPaneKey[PANE_A]
+
           return {
             retainedAgentsByPaneKey: {
               [PANE_A]: {

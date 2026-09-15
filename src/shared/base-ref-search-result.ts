@@ -10,6 +10,7 @@ export function deriveLegacyLocalBranchName(refName: string): string {
       return refName.slice(prefix.length)
     }
   }
+
   return refName
 }
 

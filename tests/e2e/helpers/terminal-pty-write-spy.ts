@@ -13,9 +13,11 @@ export async function installTerminalPtyWriteSpy(app: ElectronApplication): Prom
         __terminalPtyWriteAcceptedSpyInstalled?: boolean
         __terminalPtyWriteDelayMs?: number
       }
+
       if (global.__terminalPtyWriteSpyInstalled) {
         return
       }
+
       global.__terminalPtyWriteLog = []
       global.__terminalPtyWriteSpyInstalled = true
       ipcMain.prependListener('pty:write', (_event: unknown, args: PtyWriteLogEntry) => {
@@ -28,17 +30,22 @@ export async function installTerminalPtyWriteSpy(app: ElectronApplication): Prom
           _invokeHandlers?: Map<string, (event: unknown, args: PtyWriteLogEntry) => unknown>
         }
       )._invokeHandlers
+
       const writeAcceptedHandler = invokeHandlers?.get('pty:writeAccepted')
+
       if (!writeAcceptedHandler || global.__terminalPtyWriteAcceptedSpyInstalled) {
         return
       }
+
       global.__terminalPtyWriteAcceptedSpyInstalled = true
       invokeHandlers?.set('pty:writeAccepted', async (event, args) => {
         global.__terminalPtyWriteLog!.push({ id: args.id, data: args.data })
         const delayMs = Math.max(0, global.__terminalPtyWriteDelayMs ?? 0)
+
         if (delayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, delayMs))
         }
+
         return writeAcceptedHandler(event, args)
       })
     })
@@ -48,6 +55,7 @@ export async function installTerminalPtyWriteSpy(app: ElectronApplication): Prom
 export async function clearTerminalPtyWriteLog(app: ElectronApplication): Promise<void> {
   await app.evaluate(() => {
     const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
+
     if (global.__terminalPtyWriteLog) {
       global.__terminalPtyWriteLog.length = 0
     }
@@ -57,6 +65,7 @@ export async function clearTerminalPtyWriteLog(app: ElectronApplication): Promis
 export async function readTerminalPtyWrites(app: ElectronApplication): Promise<string[]> {
   return app.evaluate(() => {
     const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
+
     return (global.__terminalPtyWriteLog ?? []).map((entry) => entry.data)
   })
 }
@@ -66,6 +75,7 @@ export async function readTerminalPtyWriteEntries(
 ): Promise<PtyWriteLogEntry[]> {
   return app.evaluate(() => {
     const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
+
     return [...(global.__terminalPtyWriteLog ?? [])]
   })
 }

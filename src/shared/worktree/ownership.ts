@@ -27,6 +27,7 @@ export {
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../external-worktree-visibility'
+
 export { shouldShowWorktree } from '../worktree-visibility-resolution'
 
 export function buildKnownOrcaWorkspaceLayouts(
@@ -34,9 +35,11 @@ export function buildKnownOrcaWorkspaceLayouts(
   repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
+
   for (const basePath of resolveConfiguredWorktreeBasePaths(repo)) {
     layouts.push({ path: basePath, nestWorkspaces: settings.nestWorkspaces })
   }
+
   if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
     layouts.push({
       path: repo
@@ -59,12 +62,16 @@ export function buildKnownOrcaWorkspaceLayouts(
   appendWorkspaceLayouts(layouts, wslLayouts)
 
   const seen = new Set<string>()
+
   return layouts.filter((layout) => {
     const key = `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
+
     if (seen.has(key)) {
       return false
     }
+
     seen.add(key)
+
     return Boolean(layout.path)
   })
 }
@@ -92,19 +99,26 @@ function buildWslWorkspaceLayouts(
   settings: Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDirHistory'>
 ): OrcaWorkspaceLayout[] {
   const parsed = parseWslUncPath(repoPath)
+
   if (!parsed) {
     return []
   }
+
   const homeMatch = parsed.linuxPath.match(/^\/home\/[^/]+(?:\/|$)/)
   const linuxHome = homeMatch?.[0].replace(/\/$/, '')
+
   if (!linuxHome) {
     return []
   }
+
   const root = `//wsl.localhost/${parsed.distro}${linuxHome}/orca/workspaces`
+
   const historicalModes = (settings.workspaceDirHistory ?? []).map(
     (layout) => layout.nestWorkspaces
   )
+
   const modes = [settings.nestWorkspaces, ...historicalModes]
+
   return [...new Set(modes)].map((nestWorkspaces) => ({ path: root, nestWorkspaces }))
 }
 
@@ -178,14 +192,19 @@ export function toDetectedWorktree(args: {
       resolveCustomWorktreeVisibilitySources(args.repo, args.settings.worktreeVisibilityDefaults),
       resolveConfiguredWorktreeBasePaths(args.repo)
     )
+
   const visibilitySource = sourceMatcher(args.worktree.path)
+
   const ownership = classifyWorktreeOwnership({
     ...args,
     worktreeVisibilitySourceMatcher: sourceMatcher
   })
+
   const selectedCheckout = areRuntimePathsEqual(args.worktree.path, args.repo.path)
+
   const isLegacyRepoForVisibility =
     args.isLegacyRepoForVisibility ?? isLegacyRepoForExternalWorktreeVisibility(args.repo)
+
   const visible = shouldShowWorktree({
     worktree: args.worktree,
     ownership,
@@ -211,6 +230,7 @@ export function applyMetadataFallbackVisibility(detected: DetectedWorktree): Det
     // Why: retain scratch policy, including explicit imports, while ordinary fallback fails open.
     return detected
   }
+
   return {
     ...detected,
     visible: true,
@@ -243,13 +263,16 @@ function isUnderFlatOrUntrustedOrcaRoot(
 ): boolean {
   for (const layout of knownOrcaLayouts) {
     const relative = relativePathInsideRoot(layout.path, worktreePath)
+
     if (relative === null) {
       continue
     }
+
     if (!layout.nestWorkspaces) {
       return true
     }
   }
+
   return false
 }
 
@@ -260,12 +283,16 @@ function canClassifyAsExternal(
   if (knownOrcaLayouts.length === 0) {
     return false
   }
+
   for (const layout of knownOrcaLayouts) {
     const relative = relativePathInsideRoot(layout.path, worktreePath)
+
     if (relative === null) {
       continue
     }
+
     return layout.nestWorkspaces
   }
+
   return true
 }

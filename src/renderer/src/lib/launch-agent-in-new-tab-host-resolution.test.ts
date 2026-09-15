@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
+
 const mockQueueTabStartupCommand = vi.fn()
 
 type StoreRepo = {

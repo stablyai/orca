@@ -48,6 +48,7 @@ async function seedPairConfig(
 ): Promise<{ alpha: SeededSshConfigHost; bravo: SeededSshConfigHost }> {
   const hosts = pairHosts(prefix)
   await seedIsolatedSshConfig(electronApp, buildSshConfigBody([hosts.alpha, hosts.bravo]))
+
   return hosts
 }
 
@@ -113,6 +114,7 @@ test.describe('SSH config host picker', () => {
       user: 'deploy',
       port: 2222
     }
+
     await seedIsolatedSshConfig(electronApp, buildSshConfigBody([prod]))
 
     const picker = await openSshConfigHostPicker(orcaPage)

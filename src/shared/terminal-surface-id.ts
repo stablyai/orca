@@ -1,4 +1,5 @@
 export const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
+
 export const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 
 export function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
@@ -12,6 +13,7 @@ export function toHostSessionTabId(tabId: string): string {
   if (!tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX)) {
     return tabId
   }
+
   try {
     return decodeURIComponent(tabId.slice(WEB_TERMINAL_SURFACE_TAB_PREFIX.length))
   } catch {

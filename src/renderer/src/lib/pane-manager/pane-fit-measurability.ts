@@ -6,8 +6,11 @@ import {
 } from './pane-metric-options-deferral'
 
 const MIN_PANE_FIT_WIDTH_PX = 48
+
 const MIN_PANE_FIT_HEIGHT_PX = 24
+
 const MIN_PANE_FIT_COLS = 8
+
 const MIN_PANE_FIT_ROWS = 4
 
 export function getProposedPaneDimensions(
@@ -22,10 +25,13 @@ export function getProposedPaneDimensions(
 
 function hasPaneFitPixelBox(pane: ManagedPane): boolean {
   const measure = pane.container?.getBoundingClientRect
+
   if (typeof measure !== 'function') {
     return true
   }
+
   const rect = measure.call(pane.container)
+
   return rect.width >= MIN_PANE_FIT_WIDTH_PX && rect.height >= MIN_PANE_FIT_HEIGHT_PX
 }
 
@@ -33,10 +39,13 @@ export function canMeasurePaneForFit(pane: ManagedPane): boolean {
   if (!hasPaneFitPixelBox(pane)) {
     return false
   }
+
   const dims = getProposedPaneDimensions(pane)
+
   if (!dims) {
     return false
   }
+
   // Why: worktree switches can briefly measure a near-zero overlay before
   // fallback positioning lands. Fitting there pins the PTY at ~2 cols.
   return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
@@ -59,5 +68,6 @@ export function flushDeferredPaneMetricOptionsIfMeasurable(pane: ManagedPane): b
   if (!hasDeferredPaneMetricOptions(pane) || !canApplyPaneMetricOptions(pane)) {
     return false
   }
+
   return flushDeferredPaneMetricOptions(pane)
 }

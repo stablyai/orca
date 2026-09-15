@@ -12,6 +12,7 @@ export function resolveBottomDrawerFillHeight(input: {
 }): number {
   const topGap = input.topGap ?? 16
   const keyboardInset = Math.max(0, input.keyboardInset)
+
   // Never exceed the space under the status-bar gap and above the keyboard —
   // a hard minHeight here would grow the sheet upward under the status bar
   // while marginBottom still equals the full keyboard inset.

@@ -3,7 +3,9 @@ import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
+
 await import('./orca-runtime-test-lifecycle.spec')
+
 const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
 
 it.each(['renderer:active-generation', 'headless:active-generation'])(
@@ -32,10 +34,12 @@ it.each(['renderer:active-generation', 'headless:active-generation'])(
       ]
     })
     const events: RuntimeMobileSessionTabsResult[] = []
+
     const unsubscribe = runtime.onMobileSessionTabsChanged(
       (snapshot) => events.push(snapshot),
       'paired-client'
     )
+
     try {
       const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
         activate: false,
@@ -43,6 +47,7 @@ it.each(['renderer:active-generation', 'headless:active-generation'])(
         navigation: 'caller',
         clientNavigationId: 'paired-client'
       })
+
       expect(created.tab.status).toBe('ready')
       expect(created.publicationEpoch).toBe(publicationEpoch)
       expect(created.snapshotVersion).toBeGreaterThan(7)

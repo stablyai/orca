@@ -10,6 +10,7 @@ import type * as ActivateTabAndFocusPaneModule from '@/lib/activate-tab-and-focu
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
 type MockAgentOptions = {
@@ -49,18 +50,27 @@ function mockAgent({
 }
 
 let mockAgents: DashboardAgentRowData[] = []
+
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
+
 let mockTabsByWorktree: Record<string, { id: string }[]> = {}
+
 let mockStructuredTabIds = new Set<string>()
+
 let mockAgentStatusByPaneKey: Record<string, { worktreeId?: string }> = {}
+
 let mockActiveTabId: string | null = null
+
 let mockActiveTabType: string = 'editor'
+
 const mockSetActiveTab = vi.fn((tabId: string) => {
   mockActiveTabId = tabId
 })
+
 const mockSetActiveTabType = vi.fn((tabType: string) => {
   mockActiveTabType = tabType
 })
+
 let capturedRowActivations: {
   paneKey: string
   onActivate: (tabId: string, paneKey: string) => void
@@ -148,6 +158,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     onActivate: (tabId: string, paneKey: string) => void
   }) => {
     capturedRowActivations.push({ paneKey: agent.paneKey, onActivate })
+
     return <div data-testid="agent-row" data-pane-key={agent.paneKey} />
   }
 }))
@@ -252,9 +263,11 @@ describe('WorktreeCardAgents activation', () => {
     ]
     mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+
     const actualActivation = await vi.importActual<typeof ActivateTabAndFocusPaneModule>(
       '@/lib/activate-tab-and-focus-pane'
     )
+
     // Why: keep the component import mocked for call assertions, but delegate
     // this repro to the real helper so it fails if the terminal-surface fix
     // regresses.
@@ -348,6 +361,7 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     try {
       const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 

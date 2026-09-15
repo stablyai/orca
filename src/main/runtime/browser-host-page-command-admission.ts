@@ -20,6 +20,7 @@ export function assertBrowserHostPageCommandAdmission(
   ) {
     throw new Error('browser_host_reconciliation_protocol_required')
   }
+
   if (
     command.type === 'createPage' ||
     command.type === 'reclaimPage' ||
@@ -27,12 +28,14 @@ export function assertBrowserHostPageCommandAdmission(
   ) {
     requireExecutionHost(command.executionHostKey)
   }
+
   if (
     command.type === 'automation' &&
     !lease.hostCapabilities.includes(BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY)
   ) {
     throw new Error('browser_host_capability_unavailable')
   }
+
   if (
     command.type === 'automation' &&
     requiresBrowserClientFileChannel(command.method) &&

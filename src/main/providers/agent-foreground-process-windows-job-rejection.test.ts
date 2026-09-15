@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { confirmShellForegroundProcess } from './agent-foreground-process'
 
 const realPlatform = process.platform
+
 afterEach(() => {
   Object.defineProperty(process, 'platform', { value: realPlatform })
 })

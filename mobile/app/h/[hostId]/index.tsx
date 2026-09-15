@@ -8,14 +8,17 @@ import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 
 export function HostScreen(props: HostScreenProps = {}) {
   const controller = useHostScreenController(props)
+
   return <HostScreenView controller={controller} />
 }
 
 // On wide layouts the sidebar hosts the list, so this route is just the empty detail pane.
 export default function HostWorktreeRoute() {
   const { isWideLayout } = useResponsiveLayout()
+
   if (isWideLayout) {
     return <WorkspaceDetailPlaceholder />
   }
+
   return <HostScreen />
 }

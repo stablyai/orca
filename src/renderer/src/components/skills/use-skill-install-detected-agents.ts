@@ -17,17 +17,21 @@ export function useSkillInstallDetectedAgents(target: {
     const generation = ++generationRef.current
     const isCurrent = (): boolean => generation === generationRef.current
     setDetected(null)
+
     const probe = async (): Promise<readonly string[] | null> => {
       if (environmentId.startsWith('ssh:')) {
         return window.api.preflight.detectRemoteAgents({
           connectionId: environmentId.slice('ssh:'.length)
         })
       }
+
       if (environmentId !== 'local') {
         return null
       }
+
       return window.api.preflight.detectAgents(wslDistro ? { wslDistro } : undefined)
     }
+
     void probe()
       .then((agents) => {
         if (isCurrent()) {
@@ -37,6 +41,7 @@ export function useSkillInstallDetectedAgents(target: {
       .catch((cause) => {
         console.warn('[skills] agent detection failed:', cause)
       })
+
     return () => {
       generationRef.current += 1
     }

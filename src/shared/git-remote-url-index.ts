@@ -25,11 +25,14 @@ const REMOTE_VERBOSE_URL_PATTERN = /^(.*) \((fetch|push)\)$/
 /** Parse one `<name>\t<url> (fetch|push)` row. */
 export function parseGitRemoteVerboseLine(line: string): GitRemoteVerboseEntry | null {
   const tabIndex = line.indexOf('\t')
+
   if (tabIndex === -1) {
     return null
   }
+
   const name = line.slice(0, tabIndex)
   const match = REMOTE_VERBOSE_URL_PATTERN.exec(line.slice(tabIndex + 1).trim())
+
   return match ? { name, url: match[1], direction: match[2] as 'fetch' | 'push' } : null
 }
 
@@ -40,13 +43,16 @@ export function parseGitRemoteVerboseLine(line: string): GitRemoteVerboseEntry |
  */
 export function parseGitRemoteFetchUrls(stdout: string): Map<string, string> {
   const fetchUrls = new Map<string, string>()
+
   for (const line of iterateProcessOutputLines(stdout)) {
     const parsed = parseGitRemoteVerboseLine(line)
+
     // First wins: `get-url` without `--all` prints the first `remote.<name>.url`.
     if (parsed?.direction === 'fetch' && !fetchUrls.has(parsed.name)) {
       fetchUrls.set(parsed.name, parsed.url)
     }
   }
+
   return fetchUrls
 }
 
@@ -60,5 +66,6 @@ export function findGitRemoteNameByFetchUrl(
       return name
     }
   }
+
   return null
 }

@@ -99,27 +99,34 @@ export function AiVaultVirtualRow({
   // Why: omit the jump affordance when the session already lives in the
   // worktree on screen — jumping there is a no-op.
   const showJumpToWorktree = !isAiVaultSessionInCurrentWorktree(worktreeInfo)
+
   const worktreeJumpId =
     showJumpToWorktree && canJumpToAiVaultSessionWorktree(worktreeInfo)
       ? worktreeInfo?.worktreeId
       : null
+
   const resumeState = row.type === 'session' ? getSessionResumeState(row.session) : null
   const resumeActions = row.type === 'session' ? getSessionResumeActions(row.session) : null
   const resumeInChat = row.type === 'session' ? getSessionResumeInChat(row.session) : null
+
   const continuationWorktreeId =
     row.type === 'session' &&
     canContinueAiVaultSessionInNewSession(row.session, resumeState?.worktreeId)
       ? resumeState?.worktreeId
       : null
+
   // Gate resume on real content: a zero-turn transcript would resume into an
   // empty conversation, so it is never offered as normally resumable.
   const resumeGating =
     row.type === 'session'
       ? aiVaultSessionRowResumeGating(row.session, resumeState)
       : { resumeDisabled: true, canCopyResumeCommand: false }
+
   const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
+
   const canOpenLocalSessionPaths =
     row.type === 'session' && canUseLocalAiVaultSessionPathActions(row.session.executionHostId)
+
   // Why: in-Orca View Log additionally withholds synthetic (SQLite/OpenCode)
   // identities that have no single file to open, while Reveal/CWD stay on the
   // existing local-path gate.

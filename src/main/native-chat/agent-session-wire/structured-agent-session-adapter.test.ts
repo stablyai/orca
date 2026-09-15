@@ -31,9 +31,11 @@ describe('failed agent-session acquisition cleanup', () => {
 
   it('keeps a first-hand root exit that cleanup observed, with the provider diagnostic', async () => {
     const cause = new Error('proof failed')
+
     const exit = new AgentSessionAcquisitionRootExitObservedError(
       new Error('claude stream-json exited (code 1): crashed')
     )
+
     const error = await rethrowAfterAgentSessionAcquisitionCleanup(
       {
         releaseAcquisition: vi.fn(async () => {

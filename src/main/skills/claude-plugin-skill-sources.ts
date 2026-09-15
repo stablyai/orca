@@ -45,8 +45,10 @@ function parseJsonObject(content: string | null): Record<string, unknown> | null
   if (!content) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(content)
+
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null
@@ -57,18 +59,22 @@ function parseJsonObject(content: string | null): Record<string, unknown> | null
 
 function readEnabledPlugins(settingsContents: readonly (string | null)[]): Map<string, boolean> {
   const enabled = new Map<string, boolean>()
+
   for (const content of settingsContents) {
     const settings = parseJsonObject(content)
     const configured = settings?.enabledPlugins
+
     if (!configured || typeof configured !== 'object' || Array.isArray(configured)) {
       continue
     }
+
     for (const [pluginId, value] of Object.entries(configured)) {
       if (typeof value === 'boolean') {
         enabled.set(pluginId, value)
       }
     }
   }
+
   return enabled
 }
 
@@ -76,13 +82,16 @@ function parseInstall(value: unknown): ClaudePluginInstall | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
+
   const record = value as Record<string, unknown>
+
   if (
     (record.scope !== 'user' && record.scope !== 'project' && record.scope !== 'local') ||
     typeof record.installPath !== 'string'
   ) {
     return null
   }
+
   return {
     scope: record.scope,
     installPath: record.installPath,
@@ -100,10 +109,13 @@ function isProjectInstallApplicable(
   if (install.scope === 'user') {
     return true
   }
+
   if (!install.projectPath || !pathApi.isAbsolute(install.projectPath)) {
     return false
   }
+
   const relativePath = pathApi.relative(install.projectPath, cwd)
+
   return (
     relativePath === '' ||
     (relativePath !== '..' &&
@@ -118,6 +130,7 @@ function installPriority(install: ClaudePluginInstall): number {
 
 function installTimestamp(install: ClaudePluginInstall): number {
   const timestamp = Date.parse(install.lastUpdated ?? install.installedAt ?? '')
+
   return Number.isFinite(timestamp) ? timestamp : 0
 }
 
@@ -147,6 +160,7 @@ function selectActiveInstall(
 function safePluginLabel(pluginId: string, pathApi: SkillDiscoveryPathApi): string {
   const packageName = pluginId.split('@')[0] || pathApi.basename(pluginId)
   const safeLabel = stripUnsafeDisplayCharacters(packageName).slice(0, 80)
+
   return safeLabel || 'plugin'
 }
 
@@ -157,20 +171,27 @@ export function resolveClaudePluginSkillSources(args: {
 }): SkillScanRoot[] {
   const pathApi = args.pathApi ?? defaultPathApi
   const installed = parseJsonObject(args.metadata.installedPlugins)?.plugins
+
   if (!installed || typeof installed !== 'object' || Array.isArray(installed)) {
     return []
   }
+
   const enabled = readEnabledPlugins(args.metadata.settings)
   const roots = new Map<string, SkillScanRoot>()
+
   for (const [pluginId, rawInstalls] of Object.entries(installed)) {
     if (enabled.get(pluginId) !== true || !Array.isArray(rawInstalls)) {
       continue
     }
+
     const install = selectActiveInstall(rawInstalls, args.cwd, pathApi)
+
     if (!install) {
       continue
     }
+
     const skillsPath = pathApi.join(install.installPath, 'skills')
+
     if (!roots.has(skillsPath)) {
       roots.set(skillsPath, {
         id: `claude-plugin-${stablePathId(skillsPath)}`,
@@ -182,19 +203,24 @@ export function resolveClaudePluginSkillSources(args: {
       })
     }
   }
+
   return [...roots.values()]
 }
 
 async function readMetadataFile(pathValue: string): Promise<string | null> {
   try {
     const fileStat = await stat(pathValue)
+
     if (!fileStat.isFile() || fileStat.size > MAX_PLUGIN_METADATA_BYTES) {
       return null
     }
+
     const file = await open(pathValue, 'r')
+
     try {
       const buffer = Buffer.alloc(fileStat.size)
       const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+
       return buffer.toString('utf8', 0, bytesRead)
     } finally {
       await file.close()
@@ -209,9 +235,11 @@ export async function discoverClaudePluginSkillSources(args: {
   cwd: string
 }): Promise<SkillScanRoot[]> {
   const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd)
+
   const [installedPlugins, ...settings] = await Promise.all(
     [paths.installedPlugins, ...paths.settings].map(readMetadataFile)
   )
+
   return resolveClaudePluginSkillSources({
     metadata: { installedPlugins, settings },
     cwd: args.cwd

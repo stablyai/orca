@@ -11,6 +11,7 @@ export function findRichMarkdownTocHeadingTarget(
   id: string
 ): HTMLElement | undefined {
   const target = items.find((item) => item.id === id)
+
   if (!target) {
     return undefined
   }
@@ -18,7 +19,9 @@ export function findRichMarkdownTocHeadingTarget(
   const sameTitleIndex = items
     .filter((item) => item.title === target.title)
     .findIndex((item) => item.id === target.id)
+
   let remaining = Math.max(0, sameTitleIndex)
+
   for (const candidate of container.querySelectorAll<HTMLElement>(
     RICH_MARKDOWN_TOC_HEADING_SELECTOR
   )) {
@@ -26,8 +29,10 @@ export function findRichMarkdownTocHeadingTarget(
       if (remaining === 0) {
         return candidate
       }
+
       remaining -= 1
     }
   }
+
   return undefined
 }

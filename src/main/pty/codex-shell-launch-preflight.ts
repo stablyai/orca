@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
 
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
+
 const DEV_COMMAND_NAME = 'orca-dev'
 
 export type CodexShellLaunchPreflightCommandOptions = {
@@ -32,7 +33,9 @@ export function resolveCodexShellLaunchPreflightCommand(
   if (!options.hooksEnabled || !options.managedHomePath) {
     return null
   }
+
   const platform = options.platform ?? process.platform
+
   const candidate = options.isPackaged
     ? options.resourcesPath
       ? getBundledLauncherPath(platform, options.resourcesPath)
@@ -42,12 +45,15 @@ export function resolveCodexShellLaunchPreflightCommand(
         ...DEV_LAUNCHER_DIR,
         platform === 'win32' ? `${DEV_COMMAND_NAME}.cmd` : DEV_COMMAND_NAME
       )
+
   if (!candidate || !isExecutableFileOnDisk(candidate, platform)) {
     return null
   }
+
   if (!options.isWsl) {
     return candidate
   }
+
   // Why: WSLENV /p translates the verified Windows launcher with the distro's configured automount root.
   return platform === 'win32' && options.isPackaged ? candidate : null
 }
@@ -57,8 +63,10 @@ function isExecutableFileOnDisk(path: string, platform: NodeJS.Platform): boolea
     if (!statSync(path).isFile()) {
       return false
     }
+
     // Why: Windows has no exec bit, so a readable launcher file is the strongest signal available.
     accessSync(path, platform === 'win32' ? constants.R_OK : constants.X_OK)
+
     return true
   } catch {
     return false

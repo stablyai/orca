@@ -53,6 +53,7 @@ export function useWorktreePointerDrag(args: {
     onDropWorktreesOnWorkspaceBoard,
     shouldShowWorkspaceBoardDropIndicator
   } = args
+
   const {
     worktreePointerDragRef,
     suppressWorktreeClickUntilRef,
@@ -63,9 +64,11 @@ export function useWorktreePointerDrag(args: {
 
   const flushWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
+
     if (!drag) {
       return
     }
+
     flushWorktreePointerDragFrame({
       drag,
       ctx,
@@ -94,6 +97,7 @@ export function useWorktreePointerDrag(args: {
       if (drag.frameId !== null) {
         return
       }
+
       drag.frameId = window.requestAnimationFrame(flushWorktreePointerDrag)
     },
     [flushWorktreePointerDrag]
@@ -115,6 +119,7 @@ export function useWorktreePointerDrag(args: {
         pointerY: drag.currentY,
         draggedCount: drag.draggedIds.length
       })
+
       drag.active = true
       drag.preview = preview
       drag.previewOffsetX = offsetX
@@ -157,22 +162,30 @@ export function useWorktreePointerDrag(args: {
   const handleWorktreeRowPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>, worktree: Worktree, rowKey: string) => {
       const worktreeId = worktree.id
+
       if (event.button !== 0 || event.pointerType === 'touch') {
         return
       }
+
       const sourceRow = event.currentTarget
+
       if (isSidebarPointerDragBlocked(event.target, sourceRow)) {
         return
       }
+
       const sourceGroupKey = session.groupKeyByRowKey.get(rowKey)
       const container = scrollRef.current
+
       if (!sourceGroupKey || !container) {
         return
       }
+
       const rects = getWorktreeSidebarDragRectsForGroup(container, sourceGroupKey)
+
       const canPreviewWorkspaceBoardOnDrag =
         !workspaceBoardOpen &&
         onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+
       if (
         rects.length <= 1 &&
         !hasWorkspaceKanbanSidebarDropBoard() &&
@@ -180,15 +193,19 @@ export function useWorktreePointerDrag(args: {
       ) {
         return
       }
+
       const draggedIds =
         selectedWorktreeIds.has(getWorktreeHostIdentity(worktree)) && selectedWorktrees.length > 1
           ? selectedWorktrees.map((worktree) => worktree.id)
           : [worktreeId]
+
       const reorderDraggedIds = session.getReorderDraggedIds(draggedIds)
+
       const reorderUnitDraggedIds = session.getReorderUnitDraggedIds(
         sourceGroupKey,
         reorderDraggedIds
       )
+
       worktreePointerDragRef.current = {
         pointerId: event.pointerId,
         sourceRow,
@@ -229,6 +246,7 @@ export function useWorktreePointerDrag(args: {
       if (window.performance.now() >= suppressWorktreeClickUntilRef.current) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
     },
@@ -249,12 +267,14 @@ export function useWorktreePointerDrag(args: {
       if (window.performance.now() >= suppressWorktreeClickUntilRef.current) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
     }
 
     document.addEventListener('click', handleClick, true)
+
     return () => document.removeEventListener('click', handleClick, true)
   }, [suppressWorktreeClickUntilRef])
 

@@ -13,8 +13,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bufferPreHandlerPtyData, clearPreHandlerPtyState } from './pty-pre-handler-buffer'
 
 const PRE_HANDLER_PTY_DATA_MAX_PTYS = 64
+
 const WARN_BYTES = 64 * 1024
+
 const EVICTED_PTY_ID = 'pty-warn-evicted'
+
 /** One more than the cap, so the first id admitted is evicted. */
 const FILLER_PTY_IDS = Array.from(
   { length: PRE_HANDLER_PTY_DATA_MAX_PTYS },
@@ -34,6 +37,7 @@ function lostHandlerWarnings(warn: ReturnType<typeof vi.spyOn>): string[] {
 afterEach(() => {
   vi.restoreAllMocks()
   clearPreHandlerPtyState(EVICTED_PTY_ID)
+
   for (const ptyId of FILLER_PTY_IDS) {
     clearPreHandlerPtyState(ptyId)
   }

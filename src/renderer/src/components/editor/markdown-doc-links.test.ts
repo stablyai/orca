@@ -148,6 +148,7 @@ describe('resolveMarkdownDocLink', () => {
       'docs\\setup-guide.md',
       createMarkdownDocumentIndex(documents)
     )
+
     expect(result.status).toBe('resolved')
   })
 

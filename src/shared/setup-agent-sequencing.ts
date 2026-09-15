@@ -8,9 +8,12 @@ import {
 } from './setup-runner-command'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+
 // Exported so the gate and its tests share one definition.
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
+
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
+
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 
 export type SequencedSetupAgentCommands = {
@@ -24,14 +27,17 @@ export function resolveSetupAgentSequenceLaunchCommand(
   fallbackCommand: string | undefined
 ): string | undefined {
   const sequencedStartup = env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]?.trim()
+
   return sequencedStartup || fallbackCommand
 }
 
 export function createSetupAgentSequenceNonce(): string {
   const cryptoApi = globalThis.crypto
+
   if (typeof cryptoApi?.randomUUID === 'function') {
     return cryptoApi.randomUUID()
   }
+
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 }
 
@@ -50,9 +56,11 @@ export function createSequencedSetupAgentCommands(args: {
   // `Invoke-Expression` cannot parse the POSIX `'\''` escaping the pane's quoting produces. The
   // runner itself still launches through `resolution.command`, never through bash.
   const posixGateForWindowsRunner = resolution.shell === 'windows' && args.shell?.family === 'posix'
+
   const markerBasePath = posixGateForWindowsRunner
     ? nativeWindowsPathToPosixShellPath(resolution.runnerScriptPathForShell)
     : resolution.runnerScriptPathForShell
+
   // Why: overlapping gated launches of the same setup runner must not race on
   // a shared completion marker.
   const markerPath = `${markerBasePath}.${nonce}.done`
@@ -78,6 +86,7 @@ export function createSequencedSetupAgentCommands(args: {
     nonce,
     waitTimeoutSeconds
   )
+
   return {
     setupCommand: buildPosixSetupCommand(resolution.command, markerPath, nonce),
     // Why: long worktree paths can push the gate past a PTY's canonical input cap and drop its submit byte.
@@ -117,6 +126,7 @@ function buildPosixStartupScript(
   const nonceValue = quotePosixArg(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const startupSuccessCommand = buildPosixStartupSuccessCommand(startupCommand)
+
   // Why: the PTY launch path feeds this command through an interactive shell,
   // so keeping the wrapper on one line avoids visible `quote>` continuation
   // prompts while still preserving valid `while`/`if` shell syntax.
@@ -153,6 +163,7 @@ function buildPosixStartupSuccessCommand(startupCommand: string): string {
   ) {
     return `eval ${quotePosixArg(startupCommand)}; exit "$?"`
   }
+
   return `exec ${startupCommand}`
 }
 
@@ -163,29 +174,36 @@ function hasLeadingPosixEnvAssignment(command: string): boolean {
 function hasUnquotedPosixCommandSeparator(command: string): boolean {
   let quote: "'" | '"' | null = null
   let escaped = false
+
   for (const char of command) {
     if (escaped) {
       escaped = false
       continue
     }
+
     if (char === '\\') {
       escaped = true
       continue
     }
+
     if (quote) {
       if (char === quote) {
         quote = null
       }
+
       continue
     }
+
     if (char === "'" || char === '"') {
       quote = char
       continue
     }
+
     if (char === ';' || char === '&' || char === '|' || char === '\n' || char === '\r') {
       return true
     }
   }
+
   return false
 }
 
@@ -224,6 +242,7 @@ function buildWindowsStartupCommand(
   waitTimeoutSeconds: number
 ): string {
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
+
   // Why: native Windows setup runners launch through cmd.exe, but PowerShell
   // gives us safe bounded file polling/parsing without a fragile batch label loop.
   const script = [
@@ -301,6 +320,7 @@ function quotePosixArg(value: string): string {
   if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
     return value
   }
+
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 

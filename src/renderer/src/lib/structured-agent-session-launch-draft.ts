@@ -13,6 +13,7 @@ export function seedStructuredAgentLaunchDraft(
   if (options.promptDelivery !== 'draft' || !options.prompt) {
     return
   }
+
   useAppStore.getState().seedNativeChatLaunchDraft({
     tabId: structuredAgentSessionTabId(sessionId),
     agent,

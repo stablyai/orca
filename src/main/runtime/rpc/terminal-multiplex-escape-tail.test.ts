@@ -32,14 +32,18 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
   it('carries the daemon pendingEscapeTailAnsi through the SnapshotStart frame', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
       const handlers = new Map<
         number,
         (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
       >()
+
       const cleanups = new Map<string, () => void>()
+
       const runtime = stubRuntime({
         resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -74,6 +78,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)
       })
+
       const dispatcher = new RpcDispatcher({
         runtime,
         methods: TERMINAL_METHODS
@@ -89,6 +94,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
           },
           registerBinaryStreamHandler: (streamId, handler) => {
             handlers.set(streamId, handler)
+
             return () => handlers.delete(streamId)
           }
         }
@@ -121,6 +127,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
       const snapshotStart = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)!
+
       expect(decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
         pendingEscapeTailAnsi: '\x1b[3',
         alternateScreen: false,

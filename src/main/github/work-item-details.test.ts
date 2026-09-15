@@ -126,6 +126,7 @@ describe('getWorkItemDetails', () => {
       author: 'issue-author'
     })
     getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+
     const timelineEvents = [
       {
         id: 101,
@@ -173,6 +174,7 @@ describe('getWorkItemDetails', () => {
         }
       }
     ]
+
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -391,6 +393,7 @@ describe('getWorkItemDetails', () => {
       author: 'issue-author'
     })
     getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+
     const makeTimelineEvent = (page: number, index: number, event: string): string =>
       JSON.stringify({
         id: `${page}:${index}`,
@@ -399,10 +402,12 @@ describe('getWorkItemDetails', () => {
         assignee: { login: `assignee-${page}-${index}` },
         created_at: '2026-04-01T00:00:00Z'
       })
+
     const makeTimelinePage = (page: number, supportedCount: number): string =>
       Array.from({ length: 100 }, (_, index) =>
         makeTimelineEvent(page, index, index < supportedCount ? 'assigned' : 'subscribed')
       ).join('\n')
+
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -446,9 +451,11 @@ describe('getWorkItemDetails', () => {
       )
     ).toBe(false)
     const timelineItems = details?.timelineItems
+
     if (!timelineItems) {
       throw new Error('Expected timeline items to be present')
     }
+
     expect(timelineItems).toHaveLength(300)
     expect(timelineItems.at(0)).toMatchObject({ assignee: 'assignee-3-0' })
     expect(timelineItems.at(-1)).toMatchObject({ assignee: 'assignee-6-89' })
@@ -623,6 +630,7 @@ describe('getWorkItemDetails', () => {
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const target = args.at(-1)
+
       if (target === 'repos/acme/widgets/pulls/42') {
         return {
           stdout: JSON.stringify({
@@ -632,10 +640,13 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
+
       if (target === 'repos/acme/widgets/pulls/42/files?per_page=100') {
         return { stdout: '[]' }
       }
+
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (query.includes('viewerViewedState')) {
         return {
           stdout: JSON.stringify({
@@ -650,6 +661,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
+
       if (query.includes('participants(first: 100)')) {
         return {
           stdout: JSON.stringify({
@@ -657,6 +669,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
+
       return { stdout: JSON.stringify({ data: {} }) }
     })
 
@@ -727,14 +740,17 @@ describe('getWorkItemDetails', () => {
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const target = args.at(-1)
+
       if (target === 'repos/acme/widgets/pulls/8305') {
         return {
           stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
         }
       }
+
       if (target === 'repos/acme/widgets/pulls/8305/files?per_page=100') {
         throw new Error('gh: API rate limit exceeded (403)')
       }
+
       return { stdout: JSON.stringify({ data: {} }) }
     })
 
@@ -761,14 +777,17 @@ describe('getWorkItemDetails', () => {
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const target = args.at(-1)
+
       if (target === 'repos/acme/widgets/pulls/8306') {
         return {
           stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
         }
       }
+
       if (target === 'repos/acme/widgets/pulls/8306/files?per_page=100') {
         return { stdout: '[]' }
       }
+
       return { stdout: JSON.stringify({ data: {} }) }
     })
 
@@ -800,34 +819,43 @@ describe('getWorkItemDetails', () => {
     getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
+
     const avatars: Record<string, string> = {
       seah: 'https://avatars.example.com/u/1?v=4',
       ludi: 'https://avatars.example.com/u/2?v=4',
       inho: 'https://avatars.example.com/u/3?v=4'
     }
+
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const target = args.at(-1)
+
       if (target === 'repos/acme/widgets/pulls/1102') {
         return {
           stdout: JSON.stringify({ body: 'PR body', head: { sha: 'h' }, base: { sha: 'b' } })
         }
       }
+
       if (target === 'repos/acme/widgets/pulls/1102/files?per_page=100') {
         return { stdout: '[]' }
       }
+
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (query.includes('user(login:')) {
         // Return the aliased users the batch asked for, keyed by their login.
         const data: Record<string, { login: string; name: null; avatarUrl: string }> = {}
         let index = 0
+
         for (const login of Object.keys(avatars)) {
           if (query.includes(`user(login: "${login}")`)) {
             data[`u${index}`] = { login, name: null, avatarUrl: avatars[login] }
             index += 1
           }
         }
+
         return { stdout: JSON.stringify({ data }) }
       }
+
       return { stdout: JSON.stringify({ data: {} }) }
     })
 

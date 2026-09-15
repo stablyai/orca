@@ -13,12 +13,14 @@ export type GitRevListAheadBehindParseResult =
 export function parseGitRevListAheadBehindCounts(output: string): GitRevListAheadBehindParseResult {
   // Why: these Git outputs sit on status/paste-adjacent hot paths; scan only needed fields.
   const fields = getProcessOutputFields(output, 3)
+
   if (fields.length !== 2) {
     return { status: 'unexpected-field-count' }
   }
 
   const ahead = parseGitRevListNonNegativeCount(fields[0])
   const behind = parseGitRevListNonNegativeCount(fields[1])
+
   if (ahead === null || behind === null) {
     return { status: 'unparseable-counts' }
   }
@@ -34,6 +36,8 @@ function parseGitRevListNonNegativeCount(value: string | undefined): number | nu
   if (!value || !/^\d+$/.test(value)) {
     return null
   }
+
   const parsed = Number.parseInt(value, 10)
+
   return Number.isSafeInteger(parsed) ? parsed : null
 }

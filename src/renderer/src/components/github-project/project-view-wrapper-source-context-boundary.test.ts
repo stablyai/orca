@@ -14,12 +14,14 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
 describe('ProjectViewWrapper GitHub source context boundary', () => {
   it('builds project work items with a host-pinned repository identity', async () => {
     const { buildProjectWorkItem } = await import('./project-work-item')
+
     const row: GitHubProjectRow = {
       id: 'PVTI_1',
       itemType: 'PULL_REQUEST',
@@ -53,11 +55,13 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
   it('passes the matched repo source context into the repo-backed GitHub dialog', () => {
     const actionSource = componentSource('useProjectRowActions.ts')
     const wrapperSource = componentSource('ProjectViewWrapper.tsx')
+
     const contextSection = sourceBetween(
       actionSource,
       'const dialogRepo = resolvedDialogRepoItem',
       'const missingDialogs'
     )
+
     const dialogSection = sourceBetween(wrapperSource, '<GitHubItemDialog', 'onUse={(item) => {')
 
     expect(actionSource).toContain('buildTaskSourceContextFromRepo')

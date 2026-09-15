@@ -66,8 +66,10 @@ function makeRpcChild() {
     kill: ReturnType<typeof vi.fn>
     exitCode: number | null
   }
+
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   // Why: like the real app-server, the fake dies on stdin EOF or a signal —
   // the graceful shutdown path resolves only once the child reports exit.
   const exitNow = (): void => {
@@ -75,12 +77,15 @@ function makeRpcChild() {
     child.emit('exit', 0, null)
     child.emit('close', 0, null)
   }
+
   child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
   child.exitCode = null
   child.kill = vi.fn(() => {
     exitNow()
+
     return true
   })
+
   return child
 }
 
@@ -90,6 +95,7 @@ function respondToRpcRateLimitRead(
 ): void {
   rpcChild.stdin.write.mockImplementation((line: string) => {
     const msg = JSON.parse(line) as { id?: number; method?: string }
+
     if (msg.method === 'initialize') {
       setTimeout(() => {
         rpcChild.stdout.emit(
@@ -98,6 +104,7 @@ function respondToRpcRateLimitRead(
         )
       }, 0)
     }
+
     if (msg.method === 'account/rateLimits/read') {
       setTimeout(() => {
         rpcChild.stdout.emit(
@@ -112,13 +119,16 @@ function respondToRpcRateLimitRead(
 function makePtyTerm() {
   let dataHandler: ((data: string) => void) | null = null
   let exitHandler: (() => void) | null = null
+
   return {
     onData: vi.fn((callback: (data: string) => void) => {
       dataHandler = callback
+
       return makeDisposable()
     }),
     onExit: vi.fn((callback: () => void) => {
       exitHandler = callback
+
       return makeDisposable()
     }),
     write: vi.fn(),
@@ -326,6 +336,7 @@ describe('fetchCodexRateLimits', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -340,9 +351,11 @@ describe('fetchCodexRateLimits', () => {
 
     expect(ptySpawnMock).toHaveBeenCalled()
     const onPtyData = ptyHandlers.onData
+
     if (!onPtyData) {
       throw new Error('PTY data handler was not registered')
     }
+
     onPtyData('>')
     onPtyData('5h limit: 7%\nWeekly limit: 12%\n')
     await vi.advanceTimersByTimeAsync(500)
@@ -535,6 +548,7 @@ describe('fetchCodexRateLimits', () => {
     } as Response)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -543,6 +557,7 @@ describe('fetchCodexRateLimits', () => {
           )
         }, 0)
       }
+
       if (msg.method === 'account/rateLimits/read') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -611,6 +626,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -619,6 +635,7 @@ describe('fetchCodexRateLimits', () => {
           )
         }, 0)
       }
+
       if (msg.method === 'account/rateLimits/read') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -677,6 +694,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -685,6 +703,7 @@ describe('fetchCodexRateLimits', () => {
           )
         }, 0)
       }
+
       if (msg.method === 'account/rateLimits/read') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -705,6 +724,7 @@ describe('fetchCodexRateLimits', () => {
       const resultPromise = fetchCodexRateLimits({
         codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
       })
+
       await vi.advanceTimersByTimeAsync(1)
       await vi.advanceTimersByTimeAsync(1)
       await resultPromise
@@ -756,6 +776,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -764,6 +785,7 @@ describe('fetchCodexRateLimits', () => {
           )
         }, 0)
       }
+
       if (msg.method === 'account/rateLimits/read') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -817,6 +839,7 @@ describe('fetchCodexRateLimits', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -828,6 +851,7 @@ describe('fetchCodexRateLimits', () => {
       const resultPromise = fetchCodexRateLimits({
         codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
       })
+
       await vi.advanceTimersByTimeAsync(0)
       rpcChild.emit('close')
       await vi.advanceTimersByTimeAsync(0)
@@ -858,9 +882,11 @@ describe('fetchCodexRateLimits', () => {
       )
 
       const onPtyData = ptyHandlers.onData
+
       if (!onPtyData) {
         throw new Error('PTY data handler was not registered')
       }
+
       onPtyData('>')
       onPtyData('5h limit: 17%\nWeekly limit: 23%\n')
       await vi.advanceTimersByTimeAsync(500)
@@ -876,6 +902,7 @@ describe('fetchCodexRateLimits', () => {
       } else {
         process.env.CODEX_HOME = originalCodexHome
       }
+
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform

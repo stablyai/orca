@@ -54,6 +54,7 @@ export async function removeUnregisteredWorktree(
   const { mainWindow, store, runtime } = context
   const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
   let canCleanOrphanedDirectory = false
+
   if (
     canCleanupUnregisteredOrcaWorktreeDirectory({
       meta: removedMeta
@@ -63,9 +64,11 @@ export async function removeUnregisteredWorktree(
       if (!fsProvider) {
         throw new Error('SSH filesystem provider unavailable')
       }
+
       if (!fsProvider.lstat) {
         throw new Error('SSH filesystem provider lstat unavailable')
       }
+
       canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
         worktreePath,
         repo.path,
@@ -84,14 +87,18 @@ export async function removeUnregisteredWorktree(
         ))
     }
   }
+
   if (canCleanOrphanedDirectory) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
+
     if (!args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
+
     if (repo.connectionId) {
       const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath, repo.connectionId)
       let removalCompleted = false
+
       try {
         await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
           connectionId: repo.connectionId,
@@ -102,6 +109,7 @@ export async function removeUnregisteredWorktree(
       } finally {
         await removalGate.finish(removalCompleted)
       }
+
       // Why history first: the worktree is already gone from git and
       // disk by here, so a rejecting push-target cleanup must not be
       // able to skip history removal and leave the user's commands on
@@ -117,6 +125,7 @@ export async function removeUnregisteredWorktree(
     } else {
       const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
       let removalCompleted = false
+
       try {
         await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
           allowUnverifiedStop: args.allowUnverifiedPtyStop
@@ -126,6 +135,7 @@ export async function removeUnregisteredWorktree(
       } finally {
         await removalGate.finish(removalCompleted)
       }
+
       await cleanupUnusedWorktreePushTargetRemote(
         repo.path,
         args.worktreeId,
@@ -135,6 +145,7 @@ export async function removeUnregisteredWorktree(
       )
       invalidateAuthorizedRootsCache()
     }
+
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
       store,
@@ -149,11 +160,14 @@ export async function removeUnregisteredWorktree(
       })
     )
     notifyWorktreesChanged(mainWindow, repoId)
+
     return {}
   }
+
   if (!repo.connectionId) {
     const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
     const runtimeWorktreePath = toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions)
+
     if (
       await canCleanupUnregisteredOrcaLeftoverDirectory({
         meta: removedMeta,
@@ -169,8 +183,10 @@ export async function removeUnregisteredWorktree(
       if (!args.force) {
         throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
       }
+
       const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
       let removalCompleted = false
+
       try {
         await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
           allowUnverifiedStop: args.allowUnverifiedPtyStop
@@ -180,6 +196,7 @@ export async function removeUnregisteredWorktree(
       } finally {
         await removalGate.finish(removalCompleted)
       }
+
       await cleanupUnusedWorktreePushTargetRemote(
         repo.path,
         args.worktreeId,
@@ -202,14 +219,17 @@ export async function removeUnregisteredWorktree(
       )
       invalidateAuthorizedRootsCache()
       notifyWorktreesChanged(mainWindow, repoId)
+
       return {}
     }
   }
+
   if (await isAlreadyRemovedWorktreePath(repo, worktreePath, localWorktreeGitOptions)) {
     if (!args.force && !removedMeta) {
       // Why: without persisted metadata, require the renderer recovery path before deleting Orca-only state for an unregistered path.
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
     }
+
     // Why: a manually deleted worktree is already gone; persisted metadata proves it was an Orca-known row, so no force is needed.
     if (repo.connectionId) {
       // Why history first: the worktree is already gone from git and
@@ -234,6 +254,7 @@ export async function removeUnregisteredWorktree(
       )
       invalidateAuthorizedRootsCache()
     }
+
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
       store,
@@ -248,7 +269,9 @@ export async function removeUnregisteredWorktree(
       })
     )
     notifyWorktreesChanged(mainWindow, repoId)
+
     return {}
   }
+
   throw new Error(`Refusing to delete unregistered worktree path: ${worktreePath}`)
 }

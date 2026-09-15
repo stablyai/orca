@@ -12,8 +12,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+
 vi.mock('./RuntimeAccessGrantList', () => ({ RuntimeAccessGrantList: () => null }))
+
 vi.mock('./RuntimePairingGeneratorForm', () => ({
   RuntimePairingGeneratorForm: (props: { selectedAddress: string; onGenerate: () => void }) => (
     <div>

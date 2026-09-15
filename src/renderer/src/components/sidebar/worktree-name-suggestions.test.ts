@@ -9,8 +9,10 @@ import {
 
 // Always selects the first element of the unused pool, so assertions are exact.
 const pickFirst = () => 0
+
 // Suggestions are lowercased (branch-name convention), so expectations are too.
 const lower = (index: number) => MARINE_CREATURES[index].toLowerCase()
+
 const retiring = (...names: string[]) => ({ exhaustedTiers: 0, names })
 
 describe('getSuggestedCreatureName', () => {

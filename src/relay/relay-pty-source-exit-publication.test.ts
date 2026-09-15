@@ -85,15 +85,18 @@ function createScenario(
 ) {
   const deliveries = new Map<string, RelayPtySourceDeliveryRecord>([['pty-1', record]])
   let probe = initialProbe
+
   const setProbe = (next: PtySourceDeliverySnapshot | null): void => {
     probe = next
   }
+
   const session = {
     sourceDeliverySnapshotIfKnown: vi.fn(() => probe),
     sourceDeliverySnapshot: vi.fn(() => {
       if (!probe) {
         throw new Error('Unknown or stale PTY source delivery')
       }
+
       return probe
     }),
     cancelDelivery: vi.fn(),
@@ -101,6 +104,7 @@ function createScenario(
     settleExitPublication: vi.fn(),
     deliveryMode: vi.fn(() => 'source-owner' as const)
   }
+
   const dispatcher = {
     tryNotifyPtyExit: vi.fn(() => notifyAccepted),
     tryNotifyPtyExitToMatchingClients: vi.fn(
@@ -109,7 +113,9 @@ function createScenario(
     projectPtyExitToMatchingClients: vi.fn(() => true),
     tryNotifyPtyExitToClient: vi.fn(() => true)
   }
+
   const sender = { pump: vi.fn(), wakeSendWaiters: vi.fn() }
+
   const counters: RelayPtySourcePublicationCounters = {
     opened: 0,
     rotated: 0,
@@ -119,14 +125,18 @@ function createScenario(
     exitCommitted: 0,
     exitRolledBack: 0
   }
+
   const capacityIds: string[] = []
   let capacityError: Error | null = null
+
   const onCapacity = (id: string): void => {
     capacityIds.push(id)
+
     if (capacityError) {
       throw capacityError
     }
   }
+
   const run = (): boolean =>
     sealAndPublishPtySourceExit({
       params,
@@ -138,6 +148,7 @@ function createScenario(
       counters,
       onCapacity
     })
+
   const runTracked = (legacyExits: RelayPtySourceLegacyExitIndex): boolean =>
     sealAndPublishTrackedPtySourceExit({
       params,
@@ -149,6 +160,7 @@ function createScenario(
       counters,
       onCapacity
     })
+
   return {
     deliveries,
     session,
@@ -214,6 +226,7 @@ describe('sealAndPublishPtySourceExit closed-delivery guard', () => {
     const record = deliveryRecord({
       sourceExitState: exitState as RelayPtySourceDeliveryRecord['sourceExitState']
     })
+
     const scenario = createScenario(probe, record)
 
     expect(scenario.run()).toBe(true)
@@ -239,18 +252,22 @@ describe('sealAndPublishPtySourceExit closed-delivery guard', () => {
 describe('RelayPtySourceLegacyExitIndex', () => {
   function createIndex(notifyAccepted = true) {
     const index = new RelayPtySourceLegacyExitIndex()
+
     const dispatcher = {
       tryNotifyPtyExitToMatchingClients: vi.fn(
         (_matches: (clientId: number) => boolean, _params: unknown) => notifyAccepted
       )
     }
+
     const session = { deliveryMode: vi.fn(() => 'source-owner' as const) }
+
     const publish = (): boolean | null =>
       index.publishAfterRetire(
         params,
         dispatcher as unknown as RelayDispatcher,
         session as unknown as SshPtyConsumerSessionAdapter
       )
+
     return { index, dispatcher, session, publish }
   }
 
@@ -377,11 +394,13 @@ describe('sealAndPublishPtySourceExit settlement closure', () => {
     scenario.dispatcher.tryNotifyPtyExitToClient.mockImplementation(
       (...args: unknown[]): boolean => {
         settle = args[2] as typeof settle
+
         return true
       }
     )
     expect(scenario.run()).toBe(true)
     scenario.setProbe(settlementProbe)
+
     return { ...scenario, record, settle: settle! }
   }
 
@@ -412,6 +431,7 @@ describe('sealAndPublishPtySourceExit settlement closure', () => {
     let settle: ((result: { ok: true }) => void) | undefined
     scenario.dispatcher.tryNotifyPtyExitToClient.mockImplementation((...args: unknown[]) => {
       settle = args[2] as typeof settle
+
       return true
     })
     scenario.session.settleExitPublication.mockImplementation(() => {
@@ -419,6 +439,7 @@ describe('sealAndPublishPtySourceExit settlement closure', () => {
     })
     scenario.setCapacityError(new Error('capacity callback failed'))
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       expect(scenario.runTracked(index)).toBe(true)
       expect(() => settle!({ ok: true })).not.toThrow()
@@ -448,6 +469,7 @@ describe('sealAndPublishPtySourceExit settlement closure', () => {
     ['rolled back', { ok: false, error: new Error('socket write failed') } as const]
   ])('logs, contains and resumes after a %s ledger settlement fault', (_label, result) => {
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const scenario = createInFlightScenario(closedSnapshot({ state: 'sealed-unsettled' }))
       scenario.record.sendWaiters.add(vi.fn())

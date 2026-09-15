@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process'
 import type { RelayDispatcher } from './dispatcher'
 
 const TEST_GIT_USER_EMAIL = 'test@test.com'
+
 const TEST_GIT_USER_NAME = 'Test'
 
 // Why: declare an explicit type so the inferred return type of
@@ -71,9 +72,11 @@ export function createMockDispatcher(): MockDispatcher {
       context: { isStale: () => boolean; signal?: AbortSignal } = { isStale: () => false }
     ) {
       const handler = requestHandlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       return handler(params, context)
     }
   }

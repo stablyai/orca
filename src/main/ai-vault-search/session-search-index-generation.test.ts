@@ -15,14 +15,17 @@ import { SessionSearchStore } from './session-search-store'
 import { parseTranscript, userRecord } from './session-search-transcript-fixtures'
 
 let roots: string[] = []
+
 let handles: SyncDatabase[] = []
 
 afterEach(async () => {
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
+
   for (const handle of handles) {
     handle.close()
   }
+
   handles = []
   await Promise.all(roots.map((root) => removeTree(root)))
   roots = []
@@ -31,6 +34,7 @@ afterEach(async () => {
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-search-generation-'))
   roots.push(root)
+
   return root
 }
 
@@ -46,6 +50,7 @@ function reader(path: string): SyncDatabase {
   handles.push(db)
   // Constructing an engine is what installs the triggers.
   new SessionSearchEngine(db)
+
   return db
 }
 
@@ -56,11 +61,13 @@ async function indexOneTranscript(root: string, store: SessionSearchStore): Prom
   const path = join(root, `${Math.random().toString(36).slice(2)}.jsonl`)
   await writeFile(path, `${userRecord(0, 'generation fixture needle', sessionId)}\n`)
   const unregister = registerSessionSearchIndexConsumer(store)
+
   try {
     await parseTranscript(path)
   } finally {
     unregister()
   }
+
   return path
 }
 
@@ -68,9 +75,11 @@ it('moves the generation forward when a committed read changes what a read retur
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     const before = readIndexGeneration(db)
     await indexOneTranscript(root, store)
@@ -87,13 +96,16 @@ it('moves the generation forward when an append adds rows to a live session', as
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     const transcript = await indexOneTranscript(root, store)
     const indexed = readIndexGeneration(db)
     const unregister = registerSessionSearchIndexConsumer(store)
+
     try {
       resetSessionParseCacheForTests()
       await appendFile(transcript, `${userRecord(1, 'a second needle turn')}\n`)
@@ -101,6 +113,7 @@ it('moves the generation forward when an append adds rows to a live session', as
     } finally {
       unregister()
     }
+
     expect(db.prepare('SELECT COUNT(*) AS c FROM messages').get()).toEqual({ c: 2 })
     expect(readIndexGeneration(db)).toBeGreaterThan(indexed)
   } finally {
@@ -112,9 +125,11 @@ it('moves the generation forward when a proven deletion hides a session', async 
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     const transcript = await indexOneTranscript(root, store)
     const indexed = readIndexGeneration(db)
@@ -132,9 +147,11 @@ it('moves the generation forward when retention cuts a session loose', async () 
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     await indexOneTranscript(root, store)
     const indexed = readIndexGeneration(db)
@@ -156,9 +173,11 @@ it('moves the generation when a purge reclaims rows nothing can reach', async ()
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     await indexOneTranscript(root, store)
     // The shape an interrupted purge leaves: rows with no session row.
@@ -181,9 +200,11 @@ it("leaves the generation alone when a replace swaps a session's own rows", asyn
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     await indexOneTranscript(root, store)
     const rows = db.prepare('SELECT COUNT(*) AS c FROM messages').get() as { c: number }
@@ -202,9 +223,11 @@ it('leaves the generation alone when a removal hides nothing', async () => {
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     await indexOneTranscript(root, store)
     const before = readIndexGeneration(db)
@@ -221,14 +244,17 @@ it('keeps the generation across a reopen, because the bump rides its own commit'
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   reader(path)
+
   const first = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   await indexOneTranscript(root, first)
   const indexed = readIndexGeneration(reader(path))
   first.close()
 
   const second = new SessionSearchStore(path)
+
   try {
     expect(readIndexGeneration(reader(path))).toBe(indexed)
   } finally {
@@ -244,14 +270,18 @@ it('fences a reader against a writer it does not share a process with', async ()
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const writer = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     const transcripts: string[] = []
+
     for (let n = 0; n < 3; n++) {
       transcripts.push(await indexOneTranscript(root, writer))
     }
+
     const engine = new SessionSearchEngine(db)
     const page = engine.search({ query: 'needle', limit: 1 })
     expect(page.page.cursor).not.toBeNull()
@@ -277,9 +307,11 @@ it('re-creates a fence something dropped, on the next search', async () => {
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const store = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     const transcript = await indexOneTranscript(root, store)
     const engine = new SessionSearchEngine(db)
@@ -307,18 +339,23 @@ it('mints a distinct generation per change even when two handles write', async (
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
+
   const first = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   const second = new SessionSearchStore(path, (error) => {
     throw error
   })
+
   try {
     const seen: number[] = [readIndexGeneration(db)]
+
     for (const store of [first, second, first, second]) {
       await indexOneTranscript(root, store)
       seen.push(readIndexGeneration(db))
     }
+
     // Read-then-write from two connections would hand out one value twice.
     expect(new Set(seen).size).toBe(seen.length)
     expect([...seen].sort((left, right) => left - right)).toEqual(seen)

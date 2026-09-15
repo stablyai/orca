@@ -247,6 +247,7 @@ describe('worktree list indentation', () => {
       inheritedCardContentIndent: 20,
       lineageDepth: 1
     })
+
     const grandchild = getLineageNestedRowGeometry({
       experimentalNewWorktreeCardStyle: true,
       inheritedCardContentIndent: 20,

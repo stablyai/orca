@@ -64,10 +64,12 @@ type Deferred<T> = {
 function createDeferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -92,12 +94,18 @@ type ProbeProps = {
 }
 
 const authorizeExternalPath = vi.fn()
+
 // Why: opening any liveTail tab arms useLocalLogTail's change subscription.
 const onLocalLogTailChanged = vi.fn(() => () => {})
+
 const fsApi = { authorizeExternalPath, onLocalLogTailChanged }
+
 let latestFileContents: Record<string, FileContent> = {}
+
 let latestDiffContents: Record<string, DiffContent> = {}
+
 let latestReloadContent: (file: OpenFile) => void = () => {}
+
 const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
 
 function HookProbe({
@@ -112,9 +120,11 @@ function HookProbe({
     gitStatusEntries: activeFile ? gitStatusByWorktree[activeFile.worktreeId] : undefined,
     editorViewMode: {}
   })
+
   latestFileContents = state.fileContents
   latestDiffContents = state.diffContents
   latestReloadContent = state.reloadContent
+
   return null
 }
 
@@ -163,6 +173,7 @@ describe('useEditorPanelContentState', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     container = null
     root = null
@@ -174,6 +185,7 @@ describe('useEditorPanelContentState', () => {
       relativePath: 'api/src/file.ts',
       worktreeId: 'folder:folder-workspace-1'
     })
+
     mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote content', isBinary: false })
 
@@ -210,6 +222,7 @@ describe('useEditorPanelContentState', () => {
       worktreeId: 'repo-ssh::/home/user/project',
       externalSshTargetId: 'ssh-1'
     } as never)
+
     mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
     mocks.readRuntimeFileContent.mockResolvedValue({
       content: 'base64-image',
@@ -245,6 +258,7 @@ describe('useEditorPanelContentState', () => {
       relativePath: '/work/reports/audit.md',
       worktreeId: 'repo-ssh::/work/demo-project'
     })
+
     mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
     mocks.readRuntimeFileContent.mockResolvedValue({ content: '# remote', isBinary: false })
 
@@ -299,6 +313,7 @@ describe('useEditorPanelContentState', () => {
       relativePath: '/Users/me/notes/audit.md',
       worktreeId: 'repo-local::/Users/me/project'
     })
+
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
     mocks.readRuntimeFileContent.mockResolvedValue({ content: '# local', isBinary: false })
 
@@ -321,6 +336,7 @@ describe('useEditorPanelContentState', () => {
       relativePath: '/work/reports/audit.md',
       worktreeId: 'repo-runtime::/work/demo-project'
     })
+
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
     mocks.getState.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
@@ -352,6 +368,7 @@ describe('useEditorPanelContentState', () => {
       worktreeId: 'repo-ssh::/home/user/project',
       externalSshTargetId: 'ssh-original'
     } as never)
+
     mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
     mocks.readRuntimeFileContent.mockRejectedValue(
       new Error('External SSH files are not available after the workspace host changes.')
@@ -395,6 +412,7 @@ describe('useEditorPanelContentState', () => {
         mergeBase: 'merge-base'
       }
     })
+
     mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
     mocks.getRuntimeGitBranchDiff.mockResolvedValue({
       kind: 'text',
@@ -438,6 +456,7 @@ describe('useEditorPanelContentState', () => {
       relativePath: 'src/index.ts',
       worktreeId: 'repo-ssh::/home/user/project'
     })
+
     // Owner unknown (SSH repo not hydrated): connection unresolved + not ready.
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
     mocks.isWorktreeConnectionResolved.mockReturnValue(false)
@@ -514,6 +533,7 @@ describe('useEditorPanelContentState', () => {
       mode: 'diff',
       diffSource: 'unstaged'
     })
+
     mocks.getRuntimeGitDiff.mockResolvedValue({
       kind: 'text',
       originalContent: 'old',
@@ -563,6 +583,7 @@ describe('useEditorPanelContentState', () => {
       mode: 'diff',
       diffSource: 'unstaged'
     })
+
     mocks.getRuntimeGitDiff
       .mockResolvedValueOnce({
         kind: 'text',
@@ -684,6 +705,7 @@ describe('useEditorPanelContentState', () => {
         entries: [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }]
       }
     })
+
     const conflictRead = createDeferred<FileContent>()
     mocks.readRuntimeFileContent.mockReturnValueOnce(conflictRead.promise)
 
@@ -771,6 +793,7 @@ describe('useEditorPanelContentState', () => {
       mode: 'diff',
       diffSource: 'unstaged'
     })
+
     const staleDiff = createDeferred<DiffContent>()
     const freshDiff = createDeferred<DiffContent>()
     mocks.getRuntimeGitDiff
@@ -825,6 +848,7 @@ describe('useEditorPanelContentState', () => {
       mode: 'diff',
       diffSource: 'unstaged'
     })
+
     mocks.getRuntimeGitDiff
       .mockResolvedValueOnce({
         kind: 'text',

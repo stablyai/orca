@@ -22,18 +22,22 @@ function createPreviewFixture(): {
   block.appendChild(paragraph)
   root.appendChild(block)
   document.body.appendChild(root)
+
   return { root, block, paragraph }
 }
 
 function selectTextIn(node: Node): Selection {
   const selection = window.getSelection()
+
   if (!selection) {
     throw new Error('Selection API unavailable in test environment')
   }
+
   const range = document.createRange()
   range.selectNodeContents(node)
   selection.removeAllRanges()
   selection.addRange(range)
+
   return selection
 }
 

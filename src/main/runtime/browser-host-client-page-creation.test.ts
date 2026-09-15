@@ -3,6 +3,7 @@ import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-
 import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
 
 const authorityRuntimeId = 'runtime-a'
+
 const authorityEpoch = 'epoch-a'
 
 describe('browser host client page creation', () => {
@@ -21,7 +22,9 @@ describe('browser host client page creation', () => {
       browserProfileId: 'default',
       executionHostKey: 'native:runtime-a:7'
     })
+
     await Promise.resolve()
+
     if (command) {
       settle(leases, selected, command, { status: 'completed' })
     }
@@ -86,6 +89,7 @@ describe('browser host client page creation', () => {
       browserProfileId: 'default',
       executionHostKey: 'ssh:target-a:3'
     })
+
     settle(leases, selected, commands[0]!, {
       status: 'failed',
       errorCode: 'browser_client_page_mount_failed'
@@ -143,8 +147,10 @@ describe('browser host client page creation', () => {
       browserProfileId: 'default',
       executionHostKey: 'ssh:target-a:3'
     })
+
     settle(leases, selected, commands[0]!, { status: 'completed' })
     const firstPlacement = await first
+
     const second = leases.createClientPage({
       browserPageId: 'page-b',
       browserHostClientId: 'host-a',
@@ -152,12 +158,15 @@ describe('browser host client page creation', () => {
       browserProfileId: 'default',
       executionHostKey: 'ssh:target-a:3'
     })
+
     settle(leases, selected, commands[1]!, { status: 'completed' })
     const secondPlacement = await second
+
     const tunnel = leases.openTunnel(
       { ...identity(selected), executionHostKey: 'ssh:target-a:3' },
       { requireExecutionHostGrant: true }
     )
+
     let tunnelFence: string | undefined
     void tunnel.whenFenced.then((reason) => {
       tunnelFence = reason
@@ -185,6 +194,7 @@ describe('browser host client page creation', () => {
     leases.attachCommandDelivery(identity(selected), (event) => {
       command = event
     })
+
     const creation = leases.createClientPage({
       browserPageId: 'page-replaced',
       browserHostClientId: 'host-a',
@@ -211,6 +221,7 @@ describe('browser host client page creation', () => {
     leases.attachCommandDelivery(identity(selected), (event) => {
       command = event
     })
+
     const creation = leases.createClientPage({
       browserPageId: 'page-in-flight',
       browserHostClientId: 'host-a',
@@ -260,6 +271,7 @@ describe('browser host client page creation', () => {
     leases.attachCommandDelivery(identity(selected), (event) => {
       command = event
     })
+
     const creation = leases.createClientPage({
       browserPageId: 'page-exact-retirement',
       browserHostClientId: 'host-a',
@@ -267,6 +279,7 @@ describe('browser host client page creation', () => {
       browserProfileId: 'default',
       executionHostKey: 'ssh:target-a:3'
     })
+
     settle(leases, selected, command!, { status: 'completed' })
     const placement = await creation
     const retirement = leases.beginPageRetirement('page-exact-retirement', placement)
@@ -281,11 +294,13 @@ describe('browser host client page creation', () => {
 
   it('bounds missing create proof and releases its reservation and grant', async () => {
     vi.useFakeTimers()
+
     try {
       const leases = registry()
       const selected = attachHost(leases, 'host-a', 'device-a', 'connection-a')
       const commands: BrowserClientHostCommandEvent[] = []
       leases.attachCommandDelivery(identity(selected), (event) => commands.push(event))
+
       const creation = leases.createClientPage({
         browserPageId: 'page-timeout',
         browserHostClientId: 'host-a',
@@ -294,6 +309,7 @@ describe('browser host client page creation', () => {
         executionHostKey: 'ssh:target-a:3',
         timeoutMs: 25
       })
+
       const rejected = expect(creation).rejects.toThrow('browser_host_page_creation_timeout')
 
       await vi.advanceTimersByTimeAsync(25)

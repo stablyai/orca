@@ -35,6 +35,7 @@ type GlobalWithReactDevtoolsHook = Record<string, ReactDevtoolsCommitHook | unde
 
 function createCommitHookShim(): ReactDevtoolsCommitHook {
   const renderers = new Map<number, unknown>()
+
   return {
     isDisabled: false,
     supportsFiber: true,
@@ -42,6 +43,7 @@ function createCommitHookShim(): ReactDevtoolsCommitHook {
     inject: (renderer) => {
       const rendererId = renderers.size + 1
       renderers.set(rendererId, renderer)
+
       return rendererId
     },
     // Why a noop and not undefined: react-refresh captures this property and
@@ -55,11 +57,14 @@ export function ensureReactDevtoolsCommitHook(): ReactDevtoolsCommitHook | undef
   try {
     const globalWithHook = globalThis as unknown as GlobalWithReactDevtoolsHook
     const existing = globalWithHook.__REACT_DEVTOOLS_GLOBAL_HOOK__
+
     if (existing) {
       return existing
     }
+
     const hook = createCommitHookShim()
     globalWithHook.__REACT_DEVTOOLS_GLOBAL_HOOK__ = hook
+
     return hook
   } catch {
     // A renderer without a patchable global still has to boot.

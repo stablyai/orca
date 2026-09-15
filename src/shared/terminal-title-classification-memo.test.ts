@@ -10,6 +10,7 @@ import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-ty
 // what one store write costs when no title has changed.
 vi.mock('./agent-name-token-match', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentNameTokenMatchModule>()
+
   return { ...actual, titleHasAgentName: vi.fn(actual.titleHasAgentName) }
 })
 
@@ -25,6 +26,7 @@ const UNCHANGED_TITLES = [
   'gemini',
   'cursor agent'
 ]
+
 const STORE_WRITES = 50
 
 function classifyEveryTitle(): void {
@@ -63,6 +65,7 @@ describe('terminal title classification memo', () => {
     for (let read = 0; read < 20; read += 1) {
       getAgentLabel(title)
     }
+
     expect(classifierCalls.mock.calls.length).toBe(firstReadCalls)
   })
 
@@ -84,11 +87,13 @@ describe('terminal title classification memo', () => {
   it('evicts oldest entries instead of growing without bound', () => {
     const classify = vi.fn((title: string) => title.length)
     const memoized = memoizeTitleClassification(classify)
+
     // Cap is 1024; overflow it and confirm the newest key still hits while the
     // oldest was evicted.
     for (let index = 0; index < 1030; index += 1) {
       memoized(`title-${index}`)
     }
+
     const afterFill = classify.mock.calls.length
     memoized('title-1029')
     expect(classify.mock.calls.length).toBe(afterFill)

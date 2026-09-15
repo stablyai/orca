@@ -27,11 +27,13 @@ export function useRichMarkdownReviewEditorEffects({
     if (!editor || !canAnnotateRichMarkdown) {
       return
     }
+
     const noteRanges = getRichMarkdownAnnotationHighlightRanges(
       editor,
       markdownComments,
       markdownSourceLineOffset
     )
+
     editor.view.dispatch(
       editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, { noteRanges })
     )
@@ -41,13 +43,17 @@ export function useRichMarkdownReviewEditorEffects({
     if (!editor) {
       return
     }
+
     const container = scrollContainerRef.current
+
     if (!container) {
       return
     }
+
     const update = (): void => syncAnnotationTarget(editor)
     container.addEventListener('scroll', update)
     window.addEventListener('resize', update)
+
     return () => {
       container.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)

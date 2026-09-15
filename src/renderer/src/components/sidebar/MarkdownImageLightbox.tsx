@@ -29,6 +29,7 @@ export function ExpandableMarkdownImage({
   triggerClassName
 }: ExpandableMarkdownImageProps): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
+
   const label =
     alt?.trim() || translate('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
 

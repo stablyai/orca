@@ -69,9 +69,11 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   attach(mainWindow: BrowserWindow): void {
     this.detachWindowListeners?.()
     this.mainWindow = mainWindow
+
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
+
     // Why: attach() can replace windows; remove the previous closed listener too, not only the focus listeners.
     const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
@@ -79,15 +81,19 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       mainWindow.removeListener('restore', refreshOnResume)
       mainWindow.removeListener('closed', onClosed)
     }
+
     const onClosed = (): void => {
       detachWindowListeners()
+
       if (this.detachWindowListeners === detachWindowListeners) {
         this.detachWindowListeners = null
       }
+
       if (this.mainWindow === mainWindow) {
         this.mainWindow = null
       }
     }
+
     mainWindow.on('focus', refreshOnResume)
     mainWindow.on('show', refreshOnResume)
     mainWindow.on('restore', refreshOnResume)
@@ -101,6 +107,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     } else {
       this.scheduleDeferredStartupRefresh()
     }
+
     this.startTimer()
   }
 
@@ -120,6 +127,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   getState(): RateLimitState {
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
+
     return {
       ...this.state,
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.

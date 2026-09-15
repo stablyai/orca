@@ -13,10 +13,12 @@ const {
 }))
 
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: getSshGitProviderGenerationMock
 }))
+
 vi.mock('../github/local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
@@ -87,6 +89,7 @@ describe('cached git remote name listing', () => {
 
   it('uses the short TTL when config changes during remote listing', async () => {
     vi.useFakeTimers()
+
     try {
       readLocalGitConfigSignatureMock
         .mockResolvedValueOnce('sig-1')
@@ -107,6 +110,7 @@ describe('cached git remote name listing', () => {
 
   it('expires an unsigned listing after the short TTL', async () => {
     vi.useFakeTimers()
+
     try {
       readLocalGitConfigSignatureMock.mockImplementation(async () => undefined)
       gitExecFileAsyncMock
@@ -124,6 +128,7 @@ describe('cached git remote name listing', () => {
 
   it('holds a signed listing past the unsigned TTL', async () => {
     vi.useFakeTimers()
+
     try {
       gitExecFileAsyncMock.mockResolvedValue({ stdout: 'origin\n' })
 
@@ -149,6 +154,7 @@ describe('cached git remote name listing', () => {
   it('coalesces concurrent listings onto one spawn', async () => {
     gitExecFileAsyncMock.mockImplementation(async () => {
       await Promise.resolve()
+
       return { stdout: 'origin\n' }
     })
 

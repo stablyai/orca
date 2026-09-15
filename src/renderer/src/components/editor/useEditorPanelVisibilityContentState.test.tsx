@@ -62,13 +62,16 @@ type ProbeProps = {
 }
 
 const snapshots = new Map<string, ProbeSnapshot>()
+
 const EMPTY_EDITOR_VIEW_MODE: Record<string, 'edit' | 'changes'> = {}
 
 function createDeferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -95,6 +98,7 @@ function Probe({
   openFiles
 }: ProbeProps): null {
   const panelOpenFiles = useMemo(() => openFiles ?? [activeFile], [activeFile, openFiles])
+
   const state = useEditorPanelContentState({
     activeFile,
     editorViewMode,
@@ -103,10 +107,12 @@ function Probe({
     isVisible,
     openFiles: panelOpenFiles
   })
+
   snapshots.set(name, {
     diffContents: state.diffContents,
     fileContents: state.fileContents
   })
+
   return null
 }
 
@@ -136,6 +142,7 @@ function ExternalChangeLayoutEmitter({ file }: { file: OpenFile }): null {
       })
     )
   }, [file])
+
   return null
 }
 
@@ -303,6 +310,7 @@ describe('useEditorPanelContentState visibility', () => {
       relativePath: 'readme.md',
       language: 'markdown'
     })
+
     const preview = makeFile('preview', {
       filePath: '/repo/readme.md',
       relativePath: 'readme.md',
@@ -310,6 +318,7 @@ describe('useEditorPanelContentState visibility', () => {
       mode: 'markdown-preview',
       markdownPreviewSourceFileId: source.id
     })
+
     mocks.readRuntimeFileContent
       .mockResolvedValueOnce({ content: 'old', isBinary: false })
       .mockResolvedValueOnce({ content: 'fresh', isBinary: false })
@@ -423,9 +432,11 @@ describe('useEditorPanelContentState visibility', () => {
 
   it('invalidates a hidden Git-status diff without reading until reveal', async () => {
     const file = makeFile('status', { mode: 'diff', diffSource: 'unstaged' })
+
     const status: GitStatusEntry[] = [
       { path: file.relativePath, status: 'modified', area: 'unstaged' }
     ]
+
     mocks.getRuntimeGitDiff
       .mockResolvedValueOnce(textDiff('old diff'))
       .mockResolvedValueOnce(textDiff('fresh diff'))

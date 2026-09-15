@@ -26,6 +26,7 @@ export function stageWebRuntimeBrowserTab(args: {
   clientHosted?: boolean
 }): StagedWebRuntimeBrowserTab | null {
   const state = useAppStore.getState()
+
   try {
     const workspace = state.createBrowserTab(args.worktreeId, args.url ?? 'about:blank', {
       activate: args.activate,
@@ -38,16 +39,20 @@ export function stageWebRuntimeBrowserTab(args: {
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.focusAddressBar !== undefined ? { focusAddressBar: args.focusAddressBar } : {})
     })
+
     const pageId = useAppStore.getState().browserPagesByWorkspace[workspace.id]?.[0]?.id
+
     if (!pageId) {
       return null
     }
+
     useAppStore.getState().setRemoteBrowserPageHandle(pageId, {
       environmentId: args.environmentId,
       remotePageId: args.remotePageId,
       staged: true,
       ...(args.clientHosted ? { stagedClientHosted: true } : {})
     })
+
     return { workspaceId: workspace.id, pageId, clientHosted: args.clientHosted === true }
   } catch (error) {
     // Why: staging is an optimization; a store-side refusal must not fail the create itself.
@@ -55,6 +60,7 @@ export function stageWebRuntimeBrowserTab(args: {
       '[web-runtime-session] failed to stage browser tab:',
       error instanceof Error ? error.message : String(error)
     )
+
     return null
   }
 }
@@ -101,9 +107,11 @@ function findWorkspaceIdForRemotePage(args: {
   remotePageId: string
 }): string | null {
   const state = useAppStore.getState()
+
   for (const workspace of state.browserTabsByWorktree[args.worktreeId] ?? []) {
     for (const page of state.browserPagesByWorkspace[workspace.id] ?? []) {
       const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+
       if (
         handle?.environmentId === args.environmentId &&
         handle.remotePageId === args.remotePageId
@@ -112,6 +120,7 @@ function findWorkspaceIdForRemotePage(args: {
       }
     }
   }
+
   return null
 }
 
@@ -124,22 +133,28 @@ export function rehomeStagedWebRuntimeBrowserTab(
   args: { environmentId: string; worktreeId: string; remotePageId: string }
 ): StagedWebRuntimeBrowserTab | null {
   const handle = useAppStore.getState().remoteBrowserPageHandlesByPageId[staged.pageId]
+
   if (handle?.staged !== true) {
     return null
   }
+
   const mirrored = findWorkspaceIdForRemotePage(args)
+
   if (mirrored !== null && mirrored !== staged.workspaceId) {
     // Why: a snapshot already mirrored the host page under its own id while the create was in
     // flight; keeping the staged tab too would leave the user with two tabs for one page.
     discardStagedWebRuntimeBrowserTab(staged)
+
     return null
   }
+
   useAppStore.getState().setRemoteBrowserPageHandle(staged.pageId, {
     environmentId: args.environmentId,
     remotePageId: args.remotePageId,
     staged: true,
     ...(staged.clientHosted ? { stagedClientHosted: true } : {})
   })
+
   return staged
 }
 
@@ -155,16 +170,20 @@ export function restageWebRuntimeBrowserTabHostingIntent(
   if (staged.clientHosted === args.clientHosted) {
     return staged
   }
+
   const state = useAppStore.getState()
+
   if (state.remoteBrowserPageHandlesByPageId[staged.pageId]?.staged !== true) {
     return staged
   }
+
   state.setRemoteBrowserPageHandle(staged.pageId, {
     environmentId: args.environmentId,
     remotePageId: args.remotePageId,
     staged: true,
     ...(args.clientHosted ? { stagedClientHosted: true } : {})
   })
+
   return { ...staged, clientHosted: args.clientHosted }
 }
 
@@ -174,9 +193,11 @@ export function restageWebRuntimeBrowserTabHostingIntent(
  */
 export function discardStagedWebRuntimeBrowserTab(staged: StagedWebRuntimeBrowserTab): void {
   const state = useAppStore.getState()
+
   if (state.remoteBrowserPageHandlesByPageId[staged.pageId]?.staged !== true) {
     return
   }
+
   // Why: drop the handle first so the cleanup close cannot dispatch a second browser.tabClose
   // for a page the create path is already retiring.
   state.removeRemoteBrowserPageHandle(staged.pageId)

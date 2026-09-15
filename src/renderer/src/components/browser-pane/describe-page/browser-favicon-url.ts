@@ -4,15 +4,19 @@
 
 export function displayableFaviconUrl(faviconUrl: string | null | undefined): string | null {
   const trimmed = faviconUrl?.trim()
+
   if (!trimmed) {
     return null
   }
+
   // Why not a plain `data:` check: Chromium reports `data:,` for a page that declares no icon.
   if (trimmed.startsWith('data:image/')) {
     return trimmed
   }
+
   try {
     const url = new URL(trimmed)
+
     return url.protocol === 'http:' || url.protocol === 'https:' ? trimmed : null
   } catch {
     return null
@@ -24,10 +28,12 @@ export function pickDisplayableFaviconUrl(favicons: readonly string[] | undefine
   // later entry is a real icon.
   for (const candidate of favicons ?? []) {
     const displayable = displayableFaviconUrl(candidate)
+
     if (displayable) {
       return displayable
     }
   }
+
   return null
 }
 
@@ -35,8 +41,10 @@ function faviconOrigin(rawUrl: string | null | undefined): string | null {
   if (!rawUrl) {
     return null
   }
+
   try {
     const url = new URL(rawUrl)
+
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null
   } catch {
     return null
@@ -52,12 +60,16 @@ export function browserNavigationLeavesFaviconOrigin(
   toUrl: string | null | undefined
 ): boolean {
   const to = faviconOrigin(toUrl)
+
   if (to === null) {
     return true
   }
+
   const from = faviconOrigin(fromUrl)
+
   if (from === null) {
     return false
   }
+
   return from !== to
 }

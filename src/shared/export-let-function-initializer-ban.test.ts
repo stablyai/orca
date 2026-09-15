@@ -38,6 +38,7 @@ type AstNode = {
 /** Casts, parens, `!`, and comma sequences around the function don't change what rolldown folds. */
 function unwrapInitializer(node: AstNode): AstNode {
   let current = node
+
   for (;;) {
     if (
       current.expression &&
@@ -52,13 +53,16 @@ function unwrapInitializer(node: AstNode): AstNode {
       current = current.expression
       continue
     }
+
     // A sequence evaluates to its last expression — that's what gets folded.
     const sequenceTail =
       current.type === 'SequenceExpression' ? current.expressions?.at(-1) : undefined
+
     if (sequenceTail) {
       current = sequenceTail
       continue
     }
+
     return current
   }
 }
@@ -73,18 +77,24 @@ export function findFunctionInitializedExportLets(
   if (!/\bexport\b/.test(sourceText) || !/\blet\b/.test(sourceText)) {
     return []
   }
+
   const lineOf = (offset: number): number => sourceText.slice(0, offset).split('\n').length
+
   const program = parseAst(sourceText, {
     lang: fileName.endsWith('.tsx') ? 'tsx' : 'ts'
   }) as unknown as { body: AstNode[] }
+
   const functionLets: (FunctionInitializedExportLet & { exported: boolean })[] = []
   const exportedNames = new Set<string>()
+
   const collectLets = (declaration: AstNode | undefined, exported: boolean): void => {
     if (declaration?.type !== 'VariableDeclaration' || declaration.kind !== 'let') {
       return
     }
+
     for (const declarator of declaration.declarations ?? []) {
       const initializer = declarator.init && unwrapInitializer(declarator.init)
+
       if (
         initializer &&
         ['ArrowFunctionExpression', 'FunctionExpression'].includes(initializer.type)
@@ -97,19 +107,24 @@ export function findFunctionInitializedExportLets(
       }
     }
   }
+
   for (const statement of program.body) {
     if (statement.type === 'ExportNamedDeclaration') {
       collectLets(statement.declaration, true)
+
       // `let fn = () => {}; export { fn }` is the same live binding — same hazard.
       for (const specifier of statement.specifiers ?? []) {
         if (specifier.local?.name) {
           exportedNames.add(specifier.local.name)
         }
       }
+
       continue
     }
+
     collectLets(statement, false)
   }
+
   return functionLets
     .filter((candidate) => candidate.exported || exportedNames.has(candidate.name))
     .map(({ name, line }) => ({ name, line }))
@@ -128,6 +143,7 @@ describe('function-initialized export let ban', () => {
       'let f = () => {}\nexport { f }',
       'let f = () => {}\nexport { f as g }'
     ]
+
     for (const source of flagged) {
       expect(findFunctionInitializedExportLets('a.ts', source), source).toHaveLength(1)
     }
@@ -147,6 +163,7 @@ describe('function-initialized export let ban', () => {
       'export let n = 0',
       'export let f'
     ]
+
     for (const source of allowed) {
       expect(findFunctionInitializedExportLets('a.ts', source), source).toEqual([])
     }
@@ -168,6 +185,7 @@ describe('function-initialized export let ban', () => {
         (offender) => `src/${relativePath}:${offender.line} (${offender.name})`
       )
     )
+
     expect(
       offenders,
       'Rolldown miscompiles `export let fn = <function>` bridges: the initializer is folded into call sites and the setter reassignment is dropped in the built app. Use a module-local null-initialized impl var behind an exported wrapper function instead — see src/main/ipc/pty/delivery/debug.ts.'

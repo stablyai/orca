@@ -9,14 +9,18 @@ import {
 } from './dictation-meter-store'
 
 beforeEach(resetDictationMeter)
+
 afterEach(resetDictationMeter)
 
 it('notifies only the scoped meter consumer when presentation state changes', () => {
   let renders = 0
+
   const { result } = renderHook(() => {
     renders += 1
+
     return useDictationMeter()
   })
+
   const speaking = { level: 0.72, isSpeaking: true, isClipping: false }
 
   act(() => publishDictationMeter(speaking))

@@ -4,6 +4,7 @@ import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))

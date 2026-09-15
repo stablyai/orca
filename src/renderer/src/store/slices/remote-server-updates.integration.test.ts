@@ -45,6 +45,7 @@ function statusResult(id: string, version: string | null, automatic: boolean) {
         }
       : {})
   }
+
   return {
     id: `status-${id}`,
     ok: true,
@@ -60,6 +61,7 @@ describe('remote server updates mixed inventory', () => {
     environment('legacy'),
     environment('offline')
   ]
+
   const setRuntimeEnvironments = vi.fn()
   const getStatus = vi.fn()
   const call = vi.fn()
@@ -72,12 +74,15 @@ describe('remote server updates mixed inventory', () => {
       if (selector === 'offline') {
         throw new Error('connection refused')
       }
+
       if (selector === 'eligible') {
         return statusResult(selector, '1.4.0', true)
       }
+
       if (selector === 'current') {
         return statusResult(selector, '1.5.0', true)
       }
+
       return statusResult(selector, null, false)
     })
     vi.stubGlobal('window', {
@@ -95,6 +100,7 @@ describe('remote server updates mixed inventory', () => {
 
   it('keeps eligible, current, legacy, and offline servers independently actionable', async () => {
     const createSlice = createRemoteServerUpdatesSlice as unknown as StateCreator<TestState>
+
     const store = create<TestState>()((...args) => ({
       ...createSlice(...args),
       setRuntimeEnvironments
@@ -118,18 +124,23 @@ describe('remote server updates mixed inventory', () => {
 
   it('keeps settled rows stable while checking again', async () => {
     const createSlice = createRemoteServerUpdatesSlice as unknown as StateCreator<TestState>
+
     const store = create<TestState>()((...args) => ({
       ...createSlice(...args),
       setRuntimeEnvironments
     }))
+
     await store.getState().refreshRemoteServerUpdates()
 
     let releaseChecks!: () => void
+
     const checksBlocked = new Promise<void>((resolve) => {
       releaseChecks = resolve
     })
+
     getStatus.mockImplementation(async ({ selector }: { selector: string }) => {
       await checksBlocked
+
       return statusResult(selector, '1.5.0', true)
     })
 
@@ -166,10 +177,12 @@ describe('remote server updates mixed inventory', () => {
       _meta: { runtimeId: `${selector}-runtime` }
     }))
     const createSlice = createRemoteServerUpdatesSlice as unknown as StateCreator<TestState>
+
     const store = create<TestState>()((...args) => ({
       ...createSlice(...args),
       setRuntimeEnvironments
     }))
+
     const options = { includePrerelease: false, includePerfPrerelease: true }
 
     await store.getState().refreshRemoteServerUpdates(options)

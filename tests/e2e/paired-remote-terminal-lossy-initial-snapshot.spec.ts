@@ -11,7 +11,9 @@ import {
 } from './helpers/paired-electron-client'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-lossy-snapshot-'))
+
 const fixturePath = path.join(scratch, 'lossy-snapshot-terminal.mjs')
+
 writeFileSync(
   fixturePath,
   [
@@ -25,6 +27,7 @@ writeFileSync(
 )
 
 test.afterAll(() => rmSync(scratch, { recursive: true, force: true }))
+
 test.use({
   orcaAppExtraEnv: { ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED: '1' }
 })
@@ -35,6 +38,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(marker: string): string {
   const command = [process.execPath, fixturePath, marker]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -53,9 +57,11 @@ async function callRuntime<TResult>(
         method,
         params
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { environmentId, method, params }
@@ -70,9 +76,11 @@ async function callLocalRuntime<TResult>(
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -90,11 +98,14 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, 'lossy-initial-snapshot')
   let terminal: string | null = null
+
   try {
     const worktreeId = await orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId)
+
     if (!worktreeId) {
       throw new Error('Headed host has no active worktree')
     }
+
     await orcaPage.evaluate((id) => {
       const state = window.__store?.getState()
       state?.setActiveView('terminal')
@@ -117,6 +128,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
         { timeout: 60_000 }
       )
       .toBe(true)
+
     const created = await callLocalRuntime<{
       tab: { parentTabId: string; terminal: string | null }
     }>(orcaPage, 'session.tabs.createTerminal', {
@@ -126,10 +138,13 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
       select: true,
       navigation: 'host'
     })
+
     terminal = created.tab.terminal
+
     if (!terminal) {
       throw new Error('Paired host did not publish the fixture terminal')
     }
+
     const webTabId = toWebTerminalSurfaceTabId(created.tab.parentTabId)
     await expect
       .poll(
@@ -139,16 +154,19 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
             'terminal.read',
             { terminal, screen: true }
           )
+
           return result.terminal.tail.join('\n').includes(marker)
         },
         { timeout: 30_000 }
       )
       .toBe(true)
+
     const { terminal: hostEvidence } = await callLocalRuntime<{ terminal: RuntimeTerminalRead }>(
       orcaPage,
       'terminal.read',
       { terminal, screen: true }
     )
+
     console.log(
       `[lossy-initial] ${JSON.stringify({ hostLatestCursor: hostEvidence?.latestCursor, hostNextCursor: hostEvidence?.nextCursor, marker })}`
     )
@@ -185,6 +203,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
           client.page.evaluate((id) => {
             const manager = window.__paneManagers?.get(id)
             const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
             return {
               mounted: Boolean(pane),
               markerCount:
@@ -197,6 +216,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
       .toEqual({ mounted: true, markerCount: 1 })
 
     const beforeLiveCursor = Number(hostEvidence?.latestCursor)
+
     const sent = await callRuntime<{ send: { accepted: boolean } }>(
       client.page,
       client.environmentId,
@@ -208,6 +228,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
         client: { id: 'paired-lossy-initial-e2e', type: 'desktop' }
       }
     )
+
     expect(sent.send.accepted).toBe(true)
     await expect
       .poll(() =>
@@ -231,6 +252,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
               const manager = window.__paneManagers?.get(tabId)
               const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
               const content = pane?.serializeAddon?.serialize?.() ?? ''
+
               return {
                 initialMarkerCount: content.split(initialMarker).length - 1,
                 liveMarkerCount: content.split(`LIVE:${liveMarker}`).length - 1
@@ -262,6 +284,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
             'terminal.read',
             { terminal, screen: true }
           )
+
           return Number(result.terminal.latestCursor)
         },
         { timeout: 30_000 }
@@ -273,6 +296,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
         () => undefined
       )
     }
+
     await client.dispose()
   }
 })

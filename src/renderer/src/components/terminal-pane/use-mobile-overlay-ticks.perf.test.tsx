@@ -10,6 +10,7 @@ import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
 // Why: the emitters are plain module listener Sets, so N mounted subscribers
 // under a real React render reproduce the fan-out exactly — no mocking needed.
 const SUBSCRIBER_COUNT = 10
+
 const FOREIGN_EVENT_COUNT = 20
 
 const emptyManagerRef = { current: { getPanes: () => [] } as unknown as PaneManager }
@@ -29,6 +30,7 @@ function Subscriber({
 }): null {
   useMobileOverlayTicks({ managerRef: emptyManagerRef, paneTransportsRef })
   onRender()
+
   return null
 }
 
@@ -52,6 +54,7 @@ function mountSubscribers(): { renders: number[]; resetCounts: () => void } {
       ))}
     </>
   )
+
   return {
     renders,
     resetCounts: () => renders.fill(0)

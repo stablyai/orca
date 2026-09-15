@@ -10,13 +10,18 @@ const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners 
 )
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('fs/promises', () => ({ stat: vi.fn() }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
+
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   onSshFilesystemProviderRegistered: (listener: (connectionId: string) => void) => {
     providerRegistrationListeners.add(listener)
+
     return () => providerRegistrationListeners.delete(listener)
   }
 }))
@@ -24,9 +29,11 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
+
 type WatchCallback = (events: FsChangeEvent[]) => void
 
 const WORKTREE_PATH = '/home/me/repo'
+
 const WATCH_ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
 
 describe('remote filesystem watcher batching', () => {
@@ -42,9 +49,11 @@ describe('remote filesystem watcher batching', () => {
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
     watchCallbacks.length = 0
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -53,6 +62,7 @@ describe('remote filesystem watcher batching', () => {
     getSshFilesystemProviderMock.mockReturnValue({
       watch: vi.fn(async (_root: string, callback: WatchCallback) => {
         watchCallbacks.push(callback)
+
         return vi.fn()
       })
     })
@@ -66,6 +76,7 @@ describe('remote filesystem watcher batching', () => {
     for (let i = 0; i < 50; i++) {
       watchCallbacks[0]([{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }])
     }
+
     expect(sender.send).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(150)
@@ -173,6 +184,7 @@ describe('remote filesystem watcher batching', () => {
     for (const listener of providerRegistrationListeners) {
       listener('conn-1')
     }
+
     await vi.advanceTimersByTimeAsync(1_000)
     expect(watchCallbacks).toHaveLength(2)
     sender.send.mockClear()

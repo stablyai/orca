@@ -17,16 +17,21 @@ function sendPtyDeliveryInterest(ptyId: string, interested: boolean): void {
 export function acquirePtyDeliveryInterest(ptyId: string): () => void {
   const next = (ptyDeliveryInterestRefCounts.get(ptyId) ?? 0) + 1
   ptyDeliveryInterestRefCounts.set(ptyId, next)
+
   if (next === 1) {
     sendPtyDeliveryInterest(ptyId, true)
   }
+
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
     const current = ptyDeliveryInterestRefCounts.get(ptyId) ?? 0
+
     if (current <= 1) {
       ptyDeliveryInterestRefCounts.delete(ptyId)
       sendPtyDeliveryInterest(ptyId, false)

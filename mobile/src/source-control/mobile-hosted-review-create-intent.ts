@@ -96,6 +96,7 @@ async function ensureLocalChangesCommitted(
   if ((currentStatus?.entries.length ?? 0) === 0) {
     return { ok: true, status: currentStatus, committed: false }
   }
+
   if (hasUnresolvedConflicts(currentStatus)) {
     return {
       ok: false,
@@ -106,13 +107,17 @@ async function ensureLocalChangesCommitted(
   }
 
   const stagePaths = getStageablePaths(currentStatus?.entries ?? [])
+
   if (stagePaths.length > 0) {
     input.onProgress?.('staging')
     const staged = await stageMobileHostedReviewPaths(client, worktreeId, stagePaths)
+
     if (!staged.ok) {
       return staged
     }
+
     const stagedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+
     if (!stagedStatus.ok) {
       return {
         ok: false,
@@ -121,7 +126,9 @@ async function ensureLocalChangesCommitted(
         status: currentStatus
       }
     }
+
     currentStatus = stagedStatus.status
+
     if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
@@ -133,6 +140,7 @@ async function ensureLocalChangesCommitted(
   }
 
   const hasStagedChanges = currentStatus?.entries.some((entry) => entry.area === 'staged') === true
+
   if (!hasStagedChanges) {
     return {
       ok: false,
@@ -143,9 +151,11 @@ async function ensureLocalChangesCommitted(
   }
 
   let message = input.commitMessage?.trim() ?? ''
+
   if (!message) {
     input.onProgress?.('generating_commit_message')
     const generated = await requestMobileCommitMessage(client, worktreeId)
+
     if (!generated.success) {
       return {
         ok: false,
@@ -154,15 +164,19 @@ async function ensureLocalChangesCommitted(
         status: currentStatus
       }
     }
+
     message = generated.message
   }
 
   input.onProgress?.('committing')
   const committed = await commitMobileHostedReviewStagedChanges(client, worktreeId, message)
+
   if (!committed.ok) {
     return { ...committed, committed: false, status: currentStatus, commitMessage: message }
   }
+
   const committedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+
   if (!committedStatus.ok) {
     return {
       ok: false,
@@ -171,7 +185,9 @@ async function ensureLocalChangesCommitted(
       status: currentStatus
     }
   }
+
   currentStatus = committedStatus.status
+
   if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
     return {
       ok: false,
@@ -180,6 +196,7 @@ async function ensureLocalChangesCommitted(
       status: currentStatus
     }
   }
+
   return { ok: true, status: currentStatus, committed: true }
 }
 
@@ -190,6 +207,7 @@ export async function prepareMobileHostedReviewCreateIntent(
 ): Promise<MobileHostedReviewCreateIntentOutcome> {
   const initialStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
   let currentStatus = initialStatus.ok ? initialStatus.status : input.status
+
   if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
     return {
       ok: false,
@@ -201,9 +219,11 @@ export async function prepareMobileHostedReviewCreateIntent(
   }
 
   const committed = await ensureLocalChangesCommitted(client, worktreeId, input, currentStatus)
+
   if (!committed.ok) {
     return committed
   }
+
   currentStatus = committed.status
 
   let prefill = await resolvePrefillFromStatus(
@@ -213,18 +233,23 @@ export async function prepareMobileHostedReviewCreateIntent(
     input.title,
     currentStatus
   )
+
   for (let attempts = 0; attempts < 2; attempts++) {
     const remote = await applyMobileHostedReviewRemotePrerequisite(client, worktreeId, prefill, {
       ...input,
       status: currentStatus
     })
+
     if (!remote.ok) {
       return { ...remote, committed: committed.committed, status: currentStatus }
     }
+
     if (!remote.ran) {
       break
     }
+
     const refreshedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+
     if (!refreshedStatus.ok) {
       return {
         ok: false,
@@ -233,7 +258,9 @@ export async function prepareMobileHostedReviewCreateIntent(
         status: currentStatus
       }
     }
+
     currentStatus = refreshedStatus.status
+
     if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
@@ -242,6 +269,7 @@ export async function prepareMobileHostedReviewCreateIntent(
         status: currentStatus
       }
     }
+
     prefill = await resolvePrefillFromStatus(
       client,
       worktreeId,

@@ -49,6 +49,7 @@ describe('mapMRToWorkItem', () => {
       },
       'g/p'
     )
+
     expect(item.isCrossRepository).toBe(true)
   })
 

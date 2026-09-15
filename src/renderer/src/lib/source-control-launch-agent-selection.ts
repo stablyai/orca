@@ -17,6 +17,7 @@ export function readSourceControlLaunchRecipeAgentId(
   recipe: Pick<SourceControlActionRecipe, 'agentId'> | null | undefined
 ): TuiAgent | null {
   const agentId = recipe?.agentId
+
   return agentId && !isCustomAgentId(agentId) ? agentId : null
 }
 
@@ -27,9 +28,11 @@ export function pickSourceControlLaunchAgent(args: {
   disabledAgents?: TuiAgent[]
 }): TuiAgent | null {
   const enabledAgents = filterEnabledTuiAgents(args.detectedAgents, args.disabledAgents)
+
   if (args.savedAgent && enabledAgents.includes(args.savedAgent)) {
     return args.savedAgent
   }
+
   if (
     args.defaultAgent &&
     args.defaultAgent !== 'blank' &&
@@ -37,6 +40,7 @@ export function pickSourceControlLaunchAgent(args: {
   ) {
     return args.defaultAgent
   }
+
   return getAgentCatalog().find((entry) => enabledAgents.includes(entry.id))?.id ?? null
 }
 
@@ -67,6 +71,7 @@ export function resolveSourceControlLaunchAgentScope(input: {
       actionId: input.actionId
     })
   )
+
   const globalRecipeAgentId = readSourceControlLaunchRecipeAgentId(
     resolveSourceControlActionRecipe({
       settings: input.settings,
@@ -74,15 +79,19 @@ export function resolveSourceControlLaunchAgentScope(input: {
       actionId: input.actionId
     })
   )
+
   // Why: the note compares against what would run with no override, so fall back
   // to the global default agent when no global recipe agent is set.
   const defaultTuiAgent = input.settings?.defaultTuiAgent
+
   const globalAgentId =
     globalRecipeAgentId ?? (defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null)
+
   const hasRepoAgentOverride =
     normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)?.actionOverrides?.[
       input.actionId
     ]?.agentId !== undefined
+
   return {
     effectiveAgentId,
     globalAgentId,
@@ -122,15 +131,19 @@ function readRecipeOverrideFields(
     | undefined
 ): SourceControlActionRecipeOverrideField[] {
   const fields: SourceControlActionRecipeOverrideField[] = []
+
   if (Object.hasOwn(recipe ?? {}, 'agentId')) {
     fields.push('agent')
   }
+
   if (Object.hasOwn(recipe ?? {}, 'commandInputTemplate')) {
     fields.push('commandTemplate')
   }
+
   if (Object.hasOwn(recipe ?? {}, 'agentArgs')) {
     fields.push('agentArgs')
   }
+
   return fields
 }
 
@@ -143,18 +156,22 @@ export function summarizeReposOverridingActionRecipe(input: {
   actionId: SourceControlActionId
 }): SourceControlActionRecipeOverrideSummary {
   const overrides: SourceControlActionRecipeOverride[] = []
+
   for (const repo of input.repos) {
     const actionOverrides = normalizeRepoSourceControlAiOverrides(
       repo.sourceControlAi
     )?.actionOverrides
+
     if (!hasActionOverride(actionOverrides, input.actionId)) {
       continue
     }
+
     overrides.push({
       repoId: repo.id,
       repoName: repo.displayName,
       fields: readRecipeOverrideFields(actionOverrides?.[input.actionId])
     })
   }
+
   return { count: overrides.length, overrides }
 }

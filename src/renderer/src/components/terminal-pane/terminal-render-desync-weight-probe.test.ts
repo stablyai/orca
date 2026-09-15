@@ -54,9 +54,11 @@ function fakeBuffer(rows: { chars: string; bold: boolean }[][]) {
     viewportY: 0,
     getLine: (y: number) => {
       const row = rows[y]
+
       if (!row) {
         return undefined
       }
+
       return {
         getCell: (x: number) =>
           row[x] && {
@@ -82,6 +84,7 @@ describe('readSentinelWeightProbe', () => {
       },
       fontProbe: { count: 3, desired: '500', actual: 'italic 700 28px Menlo' }
     })
+
     const buffer = fakeBuffer([
       [
         { chars: 'a', bold: false },

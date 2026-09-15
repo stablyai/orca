@@ -20,13 +20,16 @@ vi.mock('node:fs', async () => {
     const watcher = Object.assign(new EventEmitter(), { close: vi.fn() })
     watchers.push(watcher)
     watchCallbacks.push(callback)
+
     return watcher as unknown as FSWatcher
   })
+
   return { ...actual, watch: watchMock }
 })
 
 vi.mock('./transcript-tail-reader', async () => {
   const actual = await vi.importActual<typeof TranscriptTailReader>('./transcript-tail-reader')
+
   return {
     ...actual,
     readNativeChatTranscriptTailFile: (
@@ -35,6 +38,7 @@ vi.mock('./transcript-tail-reader', async () => {
       if (tailReaderState.failure) {
         return Promise.reject(tailReaderState.failure)
       }
+
       return actual.readNativeChatTranscriptTailFile(...args)
     }
   }
@@ -58,6 +62,7 @@ describe('native chat transcript watcher errors', () => {
     roots.push(root)
     const filePath = join(root, 'transcript.jsonl')
     await writeFile(filePath, '')
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -81,6 +86,7 @@ describe('native chat transcript watcher errors', () => {
     await writeFile(filePath, '')
     const onInitialSnapshot = vi.fn()
     const onAppend = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -90,6 +96,7 @@ describe('native chat transcript watcher errors', () => {
       initialLimit: 40,
       debounceMs: 0
     })
+
     await vi.waitFor(() => expect(onInitialSnapshot).toHaveBeenCalledOnce())
 
     await rm(root, { recursive: true, force: true })
@@ -121,6 +128,7 @@ describe('native chat transcript watcher errors', () => {
     tailReaderState.failure = new Error('deterministic read failure')
     const onInitialSnapshot = vi.fn()
     const onAppend = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -130,6 +138,7 @@ describe('native chat transcript watcher errors', () => {
       initialLimit: 40,
       debounceMs: 0
     })
+
     expect(subscription.watching).toBe(true)
 
     await vi.waitFor(() =>
@@ -149,6 +158,7 @@ describe('native chat transcript watcher errors', () => {
     await writeFile(filePath, '')
     tailReaderState.failure = new Error('deterministic read failure')
     const onInitialSnapshot = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -158,6 +168,7 @@ describe('native chat transcript watcher errors', () => {
       initialLimit: 40,
       debounceMs: 0
     })
+
     await vi.waitFor(() =>
       expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
     )

@@ -8,6 +8,7 @@ import {
 export function useNativeChatComposerAppMenuSelection(isComposingOverride?: () => boolean) {
   const textareaRef = useRef<NativeChatComposerInput>(null)
   const isComposingRef = useRef(false)
+
   const isComposing = useCallback(
     () => isComposingOverride?.() ?? isComposingRef.current,
     [isComposingOverride]
@@ -16,6 +17,7 @@ export function useNativeChatComposerAppMenuSelection(isComposingOverride?: () =
   useEffect(() => {
     const onSelectionAction = (event: Event): void => {
       const textarea = textareaRef.current
+
       if (
         (event as CustomEvent<AppMenuSelectionAction>).detail !== 'select-all' ||
         !textarea ||
@@ -23,13 +25,16 @@ export function useNativeChatComposerAppMenuSelection(isComposingOverride?: () =
       ) {
         return
       }
+
       event.preventDefault()
+
       if (!isComposing()) {
         textarea.select()
       }
     }
 
     window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onSelectionAction)
+
     return () => window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onSelectionAction)
   }, [isComposing, textareaRef])
 

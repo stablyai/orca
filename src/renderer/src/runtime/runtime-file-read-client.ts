@@ -19,6 +19,7 @@ import {
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
+
 const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
   'Remote file download requires a newer Orca server. Update the headless server and try again.'
 
@@ -35,18 +36,22 @@ export async function readRuntimeFileContent({
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(settings, connectionId, expectedExternalSshTargetId)
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment') {
     return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
   }
+
   if (!worktreeId) {
     return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
   }
+
   if (!canReadRelativeRuntimeFile(relativePath)) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }
 
   const worktree = toRuntimeWorktreeSelector(worktreeId)
   let result: RuntimeFileReadResult
+
   try {
     result = await callRuntimeRpc<RuntimeFileReadResult>(
       target,
@@ -66,13 +71,16 @@ export async function readRuntimeFileContent({
         { timeoutMs: 15_000 }
       )
     }
+
     throw err
   }
+
   if (result.truncated) {
     // Why: the runtime file RPC is preview-sized today; treating a truncated
     // payload as editable content would make saves overwrite the rest of the file.
     throw new Error(`Remote file is too large to open in the editor (${result.byteLength} bytes)`)
   }
+
   return { content: result.content, isBinary: false }
 }
 
@@ -86,12 +94,15 @@ export async function readRuntimeFilePreview(
     context.expectedExternalSshTargetId
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
+
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
       throw new Error('Remote file is outside the owning runtime worktree')
     }
+
     return window.api.fs.readFile({ filePath, connectionId: context.connectionId })
   }
+
   return callRuntimeRpc<RuntimeFilePreviewResult>(
     remoteArgs.target,
     'files.readPreview',
@@ -111,14 +122,18 @@ export async function downloadRuntimeFile(
     context.expectedExternalSshTargetId
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
+
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
       throw new Error('Remote file is outside the owning runtime worktree')
     }
+
     if (context.connectionId) {
       return window.api.fs.downloadFile({ filePath, connectionId: context.connectionId })
     }
+
     const result = await readRuntimeFilePreview(context, filePath)
+
     return window.api.fs.saveDownloadedFile({
       suggestedName,
       content: result.content,
@@ -131,31 +146,40 @@ export async function downloadRuntimeFile(
   }
 
   const download = await window.api.fs.startDownloadedFile({ suggestedName })
+
   if (download.canceled) {
     return download
   }
 
   let finished = false
+
   try {
     let offset = 0
+
     for (;;) {
       const chunk = await readRemoteDownloadChunk(remoteArgs, offset)
+
       if (chunk.bytesRead > 0) {
         await window.api.fs.appendDownloadedFileChunk({
           transferId: download.transferId,
           contentBase64: chunk.contentBase64
         })
       }
+
       offset += chunk.bytesRead
+
       if (chunk.eof) {
         break
       }
+
       if (chunk.bytesRead <= 0) {
         throw new Error('Remote download stalled before reaching EOF')
       }
     }
+
     const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
     finished = true
+
     return result
   } finally {
     if (!finished) {
@@ -179,6 +203,7 @@ async function remoteChunkedDownloadAvailable(
       },
       { timeoutMs: 60_000 }
     )
+
     return true
   } catch (error) {
     // Why: compatible older headless servers may lack chunked downloads while
@@ -186,6 +211,7 @@ async function remoteChunkedDownloadAvailable(
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       return false
     }
+
     throw error
   }
 }
@@ -218,11 +244,13 @@ async function downloadRemoteFileViaPreview(
       { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
       { timeoutMs: 15_000 }
     )
+
     // Why: old servers use an empty, metadata-free binary result to signal an
     // unsupported binary; recognized zero-byte previews are still complete.
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }
+
     return window.api.fs.saveDownloadedFile({
       suggestedName,
       content: result.content,
@@ -232,6 +260,7 @@ async function downloadRemoteFileViaPreview(
     if (isUnsupportedRemotePreviewDownload(error)) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }
+
     throw error
   }
 }
@@ -240,6 +269,7 @@ function isUnsupportedRemotePreviewDownload(error: unknown): boolean {
   if (!(error instanceof RuntimeRpcCallError)) {
     return false
   }
+
   return (
     error.code === 'method_not_found' ||
     (error.code === 'runtime_error' &&

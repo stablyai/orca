@@ -48,11 +48,13 @@ process.stdin.on('data', () => {
 `
 
 let tempRoot: string
+
 let stubPath: string
 
 function runStub(stderr: string, exitCode: number): Promise<{ error: string | null }> {
   process.env.ORCA_STUB_CODEX_STDERR = stderr
   process.env.ORCA_STUB_CODEX_EXIT_CODE = String(exitCode)
+
   return fetchCodexRateLimits({ allowPtyFallback: false })
 }
 

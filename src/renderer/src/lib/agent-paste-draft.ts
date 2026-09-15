@@ -18,6 +18,7 @@ import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -32,7 +33,9 @@ export {
 // single atomic paste instead of echoing character-by-character or triggering
 // line-edit shortcuts. Callers choose whether to append Enter after the paste.
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
+
 export { BRACKETED_PASTE_END }
+
 export const POST_PASTE_SUBMIT_DELAY_MS = 50
 
 // Why: "the tab has a PTY" and "the agent's composer accepts input" are separate
@@ -46,6 +49,7 @@ export function getSettingsForAgentTabRuntimeOwner(
   tabId: string
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
   const store = useAppStore.getState()
+
   for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree ?? {})) {
     if (tabs?.some((tab) => tab.id === tabId)) {
       // Why: legacy remote PTY ids may not embed their runtime owner. The tab's
@@ -53,6 +57,7 @@ export function getSettingsForAgentTabRuntimeOwner(
       return getSettingsForWorktreeRuntimeOwner(store, worktreeId)
     }
   }
+
   return store.settings
 }
 
@@ -98,6 +103,7 @@ export async function pasteDraftWhenAgentReady(args: {
   const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
   const readinessTimeoutMs = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
+
   const readiness = await waitForAgentDraftInputReadyOnTab({
     tabId,
     spawnTimeoutMs: PTY_SPAWN_TIMEOUT_MS,
@@ -105,12 +111,15 @@ export async function pasteDraftWhenAgentReady(args: {
     readySignal,
     settings
   })
+
   if (!readiness) {
     onTimeout?.()
+
     return false
   }
 
   const { ptyId } = readiness
+
   if (!readiness.ready) {
     // Why: fast-starting TUIs can emit the paste-ready escape sequence before
     // this sidecar subscription attaches. If process/title inspection says the
@@ -119,8 +128,10 @@ export async function pasteDraftWhenAgentReady(args: {
     const fallbackReady = agentConfig
       ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
       : { ready: false }
+
     if (!fallbackReady.ready) {
       onTimeout?.()
+
       return false
     }
   }
@@ -155,12 +166,15 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
   const budget = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
+
   if (!ready) {
     const fallbackReady = agentConfig
       ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
       : false
+
     if (!fallbackReady) {
       onTimeout?.()
+
       return false
     }
   }
@@ -203,11 +217,13 @@ async function sendBracketedPasteToAgent(args: {
 }): Promise<boolean> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit, agent } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
+
   try {
     // Why: paste + Enter (+ retry Enter) must be one transaction, or a concurrent
     // paste on this PTY can slip between them and submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
       const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content)
+
       if (!pasted || !submit) {
         return pasted
       }
@@ -222,6 +238,7 @@ async function sendBracketedPasteToAgent(args: {
         // Why: agents that render their composer before Enter is live silently eat
         // the first Enter; the retry is best-effort and never downgrades `submitted`.
         await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
+
         try {
           await sendRuntimePtyInputVerified(settings, ptyId, '\r')
         } catch {
@@ -253,21 +270,28 @@ function waitForAgentDraftInputReadyOnTab(args: {
       if (settled) {
         return
       }
+
       settled = true
+
       if (spawnTimer !== null) {
         window.clearTimeout(spawnTimer)
       }
+
       unsubscribeStore?.()
       resolve(result)
     }
+
     const bindPty = (ptyId: string): void => {
       if (selectedPtyId || settled) {
         return
       }
+
       selectedPtyId = ptyId
+
       if (spawnTimer !== null) {
         window.clearTimeout(spawnTimer)
       }
+
       unsubscribeStore?.()
       // Why: Zustand subscribers run inside updateTabPtyId. Registering the
       // sidecar here precedes the transport's immediate pre-handler drain.
@@ -278,8 +302,10 @@ function waitForAgentDraftInputReadyOnTab(args: {
         args.settings
       ).then((ready) => finish({ ptyId, ready }))
     }
+
     const bindFromState = (state: ReturnType<typeof useAppStore.getState>): void => {
       const ptyId = state.ptyIdsByTabId[args.tabId]?.[0]
+
       if (ptyId) {
         bindPty(ptyId)
       }
@@ -298,27 +324,34 @@ async function waitForExpectedAgentOnPty(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     try {
       const process = await withDeadline(
         inspectRuntimeTerminalProcess(settings, ptyId),
         Math.max(0, deadline - Date.now())
       )
+
       if (!process) {
         return false
       }
+
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+
       if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return true
       }
     } catch {
       // Ignore transient PTY inspection failures and keep polling.
     }
+
     const delayMs = Math.min(120, Math.max(0, deadline - Date.now()))
+
     if (delayMs > 0) {
       await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs))
     }
   }
+
   return false
 }
 
@@ -326,6 +359,7 @@ function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T | nu
   if (timeoutMs <= 0) {
     return Promise.resolve(null)
   }
+
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => resolve(null), timeoutMs)
     promise.then(

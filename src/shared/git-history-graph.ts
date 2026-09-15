@@ -39,6 +39,7 @@ function findLastIndex<T>(items: readonly T[], predicate: (item: T) => boolean):
       return index
     }
   }
+
   return -1
 }
 
@@ -53,15 +54,19 @@ function getLabelColorIdentifier(
   if (historyItem.id === GIT_HISTORY_INCOMING_CHANGES_ID) {
     return GIT_HISTORY_REMOTE_REF_COLOR
   }
+
   if (historyItem.id === GIT_HISTORY_OUTGOING_CHANGES_ID) {
     return GIT_HISTORY_REF_COLOR
   }
+
   for (const ref of historyItem.references ?? []) {
     const color = colorMap.get(ref.id)
+
     if (color !== undefined) {
       return color
     }
   }
+
   return undefined
 }
 
@@ -76,15 +81,19 @@ export function compareGitHistoryRefs(
     if (ref.id === currentRef?.id) {
       return 1
     }
+
     if (ref.id === remoteRef?.id) {
       return 2
     }
+
     if (ref.id === baseRef?.id) {
       return 3
     }
+
     if (ref.color !== undefined) {
       return 4
     }
+
     return 99
   }
 
@@ -121,28 +130,34 @@ export function buildGitHistoryViewModels(
             })
             firstParentAdded = true
           }
+
           continue
         }
+
         outputSwimlanes.push(cloneNode(node))
       }
     }
 
     for (let index = firstParentAdded ? 1 : 0; index < historyItem.parentIds.length; index += 1) {
       let colorIdentifier: GitHistoryGraphColorId | undefined
+
       if (index === 0) {
         colorIdentifier = getLabelColorIdentifier(historyItem, colorMap)
       } else {
         // Side-parent colors need a lookup; defer indexing so linear histories pay no map cost.
         if (!historyItemsById) {
           historyItemsById = new Map()
+
           for (const candidate of historyItems) {
             // Array#find returns the first duplicate, so retain first-wins ordering here.
             const candidateId = candidate.id
+
             if (!historyItemsById.has(candidateId)) {
               historyItemsById.set(candidateId, candidate)
             }
           }
         }
+
         const parent = historyItemsById.get(historyItem.parentIds[index]!)
         colorIdentifier = parent ? getLabelColorIdentifier(parent, colorMap) : undefined
       }
@@ -161,6 +176,7 @@ export function buildGitHistoryViewModels(
     const references = (historyItem.references ?? [])
       .map((ref) => {
         let color = colorMap.get(ref.id)
+
         if (colorMap.has(ref.id) && color === undefined) {
           const inputIndex = inputSwimlanes.findIndex((node) => node.id === historyItem.id)
           const circleIndex = inputIndex !== -1 ? inputIndex : inputSwimlanes.length
@@ -171,6 +187,7 @@ export function buildGitHistoryViewModels(
                 ? inputSwimlanes[circleIndex]!.color
                 : GIT_HISTORY_REF_COLOR
         }
+
         return { ...ref, color }
       })
       .sort((ref1, ref2) => compareGitHistoryRefs(ref1, ref2, currentRef, remoteRef, baseRef))
@@ -199,6 +216,7 @@ export function getGitHistoryItemLaneIndex(viewModel: GitHistoryItemViewModel): 
   const inputIndex = viewModel.inputSwimlanes.findIndex(
     (node) => node.id === viewModel.historyItem.id
   )
+
   return inputIndex !== -1 ? inputIndex : viewModel.inputSwimlanes.length
 }
 
@@ -215,14 +233,18 @@ export function buildDefaultGitHistoryColorMap(input: {
   baseRef?: GitHistoryItemRef
 }): Map<string, GitHistoryGraphColorId | undefined> {
   const colorMap = new Map<string, GitHistoryGraphColorId | undefined>()
+
   if (input.currentRef) {
     colorMap.set(input.currentRef.id, GIT_HISTORY_REF_COLOR)
   }
+
   if (input.remoteRef) {
     colorMap.set(input.remoteRef.id, GIT_HISTORY_REMOTE_REF_COLOR)
   }
+
   if (input.baseRef) {
     colorMap.set(input.baseRef.id, GIT_HISTORY_BASE_REF_COLOR)
   }
+
   return colorMap
 }

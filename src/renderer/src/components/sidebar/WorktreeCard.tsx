@@ -5,6 +5,7 @@ import type { WorktreeCardProps } from './worktree-card-model'
 import { useWorktreeCardController } from './use-worktree-card-controller'
 
 export { shouldBeginWorktreeRename } from './worktree-card-model'
+
 export type { ActiveSurfaceVariant } from './worktree-card-model'
 
 const WorktreeCard = React.memo(function WorktreeCard({

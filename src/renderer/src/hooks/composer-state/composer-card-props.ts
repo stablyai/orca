@@ -131,11 +131,14 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedRepoRequiresConnection,
     sparseError
   }
+
   const repoCreateDisabled =
     createGateMode === 'quick'
       ? getQuickComposerCreateDisabled(createGateInput)
       : getFullComposerCreateDisabled(createGateInput)
+
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
+
   const cardProps: ComposerCardSourceProps & ComposerCardActionProps = {
     eligibleRepos: isProjectGroupTarget ? folderSourceRepos : eligibleRepos,
     repoId,

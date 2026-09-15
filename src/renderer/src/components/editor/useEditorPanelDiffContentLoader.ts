@@ -36,10 +36,12 @@ function inFlightDiffKey(
     file.diffSource === 'branch' && file.branchCompare
       ? `${file.branchCompare.baseOid ?? ''}..${file.branchCompare.headOid ?? ''}::${file.branchOldPath ?? ''}`
       : ''
+
   const commit =
     file.diffSource === 'commit' && file.commitCompare
       ? `${file.commitCompare.parentOid ?? 'empty-tree'}..${file.commitCompare.commitOid}::${file.branchOldPath ?? ''}`
       : ''
+
   return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}::${commit}`
 }
 
@@ -54,33 +56,42 @@ export function useEditorPanelDiffContentLoader({
       if (!file || (file.mode === 'edit' && !canUseChangesModeForFile(file))) {
         return
       }
+
       const generation = diffReadGenerationCounterRef.current + 1
       diffReadGenerationCounterRef.current = generation
       diffReadGenerationRef.current[file.id] = generation
       outstandingDiffReadsRef.current[file.id] = generation
+
       try {
         const worktreePath = file.filePath.slice(
           0,
           file.filePath.length - file.relativePath.length - 1
         )
+
         const branchCompare =
           file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
             ? file.branchCompare
             : null
+
         const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
         const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
         const activeSettings = useAppStore.getState().settings
         const fileSettings = settingsForRuntimeOwner(activeSettings, file.runtimeEnvironmentId)
         const gitScope = getRuntimeGitScope(fileSettings, connectionId)
+
         const effectiveDiffSource: typeof file.diffSource =
           file.mode === 'edit' ? 'unstaged' : file.diffSource
+
         const compareAgainstHead = file.mode === 'edit'
+
         const key = inFlightDiffKey(
           { ...file, diffSource: effectiveDiffSource },
           gitScope ?? undefined,
           compareAgainstHead
         )
+
         const registeredRead = inFlightDiffReads.get(key)
+
         if (
           options?.force &&
           (options.externalEventGeneration === undefined ||
@@ -90,7 +101,9 @@ export function useEditorPanelDiffContentLoader({
           // the external change landed.
           inFlightDiffReads.delete(key)
         }
+
         let pending = inFlightDiffReads.get(key)
+
         if (!pending) {
           const promise = (
             effectiveDiffSource === 'commit'
@@ -143,6 +156,7 @@ export function useEditorPanelDiffContentLoader({
                     }
                   )
           ) as Promise<DiffContent>
+
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {
@@ -151,15 +165,19 @@ export function useEditorPanelDiffContentLoader({
             }
           })
         }
+
         const result = await pending.promise
+
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
         }
+
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
         }
+
         setDiffContents((prev) => ({
           ...prev,
           [file.id]: {

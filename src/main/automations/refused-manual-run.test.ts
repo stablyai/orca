@@ -18,6 +18,7 @@ import { AutomationService } from './service'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
+
 const ipcHandlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
@@ -29,7 +30,9 @@ vi.mock('electron', () => ({
   },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 function automation(overrides: Partial<Automation>): Automation {
@@ -104,6 +107,7 @@ async function createStore() {
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setAutomationService(service)
+
   return { store, service, runtime }
 }
 
@@ -154,6 +158,7 @@ describe('manual run refused before dispatch', () => {
    */
   it('writes nothing when the refusal is about a stale caller, not a lost host', async () => {
     const { store, runtime } = await createStore()
+
     const stale = {
       selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 6 }
     } as const satisfies AutomationOwnerPrecondition

@@ -43,13 +43,16 @@ test('keeps a client-hosted browser tab when the client and the runtime both res
   testRepoPath
 }, testInfo) => {
   test.setTimeout(600_000)
+
   const fixture = await startClientHostedMarkerFixture({
     created: 'double-restart-survivor',
     moved: 'moved-on'
   })
+
   const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
   let client: PairedElectronClient | null = null
   let abandonedProfile: string | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     client = await launchPairedElectronClient(host.offer, testInfo, CLIENT_NAME)
@@ -144,6 +147,7 @@ test('keeps a client-hosted browser tab when the client and the runtime both res
     const survivorRows = (await readClientBrowserRows(client.page, relaunchedWorktreeId)).filter(
       (row) => row.url.startsWith(fixture.origin)
     )
+
     expect(survivorRows, 'the tab must survive both restarts exactly once').toHaveLength(1)
 
     const survivor = await findMirroredBrowserPage(
@@ -151,6 +155,7 @@ test('keeps a client-hosted browser tab when the client and the runtime both res
       relaunchedWorktreeId,
       fixture.movedUrl
     )
+
     expect(survivor?.remotePageId, 'recovery must keep the page identity it was created with').toBe(
       opened.remotePageId
     )
@@ -169,9 +174,11 @@ test('keeps a client-hosted browser tab when the client and the runtime both res
       await cleanupE2EDaemons(client.userDataDir).catch(() => undefined)
       await client.dispose()
     }
+
     if (abandonedProfile) {
       await cleanupE2EDaemons(abandonedProfile).catch(() => undefined)
     }
+
     await host.dispose()
     await fixture.close()
   }

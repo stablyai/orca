@@ -12,6 +12,7 @@ export function buildDiffResult(
   if (originalIsBinary || modifiedIsBinary) {
     const ext = filePath ? path.extname(filePath).toLowerCase() : ''
     const mimeType = PREVIEWABLE_MIME[ext]
+
     return {
       kind: 'binary' as const,
       originalContent,
@@ -23,6 +24,7 @@ export function buildDiffResult(
   }
 
   const largeDiffRenderLimit = getLargeDiffRenderLimit({ originalContent, modifiedContent })
+
   if (largeDiffRenderLimit.limited) {
     return {
       kind: 'text' as const,

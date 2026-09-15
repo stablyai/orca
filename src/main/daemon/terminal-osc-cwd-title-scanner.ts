@@ -33,8 +33,10 @@ export class TerminalOscCwdTitleScanner {
     // extractOscScanTail retains for the next call.
     if (this.scanTail.length === 0 && !data.includes('\x1b]')) {
       this.scanTail = data.endsWith('\x1b') ? extractOscScanTail(data, OSC_SCAN_TAIL_LIMIT) : ''
+
       return
     }
+
     const input = this.scanTail.length === 0 ? data : this.scanTail + data
     this.scanTail = extractOscScanTail(input, OSC_SCAN_TAIL_LIMIT)
     scanOsc7Uris(input, (uri) => {
@@ -43,11 +45,13 @@ export class TerminalOscCwdTitleScanner {
         remotePosixAuthority: this.parseOptions.remotePosixAuthority,
         wslDistro: this.parseOptions.wslDistro
       })
+
       if (parsed) {
         this.cwd = parsed
       }
     })
     const lastTitle = extractLastOscTitle(input)
+
     if (lastTitle !== null) {
       this.lastTitle = lastTitle
     }

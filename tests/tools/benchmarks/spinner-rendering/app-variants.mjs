@@ -13,16 +13,20 @@ export async function setSpinnerVariant(page, variant) {
   if (!(variant in spinnerVariants)) {
     throw new Error(`Unknown spinner variant: ${variant}`)
   }
+
   await page.evaluate((css) => {
     for (const ring of document.querySelectorAll('[data-agent-spinner]')) {
       ring.parentElement.classList.add('spinner-benchmark-container')
     }
+
     let style = document.getElementById('spinner-variant')
+
     if (!style) {
       style = document.createElement('style')
       style.id = 'spinner-variant'
       document.head.appendChild(style)
     }
+
     style.textContent = css
   }, spinnerVariants[variant])
 }
@@ -30,14 +34,18 @@ export async function setSpinnerVariant(page, variant) {
 export async function spinnerCensus(page) {
   return page.evaluate(() => {
     const rings = [...document.querySelectorAll('[data-agent-spinner]')]
+
     const inViewport = (ring) => {
       // Querying the skipped child would force the rendering this census measures.
       const rect = ring.parentElement.getBoundingClientRect()
+
       if (rect.width === 0 || rect.height === 0) {
         return false
       }
+
       let top = 0
       let bottom = innerHeight
+
       for (let parent = ring.parentElement; parent; parent = parent.parentElement) {
         if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflowY)) {
           const bounds = parent.getBoundingClientRect()
@@ -45,8 +53,10 @@ export async function spinnerCensus(page) {
           bottom = Math.min(bottom, bounds.bottom)
         }
       }
+
       return rect.bottom > top && rect.top < bottom
     }
+
     return {
       mounted: rings.length,
       visible: rings.filter(inViewport).length,

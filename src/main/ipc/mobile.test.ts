@@ -90,6 +90,7 @@ describe('registerMobileHandlers', () => {
         { family: 'IPv4', internal: false, address: '198.20.0.1' }
       ]
     })
+
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#lan',
@@ -177,6 +178,7 @@ describe('registerMobileHandlers', () => {
         'vEthernet (WSL (Hyper-V firewall))'
       ])
     )
+
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#external-switch',
@@ -238,6 +240,7 @@ describe('registerMobileHandlers', () => {
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
       'vEthernet (WSL)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }]
     })
+
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#relay',
@@ -293,6 +296,7 @@ describe('registerMobileHandlers', () => {
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
     })
+
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#bridge',
@@ -332,6 +336,7 @@ describe('registerMobileHandlers', () => {
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
       utun4: [{ family: 'IPv4', internal: false, address: '100.102.47.57' }]
     })
+
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#mobile',
@@ -339,6 +344,7 @@ describe('registerMobileHandlers', () => {
       deviceId: 'mobile-1',
       connectionMode: 'automatic'
     })
+
     const rpcServer = { createMobilePairingOffer }
 
     registerMobileHandlers(rpcServer as never)
@@ -364,11 +370,13 @@ describe('registerMobileHandlers', () => {
     networkInterfacesMock.mockReturnValue({
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
     })
+
     const relayFailure = {
       code: 'relay_mint_failed',
       stage: 'create_pairing_relay',
       message: 'Relay pairing invite request failed'
     }
+
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: false,
       reason: 'relay_mint_failed',
@@ -390,6 +398,7 @@ describe('registerMobileHandlers', () => {
     networkInterfacesMock.mockReturnValue({
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
     })
+
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#local',
@@ -484,6 +493,7 @@ describe('registerMobileHandlers', () => {
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'runtime-1'
     })
+
     const ensureNetworkExposure = vi.fn().mockResolvedValue(undefined)
     const rpcServer = { createPairingOffer, ensureNetworkExposure }
 
@@ -713,6 +723,7 @@ describe('registerMobileHandlers', () => {
 
   it('revokes runtime access through the runtime server', () => {
     const revokeRuntimeAccess = vi.fn().mockReturnValue(true)
+
     const rpcServer = {
       getDeviceRegistry: () => ({}),
       revokeRuntimeAccess
@@ -728,6 +739,7 @@ describe('registerMobileHandlers', () => {
 
   it('awaits mobile device revocation before replying', async () => {
     const revokeMobileDevice = vi.fn().mockResolvedValue(true)
+
     const rpcServer = {
       getDeviceRegistry: () => ({}),
       revokeMobileDevice
@@ -794,6 +806,7 @@ describe('registerMobileHandlers', () => {
         })
       )
       .mockResolvedValueOnce('{"launched":true,"exitCode":0}')
+
     const rpcServer = { getWebSocketEndpoint: () => 'ws://0.0.0.0:6768' }
     registerMobileHandlers(rpcServer as never, {
       firewallEnvironment: {
@@ -860,7 +873,9 @@ describe('runtime pairing bind host', () => {
       enableWebSocket: true,
       wsPort: 0
     })
+
     await server.start()
+
     return server
   }
 
@@ -903,13 +918,16 @@ describe('runtime pairing bind host', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
     const server = await startServer(userDataPath)
     let deviceId: string
+
     try {
       registerMobileHandlers(server)
+
       const offer = (await handlers.get('mobile:getRuntimePairingUrl')?.(null, {
         address: '127.0.0.1',
         rotate: true,
         reach: 'this-computer'
       })) as { available: true; deviceId: string }
+
       expect(offer.available).toBe(true)
       deviceId = offer.deviceId
       // Exactly what MobileSocketWiring does for every authenticated socket, local browser included.
@@ -919,6 +937,7 @@ describe('runtime pairing bind host', () => {
     }
 
     const relaunched = await startServer(userDataPath)
+
     try {
       expect(
         relaunched
@@ -935,13 +954,16 @@ describe('runtime pairing bind host', () => {
   it('binds all interfaces on the next launch after a network link has been used', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
     const server = await startServer(userDataPath)
+
     try {
       registerMobileHandlers(server)
+
       const offer = (await handlers.get('mobile:getRuntimePairingUrl')?.(null, {
         address: '100.64.1.20',
         rotate: true,
         reach: 'network'
       })) as { available: true; deviceId: string }
+
       expect(offer.available).toBe(true)
       server.getDeviceRegistry()?.updateLastSeen(offer.deviceId)
     } finally {
@@ -949,6 +971,7 @@ describe('runtime pairing bind host', () => {
     }
 
     const relaunched = await startServer(userDataPath)
+
     try {
       // Why: the reconnect widen must survive — a client that really did connect from off-host has to
       // find the listener at launch without the user re-pairing.

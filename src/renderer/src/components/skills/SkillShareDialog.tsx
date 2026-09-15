@@ -69,6 +69,7 @@ export function SkillShareDialog({
     if (!open || selectedSkills.length === 0) {
       return
     }
+
     const current = ++generation.current
     let disposed = false
     let retainedPreparationId: string | null = null
@@ -80,28 +81,35 @@ export function SkillShareDialog({
     setPreparing(true)
     void (async () => {
       let managedInstall: ManagedSkillInstall | null = null
+
       try {
         const operation = await window.api.skills.listManagedInstalls()
+
         if (operation.status === 'ok') {
           managedInstall = matchingManagedSkillShareInstall(selectedSkills, operation.value)
         }
       } catch (cause) {
         console.warn('[skills] managed install lookup failed during share:', cause)
       }
+
       const nextPreview = await window.api.skills.prepareShare({
         skillIds: selectedSkills.map((skill) => skill.id),
         bundleName: derivedBundleName(selectedSkills),
         ...(managedInstall ? { packageId: managedInstall.packageId } : {})
       })
+
       retainedPreparationId = nextPreview.preparationId
       const auth = await window.api.orcaProfiles.authStatus()
+
       return { nextPreview, auth, managedInstall }
     })()
       .then(async ({ nextPreview, auth, managedInstall }) => {
         if (disposed || generation.current !== current) {
           await window.api.skills.releaseShare(nextPreview.preparationId)
+
           return
         }
+
         retainedPreparationId = nextPreview.preparationId
         setPreview(nextPreview)
         setPublishingNewVersion(managedInstall !== null)
@@ -111,12 +119,15 @@ export function SkillShareDialog({
       .catch(async (cause) => {
         const preparationId = retainedPreparationId
         retainedPreparationId = null
+
         if (preparationId) {
           await window.api.skills.releaseShare(preparationId).catch((releaseCause) => {
             console.warn('[skills] failed preparation cleanup:', releaseCause)
           })
         }
+
         console.warn('[skills] share preparation failed:', cause)
+
         if (generation.current === current) {
           setError(
             translate(
@@ -131,11 +142,14 @@ export function SkillShareDialog({
           setPreparing(false)
         }
       })
+
     return () => {
       disposed = true
+
       if (generation.current === current) {
         generation.current += 1
       }
+
       if (retainedPreparationId) {
         const preparationId = retainedPreparationId
         retainedPreparationId = null
@@ -150,6 +164,7 @@ export function SkillShareDialog({
     if (!preview) {
       return
     }
+
     return window.api.skills.onShareProgress((next) => {
       if (next.preparationId === preview.preparationId) {
         setProgress(next)
@@ -169,15 +184,18 @@ export function SkillShareDialog({
     if (!progress || progress.totalBytes === 0) {
       return 0
     }
+
     return Math.min(100, Math.round((progress.bytesSent / progress.totalBytes) * 100))
   }, [progress])
 
   const close = async (): Promise<void> => {
     generation.current += 1
     onOpenChange(false)
+
     if (!preview || shareUrl) {
       return
     }
+
     await window.api.skills.releaseShare(preview.preparationId).catch((cause) => {
       console.warn('[skills] share preparation cleanup failed:', cause)
     })
@@ -187,18 +205,23 @@ export function SkillShareDialog({
     if (!preview) {
       return
     }
+
     setPublishing(true)
     cancellationRequested.current = false
     setError(null)
+
     try {
       const result = await window.api.skills.publishShare({
         preparationId: preview.preparationId,
         releaseNotes
       })
+
       if (result.status !== 'ok') {
         setError(operationError(result.status))
+
         return
       }
+
       setShareUrl(result.value.share.url)
     } catch (cause) {
       console.warn('[skills] publish failed:', cause)
@@ -224,8 +247,10 @@ export function SkillShareDialog({
     if (!preview || cancelling) {
       return
     }
+
     cancellationRequested.current = true
     setCancelling(true)
+
     try {
       await window.api.skills.cancelShare(preview.preparationId)
     } catch {
@@ -244,6 +269,7 @@ export function SkillShareDialog({
     if (!shareUrl) {
       return
     }
+
     await window.api.ui.writeClipboardText(shareUrl)
     toast.success(translate('auto.components.skills.SkillShareDialog.copied', 'Share link copied'))
   }

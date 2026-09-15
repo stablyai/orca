@@ -13,19 +13,24 @@ export function getContextualTourProgressionForFeatureInteraction(
   if (!state.activeContextualTourId) {
     return null
   }
+
   const tour = getContextualTour(state.activeContextualTourId)
   const step = tour.steps[state.activeContextualTourStepIndex]
+
   if (step?.advanceOnFeatureInteraction !== id) {
     return null
   }
+
   const nextStepIndex = getNextVisibleContextualTourStepIndex({
     tour,
     currentStepIndex: state.activeContextualTourStepIndex,
     targetExists: hasContextualTourTarget
   })
+
   if (nextStepIndex !== null) {
     return 'advance'
   }
+
   if (
     state.activeContextualTourId === 'workspace-agent-sessions' &&
     state.activeContextualTourStepIndex === 0 &&
@@ -34,5 +39,6 @@ export function getContextualTourProgressionForFeatureInteraction(
   ) {
     return 'reveal-sidebar-and-advance'
   }
+
   return 'complete'
 }

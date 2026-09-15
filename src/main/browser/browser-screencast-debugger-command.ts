@@ -8,6 +8,7 @@ export async function sendDebuggerCommand(
   params: Record<string, unknown> = {}
 ): Promise<unknown> {
   let timeout: ReturnType<typeof setTimeout> | null = null
+
   try {
     return await Promise.race([
       Promise.resolve().then(() => dbg.sendCommand(method, params)),

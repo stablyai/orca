@@ -7,6 +7,7 @@ import type {
 } from '../../shared/runtime-types'
 
 const WT = 'repo-1::/home/orca/worktree'
+
 const GROUP = `headless-terminals:${WT}`
 
 const terminalTab = (n: number, isActive = false): RuntimeMobileSessionTerminalTab => ({
@@ -46,7 +47,9 @@ describe('headless tab order stability', () => {
       emitMobileSessionTabsSnapshot: (snapshot: RuntimeMobileSessionTabsSnapshot) => void
       persistHeadlessTerminalActiveLeaf: (...args: unknown[]) => void
     }
+
     runtime.emitMobileSessionTabsSnapshot = () => {}
+
     runtime.persistHeadlessTerminalActiveLeaf = () => {}
 
     const tabs = [terminalTab(1), terminalTab(3), terminalTab(4), terminalTab(2, true)]
@@ -72,13 +75,16 @@ describe('headless tab order stability', () => {
         activeTab: RuntimeMobileSessionTerminalTab | null
       ) => { id: string; tabOrder: string[] }[]
     }
+
     const reappended = [terminalTab(1), terminalTab(3), terminalTab(4), terminalTab(2, true)]
+
     const merged = runtime.mergeMobileSessionTabGroups(
       WT,
       [{ id: GROUP, activeTabId: 'tab-1', tabOrder: ['tab-1', 'tab-2', 'tab-3', 'tab-4'] }],
       reappended,
       reappended[3]!
     )
+
     expect(merged[0]!.tabOrder).toEqual(['tab-1', 'tab-2', 'tab-3', 'tab-4'])
   })
 
@@ -91,13 +97,16 @@ describe('headless tab order stability', () => {
         activeTab: RuntimeMobileSessionTerminalTab | null
       ) => { id: string; tabOrder: string[] }[]
     }
+
     const tabs = [terminalTab(3), terminalTab(1), terminalTab(5, true)]
+
     const merged = runtime.mergeMobileSessionTabGroups(
       WT,
       [{ id: GROUP, activeTabId: 'tab-1', tabOrder: ['tab-1', 'tab-2', 'tab-3'] }],
       tabs,
       tabs[2]!
     )
+
     expect(merged[0]!.tabOrder).toEqual(['tab-1', 'tab-3', 'tab-5'])
   })
 
@@ -110,11 +119,14 @@ describe('headless tab order stability', () => {
         existingGroups?: RuntimeMobileSessionTabsSnapshot['tabGroups']
       ) => RuntimeMobileSessionTabsSnapshot['tabGroups']
     }
+
     const tabs = [terminalTab(2), terminalTab(1), terminalTab(4), terminalTab(3)]
+
     const groups = runtime.buildHeadlessMobileSessionTabGroups(WT, tabs, tabs[0]!, [
       { id: 'left', activeTabId: 'tab-1', tabOrder: ['tab-1', 'tab-2'] },
       { id: 'right', activeTabId: 'tab-3', tabOrder: ['tab-3', 'tab-4'] }
     ])
+
     expect(groups?.find((group) => group.id === 'left')?.tabOrder).toEqual(['tab-1', 'tab-2'])
     expect(groups?.find((group) => group.id === 'right')?.tabOrder).toEqual(['tab-3', 'tab-4'])
   })

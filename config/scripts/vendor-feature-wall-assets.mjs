@@ -5,7 +5,9 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 
 const __dirname = import.meta.dirname
+
 const ROOT = path.join(__dirname, '..', '..')
+
 const DEFAULT_MARKETING_REPO = path.join(
   homedir(),
   'source',
@@ -13,7 +15,9 @@ const DEFAULT_MARKETING_REPO = path.join(
   'Stably',
   'orca-marketing-website'
 )
+
 const MARKETING_REPO = process.env.ORCA_MARKETING_REPO || DEFAULT_MARKETING_REPO
+
 const DEST_ROOT = path.join(ROOT, 'resources', 'onboarding', 'feature-wall')
 
 const TILES = [
@@ -89,13 +93,17 @@ function gitRecordedAtSeconds(tile, relativePath) {
     cwd: sourceRootForTile(tile),
     encoding: 'utf8'
   })
+
   if (result.status !== 0) {
     throw new Error(`git log failed for ${relativePath}: ${result.stderr || result.stdout}`)
   }
+
   const value = result.stdout.trim()
+
   if (!value) {
     throw new Error(`No git history found for ${relativePath}`)
   }
+
   return Number(value)
 }
 

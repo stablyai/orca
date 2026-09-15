@@ -10,6 +10,7 @@ function referenceUnchanged(
   const normalize = ignoreTrailingWhitespace
     ? (value: string): string => value.trimEnd()
     : (value: string): string => value
+
   return normalize(content) === normalize(original)
 }
 

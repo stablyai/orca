@@ -35,26 +35,32 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     if (session.connectStarted) {
       return
     }
+
     // Why: a deliberately slept workspace keeps its panes mounted, so connecting
     // would reattach the retained session id and respawn the shell (#10205).
     // Wait for the wake instead; a queued startup is an explicit launch.
     if (hasWorktreeSleepIntent(session.deps.worktreeId) && !session.paneStartup) {
       session.cancelScheduledConnectFrame()
+
       if (session.connectFallbackTimer !== null) {
         clearTimeout(session.connectFallbackTimer)
         session.connectFallbackTimer = null
       }
+
       if (!wakeWaitStarted) {
         wakeWaitStarted = true
         recordPtyConnectDiagnostic(
           `pane=${session.pane.id} tab=${session.deps.tabId} -> WAIT FOR WAKE (deliberate sleep)`
         )
+
         const unsubscribe = onWorktreeSleepIntentCleared(session.deps.worktreeId, () => {
           wakeWaitStarted = false
           const index = session.waitTeardowns.indexOf(unsubscribe)
+
           if (index !== -1) {
             session.waitTeardowns.splice(index, 1)
           }
+
           // Why: an activation wake bumps the tab generation in the same tick and the
           // remounted pane connects on its own; a stale generation must not connect too.
           const currentTab = findTerminalTabForPane(
@@ -62,21 +68,27 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
             session.deps.worktreeId,
             session.deps.tabId
           )
+
           if (!session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration) {
             session.runDeferredConnect()
           }
         })
+
         // Why: disposal unsubscribes so a torn-down pane never connects on a later wake.
         session.waitTeardowns.push(unsubscribe)
       }
+
       return
     }
+
     if (!cwdPromiseSettled) {
       session.cancelScheduledConnectFrame()
+
       if (session.connectFallbackTimer !== null) {
         clearTimeout(session.connectFallbackTimer)
         session.connectFallbackTimer = null
       }
+
       if (!cwdPromiseWaitStarted) {
         cwdPromiseWaitStarted = true
         void cwdPromise?.then(
@@ -84,6 +96,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
             if (session.disposed) {
               return
             }
+
             session.deps.cwd = cwd
             session.transportOptions.cwd = cwd
             cwdPromiseSettled = true
@@ -93,34 +106,44 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
             if (session.disposed) {
               return
             }
+
             cwdPromiseSettled = true
             session.runDeferredConnect()
           }
         )
       }
+
       return
     }
+
     if (!session.startupGridSettledForConnect && session.shouldSettleStartupGridBeforeConnect()) {
       session.cancelScheduledConnectFrame()
+
       if (session.connectFallbackTimer !== null) {
         clearTimeout(session.connectFallbackTimer)
         session.connectFallbackTimer = null
       }
+
       session.settleStartupGridBeforeConnect(() => {
         session.startupGridSettledForConnect = true
         session.runDeferredConnect()
       })
+
       return
     }
+
     session.connectStarted = true
     session.cancelScheduledConnectFrame()
+
     if (session.connectFallbackTimer !== null) {
       clearTimeout(session.connectFallbackTimer)
       session.connectFallbackTimer = null
     }
+
     if (session.disposed) {
       return
     }
+
     safeFit(session.pane)
     session.cols = session.pane.terminal.cols
     session.rows = session.pane.terminal.rows
@@ -146,6 +169,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       if (session.disposed) {
         return
       }
+
       if (isWorktreeRemovalFenceError(message)) {
         // Why: main fences a spawn/reattach whose worktree (or an overlapping
         // parent/child root) is being deleted. That is expected teardown, not a
@@ -154,8 +178,10 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
         // that startFreshSpawn's own-worktree isDeleting skip cannot see.
         return
       }
+
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)
     }
+
     session.codexBackfillErrorDetector =
       session.paneStartup?.launchAgent === 'codex' || session.tab?.launchAgent === 'codex'
         ? createCodexBackfillErrorDetector()
@@ -178,9 +204,11 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       if (!ptyId) {
         return false
       }
+
       if (session.canUseMainBufferSnapshot(ptyId)) {
         return true
       }
+
       return (
         session.transport.getPtyId() === ptyId &&
         typeof session.transport.serializeBuffer === 'function'

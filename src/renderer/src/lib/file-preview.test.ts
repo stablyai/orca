@@ -416,6 +416,7 @@ describe('canShowWorkspaceFileBrowserAction', () => {
 
   it('hides the action while a file has no resolved owner', () => {
     const workspaceId = folderWorkspaceKey('folder-1')
+
     const state = {
       folderWorkspaces: [
         {

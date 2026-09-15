@@ -28,9 +28,11 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   const targetWorkspaceId = args.resumeState.usesSessionWorktree
     ? args.resumeState.worktreeId
     : (args.resumeState.worktreeId ?? args.activeWorkspaceId)
+
   const targetWorkspacePath = targetWorkspaceId
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
+
   return resolveAiVaultSessionResumeInChatEligibility({
     session: args.session,
     targetWorkspaceId,

@@ -9,9 +9,11 @@ export function logRendererStartupDiagnostic(
   details: StartupDiagnosticDetails = {}
 ): void {
   const api = window.api?.app
+
   if (!api?.startupDiagnostic) {
     return
   }
+
   void api
     .startupDiagnostic(`renderer-${event}`, {
       rendererT: nowMs(),
@@ -28,12 +30,14 @@ export async function timeRendererStartupStep<T>(
   details: StartupDiagnosticDetails = {}
 ): Promise<T> {
   const startedAt = performance.now()
+
   try {
     const result = await operation()
     logRendererStartupDiagnostic(`${event}-done`, {
       durationMs: Math.round(performance.now() - startedAt),
       ...details
     })
+
     return result
   } catch (error) {
     logRendererStartupDiagnostic(`${event}-failed`, {
@@ -51,12 +55,14 @@ export function timeRendererStartupSyncStep<T>(
   details: StartupDiagnosticDetails = {}
 ): T {
   const startedAt = performance.now()
+
   try {
     const result = operation()
     logRendererStartupDiagnostic(`${event}-done`, {
       durationMs: Math.round(performance.now() - startedAt),
       ...details
     })
+
     return result
   } catch (error) {
     logRendererStartupDiagnostic(`${event}-failed`, {

@@ -60,39 +60,50 @@ const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
 function listSourceFiles(root: string): string[] {
   const entries = readdirSync(root)
   const files: string[] = []
+
   for (const entry of entries) {
     const path = join(root, entry)
     const stat = statSync(path)
+
     if (stat.isDirectory()) {
       files.push(...listSourceFiles(path))
       continue
     }
+
     if (!/\.[cm]?[jt]sx?$/.test(entry) || /\.test\.[cm]?[jt]sx?$/.test(entry)) {
       continue
     }
+
     files.push(path)
   }
+
   return files
 }
 
 function mobileLiteralRpcMethods(): string[] {
   const roots = [join(process.cwd(), 'mobile/app'), join(process.cwd(), 'mobile/src')]
   const methods = new Set<string>()
+
   for (const file of roots.flatMap(listSourceFiles)) {
     const source = readFileSync(file, 'utf8')
+
     for (const match of source.matchAll(/sendRequest\(\s*['"]([^'"]+)/g)) {
       methods.add(match[1]!)
     }
+
     for (const match of source.matchAll(/subscribe\(\s*['"]([^'"]+)/g)) {
       methods.add(match[1]!)
     }
+
     for (const match of source.matchAll(/method:\s*['"]([^'"]+)/g)) {
       const method = match[1]!
+
       if (method.includes('.')) {
         methods.add(method)
       }
     }
   }
+
   return [...methods].sort()
 }
 
@@ -105,10 +116,13 @@ function mobileRpcAllowlist(): Set<string> {
     join(process.cwd(), 'src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist.ts'),
     'utf8'
   )
+
   const allowlist = source.match(/const MOBILE_RPC_METHOD_ALLOWLIST = new Set\(\[([\s\S]*?)\]\)/)
+
   if (!allowlist) {
     throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')
   }
+
   return new Set([...allowlist[1]!.matchAll(/'([^']+)'/g)].map((match) => match[1]!))
 }
 

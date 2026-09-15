@@ -58,7 +58,9 @@ export const appStoreSnapshot: {
   isRefreshingLocalAgentsByContext: {},
   isDetectingRemoteAgents: {}
 }
+
 export const pinTabMock: (tabId: string) => void = vi.fn()
+
 export const unpinTabMock: (tabId: string) => void = vi.fn()
 
 const useAppStoreMock = vi.fn(
@@ -124,6 +126,7 @@ const useAppStoreMock = vi.fn(
 
 export const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
   useAppStoreMock(selector)
+
 useAppStoreExport.getState = vi.fn(() => ({
   activeRepoId: appStoreSnapshot.activeRepoId,
   activeTabId: appStoreSnapshot.activeTabId,

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
+
 const { getPathMock, handleMock, resolveProvisionedRootSourceMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(),
   handleMock: vi.fn(),
@@ -27,6 +28,7 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   vi.clearAllMocks()
 })
 
@@ -50,10 +52,13 @@ it('cancels source resolution before a provisioned-root recipe creates resources
     recipeId: 'cloud-sandbox',
     provisionId: 'provision-source-ref'
   } as never) as Promise<{ ok: boolean; error?: string }>
+
   await vi.waitFor(() => expect(resolveProvisionedRootSourceMock).toHaveBeenCalledOnce())
+
   const cancelled = await handlers.get('ephemeralVm:cancelProvision')?.(null, {
     provisionId: 'provision-source-ref'
   } as never)
+
   const result = await provision
 
   expect(cancelled).toEqual({ cancelled: true })
@@ -64,11 +69,13 @@ it('cancels source resolution before a provisioned-root recipe creates resources
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix))
   tempDirs.push(dir)
+
   return dir
 }
 
 function makeStore(repoPath: string) {
   const repo = { id: 'repo-1', path: repoPath, displayName: 'Repo', addedAt: 0 }
+
   return {
     getRepo: vi.fn((id: string) => (id === repo.id ? repo : null)),
     getRepos: vi.fn(() => [repo]),

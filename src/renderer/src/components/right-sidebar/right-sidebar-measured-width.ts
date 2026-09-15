@@ -13,18 +13,21 @@ export function useMeasuredWidth(onWidth: (width: number | null) => void) {
         if (Object.is(widthRef.current, width)) {
           return
         }
+
         widthRef.current = width
         onWidth(width)
       }
 
       if (!node || typeof ResizeObserver === 'undefined') {
         commitWidth(node ? node.getBoundingClientRect().width : null)
+
         return
       }
 
       const updateWidth = (): void => {
         commitWidth(node.getBoundingClientRect().width)
       }
+
       updateWidth()
       const observer = new ResizeObserver(updateWidth)
       observer.observe(node)

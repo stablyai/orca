@@ -46,6 +46,7 @@ export function installPreviewTerminalCompatibility(
       terminal.element.removeEventListener('compositionstart', imeAnchorHandler)
       terminal.element.removeEventListener('compositionupdate', imeAnchorHandler)
     }
+
     disposeArabicShapingJoiner()
   }
 }

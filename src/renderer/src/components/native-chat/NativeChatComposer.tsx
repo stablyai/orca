@@ -96,14 +96,17 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const [dictationPressed, setDictationPressed] = useState(false)
     const imeEnterGesture = useImeEnterGestureOwnership()
     const { textareaRef } = useNativeChatComposerAppMenuSelection(imeEnterGesture.isComposing)
+
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
       targetPtyId,
       onOptimisticSendCanceled
     )
+
     const dictationState = useAppStore((store) => store.dictationState)
     const voiceSettings = useAppStore((store) => store.settings?.voice)
     const dictationDisabled = voiceSettings?.enabled !== true || !voiceSettings.sttModel
+
     const isDictating =
       dictationPressed ||
       dictationState === 'starting' ||
@@ -114,6 +117,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       agent,
       structuredTransport
     )
+
     const picker = useNativeChatPickerState({
       agent,
       terminalTabId,
@@ -127,6 +131,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setCaret,
       setActiveSuggestion
     })
+
     const {
       autocomplete,
       classifySend,
@@ -142,6 +147,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       if (!targetPtyId) {
         return null
       }
+
       return { ptyId: targetPtyId, settings: getSettingsForAgentTabRuntimeOwner(terminalTabId) }
     }, [targetPtyId, terminalTabId])
 
@@ -165,6 +171,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setDraft,
       setNotice
     })
+
     const {
       imageAttachments,
       attachResolvedPaths,
@@ -174,6 +181,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolvePendingImageAttachment,
       dropPendingImageAttachment
     } = attachments
+
     useNativeChatWorkspaceFileDrop({
       terminalTabId,
       structuredWorktreeId: structuredTransport?.worktreeId,
@@ -185,6 +193,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     // A pasted image has no agent-readable path until its save lands; sending
     // mid-save would ship the message without the image the chip promises.
     const hasPendingAttachment = imageAttachments.some((attachment) => attachment.pending)
+
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
       : disabled || hasPendingAttachment || (draft.trim() === '' && imageAttachments.length === 0)
@@ -228,8 +237,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     )
 
     const { pickAttachment } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
+
     const { toggleDictation, startHoldDictation, stopHoldDictation } =
       useNativeChatDictationActions({ textareaRef, setDictationPressed })
+
     const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
       useNativeChatSessionOptionCommand({
         agent,
@@ -248,6 +259,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         onAgentPicker: onSwitchToTerminal,
         readTerminalScreen
       })
+
     const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptySessionOptionsSurface
     const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptionsSnapshot
 
@@ -286,10 +298,12 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       clearImageAttachments,
       setNotice
     })
+
     const send = useCallback(() => {
       if (hasPendingAttachment) {
         return
       }
+
       if (!structuredTransport) {
         sendPty()
       } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
@@ -307,14 +321,19 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const interrupt = useCallback(() => {
       cancelPendingSends()
+
       if (isWorking && onStop) {
         onStop()
+
         return
       }
+
       const target = resolveTarget()
+
       if (!target) {
         return
       }
+
       sendRuntimePtyInput(target.settings, target.ptyId, ESC)
     }, [cancelPendingSends, isWorking, onStop, resolveTarget])
 
@@ -334,12 +353,15 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       clearImageAttachments,
       setNotice
     })
+
     const dispatchPickerCommand = useCallback(
       (command: Parameters<typeof dispatchPtyPickerCommand>[0]) => {
         if (structuredTransport) {
           sendStructured(`/${command.name}`)
+
           return
         }
+
         dispatchPtyPickerCommand(command)
       },
       [dispatchPtyPickerCommand, sendStructured, structuredTransport]
@@ -403,6 +425,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           if (element.value !== draft) {
             handleDraftChange(element.value, element)
           }
+
           attachments.flushPendingAttachments()
         }}
         onPaste={handlePaste}
@@ -413,6 +436,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           if (autocomplete.mode !== 'mention') {
             return
           }
+
           const result = applyMentionSuggestion(draft, caret, autocomplete.query)
           setDraft(result.draft)
           setCaret(result.caret)

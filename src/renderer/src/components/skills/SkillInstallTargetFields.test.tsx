@@ -29,6 +29,7 @@ afterEach(() => {
 describe('SkillInstallTargetFields', () => {
   it('names every conditional selector and contains long destination labels', async () => {
     const longWorkspace = `workspace-${'深'.repeat(240)}`
+
     const props = {
       ...callbacks,
       environmentId: 'local',
@@ -43,6 +44,7 @@ describe('SkillInstallTargetFields', () => {
       detectedAgents: null,
       onProvidersChange: vi.fn()
     }
+
     const view = render(<SkillInstallTargetFields {...props} />)
 
     expect(screen.getByRole('combobox', { name: 'Machine' })).toHaveClass('w-full', 'min-w-0')
@@ -62,6 +64,7 @@ describe('SkillInstallTargetFields', () => {
 
   it('filters workspaces via search and calls onWorkspaceChange upon selection', () => {
     const onWorkspaceChange = vi.fn()
+
     const props = {
       ...callbacks,
       environmentId: 'local',

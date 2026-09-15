@@ -42,9 +42,11 @@ export async function androidSwipe(
 ): Promise<void> {
   const first = points[0]
   const last = points.at(-1)
+
   if (!first || !last || points.length < 2) {
     return
   }
+
   // adb input only supports a straight swipe, so approximate the path by its
   // endpoints; the scrcpy control phase replaces this with true multi-touch.
   const start = normalizedToDevicePixels(first.x, first.y, size)
@@ -131,6 +133,7 @@ export async function androidExec(
   // Pass the whole command as a single arg so the device shell parses quotes,
   // pipes, and compound commands instead of naively splitting on spaces.
   const result = ensureAdbOk(await runner(sdk.adb, androidShellArgs(serial, [command])), 'adb exec')
+
   return result.stdout
 }
 

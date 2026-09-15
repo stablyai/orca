@@ -54,10 +54,12 @@ function targetStatus(
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -120,6 +122,7 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     const { item, target, getIssue, teamStates, updateIssue } = setup({
       linkedLinearIssueWorkspaceId: null
     })
+
     getIssue.mockResolvedValueOnce(issue({ workspaceId: 'issue-workspace' }))
 
     await syncWorkspaceBoardTaskStatuses({
@@ -145,12 +148,15 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     const target = targetStatus()
     const first = worktree({ id: 'repo-a::/worktree-a', linkedLinearIssue: 'ORC-1' })
     const second = worktree({ id: 'repo-b::/worktree-b', linkedLinearIssue: 'ORC-2' })
+
     const getIssue = vi
       .fn()
       .mockResolvedValueOnce(issue({ id: 'issue-1', identifier: 'ORC-1' }))
       .mockResolvedValueOnce(issue({ id: 'issue-2', identifier: 'ORC-2' }))
+
     const teamStates = vi.fn().mockResolvedValue([state()])
     const updateIssue = vi.fn<() => Promise<LinearMutationResult>>().mockResolvedValue({ ok: true })
+
     const getSettingsForWorktree = vi.fn((worktreeId: string) => ({
       activeRuntimeEnvironmentId: worktreeId.startsWith('repo-a') ? 'runtime-a' : 'runtime-b'
     }))
@@ -299,10 +305,12 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     const item = worktree()
     const firstUpdate = deferred<LinearMutationResult>()
     const getIssue = vi.fn().mockResolvedValue(issue())
+
     const teamStates = vi
       .fn()
       .mockResolvedValueOnce([state()])
       .mockResolvedValueOnce([state({ id: 'state-done', name: 'Done', type: 'completed' })])
+
     const updateIssue = vi
       .fn<() => Promise<LinearMutationResult>>()
       .mockReturnValueOnce(firstUpdate.promise)
@@ -316,6 +324,7 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       getLatestWorkspaceStatus: () => 'in-review',
       deps: { getIssue, teamStates, updateIssue }
     })
+
     await flushMicrotasks()
     expect(updateIssue).toHaveBeenCalledTimes(1)
 
@@ -327,6 +336,7 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       getLatestWorkspaceStatus: () => 'done',
       deps: { getIssue, teamStates, updateIssue }
     })
+
     await flushMicrotasks()
     expect(updateIssue).toHaveBeenCalledTimes(1)
 

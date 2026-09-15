@@ -59,19 +59,26 @@ import { createPurgeStaleRuntimeHostState } from './worktrees/teardown/purge-sta
 import { createMigrateWorktreeIdentity } from './worktrees/session/migrate-worktree-identity'
 
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
+
 export { WORKTREE_REFRESH_CONCURRENCY } from './worktrees/listing/worktree-slice-constants'
+
 export { acquireDetectedWorktreeRefreshLeaseForRepo } from './worktrees/listing/detected-worktree-refresh'
+
 export {
   getHostedReviewLinkMutationGenerationForTests,
   getHostedReviewLinkWorktreeAliasCountForTests,
   resetHostedReviewLinkMutationGenerationForTests
 } from './worktrees/metadata/hosted-review-link-mutation'
+
 export {
   getDetachedHeadAutoDerivedDisplayNameForTests,
   setDetachedHeadAutoDerivedDisplayNameForTests
 } from './worktrees/metadata/detached-head-display-name'
+
 export { resetAuthoritativelyRemovedWorktreeMemoryForTests } from './worktrees/listing/authoritative-worktree-removal-memory'
+
 export type { DirectSshDetectedWorktreeRefresh } from './worktrees/listing/known-ssh-worktree-fetch'
+
 export { acquireDirectSshDetectedWorktreeRefresh } from './worktrees/listing/known-ssh-worktree-fetch'
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({

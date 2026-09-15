@@ -9,6 +9,7 @@ export function isMobileConflictAborting(
   if (conflictOperation !== 'merge' && conflictOperation !== 'rebase') {
     return false
   }
+
   return busyAction === `abort-${conflictOperation}`
 }
 

@@ -17,6 +17,7 @@ import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-scrip
 import { getManagedScript } from './hook-script'
 
 export { getManagedScript }
+
 import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
@@ -68,6 +69,7 @@ export class ClaudeHookService {
     const configPath = getConfigPath(this.options.settings)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: this.options.agent,
@@ -82,22 +84,27 @@ export class ClaudeHookService {
     const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
+
     for (const event of CLAUDE_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
+
       const hasCommand = definitions.some((definition) =>
         (definition.hooks ?? []).some((hook) => hasSameManagedHookInvocation(hook, expectedHook))
       )
+
       if (hasCommand) {
         presentCount += 1
       } else {
         missing.push(event.eventName)
       }
     }
+
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+
     if (missing.length === 0) {
       state = 'installed'
       detail = null
@@ -108,6 +115,7 @@ export class ClaudeHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
   }
 
@@ -130,6 +138,7 @@ export class ClaudeHookService {
     const configPath = getConfigPath(this.options.settings)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: this.options.agent,
@@ -141,12 +150,14 @@ export class ClaudeHookService {
     }
 
     const hook = getManagedLifecycleHook(scriptPath, this.options.settings)
+
     let nextConfig = applyManagedHooks(
       config,
       hook,
       getManagedScriptFileName(this.options.settings),
       this.options.agent === 'claude' ? options : undefined
     )
+
     writeManagedScript(
       scriptPath,
       getManagedScript('local', {
@@ -154,11 +165,14 @@ export class ClaudeHookService {
         skipWhenGrokImportsClaude: this.options.agent === 'claude'
       })
     )
+
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
       nextConfig = this.installManagedStatusLine(nextConfig)
     }
+
     writeHooksJson(configPath, nextConfig)
+
     return this.getStatus()
   }
 
@@ -168,21 +182,26 @@ export class ClaudeHookService {
     const scriptFileName = getStatusLineScriptFileName(this.options.settings)
     const markerPath = getStatusLineInstallMarkerPath(this.options.settings)
     const slot = getStatusLineSlotState(config, scriptFileName)
+
     if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
       return config
     }
+
     const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
     writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
+
     const next = applyManagedStatusLine(
       config,
       getManagedCommand(statusLineScriptPath),
       scriptFileName
     )
+
     try {
       writeFileSync(markerPath, '')
     } catch {
       // Best-effort: a missing marker only means one future user deletion gets re-installed once.
     }
+
     return next
   }
 
@@ -196,9 +215,11 @@ export class ClaudeHookService {
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+
     // Why: surface fallible SFTP installs as structured errors.
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
       if (!config) {
         return {
           agent: this.options.agent,
@@ -211,6 +232,7 @@ export class ClaudeHookService {
 
       // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
       const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
+
       const nextConfig = applyManagedHooks(
         config,
         hook,
@@ -254,6 +276,7 @@ export class ClaudeHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath(this.options.settings)
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: this.options.agent,
@@ -263,17 +286,21 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
+
     const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
       config,
       getManagedScriptFileName(this.options.settings)
     )
+
     const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
       hooksRemoved,
       getStatusLineScriptFileName(this.options.settings)
     )
+
     if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
     }
+
     if (this.options.agent === 'claude') {
       try {
         // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
@@ -282,6 +309,7 @@ export class ClaudeHookService {
         // ignore — marker cleanup is best-effort
       }
     }
+
     return this.getStatus()
   }
 }

@@ -12,20 +12,25 @@ export function buildAutomationRunContextForRepo(args: {
   projectHostSetups: readonly ProjectHostSetup[]
 }): WorkspaceRunContext | null {
   const matchingRepos = args.repos.filter((candidate) => candidate.id === args.repoId)
+
   if (matchingRepos.length !== 1) {
     return null
   }
+
   const repo = matchingRepos[0]
   const hostId = getRepoExecutionHostId(repo)
+
   const setup = args.projectHostSetups.find(
     (candidate) =>
       candidate.repoId === repo.id &&
       candidate.hostId === hostId &&
       candidate.setupState === 'ready'
   )
+
   if (!setup) {
     return null
   }
+
   return buildWorkspaceRunContext({
     projectId: setup.projectId,
     hostId: setup.hostId,

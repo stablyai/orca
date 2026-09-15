@@ -25,23 +25,29 @@ export function buildSubagentChildRows(args: {
   parentIsFresh: boolean
 }): DashboardAgentRow[] {
   const subagents = args.parentEntry.subagents
+
   if (!subagents || subagents.length === 0) {
     return []
   }
+
   return subagents.map((subagent) => {
     const observation = args.parentEntry.subagentObservation
     const fresh = observation === 'live' || (observation === undefined && args.parentIsFresh)
+
     const activeState =
       fresh && subagent.state !== 'idle' && subagent.state !== 'unverifiable'
         ? subagent.state
         : undefined
+
     const state =
       subagent.state === 'unverifiable' ||
       (observation === 'unverifiable' && subagent.state !== 'idle')
         ? 'unverifiable'
         : (activeState ?? 'idle')
+
     const startedAt = subagent.startedAt > 0 ? subagent.startedAt : args.parentEntry.stateStartedAt
     const paneKey = subagentRowKey(args.parentEntry.paneKey, subagent.id)
+
     const entry: AgentStatusEntry = {
       state: activeState ?? 'done',
       prompt: subagent.description ?? subagent.agentType ?? '',
@@ -60,6 +66,7 @@ export function buildSubagentChildRows(args: {
         parentPaneKey: args.parentEntry.paneKey
       }
     }
+
     return {
       paneKey,
       entry,

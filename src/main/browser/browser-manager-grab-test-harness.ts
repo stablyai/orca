@@ -2,6 +2,7 @@ import { vi, type Mock } from 'vitest'
 import { browserManager } from './browser-manager'
 
 export const GRAB_RENDERER_WEB_CONTENTS_ID = 5001
+
 export const GRAB_GUEST_WEB_CONTENTS_ID = 101
 
 // Why: every grab test file must declare its own vi.hoisted mock bundle (vi.mock
@@ -46,15 +47,18 @@ export function routeWebContentsIds(
 ): void {
   mocks.webContentsFromIdMock.mockImplementation((id: number) => {
     const guest = guestsById[id]
+
     if (guest) {
       return guest
     }
+
     if (id === GRAB_RENDERER_WEB_CONTENTS_ID) {
       return {
         isDestroyed: mocks.rendererIsDestroyedMock,
         send: mocks.rendererSendMock
       }
     }
+
     return null
   })
 }
@@ -76,5 +80,6 @@ export function resetGrabTestEnvironment(mocks: GrabTestMocks): Electron.WebCont
     webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
     rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
   })
+
   return guest
 }

@@ -12,6 +12,7 @@ const { homedirMock, registrationTestState } = vi.hoisted(() => ({
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -20,12 +21,14 @@ vi.mock('node:os', async (importOriginal) => {
 
 vi.mock('../codex-accounts/fs-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexFsUtils>()
+
   return {
     ...actual,
     writeFileAtomically: (...args: Parameters<typeof actual.writeFileAtomically>) => {
       if (registrationTestState.failAtomicWrite) {
         throw new Error('injected atomic write failure')
       }
+
       return actual.writeFileAtomically(...args)
     }
   }
@@ -53,10 +56,13 @@ const PLUGIN_TABLE = ['[plugins."ponytail@ponytail"]', 'enabled = true', 'versio
 )
 
 const MARKETPLACE_KEY = getCodexRegistrationKey('marketplaces', 'ponytail')
+
 const PLUGIN_KEY = getCodexRegistrationKey('plugins', 'ponytail@ponytail')
 
 let tmpHome: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -66,6 +72,7 @@ beforeEach(() => {
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   registrationTestState.failAtomicWrite = false
+
   // Why: promotion writes into homedir()/.codex — if the mock ever fails to
   // intercept, these tests would rewrite the developer's real Codex config.
   if (homedir() !== tmpHome) {
@@ -76,11 +83,13 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -430,6 +439,7 @@ describe('codex marketplace refresh metadata promotion', () => {
     const runtime = readRuntimeConfig()
       .replace('last_updated = "2026-01-05T10:00:00Z"', 'last_updated = "2026-03-01T00:00:00Z"')
       .replace('last_revision = "aaaa111"', 'last_revision = "fresh11"')
+
     writeFileSync(runtimeConfigPath(), runtime, 'utf-8')
     syncSystemConfigIntoManagedCodexHome()
 
@@ -510,6 +520,7 @@ describe('codex registration reconciliation isolates accounts and source homes',
   it('promotes each managed account registration into the shared source without crossing baselines', () => {
     writeSystemConfig('model = "gpt-5"\n')
     const accounts = [accountHome('a'), accountHome('b')]
+
     for (const runtimeHomePath of accounts) {
       syncSystemConfigIntoManagedCodexHome({
         runtimeHomePath,
@@ -522,6 +533,7 @@ describe('codex registration reconciliation isolates accounts and source homes',
       '[marketplaces.beta]\nsource_type = "git"\nsource = "https://example.test/beta.git"',
       accounts[1]!
     )
+
     for (const runtimeHomePath of [...accounts, ...accounts]) {
       syncSystemConfigIntoManagedCodexHome({
         runtimeHomePath,
@@ -531,11 +543,13 @@ describe('codex registration reconciliation isolates accounts and source homes',
 
     expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
     expect(readSystemConfig()).toContain('[marketplaces.beta]')
+
     for (const runtimeHomePath of accounts) {
       expect(readRuntimeConfig(runtimeHomePath)).toContain('[marketplaces.ponytail]')
       expect(readRuntimeConfig(runtimeHomePath)).toContain('[marketplaces.beta]')
       expect(existsSync(baselinePath(runtimeHomePath))).toBe(true)
     }
+
     expect(readFileSync(baselinePath(accounts[0]!), 'utf-8')).toContain('marketplaces:ponytail')
   })
 
@@ -550,6 +564,7 @@ describe('codex registration reconciliation isolates accounts and source homes',
     })
 
     simulateCodexRegistrationWrite(MARKETPLACE_TABLE, wslRuntimeHome)
+
     for (let pass = 0; pass < 2; pass += 1) {
       syncSystemConfigIntoManagedCodexHome({
         runtimeHomePath: wslRuntimeHome,
@@ -639,6 +654,7 @@ describe('codex registration table identity', () => {
     const entries = readCodexRegistrationEntries(
       '[marketplaces.m]\nsparse_paths = [\n  "a",\n  "b"\n]\nsource = "s"\n'
     )
+
     const entry = entries.get(getCodexRegistrationKey('marketplaces', 'm'))
 
     expect(entry?.fields.get('sparse_paths')?.multiline).toBe(true)
@@ -650,6 +666,7 @@ describe('codex registration table identity', () => {
     const entries = readCodexRegistrationEntries(
       '[marketplaces.m]\nsource = "s"\n\n[marketplaces.m.auth]\ntoken = "t"\n'
     )
+
     const entry = entries.get(getCodexRegistrationKey('marketplaces', 'm'))
 
     expect(entries.size).toBe(1)
@@ -661,6 +678,7 @@ describe('codex registration table identity', () => {
     const entries = readCodexRegistrationEntries(
       '[marketplaces.m]\nsource = "s" # inline\n# keeps this one\nkey = 1\n\n# belongs to mcp_servers\n[mcp_servers.docs]\ncommand = "d"\n'
     )
+
     const block = entries.get(getCodexRegistrationKey('marketplaces', 'm'))?.block
 
     expect(block).toContain('# keeps this one')
@@ -672,6 +690,7 @@ describe('codex registration table identity', () => {
     const entries = readCodexRegistrationEntries(
       '[marketplaces.m]\nnotes = """\n# not a comment"""\n\n[mcp_servers.docs]\ncommand = "d"\n'
     )
+
     const block = entries.get(getCodexRegistrationKey('marketplaces', 'm'))?.block
 
     expect(block).toContain('# not a comment"""')

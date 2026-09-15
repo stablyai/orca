@@ -12,13 +12,17 @@ describe('mapSettledWithConcurrency', () => {
       inFlight += 1
       peak = Math.max(peak, inFlight)
       await Promise.resolve()
+
       for (let turn = 0; turn < item % 5; turn += 1) {
         await Promise.resolve()
       }
+
       inFlight -= 1
+
       if (item % 97 === 0) {
         throw `rejected-${item}`
       }
+
       return `fulfilled-${item}`
     })
 

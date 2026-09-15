@@ -25,7 +25,9 @@ import {
 } from './helpers/paired-electron-client'
 
 const PACKAGED_EXECUTABLE_ENV = 'ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE'
+
 const CLIENT_HOST_CAPABILITY = 'browser.clientHost.v1'
+
 const TUNNEL_CAPABILITY = 'network.browserTunnel.v1'
 
 type BrowserFixture = {
@@ -50,6 +52,7 @@ type PackagedPlacementCleanup = () => Promise<void> | void
 
 async function collectCleanupFailures(cleanups: PackagedPlacementCleanup[]): Promise<unknown[]> {
   const failures: unknown[] = []
+
   for (const cleanup of cleanups) {
     try {
       await cleanup()
@@ -57,6 +60,7 @@ async function collectCleanupFailures(cleanups: PackagedPlacementCleanup[]): Pro
       failures.push(error)
     }
   }
+
   return failures
 }
 
@@ -65,18 +69,23 @@ async function withPackagedPlacementCleanup(
 ): Promise<void> {
   const cleanups: PackagedPlacementCleanup[] = []
   let testError: unknown
+
   try {
     await run((cleanup) => cleanups.unshift(cleanup))
   } catch (error) {
     testError = error
   }
+
   const cleanupErrors = await collectCleanupFailures(cleanups)
+
   if (testError !== undefined && cleanupErrors.length > 0) {
     throw new AggregateError([testError, ...cleanupErrors], 'Placement test and cleanup failed')
   }
+
   if (testError !== undefined) {
     throw testError
   }
+
   if (cleanupErrors.length > 0) {
     throw new AggregateError(cleanupErrors, 'Packaged placement cleanup failed')
   }
@@ -99,6 +108,7 @@ async function startBrowserFixture(): Promise<BrowserFixture> {
       '<!doctype html><html><body><h1 id="marker">packaged-skew-marker</h1></body></html>'
     )
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -106,6 +116,7 @@ async function startBrowserFixture(): Promise<BrowserFixture> {
       resolve()
     })
   })
+
   return {
     close: () => closeServer(server),
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/browser`
@@ -127,11 +138,13 @@ async function removeProfile(userDataDir: string): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+
       return
     } catch (error) {
       if (attempt === 4) {
         throw error
       }
+
       await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
     }
   }
@@ -144,6 +157,7 @@ async function launchPackagedPairedClient(args: {
 }): Promise<PackagedPairedClient> {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-packaged-client-'))
   let app: ElectronApplication | undefined
+
   try {
     writeFileSync(
       path.join(userDataDir, 'orca-data.json'),
@@ -151,12 +165,14 @@ async function launchPackagedPairedClient(args: {
     )
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
     void _unused
+
     const homeIsolation = createElectronHomeIsolation({
       inheritedEnv: cleanEnv,
       launchEnv: {},
       extraEnv: {},
       userDataDir
     })
+
     app = await electron.launch({
       executablePath: args.executablePath,
       args: [],
@@ -174,6 +190,7 @@ async function launchPackagedPairedClient(args: {
     )
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
+
     const [status, version, environmentId] = await Promise.all([
       page.evaluate(() => window.api.runtime.getStatus()),
       app.evaluate(({ app: electronApp }) => electronApp.getVersion()),
@@ -182,16 +199,20 @@ async function launchPackagedPairedClient(args: {
           name: 'STA-4150 packaged old client',
           pairingCode: pairingUrl
         })
+
         const response = await window.api.runtimeEnvironments.getStatus({
           selector: result.environment.id,
           timeoutMs: 30_000
         })
+
         if (!response.ok) {
           throw new Error(`${response.error.code}: ${response.error.message}`)
         }
+
         return result.environment.id
       }, args.offer)
     ])
+
     return {
       app,
       environmentId,
@@ -204,6 +225,7 @@ async function launchPackagedPairedClient(args: {
           () => cleanupE2EDaemons(userDataDir),
           () => removeProfile(userDataDir)
         ])
+
         if (failures.length > 0) {
           throw new AggregateError(failures, 'Failed to clean up packaged paired client')
         }
@@ -215,12 +237,14 @@ async function launchPackagedPairedClient(args: {
       () => cleanupE2EDaemons(userDataDir),
       () => removeProfile(userDataDir)
     ])
+
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],
         'Packaged client startup and cleanup failed'
       )
     }
+
     throw error
   }
 }
@@ -243,9 +267,11 @@ async function createBrowserThroughPackagedClient(args: {
         },
         timeoutMs: 60_000
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result as BrowserCreateResult
     },
     {
@@ -270,9 +296,11 @@ async function readRemoteSnapshot(args: {
         params: { page: pageId, worktree: `path:${worktreePath}` },
         timeoutMs: 30_000
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return (response.result as { snapshot: string }).snapshot
     },
     {
@@ -298,6 +326,7 @@ async function findPairedWorktreeId(page: Page, repoPath: string): Promise<strin
       { timeout: 60_000 }
     )
     .not.toBeNull()
+
   const worktreeId = await page.evaluate(
     (candidatePath) =>
       window.__store
@@ -306,9 +335,11 @@ async function findPairedWorktreeId(page: Page, repoPath: string): Promise<strin
         .find((worktree) => worktree.path === candidatePath)?.id ?? null,
     repoPath
   )
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
@@ -320,14 +351,18 @@ async function createBrowserThroughCurrentClient(args: {
   await args.client.page.evaluate(
     async ({ environmentId, url, worktreeId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Current client store is unavailable')
       }
+
       state.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
       const groupId = state.activeGroupIdByWorktree[worktreeId]
+
       if (!groupId) {
         throw new Error('Current client has no active tab group')
       }
+
       state.setBrowserDefaultUrl(url)
       await state.openNewBrowserTabInActiveWorkspace(groupId)
     },
@@ -339,12 +374,15 @@ async function createBrowserThroughCurrentClient(args: {
         args.client.page.evaluate(
           ({ url, worktreeId }) => {
             const state = window.__store?.getState()
+
             for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
               for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
                 if (!browserPage.url.startsWith(url)) {
                   continue
                 }
+
                 const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
                 return {
                   localPageId: browserPage.id,
                   placementKind: handle?.placement?.kind ?? null,
@@ -352,6 +390,7 @@ async function createBrowserThroughCurrentClient(args: {
                 }
               }
             }
+
             return null
           },
           { url: args.url, worktreeId: args.worktreeId }
@@ -359,13 +398,16 @@ async function createBrowserThroughCurrentClient(args: {
       { timeout: 60_000 }
     )
     .toMatchObject({ placementKind: null })
+
   const mirrored = await args.client.page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (browserPage.url.startsWith(url)) {
             const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
             return {
               localPageId: browserPage.id,
               remotePageId: handle?.remotePageId ?? browserPage.id
@@ -373,13 +415,16 @@ async function createBrowserThroughCurrentClient(args: {
           }
         }
       }
+
       return null
     },
     { url: args.url, worktreeId: args.worktreeId }
   )
+
   if (!mirrored) {
     throw new Error('Server-hosted browser page disappeared after materialization')
   }
+
   return mirrored
 }
 
@@ -401,11 +446,13 @@ test.describe('packaged mixed-version browser placement', () => {
       const fixture = await startBrowserFixture()
       registerCleanup(() => fixture.close())
       await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
+
       const client = await launchPackagedPairedClient({
         executablePath: packagedExecutable!,
         offer: host.offer,
         testInfo
       })
+
       registerCleanup(() => client.dispose())
       expect(client.status.capabilities).not.toContain(CLIENT_HOST_CAPABILITY)
       expect(client.status.capabilities).not.toContain(TUNNEL_CAPABILITY)
@@ -415,6 +462,7 @@ test.describe('packaged mixed-version browser placement', () => {
         url: fixture.url,
         worktreePath: testRepoPath
       })
+
       await expect.poll(() => readOwnedPageUrls(host.app, fixture.url)).toHaveLength(1)
       expect(await readOwnedPageUrls(client.app, fixture.url)).toHaveLength(0)
       expect(
@@ -441,6 +489,7 @@ test.describe('packaged mixed-version browser placement', () => {
           ? { agentBrowserSocketParent: '/tmp', userDataParent: '/tmp' }
           : {})
       })
+
       registerCleanup(() => host.dispose())
       const fixture = await startBrowserFixture()
       registerCleanup(() => fixture.close())
@@ -449,31 +498,39 @@ test.describe('packaged mixed-version browser placement', () => {
         worktree: `path:${testRepoPath}`,
         title: 'Packaged mixed-version browser canary'
       })
+
       const client: PairedElectronClient = await launchPairedElectronClient(
         host.offer,
         testInfo,
         'STA-4150 current client to packaged old host'
       )
+
       registerCleanup(() => client.dispose())
+
       const status = await client.page.evaluate(async (environmentId) => {
         const response = await window.api.runtimeEnvironments.getStatus({
           selector: environmentId,
           timeoutMs: 30_000
         })
+
         if (!response.ok) {
           throw new Error(`${response.error.code}: ${response.error.message}`)
         }
+
         return response.result
       }, client.environmentId)
+
       expect(status.capabilities).not.toContain(CLIENT_HOST_CAPABILITY)
       expect(status.capabilities).not.toContain(TUNNEL_CAPABILITY)
 
       const worktreeId = await findPairedWorktreeId(client.page, testRepoPath)
+
       const created = await createBrowserThroughCurrentClient({
         client,
         url: fixture.url,
         worktreeId
       })
+
       await client.page.evaluate(
         ({ localPageId, worktreeId }) =>
           window.__store?.getState().focusBrowserTabInWorktree(worktreeId, localPageId, {

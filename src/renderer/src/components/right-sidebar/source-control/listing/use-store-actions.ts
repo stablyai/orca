@@ -20,6 +20,7 @@ export function useSourceControlStoreActions() {
 
   return useMemo(() => {
     const state = useAppStore.getState()
+
     return {
       allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
       allocatePullRequestGenerationRequestId: state.allocatePullRequestGenerationRequestId,

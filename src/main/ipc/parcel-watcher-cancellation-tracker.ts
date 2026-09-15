@@ -36,12 +36,15 @@ export class WatcherCancellationTracker {
     if (this.restartingChildren.has(child)) {
       return false
     }
+
     this.restartingChildren.add(child)
+
     for (const cancelled of this.entries.values()) {
       if (cancelled.child === child) {
         clearTimeout(cancelled.timer)
       }
     }
+
     return true
   }
 
@@ -52,12 +55,15 @@ export class WatcherCancellationTracker {
 
   complete(id: number, error?: Error): boolean {
     const cancelled = this.entries.get(id)
+
     if (!cancelled) {
       return false
     }
+
     this.entries.delete(id)
     clearTimeout(cancelled.timer)
     cancelled.reject(error ?? cancelled.error)
+
     return true
   }
 

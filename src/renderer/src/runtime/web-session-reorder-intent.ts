@@ -29,7 +29,9 @@ function sameMembership(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) {
     return false
   }
+
   const set = new Set(a)
+
   return b.every((id) => set.has(id))
 }
 
@@ -47,12 +49,15 @@ export function recordWebSessionReorderIntent(
   if (!worktreeId || !groupId || order.length === 0) {
     return
   }
+
   const partitionKey = reorderIntentPartitionKey(owner, worktreeId)
   let byGroup = pendingReorderByOwnerAndWorktree.get(partitionKey)
+
   if (!byGroup) {
     byGroup = new Map()
     pendingReorderByOwnerAndWorktree.set(partitionKey, byGroup)
   }
+
   byGroup.set(groupId, { order: [...order], recordedAt: now })
 }
 
@@ -73,30 +78,40 @@ export function resolveWebSessionReorderedOrder(
   const partitionKey = reorderIntentPartitionKey(owner, worktreeId)
   const byGroup = pendingReorderByOwnerAndWorktree.get(partitionKey)
   const intent = byGroup?.get(groupId)
+
   if (!intent) {
     return hostOrder
   }
+
   const clear = (): void => {
     byGroup!.delete(groupId)
+
     if (byGroup!.size === 0) {
       pendingReorderByOwnerAndWorktree.delete(partitionKey)
     }
   }
+
   if (now - intent.recordedAt > REORDER_INTENT_TTL_MS) {
     clear()
+
     return hostOrder
   }
+
   // Why: a membership change (tab added/closed elsewhere) is a newer truth than
   // a pending reorder — defer to the host and drop the now-ambiguous intent.
   if (!sameMembership(intent.order, hostOrder)) {
     clear()
+
     return hostOrder
   }
+
   if (sameOrder(intent.order, hostOrder)) {
     // Host confirmed the move; nothing left to suppress.
     clear()
+
     return hostOrder
   }
+
   return [...intent.order]
 }
 
@@ -115,6 +130,7 @@ export function clearWebSessionReorderIntent(
   const partitionKey = reorderIntentPartitionKey(owner, worktreeId)
   const byGroup = pendingReorderByOwnerAndWorktree.get(partitionKey)
   byGroup?.delete(groupId)
+
   if (byGroup?.size === 0) {
     pendingReorderByOwnerAndWorktree.delete(partitionKey)
   }
@@ -122,6 +138,7 @@ export function clearWebSessionReorderIntent(
 
 export function clearWebSessionReorderIntentsForOwner(owner: WebSessionIntentOwner): void {
   const prefix = `${webSessionIntentOwnerKey(owner)}\0`
+
   for (const key of pendingReorderByOwnerAndWorktree.keys()) {
     if (key.startsWith(prefix)) {
       pendingReorderByOwnerAndWorktree.delete(key)

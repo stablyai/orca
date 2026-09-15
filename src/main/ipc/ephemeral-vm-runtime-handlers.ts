@@ -69,20 +69,26 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:cleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
       const userDataPath = app.getPath('userData')
+
       const runtime = listEphemeralVmRuntimes(userDataPath).find(
         (entry) => entry.id === args.runtimeId
       )
+
       if (!runtime) {
         throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
       }
+
       if (!runtime.repoId) {
         throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
       }
+
       let result
+
       if (runtime.cleanupStatus === 'succeeded') {
         result = { ok: true as const, runtime, skipped: false }
       } else {
         let resolved: ReturnType<typeof getRuntimeRecipeContext>
+
         try {
           resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
         } catch (error) {
@@ -92,12 +98,14 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
             cleanupLastAttemptAt: Date.now(),
             cleanupLastError: error instanceof Error ? error.message : String(error)
           })
+
           return removeEphemeralVmRuntimeSshTarget({
             userDataPath,
             runtime: failed,
             removeTarget: removeRuntimeOwnedSshTarget
           })
         }
+
         result = await cleanupEphemeralVmRuntime({
           userDataPath,
           repoPath: resolved.repo.repo.path,
@@ -105,6 +113,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           runtimeId: runtime.id
         })
       }
+
       if (result.ok && runtime.runtimeEnvironmentId) {
         try {
           removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
@@ -113,9 +122,11 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           // environment row; users can still remove that manually.
         }
       }
+
       if (!result.ok) {
         return result.runtime
       }
+
       return removeEphemeralVmRuntimeSshTarget({
         userDataPath,
         runtime: result.runtime,
@@ -128,10 +139,12 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:stopCleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
       const userDataPath = app.getPath('userData')
+
       const stopping = stopEphemeralVmRuntimeCleanup({
         userDataPath,
         runtimeId: args.runtimeId
       })
+
       if (stopping) {
         return (await stopping).runtime
       }
@@ -139,12 +152,15 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       const runtime = listEphemeralVmRuntimes(userDataPath).find(
         (entry) => entry.id === args.runtimeId
       )
+
       if (!runtime) {
         throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
       }
+
       if (runtime.cleanupStatus !== 'running') {
         return runtime
       }
+
       return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
         status: 'cleanup_failed',
         cleanupStatus: 'failed',
@@ -157,25 +173,31 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:suspendWorkspace',
     async (_event, args: { workspaceId: string }): Promise<EphemeralVmRuntimeRecord | null> => {
       const userDataPath = app.getPath('userData')
+
       const runtime = listEphemeralVmRuntimes(userDataPath).find(
         (entry) =>
           entry.workspaceId === args.workspaceId &&
           entry.status !== 'cleaned' &&
           entry.status !== 'cleanup_pending'
       )
+
       if (!runtime?.repoId) {
         return null
       }
+
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+
       const result = await suspendEphemeralVmRuntime({
         userDataPath,
         repoPath: recipeContext.repo.repo.path,
         recipe: recipeContext.recipe,
         runtimeId: runtime.id
       })
+
       if (!result.ok) {
         throw new Error(result.error)
       }
+
       // Only tear down SSH for a real suspend; a skipped suspend keeps the runtime
       // 'running', so disconnecting would break the still-active session with no resume.
       if (runtime.connectionMode === 'ssh' && !result.skipped) {
@@ -185,6 +207,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         // unrecoverable. Keep 'suspended'; resume re-establishes the relay anyway.
         await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
       }
+
       return result.runtime
     }
   )
@@ -193,45 +216,57 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:resumeWorkspace',
     async (_event, args: { workspaceId: string }): Promise<EphemeralVmRuntimeRecord | null> => {
       const userDataPath = app.getPath('userData')
+
       const runtime = listEphemeralVmRuntimes(userDataPath).find(
         (entry) =>
           entry.workspaceId === args.workspaceId &&
           entry.status !== 'cleaned' &&
           entry.status !== 'cleanup_pending'
       )
+
       if (!runtime?.repoId) {
         return null
       }
+
       if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
         return runtime
       }
+
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+
       const result = await resumeEphemeralVmRuntime({
         userDataPath,
         repoPath: recipeContext.repo.repo.path,
         recipe: recipeContext.recipe,
         runtimeId: runtime.id
       })
+
       if (!result.ok) {
         throw new Error(result.error)
       }
+
       if (!result.skipped && runtime.runtimeEnvironmentId) {
         const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
+
         if (!pairingCode) {
           throw new Error('Resume result did not include an Orca Server pairing code.')
         }
+
         updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
           pairingCode
         })
         invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
       }
+
       const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
+
       if (!result.skipped && connection.type === 'ssh') {
         try {
           const ssh = await connectRuntimeOwnedSshTarget({
             runtimeId: result.runtime.id,
             connection
           })
+
           return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
             connectionMode: 'ssh',
             sshTargetId: ssh.targetId
@@ -243,6 +278,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           throw error
         }
       }
+
       return result.runtime
     }
   )
@@ -252,6 +288,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmCleanupCommandResult> => {
       const userDataPath = app.getPath('userData')
       const resolved = getRuntimeRecipeContext(store, userDataPath, args.runtimeId)
+
       const payload = buildEphemeralVmRecipeCleanupPayload({
         recipe: resolved.recipe,
         context: {
@@ -264,7 +301,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         },
         recipeResult: resolved.runtime.recipeResult
       })
+
       const payloadJson = JSON.stringify(payload, null, 2)
+
       if (resolved.recipe.destroyDisabled || !resolved.recipe.destroy) {
         return {
           runtimeId: resolved.runtime.id,
@@ -274,6 +313,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           message: 'Destroy is disabled for this recipe.'
         }
       }
+
       return {
         runtimeId: resolved.runtime.id,
         command: buildEphemeralVmRecipeCleanupCommand({

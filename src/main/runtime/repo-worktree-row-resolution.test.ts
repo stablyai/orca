@@ -44,6 +44,7 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
+
   const store = {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
@@ -53,14 +54,18 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
     setWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => {
       const next = { ...metaById[worktreeId], ...updates } as WorktreeMeta
       metaById[worktreeId] = next
+
       return next
     }
   } as unknown as Store
+
   const scanRepo = vi.fn<RepoWorktreeRowDeps['scanRepo']>(async (owner) => ({
     ok: true,
     worktrees: [gitWorktree(owner.id === 'unrelated' ? '/unrelated/worktree' : '/same/worktree')]
   }))
+
   const listFolderWorkspaces = vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>(() => [])
+
   return { store, metaById, scanRepo, listFolderWorkspaces }
 }
 
@@ -74,6 +79,7 @@ describe('host-qualified scoped worktree resolution', () => {
       }),
       repo('unrelated', '/unrelated/repo', { connectionId: 'slow-box' })
     ]
+
     const deps = createDeps(owners)
     const worktreeId = 'shared::/same/worktree'
 
@@ -98,6 +104,7 @@ describe('host-qualified scoped worktree resolution', () => {
         executionHostId: 'ssh:builder'
       })
     ])
+
     const worktreeId = 'shared::/same/worktree'
     deps.metaById[worktreeId] = {
       displayName: 'local workspace',
@@ -121,12 +128,15 @@ describe('host-qualified scoped worktree resolution', () => {
         executionHostId: 'ssh:builder'
       })
     ])
+
     const worktreeId = 'shared::/same/worktree'
+
     const remoteMeta = {
       displayName: 'remote workspace',
       hostId: 'ssh:builder',
       instanceId: 'remote-instance'
     } as unknown as WorktreeMeta
+
     deps.metaById[worktreeId] = {
       displayName: 'stale local workspace',
       hostId: 'local',
@@ -154,10 +164,12 @@ describe('host-qualified scoped worktree resolution', () => {
 
   it('restores canonical-only SSH rows without leaking colliding local metadata', () => {
     const local = repo('shared', '/local/repo', { executionHostId: 'local' })
+
     const remote = repo('shared', '/remote/repo', {
       connectionId: 'builder',
       executionHostId: 'ssh:builder'
     })
+
     const deps = createDeps([local, remote])
     deps.metaById['shared::/local/worktree'] = {
       displayName: 'local workspace',
@@ -186,11 +198,13 @@ describe('host-qualified scoped worktree resolution', () => {
     'keeps %s path resolution scoped',
     async (hostId, path) => {
       const target = repo('shared', path, { executionHostId: hostId })
+
       const deps = createDeps([
         target,
         repo('shared', '/other-host/repo', { executionHostId: 'ssh:unrelated' }),
         repo('unrelated', '/unrelated/repo')
       ])
+
       deps.scanRepo.mockImplementation(async () => ({ ok: true, worktrees: [gitWorktree(path)] }))
       const worktreeId = `shared::${path}`
 
@@ -208,11 +222,13 @@ describe('host-qualified scoped worktree resolution', () => {
       kind: 'folder',
       executionHostId: 'local'
     })
+
     const remote = repo('folders', '/remote/folders', {
       kind: 'folder',
       connectionId: 'builder',
       executionHostId: 'ssh:builder'
     })
+
     const deps = createDeps([local, remote, repo('unrelated', '/unrelated/repo')])
     const worktreeId = 'folders::/shared/folder'
     deps.listFolderWorkspaces.mockImplementation((owner) =>
@@ -257,6 +273,7 @@ describe('host-qualified scoped worktree resolution', () => {
     const owners = Array.from({ length: 100 }, (_, index) =>
       repo(`repo-${index}`, `/repos/${index}`, { executionHostId: 'local' })
     )
+
     const deps = createDeps(owners)
     const getRepos = vi.spyOn(deps.store, 'getRepos')
 
@@ -365,19 +382,23 @@ describe('folder-to-Git checkout identity', () => {
         kind: 'git' as const,
         folderUpgradeGitRootPath: gitPath
       }
+
       const deps = createDeps([owner])
       const oldId = `folder::${folderPath}`
+
       const metadata = mergeWorktreeMetaForWrite(undefined, {
         hostId: 'local',
         instanceId: 'existing-omp',
         comment: 'keep me'
       })
+
       deps.metaById[oldId] = metadata
       Object.assign(deps.store, { getProjectHostSetups: () => [] })
       deps.scanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree(gitPath)] })
 
       const detected = buildDetectedGitWorktrees(deps.store, owner, [gitWorktree(gitPath)])
       const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+
       for (const result of [detected, rows]) {
         expect(result).toHaveLength(1)
         expect(result[0]).toMatchObject({
@@ -387,6 +408,7 @@ describe('folder-to-Git checkout identity', () => {
           comment: 'keep me'
         })
       }
+
       expect(Object.keys(deps.metaById)).toEqual([oldId])
     }
   )

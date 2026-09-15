@@ -11,7 +11,9 @@ import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
 
 const WT_ROOT = path.join('tmp', 'wt-1')
+
 const SRC_APP_RELATIVE_PATH = path.join('src', 'app.ts')
+
 const SRC_APP_PATH = path.join(WT_ROOT, SRC_APP_RELATIVE_PATH)
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -109,6 +111,7 @@ function makeAgentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusE
 function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorkspaceTabs>[0]> = {}) {
   const worktree = makeWorktree()
   const tab = makeUnifiedTab()
+
   return buildSearchableWorkspaceTabs({
     worktrees: [worktree],
     repoMap: new Map([[worktree.repoId, { displayName: 'repo/orca' }]]),
@@ -149,11 +152,13 @@ describe('workspace-tab-palette-search', () => {
       contentType: 'editor',
       entityId: 'missing-file'
     })
+
     const resolvable = makeUnifiedTab({
       id: 'unified-editor-dup',
       contentType: 'editor',
       entityId: SRC_APP_PATH
     })
+
     const entries = buildEntries({
       unifiedTabsByWorktree: { 'wt-1': [orphaned, resolvable] },
       openFiles: [makeOpenFile()]
@@ -164,12 +169,14 @@ describe('workspace-tab-palette-search', () => {
 
   it('omits an editor row whose explicit file host disagrees with its unique worktree', () => {
     const remote = makeWorktree({ hostId: 'ssh:remote' })
+
     const editor = makeUnifiedTab({
       id: 'remote-editor',
       entityId: SRC_APP_PATH,
       contentType: 'editor',
       executionHostId: 'ssh:remote'
     })
+
     const entries = buildEntries({
       worktrees: [remote],
       unifiedTabsByWorktree: { 'wt-1': [editor] },
@@ -180,6 +187,7 @@ describe('workspace-tab-palette-search', () => {
   })
   it('omits a tab id when a session persisted it twice', () => {
     const duplicate = makeUnifiedTab({ id: 'unified-terminal-dup' })
+
     const entries = buildEntries({
       unifiedTabsByWorktree: {
         'wt-1': [makeUnifiedTab(), duplicate, { ...duplicate }]
@@ -204,6 +212,7 @@ describe('workspace-tab-palette-search', () => {
         ]
       }
     })
+
     // customTitle on the terminal record is merged into the unified resolve path.
     expect(searchWorkspaceTabs(enabledEntries, 'custom')[0]?.title).toBe('Custom Title')
 
@@ -222,6 +231,7 @@ describe('workspace-tab-palette-search', () => {
         'wt-1': [makeUnifiedTab({ label: '' })]
       }
     })
+
     expect(searchWorkspaceTabs(disabledEntries, 'generated')).toHaveLength(0)
     expect(searchWorkspaceTabs(disabledEntries, 'raw')[0]?.title).toBe('Raw Shell Title')
   })
@@ -256,12 +266,14 @@ describe('workspace-tab-palette-search', () => {
   it('indexes editor-family tabs through existing editor labels and paths', () => {
     const previewRelativePath = path.join('docs', 'readme.md')
     const previewPath = path.join(WT_ROOT, previewRelativePath)
+
     const file = makeOpenFile({
       id: `${previewPath}:preview`,
       filePath: previewPath,
       relativePath: previewRelativePath,
       mode: 'markdown-preview'
     })
+
     const entries = buildEntries({
       unifiedTabsByWorktree: {
         'wt-1': [
@@ -304,6 +316,7 @@ describe('workspace-tab-palette-search', () => {
       relativePath: SRC_APP_RELATIVE_PATH,
       mode: 'edit'
     })
+
     const diffFile = makeOpenFile({
       id: 'wt-1::diff::staged::src/app.ts',
       filePath: SRC_APP_PATH,
@@ -311,19 +324,23 @@ describe('workspace-tab-palette-search', () => {
       mode: 'diff',
       diffSource: 'staged'
     })
+
     const conflictReviewFile = makeOpenFile({
       id: 'wt-1::conflict-review',
       filePath: WT_ROOT,
       relativePath: 'Conflict Review',
       mode: 'conflict-review'
     })
+
     const checkDetailsFile = makeOpenFile({
       id: 'wt-1::check-details::check-run:42',
       filePath: WT_ROOT,
       relativePath: 'CI / Typecheck',
       mode: 'check-details'
     })
+
     const files = [editorFile, diffFile, conflictReviewFile, checkDetailsFile]
+
     const entries = buildEntries({
       unifiedTabsByWorktree: {
         'wt-1': [
@@ -378,6 +395,7 @@ describe('workspace-tab-palette-search', () => {
       tabId: undefined,
       providerSession: { key: 'session_id', id: 'sess-retained' }
     })
+
     const retained: RetainedAgentEntry = {
       entry: retainedEntry,
       worktreeId: 'wt-1',
@@ -385,6 +403,7 @@ describe('workspace-tab-palette-search', () => {
       agentType: 'codex',
       startedAt: 1
     }
+
     const sleeping: SleepingAgentSessionRecord = {
       paneKey: 'terminal-1:leaf-c',
       tabId: 'terminal-1',
@@ -397,6 +416,7 @@ describe('workspace-tab-palette-search', () => {
       updatedAt: 1,
       origin: 'worktree-sleep'
     }
+
     const entries = buildEntries({
       agentStatusByPaneKey: {
         'terminal-1:leaf-a': makeAgentEntry(),
@@ -431,6 +451,7 @@ describe('workspace-tab-palette-search', () => {
       paneKey: 'terminal-1:leaf-a',
       prompt: 'Retained duplicate prompt'
     })
+
     const entries = buildEntries({
       agentStatusByPaneKey: {
         'terminal-1:leaf-a': makeAgentEntry({ prompt: 'Live duplicate prompt' })
@@ -468,17 +489,20 @@ describe('workspace-tab-palette-search', () => {
 
   it('orders empty-query results by current tab, current worktree, and tab position', () => {
     const current = makeUnifiedTab({ id: 'tab-current', entityId: 'terminal-current' })
+
     const sibling = makeUnifiedTab({
       id: 'tab-sibling',
       entityId: 'terminal-sibling',
       sortOrder: 1
     })
+
     const other = makeUnifiedTab({
       id: 'tab-other',
       entityId: 'terminal-other',
       worktreeId: 'wt-2',
       groupId: 'group-2'
     })
+
     const entries = buildEntries({
       worktrees: [
         makeWorktree({ id: 'wt-1', displayName: 'Current WT' }),
@@ -527,6 +551,7 @@ describe('workspace-tab-palette-search', () => {
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/workspace-tab-search'
     })
+
     const entries = buildEntries({ worktrees: [cleared] })
 
     expect(searchWorkspaceTabs(entries, 'workspace-tab-search')[0]).toMatchObject({
@@ -541,6 +566,7 @@ describe('workspace-tab-palette-search', () => {
       branch: undefined as unknown as string,
       path: path.join('repos', 'design-review')
     })
+
     const entries = buildEntries({ worktrees: [cleared] })
 
     expect(searchWorkspaceTabs(entries, '')[0]).toMatchObject({
@@ -566,6 +592,7 @@ describe('workspace-tab-palette-search', () => {
       tabsByWorktree: { 'wt-1': [] },
       unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'Fix login race' })] }
     })
+
     const hit = searchWorkspaceTabs(entries, 'terminal')[0]
     expect(hit).toMatchObject({
       contentType: 'terminal',
@@ -622,6 +649,7 @@ describe('workspace-tab-palette-search', () => {
       tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'grok' })] },
       unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
     })
+
     expect(titledOnly[0]?.occupantAgent).toBe('grok')
     expect(searchWorkspaceTabs(titledOnly, 'grok')[0]?.occupantAgent).toBe('grok')
   })
@@ -631,6 +659,7 @@ describe('workspace-tab-palette-search', () => {
       tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'Terminal 1' })] },
       unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
     })
+
     expect(staleRecord[0]?.title).toBe('grok')
     expect(staleRecord[0]?.occupantAgent).toBe('grok')
   })
@@ -642,6 +671,7 @@ describe('workspace-tab-palette-search', () => {
         'wt-1': [makeUnifiedTab({ label: 'session-scanner-grok-parser' })]
       }
     })
+
     expect(hyphenated[0]?.occupantAgent).toBeNull()
   })
 })

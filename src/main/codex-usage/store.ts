@@ -49,6 +49,7 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
     // Preserve scanState.enabled so existing users keep tracking on across
     // schema bumps; the next refresh will repopulate the analytics.
     const defaults = getDefaultState()
+
     return {
       ...defaults,
       scanState: {
@@ -57,6 +58,7 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
       }
     }
   }
+
   return {
     ...state,
     sessions: state.sessions.map((session) => ({
@@ -74,6 +76,7 @@ function getCodexUsageFile(): string {
   if (!_codexUsageFile) {
     _codexUsageFile = join(app.getPath('userData'), 'orca-codex-usage.json')
   }
+
   return _codexUsageFile
 }
 
@@ -111,11 +114,13 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
 
   async getSummary(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageSummary> {
     await this.refresh(false)
+
     return buildSummary(this.state, scope, range)
   }
 
   async getDaily(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageDailyPoint[]> {
     await this.refresh(false)
+
     return buildDaily(this.state, scope, range)
   }
 
@@ -125,6 +130,7 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
     kind: CodexUsageBreakdownKind
   ): Promise<CodexUsageBreakdownRow[]> {
     await this.refresh(false)
+
     return buildBreakdown(this.state, scope, range, kind)
   }
 
@@ -134,6 +140,7 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
     limit = 12
   ): Promise<CodexUsageSessionRow[]> {
     await this.refresh(false)
+
     return buildRecentSessions(this.state, scope, range, limit)
   }
 

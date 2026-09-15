@@ -44,6 +44,7 @@ export function getWebKeybindingPlatform(): KeybindingPlatform {
 
 export function readWebKeybindingDocument(): WebKeybindingDocument {
   const document = readJson(KEYBINDINGS_STORAGE_KEY, createEmptyWebKeybindingDocument())
+
   return {
     version: 1,
     keybindings: isJsonObject(document.keybindings)
@@ -59,12 +60,15 @@ export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
   const platform = getWebKeybindingPlatform()
   const diagnostics: KeybindingFileDiagnostic[] = []
   const document = readWebKeybindingDocument()
+
   const commonOverrides = normalizeStoredWebOverrides(
     document.keybindings,
     'keybindings',
     diagnostics
   )
+
   const platformOverrides = normalizeWebPlatformOverrides(document.platforms, diagnostics)
+
   const overrides = removeConflictingWebOverrides(
     platform,
     {
@@ -92,8 +96,10 @@ export function writeWebKeybindingAction(
   if (!isKeybindingActionId(actionId)) {
     throw new Error(`Unknown keybinding action "${String(actionId)}".`)
   }
+
   const normalizedBindings =
     bindings === null ? null : normalizeKeybindingArrayForAction(actionId, bindings)
+
   if (normalizedBindings !== null && !Array.isArray(normalizedBindings)) {
     throw new Error(normalizedBindings.ok ? 'Unable to parse shortcut.' : normalizedBindings.error)
   }
@@ -101,14 +107,17 @@ export function writeWebKeybindingAction(
   const platform = getWebKeybindingPlatform()
   const currentSnapshot = getWebKeybindingSnapshot()
   const candidateOverrides = { ...currentSnapshot.overrides }
+
   if (normalizedBindings === null) {
     delete candidateOverrides[actionId]
   } else {
     candidateOverrides[actionId] = normalizedBindings
   }
+
   const blockingConflict = findKeybindingConflicts(platform, candidateOverrides).find((conflict) =>
     conflict.actionIds.includes(actionId)
   )
+
   if (blockingConflict) {
     throw new Error(
       `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with another shortcut.`
@@ -116,6 +125,7 @@ export function writeWebKeybindingAction(
   }
 
   const activePlatform: KeybindingOverrides = { ...currentSnapshot.platformOverrides[platform] }
+
   if (normalizedBindings === null) {
     delete activePlatform[actionId]
   } else {
@@ -136,6 +146,7 @@ export function writeWebKeybindingAction(
 
   const snapshot = getWebKeybindingSnapshot()
   notifyWebKeybindingListeners(snapshot)
+
   return snapshot
 }
 
@@ -153,18 +164,22 @@ export function createWebKeybindingsApi(): WebKeybindingsApi {
     reload: () => {
       const snapshot = getWebKeybindingSnapshot()
       notifyWebKeybindingListeners(snapshot)
+
       return Promise.resolve(snapshot)
     },
     openFile: () => Promise.resolve(getWebKeybindingSnapshot()),
     revealFile: () => Promise.resolve(getWebKeybindingSnapshot()),
     onChanged: (callback) => {
       webKeybindingListeners.add(callback)
+
       const onStorage = (event: StorageEvent): void => {
         if (event.key === KEYBINDINGS_STORAGE_KEY) {
           callback(getWebKeybindingSnapshot())
         }
       }
+
       window.addEventListener('storage', onStorage)
+
       return () => {
         webKeybindingListeners.delete(callback)
         window.removeEventListener('storage', onStorage)

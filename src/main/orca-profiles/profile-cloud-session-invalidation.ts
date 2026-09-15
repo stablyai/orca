@@ -11,6 +11,7 @@ export function onOrcaCloudSessionInvalidated(
   listener: OrcaCloudSessionInvalidationListener
 ): () => void {
   listeners.add(listener)
+
   return () => {
     listeners.delete(listener)
   }

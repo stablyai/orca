@@ -26,9 +26,11 @@ function deferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -40,7 +42,9 @@ describe('useMacCapturedDigitChords', () => {
       .fn()
       .mockResolvedValueOnce([PHYSICAL_CTRL_ONE])
       .mockResolvedValueOnce([])
+
     const readLayoutMap = vi.fn().mockResolvedValue(layoutMap([['Digit1', '1']]))
+
     const hook = renderHook(() =>
       useMacCapturedDigitChords({ enabled: true, readSystemChords, readLayoutMap })
     )
@@ -56,6 +60,7 @@ describe('useMacCapturedDigitChords', () => {
   it('stays silent when the active layout does not produce a digit', async () => {
     const readSystemChords = async (): Promise<MacCapturedDigitRowChord[]> => [PHYSICAL_CTRL_ONE]
     const readLayoutMap = async (): Promise<LayoutMapLike> => layoutMap([['Digit1', '&']])
+
     const hook = renderHook(() =>
       useMacCapturedDigitChords({
         enabled: true,
@@ -72,7 +77,9 @@ describe('useMacCapturedDigitChords', () => {
       .fn()
       .mockResolvedValueOnce([PHYSICAL_CTRL_ONE])
       .mockRejectedValueOnce(new Error('unavailable'))
+
     const readLayoutMap = async (): Promise<LayoutMapLike> => layoutMap([['Digit1', '1']])
+
     const hook = renderHook(() =>
       useMacCapturedDigitChords({
         enabled: true,
@@ -88,10 +95,12 @@ describe('useMacCapturedDigitChords', () => {
 
   it('clears a prior result when the layout-map probe rejects', async () => {
     const readSystemChords = vi.fn().mockResolvedValue([PHYSICAL_CTRL_ONE])
+
     const readLayoutMap = vi
       .fn()
       .mockResolvedValueOnce(layoutMap([['Digit1', '1']]))
       .mockRejectedValueOnce(new Error('layout unavailable'))
+
     const hook = renderHook(() =>
       useMacCapturedDigitChords({ enabled: true, readSystemChords, readLayoutMap })
     )
@@ -104,12 +113,15 @@ describe('useMacCapturedDigitChords', () => {
   it('coalesces focus events into one trailing refresh', async () => {
     const older = deferred<MacCapturedDigitRowChord[]>()
     const newer = deferred<MacCapturedDigitRowChord[]>()
+
     const readSystemChords = vi
       .fn()
       .mockResolvedValueOnce([PHYSICAL_CTRL_ONE])
       .mockReturnValueOnce(older.promise)
       .mockReturnValueOnce(newer.promise)
+
     const readLayoutMap = async (): Promise<LayoutMapLike> => layoutMap([['Digit1', '1']])
+
     const hook = renderHook(() =>
       useMacCapturedDigitChords({
         enabled: true,
@@ -135,6 +147,7 @@ describe('useMacCapturedDigitChords', () => {
   it('removes the focus listener when unmounted', async () => {
     const readSystemChords = vi.fn().mockResolvedValue([PHYSICAL_CTRL_ONE])
     const readLayoutMap = async (): Promise<LayoutMapLike> => layoutMap([['Digit1', '1']])
+
     const hook = renderHook(() =>
       useMacCapturedDigitChords({
         enabled: true,
@@ -142,6 +155,7 @@ describe('useMacCapturedDigitChords', () => {
         readLayoutMap
       })
     )
+
     await waitFor(() => expect(readSystemChords).toHaveBeenCalledOnce())
 
     hook.unmount()

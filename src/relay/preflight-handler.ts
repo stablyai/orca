@@ -35,7 +35,9 @@ type AgentDetectionCommand = {
 }
 
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
+
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
+
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
 
 export class PreflightHandler {
@@ -61,9 +63,11 @@ export class PreflightHandler {
     versions?: Record<string, string>
   }> {
     const commands = params.commands as AgentDetectionCommand[]
+
     if (!Array.isArray(commands)) {
       return { agents: [] }
     }
+
     const probeCommands = [
       ...new Set(
         commands
@@ -78,16 +82,20 @@ export class PreflightHandler {
         executablePath: await resolveCommandPathForRelay(cmd)
       }))
     )
+
     const foundCommands = new Set(
       results.filter((result) => result.executablePath !== null).map(({ cmd }) => cmd)
     )
+
     const detectedCommands = commands.filter(
       (command) =>
         !isDetectionUnsupportedInRuntime(command, process.platform) &&
         foundCommands.has(command.cmd) &&
         (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
     )
+
     const versions: Record<string, string> = {}
+
     for (const command of detectedCommands) {
       if (
         command.id !== 'claude' ||
@@ -96,11 +104,15 @@ export class PreflightHandler {
       ) {
         continue
       }
+
       const executablePath = results.find((result) => result.cmd === command.cmd)?.executablePath
+
       if (!executablePath) {
         continue
       }
+
       const version = await probeCommandVersion(executablePath)
+
       if (version) {
         versions[command.id] = version
       }
@@ -124,7 +136,9 @@ export class PreflightHandler {
       isPwshAvailableAsync().catch(() => false),
       Promise.resolve(isGitBashAvailable()).catch(() => false)
     ])
+
     const wslDistros = wslAvailable ? await listWslDistrosAsync().catch(() => []) : []
+
     return {
       wslAvailable,
       wslDistros,
@@ -146,6 +160,7 @@ async function probeCommandVersion(executablePath: string): Promise<string | nul
     const pathKey = process.platform === 'win32' && env.Path !== undefined ? 'Path' : 'PATH'
     const executableDir = path.dirname(executablePath)
     const inheritedPath = env[pathKey]
+
     const result = await runProcess({
       program: executablePath,
       args: ['--version'],
@@ -158,10 +173,13 @@ async function probeCommandVersion(executablePath: string): Promise<string | nul
       timeoutMs: 5_000,
       maxOutputBytes: 4_096
     })
+
     if (result.code !== 0) {
       return null
     }
+
     const output = `${result.stdout}\n${result.stderr}`.trim()
+
     return output.length > 0 ? output : null
   } catch {
     return null
@@ -182,6 +200,7 @@ export function buildCommandLookupSpec(
   accountLoginShell?: string | null
 ): CommandLookupSpec {
   const [spec] = buildCommandLookupSpecs(command, platform, env, accountLoginShell)
+
   return spec ?? buildPosixCommandLookupSpec(command, '/bin/sh')
 }
 
@@ -194,10 +213,12 @@ export function buildCommandLookupSpecs(
   if (platform === 'win32') {
     return [{ file: 'where.exe', args: [command], windowsHide: true }]
   }
+
   const trustedShell = pickTrustedPosixShell(
     env,
     resolveAccountLoginShell(platform, accountLoginShell)
   )
+
   const specs: CommandLookupSpec[] = []
 
   if (trustedShell) {
@@ -205,6 +226,7 @@ export function buildCommandLookupSpecs(
   }
 
   const inheritedPathSpec = buildPosixCommandLookupSpec(command, '/bin/sh')
+
   if (!trustedShell || trustedShell !== inheritedPathSpec.file) {
     specs.push(inheritedPathSpec)
   }
@@ -235,7 +257,9 @@ export async function resolveCommandPathForRelay(
         timeout: 5000,
         ...(spec.windowsHide ? { windowsHide: true } : {})
       })
+
       const resolvedPath = getAbsoluteCommandPath(stdout, platform)
+
       if (resolvedPath) {
         return resolvedPath
       }
@@ -253,6 +277,7 @@ export function hasAbsoluteCommandPath(output: string, platform: NodeJS.Platform
 
 function getAbsoluteCommandPath(output: string, platform: NodeJS.Platform): string | null {
   const pathOps = platform === 'win32' ? win32 : path
+
   return (
     output
       .split(/\r?\n/)
@@ -264,6 +289,7 @@ function getAbsoluteCommandPath(output: string, platform: NodeJS.Platform): stri
             : line.startsWith(AGENT_PATH_PREFIX)
               ? line.slice(AGENT_PATH_PREFIX.length)
               : ''
+
         return pathOps.isAbsolute(resolvedPath) ? resolvedPath : null
       })
       .find((resolvedPath): resolvedPath is string => resolvedPath !== null) ?? null
@@ -272,9 +298,11 @@ function getAbsoluteCommandPath(output: string, platform: NodeJS.Platform): stri
 
 function buildPosixCommandLookupSpec(command: string, shell: string): CommandLookupSpec {
   const shellName = path.posix.basename(shell).toLowerCase()
+
   if (shellName === 'fish') {
     return { file: shell, args: ['-ilc', buildFishCommandLookupScript(command)] }
   }
+
   return { file: shell, args: [getShellCommandMode(shell), buildShCommandLookupScript(command)] }
 }
 
@@ -290,6 +318,7 @@ function buildShCommandLookupScript(command: string): string {
 
 function buildFishCommandLookupScript(command: string): string {
   const quotedCommand = shellQuote(command)
+
   return [
     `set -l resolved (command -v ${quotedCommand} 2>/dev/null)`,
     'if test -n "$resolved"',
@@ -305,9 +334,11 @@ function resolveAccountLoginShell(
   if (accountLoginShell !== undefined) {
     return accountLoginShell
   }
+
   if (platform === 'win32') {
     return null
   }
+
   try {
     return userInfo().shell ?? null
   } catch {
@@ -320,21 +351,27 @@ function pickTrustedPosixShell(
   accountLoginShell: string | null
 ): string | null {
   const shell = env.SHELL
+
   if (!shell || !path.posix.isAbsolute(shell)) {
     return null
   }
+
   const shellName = path.posix.basename(shell).toLowerCase()
+
   if (!SUPPORTED_POSIX_SHELLS.has(shellName)) {
     return null
   }
+
   if (accountLoginShell) {
     return shell === accountLoginShell ? shell : null
   }
+
   return CONSERVATIVE_SYSTEM_SHELL_DIRS.has(path.posix.dirname(shell)) ? shell : null
 }
 
 function getShellCommandMode(shell: string): '-lc' | '-ilc' {
   const shellName = path.posix.basename(shell).toLowerCase()
+
   // Why: bash/zsh/fish users commonly add package-manager bins from interactive
   // startup files. POSIX sh/dash may not support interactive login flags.
   return shellName === 'sh' || shellName === 'dash' ? '-lc' : '-ilc'

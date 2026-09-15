@@ -24,25 +24,32 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
     terminalOwner?: 'shell'
   } | null> {
     const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
+
     if (restoredSnapshot) {
       return restoredSnapshot
     }
+
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
+
     if (headlessSnapshot) {
       return headlessSnapshot
     }
 
     const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
+
     if (!rendererSnapshot) {
       return this.serializeProviderTerminalBuffer(ptyId, opts)
     }
+
     if (rendererSnapshot.data.length > 0) {
       return rendererSnapshot
     }
+
     // Why: parked desktop panes register serializers before their xterm has
     // hydrated. Treat that empty shell as provisional so retained provider
     // history can restore mobile without forcing the desktop pane to mount.
     const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+
     return providerSnapshot &&
       (providerSnapshot.data.length > 0 || Boolean(providerSnapshot.scrollbackAnsi))
       ? providerSnapshot
@@ -56,6 +63,7 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return null
     }
+
     // Pre-attach bytes are only a suffix; older providers can fall back to the renderer.
     return (
       (await this.serializeProviderTerminalBuffer(ptyId, opts)) ??
@@ -81,6 +89,7 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
     if (this.ptyController?.hasRendererSerializer?.(ptyId) === false) {
       return null
     }
+
     let rendererSnapshot: {
       data: string
       cols: number
@@ -91,6 +100,7 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
       oscLinks?: TerminalOscLinkRange[]
       kittyKeyboardFlags?: number
     } | null = null
+
     try {
       rendererSnapshot = await (this.ptyController?.serializeBuffer?.(ptyId, {
         scrollbackRows: opts.scrollbackRows
@@ -100,6 +110,7 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
       // If renderer serialization races reload/unmount, callers can still use
       // their existing null fallback paths.
     }
+
     return rendererSnapshot
       ? this.preferTrackedLastTitle(ptyId, {
           ...rendererSnapshot,
@@ -117,9 +128,11 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
+
     if (acquisition?.generation === generation && acquisition.timedOut) {
       return null
     }
+
     if (
       !acquisition ||
       acquisition.generation !== generation ||
@@ -134,12 +147,15 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
         }
       })
     }
+
     if (acquisition.timedOut) {
       return null
     }
+
     if (typeof wait.timeoutMs !== 'number') {
       return acquisition.promise
     }
+
     const result = await withTimeout<
       { settled: true; value: PtyProviderBufferSnapshot | null } | { settled: false }
     >(
@@ -147,12 +163,15 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
       wait.timeoutMs,
       { settled: false as const }
     )
+
     if (!result.settled) {
       if (wait.retireOnTimeout) {
         acquisition.timedOut = true
       }
+
       return null
     }
+
     return result.value
   }
 }

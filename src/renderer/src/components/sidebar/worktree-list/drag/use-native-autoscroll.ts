@@ -17,6 +17,7 @@ export function useWorktreeNativeDragAutoscroll(args: {
   markScrollMovement: () => void
 }): () => void {
   const { ctx, session, runtime, scrollRef, markScrollMovement } = args
+
   const {
     nativeAutoscrollFrameIdRef,
     nativeAutoscrollLastFrameTimeRef,
@@ -32,13 +33,16 @@ export function useWorktreeNativeDragAutoscroll(args: {
       const point = nativeLatestPointRef.current
       const container = scrollRef.current
       const dragSession = session.worktreeDragSessionRef.current
+
       if (!point || !container || !dragSession) {
         cancelWorktreeNativeAutoscroll()
+
         return
       }
 
       const previousFrameTime = nativeAutoscrollLastFrameTimeRef.current ?? frameTime
       nativeAutoscrollLastFrameTimeRef.current = frameTime
+
       const autoscroll = getWorktreeSidebarDragAutoscroll({
         point,
         containerRect: container.getBoundingClientRect(),
@@ -47,20 +51,26 @@ export function useWorktreeNativeDragAutoscroll(args: {
         clientHeight: container.clientHeight,
         elapsedMs: frameTime - previousFrameTime
       })
+
       if (autoscroll) {
         markScrollMovement()
         container.scrollTop = autoscroll.scrollTop
+
         if (!session.refreshWorktreeDragSession()) {
           clearWorktreeDrag()
+
           return
         }
+
         const drop = ctx.computeWorktreeDrop(point.clientY)
+
         if (!drop) {
           const target = getPointerDropStatusTarget({
             container,
             x: point.clientX,
             y: point.clientY
           })
+
           const statusDrop = target.status
             ? ctx.computeWorktreeStatusDrop({
                 pointerY: point.clientY,
@@ -68,12 +78,15 @@ export function useWorktreeNativeDragAutoscroll(args: {
                 draggedIds: dragSession.reorderDraggedIds
               })
             : null
+
           if (statusDrop) {
             setWorktreeDragState((prev) =>
               applyWorktreeDropPreview(prev, statusDrop, { pointerY: point.clientY })
             )
+
             return
           }
+
           setWorktreeDragState((prev) => clearWorktreeDropPreview(prev, { pointerY: null }))
         } else {
           setWorktreeDragState((prev) =>
@@ -102,6 +115,7 @@ export function useWorktreeNativeDragAutoscroll(args: {
     if (nativeAutoscrollFrameIdRef.current !== null) {
       return
     }
+
     nativeAutoscrollLastFrameTimeRef.current = null
     nativeAutoscrollFrameIdRef.current = window.requestAnimationFrame(runFrame)
   }, [nativeAutoscrollFrameIdRef, nativeAutoscrollLastFrameTimeRef, runFrame])

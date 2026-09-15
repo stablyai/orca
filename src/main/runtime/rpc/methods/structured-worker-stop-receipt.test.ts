@@ -19,7 +19,9 @@ import { ORCHESTRATION_METHODS } from './orchestration'
 import { eraseRpcMethods } from '../core'
 
 const SESSION = 'session-stop-receipt'
+
 const HANDLE = 'structworker_22222222-2222-4222-a222-222222222222'
+
 const WORKTREE = 'repo::worktree'
 
 describe('worker-stop on a structured worker this runtime cannot reach', () => {
@@ -47,9 +49,11 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method.handler(method.params!.parse(params), { runtime })
   }
 
@@ -65,10 +69,12 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
       worktreeId: WORKTREE,
       hostScope: { kind: 'local', hostId: 'local' }
     })
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'stop a structured worker'
     })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -76,6 +82,7 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
       startOptions: {},
       runtimeEpoch: runtime.getRuntimeId()
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: HANDLE,
@@ -87,6 +94,7 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(started.dispatch.id)
+
     return started.dispatch.id
   }
 

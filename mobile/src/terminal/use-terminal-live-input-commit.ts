@@ -65,9 +65,11 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const liveInputInteractionGenerationRef = useRef(0)
+
   const advanceLiveInputInteractionGeneration = useCallback(() => {
     liveInputInteractionGenerationRef.current += 1
   }, [])
+
   const {
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
@@ -95,9 +97,11 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   useEffect(() => {
     const pendingHandle = pendingLiveInputHandleRef.current
+
     if (!pendingHandle) {
       return
     }
+
     // Why: a lagging mobile tab list briefly yields no active tab object; a
     // null/undefined type is "unknown", not "left the terminal" — flush guards
     // still block sends if the tab truly changed.
@@ -115,15 +119,19 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     async (handle: string): Promise<boolean> => {
       advanceLiveInputInteractionGeneration()
       const pendingHandle = pendingLiveInputHandleRef.current
+
       if (pendingHandle && pendingHandle !== handle) {
         clearPendingLiveInputCommit()
+
         return waitForPendingLiveInputFlush()
       }
+
       // Why: external bytes (dictation/paste) land after the field's echo on the
       // PTY; the field session must fully end or later diffs would erase them.
       if (pendingHandle === handle) {
         return flushPendingLiveInputText(handle)
       }
+
       return waitForPendingLiveInputFlush()
     },
     [
@@ -138,8 +146,10 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
+
         return
       }
+
       // Why: iOS kills an active dictation/IME session when JS writes a value
       // that differs from the native field text, so the controlled capture must
       // echo the field verbatim; only the PTY mirror sees normalized text.
@@ -171,16 +181,20 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         return
       }
+
       advanceLiveInputInteractionGeneration()
       const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+
       if (pendingLiveInputHandleRef.current && !ownsPendingState) {
         clearPendingLiveInputCommit()
       }
+
       const decision = getTerminalLiveSpecialKeyDecision({
         key: event.nativeEvent.key,
         heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
         sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
       })
+
       switch (decision.kind) {
         case 'ignore':
         case 'local-edit':
@@ -189,12 +203,14 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
           void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
             sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           )
+
           return
         case 'commit-held-then-send':
           void sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
             () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           )
+
           return
         default:
           decision satisfies never
@@ -232,7 +248,9 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
       return Promise.resolve(false)
     }
+
     advanceLiveInputInteractionGeneration()
+
     return sendTerminalLiveControlAfterPendingFlush(
       () => flushPendingLiveInputText(activeHandle),
       () => sendLiveTerminalInputRef.current(activeHandle, '\r')

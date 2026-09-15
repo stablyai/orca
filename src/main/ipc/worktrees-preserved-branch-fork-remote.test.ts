@@ -12,83 +12,107 @@ import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fix
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -129,6 +153,7 @@ describe('registerWorktreeHandlers', () => {
     await handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt'
     })
+
     const result = await handlers['worktrees:forceDeletePreservedBranch'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt',
       branchName: 'feature/test',
@@ -153,8 +178,10 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1',
       worktreeBaseRef: null
     }
+
     const worktreeId = 'repo-ssh::/remote/feature-wt'
     const localRepo = { ...repo, path: '/workspace/repo', connectionId: undefined }
+
     const provider = {
       exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
       forceDeletePreservedBranch: vi.fn().mockResolvedValue(undefined),
@@ -179,6 +206,7 @@ describe('registerWorktreeHandlers', () => {
       }),
       worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
+
     store.getRepos.mockReturnValue([localRepo, repo])
     store.getRepo.mockReturnValue(localRepo)
     store.getWorktreeMeta.mockReturnValue(
@@ -189,6 +217,7 @@ describe('registerWorktreeHandlers', () => {
 
     await handlers['worktrees:remove'](null, { worktreeId, hostId: 'ssh:conn-1' })
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+
     const result = await handlers['worktrees:forceDeletePreservedBranch'](null, {
       worktreeId,
       branchName: 'feature/test',
@@ -228,12 +257,14 @@ describe('registerWorktreeHandlers', () => {
   it('removes an unused Orca-created fork remote after deleting its worktree', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
+
     const pushTarget = {
       remoteName: 'pr-contributor-orca',
       branchName: 'feature/from-fork',
       remoteUrl: 'https://github.com/contributor/orca.git',
       remoteCreated: true
     }
+
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ pushTarget }))
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-1::/workspace/feature-wt': makeWorktreeMeta({ pushTarget })
@@ -242,9 +273,11 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'config') {
         throw new Error('no branch config')
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: 'https://github.com/contributor/orca.git\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -260,12 +293,14 @@ describe('registerWorktreeHandlers', () => {
   it('keeps an Orca-created fork remote while another worktree still uses it', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
+
     const pushTarget = {
       remoteName: 'pr-contributor-orca',
       branchName: 'feature/from-fork',
       remoteUrl: 'https://github.com/contributor/orca.git',
       remoteCreated: true
     }
+
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ pushTarget }))
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-1::/workspace/feature-wt': makeWorktreeMeta({ pushTarget }),
@@ -290,12 +325,14 @@ describe('registerWorktreeHandlers', () => {
   it('ignores matching push targets from other repos when deciding fork remote cleanup', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
+
     const pushTarget = {
       remoteName: 'pr-contributor-orca',
       branchName: 'feature/from-fork',
       remoteUrl: 'https://github.com/contributor/orca.git',
       remoteCreated: true
     }
+
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ pushTarget }))
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-1::/workspace/feature-wt': makeWorktreeMeta({ pushTarget }),
@@ -310,9 +347,11 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'config') {
         throw new Error('no branch config')
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: 'https://github.com/contributor/orca.git\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 

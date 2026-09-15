@@ -10,6 +10,7 @@ export function deriveNeededSectionIds(args: {
 }): Set<string> {
   const hasSearchQuery = args.query.trim() !== ''
   const next = hasSearchQuery ? new Set<string>() : new Set(args.mountedSectionIds)
+
   if (!hasSearchQuery) {
     for (const sectionId of args.navSectionIds) {
       if (EAGER_SECTION_IDS.has(sectionId)) {
@@ -17,15 +18,18 @@ export function deriveNeededSectionIds(args: {
       }
     }
   }
+
   if (
     args.activeSectionId &&
     (!hasSearchQuery || args.visibleSectionIds.has(args.activeSectionId))
   ) {
     next.add(args.activeSectionId)
   }
+
   if (args.pendingSectionId) {
     next.add(args.pendingSectionId)
   }
+
   return next
 }
 

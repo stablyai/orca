@@ -6,9 +6,12 @@ export const WorkspaceLinkedItemSchema = z
   .unknown()
   .transform((value, ctx): WorkspaceLinkedItem => {
     const normalized = normalizeWorkspaceLinkedItem(value)
+
     if (!normalized) {
       ctx.addIssue({ code: 'custom', message: 'Invalid linked work item' })
+
       return z.NEVER
     }
+
     return normalized
   })

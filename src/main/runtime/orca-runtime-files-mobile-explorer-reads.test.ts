@@ -12,31 +12,39 @@ import {
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -148,6 +156,7 @@ describe('RuntimeFileCommands', () => {
 
   it('rejects missing remote files without creating an editor tab', async () => {
     const openFile = vi.fn()
+
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: {
         id: 'wt-1',
@@ -156,11 +165,13 @@ describe('RuntimeFileCommands', () => {
       },
       executionHostId: 'ssh:ssh-1'
     }))
+
     const { commands } = createRuntimeFileCommands({
       openFile,
       path: '/remote/repo',
       resolveRuntimeFileTarget
     })
+
     vi.mocked(getSshFilesystemProvider).mockReturnValue({
       stat: vi.fn().mockRejectedValue(new Error('ENOENT: no such file or directory'))
     } as never)

@@ -54,6 +54,7 @@ function renderFields(initialRepoId: string): {
       settings: null,
       submitting: false
     })
+
     return null
   }
 
@@ -70,6 +71,7 @@ function renderFields(initialRepoId: string): {
       if (!latest) {
         throw new Error('dialog fields were not rendered')
       }
+
       return latest
     },
     switchRepo: async (nextRepoId, defaultBaseRef) => {
@@ -95,6 +97,7 @@ describe('useCreatePullRequestDialogFields repo default base ref', () => {
       remoteCount: 1
     })
     const harness = renderFields('repo-1')
+
     try {
       await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/parent')
 
@@ -113,6 +116,7 @@ describe('useCreatePullRequestDialogFields repo default base ref', () => {
       remoteCount: 1
     })
     const harness = renderFields('repo-1')
+
     try {
       await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/parent')
       await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/other')
@@ -130,6 +134,7 @@ describe('useCreatePullRequestDialogFields repo default base ref', () => {
       remoteCount: 1
     })
     const harness = renderFields('repo-1')
+
     try {
       await harness.switchRepo('repo-1', 'refs/remotes/origin/main')
       expect(harness.current().repoDefaultBaseRef).toBe('main')

@@ -41,14 +41,17 @@ export function shouldReclaimRuntimeMetadata(
   if (!current) {
     return true
   }
+
   if (current.pid === ownedPid && current.runtimeId === ownedRuntimeId) {
     return false
   }
+
   // Why: only this process can legitimately claim this pid, so a foreign
   // runtimeId on it is a leftover from a recycled pid, not a live sibling.
   if (current.pid === ownedPid) {
     return true
   }
+
   return !isProcessRunning(current.pid)
 }
 
@@ -57,8 +60,10 @@ export function watchRuntimeMetadataOwnership(
 ): RuntimeMetadataOwnershipWatch {
   const isProcessRunning = options.isProcessRunning ?? isPidRunning
   let inFlight: Promise<void> | null = null
+
   const runCheck = async (): Promise<void> => {
     const current = await tryReadRuntimeMetadata(options.userDataPath)
+
     if (
       !shouldReclaimRuntimeMetadata(
         current,
@@ -69,20 +74,25 @@ export function watchRuntimeMetadataOwnership(
     ) {
       return
     }
+
     try {
       options.republish()
     } catch (error) {
       // Why: a transient write failure must not kill the watch; the next tick retries.
       console.error('[runtime] Failed to reclaim runtime metadata ownership:', error)
+
       return
     }
+
     options.onReclaim?.(current)
   }
+
   // Why: the read is off-thread now, so a slow volume could otherwise stack ticks on one file.
   const check = (): Promise<void> => {
     inFlight ??= runCheck().finally(() => {
       inFlight = null
     })
+
     return inFlight
   }
 
@@ -90,8 +100,10 @@ export function watchRuntimeMetadataOwnership(
     () => void check(),
     options.pollIntervalMs ?? RUNTIME_METADATA_OWNERSHIP_POLL_MS
   )
+
   // Why: discovery bookkeeping must never be the reason the process stays alive.
   timer.unref?.()
+
   return {
     check,
     stop: () => clearInterval(timer)
@@ -107,6 +119,7 @@ async function tryReadRuntimeMetadata(userDataPath: string): Promise<RuntimeMeta
       `[runtime] Ignoring unreadable ${getRuntimeMetadataPath(userDataPath)}:`,
       error instanceof Error ? error.message : String(error)
     )
+
     return null
   }
 }
@@ -115,8 +128,10 @@ function isPidRunning(pid: number): boolean {
   if (!pid || pid <= 0) {
     return false
   }
+
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     // Why: only ESRCH proves the pid is gone; EPERM means a foreign owner holds it (same rule as the socket sweep).

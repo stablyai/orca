@@ -29,6 +29,7 @@ export function SidebarWorktreeListDialogs({
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
   const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+
   return (
     <>
       <ProjectGroupNameDialog
@@ -88,8 +89,10 @@ export function SidebarWorktreeListDialogs({
           if (!suppressExternalWorktreeInboxRepoId) {
             return
           }
+
           const repo = findRepoForHost(repos, suppressExternalWorktreeInboxRepoId, { settings })
           setSuppressExternalWorktreeInboxRepoId(null)
+
           if (repo) {
             onOpenWorktreeVisibility(repo)
           }

@@ -71,6 +71,7 @@ export function getRuntimeGitScope(
   connectionId: string | null | undefined
 ): string | null | undefined {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : connectionId
 }
 
@@ -83,7 +84,9 @@ export function getRuntimeCommitMessageSettings(
   if (!settings) {
     return {}
   }
+
   const scope = getRuntimeGitScope(settings, connectionId)
+
   return {
     ...(settings.commitMessageAi !== undefined
       ? { commitMessageAi: settings.commitMessageAi }

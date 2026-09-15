@@ -7,28 +7,38 @@ import type * as RepoModule from '../git/repo'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
+
   return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
 )
+
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
+
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+
 vi.mock('./registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
+
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
+
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+
 vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
@@ -64,6 +74,7 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -88,9 +99,11 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/mirror.git/HEAD') {
         return { type: 'file', size: 0, mtime: 0 }
       }
+
       if (path === '/srv/platform/mirror.git/objects' || path === '/srv/platform/mirror.git/refs') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -117,6 +130,7 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git' || path === '/srv/platform/linked-outside/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -143,6 +157,7 @@ describe('projectGroups IPC validation', () => {
       { length: 101 },
       (_, index) => `archived-service-${String(index + 1).padStart(3, '0')}`
     )
+
     const archivedRepoPaths = archivedRepoNames.map((name) => `/srv/platform/archive/${name}`)
     const gitRepos = new Set(['/srv/platform/z-web-client', ...archivedRepoPaths])
 
@@ -152,9 +167,11 @@ describe('projectGroups IPC validation', () => {
     }))
     mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
       const repoPath = path.replace(/\/\.git$/, '')
+
       if (path.endsWith('/.git') && gitRepos.has(repoPath)) {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
@@ -164,6 +181,7 @@ describe('projectGroups IPC validation', () => {
           { name: 'z-web-client', isDirectory: true, isSymlink: false }
         ]
       }
+
       if (dirPath === '/srv/platform/archive') {
         return archivedRepoNames.map((name) => ({
           name,
@@ -171,6 +189,7 @@ describe('projectGroups IPC validation', () => {
           isSymlink: false
         }))
       }
+
       return []
     })
 
@@ -199,6 +218,7 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git' || path === '/srv/platform/web/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -209,6 +229,7 @@ describe('projectGroups IPC validation', () => {
           ]
         : []
     )
+
     const event = {
       sender: {
         send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {
@@ -239,9 +260,11 @@ describe('projectGroups IPC validation', () => {
   it('returns partial local scan results after cancellation', async () => {
     vi.mocked(isGitRepo).mockReturnValue(false)
     const root = await mkdtemp(join(tmpdir(), 'orca-nested-local-cancel-'))
+
     try {
       await mkdir(join(root, 'api', '.git'), { recursive: true })
       await mkdir(join(root, 'web', '.git'), { recursive: true })
+
       const event = {
         sender: {
           send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {

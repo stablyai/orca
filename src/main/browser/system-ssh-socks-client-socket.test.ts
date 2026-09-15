@@ -15,6 +15,7 @@ describe('SystemSshSocksClientSocket', () => {
   it('carries the exact destination domain through the internal SOCKS handshake', async () => {
     let accepted: Socket | undefined
     let request: Buffer | undefined
+
     const server = createServer((socket) => {
       accepted = socket
       socket.once('data', (greeting) => {
@@ -27,13 +28,16 @@ describe('SystemSshSocksClientSocket', () => {
         })
       })
     })
+
     servers.push(server)
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     const address = server.address() as AddressInfo
+
     const socket = new SystemSshSocksClientSocket(address.port, {
       host: 'split-horizon.internal',
       port: 8443
     })
+
     socket.on('error', () => {})
     await once(socket, 'connect')
 

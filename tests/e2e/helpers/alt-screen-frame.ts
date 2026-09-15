@@ -4,6 +4,7 @@ import type { Page } from '@stablyai/playwright-test'
 // a marker line carrying a zero-padded frame number.
 export function buildAltScreenFrame(marker: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
+
   return [
     '\x1b[?2026h',
     '\x1b[?1049h',
@@ -31,14 +32,18 @@ export async function readActiveScreen(page: Page, tabId: string): Promise<Activ
     ({ tabId }) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         return null
       }
+
       const buffer = pane.terminal.buffer.active
       const rows: string[] = []
+
       for (let row = 0; row < pane.terminal.rows; row += 1) {
         rows.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '')
       }
+
       return { bufferType: buffer.type, rows }
     },
     { tabId }
@@ -51,10 +56,12 @@ export function findMarkerFrame(text: string, marker: string): number | null {
   // marker is a literal, so escape it rather than letting `[`/`.`/`+` act as regex syntax.
   const pattern = new RegExp(`${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} frame (\\d+)`, 'g')
   let latest: number | null = null
+
   for (const match of text.matchAll(pattern)) {
     const frame = Number(match[1])
     latest = latest === null ? frame : Math.max(latest, frame)
   }
+
   return latest
 }
 
@@ -66,6 +73,7 @@ export async function readRenderedAltScreenFrame(
   marker: string
 ): Promise<number | null> {
   const screen = await readActiveScreen(page, tabId)
+
   return screen ? findMarkerFrame(screen.rows.join('\n'), marker) : null
 }
 
@@ -77,9 +85,11 @@ export function describeAltScreenRenderPath(
   if (renderedFrame === restoreFrame) {
     return 'reveal restore'
   }
+
   if (renderedFrame === liveFrame) {
     return 'live write (no restore)'
   }
+
   return renderedFrame === null ? 'no marker' : `unexpected frame ${renderedFrame}`
 }
 
@@ -88,9 +98,11 @@ export async function writeToPaneTerminal(page: Page, tabId: string, data: strin
     ({ tabId, data }) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
       if (!pane) {
         throw new Error(`No terminal pane for tab ${tabId}`)
       }
+
       return new Promise<void>((resolve) => pane.terminal.write(data, resolve))
     },
     { tabId, data }

@@ -17,7 +17,9 @@ vi.mock('@/store', () => ({
 }))
 
 const paneKey = 'tab-1:leaf-1'
+
 const launchToken = 'launch-token-1'
+
 const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
 
 function seedTab(): void {
@@ -225,6 +227,7 @@ describe('Codex auto-approval status suppression', () => {
       agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
       launchToken
     })
+
     const suppressor = createCodexAutoApprovalHookCompletionSuppressor(paneKey, () => ({
       tabId: 'tab-1',
       launchToken

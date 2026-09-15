@@ -9,6 +9,7 @@ import {
 function decodePayload(command: string): string {
   const encoded = command.match(/ -EncodedCommand (\S+)$/)?.[1]
   expect(encoded).toBeTruthy()
+
   return Buffer.from(encoded!, 'base64').toString('utf16le')
 }
 

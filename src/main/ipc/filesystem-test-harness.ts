@@ -7,56 +7,103 @@ type IpcMock = Mock<(...args: any[]) => unknown>
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
 export const REPO_PATH = path.resolve('/workspace/repo')
+
 export const WORKSPACE_DIR = path.resolve('/workspace')
+
 export const WORKTREE_FEATURE_PATH = path.resolve('/workspace/repo-feature')
 
 export const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 
 export const handleMock: IpcMock = vi.fn()
+
 export const showSaveDialogMock: IpcMock = vi.fn()
+
 export const showOpenDialogMock: IpcMock = vi.fn()
+
 export const fromWebContentsMock: IpcMock = vi.fn()
+
 export const trashItemMock: IpcMock = vi.fn()
+
 export const readdirMock: IpcMock = vi.fn()
+
 export const readFileMock: IpcMock = vi.fn()
+
 export const writeFileMock: IpcMock = vi.fn()
+
 export const statMock: IpcMock = vi.fn()
+
 export const openMock: IpcMock = vi.fn()
+
 export const renameMock: IpcMock = vi.fn()
+
 export const rmMock: IpcMock = vi.fn()
+
 export const realpathMock: IpcMock = vi.fn()
+
 export const lstatMock: IpcMock = vi.fn()
+
 export const commitChangesMock: IpcMock = vi.fn()
+
 export const getStatusMock: IpcMock = vi.fn()
+
 export const detectConflictOperationMock: IpcMock = vi.fn()
+
 export const abortMergeMock: IpcMock = vi.fn()
+
 export const abortRebaseMock: IpcMock = vi.fn()
+
 export const getDiffMock: IpcMock = vi.fn()
+
 export const getBranchCompareMock: IpcMock = vi.fn()
+
 export const getBranchDiffMock: IpcMock = vi.fn()
+
 export const getStagedCommitContextMock: IpcMock = vi.fn()
+
 export const stageFileMock: IpcMock = vi.fn()
+
 export const bulkStageFilesMock: IpcMock = vi.fn()
+
 export const unstageFileMock: IpcMock = vi.fn()
+
 export const bulkUnstageFilesMock: IpcMock = vi.fn()
+
 export const bulkDiscardChangesMock: IpcMock = vi.fn()
+
 export const discardChangesMock: IpcMock = vi.fn()
+
 export const checkIgnoredPathsMock: IpcMock = vi.fn()
+
 export const listWorktreesMock: IpcMock = vi.fn()
+
 export const resolveCommitMessageSettingsMock: IpcMock = vi.fn()
+
 export const generateCommitMessageFromContextMock: IpcMock = vi.fn()
+
 export const generatePullRequestFieldsFromContextMock: IpcMock = vi.fn()
+
 export const discoverCommitMessageModelsLocalMock: IpcMock = vi.fn()
+
 export const discoverCommitMessageModelsRemoteMock: IpcMock = vi.fn()
+
 export const cancelGenerateCommitMessageLocalMock: IpcMock = vi.fn()
+
 export const cancelGeneratePullRequestFieldsLocalMock: IpcMock = vi.fn()
+
 export const getPullRequestDraftContextMock: IpcMock = vi.fn()
+
 export const resolveHostedReviewBodyForGenerationMock: IpcMock = vi.fn()
+
 export const loadPullRequestLinkedIssueMock: IpcMock = vi.fn()
+
 export const getSshFilesystemProviderMock: IpcMock = vi.fn()
+
 export const getSshGitProviderMock: IpcMock = vi.fn()
+
 export const tryDeleteWslUncPathMock: IpcMock = vi.fn()
+
 export const recordCrashBreadcrumbMock: IpcMock = vi.fn()
+
 export const promoteLocalDownloadedFolderMock: IpcMock = vi.fn()
 
 export const electronMock = {
@@ -120,9 +167,11 @@ export const sshFilesystemDispatchMock = {
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE,
   requireSshFilesystemProvider: (connectionId: string) => {
     const provider = getSshFilesystemProviderMock(connectionId)
+
     if (!provider) {
       throw new Error(PROVIDER_UNAVAILABLE_MESSAGE)
     }
+
     return provider
   }
 }
@@ -198,6 +247,7 @@ export async function withPlatform<T>(
 ): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await run()
   } finally {
@@ -212,6 +262,7 @@ function collectMocks(moduleMock: object): IpcMock[] {
     if (vi.isMockFunction(value)) {
       return [value as IpcMock]
     }
+
     return value && typeof value === 'object' ? collectMocks(value) : []
   })
 }
@@ -236,9 +287,11 @@ const ALL_MOCKS = [
 /** Resets every filesystem IPC mock and reinstalls the defaults every suite starts from. */
 export function resetFilesystemIpcMocks(): void {
   handlers.clear()
+
   for (const mock of ALL_MOCKS) {
     mock.mockReset()
   }
+
   loadPullRequestLinkedIssueMock.mockResolvedValue(null)
 
   handleMock.mockImplementation(
@@ -271,6 +324,7 @@ export function resetFilesystemIpcMocks(): void {
   openMock.mockResolvedValue({
     read: vi.fn(async (buffer: Buffer) => {
       buffer.fill(0x61)
+
       return { bytesRead: buffer.length, buffer }
     }),
     write: vi.fn().mockResolvedValue(undefined),

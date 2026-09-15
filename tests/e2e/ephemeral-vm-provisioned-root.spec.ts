@@ -23,6 +23,7 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
   test.setTimeout(240_000)
   let target: DockerSshRelayTarget | null = null
   const sourceRepo = mkdtempSync(path.join(tmpdir(), 'orca-provisioned-root-source-'))
+
   try {
     ensureDockerSshRelayImage(process.cwd())
     target = startDockerSshRelayTarget(testInfo)
@@ -56,6 +57,7 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
     const adopted = await orcaPage.evaluate(
       ({ sourceRepoId, workspaceName }) => {
         const state = window.__store!.getState()
+
         return Object.values(state.worktreesByRepo)
           .flat()
           .find(
@@ -64,6 +66,7 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
       },
       { sourceRepoId, workspaceName }
     )
+
     expect(adopted).toMatchObject({
       path: DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
       isMainWorktree: true,
@@ -123,13 +126,16 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
 async function addRecipeRepo(page: Parameters<typeof waitForSessionReady>[0], repoPath: string) {
   return page.evaluate(async (pathValue) => {
     const result = await window.api.repos.add({ path: pathValue })
+
     if ('error' in result) {
       throw new Error(result.error)
     }
+
     const store = window.__store!
     await store.getState().fetchRepos()
     await store.getState().updateSettings({ experimentalEphemeralVms: true })
     store.getState().setActiveRepo(result.repo.id)
+
     return result.repo.id
   }, repoPath)
 }
@@ -181,10 +187,12 @@ ${docker} rm -f ${shellQuote(target.containerName)} >/dev/null
   })
   execFileSync('git', ['add', '.'], { cwd: repoPath })
   execFileSync('git', ['commit', '-m', 'seed recipe'], { cwd: repoPath })
+
   const expectedRefHead = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: repoPath,
     encoding: 'utf8'
   }).trim()
+
   execDockerSshRelayTargetCommand(
     target,
     `rm -rf ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} && mkdir -p ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)}`
@@ -198,5 +206,6 @@ ${docker} rm -f ${shellQuote(target.containerName)} >/dev/null
     target,
     `chown -R root:root ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)}`
   )
+
   return expectedRefHead
 }

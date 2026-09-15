@@ -30,6 +30,7 @@ export type LinearIssueReadArgs =
   | LinearIssueListReadArgs
 
 export type LinearFetchOptions = { force?: boolean; sourceContext?: TaskSourceContext | null }
+
 export type LinearPatchOptions = { sourceContext?: TaskSourceContext | null }
 
 export type LinearSlice = {
@@ -156,5 +157,7 @@ export type LinearSlice = {
 }
 
 export type LinearSliceStateCreator = StateCreator<AppState, [], [], LinearSlice>
+
 export type LinearSliceSet = Parameters<LinearSliceStateCreator>[0]
+
 export type LinearSliceGet = Parameters<LinearSliceStateCreator>[1]

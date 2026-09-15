@@ -54,6 +54,7 @@ describe('Endpoint file lifecycle', () => {
   it('writes the endpoint file with the expected shell-sourceable shape', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'development', userDataPath })
+
     try {
       const filePath = server.endpointFilePath
       expect(filePath).toBeTruthy()
@@ -76,8 +77,10 @@ describe('Endpoint file lifecycle', () => {
     if (process.platform === 'win32') {
       return
     }
+
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const filePath = server.endpointFilePath!
       // Why: mask to the rwx octet so we assert only the file's mode:0o600, not umask-leaked bits on the parent dir.
@@ -96,6 +99,7 @@ describe('Endpoint file lifecycle', () => {
     server.stop()
 
     await server.start({ env: 'production', userDataPath })
+
     try {
       const secondPath = server.endpointFilePath
       const secondPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
@@ -128,6 +132,7 @@ describe('Endpoint file lifecycle', () => {
   it('buildPtyEnv includes ORCA_AGENT_HOOK_ENDPOINT when the server is running', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const env = server.buildPtyEnv()
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
@@ -143,6 +148,7 @@ describe('Endpoint file lifecycle', () => {
       userDataPath,
       endpointNamespace: 'com.stablyai.orca.dev.test123'
     })
+
     try {
       const env = server.buildPtyEnv()
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
@@ -159,6 +165,7 @@ describe('Endpoint file lifecycle', () => {
     const secondServer = new AgentHookServer()
     await firstServer.start({ env: 'development', userDataPath, endpointNamespace: 'dev-a' })
     await secondServer.start({ env: 'development', userDataPath, endpointNamespace: 'dev-b' })
+
     try {
       expect(firstServer.endpointFilePath).not.toBe(secondServer.endpointFilePath)
       expect(firstServer.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBe(firstServer.endpointFilePath)
@@ -177,6 +184,7 @@ describe('Endpoint file lifecycle', () => {
     // Why: the endpoint file is opt-in via userDataPath; without it, hooks fall back to v1 behavior (no ENDPOINT key).
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
@@ -205,6 +213,7 @@ describe('Endpoint file lifecycle', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       expect(existsSync(staleTmp)).toBe(false)
       expect(existsSync(freshTmp)).toBe(true)
@@ -217,6 +226,7 @@ describe('Endpoint file lifecycle', () => {
     // Why: written values are sourced as shell, so isShellSafeEndpointValue must reject metacharacters to prevent command injection.
     const server = new AgentHookServer()
     await server.start({ env: 'bad;value', userDataPath })
+
     try {
       expect(existsSync(server.endpointFilePath!)).toBe(false)
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
@@ -238,6 +248,7 @@ describe('Endpoint file lifecycle', () => {
         payload: evt.payload
       })
     })
+
     try {
       const remotePane = makePaneKey('tab-3', LEAF_3)
       server.ingestRemote(
@@ -270,6 +281,7 @@ describe('Endpoint file lifecycle', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setListener(listener)
+
     try {
       // Missing paneKey
       server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
@@ -294,15 +306,19 @@ describe('Endpoint file lifecycle', () => {
     if (process.platform === 'win32') {
       return
     }
+
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const filePath = server.endpointFilePath!
       const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+
       // Why: source the file exactly as the managed hook script does, catching drift from the KEY=VALUE shape before users do.
       const out = execFileSync('/bin/sh', ['-c', `. "${filePath}" && echo "$ORCA_AGENT_HOOK_PORT"`])
         .toString()
         .trim()
+
       expect(out).toBe(expectedPort)
     } finally {
       server.stop()

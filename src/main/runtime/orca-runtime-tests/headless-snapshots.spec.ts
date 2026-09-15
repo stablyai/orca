@@ -43,6 +43,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-1', 'user@host % claude\r\n', 100)
     currentSize = resized
     runtime.onExternalPtyResize('pty-1', resized.cols, resized.rows)
+
     for (let index = 0; index < 5; index += 1) {
       runtime.onPtyData('pty-1', makeStatusFrame(index, index === 0), 200 + index)
     }
@@ -66,6 +67,7 @@ describe('OrcaRuntimeService', () => {
       getSize: () => currentSize,
       resize: () => {
         currentSize = resized
+
         return true
       }
     })
@@ -77,9 +79,11 @@ describe('OrcaRuntimeService', () => {
       emulator: HeadlessEmulator
       writeChain: Promise<void>
     }
+
     const headless = (
       runtime as unknown as { headlessTerminals: Map<string, HeadlessStateForTest> }
     ).headlessTerminals.get('pty-1')
+
     expect(headless).toBeDefined()
     const originalWrite = headless!.emulator.write.bind(headless!.emulator)
     const queuedWriteStarted = makeDeferred()
@@ -118,13 +122,16 @@ describe('OrcaRuntimeService', () => {
     const serializeBuffer = vi.fn(async (_ptyId: string, opts?: { scrollbackRows?: number }) => {
       const suppressesScrollback =
         (opts as Record<string, unknown> | undefined)?.altScreenForcesZeroRows === true
+
       const scrollback = suppressesScrollback ? '' : 'PRE_CODEX_START\r\nAGENTS.md\r\n'
+
       return {
         data: `${scrollback}\x1b[?1049h\x1b[HCodex TUI frame`,
         cols: 80,
         rows: 24
       }
     })
+
     const runtime = createRuntime()
     runtime.setPtyController({
       write: () => true,
@@ -146,12 +153,14 @@ describe('OrcaRuntimeService', () => {
 
   it('adopts renderer-seeded titles into headless main terminal snapshots', async () => {
     const artifactPath = '/tmp/renderer-seeded-artifact.json'
+
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: `renderer scrollback\nwrote ${artifactPath}\n`,
       cols: 100,
       rows: 30,
       lastTitle: 'Renderer seeded Codex'
     })
+
     const runtime = createRuntime()
     runtime.setPtyController({
       write: () => true,
@@ -395,6 +404,7 @@ describe('OrcaRuntimeService', () => {
     const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', {
       scrollbackRows: 100
     })
+
     expect(snapshot?.data).toContain('restored history')
     expect(snapshot?.data).toContain('after recovery')
     expect(snapshot?.data).not.toContain('suffix-only redraw')
@@ -422,6 +432,7 @@ describe('OrcaRuntimeService', () => {
       rows: 30,
       lastTitle: 'Renderer working'
     })
+
     const runtime = createRuntime()
     runtime.setPtyController({
       write: () => true,
@@ -451,9 +462,11 @@ describe('OrcaRuntimeService', () => {
   it('binds shell ownership evidence to the headless snapshot sequence', async () => {
     const runtime = createRuntime()
     let resolveConfirmation: ((confirmed: boolean) => void) | undefined
+
     const confirmShellForeground = vi.fn(
       () => new Promise<boolean>((resolve) => void (resolveConfirmation = resolve))
     )
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -498,6 +511,7 @@ describe('OrcaRuntimeService', () => {
       cols: 80,
       rows: 24
     })
+
     const runtime = createRuntime()
     runtime.setPtyController({
       write: () => true,
@@ -506,6 +520,7 @@ describe('OrcaRuntimeService', () => {
       serializeBuffer,
       hasRendererSerializer: () => true
     })
+
     type HeadlessStateForTest = {
       emulator: {
         isAlternateScreen: boolean
@@ -520,9 +535,11 @@ describe('OrcaRuntimeService', () => {
       writeChain: Promise<void>
       ownership: { settle: () => Promise<void>; owner: undefined }
     }
+
     const runtimePrivate = runtime as unknown as {
       headlessTerminals: Map<string, HeadlessStateForTest>
     }
+
     runtimePrivate.headlessTerminals.set('pty-empty', {
       emulator: {
         isAlternateScreen: false,
@@ -557,9 +574,11 @@ describe('OrcaRuntimeService', () => {
 
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
+
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = `tab-1:${leafId}`
     runtime.attachWindow(1)
@@ -611,9 +630,11 @@ describe('OrcaRuntimeService', () => {
 
   it('stamps SSH connection identity on runtime terminal status', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
+
     const leafId = '11111111-1111-4111-8111-111111111111'
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
@@ -666,6 +687,7 @@ describe('OrcaRuntimeService', () => {
       terminalFileUriHostnameByPtyId: Map<string, string>
       wslDistroByPtyId: Map<string, string>
     }
+
     expect(internals.terminalCwdByPtyId.get('pty-ssh')).toBe('/home/me/repo/src')
     expect(internals.terminalFileUriHostnameByPtyId.get('pty-ssh')).toBe('remote-host')
     expect(internals.wslDistroByPtyId.has('pty-ssh')).toBe(false)
@@ -684,6 +706,7 @@ describe('OrcaRuntimeService', () => {
 
     const cwds = (runtime as unknown as { terminalCwdByPtyId: Map<string, string> })
       .terminalCwdByPtyId
+
     expect(cwds.get('pty-ubuntu')).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
     expect(cwds.get('pty-debian')).toBe('\\\\wsl.localhost\\Debian\\home\\me\\repo')
   })
@@ -701,6 +724,7 @@ describe('OrcaRuntimeService', () => {
 
     const cwds = (runtime as unknown as { terminalCwdByPtyId: Map<string, string> })
       .terminalCwdByPtyId
+
     expect(cwds.get('pty-reused')).toBe('\\\\server\\share\\repo')
   })
 
@@ -713,11 +737,13 @@ describe('OrcaRuntimeService', () => {
     const changed = runtime.preparePtyExecutionContext('pty-attached', 'Debian', {
       preserveExisting: true
     })
+
     runtime.onPtyData('pty-attached', '\x1b]7;file://DESKTOP/home/me/repo\x07', 1)
 
     const cwd = (
       runtime as unknown as { terminalCwdByPtyId: Map<string, string> }
     ).terminalCwdByPtyId.get('pty-attached')
+
     expect(changed).toBe(false)
     expect(cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
   })

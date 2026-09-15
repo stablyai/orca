@@ -68,6 +68,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     if (!client) {
       return null
     }
+
     return {
       fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
       fetchWorktreeLinkedPR: (wt) => fetchWorktreeLinkedPR(client, wt),
@@ -85,9 +86,11 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
   useEffect(() => {
     let cancelled = false
+
     if (!probeReady || !client) {
       return
     }
+
     void fetchGithubRepoSlug(client, worktreeId)
       .then((outcome) => {
         if (!cancelled) {
@@ -102,6 +105,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
           setRepoProbeLoaded(true)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -113,8 +117,10 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       detailsSeqRef.current += 1
       stateIdentityRef.current = null
       setState({ kind: 'hidden' })
+
       return
     }
+
     if (stateIdentityRef.current !== null && stateIdentityRef.current !== identity) {
       // Why: data is scoped to branch; a branch switch must not keep rendering the previous PR as "fresh."
       loadSeqRef.current += 1
@@ -129,31 +135,38 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
+
       if (!deps || !branch || !loadIdentity) {
         return
       }
+
       const seq = loadSeqRef.current + 1
       loadSeqRef.current = seq
       // Don't invalidate in-flight phase 2 here: it's only claimed when this load's own phase 2 starts, so a superseded phase-1 load can't orphan the details fetch.
       const previousIdentity = stateIdentityRef.current
       stateIdentityRef.current = loadIdentity
+
       // Soft refresh: same-branch ready/none stays visible while checks re-fetch; hard "loading" only on first load or identity wipe.
       const keepVisible =
         previousIdentity === loadIdentity &&
         (stateRef.current.kind === 'ready' ||
           stateRef.current.kind === 'none' ||
           stateRef.current.kind === 'loading')
+
       if (!keepVisible) {
         setState({ kind: 'loading' })
       }
+
       // Phase 1: PR + checks (fast); linkedPR read runs in parallel with forBranch so a closed/merged linked PR still resolves.
       const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
+
       if (
         !shouldApplyResult(seq, loadSeqRef.current) ||
         stateIdentityRef.current !== loadIdentity
       ) {
         return
       }
+
       stateIdentityRef.current = loadIdentity
 
       // Preserve prior details across phase 1 (loadPrSidebarData returns details:null) so soft/PR-tab refresh doesn't blank the comment tree.
@@ -167,11 +180,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
       if (next.kind === 'ready' && priorDetails != null) {
         setState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
+
         if (!includeDetails) {
           return
         }
       } else {
         setState(next)
+
         if (next.kind !== 'ready' || !includeDetails) {
           return
         }
@@ -182,10 +197,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       detailsSeqRef.current = detailsSeq
       detailsInFlightRef.current = { seq: detailsSeq, prNumber: next.data.pr.number }
       const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, next.data.pr.number)
+
       // Release the claim unless a newer phase-2 superseded it (never clear theirs).
       if (detailsInFlightRef.current?.seq === detailsSeq) {
         detailsInFlightRef.current = null
       }
+
       // Ownership keyed on detailsSeq (not loadSeq): a chip-only soft refresh bumps loadSeq without detailsSeq and must not discard these details.
       if (
         detailsSeq !== detailsSeqRef.current ||
@@ -195,12 +212,14 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       ) {
         return
       }
+
       // Non-fatal null must not leave details===null (UI treats that as forever-loading).
       const details = resolvePrSidebarDetailsAfterPhase2({
         fetched: fetchedDetails,
         prior: stateRef.current.data.details,
         pr: stateRef.current.data.pr
       })
+
       setState({ kind: 'ready', data: { ...stateRef.current.data, details } })
     },
     [buildDeps, branch, headSha, identity, worktreeId]
@@ -209,27 +228,35 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   // Phase-2-only fill-in; uses detailsSeqRef so it can't cancel a concurrent phase-1, and re-fetches non-null placeholders too.
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = stateRef.current
+
     if (current.kind !== 'ready' || !prSidebarDetailsNeedFetch(current.data.details)) {
       return
     }
+
     const deps = buildDeps()
     const loadIdentity = identity
+
     if (!deps || !loadIdentity || stateIdentityRef.current !== loadIdentity) {
       return
     }
+
     const prNumber = current.data.pr.number
     // Skip if a live phase-2 fetch for this PR already owns the latest details seq (dedupe).
     const inFlight = detailsInFlightRef.current
+
     if (inFlight && inFlight.prNumber === prNumber && inFlight.seq === detailsSeqRef.current) {
       return
     }
+
     const detailsSeq = detailsSeqRef.current + 1
     detailsSeqRef.current = detailsSeq
     detailsInFlightRef.current = { seq: detailsSeq, prNumber }
     const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, prNumber)
+
     if (detailsInFlightRef.current?.seq === detailsSeq) {
       detailsInFlightRef.current = null
     }
+
     if (
       detailsSeq !== detailsSeqRef.current ||
       stateIdentityRef.current !== loadIdentity ||
@@ -238,11 +265,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     ) {
       return
     }
+
     const details = resolvePrSidebarDetailsAfterPhase2({
       fetched: fetchedDetails,
       prior: stateRef.current.data.details,
       pr: stateRef.current.data.pr
     })
+
     setState({
       kind: 'ready',
       data: { ...stateRef.current.data, details }
@@ -254,15 +283,20 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     if (headShaRef.current === headSha) {
       return
     }
+
     headShaRef.current = headSha
+
     // Identity just wiped: stateRef still holds stale pre-wipe state, so let the surface's hidden-state effects drive the new load.
     if (stateIdentityRef.current === null) {
       return
     }
+
     const current = stateRef.current
+
     if (!shouldSoftRefreshPrSidebarOnHeadChange(current.kind)) {
       return
     }
+
     void load({
       includeDetails: current.kind === 'ready' && current.data.details != null
     })
@@ -270,6 +304,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
   const openPRSidebar = useCallback(() => {
     setShowPRSidebar(true)
+
     // (Re)load on open unless we already have fresh PR data showing.
     if (
       stateIdentityRef.current !== identity ||

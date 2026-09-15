@@ -26,12 +26,14 @@ describe('pairing offer', () => {
     const url = encodePairingOffer(offer)
     const nodeBuffer = Buffer
     let decoded: PairingOffer | null = null
+
     try {
       vi.stubGlobal('Buffer', undefined)
       decoded = decodePairingOffer(url)
     } finally {
       vi.stubGlobal('Buffer', nodeBuffer)
     }
+
     expect(decoded).toEqual(offer)
   })
 

@@ -29,9 +29,11 @@ export function createTerminalLayoutActions(
     replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
       set((s) => {
         const layout = s.terminalLayoutsByTabId[tabId]
+
         if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
           return s
         }
+
         return {
           terminalLayoutsByTabId: {
             ...s.terminalLayoutsByTabId,
@@ -65,11 +67,15 @@ export function createTerminalLayoutActions(
           if (!(tabId in s.terminalLayoutsByTabId)) {
             return s
           }
+
           const next = { ...s.terminalLayoutsByTabId }
           delete next[tabId]
+
           return { terminalLayoutsByTabId: next }
         }
+
         const normalized = normalizeTerminalLayoutPtyOwnership(layout)
+
         // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
         if (normalized.changed) {
           ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(
@@ -77,11 +83,14 @@ export function createTerminalLayoutActions(
             normalized.snapshot
           )
         }
+
         // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
         const existing = s.terminalLayoutsByTabId[tabId]
+
         if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
           return s
         }
+
         return {
           terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
         }
@@ -99,41 +108,52 @@ export function createTerminalLayoutActions(
       const targetPaneKey = makePaneKey(targetTabId, detachedLeafId)
       set((s) => {
         const layoutSourcePtyIds = uniquePtyIds(Object.values(sourceLayout.ptyIdsByLeafId ?? {}))
+
         const existingSourcePtyIds = (s.ptyIdsByTabId[sourceTabId] ?? []).filter(
           (ptyId) => ptyId !== detachedPtyId
         )
+
         const sourcePtyIds =
           layoutSourcePtyIds.length > 0 ? layoutSourcePtyIds : existingSourcePtyIds
+
         const sourcePrimaryPtyId =
           resolvePrimaryLayoutPtyId(sourceLayout) ?? sourcePtyIds[0] ?? null
+
         const nextPtyIdsByTabId = {
           ...s.ptyIdsByTabId,
           [sourceTabId]: sourcePtyIds
         }
+
         if (detachedPtyId) {
           nextPtyIdsByTabId[targetTabId] = uniquePtyIds([
             ...(nextPtyIdsByTabId[targetTabId] ?? []),
             detachedPtyId
           ])
         }
+
         const nextLastKnownRelayPtyIdByTabId = { ...s.lastKnownRelayPtyIdByTabId }
+
         if (sourcePrimaryPtyId) {
           nextLastKnownRelayPtyIdByTabId[sourceTabId] = sourcePrimaryPtyId
         } else {
           delete nextLastKnownRelayPtyIdByTabId[sourceTabId]
         }
+
         if (detachedPtyId) {
           nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
         }
+
         // Why: pane-to-tab detach moves a live PTY without spawning or exiting, so transfer identity without activity bumps.
         const sourceTabsByWorktree = withTerminalTabPtyId(
           s.tabsByWorktree,
           sourceTabId,
           sourcePrimaryPtyId
         )
+
         const nextTabsByWorktree = detachedPtyId
           ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
           : sourceTabsByWorktree
+
         const directSshLedger = transferDirectSshPaneDetachLedger(s, {
           detachedPtyId,
           sourcePtyId: sourcePrimaryPtyId,
@@ -141,6 +161,7 @@ export function createTerminalLayoutActions(
           targetTabId,
           isAuthorityCurrent: (authority) => isCurrentDirectSshAuthority(s, authority)
         })
+
         return {
           ptyIdsByTabId: nextPtyIdsByTabId,
           lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,

@@ -33,17 +33,27 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalParkingFoundation } from '../use-terminal-parking-foundation'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const OTHER_WORKTREE_ID = 'repo::/other-worktree'
+
 const TAB_1 = 'tab-1'
+
 const TAB_2 = 'tab-2'
+
 const PTY_1 = `${WORKTREE_ID}@@session-1`
+
 const PTY_2 = `${WORKTREE_ID}@@session-2`
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const SURFACE_IDS = [WORKTREE_ID, OTHER_WORKTREE_ID]
 
 const initialState = useAppStore.getInitialState()
+
 const originalRequestIdle = globalThis.requestIdleCallback
+
 const originalCancelIdle = globalThis.cancelIdleCallback
 
 function terminalTab(id: string, ptyId: string): TerminalTab {
@@ -85,6 +95,7 @@ function useStrandingHarness(props: HarnessProps) {
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   const activationDeferralPlanRevisionRef = useRef(0)
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
+
   const foundation = {
     activationDeferralPlanRevisionRef,
     activationDeferredMountTabIdsByWorktreeRef,
@@ -112,8 +123,10 @@ function useStrandingHarness(props: HarnessProps) {
     workspaceSurfaceIds: SURFACE_IDS,
     workspaceSurfaceIdSet: new Set(SURFACE_IDS)
   } as unknown as TerminalParkingFoundation
+
   const coldActivation = Object.assign(foundation, applyTerminalColdActivation(foundation))
   useActivationDeferredTabAdmission(coldActivation)
+
   return { activationDeferredMountTabIdsByWorktreeRef, backgroundMountTabIdsByWorktreeRef }
 }
 
@@ -168,11 +181,13 @@ describe('cold-activation deferral stranding', () => {
   it('drains a plan installed by the gate-open pass without the active worktree changing', async () => {
     await seedDeferrableWorktree()
     vi.useFakeTimers()
+
     // Pass 1: worktree already rendered-active while the startup gate is
     // closed — the else branch resets lastActivationWorktreeIdRef to null.
     const { result, rerender } = renderHook((props: HarnessProps) => useStrandingHarness(props), {
       initialProps: { worktreeId: WORKTREE_ID, gateOpen: false }
     })
+
     expect(result.current.activationDeferredMountTabIdsByWorktreeRef.current.size).toBe(0)
 
     // Pass 2: gate opens with the SAME rendered-active worktree; the plan
@@ -203,9 +218,11 @@ describe('cold-activation deferral stranding', () => {
   it('control: the same stranded state drains when the active worktree bounces away and back', async () => {
     await seedDeferrableWorktree()
     vi.useFakeTimers()
+
     const { result, rerender } = renderHook((props: HarnessProps) => useStrandingHarness(props), {
       initialProps: { worktreeId: WORKTREE_ID, gateOpen: false }
     })
+
     rerender({ worktreeId: WORKTREE_ID, gateOpen: true })
     expect(
       result.current.activationDeferredMountTabIdsByWorktreeRef.current.get(WORKTREE_ID)?.size

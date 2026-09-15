@@ -19,14 +19,18 @@ export async function readWorktreeStructuredActivationInventory(
   if (typeof window === 'undefined') {
     return false
   }
+
   const response = await window.api.runtime.call({
     method: 'session.tabs.list',
     params: { worktree: toRuntimeWorktreeSelector(worktreeId) }
   })
+
   if (!response.ok) {
     throw new Error('structured session inventory unavailable')
   }
+
   const snapshot = response.result as RuntimeMobileSessionTabsResult
+
   if (
     !snapshot ||
     typeof snapshot.worktree !== 'string' ||
@@ -35,9 +39,11 @@ export async function readWorktreeStructuredActivationInventory(
   ) {
     throw new Error('structured session inventory scope unavailable')
   }
+
   if (!snapshot.tabs.some((tab) => tab.type === 'agent-session')) {
     return false
   }
+
   const ownerBySessionId = new Map<
     string,
     {
@@ -45,6 +51,7 @@ export async function readWorktreeStructuredActivationInventory(
       terminal?: { paneKey: string; ptyId: string; tabId: string }
     }
   >()
+
   await Promise.all(
     snapshot.tabs.flatMap((tab) =>
       tab.type === 'agent-session'
@@ -55,10 +62,12 @@ export async function readWorktreeStructuredActivationInventory(
                 if (!statusResponse.ok) {
                   return
                 }
+
                 const status = statusResponse.result as {
                   owner?: unknown
                   terminal?: { paneKey?: unknown; ptyId?: unknown; tabId?: unknown }
                 }
+
                 if (status.owner === 'native') {
                   ownerBySessionId.set(tab.sessionId, { owner: 'native' })
                 } else if (
@@ -82,5 +91,6 @@ export async function readWorktreeStructuredActivationInventory(
         : []
     )
   )
+
   return { snapshot, ownerBySessionId }
 }

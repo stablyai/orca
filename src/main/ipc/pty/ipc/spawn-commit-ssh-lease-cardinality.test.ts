@@ -17,7 +17,9 @@ vi.mock('electron', () => ({
 }))
 
 const TARGET = 'ssh-1'
+
 const WORKTREE = 'repo1::/worktree'
+
 const TAB = 'tab-1'
 
 /**
@@ -34,6 +36,7 @@ async function commitSshSpawn(
   args: { relayPtyId: string; leafId: string }
 ): Promise<void> {
   const deps = { store } as unknown as PtySpawnIpcDeps
+
   const spawnArgs = {
     cols: 80,
     rows: 24,
@@ -42,6 +45,7 @@ async function commitSshSpawn(
     leafId: args.leafId,
     connectionId: TARGET
   } as unknown as PtySpawnIpcArgs
+
   const ctx = createPtyIpcSpawnState(deps, spawnArgs)
   ctx.result = { id: toAppSshPtyId(TARGET, args.relayPtyId) }
   ctx.validatedLeafId = args.leafId

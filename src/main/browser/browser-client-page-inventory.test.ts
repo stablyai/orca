@@ -15,12 +15,15 @@ describe('browser client page inventory', () => {
       'z-page',
       ...Array.from({ length: 254 }, (_, index) => `page-${index.toString().padStart(3, '0')}`)
     ]
+
     const inventory = pageIds.map(inventoryPage)
     const forward = prepareBrowserClientPageInventoryForAttach(inventory)
     const reversed = prepareBrowserClientPageInventoryForAttach(inventory.toReversed())
+
     if (!forward || !reversed) {
       throw new Error('expected encodable inventory')
     }
+
     const omitted = omittedPageIds(forward)
     const expected = [...pageIds].sort(compareCodepoints).slice(0, omitted.length)
 

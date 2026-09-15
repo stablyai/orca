@@ -25,6 +25,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -45,6 +46,7 @@ describe('CodexRuntimeHomeService', () => {
     const managedAuth = createCodexAuthJson('shared@example.com', 'acct-shared', 'managed')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -60,6 +62,7 @@ describe('CodexRuntimeHomeService', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -81,17 +84,21 @@ describe('CodexRuntimeHomeService', () => {
 
   it('restores retained system ownership when a self-contained transition leaves it untouched', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+
     const refreshedSystemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
       'refreshed'
     )
+
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -107,6 +114,7 @@ describe('CodexRuntimeHomeService', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -130,6 +138,7 @@ describe('CodexRuntimeHomeService', () => {
     const managedAuth = createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -145,6 +154,7 @@ describe('CodexRuntimeHomeService', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -164,11 +174,13 @@ describe('CodexRuntimeHomeService', () => {
 
   it('refreshes untouched retained-pane auth during real-home rate polling', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+
     const refreshedSystemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
       'refreshed-token'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -210,11 +222,13 @@ describe('CodexRuntimeHomeService', () => {
     setShellStartupEnvProbeSupportedForTest(true)
     rmSync(getSystemCodexAuthPath())
     service.prepareForRateLimitFetch()
+
     const metadataPaths = [
       getSharedRuntimeAuthProvenancePath(),
       join(testState.userDataDir, 'codex-runtime-home', 'system-default-auth.json'),
       join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
     ]
+
     const originalInodes = metadataPaths.map((path) => statSync(path).ino)
 
     service.prepareForRateLimitFetch()
@@ -225,17 +239,21 @@ describe('CodexRuntimeHomeService', () => {
 
   it('clears managed transition state before later retained-auth reconciliation', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+
     const refreshedSystemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
       'refreshed-token'
     )
+
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('managed@example.com', 'acct-managed', 'managed-token')
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -251,6 +269,7 @@ describe('CodexRuntimeHomeService', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -284,11 +303,13 @@ describe('CodexRuntimeHomeService', () => {
   it('does not overwrite auth changed by a retained Codex process', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
     const retainedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'retained-token')
+
     const refreshedSystemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
       'refreshed-token'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -326,11 +347,13 @@ describe('CodexRuntimeHomeService', () => {
 
   it('repairs a completed pending system-auth replacement after restart', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+
     const refreshedSystemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
       'refreshed-token'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -398,11 +421,13 @@ describe('CodexRuntimeHomeService', () => {
 
   it('does not treat malformed provenance as a missing migration marker', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+
     const refreshedSystemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
       'refreshed-token'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -459,9 +484,11 @@ describe('CodexRuntimeHomeService', () => {
       setShellStartupEnvProbeSupportedForTest(true)
       rmSync(getSystemCodexAuthPath())
       rmSync(getRuntimeCodexAuthPath())
+
       if (removeProvenance) {
         rmSync(getSharedRuntimeAuthProvenancePath())
       }
+
       rmSync(
         join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json'),
         {
@@ -484,11 +511,13 @@ describe('CodexRuntimeHomeService', () => {
   it('recreates retained auth after interrupted logout crosses a managed transition', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
     const reloginAuth = createCodexAuthJson('system@example.com', 'acct-system', 'relogin-token')
+
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('managed@example.com', 'acct-managed', 'managed-token')
     )
+
     const settings = createSettings({
       shellStartupEnvProbeSupported: false,
       codexManagedAccounts: [
@@ -505,6 +534,7 @@ describe('CodexRuntimeHomeService', () => {
         }
       ]
     })
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')

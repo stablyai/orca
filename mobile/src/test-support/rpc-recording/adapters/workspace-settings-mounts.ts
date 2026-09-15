@@ -21,6 +21,7 @@ export function workspaceSettingsMounts(
       >(
         'mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx'
       ).useMobileTasksWorkspaceCreateActions
+
       const model = observableModel(context, {
         client: context.client,
         hostId: 'host-1',
@@ -39,16 +40,20 @@ export function workspaceSettingsMounts(
         resolveCreateSetupDecision: async () => setupResolution,
         router: { push: (value: unknown) => context.effect('navigation', value) }
       })
+
       let actions: ReturnType<typeof useCreate>
+
       const hook = hookMount(() => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
         actions = useCreate(model as unknown as Parameters<typeof useCreate>[0])
       })
+
       return {
         action(name, args) {
           if (name === 'mount') {
             return hook.mount()
           }
+
           if (name === 'submit') {
             return actions.createWorkspace(
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the action item as JSON, not as a typed model.
@@ -62,6 +67,7 @@ export function workspaceSettingsMounts(
               'claude'
             )
           }
+
           throw new Error(`Unknown task workspace action: ${name}`)
         },
         state: () =>
@@ -80,6 +86,7 @@ export function workspaceSettingsMounts(
       const useSubmit = modules.load<
         typeof import('../../../components/use-new-workspace-create-submit')
       >('mobile/src/components/use-new-workspace-create-submit.ts').useNewWorkspaceCreateSubmit
+
       const model = observableModel(context, {
         client: context.client,
         selectedRepo: { id: 'repo-1', displayName: 'Repo' },
@@ -101,19 +108,24 @@ export function workspaceSettingsMounts(
         onCreated: (id: unknown, name: unknown) => context.effect('created', { id, name }),
         onClose: () => context.effect('close', null)
       })
+
       let state: ReturnType<typeof useSubmit>
+
       const hook = hookMount(() => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
         state = useSubmit(model as unknown as Parameters<typeof useSubmit>[0])
       })
+
       return {
         action(name) {
           if (name === 'mount') {
             return hook.mount()
           }
+
           if (name === 'submit') {
             return performHookAction(() => state.create())
           }
+
           throw new Error(`Unknown submit action: ${name}`)
         },
         state: () =>

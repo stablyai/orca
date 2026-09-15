@@ -36,6 +36,7 @@ export function createLinearTeamActions(
     getCachedLinearTeams: (workspaceId, options) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const key = linearTeamsCacheKey(workspaceId ?? getSelectedWorkspaceId(get().linearStatus))
+
       return get().linearTeamCache[scopedLinearCacheKey(scope, key)]?.data ?? null
     },
 
@@ -45,11 +46,13 @@ export function createLinearTeamActions(
       const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
       const cacheKey = scopedLinearCacheKey(scope, linearTeamsCacheKey(resolvedWorkspaceId))
       const cached = get().linearTeamCache[cacheKey]
+
       if (!options?.force && isFresh(cached, TEAM_CACHE_TTL)) {
         return cached.data ?? []
       }
 
       const inflight = inflightTeamRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -62,9 +65,11 @@ export function createLinearTeamActions(
       let entry: InflightLinearTeamRequest
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearListTeams(scope.settings, resolvedWorkspaceId)
         .then((teams) => {
           const data = teams as LinearTeam[]
+
           if (
             inflightTeamRequests.get(cacheKey) === entry &&
             canWriteLinearReadResult(
@@ -82,10 +87,12 @@ export function createLinearTeamActions(
               })
             }))
           }
+
           return data
         })
         .catch((error) => {
           console.warn('[linear] listLinearTeams failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -99,14 +106,17 @@ export function createLinearTeamActions(
             if (!shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus)) {
               void get().checkLinearConnection(true)
             }
+
             return []
           }
+
           return get().linearTeamCache[cacheKey]?.data ?? []
         })
         .finally(() => {
           if (inflightTeamRequests.get(cacheKey) === entry) {
             inflightTeamRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -129,6 +139,7 @@ export function createLinearTeamActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightTeamRequests.set(cacheKey, entry)
+
       return promise
     }
   }

@@ -4,13 +4,16 @@ import { imeFallbackKeyEvent, parseCdpKeyEvent } from './cdp-keyboard-us-layout'
 describe('parseCdpKeyEvent', () => {
   it('maps every printable ASCII character to a key event that types that character', () => {
     const broken: string[] = []
+
     for (let charCode = 32; charCode <= 126; charCode++) {
       const ch = String.fromCharCode(charCode)
       const parsed = parseCdpKeyEvent(ch)
+
       if (!parsed || parsed.text !== ch || parsed.keyCode === 0) {
         broken.push(ch)
       }
     }
+
     expect(broken).toEqual([])
   })
 

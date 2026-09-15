@@ -26,9 +26,11 @@ export async function killSourceControlAgentProcess(
   child: SpawnedSourceControlAgentProcess
 ): Promise<void> {
   const pid = child.pid
+
   if (!pid) {
     return
   }
+
   if (process.platform === 'win32') {
     // taskkill owns the tree, but the own-Chromium gate can refuse the
     // pid-addressed walk; the handle-addressed root kill below cannot reach the
@@ -36,6 +38,7 @@ export async function killSourceControlAgentProcess(
     // promise, so it must not resolve having killed nothing.
     await terminateWindowsProcessTree(pid, { site: 'source-control-text-generation' })
   }
+
   try {
     child.kill('SIGKILL')
   } catch {
@@ -55,11 +58,14 @@ export function runLocalSourceControlPlan(input: {
 }): LocalProcessExecution<InternalTextGenerationResult> {
   const { plan, cwd, operation, holdHomeLockUntilExit } = input
   let markProcessClosed!: () => void
+
   const processClosed = new Promise<void>((resolve) => {
     markProcessClosed = resolve
   })
+
   const result = new Promise<InternalTextGenerationResult>((resolve) => {
     let child: SpawnedSourceControlAgentProcess
+
     try {
       child = input.spawnAgent({
         binary: plan.binary,
@@ -72,15 +78,19 @@ export function runLocalSourceControlPlan(input: {
       })
     } catch (error) {
       markProcessClosed()
+
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({ success: false, error: userFacingUnsafeWindowsBatchArgs(plan.label) })
+
         return
       }
+
       console.error('[commit-message] Failed to spawn local generator:', error)
       resolve({
         success: false,
         error: `${plan.label} could not be started. Check the agent command in Settings and try again.`
       })
+
       return
     }
 
@@ -95,33 +105,43 @@ export function runLocalSourceControlPlan(input: {
     let timer: ReturnType<typeof setTimeout> | null = null
     let terminationComplete: Promise<void> | null = null
     let detachChildListeners = (): void => {}
+
     const startTermination = (): void => {
       terminationComplete ??= killSourceControlAgentProcess(child)
     }
+
     const markClosedAfterTermination = (): void => {
       void (terminationComplete ?? Promise.resolve()).then(markProcessClosed)
     }
+
     const finalize = (value: InternalTextGenerationResult): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
+
       detachChildListeners()
       clearLocalGenerationCancelToken(laneKey, cancel)
+
       if (!holdHomeLockUntilExit) {
         markProcessClosed()
       }
+
       resolve(value)
     }
+
     const cancel = (): void => {
       canceledByUser = true
       startTermination()
       finalize({ success: false, error: 'Generation canceled.', canceled: true })
     }
+
     setLocalGenerationCancelToken(laneKey, cancel)
     timer = setTimeout(() => {
       startTermination()
@@ -133,52 +153,69 @@ export function runLocalSourceControlPlan(input: {
 
     const onStdoutData = (chunk: Buffer): void => {
       stdoutBytes += chunk.byteLength
+
       if (stdoutBytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         startTermination()
+
         return
       }
+
       stdout += chunk.toString('utf-8')
     }
+
     const onStderrData = (chunk: Buffer): void => {
       stderrBytes += chunk.byteLength
+
       if (stderrBytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         startTermination()
+
         return
       }
+
       stderr += chunk.toString('utf-8')
     }
+
     const onError = (error: Error): void => {
       if (!child.pid) {
         markProcessClosed()
       }
+
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finalize({
           success: false,
           error: `${plan.binary} not found on PATH. Install ${plan.label} to use AI commit messages.`
         })
+
         return
       }
+
       console.error('[commit-message] Local generator failed after spawn:', error)
       finalize({
         success: false,
         error: `${plan.label} failed to start. Check the agent command in Settings and try again.`
       })
     }
+
     const onClose = (code: number | null): void => {
       markClosedAfterTermination()
+
       if (canceledByUser) {
         finalize({ success: false, error: 'Generation canceled.', canceled: true })
+
         return
       }
+
       if (outputLimitExceeded) {
         finalize({
           success: false,
           error: `${plan.label} CLI command produced too much output. Check the agent CLI configuration and try again.`
         })
+
         return
       }
+
       finalize(
         finalizeFromAgentOutput({
           code,
@@ -190,12 +227,15 @@ export function runLocalSourceControlPlan(input: {
         })
       )
     }
+
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
+
     if (holdHomeLockUntilExit) {
       child.once('exit', markClosedAfterTermination)
       child.once('close', markClosedAfterTermination)
     }
+
     child.on('error', onError)
     child.on('close', onClose)
     detachChildListeners = () => {
@@ -204,6 +244,7 @@ export function runLocalSourceControlPlan(input: {
       child.off?.('error', onError)
       child.off?.('close', onClose)
     }
+
     try {
       child.stdin?.end(plan.stdinPayload ?? undefined)
     } catch (error) {
@@ -211,5 +252,6 @@ export function runLocalSourceControlPlan(input: {
       onError(error instanceof Error ? error : new Error(String(error)))
     }
   })
+
   return { result, processClosed }
 }

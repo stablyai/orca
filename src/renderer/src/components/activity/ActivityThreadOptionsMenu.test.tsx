@@ -70,6 +70,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Thread list options, filters active"]'
     )
+
     expect(trigger).not.toBeNull()
     expect(trigger?.querySelector('[data-scope-filter-dot]')).not.toBeNull()
   })
@@ -105,19 +106,24 @@ describe('ActivityThreadOptionsMenu', () => {
         agentsFilterRepoIds: scenario === 'removed host' ? [] : ['repo-1'],
         filterRepoIds: ['workspace-nav-filter']
       })
+
       try {
         await act(async () => root.render(<Harness />))
+
         const trigger = container.querySelector<HTMLButtonElement>(
           'button[aria-label="Thread list options, filters active"]'
         )
+
         expect(trigger).not.toBeNull()
         await act(async () => {
           trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
         })
         expect(document.querySelector('[data-slot="dropdown-menu-sub-trigger"]')).toBeNull()
+
         const reset = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
           (item) => item.textContent === 'Show all hosts and projects'
         )
+
         expect(reset).toBeDefined()
         await act(async () => {
           reset?.focus()
@@ -156,6 +162,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const subTrigger = document.querySelector<HTMLElement>(
       '[data-slot="dropdown-menu-sub-trigger"]'
     )
+
     expect(subTrigger).not.toBeNull()
 
     await act(async () => {
@@ -184,6 +191,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Thread list options"]'
     )
+
     await act(async () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
@@ -191,6 +199,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const compactMode = Array.from(
       document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
     ).find((item) => item.textContent === 'Compact mode')
+
     await act(async () => {
       compactMode?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
@@ -222,6 +231,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Thread list options"]'
     )
+
     await act(async () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
@@ -232,6 +242,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const showSearchItem = Array.from(
       document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
     ).find((item) => item.textContent?.includes('Show search'))
+
     expect(showSearchItem?.getAttribute('data-state')).toBe('checked')
 
     await act(async () => {
@@ -260,6 +271,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Thread list options"]'
     )
+
     await act(async () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
@@ -267,6 +279,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const unreadItem = Array.from(
       document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
     ).find((item) => item.textContent === 'Show unread only')
+
     await act(async () => {
       unreadItem?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
@@ -294,6 +307,7 @@ describe('ActivityThreadOptionsMenu', () => {
     const childAgentsItem = Array.from(
       document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
     ).find((item) => item.textContent === 'Show child agents')
+
     await act(async () => {
       childAgentsItem?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })

@@ -7,11 +7,15 @@ import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const setWorktreeCardMode = vi.fn()
+
 const setWorktreeCardProperties = vi.fn()
+
 const setAgentActivityDisplayMode = vi.fn()
 
 let settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+
 let projectGroups: unknown[] = []
+
 let worktreeCardProperties = [
   'status',
   'unread',
@@ -40,12 +44,14 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const ReactModule = await import('react')
+
   type RadioItemProps = {
     children: ReactNode
     onSelect?: (event: { preventDefault: () => void }) => void
     onValueChange?: (value: string) => void
     value: string
   }
+
   return {
     DropdownMenuCheckboxItem: ({
       children,
@@ -102,6 +108,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 })
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function renderMenu(): void {
@@ -150,6 +157,7 @@ describe('WorktreeCardDisplayMenuSection', () => {
     const compactLayoutButton = document.querySelector<HTMLButtonElement>(
       '[data-radio-group-value="detailed"] [data-radio-item-value="compact"]'
     )
+
     expect(compactLayoutButton).not.toBeNull()
 
     act(() => {

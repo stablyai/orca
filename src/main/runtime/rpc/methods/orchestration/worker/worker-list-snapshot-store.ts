@@ -5,8 +5,11 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
 
 export const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS = 5_000
+
 const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ENTRIES = 32
+
 const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_BYTES = 4 * 1024 * 1024
+
 const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ENTRY_BYTES = 512 * 1024
 
 type WorkerListSnapshot = {
@@ -35,22 +38,27 @@ export function createWorkerListSnapshot(
   }
 ): string {
   const id = `wls_${randomUUID().replaceAll('-', '')}`
+
   const snapshot = {
     runId: params.runId ?? null,
     terminalState: params.terminalState,
     databaseId: params.databaseId,
     dispatchIds: params.dispatchIds
   }
+
   const store = storeFor(runtime)
+
   const stored = canRetainWithPinnedSnapshots(store, snapshot)
     ? store.snapshots.set(id, snapshot)
     : false
+
   if (!stored) {
     throw new OrchestrationError(
       'worker_list_snapshot_too_large',
       'The filtered worker inventory is too large to page as one bounded snapshot.'
     )
   }
+
   return id
 }
 
@@ -60,12 +68,14 @@ export function readWorkerListSnapshot(
   params: { runId?: string; terminalState?: WorkerTerminalListState }
 ): WorkerListSnapshot {
   const snapshot = storeFor(runtime).snapshots.get(id)
+
   if (!snapshot) {
     throw new OrchestrationError(
       'worker_list_cursor_expired',
       'This worker-list cursor expired or belongs to another runtime. Restart without --cursor.'
     )
   }
+
   if (
     snapshot.runId !== (params.runId ?? null) ||
     snapshot.terminalState !== params.terminalState
@@ -75,6 +85,7 @@ export function readWorkerListSnapshot(
       'A worker-list cursor must be reused with the same Run and terminal-state filter.'
     )
   }
+
   return snapshot
 }
 
@@ -87,14 +98,17 @@ export function pinWorkerListSnapshot(
   const store = storeFor(runtime)
   store.pins.set(id, (store.pins.get(id) ?? 0) + 1)
   let released = false
+
   return {
     snapshot,
     release: () => {
       if (released) {
         return
       }
+
       released = true
       const remaining = (store.pins.get(id) ?? 1) - 1
+
       if (remaining > 0) {
         store.pins.set(id, remaining)
       } else {
@@ -106,6 +120,7 @@ export function pinWorkerListSnapshot(
 
 function storeFor(runtime: OrcaRuntimeService): WorkerListSnapshotStore {
   let store = storesByRuntime.get(runtime)
+
   if (!store) {
     const pins = new Map<string, number>()
     store = {
@@ -120,6 +135,7 @@ function storeFor(runtime: OrcaRuntimeService): WorkerListSnapshotStore {
     }
     storesByRuntime.set(runtime, store)
   }
+
   return store
 }
 
@@ -130,16 +146,20 @@ function canRetainWithPinnedSnapshots(
   const snapshotBytes = retainedSnapshotBytes(snapshot)
   let pinnedBytes = 0
   let pinnedEntries = 0
+
   for (const id of store.snapshots.keys()) {
     if (!store.pins.has(id)) {
       continue
     }
+
     const pinned = store.snapshots.get(id)
+
     if (pinned) {
       pinnedEntries += 1
       pinnedBytes += retainedSnapshotBytes(pinned)
     }
   }
+
   return (
     snapshotBytes <= ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ENTRY_BYTES &&
     pinnedEntries < ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ENTRIES &&
@@ -150,8 +170,10 @@ function canRetainWithPinnedSnapshots(
 function retainedSnapshotBytes(snapshot: WorkerListSnapshot): number {
   let bytes =
     Buffer.byteLength(snapshot.runId ?? '') + Buffer.byteLength(snapshot.terminalState) + 8
+
   for (const dispatchId of snapshot.dispatchIds) {
     bytes += Buffer.byteLength(dispatchId) + 8
   }
+
   return bytes
 }

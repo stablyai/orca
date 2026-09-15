@@ -24,6 +24,7 @@ export type StarNagMocks = {
 }
 
 type AgentStartedListener = (totalAgentsSpawned: number) => void
+
 type IpcHandler = () => unknown
 
 export type TestHarness = {
@@ -60,23 +61,28 @@ export function createWindow(): TestWindow {
 export function createHarness(initialUI: Partial<PersistedUIState> = {}): TestHarness {
   let totalAgentsSpawned = 45
   const listeners: AgentStartedListener[] = []
+
   const ui = {
     starNagAppVersion: '1.2.3',
     starNagBaselineAgents: 10,
     starNagNextThreshold: STAR_NAG_INITIAL_THRESHOLD,
     ...initialUI
   } as PersistedUIState
+
   const store = {
     getUI: vi.fn(() => ui),
     updateUI: vi.fn((updates: Partial<PersistedUIState>) => {
       Object.assign(ui, updates)
     })
   } as unknown as Store
+
   const stats = {
     onAgentStarted: vi.fn((listener: AgentStartedListener) => {
       listeners.push(listener)
+
       return () => {
         const index = listeners.indexOf(listener)
+
         if (index !== -1) {
           listeners.splice(index, 1)
         }
@@ -91,6 +97,7 @@ export function createHarness(initialUI: Partial<PersistedUIState> = {}): TestHa
     ui,
     emitAgentStarted: (nextTotal: number) => {
       totalAgentsSpawned = nextTotal
+
       for (const listener of listeners) {
         listener(nextTotal)
       }
@@ -103,9 +110,11 @@ export function createDeferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 
@@ -114,9 +123,11 @@ export function createIpcHandlerLookup(ipcMainHandleMock: Mock): (channel: strin
     const call = ipcMainHandleMock.mock.calls.find(
       ([registeredChannel]) => registeredChannel === channel
     )
+
     if (!call) {
       throw new Error(`missing IPC handler for ${channel}`)
     }
+
     return call[1] as IpcHandler
   }
 }

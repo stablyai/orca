@@ -8,6 +8,7 @@ function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
     return 'Installing...'
   }
+
   return 'Working...'
 }
 

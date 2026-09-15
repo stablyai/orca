@@ -23,7 +23,9 @@ import { SessionSearchStore } from './session-search-store'
 // way through being rewritten.
 
 let index: SessionSearchIndexFile
+
 let store: SessionSearchStore
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -62,12 +64,14 @@ function failOnStatement(pick: (sql: string) => boolean, nth: number): void {
     if (pick(sql) && ++seen === nth) {
       throw new Error('index write crashed mid transaction')
     }
+
     return prepare.call(this, sql)
   })
 }
 
 function counts(db: SyncDatabase): Record<string, number> {
   const one = (sql: string): number => (db.prepare(sql).get() as { n: number }).n
+
   return {
     sessions: one('SELECT count(*) AS n FROM sessions'),
     messages: one('SELECT count(*) AS n FROM messages'),
@@ -105,9 +109,11 @@ it('files every row in one FTS table, under the column its role owns', () => {
 
 it('leaves the index exactly as it found it when a read never finishes', () => {
   const write = store.beginWrite(syntheticCandidate(), 'replace', 0)!
+
   for (const message of userMessages('neverfinished', 200)) {
     write.add(message)
   }
+
   // The process dies here: the rows only ever existed in this buffer.
   expect(counts(index.db)).toMatchObject({
     sessions: 0,
@@ -183,12 +189,14 @@ it('shows a reader on another handle one generation or the other, never a mixtur
   expect(counts(index.db).messages).toBe(3)
 
   const write = store.beginWrite(syntheticCandidate(), 'replace', 0)!
+
   for (const message of userMessages('secondgeneration', 7)) {
     write.add(message)
     // Every point at which the other handle could issue a query mid-read.
     expect(counts(index.db).messages).toBe(3)
     expect(matches(index.db, 'messages_fts', 'secondgeneration')).toBe(0)
   }
+
   expect(
     write.commit({
       session: syntheticSession(),
@@ -226,6 +234,7 @@ it('leaves the session consistent after every chunk of a file too large for one 
   expect(CHUNKED_MESSAGE.length).toBe(100)
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
+
   for (const [position, message] of userMessages(CHUNKED_MESSAGE, 10).entries()) {
     write.add(message)
     const rows = counts(index.db).messages
@@ -233,6 +242,7 @@ it('leaves the session consistent after every chunk of a file too large for one 
     expect(rows).toBe(Math.floor((position + 1) / 4) * 4)
     // Whatever landed is a coherent prefix of this session and answers searches.
     expect(matches(index.db, 'messages_fts', 'chunkedneedle')).toBe(rows)
+
     if (rows > 0) {
       // The cursor a chunk leaves refuses every append rather than inventing an
       // offset the reader never gave it.
@@ -240,6 +250,7 @@ it('leaves the session consistent after every chunk of a file too large for one 
       expect(writer.beginWrite(syntheticCandidate(), 'append', 0)).toBeNull()
     }
   }
+
   expect(counts(index.db).messages).toBe(8)
 
   expect(
@@ -269,6 +280,7 @@ it('holds the ceiling against a single message larger than it', () => {
     if (sql === 'BEGIN IMMEDIATE') {
       opened += 1
     }
+
     exec.call(this, sql)
   })
 
@@ -293,6 +305,7 @@ it('holds the ceiling against a single message larger than it', () => {
 it('names a session on its first chunk, not only when the read ends', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
+
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
     write.add(message)
   }
@@ -339,6 +352,7 @@ it('commits a whole-file read over the ceiling in one transaction, never a chunk
     if (sql === 'BEGIN IMMEDIATE') {
       opened += 1
     }
+
     exec.call(this, sql)
   })
 
@@ -349,6 +363,7 @@ it('commits a whole-file read over the ceiling in one transaction, never a chunk
     // prefix answering searches for good.
     expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0 })
   }
+
   expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
     true
   )
@@ -364,9 +379,11 @@ it('starts chunking only once the parser has an id to name the session with', ()
   const writer = new SessionSearchIndexWriter(index.db, 400)
   let decoded: typeof PROVISIONAL_IDENTITY | null = null
   const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, () => decoded)!
+
   for (const message of userMessages(CHUNKED_MESSAGE, 4)) {
     write.add(message)
   }
+
   // Past the ceiling, but the parser has decoded nothing: the buffer keeps
   // growing rather than naming a session it cannot name.
   expect(counts(index.db).messages).toBe(0)
@@ -385,6 +402,7 @@ it('starts chunking only once the parser has an id to name the session with', ()
 it('reports a chunk-partial file as held, and as one that must be read whole', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
+
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
     write.add(message)
   }
@@ -412,9 +430,11 @@ it('reports a chunk-partial file as held, and as one that must be read whole', (
 it('re-reads a chunked file whole when its writer died between chunks', async () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const abandoned = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
+
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
     abandoned.add(message)
   }
+
   expect(counts(index.db).messages).toBe(8)
 
   // Nothing can continue that prefix, so the only way forward is a whole re-read,
@@ -441,9 +461,11 @@ it('stops a chunked read whose file was removed between its chunks', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   const messages = userMessages(CHUNKED_MESSAGE, 10)
+
   for (const message of messages.slice(0, 4)) {
     write.add(message)
   }
+
   expect(counts(index.db).messages).toBe(4)
 
   writer.removeFile(SYNTHETIC_TRANSCRIPT)
@@ -456,11 +478,14 @@ it('stops a chunked read whose file was removed between its chunks', () => {
     if (sql === 'BEGIN IMMEDIATE') {
       opened += 1
     }
+
     exec.call(this, sql)
   })
+
   for (const message of messages.slice(4)) {
     write.add(message)
   }
+
   expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
     false
   )
@@ -476,9 +501,11 @@ it('stops a chunked read whose file was removed between its chunks', () => {
 it('fences a first-ever read whose file was removed before it committed', () => {
   const candidate = syntheticCandidate({ path: '/never-indexed.jsonl' })
   const write = store.beginWrite(candidate, 'replace', 0)!
+
   for (const message of userMessages('removedbeforefirstcommit', 3)) {
     write.add(message)
   }
+
   // The path was never indexed, so there is no cursor for the removal to move.
   // PR 3's retirement sweep removes exactly these: paths the index deferred over
   // budget and never wrote, while the registered consumer is fed concurrently.
@@ -504,9 +531,11 @@ it('replaces the previous generation without ever showing both', async () => {
 it('replaces a generation by cutting the old one loose, not by deleting it inline', async () => {
   const writer = new SessionSearchIndexWriter(index.db)
   const first = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+
   for (const message of userMessages('firstgeneration', 200)) {
     first.add(message)
   }
+
   expect(first.commit({ session: syntheticSession(), byteOffset: 100, incomplete: false })).toBe(
     true
   )
@@ -514,9 +543,11 @@ it('replaces a generation by cutting the old one loose, not by deleting it inlin
   expect(counts(index.db).messages).toBe(200)
 
   const second = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+
   for (const message of userMessages('secondgeneration', 3)) {
     second.add(message)
   }
+
   expect(second.commit({ session: syntheticSession(), byteOffset: 200, incomplete: false })).toBe(
     true
   )

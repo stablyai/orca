@@ -8,6 +8,7 @@ import {
 } from './removal'
 
 const liveError = `${UNSTOPPED_PTY_REMOVAL_PREFIX} repo-1::/w — still live: term_a. ${WORKTREE_TEARDOWN_FORCE_HINT}`
+
 const unverifiableError = `${UNSTOPPED_PTY_REMOVAL_PREFIX} repo-1::/w — could not verify these exited: term_a (daemon socket closed). ${WORKTREE_TEARDOWN_FORCE_HINT}`
 
 // Why (#11960): the desktop Force Delete button renders only when this classifier

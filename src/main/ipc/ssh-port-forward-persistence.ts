@@ -7,12 +7,14 @@ import { broadcastPortForwards } from './ssh-renderer-broadcast'
 // Why: after user add/remove/update the runtime manager is the source of truth — persist exactly its entries (unrestored ones handled by a separate helper).
 export function persistPortForwards(targetId: string): void {
   const active = portForwardManager!.listForwards(targetId)
+
   const saved: SavedPortForward[] = active.map((f) => ({
     localPort: f.localPort,
     remoteHost: f.remoteHost,
     remotePort: f.remotePort,
     label: f.label
   }))
+
   getSshTargetRegistryStore()!.updateTarget(targetId, {
     portForwards: saved.length > 0 ? saved : undefined
   })
@@ -24,6 +26,7 @@ export function persistPortForwardsWithUnrestored(targetId: string): void {
   const activeKeys = new Set(active.map((f) => `${f.localPort}:${f.remoteHost}:${f.remotePort}`))
 
   const existing = getSshTargetRegistryStore()!.getTarget(targetId)?.portForwards ?? []
+
   const unrestored = existing.filter(
     (pf) => !activeKeys.has(`${pf.localPort}:${pf.remoteHost}:${pf.remotePort}`)
   )
@@ -37,6 +40,7 @@ export function persistPortForwardsWithUnrestored(targetId: string): void {
     })),
     ...unrestored
   ]
+
   getSshTargetRegistryStore()!.updateTarget(targetId, {
     portForwards: saved.length > 0 ? saved : undefined
   })
@@ -47,10 +51,13 @@ export async function restorePortForwards(
   getMainWindow: () => BrowserWindow | null
 ): Promise<void> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
+
   if (!target?.portForwards?.length) {
     return
   }
+
   const conn = connectionManager!.getConnection(targetId)
+
   if (!conn) {
     return
   }
@@ -61,6 +68,7 @@ export async function restorePortForwards(
     if (connectionManager!.getConnection(targetId) !== conn) {
       return
     }
+
     try {
       await portForwardManager!.addForward(
         targetId,

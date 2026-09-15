@@ -27,6 +27,7 @@ export function ChecksPanelEmptyContent({
     model.prRefreshState?.nextAutoRetryAt !== undefined ||
       model.prRefreshState?.retryDisabledUntil !== undefined
   )
+
   const {
     activeReview,
     activeWorktree,
@@ -95,6 +96,7 @@ export function ChecksPanelEmptyContent({
     stackParentReview,
     suppressedGitHubPR
   } = model
+
   // ── Empty state ──
   if (!activeWorktree) {
     return (
@@ -114,6 +116,7 @@ export function ChecksPanelEmptyContent({
       </div>
     )
   }
+
   if (isFolder) {
     return (
       <div className="px-4 py-6">
@@ -132,6 +135,7 @@ export function ChecksPanelEmptyContent({
 
   const currentGitHubPRIsSuppressed =
     prNumber !== null && isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, prNumber)
+
   if (!activeReview && linkedReviewNumber === null && currentGitHubPRIsSuppressed) {
     return (
       <div className="px-4 py-6">
@@ -157,6 +161,7 @@ export function ChecksPanelEmptyContent({
   if (!activeReview) {
     // Why: mid rebase/merge/cherry-pick HEAD is detached, so "No pull request found" misleads — the PR still exists on the original branch.
     const operationInProgress = conflictOperation !== 'unknown'
+
     const operationLabel =
       conflictOperation === 'rebase'
         ? 'Rebase'
@@ -165,12 +170,15 @@ export function ChecksPanelEmptyContent({
           : conflictOperation === 'cherry-pick'
             ? 'Cherry-pick'
             : null
+
     const emptyReviewIsGitLab =
       linkedGitLabMR !== null || hostedReviewCreation?.provider === 'gitlab'
+
     const emptyReviewLabel = emptyReviewIsGitLab ? 'merge request' : 'pull request'
     const emptyReviewShortLabel = emptyReviewIsGitLab ? 'MR' : 'PR'
     const canPushCreate = hostedReviewCreation?.blockedReason === 'needs_push'
     const shouldPushBeforeCreateReview = createPrPushFirst || canPushCreate
+
     const canPublishBranch =
       isPublishingBranch ||
       (!publishActionHasUncommittedChanges &&
@@ -179,6 +187,7 @@ export function ChecksPanelEmptyContent({
           hasUpstream: publishActionRemoteStatus?.hasUpstream,
           hasCurrentBranch: Boolean(branch)
         }))
+
     // Feed refresh state only for GitHub; surface a sticky hard error so its card and composer suppression persist across retries.
     const emptyRefreshInput = !isGitHubReviewContext
       ? undefined
@@ -193,12 +202,14 @@ export function ChecksPanelEmptyContent({
               retryDisabledUntil: prRefreshState.retryDisabledUntil
             }
           : undefined
+
     const emptyGitStatusPhase: 'loading' | 'ready' | 'error' =
       gitStatusInputs.hasUncommittedChanges !== undefined
         ? 'ready'
         : gitStatusProbeErrorContextKey === panelContextKey
           ? 'error'
           : 'loading'
+
     const reviewState = getChecksPanelReviewState({
       operationLabel,
       reviewLabel: emptyReviewLabel,
@@ -216,7 +227,9 @@ export function ChecksPanelEmptyContent({
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
       hasCurrentBranch: Boolean(branch)
     })
+
     const emptyStateCopy = { title: reviewState.title, description: reviewState.description }
+
     const reviewStateAutoRetryText =
       reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > now
         ? translate(
@@ -225,22 +238,29 @@ export function ChecksPanelEmptyContent({
             { time: new Date(reviewState.autoRetryAt).toLocaleTimeString() }
           )
         : null
+
     const reviewRecoveryRetryDisabled =
       reviewState.retryDisabledUntil !== undefined && now < reviewState.retryDisabledUntil
+
     const reviewRecoveryLabelIsRefresh = reviewState.recovery.includes('refresh')
+
     // Only offer Retry/Refresh when the selector's recovery set includes it; some states expose none.
     const reviewShowRetryOrRefresh =
       reviewState.recovery.includes('retry') || reviewRecoveryLabelIsRefresh
+
     const reviewShowOpenReview =
       reviewState.recovery.includes('open_review') && Boolean(reviewState.openReviewUrl)
+
     // A `needs_sync` create blocker must expose Sync Branch, not just guidance copy.
     const reviewShowSyncBranch = reviewState.workflowAction === 'sync_branch'
+
     // Recovery actions render independently of the composer so a preserved composer still exposes Retry during a transient failure.
     const reviewShowActionRow =
       canPublishBranch ||
       reviewShowSyncBranch ||
       (reviewShowOpenReview && Boolean(reviewState.openReviewUrl)) ||
       reviewShowRetryOrRefresh
+
     return (
       <div className="px-4 py-6">
         {detachedHeadDisplay && (
@@ -372,6 +392,7 @@ export function ChecksPanelEmptyContent({
                   if (!activeWorktreeId) {
                     return
                   }
+
                   setEmptyRefreshing(true)
                   void handleRefresh().finally(() => {
                     setEmptyRefreshing(false)
@@ -390,5 +411,6 @@ export function ChecksPanelEmptyContent({
       </div>
     )
   }
+
   return null
 }

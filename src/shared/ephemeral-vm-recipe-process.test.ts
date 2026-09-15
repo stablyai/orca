@@ -10,6 +10,7 @@ const tmpRoots: string[] = []
 
 afterEach(() => {
   vi.useRealTimers()
+
   for (const root of tmpRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -18,6 +19,7 @@ afterEach(() => {
 function makeRepo(): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-vm-recipe-process-'))
   tmpRoots.push(root)
+
   return root
 }
 
@@ -28,6 +30,7 @@ function nodeCommand(scriptPath: string): string {
 describe('runRecipeCommand', () => {
   it('does not impose an implicit wall-clock deadline', async () => {
     vi.useFakeTimers()
+
     const child = Object.assign(new EventEmitter(), {
       pid: undefined,
       stdin: new PassThrough(),
@@ -36,6 +39,7 @@ describe('runRecipeCommand', () => {
       kill: vi.fn(),
       unref: vi.fn()
     })
+
     const resultPromise = runRecipeCommand({
       command: 'destroy',
       repoPath: makeRepo(),
@@ -52,6 +56,7 @@ describe('runRecipeCommand', () => {
 
   it('force-kills an aborted recipe if graceful termination never closes it', async () => {
     vi.useFakeTimers()
+
     const child = Object.assign(new EventEmitter(), {
       pid: undefined,
       stdin: new PassThrough(),
@@ -60,7 +65,9 @@ describe('runRecipeCommand', () => {
       kill: vi.fn(),
       unref: vi.fn()
     })
+
     const controller = new AbortController()
+
     const resultPromise = runRecipeCommand({
       command: 'destroy',
       repoPath: makeRepo(),
@@ -82,6 +89,7 @@ describe('runRecipeCommand', () => {
 
   it('clears the force-kill timer when graceful termination closes synchronously', async () => {
     vi.useFakeTimers()
+
     const child = Object.assign(new EventEmitter(), {
       pid: undefined,
       stdin: new PassThrough(),
@@ -90,11 +98,14 @@ describe('runRecipeCommand', () => {
       kill: vi.fn(),
       unref: vi.fn()
     })
+
     child.kill.mockImplementation(() => {
       child.emit('close', null, 'SIGTERM')
+
       return true
     })
     const controller = new AbortController()
+
     const resultPromise = runRecipeCommand({
       command: 'destroy',
       repoPath: makeRepo(),

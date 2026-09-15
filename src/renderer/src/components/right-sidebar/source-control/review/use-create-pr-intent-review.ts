@@ -74,6 +74,7 @@ export function useSourceControlCreatePrIntentReview({
         eligibilityDefaultBaseRef: eligibility.defaultBaseRef,
         composerBaseRef: prBase
       }).trim()
+
       if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(token.branch).toLowerCase()) {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
@@ -83,6 +84,7 @@ export function useSourceControlCreatePrIntentReview({
             { value0: hostedReviewCreateCopy.reviewLabel }
           )
         })
+
         return false
       }
 
@@ -112,12 +114,14 @@ export function useSourceControlCreatePrIntentReview({
           )
         })
         const target = getCreatePrIntentOperationTarget(token)
+
         try {
           const generated = await generateRuntimePullRequestFields(target, {
             ...fields,
             provider: eligibility.provider,
             useTemplate: resolvedPrCreationDefaults.useTemplate
           })
+
           if (generated.branchChangedByPreparation) {
             setCreatePrIntentNoticeForWorktree(token.worktreeId, {
               tone: 'muted',
@@ -126,16 +130,21 @@ export function useSourceControlCreatePrIntentReview({
                 'Branch changed while generating review details. Retry Create PR.'
               )
             })
+
             return false
           }
+
           const resolved = resolveCreatePrIntentGeneratedReviewFields(fields, generated)
+
           if (!resolved.ok) {
             setCreatePrIntentNoticeForWorktree(token.worktreeId, {
               tone: 'destructive',
               message: resolved.error
             })
+
             return false
           }
+
           fields = resolved.fields
         } catch (error) {
           console.warn('[SourceControl] Create PR intent detail generation failed', error)
@@ -149,6 +158,7 @@ export function useSourceControlCreatePrIntentReview({
                     'Could not generate review details. Retry Create PR.'
                   )
           })
+
           return false
         }
       }
@@ -159,10 +169,12 @@ export function useSourceControlCreatePrIntentReview({
       ) {
         return false
       }
+
       const createPrIntentIsForeground = (): boolean =>
         createPrIntentRunTokenMatches(token, createPrIntentCurrentTargetRef.current)
 
       const title = fields.title.trim()
+
       if (!title) {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
@@ -172,6 +184,7 @@ export function useSourceControlCreatePrIntentReview({
             { value0: hostedReviewCreateCopy.reviewLabel }
           )
         })
+
         return false
       }
 
@@ -184,6 +197,7 @@ export function useSourceControlCreatePrIntentReview({
       })
       createPrInFlightRef.current[token.worktreeId] = true
       setCreatePrInFlightByWorktree((prev) => ({ ...prev, [token.worktreeId]: true }))
+
       try {
         const result = await createHostedReview(activeRepo.path, {
           repoId: activeRepo.id,
@@ -213,10 +227,13 @@ export function useSourceControlCreatePrIntentReview({
               openChecks
             }
           )
+
           if (openChecks && resolvedPrCreationDefaults.openAfterCreate) {
             window.api.shell.openUrl(result.url)
           }
+
           setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
+
           return true
         }
 
@@ -237,6 +254,7 @@ export function useSourceControlCreatePrIntentReview({
             }
           )
           setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
+
           return true
         }
 
@@ -244,6 +262,7 @@ export function useSourceControlCreatePrIntentReview({
           tone: 'destructive',
           message: result.error
         })
+
         return false
       } catch (error) {
         const message =
@@ -254,10 +273,12 @@ export function useSourceControlCreatePrIntentReview({
                 'Failed to create {{value0}}',
                 { value0: hostedReviewCreateCopy.reviewLabel }
               )
+
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
           message
         })
+
         return false
       } finally {
         createPrInFlightRef.current[token.worktreeId] = false

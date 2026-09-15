@@ -53,6 +53,7 @@ export class BrowserClientPageCommandExecutor {
     this.authorityConnectionIdentity = dependencies.authorityConnectionIdentity
     this.legacyAuthorityConnectionIdentity = dependencies.legacyAuthorityConnectionIdentity
     this.maxPages = dependencies.maxPages ?? BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
+
     if (
       !Number.isInteger(this.maxPages) ||
       this.maxPages < 1 ||
@@ -69,8 +70,10 @@ export class BrowserClientPageCommandExecutor {
     if (this.closed || this.authorityTransitioning || this.navigationFence.isFenced) {
       return { status: 'failed', errorCode: 'browser_client_page_executor_closed' }
     }
+
     try {
       const value = await this.executeCommand(event, signal)
+
       return value === undefined ? { status: 'completed' } : { status: 'completed', value }
     } catch (error) {
       return { status: 'failed', errorCode: browserClientPageCommandFailureCode(error, signal) }
@@ -151,6 +154,7 @@ export class BrowserClientPageCommandExecutor {
 
   close(): Promise<void> {
     this.closed = true
+
     return (this.closePromise ??= this.navigationFence.fenceBeforeCleanup(
       this.pages.values(),
       (claim) => this.dependencies.routeWebContents.revokeNavigation(claim),
@@ -168,6 +172,7 @@ export class BrowserClientPageCommandExecutor {
     if (this.closed || this.authorityTransitioning) {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
+
     this.authorityTransitioning = true
     this.navigationFence.revoke(this.pages.values(), (claim) =>
       this.dependencies.routeWebContents.revokeNavigation(claim)
@@ -178,6 +183,7 @@ export class BrowserClientPageCommandExecutor {
     if (this.closed || !this.authorityTransitioning || !input.authorityConnectionIdentity) {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
+
     this.authorityConnectionIdentity = input.authorityConnectionIdentity
     this.legacyAuthorityConnectionIdentity = input.legacyAuthorityConnectionIdentity
     this.authorityTransitioning = false
@@ -185,25 +191,31 @@ export class BrowserClientPageCommandExecutor {
 
   async retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
     const page = this.pages.get(browserPageId)
+
     if (!page || page.generation !== pageHostGeneration) {
       return false
     }
+
     page.retiring ??= this.cleanupPage(page)
+
     try {
       await page.retiring
     } catch (error) {
       if (this.pages.get(browserPageId) === page) {
         this.pages.delete(browserPageId)
       }
+
       this.failedPages.set(
         browserPageId,
         Object.freeze({ ...page.inventory, state: 'outcomeUnknown' })
       )
       throw error
     }
+
     if (this.pages.get(browserPageId) === page) {
       this.pages.delete(browserPageId)
     }
+
     return true
   }
 
@@ -214,6 +226,7 @@ export class BrowserClientPageCommandExecutor {
     if (event.command.type !== 'createPage') {
       throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
     }
+
     assertBrowserClientPageAdmission(
       [this.pages, this.creatingPages, this.failedPages],
       this.maxPages,
@@ -221,12 +234,14 @@ export class BrowserClientPageCommandExecutor {
     )
     const unknownInventory = createBrowserClientPageInventory(event, 'outcomeUnknown')
     this.creatingPages.set(event.browserPageId, unknownInventory)
+
     try {
       await this.createReservedPage(event, signal)
     } catch (error) {
       if (isBrowserClientPageCleanupFailure(error)) {
         this.failedPages.set(event.browserPageId, unknownInventory)
       }
+
       throw error
     } finally {
       this.creatingPages.delete(event.browserPageId)
@@ -278,6 +293,7 @@ export class BrowserClientPageCommandExecutor {
     page.releaseAvailabilityWatch?.()
     page.releaseAvailabilityWatch = undefined
     this.dependencies.guestBinding.release(page.registration)
+
     return cleanupRetainedBrowserClientPage(
       page,
       {
@@ -298,10 +314,12 @@ export class BrowserClientPageCommandExecutor {
         : []),
       ...(this.failedPages.size > 0 ? [new Error('browser_client_page_cleanup_unresolved')] : [])
     ]
+
     for (const [browserPageId, page] of this.pages) {
       try {
         page.retiring ??= this.cleanupPage(page)
         await page.retiring
+
         if (this.pages.get(browserPageId) === page) {
           this.pages.delete(browserPageId)
         }
@@ -309,9 +327,11 @@ export class BrowserClientPageCommandExecutor {
         failures.push(error)
       }
     }
+
     await this.dependencies.uploadStaging?.releaseAll().catch((error: unknown) => {
       failures.push(error)
     })
+
     if (failures.length > 0) {
       throw new AggregateError(failures, 'Browser client page executor cleanup failed')
     }

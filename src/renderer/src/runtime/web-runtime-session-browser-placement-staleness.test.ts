@@ -47,6 +47,7 @@ vi.mock('../store', () => ({
     subscribe: mocks.subscribe
   }
 }))
+
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
@@ -54,20 +55,25 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     return () => {}
   },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
+
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
+
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
+
 vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
@@ -122,9 +128,11 @@ describe('browser placement against a stale capability cache', () => {
 
   it('consults the live placement check even when the cached catalog shows no client hosting', async () => {
     cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
+
     const preparePlacement = vi
       .fn()
       .mockResolvedValue({ kind: 'client', browserHostClientId: 'browser-client-a' })
+
     const runtimeCall = successfulCreateCalls()
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall, preparePlacement))
 
@@ -141,9 +149,11 @@ describe('browser placement against a stale capability cache', () => {
 
   it('re-marks the staged pane client-hosted once the live placement outvotes the cache', async () => {
     cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
+
     const preparePlacement = vi
       .fn()
       .mockResolvedValue({ kind: 'client', browserHostClientId: 'browser-client-a' })
+
     const runtimeCall = successfulCreateCalls()
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall, preparePlacement))
 

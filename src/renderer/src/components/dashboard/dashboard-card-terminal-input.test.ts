@@ -73,6 +73,7 @@ describe('resolveDashboardCardTerminalInput', () => {
       ...WINDOWS_ARGS,
       launchAgent: 'grok'
     })
+
     expect(profile.localWindowsConpty).toBe(true)
     expect(profile.kittyKeyboardAdvertised).toBe(true)
   })
@@ -90,6 +91,7 @@ describe('resolveDashboardCardTerminalInput', () => {
       }),
       WINDOWS_ARGS
     )
+
     expect(droid.ctrlEnterCsiU).toBe(true)
 
     const pi = resolveDashboardCardTerminalInput(
@@ -104,6 +106,7 @@ describe('resolveDashboardCardTerminalInput', () => {
       }),
       WINDOWS_ARGS
     )
+
     expect(pi.windowsShiftEnterEncoding).toBe('csi-u')
     expect(pi.ctrlEnterCsiU).toBe(false)
   })
@@ -115,6 +118,7 @@ describe('resolveDashboardCardTerminalInput', () => {
       ...WINDOWS_ARGS,
       shellOverride: 'wsl.exe'
     })
+
     expect(profile.localWindowsConpty).toBe(false)
     expect(profile.kittyKeyboardAdvertised).toBe(true)
     expect(profile.hostPlatform).toBe('linux')
@@ -125,6 +129,7 @@ describe('resolveDashboardCardTerminalInput', () => {
       ...WINDOWS_ARGS,
       cwd: '\\\\wsl$\\Ubuntu\\home\\dev\\repo'
     })
+
     expect(profile.hostPlatform).toBe('linux')
     expect(profile.localWindowsConpty).toBe(false)
   })
@@ -138,6 +143,7 @@ describe('resolveDashboardCardTerminalInput', () => {
       repos: [{ id: 'repo-1', connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }],
       sshConnectionStates: new Map([['conn-1', { remotePlatform: 'win32' }]])
     } as unknown as Partial<DashboardCardTerminalInputState>)
+
     expect(resolveDashboardCardTerminalInput(state, MAC_ARGS).hostPlatform).toBe('win32')
   })
 
@@ -189,10 +195,12 @@ describe('resolveDashboardCardTerminalInput', () => {
     const state = stateWith({
       sshConnectionStates: new Map([['conn-live', { remotePlatform: 'win32' }]])
     } as unknown as Partial<DashboardCardTerminalInputState>)
+
     const profile = resolveDashboardCardTerminalInput(state, {
       ...MAC_ARGS,
       ptyId: 'ssh:conn-live@@pty-1'
     })
+
     expect(profile.hostPlatform).toBe('win32')
     expect(profile.localWindowsConpty).toBe(false)
   })
@@ -201,10 +209,12 @@ describe('resolveDashboardCardTerminalInput', () => {
     const state = stateWith({
       runtimeStatusByEnvironmentId: new Map([['env-live', { status: { hostPlatform: 'linux' } }]])
     } as unknown as Partial<DashboardCardTerminalInputState>)
+
     const profile = resolveDashboardCardTerminalInput(state, {
       ...WINDOWS_ARGS,
       ptyId: 'remote:env-live@@pty-1'
     })
+
     expect(profile.hostPlatform).toBe('linux')
     expect(profile.localWindowsConpty).toBe(false)
     expect(profile.kittyKeyboardAdvertised).toBe(true)
@@ -224,6 +234,7 @@ describe('resolveDashboardCardTerminalInput', () => {
     const state = stateWith() as Partial<DashboardCardTerminalInputState> & {
       unrelatedSlice?: unknown
     }
+
     Object.defineProperty(state, 'unrelatedSlice', {
       enumerable: true,
       get: () => {

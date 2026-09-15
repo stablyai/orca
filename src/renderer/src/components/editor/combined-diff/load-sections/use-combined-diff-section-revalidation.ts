@@ -36,27 +36,36 @@ export function useCombinedDiffSectionRevalidation({
   treeMode: CombinedDiffFileTreeMode
 }): string {
   const { loadedIndicesRef } = registry
+
   const combinedGitStatusSignature = React.useMemo(() => {
     if (!shouldAutoReloadFromGitStatus) {
       return ''
     }
+
     return buildCombinedGitStatusSignature(sectionEntries, gitStatusEntries)
   }, [gitStatusEntries, sectionEntries, shouldAutoReloadFromGitStatus])
+
   const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!shouldAutoReloadFromGitStatus) {
       prevCombinedGitStatusSignatureRef.current = null
+
       return
     }
+
     if (prevCombinedGitStatusSignatureRef.current === null) {
       prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
+
       return
     }
+
     if (prevCombinedGitStatusSignatureRef.current === combinedGitStatusSignature) {
       return
     }
+
     prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
+
     for (const index of loadedIndicesRef.current) {
       requestSectionReload(index)
     }
@@ -71,30 +80,39 @@ export function useCombinedDiffSectionRevalidation({
     if (treeMode !== 'all' && treeMode !== 'uncommitted') {
       return
     }
+
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+
       if (!detail || detail.worktreeId !== file.worktreeId) {
         return
       }
+
       const hasRuntimeOwnerFilter = Object.hasOwn(detail, 'runtimeEnvironmentId')
       const targetRuntimeOwner = detail.runtimeEnvironmentId?.trim() || null
       const fileRuntimeOwner = file.runtimeEnvironmentId?.trim() || null
+
       if (hasRuntimeOwnerFilter && targetRuntimeOwner !== fileRuntimeOwner) {
         return
       }
+
       for (const area of ['unstaged', 'staged', 'untracked'] as const) {
         const key = getCombinedDiffFileTreeSectionKey('uncommitted', {
           path: detail.relativePath,
           status: 'modified',
           area
         })
+
         const index = sectionIndexByKeyRef.current.get(key)
+
         if (index !== undefined) {
           requestSectionReload(index)
         }
       }
     }
+
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+
     return () =>
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
   }, [

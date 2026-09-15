@@ -2,6 +2,7 @@ import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
+
 const { handleMock, copyFileMock, lstatMock, mkdirMock, renameMock, writeFileMock, realpathMock } =
   vi.hoisted(() => ({
     handleMock: vi.fn(),
@@ -40,6 +41,7 @@ import {
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
 const REPO_PATH = path.resolve('/workspace/repo')
+
 const WORKSPACE_DIR = path.resolve('/workspace')
 
 const store = {
@@ -58,6 +60,7 @@ function mockRealpath(mapping: Record<string, string>) {
     if (mapping[p]) {
       return mapping[p]
     }
+
     return p
   })
 }
@@ -180,12 +183,15 @@ describe('registerFilesystemMutationHandlers', () => {
       if (filePath === destinationPath && destinationExists) {
         return mockStats(1, 30)
       }
+
       if (filePath === firstPath) {
         return mockStats(1, 10)
       }
+
       if (filePath === secondPath) {
         return mockStats(1, 20)
       }
+
       throw enoent()
     })
     renameMock.mockImplementation(async () => {
@@ -208,9 +214,11 @@ describe('registerFilesystemMutationHandlers', () => {
       if (p === oldPath) {
         return mockStats(1, 10)
       }
+
       if (p === resolvedNewPath) {
         return mockStats(1, 11)
       }
+
       throw enoent()
     })
 
@@ -232,6 +240,7 @@ describe('registerFilesystemMutationHandlers', () => {
       if (p === oldPath || p === newPath) {
         return mockStats(2, 20)
       }
+
       throw enoent()
     })
     mockRealpath({ [oldPath]: canonicalPath, [newPath]: canonicalPath })
@@ -248,6 +257,7 @@ describe('registerFilesystemMutationHandlers', () => {
       if (p === oldPath || p === newPath) {
         return mockStats(2, 21)
       }
+
       throw enoent()
     })
     mockRealpath({ [oldPath]: oldPath, [newPath]: oldPath })
@@ -264,6 +274,7 @@ describe('registerFilesystemMutationHandlers', () => {
       if (p === oldPath || p === newPath) {
         return mockStats(3, 30)
       }
+
       throw enoent()
     })
 
@@ -281,6 +292,7 @@ describe('registerFilesystemMutationHandlers', () => {
       if (p === oldPath || p === newPath) {
         return mockStats(3, 30)
       }
+
       throw enoent()
     })
     realpathMock.mockRejectedValue(
@@ -300,6 +312,7 @@ describe('registerFilesystemMutationHandlers', () => {
       if (p === oldPath || p === newPath) {
         return mockStats(4, 40)
       }
+
       throw enoent()
     })
 

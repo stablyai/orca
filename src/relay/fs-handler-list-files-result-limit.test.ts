@@ -31,6 +31,7 @@ type ListFilesHandler = (
 
 function createHandler(): { listFiles: ListFilesHandler; dispose: () => void } {
   const requestHandlers = new Map<string, ListFilesHandler>()
+
   const dispatcher = {
     onRequest: (method: string, handler: ListFilesHandler) => requestHandlers.set(method, handler),
     onNotification: vi.fn(),
@@ -41,11 +42,13 @@ function createHandler(): { listFiles: ListFilesHandler; dispose: () => void } {
     activeClientIds: () => [],
     producerEnvelopeBudget: () => Number.MAX_SAFE_INTEGER
   } as unknown as RelayDispatcher
+
   const handler = new FsHandler(dispatcher, new RelayContext(), {
     dispose: vi.fn(),
     forgetRoot: vi.fn(),
     subscribe: vi.fn()
   })
+
   return { listFiles: requestHandlers.get('fs.listFiles')!, dispose: () => handler.dispose() }
 }
 
@@ -59,6 +62,7 @@ describe('fs.listFiles result limit', () => {
     const created = createHandler()
     listFiles = created.listFiles
     dispose = created.dispose
+
     return () => dispose()
   })
 
@@ -84,6 +88,7 @@ describe('fs.listFiles result limit', () => {
       { length: QUICK_OPEN_LISTING_MAX_RESULTS + 500 },
       (_, index) => `f${index}`
     )
+
     runListFilesScanMock.mockResolvedValue(files)
 
     await expect(listFiles({ rootPath: '/remote/root' }, { clientId: 1 })).resolves.toEqual(files)

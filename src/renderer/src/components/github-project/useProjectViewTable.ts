@@ -36,6 +36,7 @@ async function listProjectViewsForRuntime(
   args: { owner: string; ownerType: 'organization' | 'user'; projectNumber: number; host?: string }
 ): Promise<ListProjectViewsResult> {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', args, {
         timeoutMs: 30_000
@@ -54,12 +55,15 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
   const target = getActiveRuntimeTarget(settings)
   const sourceScope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
   const [loading, setLoading] = useState(false)
+
   const [error, setError] = useState<{ error: GitHubProjectViewError; totalCount?: number } | null>(
     null
   )
+
   const [viewListByProject, setViewListByProject] = useState<
     Record<string, GitHubProjectViewSummary[]>
   >({})
+
   const [appliedQueryByView, setAppliedQueryByView] = useState<Record<string, string>>({})
   const parentDroppedToastedRef = useRef<Set<string>>(new Set())
   const fetchRunIdRef = useRef(0)
@@ -69,6 +73,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
       const runId = ++fetchRunIdRef.current
       setLoading(true)
       setError(null)
+
       try {
         const result: GetProjectViewTableResult = await fetchProjectViewTable(
           {
@@ -81,9 +86,11 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
           },
           { force }
         )
+
         if (!mountedRef.current || fetchRunIdRef.current !== runId) {
           return
         }
+
         if (!result.ok) {
           setError({ error: result.error, totalCount: result.totalCount })
         }
@@ -98,11 +105,14 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
 
   const projectIdentity = activeProject ? githubProjectIdentityKey(activeProject) : null
   const viewId = projectIdentity ? lastViewByProject[projectIdentity]?.viewId : undefined
+
   const currentProjectViewKey =
     projectIdentity && viewId ? `${sourceScope}:${projectIdentity}:${viewId}` : null
+
   const currentAppliedOverride = currentProjectViewKey
     ? appliedQueryByView[currentProjectViewKey]
     : undefined
+
   const currentCacheKey =
     activeProject && viewId
       ? projectViewCacheKey(
@@ -115,12 +125,14 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
           activeProject.host
         )
       : null
+
   const table = currentCacheKey ? (projectViewCache[currentCacheKey]?.data ?? null) : null
 
   useEffect(() => {
     if (!activeProject || !viewId || !currentCacheKey || projectViewCache[currentCacheKey]?.data) {
       return
     }
+
     void doFetch(
       {
         owner: activeProject.owner,
@@ -138,10 +150,13 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
     if (!activeProject) {
       return
     }
+
     const projectKey = `${sourceScope}:${githubProjectIdentityKey(activeProject)}`
+
     if (viewListByProject[projectKey]) {
       return
     }
+
     let cancelled = false
     void listProjectViewsForRuntime(settings, {
       owner: activeProject.owner,
@@ -161,6 +176,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
           console.warn('[project-view] listProjectViews threw:', caught)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -170,6 +186,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
     () => getSelectedRepoFingerprint(selectedRepoIds),
     [selectedRepoIds]
   )
+
   const filteredTable = useMemo(
     () =>
       table && slugIndexReady
@@ -182,7 +199,9 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
         : null,
     [lookupSlugMatches, selectedRepoIds, slugIndexReady, table]
   )
+
   const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
+
   const nextVisibleTableCache = getNextVisibleProjectTableCache({
     currentCacheKey,
     selectedRepoFingerprint,
@@ -191,9 +210,11 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
     filteredTable,
     previous: lastFilteredTableRef.current
   })
+
   useLayoutEffect(() => {
     lastFilteredTableRef.current = nextVisibleTableCache
   }, [nextVisibleTableCache])
+
   const visibleTable = getVisibleProjectTable({
     currentCacheKey,
     selectedRepoFingerprint,
@@ -210,6 +231,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
     ) {
       return
     }
+
     parentDroppedToastedRef.current.add(currentCacheKey)
     toast.message(
       translate(
@@ -224,6 +246,7 @@ export function useProjectViewTable(selectedRepoIds: ReadonlySet<string>) {
       if (!activeProject || viewId === nextViewId) {
         return
       }
+
       const freshSettings = useAppStore.getState().settings
       const previous = freshSettings?.githubProjects ?? EMPTY_PROJECT_SETTINGS
       await useAppStore.getState().updateSettings({
@@ -276,4 +299,5 @@ const EMPTY_PROJECT_SETTINGS: GitHubProjectSettings = {
 }
 
 export type ProjectViewTableState = ReturnType<typeof useProjectViewTable>
+
 export type ProjectViewTable = GitHubProjectTable

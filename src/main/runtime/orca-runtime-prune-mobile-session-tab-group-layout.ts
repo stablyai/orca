@@ -38,14 +38,18 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     if (!layout) {
       return null
     }
+
     if (layout.type === 'leaf') {
       return validGroupIds.has(layout.groupId) ? layout : null
     }
+
     const first = this.pruneMobileSessionTabGroupLayout(layout.first, validGroupIds)
     const second = this.pruneMobileSessionTabGroupLayout(layout.second, validGroupIds)
+
     if (first && second) {
       return { ...layout, first, second }
     }
+
     return first ?? second
   }
 
@@ -83,6 +87,7 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
       snapshot = replaceConversationInSnapshot(snapshot, replacement)
     }
+
     return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
   }
 
@@ -138,9 +143,11 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       terminalHandle: null,
       hookRows: getRows(paneKey, null)
     })
+
     if (paneMatch || !pty) {
       return paneMatch
     }
+
     // Why: the OSC producer can stamp a leaf or incarnation handle; use the same non-minting
     // inventory as worktree.ps so a tab-id remint can rejoin the still-live central row.
     for (const terminalHandle of this.getExistingTerminalHandlesForPtyId(pty.ptyId)) {
@@ -149,10 +156,12 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
         terminalHandle,
         hookRows: getRows(paneKey, terminalHandle)
       })
+
       if (handleMatch) {
         return handleMatch
       }
     }
+
     return null
   }
 
@@ -163,15 +172,19 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   ): RuntimePtyWorktreeRecord | null {
     const snapshotPtyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? null
     const paneKey = this.getMobileTerminalPaneKey(tab)
+
     if (snapshotPtyId) {
       const pty = this.ptysById.get(snapshotPtyId)
+
       if (!pty) {
         return null
       }
+
       // Why: persisted PTY ids can collide with unrelated provider ids after restart; only a matching spawn-time pane identity is safe to expose.
       if (this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey)) {
         return pty
       }
+
       if (
         options.allowWorktreeOnlyMatch === true &&
         pty.worktreeId === worktreeId &&
@@ -180,17 +193,22 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       ) {
         return pty
       }
+
       return null
     }
+
     const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
+
     if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
       paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
     }
+
     for (const pty of this.ptysById.values()) {
       if (pty.tabId === tab.parentTabId && pty.paneKey && paneKeys.has(pty.paneKey)) {
         return pty
       }
     }
+
     return null
   }
 
@@ -204,7 +222,9 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     if (isTerminalLeafId(tab.leafId)) {
       return makePaneKey(tab.parentTabId, tab.leafId)
     }
+
     const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
+
     return `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
   }
 
@@ -222,11 +242,14 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     // A structured worker has no pane and no title, so every PTY probe below answers null and
     // `@idle` would enumerate it and then silently drop it. Its status is the journal's.
     const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
+
     if (structured) {
       return structuredWorkerAgentStatus(structured.identity.sessionId)
     }
+
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)
+
       return this.getTerminalAgentStatusSnapshot(handle, ptyId).titleStatus
     } catch {
       return null
@@ -237,9 +260,11 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     paneKey: string
   ): AgentStatusOrchestrationContext | undefined {
     const handle = this.getTerminalHandleForPaneKey(paneKey)
+
     if (!handle) {
       return undefined
     }
+
     return this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
   }
 
@@ -252,28 +277,36 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     args?: { launchToken?: string }
   ): SleepingAgentLaunchConfig | undefined {
     const pty = this.getPtyRecordForPaneKey(paneKey)
+
     if (!pty?.launchConfig) {
       return undefined
     }
+
     if (pty.launchToken === null || pty.launchToken !== args?.launchToken) {
       return undefined
     }
+
     return copySleepingAgentLaunchConfig(pty.launchConfig)
   }
 
   getTerminalHandleForPaneKey(paneKey: string): string | null {
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
+
     if (leaf?.ptyId && leaf.connected) {
       return this.issueHandle(leaf)
     }
+
     const panePty = this.getPtyRecordForPaneKey(paneKey)
+
     if (panePty?.connected) {
       return this.issuePtyHandle(panePty)
     }
+
     if (leaf?.ptyId) {
       return this.issueHandle(leaf)
     }
+
     return panePty ? this.issuePtyHandle(panePty) : null
   }
 }

@@ -46,16 +46,20 @@ function installRpcResponses(responses: RpcResponses): void {
         if (responses.failListTargets) {
           return Promise.reject(new Error('method not found'))
         }
+
         return Promise.resolve({ targets: responses.targets ?? [] } as never)
       case 'ssh.listRemovedTargetLabels':
         if (responses.failRemovedLabels) {
           return Promise.reject(new Error('method not found'))
         }
+
         return Promise.resolve({ labels: responses.labels ?? {} } as never)
       case 'ssh.getState': {
         const targetId = (params as { targetId: string }).targetId
+
         return Promise.resolve({ state: responses.states?.[targetId] ?? null } as never)
       }
+
       default:
         return Promise.reject(new Error(`unexpected method ${method}`))
     }
@@ -63,8 +67,10 @@ function installRpcResponses(responses: RpcResponses): void {
 }
 
 let envCounter = 0
+
 function nextEnvId(): string {
   envCounter += 1
+
   return `env-${envCounter}`
 }
 
@@ -101,6 +107,7 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     // Local maps stay untouched.
     expect(useAppStore.getState().sshTargetLabels.size).toBe(0)
     expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
+
     // Every call was routed to the owning environment.
     for (const [target] of callRuntimeRpcMock.mock.calls) {
       expect(target).toEqual({ kind: 'environment', environmentId: envId })
@@ -126,16 +133,20 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
       .getState()
       .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-1', label: 'devbox' }])
     let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void
+
     const targetsPromise = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
       resolveTargets = resolve
     })
+
     callRuntimeRpcMock.mockImplementation((_target, method) => {
       if (method === 'ssh.listTargetSummaries') {
         return targetsPromise as never
       }
+
       if (method === 'ssh.listRemovedTargetLabels') {
         return Promise.resolve({ labels: {} } as never)
       }
+
       return Promise.resolve({ state: connState('ssh-1') } as never)
     })
 
@@ -249,23 +260,29 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
   it('reruns hydration when a new generation joins an older in-flight request', async () => {
     const envId = nextEnvId()
     let resolveOlderTargets!: (value: { targets: { id: string; label: string }[] }) => void
+
     const olderTargets = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
       resolveOlderTargets = resolve
     })
+
     let targetListCallCount = 0
     callRuntimeRpcMock.mockImplementation((_target, method, params) => {
       if (method === 'ssh.listTargetSummaries') {
         targetListCallCount += 1
+
         return (
           targetListCallCount === 1
             ? olderTargets
             : Promise.resolve({ targets: [{ id: 'ssh-new', label: 'new' }] })
         ) as never
       }
+
       if (method === 'ssh.listRemovedTargetLabels') {
         return Promise.resolve({ labels: {} } as never)
       }
+
       const targetId = (params as { targetId: string }).targetId
+
       return Promise.resolve({ state: connState(targetId) } as never)
     })
 
@@ -290,22 +307,27 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
       .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-1', label: 'devbox' }])
     useAppStore.getState().markEnvironmentSshStateStale(envId)
     let rejectFirstTargets!: (error: Error) => void
+
     const firstTargets = new Promise<never>((_resolve, reject) => {
       rejectFirstTargets = reject
     })
+
     let targetListCallCount = 0
     callRuntimeRpcMock.mockImplementation((_target, method) => {
       if (method === 'ssh.listTargetSummaries') {
         targetListCallCount += 1
+
         return (
           targetListCallCount === 1
             ? firstTargets
             : Promise.resolve({ targets: [{ id: 'ssh-1', label: 'devbox' }] })
         ) as never
       }
+
       if (method === 'ssh.listRemovedTargetLabels') {
         return Promise.resolve({ labels: {} } as never)
       }
+
       return Promise.resolve({ state: connState('ssh-1') } as never)
     })
 
@@ -353,16 +375,20 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
   it('does not let an in-flight response resurrect readiness after disconnect', async () => {
     const envId = nextEnvId()
     let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void
+
     const targetsPromise = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
       resolveTargets = resolve
     })
+
     callRuntimeRpcMock.mockImplementation((_target, method) => {
       if (method === 'ssh.listTargetSummaries') {
         return targetsPromise as never
       }
+
       if (method === 'ssh.listRemovedTargetLabels') {
         return Promise.resolve({ labels: {} } as never)
       }
+
       return Promise.resolve({ state: connState('ssh-1') } as never)
     })
 
@@ -380,16 +406,20 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
       .getState()
       .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-old', label: 'old box' }])
     let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void
+
     const targetsPromise = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
       resolveTargets = resolve
     })
+
     callRuntimeRpcMock.mockImplementation((_target, method) => {
       if (method === 'ssh.listTargetSummaries') {
         return targetsPromise as never
       }
+
       if (method === 'ssh.listRemovedTargetLabels') {
         return Promise.resolve({ labels: {} } as never)
       }
+
       return Promise.resolve({ state: connState('ssh-new') } as never)
     })
 

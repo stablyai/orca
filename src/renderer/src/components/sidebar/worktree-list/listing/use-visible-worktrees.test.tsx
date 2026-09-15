@@ -10,14 +10,17 @@ import { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 import type * as visibleWorktreesModule from '../../visible-worktrees'
 
 const computeVisibleWorktreesCalls = { count: 0 }
+
 vi.mock('../../visible-worktrees', async (importOriginal) => {
   const actual = await importOriginal<typeof visibleWorktreesModule>()
+
   return {
     ...actual,
     computeVisibleWorktrees: (
       ...args: Parameters<typeof actual.computeVisibleWorktrees>
     ): ReturnType<typeof actual.computeVisibleWorktrees> => {
       computeVisibleWorktreesCalls.count += 1
+
       return actual.computeVisibleWorktrees(...args)
     }
   }
@@ -128,6 +131,7 @@ describe('useVisibleSidebarWorktrees', () => {
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
       agentSendTargetWorktreeId: null
     } as Parameters<typeof useVisibleSidebarWorktrees>[0]
+
     // Why the extra `settings`: it is the pre-fix memo key. Passing it keeps
     // this test red against the old hook, which re-keyed the whole scan on the
     // settings object identity.
@@ -136,10 +140,12 @@ describe('useVisibleSidebarWorktrees', () => {
     ): Parameters<typeof useVisibleSidebarWorktrees>[0] => Object.assign({}, baseArgs, { settings })
 
     computeVisibleWorktreesCalls.count = 0
+
     const { result, rerender } = renderHook(
       (args: Parameters<typeof useVisibleSidebarWorktrees>[0]) => useVisibleSidebarWorktrees(args),
       { initialProps: withSettings(useAppStore.getState().settings) }
     )
+
     const initialVisible = result.current.visibleWorktrees
     const callsAfterFirstRender = computeVisibleWorktreesCalls.count
     expect(callsAfterFirstRender).toBe(1)
@@ -149,6 +155,7 @@ describe('useVisibleSidebarWorktrees', () => {
       ...useAppStore.getState().settings,
       sidebarWidth: 321
     } as ReturnType<typeof useAppStore.getState>['settings']
+
     useAppStore.setState({ settings: nextSettings })
     rerender(withSettings(nextSettings))
 

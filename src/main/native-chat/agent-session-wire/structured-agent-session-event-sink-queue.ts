@@ -64,9 +64,11 @@ export class StructuredAgentSessionSinkQueue {
 
   bindReadingControl(control: StructuredAgentSessionReadingControl): () => void {
     this.readingControl = control
+
     if (this.backpressured) {
       control.pauseReading()
     }
+
     return () => {
       if (this.readingControl === control) {
         this.readingControl = undefined
@@ -99,11 +101,13 @@ export class StructuredAgentSessionSinkQueue {
 
   barrier = (): Promise<StructuredAgentSessionSinkBarrier> => {
     const through = this.acceptedSequence
+
     if (this.settledSequence >= through) {
       return Promise.resolve(
         this.failure === null ? { ok: true } : { ok: false, error: this.failure.error }
       )
     }
+
     return new Promise((resolve) => this.waiters.push({ through, resolve }))
   }
 
@@ -114,9 +118,11 @@ export class StructuredAgentSessionSinkQueue {
     if (this.closed) {
       return { accepted: false, reason: 'closed' }
     }
+
     if (this.failure !== null) {
       return { accepted: false, reason: 'failed' }
     }
+
     const sequence = ++this.acceptedSequence
     const key = options.coalescingKey ?? operation.coalescingKey
     const replaceAt = key ? this.queue.findIndex((queued) => queued.coalescingKey === key) : -1
@@ -125,25 +131,32 @@ export class StructuredAgentSessionSinkQueue {
     const lifecycleBytes = lifecycle ? (operation.lifecycleBytes ?? operation.bytes) : 0
     const nextBytes = this.queuedBytes - (replaced?.bytes ?? 0) + operation.bytes
     const nextOperations = this.queuedOperations + (replaced ? 0 : 1)
+
     const nextLifecycleBytes =
       this.lifecycleQueuedBytes -
       (replaced?.lifecycle ? (replaced.lifecycleBytes ?? replaced.bytes) : 0) +
       lifecycleBytes
+
     const nextLifecycleOperations =
       this.lifecycleQueuedOperations - (replaced?.lifecycle ? 1 : 0) + (lifecycle ? 1 : 0)
+
     const exceedsOrdinary =
       !lifecycle &&
       (nextBytes > this.deps.watermarks.maxQueuedBytes ||
         nextOperations > this.deps.watermarks.maxQueuedOperations)
+
     const exceedsLifecycle =
       lifecycle &&
       (nextLifecycleBytes > this.deps.watermarks.maxLifecycleQueuedBytes ||
         nextLifecycleOperations > this.deps.watermarks.maxLifecycleQueuedOperations)
+
     if (exceedsOrdinary || exceedsLifecycle) {
       this.acceptedSequence -= 1
       this.setBackpressure(true)
+
       return { accepted: false, reason: 'backpressure' }
     }
+
     const accepted = {
       ...operation,
       sequence,
@@ -151,9 +164,11 @@ export class StructuredAgentSessionSinkQueue {
       lifecycleBytes,
       ...(key ? { coalescingKey: key } : {})
     }
+
     if (replaced) {
       this.queue.splice(replaceAt, 1)
     }
+
     this.queue.push(accepted)
     this.queuedBytes = nextBytes
     this.queuedOperations = nextOperations
@@ -161,6 +176,7 @@ export class StructuredAgentSessionSinkQueue {
     this.lifecycleQueuedOperations = nextLifecycleOperations
     this.updateBackpressure()
     this.pump()
+
     return { accepted: true }
   }
 
@@ -168,12 +184,15 @@ export class StructuredAgentSessionSinkQueue {
     if (next === this.backpressured) {
       return
     }
+
     this.backpressured = next
+
     if (next) {
       this.readingControl?.pauseReading()
     } else {
       this.readingControl?.resumeReading()
     }
+
     this.deps.onBackpressureChange?.(next, this.state())
   }
 
@@ -186,12 +205,14 @@ export class StructuredAgentSessionSinkQueue {
             this.queuedOperations > this.deps.watermarks.lowQueuedOperations
           : this.queuedBytes >= this.deps.watermarks.pauseQueuedBytes ||
             this.queuedOperations >= this.deps.watermarks.pauseQueuedOperations)
+
     this.setBackpressure(next)
   }
 
   private settleWaiters(): void {
     for (let index = this.waiters.length - 1; index >= 0; index -= 1) {
       const waiter = this.waiters[index]
+
       if (waiter && waiter.through <= this.settledSequence) {
         this.waiters.splice(index, 1)
         waiter.resolve(
@@ -206,6 +227,7 @@ export class StructuredAgentSessionSinkQueue {
       this.failure = { error }
       this.deps.onError?.(error)
     }
+
     this.queue.length = 0
     this.queuedBytes = 0
     this.queuedOperations = 0
@@ -220,10 +242,13 @@ export class StructuredAgentSessionSinkQueue {
     if (this.running || !this.target || this.closed || this.failure !== null) {
       return
     }
+
     const operation = this.queue.shift()
+
     if (!operation) {
       return
     }
+
     this.running = true
     const bound = this.target
     void Promise.resolve(operation.run(bound))
@@ -232,6 +257,7 @@ export class StructuredAgentSessionSinkQueue {
         this.running = false
         this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
         this.queuedOperations = Math.max(0, this.queuedOperations - 1)
+
         if (operation.lifecycle) {
           this.lifecycleQueuedBytes = Math.max(
             0,
@@ -239,6 +265,7 @@ export class StructuredAgentSessionSinkQueue {
           )
           this.lifecycleQueuedOperations = Math.max(0, this.lifecycleQueuedOperations - 1)
         }
+
         this.settledSequence = Math.max(this.settledSequence, operation.sequence)
         this.updateBackpressure()
         this.settleWaiters()

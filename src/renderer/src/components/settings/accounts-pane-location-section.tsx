@@ -17,6 +17,7 @@ export function renderAccountsLocationSection(
     wslDistros,
     wslSupportedPlatform
   } = model
+
   const accountRuntimeControls = wslSupportedPlatform ? (
     <SearchableSetting
       title={translate('auto.components.settings.AccountsPane.f54b4fbd71', 'Account Location')}

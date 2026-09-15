@@ -8,9 +8,11 @@ export class PushOutcomeCounters {
 
   record(outcome: PushOutcome): void {
     this.counts.set(outcome, (this.counts.get(outcome) ?? 0) + 1)
+
     if (this.now() < this.nextLogAt) {
       return
     }
+
     this.nextLogAt = this.now() + 60_000
     this.flush()
   }
@@ -19,6 +21,7 @@ export class PushOutcomeCounters {
     if (!this.counts.size) {
       return
     }
+
     console.warn(
       JSON.stringify({ event: 'orca_desktop_push_failures', ...Object.fromEntries(this.counts) })
     )

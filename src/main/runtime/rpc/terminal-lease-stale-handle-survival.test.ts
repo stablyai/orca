@@ -35,6 +35,7 @@ const subscriptionCases = [
 
 function createRuntime(exitListeners: ExitListener[]) {
   const registry = createSubscriptionRegistryDouble()
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     requestRendererTerminalTabMount: () => false,
@@ -59,9 +60,11 @@ function createRuntime(exitListeners: ExitListener[]) {
     waitForTerminal: vi.fn(() => Promise.reject(new Error('unexpected handle waiter'))),
     subscribeToPtyExit: vi.fn((_ptyId: string, listener: ExitListener) => {
       exitListeners.push(listener)
+
       return vi.fn()
     })
   } as unknown as OrcaRuntimeService
+
   return { registry, runtime }
 }
 

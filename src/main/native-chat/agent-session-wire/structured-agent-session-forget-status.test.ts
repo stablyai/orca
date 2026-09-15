@@ -29,7 +29,9 @@ vi.mock('./structured-agent-session-attach-flow', () => ({
 }))
 
 const SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+
 const TURN = { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 } as const
+
 const PROMPT = { ...TURN, ordinal: 1 }
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -41,6 +43,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
@@ -70,6 +73,7 @@ async function workingSession(): Promise<{
     { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
     { fence: 1 }
   )
+
   const sessions = new Map<string, StructuredAgentSessionHostSession>([
     [
       SESSION,
@@ -82,7 +86,9 @@ async function workingSession(): Promise<{
       } as unknown as StructuredAgentSessionHostSession
     ]
   ])
+
   const server = new AgentHookServer()
+
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
     getRecord: () => null,
@@ -92,10 +98,12 @@ async function workingSession(): Promise<{
       forget: (sessionId) => server.dropStructuredStatus(sessionId)
     })
   })
+
   feed.publish(SESSION, journal)
   expect(server.getStatusSnapshot()).toEqual([
     expect.objectContaining({ state: 'working', structuredHost: 'owned' })
   ])
+
   return { server, feed, sessions, journal }
 }
 
@@ -110,6 +118,7 @@ function attachContext(
     bind: () => undefined,
     close: () => undefined
   }
+
   return {
     deps: { store: { getRecord: () => null }, claimKeyId: 'key-1', journalRoot: root },
     runtimeState: {

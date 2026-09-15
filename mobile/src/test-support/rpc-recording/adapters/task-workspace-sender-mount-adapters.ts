@@ -2,6 +2,7 @@ import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO = 'repo-1'
+
 const REPO_SELECTOR = `id:${REPO}`
 
 /**
@@ -18,8 +19,10 @@ export function taskWorkspaceSenderMountAdapters(
       const create = modules.load<typeof import('../../../tasks/worktree-create-retry')>(
         'mobile/src/tasks/worktree-create-retry.ts'
       ).createWorktreeWithNameRetry
+
       let outcome: unknown = 'uncreated'
       let minted = 0
+
       return {
         action: (_name, args) =>
           create({
@@ -34,6 +37,7 @@ export function taskWorkspaceSenderMountAdapters(
             mintMutationId: () => `mutation-${++minted}`
           }).then((value: unknown) => {
             outcome = value
+
             return value
           }),
         state: () => ({ outcome }),
@@ -44,11 +48,14 @@ export function taskWorkspaceSenderMountAdapters(
       const read = modules.load<typeof import('../../../tasks/worktree-create-capability')>(
         'mobile/src/tasks/worktree-create-capability.ts'
       ).readNewWorktreeRuntimeCapabilities
+
       let capabilities: unknown = 'unprobed'
+
       return {
         action: () =>
           read(client).then((value: unknown) => {
             capabilities = value
+
             return value
           }),
         state: () => ({ capabilities }),
@@ -59,8 +66,10 @@ export function taskWorkspaceSenderMountAdapters(
       const resolve = modules.load<typeof import('../../../tasks/composer-source-base-resolve')>(
         'mobile/src/tasks/composer-source-base-resolve.ts'
       )
+
       let prBase: unknown = 'unresolved'
       let mrBase: unknown = 'unresolved'
+
       return {
         action(name) {
           if (name === 'mr-base') {
@@ -68,13 +77,16 @@ export function taskWorkspaceSenderMountAdapters(
               .resolveComposerMrBase({ client, repoId: REPO, mrIid: 7, sourceBranch: 'feature' })
               .then((value: unknown) => {
                 mrBase = value
+
                 return value
               })
           }
+
           return resolve
             .resolveComposerPrBase({ client, repoId: REPO, prNumber: 12, headRefName: 'feature' })
             .then((value: unknown) => {
               prBase = value
+
               return value
             })
         },
@@ -86,7 +98,9 @@ export function taskWorkspaceSenderMountAdapters(
       const persist = modules.load<typeof import('../../../tasks/setup-hook-trust')>(
         'mobile/src/tasks/setup-hook-trust.ts'
       ).persistSetupHookTrustApproval
+
       let trust: unknown = 'unapproved'
+
       return {
         action: (_name, args) =>
           persist({
@@ -97,6 +111,7 @@ export function taskWorkspaceSenderMountAdapters(
             alwaysTrust: args.always === true
           }).then((value: unknown) => {
             trust = value
+
             return value
           }),
         state: () => ({ trust }),
@@ -107,10 +122,13 @@ export function taskWorkspaceSenderMountAdapters(
       const search = modules.load<typeof import('../../../tasks/smart-source-search-requests')>(
         'mobile/src/tasks/smart-source-search-requests.ts'
       )
+
       const results: Record<string, unknown> = {}
+
       return {
         action(name, args) {
           const query = String(args.query ?? 'bug')
+
           const request =
             name === 'gitlab'
               ? search.searchGitLabItems(client, REPO, query, 'opened')
@@ -123,8 +141,10 @@ export function taskWorkspaceSenderMountAdapters(
                 : name === 'branches'
                   ? search.searchBranches(client, REPO, query)
                   : search.searchGitHubItems(client, REPO, query)
+
           return request.then((value: unknown) => {
             results[name] = value
+
             return value
           })
         },
@@ -136,12 +156,16 @@ export function taskWorkspaceSenderMountAdapters(
       const paste = modules.load<typeof import('../../../tasks/smart-source-paste-intent')>(
         'mobile/src/tasks/smart-source-paste-intent.ts'
       )
+
       const slugCache = new Map<string, { owner: string; repo: string; host?: string } | null>()
+
       const repos = [
         { id: REPO, displayName: 'Repo', slug: null },
         { id: 'repo-2', displayName: 'Other', slug: null }
       ]
+
       const results: Record<string, unknown> = {}
+
       return {
         action(name) {
           const request =
@@ -167,8 +191,10 @@ export function taskWorkspaceSenderMountAdapters(
                       { owner: 'owner', repo: 'repo' },
                       slugCache
                     )
+
           return request.then((value: unknown) => {
             results[name] = value
+
             return value
           })
         },

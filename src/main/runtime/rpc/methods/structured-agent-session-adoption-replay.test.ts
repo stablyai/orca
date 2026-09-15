@@ -14,9 +14,13 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 
 const SESSION = 'session-adoption-replay'
+
 const THREAD = 'thread-adoption-replay'
+
 const WORKSPACE = 'workspace-1'
+
 const OPERATION = `${Date.now()}-00000000000000000000000000000001`
+
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
@@ -24,6 +28,7 @@ const CLIENT = {
 }
 
 let root: string
+
 let host: StructuredAgentSessionHost
 
 function adapter(): StructuredAgentSessionAdapter {
@@ -60,6 +65,7 @@ function createParams(operationId = OPERATION) {
     agent: 'codex' as const,
     resumeFrom: { providerSessionId: THREAD }
   }
+
   return {
     envelope: {
       sessionId: SESSION,
@@ -77,17 +83,20 @@ function createParams(operationId = OPERATION) {
 
 async function call(dispatcher: RpcDispatcher, params: unknown, client = CLIENT) {
   const replies: RpcResponse[] = []
+
   const request: RpcRequest = {
     id: `request-${replies.length + 1}`,
     authToken: 'token',
     method: 'agentSession.create',
     params
   }
+
   await dispatcher.dispatchStreaming(
     request,
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
     client
   )
+
   return replies[0]
 }
 
@@ -107,6 +116,7 @@ describe('committed adopting create RPC replay', () => {
   it('republishes from durable identity after the source disappears and account selection drifts', async () => {
     const originalHome = join(root, 'account-original')
     const driftedHome = join(root, 'account-drifted')
+
     const transcriptPath = join(
       originalHome,
       'sessions',
@@ -115,6 +125,7 @@ describe('committed adopting create RPC replay', () => {
       '06',
       `rollout-2026-09-06T18-00-00-${THREAD}.jsonl`
     )
+
     await mkdir(dirname(transcriptPath), { recursive: true })
     await writeFile(
       transcriptPath,
@@ -131,6 +142,7 @@ describe('committed adopting create RPC replay', () => {
 
     let selectedHome = originalHome
     const selectAccountHome = vi.fn(() => selectedHome)
+
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
@@ -141,6 +153,7 @@ describe('committed adopting create RPC replay', () => {
       undefined,
       { prepareCodexStructuredLaunch: selectAccountHome }
     )
+
     // The structured surface is settings-gated for every caller, not just mobile; this test
     // probes durable-identity replay, which only runs once the gate admits the call.
     vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
@@ -149,6 +162,7 @@ describe('committed adopting create RPC replay', () => {
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })
+
     const internal = runtime as unknown as {
       resolveStructuredAgentSessionLocation: () => Promise<{
         executionHostId: 'local'
@@ -160,6 +174,7 @@ describe('committed adopting create RPC replay', () => {
       ensureStructuredAgentSessionHost: () => Promise<void>
       publishStructuredAgentSessionTab: () => Promise<void>
     }
+
     internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
       executionHostId: 'local' as const,
       wslDistro: null,
@@ -179,6 +194,7 @@ describe('committed adopting create RPC replay', () => {
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     const sessionAdapter = adapter()
     host = new StructuredAgentSessionHost({
       store,
@@ -187,10 +203,12 @@ describe('committed adopting create RPC replay', () => {
       claimKeyId: 'key-1'
     })
     setStructuredAgentSessionHost(host)
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: STRUCTURED_AGENT_SESSION_METHODS
     })
+
     const params = createParams()
 
     expect(await call(dispatcher, params)).toMatchObject({

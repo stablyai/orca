@@ -10,8 +10,11 @@ import {
 import type { GitBranchLineTotal } from './git-status-types'
 
 const CACHE_KEY = 'native\0/repo'
+
 const MERGE_BASE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4'
+
 const OTHER_MERGE_BASE = '0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c'
+
 const TOTAL: GitBranchLineTotal = { added: 12, removed: 3, mergeBase: MERGE_BASE }
 
 function entries(added?: number): { path: string; status: string; area: string; added?: number }[] {
@@ -84,6 +87,7 @@ describe('branch line total inside the status line-stats cache', () => {
       recompute: async () => true,
       branchLineTotal: { mergeBase: MERGE_BASE, compute }
     })
+
     const second = await reuseOrRecomputeGitStatusLineStats({
       cacheKey: CACHE_KEY,
       head: 'head-1',
@@ -114,6 +118,7 @@ describe('branch line total inside the status line-stats cache', () => {
   it('starts the ranged diff before waiting on the per-area numstat', async () => {
     const order: string[] = []
     let releaseRecompute = (): void => {}
+
     const recomputeGate = new Promise<void>((resolve) => {
       releaseRecompute = resolve
     })
@@ -128,16 +133,19 @@ describe('branch line total inside the status line-stats cache', () => {
       recompute: async () => {
         order.push('recompute')
         await recomputeGate
+
         return true
       },
       branchLineTotal: {
         mergeBase: MERGE_BASE,
         compute: async () => {
           order.push('compute')
+
           return TOTAL
         }
       }
     })
+
     releaseRecompute()
 
     expect(await pending).toEqual({ branchLineTotal: TOTAL })
@@ -227,6 +235,7 @@ describe('branch line total inside the status line-stats cache', () => {
           mergeBase: MERGE_BASE,
           compute: async () => {
             aborted = true
+
             return TOTAL
           }
         }

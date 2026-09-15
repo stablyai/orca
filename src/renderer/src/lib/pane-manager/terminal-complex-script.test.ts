@@ -212,6 +212,7 @@ describe('terminalRewriteOutputRenderRefreshDecision', () => {
       previousChunkEndsWithCarriageReturn: false,
       previousRewriteCsiScanTail: ''
     })
+
     expect(trailingCarriageReturn).toEqual({
       nextChunkEndsWithCarriageReturn: true,
       nextRewriteCsiScanTail: '',
@@ -235,6 +236,7 @@ describe('terminalRewriteOutputRenderRefreshDecision', () => {
       previousChunkEndsWithCarriageReturn: false,
       previousRewriteCsiScanTail: ''
     })
+
     expect(trailingCarriageReturn).toEqual({
       nextChunkEndsWithCarriageReturn: true,
       nextRewriteCsiScanTail: '',
@@ -258,6 +260,7 @@ describe('terminalRewriteOutputRenderRefreshDecision', () => {
       previousChunkEndsWithCarriageReturn: false,
       previousRewriteCsiScanTail: ''
     })
+
     expect(trailingRewriteCsi).toEqual({
       nextChunkEndsWithCarriageReturn: false,
       nextRewriteCsiScanTail: '\x1b[',
@@ -339,10 +342,12 @@ describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
       previousChunkEndsWithCarriageReturn: false,
       previousRewriteCsiScanTail: ''
     }
+
     return chunks.map((chunk) => {
       const decision = terminalRewriteOutputRenderRefreshDecision(chunk, state)
       state.previousChunkEndsWithCarriageReturn = decision.nextChunkEndsWithCarriageReturn
       state.previousRewriteCsiScanTail = decision.nextRewriteCsiScanTail
+
       return decision.prefersRenderRefresh
     })
   }
@@ -359,9 +364,11 @@ describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
       '\r\x1b[3G',
       'zzzx\x1b[K'
     ]
+
     const inPlace = rewriteIsInPlace(claudeRedrawChunks)
     // Every redraw chunk is an in-place rewrite (CR continuation or erase-line).
     expect(inPlace.every(Boolean)).toBe(true)
+
     for (const isInPlaceRewrite of inPlace) {
       expect(
         nativeWindowsRewriteNeedsFollowupRenderRefresh({
@@ -376,6 +383,7 @@ describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
   it('does not schedule a follow-up repaint for ordinary CRLF foreground output', () => {
     const inPlace = rewriteIsInPlace(['line one\r\n', 'line two\r\n'])
     expect(inPlace).toEqual([false, false])
+
     for (const isInPlaceRewrite of inPlace) {
       expect(
         nativeWindowsRewriteNeedsFollowupRenderRefresh({

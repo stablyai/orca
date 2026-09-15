@@ -29,10 +29,13 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     guestWebContentsId: number
   ): { browserPageId: string; renderer: Electron.WebContents } | null {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+
     if (!browserPageId) {
       return null
     }
+
     const renderer = this.resolveRendererForBrowserTab(browserPageId)
+
     return renderer ? { browserPageId, renderer } : null
   }
 
@@ -42,6 +45,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
 
   getBrowserPageLoadError(browserPageId: string): BrowserLoadError | null {
     const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+
     return webContentsId === undefined
       ? null
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)
@@ -55,17 +59,22 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     if (this.popupOwnerContextByGuestId.has(webContentsId)) {
       return null
     }
+
     const browserPageId = this.tabIdByWebContentsId.get(webContentsId) ?? null
     const offscreen = this.offscreenGuestIds.has(webContentsId)
+
     if (!offscreen && !this.policyAttachedGuestIds.has(webContentsId)) {
       return null
     }
+
     if (!offscreen) {
       const guest = webContents.fromId(webContentsId)
+
       if (!guest || guest.isDestroyed() || guest.getType() !== 'webview') {
         return null
       }
     }
+
     return {
       browserPageId,
       worktreeId: browserPageId ? (this.worktreeIdByTabId.get(browserPageId) ?? null) : null,
@@ -95,14 +104,19 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
       this.loadErrorsByGuestId.set(webContentsId, loadError)
       this.forwardOrQueueGuestLoadFailure(webContentsId, loadError)
     }
+
     const browserPageId = this.tabIdByWebContentsId.get(webContentsId)
+
     if (!browserPageId) {
       return
     }
+
     if (this.offscreenGuestIds.has(webContentsId)) {
       this.notifyBrowserGuestStateChanged(webContentsId)
+
       return
     }
+
     const renderer = this.resolveRendererForBrowserTab(browserPageId)
     renderer?.send('browser:certificate-failure-changed', { browserPageId, failure })
   }
@@ -111,8 +125,10 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     if (!this.offscreenGuestIds.has(webContentsId)) {
       return
     }
+
     const browserPageId = this.tabIdByWebContentsId.get(webContentsId)
     const worktreeId = browserPageId ? this.worktreeIdByTabId.get(browserPageId) : null
+
     if (worktreeId) {
       // Why: runs inside an Electron guest event dispatch, so an escaping throw would be a fatal uncaught exception.
       try {

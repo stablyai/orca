@@ -16,12 +16,15 @@ function delay(ms) {
 
 async function waitForFile(filePath, timeoutMs) {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (existsSync(filePath)) {
       return true
     }
+
     await delay(POLL_MS)
   }
+
   return false
 }
 
@@ -35,9 +38,11 @@ export async function probeEcho(page, runDir, label = 'echo') {
   const file = path.join(runDir, `${label}-${token}.txt`)
   await runShellCommand(page, `Set-Content -LiteralPath '${file}' -Value '${token}'`)
   const appeared = await waitForFile(file, 15_000)
+
   if (!appeared) {
     return false
   }
+
   return readFileSync(file, 'utf8').includes(token)
 }
 
@@ -58,6 +63,7 @@ export async function probeHeartbeatAdvancing(heartbeatFile) {
   const first = fileMtimeMs(heartbeatFile)
   await delay(1500)
   const second = fileMtimeMs(heartbeatFile)
+
   return second > first && second > 0
 }
 
@@ -74,6 +80,7 @@ export async function probeCtrlCInterruptsMarker(page, runDir, heartbeatFile) {
   const stillLater = fileMtimeMs(heartbeatFile)
   const heartbeatStopped = stillLater === afterCtrlC
   const promptReturned = await probeEcho(page, runDir, 'post-interrupt')
+
   return heartbeatStopped && promptReturned
 }
 
@@ -83,17 +90,21 @@ export async function probeCtrlCInterruptsMarker(page, runDir, heartbeatFile) {
  */
 export async function probeCtrlCOnFreshLoop(page, runDir) {
   const heartbeatFile = path.join(runDir, `fresh-loop-${Date.now()}.txt`)
+
   if (existsSync(heartbeatFile)) {
     rmSync(heartbeatFile)
   }
+
   await runShellCommand(
     page,
     `while($true){ [System.IO.File]::WriteAllText('${heartbeatFile}',(Get-Date).ToString('o')); Start-Sleep -Milliseconds 500 }`
   )
   // Let the loop spin up and prove it is actually running before interrupting.
   const running = await probeHeartbeatAdvancing(heartbeatFile)
+
   if (!running) {
     return false
   }
+
   return probeCtrlCInterruptsMarker(page, runDir, heartbeatFile)
 }

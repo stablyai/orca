@@ -40,23 +40,29 @@ export function resolveFleetWorkerOutcome(args: {
   dispatchStatus?: string | null
 }): FleetAttemptOutcome {
   const { attemptOutcome, workerState, dispatchStatus } = args
+
   if (attemptOutcome && attemptOutcome !== 'outcome_unknown') {
     return attemptOutcome
   }
+
   if (workerState === 'succeeded') {
     return 'succeeded'
   }
+
   if (workerState === 'failed' || dispatchStatus === 'failed') {
     return 'failed'
   }
+
   // `dispatch_contexts.status = 'completed'` is only ever written from an accepted `succeeded`
   // worker report or a Task completion. With no worker row that record is the whole settlement,
   // and reading it as unknown reported every pre-v3 Dispatch as needing attention forever.
   if (dispatchStatus === 'completed' && isUnsupervisedWorker(workerState)) {
     return 'succeeded'
   }
+
   if (dispatchStatus === 'pending' || dispatchStatus === 'dispatched') {
     return 'in_progress'
   }
+
   return attemptOutcome ?? 'in_progress'
 }

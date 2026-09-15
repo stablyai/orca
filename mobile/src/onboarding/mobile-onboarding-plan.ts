@@ -2,7 +2,9 @@ import { shouldPresentNotificationOptIn } from '../notifications/notification-op
 import { shouldPresentSessionViewOptIn } from '../session/session-view-opt-in-gate'
 
 export const MOBILE_ONBOARDING_STEPS = ['session-view', 'notifications'] as const
+
 export type MobileOnboardingStep = (typeof MOBILE_ONBOARDING_STEPS)[number]
+
 export type MobileOnboardingDestination =
   | '/'
   | `/h/${string}`
@@ -19,6 +21,7 @@ export async function loadMobileOnboardingSteps(): Promise<MobileOnboardingStep[
     shouldPresentSessionViewOptIn(),
     shouldPresentNotificationOptIn()
   ])
+
   return MOBILE_ONBOARDING_STEPS.filter(
     (step) =>
       (step === 'session-view' && showSessionView) ||
@@ -34,6 +37,7 @@ export function mobileOnboardingDestination(
   if (steps.length === 0) {
     return hostId ? `/h/${hostId}` : '/'
   }
+
   return {
     pathname: '/mobile-onboarding',
     params: { steps: steps.join(','), ...(hostId ? { hostId } : {}) }
@@ -45,7 +49,9 @@ export function parseMobileOnboardingSteps(raw: string | undefined): MobileOnboa
   if (!raw) {
     return [...MOBILE_ONBOARDING_STEPS]
   }
+
   const requested = new Set(raw.split(','))
   const steps = MOBILE_ONBOARDING_STEPS.filter((step) => requested.has(step))
+
   return steps.length > 0 ? steps : [...MOBILE_ONBOARDING_STEPS]
 }

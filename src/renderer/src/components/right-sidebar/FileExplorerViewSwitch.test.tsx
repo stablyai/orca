@@ -9,21 +9,25 @@ function findElementByAriaLabel(node: unknown, ariaLabel: string): ReactElementL
       found = entry
     }
   })
+
   if (!found) {
     throw new Error(`${ariaLabel} element not found`)
   }
+
   return found
 }
 
 describe('FileExplorerViewSwitch', () => {
   it('switches between files and search views', () => {
     const onSelectView = vi.fn()
+
     const element = FileExplorerViewSwitch({
       view: 'files',
       onSelectView
     })
 
     const switchRoot = findElementByAriaLabel(element, 'Explorer search mode')
+
     ;(switchRoot.props.onValueChange as (value: string) => void)('search')
 
     expect(onSelectView).toHaveBeenCalledWith('search')

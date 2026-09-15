@@ -15,6 +15,7 @@ export function shouldEvictAdvertisedUrlAfterScan(args: {
   startupAbsentAllowances: Set<CacheKey>
 }): boolean {
   const baseline = args.validationBaselines.get(args.key)
+
   if (args.current.kind === 'absent') {
     if (
       args.entry.validatedListenerPid === undefined &&
@@ -23,8 +24,10 @@ export function shouldEvictAdvertisedUrlAfterScan(args: {
     ) {
       return false
     }
+
     return true
   }
+
   if (
     args.entry.validatedListenerPid !== undefined &&
     args.current.pid !== undefined &&
@@ -32,10 +35,13 @@ export function shouldEvictAdvertisedUrlAfterScan(args: {
   ) {
     return true
   }
+
   if (baseline?.kind === 'absent') {
     args.startupAbsentAllowances.delete(args.key)
+
     return false
   }
+
   return (
     args.entry.validatedListenerPid === undefined &&
     baseline !== undefined &&
@@ -53,12 +59,15 @@ export function lookupBestAdvertisedUrl(args: {
   onEvict: (worktreeId: string) => void
 }): AdvertisedUrl | undefined {
   let best: { worktreeId: string; entry: AdvertisedUrl } | undefined
+
   for (const worktreeId of args.worktreeIds) {
     const key = cacheKey(worktreeId, args.port)
     const candidate = args.cache.get(key)
+
     if (!candidate) {
       continue
     }
+
     if (
       args.currentListenerPid !== undefined &&
       candidate.validatedListenerPid !== undefined &&
@@ -70,10 +79,12 @@ export function lookupBestAdvertisedUrl(args: {
       args.onEvict(worktreeId)
       continue
     }
+
     if (!best || shouldReplace(best.entry, candidate)) {
       best = { worktreeId, entry: candidate }
     }
   }
+
   if (
     best &&
     args.currentListenerPid !== undefined &&
@@ -83,5 +94,6 @@ export function lookupBestAdvertisedUrl(args: {
     args.validationBaselines.delete(cacheKey(best.worktreeId, args.port))
     args.startupAbsentAllowances.delete(cacheKey(best.worktreeId, args.port))
   }
+
   return best?.entry
 }

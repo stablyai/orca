@@ -28,6 +28,7 @@ function toggleValue(values: readonly string[], id: string): readonly string[] {
   if (values.includes(id)) {
     return values.filter((value) => value !== id)
   }
+
   return [...values, id].sort()
 }
 
@@ -45,15 +46,19 @@ function addValues(values: readonly string[], ids: readonly string[]): readonly 
   if (ids.length === 0) {
     return values
   }
+
   const merged = new Set(values)
   const sizeBefore = merged.size
+
   for (const id of ids) {
     merged.add(id)
   }
+
   // Why: same reference when nothing was added keeps search memos stable.
   if (merged.size === sizeBefore) {
     return values
   }
+
   return [...merged].sort()
 }
 
@@ -65,9 +70,11 @@ export function addPaletteFilterValues(
 ): PaletteFilterState {
   const values = field === 'host' ? filter.hostIds : filter.repoIds
   const nextValues = addValues(values, ids)
+
   if (nextValues === values) {
     return filter
   }
+
   return field === 'host' ? { ...filter, hostIds: nextValues } : { ...filter, repoIds: nextValues }
 }
 
@@ -78,6 +85,7 @@ export function clearPaletteFilterField(
   if ((field === 'host' ? filter.hostIds : filter.repoIds).length === 0) {
     return filter
   }
+
   return field === 'host' ? { ...filter, hostIds: [] } : { ...filter, repoIds: [] }
 }
 
@@ -100,6 +108,7 @@ export function buildPaletteFilterFromSidebarScope(
   if (hostIds.length === 0 && repoIds.length === 0) {
     return EMPTY_PALETTE_FILTER
   }
+
   return { hostIds, repoIds }
 }
 
@@ -125,25 +134,31 @@ export function buildPaletteFilterPredicate(
 
   const selectedHostIds = filter.hostIds.length > 0 ? new Set(filter.hostIds) : null
   const selectedRepoIds = filter.repoIds.length > 0 ? new Set(filter.repoIds) : null
+
   const repoMatchesSelectedHost = (repoId: string): boolean => {
     if (!selectedHostIds) {
       return true
     }
+
     const repoHostIds = model.hostIdsByRepoId.get(repoId)
+
     if (!repoHostIds) {
       return selectedHostIds.has(model.defaultHostId)
     }
+
     for (const hostId of repoHostIds) {
       if (selectedHostIds.has(hostId)) {
         return true
       }
     }
+
     return false
   }
 
   return {
     matchesProjectRowKey: (rowKey) => {
       const rowRepoIds = model.repoIdsByProjectKey.get(rowKey) ?? []
+
       return rowRepoIds.some(
         (repoId) =>
           (!selectedRepoIds || selectedRepoIds.has(repoId)) && repoMatchesSelectedHost(repoId)
@@ -153,9 +168,11 @@ export function buildPaletteFilterPredicate(
       if (selectedRepoIds && !selectedRepoIds.has(worktree.repoId)) {
         return false
       }
+
       if (!selectedHostIds) {
         return true
       }
+
       // Why: worktree.hostId wins over the repo fallback — a runtime-owned
       // workspace can live on a different host than the repo it came from.
       return selectedHostIds.has(

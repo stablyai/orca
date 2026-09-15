@@ -37,6 +37,7 @@ type AssertNever<T extends never> = T
 
 // Type-only gates belong in the node typecheck; runtime parsing is a separate contract.
 export type RpcParamsTypeParity = AssertNever<MismatchedMethod<RegisteredMethod>>
+
 export type RpcParamsUncataloguedMethods = AssertNever<
   Exclude<UncataloguedMethod, Exclude<RegisteredMethod['name'], RpcMethodName>>
 >

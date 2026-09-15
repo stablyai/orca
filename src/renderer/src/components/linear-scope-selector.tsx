@@ -53,15 +53,20 @@ export function filterLinearScopeTeams(
   if (isLinearScopeTeamFilterQueryTooLarge(query)) {
     return []
   }
+
   const trimmed = query.trim()
+
   if (!trimmed) {
     return teams
   }
+
   const normalizedQuery = trimmed.toLowerCase()
+
   return teams.filter((team) => {
     const workspaceName =
       team.workspaceName ??
       (team.workspaceId ? workspaceById.get(team.workspaceId)?.organizationName : '')
+
     return [team.name, team.key, workspaceName ?? ''].some((value) =>
       value.toLowerCase().includes(normalizedQuery)
     )
@@ -77,15 +82,18 @@ export function normalizeLinearScopeTeamSelection({
   persisted: string[] | null
 } {
   const visibleIds = teams.map((team) => team.id)
+
   if (visibleIds.length === 0) {
     return { selectedTeamIds: new Set(), persisted: null }
   }
 
   const visibleIdSet = new Set(visibleIds)
   const next = new Set([...nextSelectedTeamIds].filter((id) => visibleIdSet.has(id)))
+
   if (next.size === 0) {
     const current = [...currentSelectedTeamIds].filter((id) => visibleIdSet.has(id))
     const fallback = current.length > 0 ? current : visibleIds
+
     return {
       selectedTeamIds: new Set(fallback),
       persisted: fallback.length === visibleIds.length ? null : fallback
@@ -105,6 +113,7 @@ function summarizeTeamKeys(
   options: { activeAllWorkspaces: boolean; multipleWorkspaces: boolean }
 ): string {
   const selectedTeams = teams.filter((team) => selectedTeamIds.has(team.id))
+
   if (selectedTeams.length === 0) {
     return 'All teams'
   }
@@ -113,6 +122,7 @@ function summarizeTeamKeys(
     const workspaceIds = new Set(selectedTeams.map((team) => team.workspaceId ?? ''))
     const keys = selectedTeams.map((team) => team.key)
     const keyCount = new Set(keys).size
+
     if (workspaceIds.size > 1 || keyCount < keys.length) {
       return `${selectedTeams.length} team${selectedTeams.length === 1 ? '' : 's'}`
     }
@@ -120,6 +130,7 @@ function summarizeTeamKeys(
 
   const [first, second, ...rest] = selectedTeams
   const labels = [first?.key, second?.key].filter(Boolean)
+
   return `${labels.join(', ')}${rest.length > 0 ? ` +${rest.length}` : ''}`
 }
 
@@ -132,12 +143,15 @@ export function getLinearScopeTriggerLabel({
 }: LinearScopeLabelInput): string {
   const multipleWorkspaces = workspaces.length > 1
   const activeAllWorkspaces = selectedWorkspaceId === 'all'
+
   const selectedWorkspace =
     selectedWorkspaceId && selectedWorkspaceId !== 'all'
       ? workspaces.find((workspace) => workspace.id === selectedWorkspaceId)
       : null
+
   const allVisibleTeamsSelected =
     teams.length > 0 && teams.every((team) => selectedTeamIds.has(team.id))
+
   const teamLabel =
     teamSelectionIsStickyAll || selectedTeamIds.size === 0 || allVisibleTeamsSelected
       ? 'All teams'
@@ -149,9 +163,11 @@ export function getLinearScopeTriggerLabel({
   if (!multipleWorkspaces) {
     return teamLabel
   }
+
   if (activeAllWorkspaces) {
     return teamLabel === 'All teams' ? 'All workspaces' : `All workspaces / ${teamLabel}`
   }
+
   return `${selectedWorkspace?.organizationName ?? 'Linear'} / ${teamLabel}`
 }
 
@@ -170,10 +186,12 @@ export function LinearScopeSelector({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
+
   const workspaceById = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
     [workspaces]
   )
+
   const triggerLabel = getLinearScopeTriggerLabel({
     workspaces,
     selectedWorkspaceId,
@@ -181,8 +199,10 @@ export function LinearScopeSelector({
     selectedTeamIds,
     teamSelectionIsStickyAll
   })
+
   const showWorkspaceNames = selectedWorkspaceId === 'all' || workspaces.length > 1
   const allTeamsSelected = teams.length > 0 && teams.every((team) => selectedTeamIds.has(team.id))
+
   const filteredTeams = useMemo(
     () => filterLinearScopeTeams(teams, query, workspaceById),
     [query, teams, workspaceById]
@@ -191,10 +211,13 @@ export function LinearScopeSelector({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (nextOpen) {
         onOpen?.()
+
         return
       }
+
       setQuery('')
       setCommandValue('')
     },
@@ -214,6 +237,7 @@ export function LinearScopeSelector({
         currentSelectedTeamIds: selectedTeamIds,
         nextSelectedTeamIds
       })
+
       onTeamSelectionChange(normalized.selectedTeamIds, normalized.persisted)
     },
     [onTeamSelectionChange, selectedTeamIds, teams]
@@ -226,11 +250,13 @@ export function LinearScopeSelector({
   const handleTeamToggle = useCallback(
     (teamId: string) => {
       const next = new Set(selectedTeamIds)
+
       if (next.has(teamId)) {
         next.delete(teamId)
       } else {
         next.add(teamId)
       }
+
       commitTeamSelection(next)
     },
     [commitTeamSelection, selectedTeamIds]
@@ -336,9 +362,11 @@ export function LinearScopeSelector({
             {filteredTeams.length > 0 ? (
               filteredTeams.map((team) => {
                 const isSelected = selectedTeamIds.has(team.id)
+
                 const workspaceName =
                   team.workspaceName ??
                   (team.workspaceId ? workspaceById.get(team.workspaceId)?.organizationName : null)
+
                 return (
                   <CommandItem
                     key={`${team.workspaceId ?? 'workspace'}:${team.id}`}

@@ -5,6 +5,7 @@ import { waitForSessionReady } from './helpers/store'
 // Why: post-fix trailing overhang is ~0px; 16px is subpixel headroom that still
 // fails the old pr-[6.5rem] (~104px) reservation.
 const MAX_TRAILING_CHROME_PX = 16
+
 const VIEWPORTS = [
   { name: 'desktop', size: { width: 1440, height: 900 } },
   { name: 'mobile', size: { width: 390, height: 844 } }
@@ -13,9 +14,11 @@ const VIEWPORTS = [
 async function enableExperimentalPet(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     // Why: updateSettings swallows errors; throw so a failed persist fails loudly.
     await store.getState().updateSettingsOrThrow({ experimentalPet: true })
   })
@@ -45,9 +48,11 @@ async function assertPetTriggerFitsLabel(page: Page): Promise<void> {
           trigger.boundingBox(),
           label.boundingBox()
         ])
+
         if (!triggerBox || !labelBox) {
           return Number.POSITIVE_INFINITY
         }
+
         return triggerBox.x + triggerBox.width - (labelBox.x + labelBox.width)
       },
       { message: 'pet menu trigger still reserves trailing space after its label' }

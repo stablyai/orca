@@ -6,6 +6,7 @@ const MAX_REPORTED_SALVAGE_PATHS = 100
 type DropCollector = { paths: string[]; count: number }
 
 let dropCollector: DropCollector | null = null
+
 const dropPath: (string | number)[] = []
 
 /** Run a synchronous parse while collecting its salvage count and example paths. */
@@ -19,8 +20,10 @@ export function collectSalvageDrops<T>(parse: () => T): {
   const collector: DropCollector = { paths: [], count: 0 }
   dropCollector = collector
   dropPath.length = 0
+
   try {
     const value = parse()
+
     return { value, droppedPaths: collector.paths, droppedCount: collector.count }
   } finally {
     dropCollector = previousCollector
@@ -32,7 +35,9 @@ function reportDrop(segment: string | number): void {
   if (!dropCollector) {
     return
   }
+
   dropCollector.count += 1
+
   if (dropCollector.paths.length < MAX_REPORTED_SALVAGE_PATHS) {
     dropCollector.paths.push([...dropPath, segment].join('.'))
   }
@@ -44,6 +49,7 @@ function parseEntry<T extends z.ZodType>(
 ): { success: true; data: z.output<T> } | { success: false } {
   try {
     const parsed = schema.safeParse(raw)
+
     return parsed.success ? { success: true, data: parsed.data as z.output<T> } : { success: false }
   } catch {
     return { success: false }
@@ -58,6 +64,7 @@ function parseEntryAt<T extends z.ZodType>(
   raw: unknown
 ): { success: true; data: z.output<T> } | { success: false } {
   dropPath.push(segment)
+
   try {
     return parseEntry(schema, raw)
   } finally {
@@ -73,11 +80,13 @@ function recordEntryKeys(raw: unknown): string[] | null {
   if (!z.core.util.isPlainObject(raw)) {
     return null
   }
+
   for (const symbol of Object.getOwnPropertySymbols(raw)) {
     if (Object.prototype.propertyIsEnumerable.call(raw, symbol)) {
       return null
     }
   }
+
   return Object.keys(raw)
 }
 
@@ -90,17 +99,23 @@ export function salvagingArray<T extends z.ZodType>(item: T): z.ZodType<z.output
   return z.unknown().transform((raw, ctx) => {
     if (!Array.isArray(raw)) {
       ctx.addIssue({ code: 'invalid_type', expected: 'array', input: raw })
+
       return z.NEVER
     }
+
     const kept: z.output<T>[] = []
+
     for (let index = 0; index < raw.length; index += 1) {
       const parsed = parseEntryAt(index, item, raw[index])
+
       if (parsed.success) {
         kept.push(parsed.data)
         continue
       }
+
       reportDrop(index)
     }
+
     return kept
   }) as z.ZodType<z.output<T>[], unknown>
 }
@@ -113,27 +128,35 @@ export function salvagingRecord<K extends z.ZodType<string>, V extends z.ZodType
 ): z.ZodType<Record<string, z.output<V>>, unknown> {
   return z.unknown().transform((raw, ctx) => {
     const entryKeys = recordEntryKeys(raw)
+
     if (!entryKeys) {
       ctx.addIssue({ code: 'invalid_type', expected: 'record', input: raw })
+
       return z.NEVER
     }
+
     const entries = raw as Record<string, unknown>
     // Why: null prototype so a persisted '__proto__' key cannot poison the result.
     const kept: Record<string, z.output<V>> = Object.create(null)
+
     for (const entryKey of entryKeys) {
       // Why: z.record strips '__proto__' before the value schema sees it, so it is not a drop.
       if (entryKey === '__proto__') {
         continue
       }
+
       const parsed = parseEntry(key, entryKey).success
         ? parseEntryAt(entryKey, value, entries[entryKey])
         : null
+
       if (parsed?.success && (!accepts || accepts(entryKey, parsed.data))) {
         kept[entryKey] = parsed.data
         continue
       }
+
       reportDrop(entryKey)
     }
+
     return { ...kept }
   }) as z.ZodType<Record<string, z.output<V>>, unknown>
 }
@@ -142,13 +165,18 @@ function salvaged(name: string, schema: z.ZodType, fallback: () => unknown): z.Z
   return z.unknown().transform((raw, ctx) => {
     if (raw === undefined) {
       ctx.addIssue({ code: 'custom', message: 'required', input: raw })
+
       return z.NEVER
     }
+
     const parsed = parseEntryAt(name, schema, raw)
+
     if (parsed.success) {
       return parsed.data
     }
+
     reportDrop(name)
+
     return fallback()
   })
 }

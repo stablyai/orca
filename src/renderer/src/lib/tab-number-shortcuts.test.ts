@@ -38,6 +38,7 @@ function state(overrides: {
   | 'worktreesByRepo'
 > {
   const worktreeId = overrides.activeWorktreeId ?? 'wt-1'
+
   return {
     activeView: overrides.activeView ?? 'terminal',
     activeWorktreeId: worktreeId,
@@ -122,6 +123,7 @@ describe('resolveTabNumberShortcutTarget', () => {
 
   it('returns null outside terminal workspaces or out of range', () => {
     const only = tab({ id: 'tab-1', groupId: 'group-a' })
+
     const base = state({
       groups: [{ id: 'group-a', worktreeId: 'wt-1', activeTabId: null, tabOrder: ['tab-1'] }],
       tabs: [only]

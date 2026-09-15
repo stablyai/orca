@@ -15,6 +15,7 @@ async function packageVersion(root: string, versionId: string, heading: string) 
     join(source, 'SKILL.md'),
     `---\nname: crash-skill\ndescription: Process termination\n---\n\n# ${heading}\n`
   )
+
   return createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, `${versionId}.tar.gz`),
@@ -30,35 +31,45 @@ async function stopAtBoundary(phase: string, boundary: string): Promise<void> {
   ) {
     return
   }
+
   const marker = process.env.ORCA_SKILL_CRASH_MARKER
+
   if (!marker) {
     throw new Error('missing-crash-marker')
   }
+
   const handle = await open(marker, 'w', 0o600)
+
   try {
     await handle.writeFile(`${JSON.stringify({ pid: process.pid })}\n`)
     await handle.sync()
   } finally {
     await handle.close()
   }
+
   await new Promise<void>(() => undefined)
 }
 
 describe.runIf(CHILD)('skill process termination child', () => {
   it('stops at the requested durable boundary', async () => {
     const root = process.env.ORCA_SKILL_CRASH_ROOT
+
     if (!root) {
       throw new Error('missing-crash-root')
     }
+
     const destinationRoot = join(root, 'skills')
     const stateDirectory = join(root, 'state')
+
     if (process.env.ORCA_SKILL_CRASH_OPERATION === 'extract') {
       const extraction = await beginSkillExtractionRecovery(stateDirectory, destinationRoot)
       await mkdir(extraction.extractionPath, { recursive: true })
       await writeFile(join(extraction.extractionPath, 'partial'), 'partial bytes')
       await stopAtBoundary('partial-extraction', 'after')
+
       return
     }
+
     const first = await packageVersion(root, 'version_1', 'First')
     await installLocalSkillPackage({
       operationId: 'install-first',
@@ -69,6 +80,7 @@ describe.runIf(CHILD)('skill process termination child', () => {
       destinationIdentity: 'global:process-test',
       hostIdentity: 'process-test'
     })
+
     if (process.env.ORCA_SKILL_CRASH_OPERATION === 'remove') {
       await removeLocalSharedSkill(
         {
@@ -79,8 +91,10 @@ describe.runIf(CHILD)('skill process termination child', () => {
         },
         { onJournalTransition: stopAtBoundary }
       )
+
       return
     }
+
     const second = await packageVersion(root, 'version_2', 'Second')
     await installLocalSkillPackage(
       {

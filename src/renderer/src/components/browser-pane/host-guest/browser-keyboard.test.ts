@@ -10,6 +10,7 @@ function targetInside(hostHtml: string): Element {
   host.innerHTML = `${hostHtml}`
   document.body.appendChild(host)
   const leaf = host.querySelector('[data-target]')
+
   return leaf ?? host.firstElementChild!
 }
 

@@ -136,6 +136,7 @@ function remoteAntigravitySource(
 ): RemoteSessionSource {
   const cliRoot = joinRemotePath(hostPlatform, remoteHome, '.gemini', 'antigravity-cli')
   const historyPath = joinRemotePath(hostPlatform, cliRoot, 'history.jsonl')
+
   const parse = async (
     file: FileWithMtime,
     content: RemoteSessionContent,
@@ -148,8 +149,10 @@ function remoteAntigravitySource(
       parserOptions(context),
       context.signal
     )
+
     return session ? context.antigravityWorkspaceResolver.enrich(session, historyPath) : null
   }
+
   return {
     agent: 'antigravity',
     rootDir: joinRemotePath(hostPlatform, cliRoot, 'brain'),
@@ -233,6 +236,7 @@ function remoteCodexSources(
         signal: context.signal,
         readIndexedTitle: remoteCodexIndexedTitleReader(codexHome, context)
       })
+
     return {
       agent: 'codex',
       rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),

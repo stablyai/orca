@@ -33,20 +33,25 @@ export function applyAgentRowLineage(rows: DashboardAgentRow[]): DashboardAgentR
 
   const ordered: DashboardAgentRowWithLineage[] = []
   const emitted = new Set<string>()
+
   const emitRow = (row: DashboardAgentRow, lineage: AgentRowLineagePresentation): boolean => {
     if (emitted.has(row.paneKey)) {
       return false
     }
+
     emitted.add(row.paneKey)
     ordered.push({ ...row, lineage })
+
     return true
   }
 
   const emitSubtree = (row: DashboardAgentRow, lineage: AgentRowLineagePresentation): void => {
     const children = childrenByParentPaneKey.get(row.paneKey) ?? []
+
     if (!emitRow(row, { ...lineage, childCount: children.length })) {
       return
     }
+
     children.forEach((child, index) => {
       emitSubtree(child, {
         // Why: nested dispatches should still stay under their nearest
@@ -74,6 +79,7 @@ export function applyAgentRowLineage(rows: DashboardAgentRow[]): DashboardAgentR
 
 export function dashboardCardParentPaneKey(row: DashboardAgentRowWithLineage): string | undefined {
   const directParentPaneKey = row.entry.orchestration?.parentPaneKey
+
   return (
     row.lineage.parentPaneKey ??
     (directParentPaneKey === row.paneKey ? undefined : directParentPaneKey)

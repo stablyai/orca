@@ -12,9 +12,11 @@ import {
 } from './journal-payload-bounds'
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
+
 export const MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS = 4
 
 const JOURNAL_PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
+
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
 
 export function cancelledJournalPromptBody(
@@ -23,7 +25,9 @@ export function cancelledJournalPromptBody(
   if (body.kind !== 'approval' && body.kind !== 'question') {
     return null
   }
+
   const bounded = boundJournalPromptBody(body)
+
   return {
     ...bounded,
     resolution: {
@@ -55,6 +59,7 @@ export function boundJournalPromptBody(
       options: boundPromptOptions(body.options)
     }
   }
+
   return {
     ...body,
     question: boundPromptText(body.question),
@@ -105,6 +110,8 @@ function boundPromptIdentifier(value: string): string {
   if (Buffer.byteLength(value, 'utf8') <= JOURNAL_PROMPT_ID_MAX_BYTES) {
     return value
   }
+
   const bounded = boundPayload(value, { inlineHeadBytes: JOURNAL_PROMPT_ID_MAX_BYTES - 33 })
+
   return `${bounded.head}#${bounded.digest.slice(0, 32)}`
 }

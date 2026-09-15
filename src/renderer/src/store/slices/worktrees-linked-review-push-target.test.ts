@@ -38,12 +38,14 @@ describe('worktree remote runtime mutations', () => {
   it('resolves and persists a push target when manually linking a GitHub PR', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'origin', branchName: 'bot/pr-bug-scan-2504' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       suppressedGitHubPR: 2548
     })
+
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
       baseBranch: 'origin/bot/pr-bug-scan-2504',
       pushTarget
@@ -80,6 +82,7 @@ describe('worktree remote runtime mutations', () => {
   it('clears a stale push target when unlinking the GitHub PR that supplied it', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -87,6 +90,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 2548,
       pushTarget
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
@@ -106,6 +110,7 @@ describe('worktree remote runtime mutations', () => {
   it('skips duplicate hosted-review work when the unlinking caller owns the refresh', async () => {
     const store = createTestStore()
     const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -114,6 +119,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 2548,
       pushTarget: { remoteName: 'fork', branchName: 'owner/old-pr' }
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
@@ -141,6 +147,7 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const oldPushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
     const newPushTarget = { remoteName: 'upstream', branchName: 'owner/new-mr' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -149,6 +156,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 2548,
       pushTarget: oldPushTarget
     })
+
     const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
     store.setState({
       repos: [
@@ -203,12 +211,14 @@ describe('worktree remote runtime mutations', () => {
   it('resolves a manually linked GitHub PR through the worktree owner runtime', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'owner-runtime/manual-pr' }
+
     const wt = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
       path: '/remote/wt1',
       hostId: 'runtime:owner-env'
     })
+
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.resolvePrBase') {
         return Promise.resolve({
@@ -218,6 +228,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'owner-env' }
         })
       }
+
       if (method === 'worktree.set') {
         return Promise.resolve({
           id: 'rpc-owner-set-worktree',
@@ -226,6 +237,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'owner-env' }
         })
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     store.setState({
@@ -263,6 +275,7 @@ describe('worktree remote runtime mutations', () => {
   it('sends a runtime clear when unlinking a review-owned push target', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'owner-runtime/old-pr' }
+
     const wt = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -271,6 +284,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 2548,
       pushTarget
     })
+
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.set') {
         return Promise.resolve({
@@ -280,6 +294,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'owner-env' }
         })
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     store.setState({
@@ -324,6 +339,7 @@ describe('worktree remote runtime mutations', () => {
   it('does not resolve a push target when re-saving the same linked GitHub PR', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'origin', branchName: 'bot/pr-bug-scan-2504' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -331,6 +347,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 2548,
       pushTarget
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
@@ -350,12 +367,14 @@ describe('worktree remote runtime mutations', () => {
   it('recovers a missing push target when re-saving the same linked GitHub PR', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'contributor/fix' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       linkedPR: 2548
     })
+
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
       baseBranch: 'origin/contributor/fix',
       pushTarget
@@ -383,16 +402,19 @@ describe('worktree remote runtime mutations', () => {
 
   it('hydrates a missing push target for an existing linked GitHub PR', async () => {
     const store = createTestStore()
+
     const pushTarget = {
       remoteName: 'pr-tmchow-orca',
       branchName: 'tmchow/worktree-delete-button'
     }
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       linkedPR: 5571
     })
+
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
       baseBranch: 'fork-head',
       pushTarget
@@ -421,12 +443,14 @@ describe('worktree remote runtime mutations', () => {
   it('hydrates a missing linked GitHub PR push target through the active remote runtime', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'feature/runtime-pr' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/runtime-wt',
       repoId: 'repo1',
       path: '/path/runtime-wt',
       linkedPR: 5571
     })
+
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.resolvePrBase') {
         return Promise.resolve({
@@ -436,6 +460,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'runtime-remote' }
         })
       }
+
       if (method === 'worktree.set') {
         return Promise.resolve({
           id: 'rpc-set-worktree',
@@ -444,6 +469,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'runtime-remote' }
         })
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     store.setState({
@@ -476,6 +502,7 @@ describe('worktree remote runtime mutations', () => {
   it('hydrates a host-stamped linked GitHub PR push target through the worktree owner runtime', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'feature/owner-runtime-pr' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/owner-runtime-wt',
       repoId: 'repo1',
@@ -483,6 +510,7 @@ describe('worktree remote runtime mutations', () => {
       hostId: 'runtime:owner-env',
       linkedPR: 5571
     })
+
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.resolvePrBase') {
         return Promise.resolve({
@@ -492,6 +520,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'owner-env' }
         })
       }
+
       if (method === 'worktree.set') {
         return Promise.resolve({
           id: 'rpc-owner-set-worktree',
@@ -500,6 +529,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'owner-env' }
         })
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     store.setState({
@@ -532,6 +562,7 @@ describe('worktree remote runtime mutations', () => {
   it('hydrates an SSH-owned linked GitHub PR push target through local IPC when a runtime is focused', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'feature/ssh-pr' }
+
     const wt = makeWorktree({
       id: 'repo-ssh::/home/orca/runtime-wt',
       repoId: 'repo-ssh',
@@ -539,6 +570,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 5571,
       hostId: 'ssh:ssh-1'
     })
+
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
       baseBranch: 'fork-head',
       pushTarget
@@ -575,12 +607,14 @@ describe('worktree remote runtime mutations', () => {
 
   it('keeps a linked review without a derivable target unmodified', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       linkedPR: 5571
     })
+
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({ baseBranch: 'fork-head' })
     store.setState({
       repos: [
@@ -628,6 +662,7 @@ describe('worktree remote runtime mutations', () => {
   it('updates only the explicitly selected owner when locators collide', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'
+
     const sshA = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
@@ -635,6 +670,7 @@ describe('worktree remote runtime mutations', () => {
       runtimeOwnerEnvironmentId: 'hub-a',
       comment: 'A'
     })
+
     const sshB = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
@@ -642,6 +678,7 @@ describe('worktree remote runtime mutations', () => {
       runtimeOwnerEnvironmentId: 'hub-b',
       comment: 'B'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-set-selected-owner',
       ok: true,
@@ -675,6 +712,7 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'
     const pushTarget = { remoteName: 'fork', branchName: 'feature/disambiguated' }
+
     const ownedWorktree = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
@@ -682,6 +720,7 @@ describe('worktree remote runtime mutations', () => {
       runtimeOwnerEnvironmentId: 'hub-a',
       linkedPR: 123
     })
+
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.resolvePrBase') {
         return Promise.resolve({
@@ -691,6 +730,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'hub-a' }
         })
       }
+
       if (method === 'worktree.set') {
         return Promise.resolve({
           id: 'rpc-ambiguous-set-worktree',
@@ -699,6 +739,7 @@ describe('worktree remote runtime mutations', () => {
           _meta: { runtimeId: 'hub-a' }
         })
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     store.setState({
@@ -741,12 +782,14 @@ describe('worktree remote runtime mutations', () => {
   it('hydrates a missing push target for an existing linked GitLab MR when supported', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'upstream', branchName: 'feature/mr' }
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       linkedGitLabMR: 42
     })
+
     mockApi.worktrees.resolveMrBase.mockResolvedValueOnce({
       baseBranch: 'upstream/feature/mr',
       pushTarget
@@ -774,18 +817,21 @@ describe('worktree remote runtime mutations', () => {
 
   it('skips push target hydration for invalid linked review numbers', async () => {
     const store = createTestStore()
+
     const github = makeWorktree({
       id: 'repo1::/path/github',
       repoId: 'repo1',
       path: '/path/github',
       linkedPR: 0
     })
+
     const gitlab = makeWorktree({
       id: 'repo1::/path/gitlab',
       repoId: 'repo1',
       path: '/path/gitlab',
       linkedGitLabMR: -1
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }

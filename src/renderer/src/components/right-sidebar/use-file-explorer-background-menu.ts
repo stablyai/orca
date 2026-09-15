@@ -28,9 +28,11 @@ export function useFileExplorerBackgroundMenu({
   const handleExplorerBackgroundContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       const target = event.target as HTMLElement
+
       if (target.closest('[data-slot="context-menu-trigger"]')) {
         return
       }
+
       event.preventDefault()
       window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
       setBgMenuPoint({ x: event.clientX, y: event.clientY })
@@ -44,10 +46,13 @@ export function useFileExplorerBackgroundMenu({
       if (!worktreePath || inlineInput) {
         return
       }
+
       const target = event.target as HTMLElement
+
       if (target.closest('[data-slot="context-menu-trigger"]')) {
         return
       }
+
       startNew('file', worktreePath, 0)
     },
     [inlineInput, startNew, worktreePath]

@@ -18,14 +18,21 @@ import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-ac
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 
 vi.mock('react-native', () => ({ Keyboard: { dismiss: vi.fn() } }))
+
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
+
 vi.mock('expo-clipboard', () => ({ getStringAsync: async () => 'pasted text' }))
+
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: '/tmp' } }))
+
 vi.mock('expo-image-manipulator', () => ({ ImageManipulator: {}, SaveFormat: {} }))
 
 const REPORT = 'orchestration.workerTerminalUserInput'
+
 const ref = <T>(current: T) => ({ current })
+
 const renderers: ReactTestRenderer[] = []
+
 function clientFixture() {
   return {
     sendRequest: vi.fn(async (method: string) => ({
@@ -45,6 +52,7 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
   const activeHandleRef = ref<string | null>(handle)
   const activeSessionTabTypeRef = ref<string | null>('terminal')
   const sendLiveTerminalInputRef = ref(async (_handle: string, _text: string) => false)
+
   const scope = {
     client,
     clientRef: ref(client),
@@ -74,11 +82,13 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
       settleBufferedTerminalDraftSend: () => true
     }
   }
+
   let actions!: ReturnType<typeof useMobileSessionTerminalSendActions>
   let live!: ReturnType<typeof useTerminalLiveInputCommit>
   let gestures!: ReturnType<typeof useMobileSessionTerminalInput>
   let paste!: ReturnType<typeof useMobileTerminalPaste>
   let diff!: ReturnType<typeof useMobileDiffReviewSendActions>
+
   function Harness() {
     live = useTerminalLiveInputCommit({
       activeHandle: handle,
@@ -114,12 +124,15 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
       setSendSheet: vi.fn(),
       saveCommentsAndReviewState: vi.fn()
     } as never)
+
     return null
   }
+
   act(() => {
     renderers.push(create(createElement(Harness)))
   })
   let text = ''
+
   return {
     'live field': async () => {
       text += 'x'
@@ -184,6 +197,7 @@ beforeEach(() => {
   vi.setSystemTime(1_000)
   resetWorkerTerminalTakeoverReportsForTest()
 })
+
 afterEach(() => {
   act(() => {
     for (const renderer of renderers.splice(0)) {
@@ -204,14 +218,17 @@ const realSites = [
   'dictation',
   'native chat'
 ] as const
+
 it.each(realSites)('%s reports on its send target once per handle per 30 seconds', async (site) => {
   const client = clientFixture()
   const sites = mountSendSites(client)
+
   const invoke = async () => {
     await act(async () => {
       await sites[site]()
     })
   }
+
   const reports = () => client.sendRequest.mock.calls.filter(([method]) => method === REPORT)
   await invoke()
   await invoke()

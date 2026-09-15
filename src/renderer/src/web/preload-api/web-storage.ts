@@ -14,17 +14,21 @@ export function getBrowserPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Windows')) {
     return 'win32'
   }
+
   if (navigator.userAgent.includes('Linux')) {
     return 'linux'
   }
+
   return 'darwin'
 }
 
 export function readJson<T>(key: string, fallback: T): T {
   const raw = window.localStorage.getItem(key)
+
   if (!raw) {
     return cloneJson(fallback)
   }
+
   try {
     return { ...cloneJson(fallback), ...JSON.parse(raw) } as T
   } catch {

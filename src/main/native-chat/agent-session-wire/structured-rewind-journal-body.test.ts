@@ -23,12 +23,15 @@ describe('rewind recovery of newer durable records', () => {
       input: { path: 'file' },
       state: 'paused-by-provider'
     }
+
     expect(restoreRewindJournalBody(body)).toEqual({ kind: 'status', text: JSON.stringify(body) })
+
     const status = {
       kind: 'status' as const,
       text: 'state',
       turnLifecycle: { turnId: 'turn', state: 'future-state' }
     }
+
     expect(restoreRewindJournalBody(status)).toEqual({
       kind: 'status',
       text: JSON.stringify(status)
@@ -47,6 +50,7 @@ describe('rewind recovery of newer durable records', () => {
           ...(state === 'interrupted' ? { completedAt: 20 } : {})
         }
       }
+
       expect(restoreRewindJournalBody(status)).toEqual(status)
     }
   )
@@ -60,6 +64,7 @@ describe('rewind recovery of newer durable records', () => {
       completedAt: 20,
       durationMs: 10
     }
+
     expect(restoreRewindJournalBody(turn)).toEqual(turn)
     const unknown = { ...turn, state: 'future-state' }
     expect(restoreRewindJournalBody(unknown)).toEqual({

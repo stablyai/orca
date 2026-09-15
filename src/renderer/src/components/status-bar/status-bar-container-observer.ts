@@ -7,6 +7,8 @@ export function observeStatusBarContainer(
       onWidthChange(entry.contentRect.width)
     }
   })
+
   observer.observe(node)
+
   return observer
 }

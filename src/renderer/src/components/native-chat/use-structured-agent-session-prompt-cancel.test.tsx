@@ -13,6 +13,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionPromptCancel: mocks.promptCancelSupported
 }))
+
 vi.mock('./use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
     state: {
@@ -28,6 +29,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
     loadOlder: vi.fn()
   })
 }))
+
 vi.mock('./use-structured-agent-session-outbox', () => ({
   structuredSessionOperationId: mocks.operationId,
   useStructuredAgentSessionOutbox: () => ({
@@ -43,6 +45,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 let items: AgentJournalRenderItem[] = []
+
 const target = { kind: 'local' } as const
 
 function pendingApproval(): AgentJournalRenderItem {
@@ -90,6 +93,7 @@ describe('desktop structured prompt cancellation', () => {
 
   it('sends item identity and revision on capable hosts', async () => {
     mocks.promptCancelSupported.mockResolvedValue(true)
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({ sessionId: 'session-1', target, agent: 'codex', isVisible: true })
     )

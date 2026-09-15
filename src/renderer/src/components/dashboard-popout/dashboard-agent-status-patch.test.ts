@@ -73,6 +73,7 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
         unseen: true
       })
     ])
+
     const result = patchDashboardSnapshotFromAgentStatus(
       original,
       event({ state: 'waiting', prompt: '', interactivePrompt: undefined, stateStartedAt: 250 })
@@ -131,6 +132,7 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
 
   it('asks the caller for topology only when the pane is unknown', () => {
     const original = snapshot()
+
     const result = patchDashboardSnapshotFromAgentStatus(
       original,
       event({ paneKey: 'tab-new:leaf-new' })

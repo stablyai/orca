@@ -24,10 +24,12 @@ import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycl
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const deadline = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => resolve(false), TERMINAL_FIT_RESTORE_DEADLINE_MS)
     timer.unref?.()
   })
+
   return Promise.race([pending, deadline]).finally(() => clearTimeout(timer))
 }
 
@@ -44,17 +46,21 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     'runtime:syncWindowGraph',
     (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
       const window = BrowserWindow.fromWebContents(event.sender)
+
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
       }
+
       if (event.senderFrame !== event.sender.mainFrame) {
         // Why: a disposed main frame can leave an invoke queued after its
         // replacement starts. It must not settle the replacement generation.
         throw new Error('Runtime graph sync must originate from the current main frame')
       }
+
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
+
       return runtime.syncWindowGraph(window.id, graph)
     }
   )
@@ -72,6 +78,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
+
       return (await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',
@@ -105,6 +112,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime subscription must originate from the current main frame')
       }
+
       const senderSubscriptions = desktopSenders.subscriptionsFor(event.sender)
       const connectionId = desktopSenders.connectionIdFor(event.sender)
       const previous = senderSubscriptions.get(args.subscriptionId)
@@ -112,11 +120,13 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
+
       const stop = (): void => {
         if (senderSubscriptions.get(args.subscriptionId) === controller) {
           senderSubscriptions.delete(args.subscriptionId)
         }
       }
+
       void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
         .dispatchStreaming(
           {
@@ -146,6 +156,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           }
         )
         .finally(stop)
+
       return { subscribed: true }
     }
   )
@@ -166,6 +177,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       rows: number
     }[] => {
       const overrides = runtime.getAllTerminalFitOverrides()
+
       return Array.from(overrides.entries()).map(([ptyId, override]) => ({
         ptyId,
         ...override
@@ -178,6 +190,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     'runtime:getTerminalDrivers',
     (): { ptyId: string; driver: RuntimeTerminalDriverState }[] => {
       const drivers = runtime.getAllTerminalDrivers()
+
       return Array.from(drivers.entries()).map(([ptyId, driver]) => ({ ptyId, driver }))
     }
   )
@@ -187,6 +200,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     'runtime:getBrowserDrivers',
     (): { browserPageId: string; driver: RuntimeBrowserDriverState }[] => {
       const drivers = runtime.getAllBrowserDrivers()
+
       return Array.from(drivers.entries()).map(([browserPageId, driver]) => ({
         browserPageId,
         driver
@@ -226,21 +240,26 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     // Why: keep one underlying reclaim per PTY even after callers time out;
     // layout serialization means a retry cannot bypass the wedged operation.
     let pending = pendingTerminalFitRestores.get(args.ptyId)
+
     if (!pending) {
       try {
         let tracked!: Promise<boolean>
+
         const clearTrackedRestore = (): void => {
           if (pendingTerminalFitRestores.get(args.ptyId) === tracked) {
             pendingTerminalFitRestores.delete(args.ptyId)
           }
         }
+
         tracked = runtime.reclaimTerminalForDesktop(args.ptyId).then(
           (restored) => {
             clearTrackedRestore()
+
             return restored
           },
           () => {
             clearTrackedRestore()
+
             return false
           }
         )
@@ -250,6 +269,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         return { restored: false }
       }
     }
+
     return { restored: await boundTerminalFitRestore(pending) }
   })
 

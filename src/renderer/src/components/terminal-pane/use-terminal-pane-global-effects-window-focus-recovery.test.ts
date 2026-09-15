@@ -41,6 +41,7 @@ function resetHookRefs(): void {
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
@@ -50,9 +51,11 @@ vi.mock('react', async (importOriginal) => {
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
+
       if (!reactRefState.slots[index]) {
         reactRefState.slots[index] = { current: value }
       }
+
       return reactRefState.slots[index] as { current: T }
     }
   }
@@ -104,9 +107,12 @@ vi.mock('./terminal-input-activity', () => ({
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
+
   const testHook = ((selector?: (state: ReturnType<typeof realHook.getState>) => unknown) =>
     selector ? selector(realHook.getState()) : realHook.getState()) as typeof realHook
+
   Object.assign(testHook, realHook)
+
   return { ...actual, useAppStore: testHook }
 })
 
@@ -166,9 +172,11 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(focusListener).toBeDefined()
     const listener = focusListener?.[1]
+
     if (typeof listener !== 'function') {
       throw new Error('expected focus listener')
     }
+
     manager.resetWebglTextureAtlases.mockClear()
     manager.scheduleRevealRepaint.mockClear()
     manager.scheduleRevealPresent.mockClear()
@@ -186,6 +194,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
   it('recovers visible terminal rendering and input when the window regains focus', () => {
     const terminal = { name: 'terminal-a' }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
@@ -221,9 +230,11 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(focusListener).toBeDefined()
     const listener = focusListener?.[1]
+
     if (typeof listener !== 'function') {
       throw new Error('expected focus listener')
     }
+
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
     manager.refreshAllPanes.mockClear()
@@ -267,12 +278,16 @@ describe('useTerminalPaneGlobalEffects', () => {
       fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
+
     const captured: { onSystemResumed: (() => void) | null } = { onSystemResumed: null }
+
     const unsubscribeSystemResumed = vi.fn()
+
     ;(
       window.api.ui as unknown as { onSystemResumed: (callback: () => void) => () => void }
     ).onSystemResumed = vi.fn((callback: () => void) => {
       captured.onSystemResumed = callback
+
       return unsubscribeSystemResumed
     })
 
@@ -316,6 +331,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       }),
       removeEventListener: vi.fn()
     })
+
     const manager = {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
@@ -326,6 +342,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
+
     const siblingManager = {
       resetWebglTextureAtlases: vi.fn()
     }
@@ -350,9 +367,11 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     const listener = documentListeners.get('visibilitychange')
     expect(listener).toBeDefined()
+
     if (typeof listener !== 'function') {
       throw new Error('expected visibilitychange listener')
     }
+
     manager.resetWebglTextureAtlases.mockClear()
     manager.scheduleRevealPresent.mockClear()
     siblingManager.resetWebglTextureAtlases.mockClear()
@@ -375,6 +394,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       addEventListener,
       removeEventListener: vi.fn()
     })
+
     const manager = {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
@@ -385,6 +405,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
+
     const useMountForVisibilityRecovery = (options: {
       isActive: boolean
       isVisible: boolean

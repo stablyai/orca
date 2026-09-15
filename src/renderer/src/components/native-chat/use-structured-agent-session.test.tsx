@@ -8,9 +8,13 @@ const mocks = vi.hoisted(() => ({
   operationId: vi.fn(),
   enqueueSettingsWrite: vi.fn()
 }))
+
 let fence = 3
+
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
+
 let items: AgentJournalRenderItem[] = []
+
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -63,6 +67,7 @@ import { useStructuredAgentSession } from './use-structured-agent-session'
 /** Replay every host mutation in order, exactly as the runtime does. */
 function seededByNextLaunch(): Record<string, string> | undefined {
   let persisted: PersistedNativeChatSessionOptions | undefined
+
   for (const [, mutation] of mocks.enqueueSettingsWrite.mock.calls) {
     persisted =
       applyNativeChatSessionOptionSettingsMutation(
@@ -70,6 +75,7 @@ function seededByNextLaunch(): Record<string, string> | undefined {
         mutation as Parameters<typeof applyNativeChatSessionOptionSettingsMutation>[1]
       ) ?? persisted
   }
+
   return resolveStructuredLaunchSeedOptions(persisted, 'codex')
 }
 
@@ -110,9 +116,11 @@ const FAST_OPTIONS = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((accept) => {
     resolve = accept
   })
+
   return { promise, resolve }
 }
 
@@ -137,6 +145,7 @@ describe('useStructuredAgentSession working state', () => {
         resolvedAt: null
       }
     ]
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -164,6 +173,7 @@ describe('useStructuredAgentSession working state', () => {
         resolvedAt: 2
       }
     ]
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -199,7 +209,9 @@ describe('useStructuredAgentSession options', () => {
           changed ? { ...OPTIONS, current: { model: 'gpt-fast', effort: 'low' } } : OPTIONS
         )
       }
+
       changed = true
+
       return Promise.resolve({
         ok: true,
         value: {
@@ -209,6 +221,7 @@ describe('useStructuredAgentSession options', () => {
         }
       })
     })
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -217,6 +230,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -241,6 +255,7 @@ describe('useStructuredAgentSession options', () => {
         ? Promise.resolve(OPTIONS)
         : Promise.reject(new Error('provider rejected option'))
     )
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -249,6 +264,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -268,7 +284,9 @@ describe('useStructuredAgentSession options', () => {
         // The hook also holds the session while it is mounted; only option writes are attempts.
         return Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
       }
+
       attempts += 1
+
       return Promise.resolve(
         attempts === 1
           ? {
@@ -288,6 +306,7 @@ describe('useStructuredAgentSession options', () => {
             }
       )
     })
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -296,6 +315,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -306,6 +326,7 @@ describe('useStructuredAgentSession options', () => {
     const mutations = mocks.call.mock.calls.filter(
       ([, method]) => method === 'agentSession.setOption'
     )
+
     expect(
       mutations.map(
         ([, , params]) =>
@@ -321,7 +342,9 @@ describe('useStructuredAgentSession options', () => {
         // The hook also holds the session while it is mounted; only option writes are attempts.
         return Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
       }
+
       attempts += 1
+
       return Promise.resolve(
         attempts === 1
           ? {
@@ -343,6 +366,7 @@ describe('useStructuredAgentSession options', () => {
             }
       )
     })
+
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -351,6 +375,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -366,6 +391,7 @@ describe('useStructuredAgentSession options', () => {
     const mutations = mocks.call.mock.calls.filter(
       ([, method]) => method === 'agentSession.setOption'
     )
+
     expect(
       mutations.map(
         ([, , params]) =>
@@ -383,12 +409,15 @@ describe('useStructuredAgentSession options', () => {
 
   it('ignores an option failure from a superseded fence', async () => {
     let reject!: (error: Error) => void
+
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
     })
+
     mocks.call.mockImplementation((_target, method) =>
       method === 'agentSession.options' ? Promise.resolve(OPTIONS) : pending
     )
+
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -397,6 +426,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
     let setting!: Promise<boolean>
     act(() => {
@@ -422,6 +452,7 @@ describe('useStructuredAgentSession options', () => {
             value: { turnId: 'background-tasks', cancelled: true }
           })
     )
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -462,6 +493,7 @@ describe('useStructuredAgentSession options', () => {
             }
           })
     )
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -470,6 +502,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -497,6 +530,7 @@ describe('useStructuredAgentSession options', () => {
             value: { key: 'effort', value: 'high', options: { effort: 'high' } }
           })
     )
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -505,6 +539,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -526,6 +561,7 @@ describe('useStructuredAgentSession options', () => {
             value: { key: 'effort', value: 'high', options: { effort: 'high' } }
           })
     )
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -534,6 +570,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -550,6 +587,7 @@ describe('useStructuredAgentSession options', () => {
         ? Promise.resolve(OPTIONS)
         : Promise.reject(new Error('provider rejected option'))
     )
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -558,6 +596,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
 
     await act(async () => {
@@ -571,6 +610,7 @@ describe('useStructuredAgentSession options', () => {
     mocks.call.mockImplementation((_target, method) =>
       Promise.resolve(method === 'agentSession.options' ? FAST_OPTIONS : null)
     )
+
     const supported = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-supported',
@@ -579,6 +619,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() =>
       expect(
         supported.result.current.optionSnapshot.find((entry) => entry.id === 'fastMode')?.kind
@@ -589,6 +630,7 @@ describe('useStructuredAgentSession options', () => {
     mocks.call.mockImplementation((_target, method) =>
       Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
     )
+
     const legacy = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-legacy',
@@ -597,6 +639,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(legacy.result.current.optionSnapshot).toHaveLength(2))
     expect(legacy.result.current.optionSnapshot.some((entry) => entry.id === 'fastMode')).toBe(
       false
@@ -612,7 +655,9 @@ describe('useStructuredAgentSession options', () => {
           current: { ...FAST_OPTIONS.current, fastMode }
         })
       }
+
       fastMode = true
+
       return Promise.resolve({
         ok: true,
         value: {
@@ -622,6 +667,7 @@ describe('useStructuredAgentSession options', () => {
         }
       })
     })
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -630,6 +676,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(3))
 
     await act(async () => {
@@ -663,17 +710,21 @@ describe('useStructuredAgentSession options', () => {
     mocks.call.mockImplementation((_target, method) => {
       if (method === 'agentSession.options') {
         optionReads += 1
+
         if (optionReads === 1) {
           return Promise.resolve(FAST_OPTIONS)
         }
+
         if (optionReads === 2) {
           return staleRead.promise
         }
+
         return Promise.resolve({
           ...FAST_OPTIONS,
           current: { ...FAST_OPTIONS.current, fastMode: true }
         })
       }
+
       return Promise.resolve({
         ok: true,
         value: {
@@ -683,6 +734,7 @@ describe('useStructuredAgentSession options', () => {
         }
       })
     })
+
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -691,6 +743,7 @@ describe('useStructuredAgentSession options', () => {
         isVisible: true
       })
     )
+
     await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(3))
     items = [
       {
@@ -733,18 +786,22 @@ describe('turn timing', () => {
 
   it('exposes host-settled durations and a skew-free live anchor', () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(50_000)
+
       const item = (
         itemId: string,
         observedAt: number,
         body: AgentJournalRenderItem['body']
       ): AgentJournalRenderItem => ({ itemId, revision: 0, sequence: observedAt, observedAt, body })
+
       const user: AgentJournalRenderItem['body'] = {
         kind: 'message',
         role: 'user',
         blocks: [{ type: 'text', text: 'go' }]
       }
+
       items = [
         item('u1', 9_000_000, user),
         item('l1', 9_000_100, {
@@ -764,6 +821,7 @@ describe('turn timing', () => {
           turnLifecycle: { turnId: 't2', state: 'running', startedAt: 9_010_000 }
         })
       ]
+
       const { result, rerender } = renderHook(() =>
         useStructuredAgentSession({
           sessionId: 'session-1',
@@ -772,6 +830,7 @@ describe('turn timing', () => {
           isVisible: true
         })
       )
+
       expect(result.current.isWorking).toBe(true)
       expect(result.current.workingStartedAt).toBe(50_000 - 300)
       // t2 is still running, so the host has no duration for it: an explicit null
@@ -802,9 +861,11 @@ describe('session command catalog stream', () => {
 
   it('uses owner-scoped catalog state without a separate command RPC or stale cache', () => {
     sessionCommands = commands
+
     const { result, rerender } = renderHook((props) => useStructuredAgentSession(props), {
       initialProps: args
     })
+
     expect(result.current.sessionCommands).toEqual(commands)
     sessionCommands = undefined
     rerender({ ...args, sessionId: 'two' })
@@ -821,9 +882,11 @@ describe('session command catalog stream', () => {
     sessionCommands = commands
     const { result, rerender } = renderHook(() => useStructuredAgentSession(args))
     expect(result.current.sessionCommands).toEqual(commands)
+
     for (let index = 0; index < 30; index += 1) {
       rerender()
     }
+
     sessionCommands = []
     rerender()
     expect(result.current.sessionCommands).toEqual([])
@@ -847,6 +910,7 @@ describe('structured option surface snapshot identity', () => {
    *  returns a new array per call and never quiesces. */
   it('returns the same snapshot instance for repeated reads at one state', async () => {
     mocks.call.mockResolvedValue(FAST_OPTIONS)
+
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -855,6 +919,7 @@ describe('structured option surface snapshot identity', () => {
         isVisible: true
       })
     )
+
     await waitFor(() =>
       expect(result.current.optionSurface.getSnapshot().length).toBeGreaterThan(0)
     )

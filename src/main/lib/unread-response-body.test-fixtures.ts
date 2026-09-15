@@ -9,5 +9,6 @@ export function cancelTrackingResponse(status: number, onCancel: () => void): Re
       onCancel()
     }
   })
+
   return new Response(body, { status })
 }

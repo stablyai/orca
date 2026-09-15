@@ -13,6 +13,7 @@ describe('Pi status owner recovery', () => {
       // pane never reports status again.
       const ownerKey =
         kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+
       const harness = createHarness({
         kind,
         pid: SELF_PID,

@@ -11,6 +11,7 @@ import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 
 const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }))
+
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
 
 import {
@@ -93,6 +94,7 @@ describe('daemon audit eligibility telemetry', () => {
     expect(validate('daemon_audit_eligibility', firstProperties).ok).toBe(true)
 
     const serializedProperties = JSON.stringify(firstProperties)
+
     for (const rawIdentity of [
       exactIncarnation.identity.launchNonce,
       String(exactIncarnation.identity.pid),
@@ -180,6 +182,7 @@ describe('daemon audit eligibility telemetry', () => {
       nowMs += 1_000
       trackEligibility(recordAuthenticatedInventory(context, null))
     }
+
     expect(trackMock).toHaveBeenCalledTimes(2)
 
     nowMs += 5 * 60_000

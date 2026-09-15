@@ -31,6 +31,7 @@ export function waitForSharedControlReadyWithTimeout(args: {
   if (args.signal?.aborted) {
     return Promise.reject(abortSignalReason(args.signal))
   }
+
   if (args.readyWaiters.length >= REMOTE_RUNTIME_MAX_READY_WAITERS) {
     return Promise.reject(
       new RemoteRuntimeClientError(
@@ -39,38 +40,49 @@ export function waitForSharedControlReadyWithTimeout(args: {
       )
     )
   }
+
   return new Promise<void>((resolve, reject) => {
     let settled = false
     let waiter!: SharedControlReadyWaiter
+
     const timeout = setTimeout(() => {
       if (settled) {
         return
       }
+
       settled = true
       const index = args.readyWaiters.indexOf(waiter)
+
       if (index !== -1) {
         args.readyWaiters.splice(index, 1)
       }
+
       args.signal?.removeEventListener('abort', onAbort)
       reject(remoteRuntimeUnavailableError())
     }, args.timeoutMs)
+
     const onAbort = (): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       const index = args.readyWaiters.indexOf(waiter)
+
       if (index !== -1) {
         args.readyWaiters.splice(index, 1)
       }
+
       reject(abortSignalReason(args.signal!))
     }
+
     waiter = {
       resolve: () => {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timeout)
         args.signal?.removeEventListener('abort', onAbort)
@@ -80,6 +92,7 @@ export function waitForSharedControlReadyWithTimeout(args: {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timeout)
         args.signal?.removeEventListener('abort', onAbort)
@@ -88,17 +101,22 @@ export function waitForSharedControlReadyWithTimeout(args: {
     }
     args.readyWaiters.push(waiter)
     args.signal?.addEventListener('abort', onAbort, { once: true })
+
     if (args.signal?.aborted) {
       onAbort()
+
       return
     }
+
     try {
       args.open()
     } catch (error) {
       const index = args.readyWaiters.indexOf(waiter)
+
       if (index !== -1) {
         args.readyWaiters.splice(index, 1)
       }
+
       waiter.reject(error instanceof Error ? error : remoteRuntimeUnavailableError(String(error)))
     }
   })

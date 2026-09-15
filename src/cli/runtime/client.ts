@@ -95,19 +95,24 @@ export class RuntimeClient {
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation
     const durableMutation = !legacyTerminalPrompt && isDurableMutation(method, params)
+
     if (orchestrationMutation) {
       await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
     }
+
     const orchestrationRequestId = durableMutation
       ? (options?.orchestrationRequestId ?? randomUUID())
       : undefined
+
     const originalCommand = durableMutation
       ? buildOrchestrationRecoveryCommand(method, params, this.cliExecutable, this.originalArgs)
       : undefined
+
     const recover = (error: unknown, targetRuntimeId: string | null) => {
       if (legacyTerminalPrompt) {
         return attachLegacyTerminalPromptRecovery(error)
       }
+
       if (
         terminalPromptMutation &&
         options?.terminalPromptPreflight &&
@@ -119,8 +124,10 @@ export class RuntimeClient {
       ) {
         return attachUnverifiedTerminalPromptRecovery(error)
       }
+
       return attachDurableMutationRecovery(error, orchestrationRequestId, originalCommand, method)
     }
+
     const compatibilityEnvelope = method.startsWith('orchestration.')
       ? {
           ...this.orchestrationCompatibility,
@@ -128,6 +135,7 @@ export class RuntimeClient {
             orchestrationRequestId ?? this.orchestrationCompatibility.compatibilityInvocationId
         }
       : {}
+
     const envelope = {
       orchestrationCapability: options?.orchestrationCapability,
       orchestrationContractVersion: method.startsWith('orchestration.')
@@ -136,9 +144,11 @@ export class RuntimeClient {
       orchestrationRequestId,
       ...compatibilityEnvelope
     }
+
     if (this.remotePairing) {
       const transport = await loadWebSocketTransport()
       let response
+
       try {
         response = await this.remoteCompat.send<TResult>({
           transport,
@@ -151,26 +161,33 @@ export class RuntimeClient {
       } catch (error) {
         throw recover(error, null)
       }
+
       if (response.ok === false) {
         throw recover(new RuntimeRpcFailureError(response), null)
       }
+
       if (this.environmentSelector) {
         markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
           runtimeId: response._meta.runtimeId
         })
       }
+
       return response
     }
+
     const metadata = readMetadata(this.userDataPath)
     let response
+
     try {
       response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
     } catch (error) {
       throw recover(error, metadata.runtimeId ?? null)
     }
+
     if (response.ok === false) {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)
     }
+
     return response
   }
 
@@ -183,24 +200,30 @@ export class RuntimeClient {
     if (method === 'orchestration.workerStart') {
       const requestedValue = getTimeoutMsParam(params)
       const requested = typeof requestedValue === 'number' ? requestedValue : Number(requestedValue)
+
       if (!isWorkerStartTimeoutWithinTimerLimit(requested)) {
         throw new RuntimeClientError(
           'invalid_argument',
           `--timeout-ms is too large for worker-start transport grace; the derived timeout must be <= ${MAX_TIMER_DELAY_MS}ms.`
         )
       }
+
       const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
+
       return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
     }
+
     if (
       (method === 'orchestration.check' && isWaitingCheck(params)) ||
       method === 'terminal.wait'
     ) {
       const inner = Number(getTimeoutMsParam(params))
+
       if (Number.isFinite(inner) && inner > 0) {
         return Math.max(inner + LONG_POLL_CLIENT_GRACE_MS, this.requestTimeoutMs)
       }
     }
+
     return this.requestTimeoutMs
   }
 
@@ -209,6 +232,7 @@ export class RuntimeClient {
       const response = await this.call<RuntimeStatus>('status.get')
       this.remoteCompat.noteVerifiedStatus(response.result)
       const graphState = response.result.graphStatus
+
       return {
         id: response.id,
         ok: true,
@@ -240,6 +264,7 @@ export class RuntimeClient {
         _meta: response._meta
       }
     }
+
     return getCliStatus(this.userDataPath)
   }
 
@@ -247,14 +272,17 @@ export class RuntimeClient {
     if (!this.orchestrationContractCheck) {
       this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(timeoutMs)
     }
+
     await this.orchestrationContractCheck
   }
 
   private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<void> {
     const response = await this.call<RuntimeStatus>('status.get', undefined, { timeoutMs })
+
     if (this.remotePairing) {
       this.remoteCompat.noteVerifiedStatus(response.result)
     }
+
     if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
       throw new RuntimeClientError(
         'orchestration_migration_required',
@@ -266,6 +294,7 @@ export class RuntimeClient {
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
     const initial = await this.getCliStatus()
+
     if (this.remotePairing) {
       return initial
     }
@@ -275,20 +304,26 @@ export class RuntimeClient {
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }
+
     launchOrcaApp()
+
     if (initial.result.app.desktopWindowStatus === 'available') {
       return initial
     }
 
     const startedAt = Date.now()
+
     while (Date.now() - startedAt < timeoutMs) {
       const status = await this.getCliStatus()
+
       if (status.result.app.desktopWindowStatus === 'blocked') {
         throwDesktopActivationBlocked()
       }
+
       if (status.result.app.desktopWindowStatus === 'available') {
         return status
       }
+
       await delay(250)
     }
 

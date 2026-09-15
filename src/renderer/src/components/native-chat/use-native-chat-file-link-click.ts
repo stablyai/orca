@@ -9,9 +9,11 @@ export function useNativeChatFileLinkClick(
   const openFileLink = useCallback<CommentMarkdownLinkClickHandler>(
     (event, href) => {
       const target = resolveNativeChatFileLink(href, context)
+
       if (!target || !context) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       openDetectedFilePath(target.absolutePath, target.line, target.column, {
@@ -23,5 +25,6 @@ export function useNativeChatFileLinkClick(
     },
     [context]
   )
+
   return context ? openFileLink : undefined
 }

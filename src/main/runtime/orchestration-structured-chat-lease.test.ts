@@ -15,25 +15,30 @@ import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
 
 const WORKTREE_ID = 'repo-structured-chat::/tmp/structured-chat'
+
 const SESSION_ID = 'session-structured-chat'
+
 const COORDINATOR = {
   handle: 'term_structured_coord',
   tabId: '11111111-1111-4111-8111-111111111111',
   leafId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   ptyId: 'pty-structured-coord'
 }
+
 const WORKER = {
   handle: 'term_structured_worker',
   tabId: '22222222-2222-4222-8222-222222222222',
   leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   ptyId: 'pty-structured-worker'
 }
+
 const PLAIN = {
   handle: 'term-plain',
   tabId: '33333333-3333-4333-8333-333333333333',
   leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
   ptyId: 'pty-plain'
 }
+
 const LOCATION: AgentSessionExecutionLocation = {
   executionHostId: 'local',
   wslDistro: null,
@@ -49,6 +54,7 @@ function paneKey(terminal: TestTerminal): string {
 
 function makeStore() {
   const session = getDefaultWorkspaceSession()
+
   const repo = {
     id: 'repo-structured-chat',
     path: '/tmp/structured-chat',
@@ -56,6 +62,7 @@ function makeStore() {
     badgeColor: '#000000',
     addedAt: 0
   }
+
   return {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
@@ -90,11 +97,14 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       repoId: 'repo-structured-chat'
     } as never)
     writes = vi.fn<(ptyId: string, data: string) => void>()
+
     const admittedWrite = (ptyId: string, data: string): boolean => {
       agentSessionPtyWriteGate.assertAdmitted(ptyId)
       writes(ptyId, data)
+
       return true
     }
+
     runtime.setPtyController({
       spawn: vi.fn(async () => ({ id: 'unused' })),
       write: admittedWrite,
@@ -104,6 +114,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       listProcesses: vi.fn(async () => []),
       hasPty: vi.fn(() => true)
     } as never)
+
     for (const terminal of [COORDINATOR, WORKER, PLAIN]) {
       runtime.registerPty(terminal.ptyId, WORKTREE_ID, null, {
         tabId: terminal.tabId,
@@ -113,6 +124,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       })
       runtime.registerPreAllocatedHandleForPty(terminal.ptyId, terminal.handle)
     }
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [COORDINATOR, WORKER, PLAIN].map((terminal) => ({
@@ -133,10 +145,12 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       }))
     })
     await runtime.listTerminals()
+
     for (const terminal of [COORDINATOR, WORKER, PLAIN]) {
       runtime.onPtyData(terminal.ptyId, '\x1b]0;Codex working\x07', 1)
       runtime.onPtyData(terminal.ptyId, '\x1b]0;Codex done\x07', 2)
     }
+
     operationSequence = 0
     await establishOwner('native', 'spawn-native', null)
     agentSessionPtyWriteGate.attachRecordLookup((sessionId) => recordStore.getRecord(sessionId))
@@ -156,6 +170,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
 
   function operation() {
     operationSequence += 1
+
     return {
       callerKey: 'structured-chat-test',
       operationId: `1800000000000-${operationSequence.toString(16).padStart(32, '0')}`,
@@ -169,6 +184,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
     expectedFence: number | null
   ): Promise<void> {
     const now = 1_800_000_000_000 + operationSequence
+
     const reserved = await recordStore.reserveOwner({
       sessionId: SESSION_ID,
       location: LOCATION,
@@ -186,6 +202,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       operation: operation(),
       now
     })
+
     const fence = reserved.record.lease.runtimeFence
     await recordStore.commitProcessIdentity({
       sessionId: SESSION_ID,
@@ -278,6 +295,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.ok).toBe(true)
     expect(response.result).toMatchObject({
       state: 'failed',
@@ -300,9 +318,11 @@ describe('orchestration while Structured Chat owns an agent session', () => {
     })
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toMatchObject({
       send: {
         handle: WORKER.handle,
@@ -328,6 +348,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       runtime.sendTerminalAgentPrompt(WORKER.handle, 'x'.repeat(20_000), {
         beforeWrite: async () => {
           writesStarted += 1
+
           if (writesStarted === 2) {
             await establishOwner('native', 'spawn-native-transfer', 2)
           }
@@ -362,6 +383,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
   it('settles worker_done while its pane remains in Structured Chat', async () => {
     const run = createRun()
     const task = db.createTask({ spec: 'Finish from Structured Chat', runId: run.id })
+
     const dispatch = db.createDispatchContext({
       taskId: task.id,
       assigneeHandle: WORKER.handle,
@@ -370,6 +392,7 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER
     })
+
     const capability = db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: paneKey(WORKER),

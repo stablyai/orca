@@ -14,6 +14,7 @@ function fakeClient(script: (method: string, call: number) => unknown, calls: Ca
     sendRequest: async (method: string, params?: unknown) => {
       calls.push({ method, params })
       const result = script(method, calls.length)
+
       if (result instanceof Error) {
         return {
           id: '1',
@@ -22,6 +23,7 @@ function fakeClient(script: (method: string, call: number) => unknown, calls: Ca
           _meta: { runtimeId: 'r' }
         }
       }
+
       return { id: '1', ok: true, result, _meta: { runtimeId: 'r' } }
     }
   } as unknown as RpcClient
@@ -114,10 +116,12 @@ describe('createBlankWorkspace', () => {
 
   it('retries with a numeric suffix on a branch-collision error', async () => {
     const calls: Call[] = []
+
     const client = fakeClient((_method, call) => {
       if (call === 1) {
         return new Error('Branch "octopus" already exists locally. Pick a different branch name.')
       }
+
       return { worktree: { id: 'wt-3' } }
     }, calls)
 
@@ -140,10 +144,12 @@ describe('createBlankWorkspace', () => {
 
   it('retries on the bare older-runtime collision message', async () => {
     const calls: Call[] = []
+
     const client = fakeClient((_method, call) => {
       if (call === 1) {
         return new Error('Branch "octopus" already exists.')
       }
+
       return { worktree: { id: 'wt-4' } }
     }, calls)
 

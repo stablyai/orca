@@ -1,6 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+
 const storage = vi.hoisted(() => new Map<string, string>())
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
@@ -9,13 +11,16 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     }
   }
 }))
+
 import { rememberPushDismissal, wasPushDismissed } from './push-dismissal-watermarks'
+
 const payload = {
   hostFingerprint: 'host-a',
   notificationEpoch: 'epoch-a',
   notificationId: 'note',
   notificationSeq: 2
 }
+
 beforeEach(() => {
   storage.clear()
   vi.mocked(AsyncStorage.getItem)
@@ -60,6 +65,7 @@ it('joins an overtaking JavaScript write before retrying a delayed negative snap
     await new Promise<void>((resolve) => {
       finish = resolve
     })
+
     return snapshot
   })
   const pending = wasPushDismissed(payload)
@@ -79,14 +85,17 @@ it.each([1, 3])('retains live dismissals beyond 512 entries across %i hosts', as
       notificationId: `note-${index}`
     })
   }
+
   vi.resetModules()
   const restarted = await import('./push-dismissal-watermarks')
+
   for (const index of [0, 1, 519]) {
     const alert = {
       ...payload,
       hostFingerprint: `host-${index % hosts}`,
       notificationId: `note-${index}`
     }
+
     expect(await restarted.wasPushDismissed(alert)).toBe(true)
     expect(await restarted.wasPushDismissed({ ...alert, notificationSeq: 3 })).toBe(false)
   }

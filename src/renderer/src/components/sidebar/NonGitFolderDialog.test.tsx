@@ -36,15 +36,19 @@ function textContent(node: ReactModule.ReactNode): string {
   if (node == null || typeof node === 'boolean') {
     return ''
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(textContent).join('')
   }
+
   if (typeof node === 'object' && 'props' in node) {
     return textContent((node as { props?: { children?: ReactModule.ReactNode } }).props?.children)
   }
+
   return ''
 }
 
@@ -58,6 +62,7 @@ vi.mock('@/store', () => {
       }
     }
   )
+
   return { useAppStore }
 })
 
@@ -74,6 +79,7 @@ vi.mock('@/components/ui/dialog', () => ({
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick }: { children: ReactModule.ReactNode; onClick?: () => unknown }) => {
     mocks.buttons.push({ label: textContent(children), onClick })
+
     return <button onClick={onClick}>{children}</button>
   }
 }))
@@ -215,6 +221,7 @@ describe('NonGitFolderDialog', () => {
       kind: 'folder',
       connectionId: 'ssh-1'
     }
+
     const localWorktree = makeWorktree('shared-repo::/local/non-git', '/local/non-git', 'local')
     const sshWorktree = makeWorktree('shared-repo::/srv/non-git', '/srv/non-git', 'ssh:ssh-1')
     mocks.state.modalData = {
@@ -232,6 +239,7 @@ describe('NonGitFolderDialog', () => {
     mocks.addRemote.mockResolvedValue({ repo })
     mocks.state.fetchWorktrees.mockImplementation(async () => {
       mocks.state.worktreesByRepo = { [repo.id]: [localWorktree, sshWorktree] }
+
       return true
     })
     renderToStaticMarkup(<NonGitFolderDialog />)

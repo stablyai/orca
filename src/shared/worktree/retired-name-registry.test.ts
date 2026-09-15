@@ -12,6 +12,7 @@ import {
 } from './retired-name-registry'
 
 const POOL = MARINE_CREATURES.map((name) => name.toLowerCase())
+
 const tier = (n: number) => POOL.map((name) => (n === 1 ? name : `${name}-${n}`))
 
 describe('creatureNameTier', () => {
@@ -61,6 +62,7 @@ describe('compactRetiredNames', () => {
       exhaustedTiers: 0,
       names: [...tier(3), ...tier(2), ...tier(1)]
     })
+
     expect(registry).toEqual({ exhaustedTiers: 3, names: [] })
   })
 
@@ -69,6 +71,7 @@ describe('compactRetiredNames', () => {
       exhaustedTiers: 0,
       names: [...tier(1), 'nautilus-3', 'nautilus-2-3']
     })
+
     expect(registry.exhaustedTiers).toBe(1)
     expect([...registry.names].sort()).toEqual(['nautilus-2-3', 'nautilus-3'])
   })
@@ -160,6 +163,7 @@ describe('end-to-end retirement guarantee', () => {
   it('never suggests a name that has been retired, compacted or not', () => {
     let registry = EMPTY_RETIRED_NAME_REGISTRY
     const issued: string[] = []
+
     // Two full tiers plus one, so the run crosses compaction twice and lands above the watermark.
     for (let index = 0; index < POOL.length * 2 + 1; index += 1) {
       const name = selectSuggestedCreatureName(registry.names, pickFirst, registry.exhaustedTiers)

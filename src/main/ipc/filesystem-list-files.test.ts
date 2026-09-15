@@ -47,6 +47,7 @@ function staged(mode: string, path: string): string {
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
+
   ;(p as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (p as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -66,6 +67,7 @@ function createMissingRipgrepProcess(): ChildProcess {
   const child = createMockProcess()
   Object.defineProperty(child, 'pid', { value: undefined })
   void Promise.resolve().then(() => child.emit('close', -2, null))
+
   return child
 }
 
@@ -91,6 +93,7 @@ describe('filesystem-list-files', () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()
     spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+
     const promise = listQuickOpenFiles(
       '/mock/root',
       {} as unknown as Store,
@@ -121,6 +124,7 @@ describe('filesystem-list-files', () => {
       if (isIgnoredRgPass(args)) {
         return p2
       }
+
       return p1
     })
 
@@ -167,6 +171,7 @@ describe('filesystem-list-files', () => {
       if (isIgnoredRgPass(args)) {
         return p2
       }
+
       return p1
     })
 
@@ -197,6 +202,7 @@ describe('filesystem-list-files', () => {
       if (isIgnoredRgPass(args)) {
         return p2
       }
+
       return p1
     })
 
@@ -238,6 +244,7 @@ describe('filesystem-list-files', () => {
       if (isIgnoredRgPass(args)) {
         return p2
       }
+
       return p1
     })
 
@@ -260,6 +267,7 @@ describe('filesystem-list-files', () => {
       if (isIgnoredRgPass(args)) {
         return p2
       }
+
       return p1
     })
 
@@ -283,6 +291,7 @@ describe('filesystem-list-files', () => {
       if (isIgnoredRgPass(args)) {
         return p2
       }
+
       return p1
     })
 
@@ -309,6 +318,7 @@ describe('filesystem-list-files', () => {
         if (isIgnoredRgPass(args)) {
           return p2
         }
+
         return p1
       })
 
@@ -342,12 +352,14 @@ describe('filesystem-list-files', () => {
     spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
     const controller = new AbortController()
     const cancellation = new FileListingCancelledError('superseded')
+
     const promise = listQuickOpenFiles(
       '/mock/root',
       {} as unknown as Store,
       undefined,
       controller.signal
     )
+
     await flushMicrotasks()
 
     controller.abort(cancellation)
@@ -365,6 +377,7 @@ describe('filesystem-list-files', () => {
       if (isIgnoredRgPass(args)) {
         return p2
       }
+
       return p1
     })
 
@@ -402,6 +415,7 @@ describe('filesystem-list-files', () => {
       undefined,
       controller.signal
     )
+
     await flushMicrotasks()
     controller.abort(cancellation)
     first.emit('close', -2, null)
@@ -427,12 +441,15 @@ describe('filesystem-list-files', () => {
         if (cmd === 'rg') {
           return isIgnoredRgPass(args) ? missingIgnored : primary
         }
+
         if (args.includes('rev-parse')) {
           return revParse
         }
+
         if (args.includes('ls-files')) {
           return gitPassIndex++ === 0 ? gitPrimary : gitIgnored
         }
+
         return createMockProcess()
       })
 
@@ -473,13 +490,17 @@ describe('filesystem-list-files', () => {
         if (cmd === 'rg') {
           return createMissingRipgrepProcess()
         }
+
         if (cmd === 'git' && args.includes('rev-parse')) {
           return revParseProc
         }
+
         if (cmd === 'git' && args.includes('ls-files')) {
           callIndex++
+
           return callIndex === 1 ? gitP1 : gitP2
         }
+
         return createMockProcess()
       })
 
@@ -520,6 +541,7 @@ describe('filesystem-list-files', () => {
       const gitCalls = spawnMock.mock.calls.filter(
         (call) => call[0] === 'git' && (call[1] as string[]).includes('ls-files')
       )
+
       expect(gitCalls.length).toBe(2)
       expect(gitCalls[0][1]).toContain('ls-files')
       expect(gitCalls[0][1]).toContain('-s')
@@ -545,13 +567,17 @@ describe('filesystem-list-files', () => {
         if (cmd === 'rg') {
           return createMissingRipgrepProcess()
         }
+
         if (cmd === 'git' && args.includes('rev-parse')) {
           return revParseProc
         }
+
         if (cmd === 'git' && args.includes('ls-files')) {
           callIndex += 1
+
           return callIndex === 1 ? gitP1 : gitP2
         }
+
         return createMockProcess()
       })
 
@@ -562,6 +588,7 @@ describe('filesystem-list-files', () => {
         undefined,
         2
       )
+
       setTimeout(() => revParseProc.emit('close', 0, null), 0)
       setTimeout(() => {
         ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'one.ts\0two.ts')
@@ -581,9 +608,11 @@ describe('filesystem-list-files', () => {
         if (cmd === 'rg') {
           return createMissingRipgrepProcess()
         }
+
         if (cmd === 'git' && args.includes('rev-parse')) {
           return revParseProc
         }
+
         return primary
       })
 
@@ -594,6 +623,7 @@ describe('filesystem-list-files', () => {
         undefined,
         1
       )
+
       setTimeout(() => revParseProc.emit('close', 0, null), 0)
       setTimeout(() => {
         ;(primary.stdout as unknown as EventEmitter).emit(
@@ -617,13 +647,17 @@ describe('filesystem-list-files', () => {
         if (cmd === 'rg') {
           return createMissingRipgrepProcess()
         }
+
         if (cmd === 'git' && args.includes('rev-parse')) {
           return revParseProc
         }
+
         if (cmd === 'git' && args.includes('ls-files')) {
           callIndex++
+
           return callIndex === 1 ? gitP1 : gitP2
         }
+
         return createMockProcess()
       })
 
@@ -670,13 +704,17 @@ describe('filesystem-list-files', () => {
           if (cmd === 'rg') {
             return createMissingRipgrepProcess()
           }
+
           if (cmd === 'git' && args.includes('rev-parse')) {
             return revParseProc
           }
+
           if (cmd === 'git' && args.includes('ls-files')) {
             callIndex++
+
             return callIndex === 1 ? gitP1 : gitP2
           }
+
           return createMockProcess()
         })
 
@@ -727,13 +765,17 @@ describe('filesystem-list-files', () => {
           if (cmd === 'rg') {
             return createMissingRipgrepProcess()
           }
+
           if (cmd === 'git' && args.includes('rev-parse')) {
             return revParseProc
           }
+
           if (cmd === 'git' && args.includes('ls-files')) {
             callIndex++
+
             return callIndex === 1 ? gitP1 : gitP2
           }
+
           return createMockProcess()
         })
 
@@ -779,6 +821,7 @@ describe('filesystem-list-files', () => {
         if (isIgnoredRgPass(args)) {
           return p2
         }
+
         return p1
       })
 

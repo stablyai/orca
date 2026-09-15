@@ -78,6 +78,7 @@ describe('registerOrcaProfileHandlers auth channels', () => {
       state: 'unconfigured',
       persistence: 'none'
     }
+
     getCurrentOrcaProfileAuthStatusMock.mockReturnValue(status)
     registerOrcaProfileHandlers({
       flush: vi.fn(),
@@ -154,6 +155,7 @@ describe('registerOrcaProfileHandlers auth channels', () => {
       profiles: [],
       profile: { id: 'cloud-1' }
     }
+
     createCloudLinkedOrcaProfileMock.mockResolvedValue(createResult)
     registerOrcaProfileHandlers({
       flush: vi.fn(),

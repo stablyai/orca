@@ -13,6 +13,7 @@ describe('Run coordinator handle history migration', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
@@ -23,11 +24,13 @@ describe('Run coordinator handle history migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-handle-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const run = db.createRun({
       objective: 'migration authority',
       coordinatorHandle: 'term_old',
       coordinatorPaneKey: 'tab:leaf'
     })
+
     db.close()
     db = undefined
 
@@ -50,6 +53,7 @@ describe('Run coordinator handle history migration', () => {
       coordinatorHandle: 'term_new',
       coordinatorPaneKey: 'tab:leaf'
     })
+
     const late = db.insertMessage({
       runId: run.id,
       from: 'worker',
@@ -57,6 +61,7 @@ describe('Run coordinator handle history migration', () => {
       subject: 'late completion',
       type: 'worker_done'
     })
+
     sqlite.prepare('UPDATE messages SET to_handle = ? WHERE id = ?').run('term_old', late.id)
 
     expect(db.routeForeignDirectMessagesToOwnedMailboxes('term_old')).toMatchObject({
@@ -70,11 +75,13 @@ describe('Run coordinator handle history migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-v28-convergence-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const run = db.createRun({
       objective: 'schema collision',
       coordinatorHandle: 'term_existing',
       coordinatorPaneKey: 'tab:leaf'
     })
+
     db.close()
     db = undefined
 
@@ -97,11 +104,13 @@ describe('Run coordinator handle history migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-old-runtime-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const run = db.createRun({
       objective: 'mixed-version authority',
       coordinatorHandle: 'term_v28',
       coordinatorPaneKey: 'tab:leaf'
     })
+
     db.close()
     db = undefined
 
@@ -128,6 +137,7 @@ describe('Run coordinator handle history migration', () => {
       { terminal_handle: 'term_v27_second' },
       { terminal_handle: 'term_v28' }
     ])
+
     const late = db.insertMessage({
       runId: run.id,
       from: 'worker',
@@ -135,6 +145,7 @@ describe('Run coordinator handle history migration', () => {
       subject: 'late intermediate completion',
       type: 'worker_done'
     })
+
     expect(db.getMessageById(late.id)?.to_handle).toBe(`run:${run.id}`)
   })
 
@@ -142,11 +153,13 @@ describe('Run coordinator handle history migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-trigger-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const run = db.createRun({
       objective: 'trigger migration',
       coordinatorHandle: 'term_migrated',
       coordinatorPaneKey: 'tab:leaf'
     })
+
     db.close()
     db = undefined
 
@@ -156,6 +169,7 @@ describe('Run coordinator handle history migration', () => {
     oldDb.close()
 
     db = new OrchestrationDb(dbPath)
+
     const message = db.insertMessage({
       runId: run.id,
       from: 'worker',

@@ -26,6 +26,7 @@ export function useRichMarkdownReviewCopyFeedback({
 
   const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
     const copied = await copyReviewNotes(markdownReviewNotes, markdownReviewContent)
+
     if (copied && rootRef.current) {
       clearReviewCopyTimers()
       setCopiedReviewNoteId(null)
@@ -40,6 +41,7 @@ export function useRichMarkdownReviewCopyFeedback({
   const handleCopyMarkdownReviewNote = useCallback(
     async (note: MarkdownReviewNote): Promise<void> => {
       const copied = await copyReviewNotes([note], markdownReviewContent)
+
       if (copied && rootRef.current) {
         clearWindowTimer(copiedReviewNoteResetTimerRef)
         setCopiedReviewNoteId(note.id)

@@ -23,6 +23,7 @@ const { scheduleSecretProtectionGapReport } = await import('./deferred-secret-pr
 /** Stands in for the BrowserWindow the app creates first. */
 function fakeWindow(): { once: (event: string, listener: Listener) => void; reveal: () => void } {
   const listeners: Listener[] = []
+
   return {
     once: (event, listener) => {
       if (event === 'ready-to-show') {
@@ -39,6 +40,7 @@ function createWindow(): ReturnType<typeof fakeWindow> {
     .get('browser-window-created')
     ?.splice(0)
     .forEach((listener) => listener({}, window))
+
   return window
 }
 
@@ -62,6 +64,7 @@ describe('scheduleSecretProtectionGapReport', () => {
       describeProtectionGap: () => {
         // Why count here: this is the call that blocks on the OS keyring.
         probes += 1
+
         return 'The OS keyring is unavailable.'
       }
     })
@@ -171,18 +174,22 @@ describe('scheduleSecretProtectionGapReport', () => {
     // for up to 15s after its last window closed.
     const timers: ReturnType<typeof setTimeout>[] = []
     const original = globalThis.setTimeout
+
     const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
       ...args: Parameters<typeof setTimeout>
     ) => {
       const timer = original(...args)
       timers.push(timer)
+
       return timer
     }) as typeof setTimeout)
+
     try {
       schedule()
     } finally {
       spy.mockRestore()
     }
+
     expect(timers).toHaveLength(1)
     expect(timers[0]?.hasRef()).toBe(false)
   })

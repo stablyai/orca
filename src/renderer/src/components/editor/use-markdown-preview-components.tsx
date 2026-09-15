@@ -59,6 +59,7 @@ export function useMarkdownPreviewComponents({
     pendingEditorRevealFrameIdsRef,
     setPendingEditorReveal
   } = foundation
+
   const { scrollToAnchor } = viewport
   const { getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick } = reviewActions
   const { renderAnnotationControls, wrapAnnotatedBlock } = annotationRenderers
@@ -85,14 +86,17 @@ export function useMarkdownPreviewComponents({
     return {
       a: ({ href, children, className, ...props }) => {
         const docLinkTarget = parseMarkdownDocLinkHref(href)
+
         if (docLinkTarget !== null) {
           const resolution = resolveMarkdownDocLink(docLinkTarget, markdownDocumentIndex)
           const resolvedDocument = resolution.status === 'resolved' ? resolution.document : null
+
           const title =
             resolution.status === 'ambiguous' ? 'Document link is ambiguous' : 'Document not found'
 
           const handleDocLinkClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
             event.preventDefault()
+
             if (resolvedDocument && onOpenDocument) {
               void onOpenDocument(resolvedDocument, {
                 anchor: getMarkdownDocLinkAnchor(docLinkTarget)
@@ -131,6 +135,7 @@ export function useMarkdownPreviewComponents({
       },
       img: function MarkdownImg({ src, alt, ...props }) {
         const resolvedSrc = useLocalImageSrc(src, filePath, undefined, imageRuntimeContext)
+
         const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
           if (!isMarkdownPreviewOpenModifier(event, isMac)) {
             return
@@ -159,6 +164,7 @@ export function useMarkdownPreviewComponents({
             <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
           )
         }
+
         return (
           <code className={className} {...props}>
             {children}
@@ -167,9 +173,11 @@ export function useMarkdownPreviewComponents({
       },
       pre: ({ node, children, ...props }) => {
         const child = React.Children.toArray(children)[0]
+
         if (React.isValidElement(child) && child.type === MermaidBlock) {
           return <>{children}</>
         }
+
         return wrapAnnotatedBlock(
           'pre',
           node as MarkdownPreviewPositionNode,
@@ -192,19 +200,24 @@ export function useMarkdownPreviewComponents({
         ),
       li: ({ node, children, ...props }) => {
         const positionNode = node as MarkdownPreviewPositionNode
+
         const range = hasMarkdownPreviewNestedBlock(positionNode)
           ? null
           : getMarkdownPreviewBlockRange(positionNode)
+
         if (!range) {
           return <li {...props}>{children}</li>
         }
+
         const blockKey = `li:${range.startLine}-${range.endLine}`
         const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
+
         const controls = renderAnnotationControls(
           range,
           blockKey,
           getMarkdownPreviewAnnotationQuote(children)
         )
+
         return (
           <li {...props}>
             <div

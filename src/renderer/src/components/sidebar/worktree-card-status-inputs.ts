@@ -8,7 +8,9 @@ import { createWorktreeRecordSelector } from './worktree-record-selector-cache'
 // Why frozen: one instance is shared by every card, so a stray write would leak
 // across worktrees instead of failing locally.
 export const EMPTY_RUNTIME_PANE_TITLES: Record<string, Record<number, string>> = Object.freeze({})
+
 export const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = Object.freeze({})
+
 export const EMPTY_TERMINAL_LAYOUT_ROOTS: Record<
   string,
   TerminalPaneLayoutNode | null | undefined
@@ -30,12 +32,15 @@ export const selectRuntimePaneTitlesForWorktree = createWorktreeRecordSelector<
   empty: EMPTY_RUNTIME_PANE_TITLES,
   build: (state, worktreeId) => {
     const out: Record<string, Record<number, string>> = {}
+
     for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
       const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
+
       if (paneTitles) {
         out[tab.id] = paneTitles
       }
     }
+
     return out
   }
 })
@@ -48,12 +53,15 @@ export const selectLivePtyIdsForWorktree = createWorktreeRecordSelector<
   empty: EMPTY_LIVE_PTY_IDS,
   build: (state, worktreeId) => {
     const out: Record<string, string[]> = {}
+
     for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
       const ids = state.ptyIdsByTabId[tab.id]
+
       if (ids && ids.length > 0) {
         out[tab.id] = ids
       }
     }
+
     return out
   }
 })
@@ -66,9 +74,11 @@ export const selectTerminalLayoutRootsForWorktree = createWorktreeRecordSelector
   empty: EMPTY_TERMINAL_LAYOUT_ROOTS,
   build: (state, worktreeId) => {
     const out: Record<string, TerminalPaneLayoutNode | null | undefined> = {}
+
     for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
       out[tab.id] = state.terminalLayoutsByTabId[tab.id]?.root
     }
+
     return out
   }
 })
@@ -78,10 +88,12 @@ export function selectTerminalLayoutRootsForWorktrees(
   worktreeIds: readonly string[]
 ): Record<string, TerminalPaneLayoutNode | null | undefined> {
   const out: Record<string, TerminalPaneLayoutNode | null | undefined> = {}
+
   for (const worktreeId of worktreeIds) {
     for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
       out[tab.id] = state.terminalLayoutsByTabId[tab.id]?.root
     }
   }
+
   return out
 }

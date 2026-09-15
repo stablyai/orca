@@ -47,10 +47,12 @@ describe('getTabIdsAwaitingHostHydrationRemount', () => {
 
   it('drops a parked tab that acquired a PTY by other means', () => {
     recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
+
     const withPty = {
       ...baseState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-1' }] }
     }
+
     expect(getTabIdsAwaitingHostHydrationRemount(withPty as never)).toEqual([])
   })
 

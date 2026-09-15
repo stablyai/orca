@@ -72,6 +72,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
       // Why: each ensureRunning bumps a counter into socketPath so tests can tell the replacement adapter used the second call, not the first.
       this.ensureRunning = vi.fn(async () => {
         const override = ensureRunningOverrides.shift()
+
         if (override) {
           const result = await override()
           const releaseAdoptionLease = vi.fn()
@@ -80,21 +81,26 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
             releaseAdoptionLease,
             shutdown: vi.fn(async () => {})
           }
+
           if (result.mode) {
             this.handle.mode = result.mode
           }
+
           if (result.adopted) {
             this.handle.adopted = true
           }
+
           return {
             socketPath: result.socketPath,
             tokenPath: result.tokenPath
           }
         }
+
         this.socketCounter += 1
         const releaseAdoptionLease = vi.fn()
         adoptionLeaseReleases.push(releaseAdoptionLease)
         this.handle = { releaseAdoptionLease, shutdown: vi.fn(async () => {}) }
+
         return {
           socketPath: `/fake/socket-${this.socketCounter}`,
           tokenPath: `/fake/token-${this.socketCounter}`
@@ -154,6 +160,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
           routerSubscriptionError.current = null
           throw error
         }
+
         return () => {}
       })
       this.onExit = vi.fn(() => () => {})
@@ -246,16 +253,20 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
         connect: [],
         error: []
       }
+
       return {
         on(event: string, cb: () => void) {
           handlers[event]?.push(cb)
+
           if (event === 'error') {
             queueMicrotask(() => cb())
           }
+
           return this
         },
         removeListener(event: string, cb: () => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
           return this
         },
         destroy() {}
@@ -267,16 +278,20 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
     netConnectMock.mockImplementation((options?: { path?: string }): MockProbeSocket => {
       const live = options?.path?.endsWith(socketSuffix) ?? false
       const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+
       return {
         on(event: string, callback: () => void) {
           handlers[event]?.push(callback)
+
           if ((live && event === 'connect') || (!live && event === 'error')) {
             queueMicrotask(() => callback())
           }
+
           return this
         },
         removeListener(event: string, callback: () => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
+
           return this
         },
         destroy() {}

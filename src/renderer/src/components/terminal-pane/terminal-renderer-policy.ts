@@ -53,9 +53,11 @@ function resolveGeminiCompatFallback(
   if (!isGeminiTerminalTitle(rawTitle ?? '')) {
     return { disable: false, confidence: 'authoritative' }
   }
+
   if (isKnownNonGeminiOwner(ownerAgentType)) {
     return { disable: false, confidence: 'authoritative' }
   }
+
   return { disable: true, confidence: ownerAgentType === 'gemini' ? 'authoritative' : 'fallback' }
 }
 
@@ -79,6 +81,7 @@ export function resolvePaneRendererPolicy(
     // title/owner content gate so a genuine Gemini pane stays DOM-gated while
     // other panes keep the gate open for a later switch to `auto`/`on`.
     const fallback = resolveGeminiCompatFallback(rawTitle, ownerAgentType)
+
     // Why: carry the fallback's own confidence so identical inputs report the
     // same confidence whether the effective mode is `off` or `auto`.
     return {
@@ -91,6 +94,7 @@ export function resolvePaneRendererPolicy(
   if (input.inContextLossContainment) {
     return { gpuEnabled: false, reason: 'context-loss', confidence: 'authoritative' }
   }
+
   if (input.webglUnavailable) {
     return { gpuEnabled: false, reason: 'capability', confidence: 'authoritative' }
   }
@@ -100,8 +104,10 @@ export function resolvePaneRendererPolicy(
   }
 
   const fallback = resolveGeminiCompatFallback(rawTitle, ownerAgentType)
+
   if (fallback.disable) {
     return { gpuEnabled: false, reason: 'agent-compatibility', confidence: fallback.confidence }
   }
+
   return { gpuEnabled: true, reason: 'capability', confidence: 'authoritative' }
 }

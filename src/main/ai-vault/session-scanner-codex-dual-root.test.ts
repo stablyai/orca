@@ -98,6 +98,7 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
     const backfilled = codexSessions.find(
       (session) => session.sessionId === '019f0000-1111-7222-8333-444444444444'
     )
+
     expect(backfilled).toMatchObject({
       codexHome: null,
       filePath: join(realSessionsDir, '2026', '07', '01', rolloutName),
@@ -108,6 +109,7 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
     const managedOnly = codexSessions.find(
       (session) => session.sessionId === '029f0000-1111-7222-8333-555555555555'
     )
+
     expect(managedOnly).toMatchObject({
       codexHome: managedHome,
       resumeCommand: `cd '/repo/app' && CODEX_HOME='${managedHome}' codex resume '029f0000-1111-7222-8333-555555555555'`

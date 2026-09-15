@@ -28,6 +28,7 @@ export function worktreeRefreshOptions(
   executionHostId?: ExecutionHostId
 } {
   const executionHostId = capturedAddRepoExecutionHostId(owner, sshConnectionId)
+
   return {
     requireAuthoritative: true,
     ...(executionHostId ? { executionHostId } : {})

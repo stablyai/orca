@@ -26,6 +26,7 @@ describe('createGitHubSlice.patchWorkItem', () => {
 
   it('can scope patches to one repo when different repos have the same work-item id', () => {
     const store = createTestStore()
+
     const repoOneItem = {
       id: 'pr:42',
       repoId: 'repo-1',
@@ -33,6 +34,7 @@ describe('createGitHubSlice.patchWorkItem', () => {
       number: 42,
       title: 'Repo one PR'
     } as GitHubWorkItem
+
     const repoTwoItem = {
       id: 'pr:42',
       repoId: 'repo-2',
@@ -64,6 +66,7 @@ describe('createGitHubSlice.patchWorkItem', () => {
     const store = createTestStore()
     const firstSourceContext = githubSourceContext('runtime:first-host', 'repo-1')
     const secondSourceContext = githubSourceContext('runtime:second-host', 'repo-1')
+
     const firstItem = {
       id: 'pr:42',
       repoId: 'repo-1',
@@ -71,6 +74,7 @@ describe('createGitHubSlice.patchWorkItem', () => {
       number: 42,
       title: 'First host PR'
     } as GitHubWorkItem
+
     const secondItem = {
       id: 'pr:42',
       repoId: 'repo-1',
@@ -97,14 +101,17 @@ describe('createGitHubSlice.patchWorkItem', () => {
     })
 
     const state = store.getState()
+
     const firstPatched =
       state.workItemsCache[
         workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(firstSourceContext))
       ]?.data?.[0]
+
     const secondPatched =
       state.workItemsCache[
         workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(secondSourceContext))
       ]?.data?.[0]
+
     expect(firstPatched).toMatchObject({
       title: 'First host PR',
       reviewRequests: []
@@ -173,10 +180,12 @@ describe('createGitHubSlice.fetchWorkItems cache identity', () => {
 
   it('reuses the cache map, entry, and nested rows on a no-op force refetch', async () => {
     const store = createTestStore()
+
     const items = [
       makeNestedWorkItem({ id: 'pr:42', number: 42, title: 'First nested PR' }),
       makeNestedWorkItem({ id: 'pr:43', number: 43, title: 'Second nested PR' })
     ]
+
     mockApi.gh.listWorkItems.mockImplementation(() =>
       Promise.resolve({
         items: structuredClone(items),
@@ -236,9 +245,11 @@ describe('createGitHubSlice.fetchWorkItems cache identity', () => {
 
     const changedFirst = structuredClone(first)
     const nextReviewer = changedFirst.reviewRequests?.[0]
+
     if (nextReviewer) {
       nextReviewer.login = 'reviewer-updated'
     }
+
     mockApi.gh.listWorkItems.mockResolvedValueOnce({
       items: [changedFirst, structuredClone(second)],
       sources: structuredClone(nestedSources)

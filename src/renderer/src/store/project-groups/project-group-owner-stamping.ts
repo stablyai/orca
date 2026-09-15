@@ -10,8 +10,10 @@ export function projectGroupWithFetchedOwner(
   if (target.kind === 'environment') {
     return { ...projectGroup, executionHostId: getRuntimeTargetHostId(target) }
   }
+
   if (projectGroup.connectionId) {
     return { ...projectGroup, executionHostId: toSshExecutionHostId(projectGroup.connectionId) }
   }
+
   return { ...projectGroup, executionHostId: LOCAL_EXECUTION_HOST_ID }
 }

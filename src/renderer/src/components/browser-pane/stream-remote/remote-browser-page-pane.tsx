@@ -63,6 +63,7 @@ export function RemoteBrowserPagePane({
   // Why: the screencast <img> only exists once a frame lands, so before the first one the
   // viewport is the only place guest focus can go.
   const guestFocus = useElementGuestFocus(imageRef, remoteViewportRef)
+
   const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
     workspaceId,
@@ -71,6 +72,7 @@ export function RemoteBrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
+
   const { addressBarValue, setAddressBarValue, setAddressBarValueFromPage, addressBarEditSession } =
     useBrowserAddressBarEditSession({
       pageId: browserTab.id,
@@ -78,6 +80,7 @@ export function RemoteBrowserPagePane({
       addressBarInputRef,
       startAddressBarFocusGrab
     })
+
   // Pane-owned notices, split by what they are ABOUT, because that decides who outranks whom:
   //
   //   'direct'      — feedback on what the user just did (URL validation). Always shown: it is the
@@ -89,12 +92,15 @@ export function RemoteBrowserPagePane({
   // Kept as one slot so the newest notice replaces the previous one, as a single toast should.
   const [paneNotice, setPaneNotice] = useState<RemoteBrowserPaneNotice | null>(null)
   const [paneBusy, setPaneBusy] = useState(false)
+
   const certificateFailure = useAppStore(
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
+
   const remotePageHandle = useAppStore(
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
+
   const stagedPage = remotePageHandle?.staged === true
 
   // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
@@ -104,8 +110,10 @@ export function RemoteBrowserPagePane({
   useEffect(() => {
     if (!remoteCertificateEnvironmentId || !certificateChallengeId) {
       setRemoteCertificateTrustSupported(false)
+
       return
     }
+
     let cancelled = false
     void runtimeEnvironmentSupportsCapability(
       remoteCertificateEnvironmentId,
@@ -121,6 +129,7 @@ export function RemoteBrowserPagePane({
           setRemoteCertificateTrustSupported(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -177,7 +186,9 @@ export function RemoteBrowserPagePane({
     : streamStatus.kind === 'stopped'
       ? false
       : paneBusy || isRemoteBrowserStreamBusy(streamStatus)
+
   const streamNotice = remoteBrowserStreamNotice(streamStatus)
+
   const remoteError =
     paneNotice?.kind === 'direct' ? paneNotice.text : (streamNotice ?? paneNotice?.text ?? null)
 
@@ -211,7 +222,9 @@ export function RemoteBrowserPagePane({
     if (stagedPage) {
       return
     }
+
     const deferredUrl = consumeBrowserPageDeferredNavigation(browserTab.id)
+
     if (deferredUrl) {
       navigateToUrl(deferredUrl)
     }
@@ -231,6 +244,7 @@ export function RemoteBrowserPagePane({
     if (!hasStreamFrame || document.activeElement !== remoteViewportRef.current) {
       return
     }
+
     imageRef.current?.focus()
   }, [hasStreamFrame])
 
@@ -324,13 +338,17 @@ export function RemoteBrowserPagePane({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const element = imageRef.current
       const container = remoteViewportRef.current
+
       if (!element || !container) {
         return null
       }
+
       const rect = container.getBoundingClientRect()
+
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
+
       return {
         source: { kind: 'image', element },
         cssWidth: rect.width,

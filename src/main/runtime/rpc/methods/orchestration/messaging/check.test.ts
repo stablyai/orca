@@ -41,6 +41,7 @@ describe('orchestration RPC methods', () => {
     function createDispatchedTask(assigneeHandle = 'term_worker', assigneePaneKey?: string) {
       const task = db.createTask({ spec: 'manual check work' })
       const dispatch = createRootDispatch(db, task.id, assigneeHandle, assigneePaneKey)
+
       return { task, dispatch }
     }
 
@@ -53,13 +54,17 @@ describe('orchestration RPC methods', () => {
       senderPaneKey?: string
     }): void {
       const payload: Record<string, unknown> = {}
+
       if (params.taskId !== undefined) {
         payload.taskId = params.taskId
       }
+
       if (params.dispatchId !== undefined) {
         payload.dispatchId = params.dispatchId
       }
+
       payload.outcome = 'succeeded'
+
       if (params.filesModified !== undefined) {
         payload.filesModified = params.filesModified
       }
@@ -73,6 +78,7 @@ describe('orchestration RPC methods', () => {
         senderPaneKey: params.senderPaneKey,
         runId: activeRunId
       })
+
       reconcileLifecycleMessage(db, message)
     }
 
@@ -97,16 +103,19 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_a' ? paneA : paneB
       )
+
       const runA = db.createRun({
         objective: 'A',
         coordinatorHandle: 'term_a',
         coordinatorPaneKey: paneA
       })
+
       const runB = db.createRun({
         objective: 'B',
         coordinatorHandle: 'term_b',
         coordinatorPaneKey: paneB
       })
+
       db.insertMessage({
         from: 'worker_a',
         to: `run:${runA.id}`,
@@ -123,9 +132,11 @@ describe('orchestration RPC methods', () => {
       const inboxA = (await call('orchestration.check', { terminal: 'term_a' })) as {
         messages: { subject: string }[]
       }
+
       const inboxB = (await call('orchestration.check', { terminal: 'term_b' })) as {
         messages: { subject: string }[]
       }
+
       expect(inboxA.messages.map((message) => message.subject)).toEqual(['A only'])
       expect(inboxB.messages.map((message) => message.subject)).toEqual(['B only'])
     })
@@ -152,11 +163,13 @@ describe('orchestration RPC methods', () => {
 
     it('keeps a live handle authoritative over mismatched pane metadata', async () => {
       setup()
+
       const foreignRun = db.createRun({
         objective: 'Foreign run',
         coordinatorHandle: 'term_foreign',
         coordinatorPaneKey: 'tab_foreign:leaf_foreign'
       })
+
       db.insertMessage({
         from: 'term_worker',
         to: `run:${activeRunId}`,
@@ -217,6 +230,7 @@ describe('orchestration RPC methods', () => {
         wait: true,
         timeoutMs: 10
       })) as { timedOut: boolean; cancelled: boolean; count: number }
+
       expect(timedOut).toMatchObject({ timedOut: true, cancelled: false, count: 0 })
 
       vi.mocked(runtime.waitForMessage).mockResolvedValueOnce('waiter_exists')
@@ -259,6 +273,7 @@ describe('orchestration RPC methods', () => {
       const first = (await call('orchestration.check', {
         terminal: 'term_coord'
       })) as { count: number; deliveryId: string }
+
       const peeked = (await call('orchestration.check', {
         terminal: 'term_coord',
         ack: first.deliveryId,
@@ -272,12 +287,14 @@ describe('orchestration RPC methods', () => {
 
     it('peeks an old unread Run row beyond the newest history page', async () => {
       setup()
+
       const unread = db.insertMessage({
         from: 'worker',
         to: `run:${activeRunId}`,
         subject: 'old unread',
         runId: activeRunId
       })
+
       for (let index = 0; index < 100; index += 1) {
         const read = db.insertMessage({
           from: 'worker',
@@ -285,6 +302,7 @@ describe('orchestration RPC methods', () => {
           subject: `new read ${index}`,
           runId: activeRunId
         })
+
         db.markAsRead([read.id])
       }
 
@@ -292,6 +310,7 @@ describe('orchestration RPC methods', () => {
         terminal: 'term_coord',
         peek: true
       })) as { messages: { id: string }[]; count: number }
+
       const delivered = (await call('orchestration.check', {
         terminal: 'term_coord'
       })) as { messages: { id: string }[]; count: number }
@@ -303,6 +322,7 @@ describe('orchestration RPC methods', () => {
     it('waits for a filtered Run peek without consuming the arrival', async () => {
       setup()
       let arrivedId = ''
+
       const waitSpy = vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
         arrivedId = db.insertMessage({
           from: 'worker',
@@ -311,6 +331,7 @@ describe('orchestration RPC methods', () => {
           type: 'worker_done',
           runId: activeRunId
         }).id
+
         return 'notified'
       })
 
@@ -340,6 +361,7 @@ describe('orchestration RPC methods', () => {
           dispatchId: dispatch.id,
           filesModified: ['src/file.ts']
         })
+
         return 'notified'
       })
 
@@ -355,6 +377,7 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
       expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(1)
+
       const taskList = (await call('orchestration.taskList', {})) as {
         tasks: {
           id: string
@@ -363,28 +386,35 @@ describe('orchestration RPC methods', () => {
           dispatch_id?: string | null
         }[]
       }
+
       const listedTask = taskList.tasks.find((t) => t.id === task.id)
       expect(listedTask?.status).toBe('completed')
       expect(listedTask).not.toHaveProperty('assignee_handle')
       expect(listedTask).not.toHaveProperty('dispatch_id')
+
       const shownDispatch = (await call('orchestration.dispatchShow', {
         task: task.id
       })) as { dispatch: { status: string } | null }
+
       expect(shownDispatch.dispatch?.status).toBe('completed')
 
       const completedAt = db.getTask(task.id)?.completed_at
       const taskResult = db.getTask(task.id)?.result
+
       const repeated = (await call('orchestration.check', {
         terminal: 'term_coord',
         types: 'worker_done'
       })) as { count: number; deliveryId: string }
+
       expect(repeated.count).toBe(1)
       expect(repeated.deliveryId).toBe(result.deliveryId)
+
       const acknowledged = (await call('orchestration.check', {
         terminal: 'term_coord',
         ack: repeated.deliveryId,
         types: 'worker_done'
       })) as { count: number }
+
       expect(acknowledged.count).toBe(0)
       expect(db.getTask(task.id)?.completed_at).toBe(completedAt)
       expect(db.getTask(task.id)?.result).toBe(taskResult)
@@ -498,6 +528,7 @@ describe('orchestration RPC methods', () => {
     it('records heartbeat returned by unread manual check', async () => {
       setup()
       const { task, dispatch } = createDispatchedTask()
+
       const msg = db.insertMessage({
         from: 'term_worker',
         to: `run:${activeRunId}`,
@@ -506,6 +537,7 @@ describe('orchestration RPC methods', () => {
         payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
         runId: activeRunId
       })
+
       reconcileLifecycleMessage(db, msg)
 
       const result = (await call('orchestration.check', {
@@ -541,11 +573,13 @@ describe('orchestration RPC methods', () => {
       const first = (await call('orchestration.check', { terminal: 'b' })) as {
         count: number
       }
+
       expect(first.count).toBe(2)
 
       const second = (await call('orchestration.check', { terminal: 'b' })) as {
         count: number
       }
+
       expect(second.count).toBe(0)
     })
 
@@ -567,6 +601,7 @@ describe('orchestration RPC methods', () => {
         subject: 'plumbing',
         delivery_contract: 'current_delivery'
       })
+
       for (const column of [
         'read',
         'sequence',
@@ -599,6 +634,7 @@ describe('orchestration RPC methods', () => {
         terminal: 'term_gone',
         peek: true
       })) as { count: number }
+
       const history = (await call('orchestration.check', {
         terminal: 'term_gone',
         all: true
@@ -695,6 +731,7 @@ describe('orchestration RPC methods', () => {
         terminal: 'does_not_exist',
         all: true
       })) as { count: number }
+
       expect(result.count).toBe(0)
     })
 
@@ -706,6 +743,7 @@ describe('orchestration RPC methods', () => {
         terminal: 'b',
         unread: false
       })) as { count: number }
+
       expect(result.count).toBe(1)
 
       // Must not have marked read
@@ -720,6 +758,7 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
         db.insertMessage({ from: 'a', to: 'b', subject: 'arrived during close' })
         abortController.abort()
+
         return 'cancelled'
       })
 
@@ -745,6 +784,7 @@ describe('orchestration RPC methods', () => {
         timeoutMs: 5000,
         types: 'escalation,question'
       }) as Promise<{ count: number; messages: { type: string }[] }>
+
       await Promise.resolve()
 
       await call('orchestration.send', {
@@ -759,6 +799,7 @@ describe('orchestration RPC methods', () => {
         waitPromise.then(() => 'settled'),
         Promise.resolve('pending')
       ])
+
       expect(early).toBe('pending')
 
       await call('orchestration.send', {
@@ -813,6 +854,7 @@ describe('orchestration RPC methods', () => {
         messages: { id: string; to_handle: string }[]
         count: number
       }
+
       const check = (await call('orchestration.check', {
         terminal: 'b',
         all: true
@@ -832,6 +874,7 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.inbox', {
         terminal: 'does_not_exist'
       })) as { count: number }
+
       expect(result.count).toBe(0)
     })
   })

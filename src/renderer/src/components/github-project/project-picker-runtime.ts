@@ -12,6 +12,7 @@ type RuntimeSettings = Parameters<typeof getActiveRuntimeTarget>[0]
 export function getProjectPickerRuntimeScope(settings: RuntimeSettings, host: string): string {
   const target = getActiveRuntimeTarget(settings)
   const runtimeScope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+
   return `${runtimeScope}\0${host.toLowerCase()}`
 }
 
@@ -25,6 +26,7 @@ export async function listAccessibleProjectsForRuntime(
 ): Promise<ListAccessibleProjectsResult> {
   const target = getActiveRuntimeTarget(settings)
   const args = { host }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<ListAccessibleProjectsResult>(target, 'github.project.listAccessible', args, {
         timeoutMs: 60_000
@@ -42,6 +44,7 @@ export async function listProjectViewsForRuntime(
   }
 ): Promise<ListProjectViewsResult> {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', args, {
         timeoutMs: 30_000
@@ -55,6 +58,7 @@ export async function resolveProjectRefForRuntime(
   host?: string
 ): Promise<ResolveProjectRefResult> {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<ResolveProjectRefResult>(
         target,

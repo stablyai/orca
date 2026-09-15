@@ -23,6 +23,7 @@ function nextColdParkDeadlineDelayMs(args: {
   if (!args.parkingEnabled || args.hiddenSinceMs === null) {
     return null
   }
+
   const pendingDeadlines = [
     args.hiddenSinceMs + args.coldParkDelayMs,
     args.hiddenSinceMs + args.hotRetainMs,
@@ -32,6 +33,7 @@ function nextColdParkDeadlineDelayMs(args: {
     // Why: damping stops the churn that would otherwise wake this deadline.
     ...(args.parkVerdictPinUntilMs != null ? [args.parkVerdictPinUntilMs] : [])
   ].filter((deadlineMs) => deadlineMs > args.nowMs)
+
   return pendingDeadlines.length === 0 ? null : Math.min(...pendingDeadlines) - args.nowMs
 }
 

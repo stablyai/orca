@@ -33,13 +33,16 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   // race one auth.json. WSL accounts keep their per-distro lane.
   protected getSelfContainedManagedHostAccount(): CodexManagedAccount | null {
     const settings = this.store.getSettings()
+
     const account = this.getActiveAccount(
       settings.codexManagedAccounts,
       normalizeCodexRuntimeSelection(settings).host
     )
+
     if (!account || this.getWslManagedHomePath(account)) {
       return null
     }
+
     return account
   }
 
@@ -47,32 +50,41 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   protected getManagedAccountHomesForSessionDiscovery(): string[] {
     const settings = this.store.getSettings()
     const homes: string[] = []
+
     for (const account of settings.codexManagedAccounts) {
       const wslHome = this.getWslManagedHomePath(account)
+
       if (wslHome) {
         homes.push(wslHome)
         continue
       }
+
       const trustedHome = this.getTrustedSelfContainedManagedHomePath(account)
+
       if (trustedHome) {
         homes.push(trustedHome)
       }
     }
+
     return homes
   }
 
   protected getManagedHostAccountHomesForSessionDiscovery(): string[] {
     const settings = this.store.getSettings()
     const homes: string[] = []
+
     for (const account of settings.codexManagedAccounts) {
       if (this.getWslManagedHomePath(account)) {
         continue
       }
+
       const trustedHome = this.getTrustedSelfContainedManagedHomePath(account)
+
       if (trustedHome) {
         homes.push(trustedHome)
       }
     }
+
     return homes
   }
 
@@ -81,30 +93,38 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     unavailableManagedHomePath?: string
   ): string | null {
     const resolved = this.resolveSelfContainedManagedHome(account)
+
     if (resolved.kind === 'indeterminate') {
       // Why: refuse the launch rather than silently falling through to the
       // system default, which would run a different account behind a UI still
       // showing this one. The selection stays put; a later read may succeed.
       throw new ManagedCodexHomeTemporarilyUnavailableError()
     }
+
     if (resolved.kind === 'untrusted') {
       this.clearSelfContainedManagedSelection(account)
+
       return null
     }
+
     const perAccountHome = resolved.homePath
+
     if (
       unavailableManagedHomePath &&
       normalizeRuntimePathForComparison(unavailableManagedHomePath) ===
         normalizeRuntimePathForComparison(perAccountHome)
     ) {
       const absence = this.credentialAbsenceGrace.assess(join(perAccountHome, 'auth.json'))
+
       if (absence.state !== 'present' && absence.durable) {
         this.clearSelfContainedManagedSelection(account, 'credential remained unavailable')
+
         return null
       }
       // Why: a transient missing/unreadable auth.json is usually codex rotating
       // it; keep the selection and launch — the CLI re-reads the settled file.
     }
+
     // Why: link the user's real ~/.codex resources and mirror config into THIS
     // home (never symlinking into or mutating ~/.codex), so the per-account home
     // is a complete CODEX_HOME. Hooks/trust are installed by the launch caller.
@@ -118,6 +138,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       systemHomePath: getSystemCodexHomePath()
     })
     this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
+
     return perAccountHome
   }
 
@@ -150,12 +171,15 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   // while Codex atomically replaces auth.json.
   protected syncSelfContainedManagedSelection(account: CodexManagedAccount): void {
     const resolved = this.resolveSelfContainedManagedHome(account)
+
     if (resolved.kind === 'indeterminate') {
       // Why: a sync runs on every app start, exactly when antivirus is busiest.
       // An unreadable home must not deselect the account (#STA-4422).
       return
     }
+
     const perAccountHome = resolved.kind === 'owned' ? resolved.homePath : null
+
     if (perAccountHome) {
       this.lastSyncedAccountId = account.id
       this.lastHostAccountUsedSelfContainedHome = true
@@ -164,8 +188,10 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       // Why: selection runs well before the user restarts a pane, so history is
       // already linked in by the time the newly launched Codex opens /resume.
       this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
+
       return
     }
+
     this.clearSelfContainedManagedSelection(account)
   }
 
@@ -184,25 +210,31 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       systemCodexHomePath: getSystemCodexHomePath(),
       expectedAccountId: account.id
     })
+
     if (verdict.kind === 'owned') {
       // Preserve the persisted path spelling (notably /var vs /private/var on
       // macOS) so injected CODEX_HOME stays stable across the rollout.
       return { kind: 'owned', homePath: account.managedHomePath }
     }
+
     if (verdict.kind === 'untrusted') {
       console.warn('[codex-runtime-home] Refusing untrusted managed account home:', verdict.reason)
+
       return { kind: 'untrusted' }
     }
+
     console.warn(
       '[codex-runtime-home] Managed account home is temporarily unreadable; keeping selection:',
       verdict.error
     )
+
     return { kind: 'indeterminate' }
   }
 
   /** Read-only callers that mutate nothing and simply skip an unusable home. */
   protected getTrustedSelfContainedManagedHomePath(account: CodexManagedAccount): string | null {
     const resolved = this.resolveSelfContainedManagedHome(account)
+
     return resolved.kind === 'owned' ? resolved.homePath : null
   }
 
@@ -212,9 +244,11 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   ): void {
     console.warn(`[codex-runtime-home] Active managed account ${reason}, clearing selection`)
     const settings = this.store.getSettings()
+
     if (normalizeCodexRuntimeSelection(settings).host !== account.id) {
       return
     }
+
     this.store.updateSettings({
       activeCodexManagedAccountId: null,
       activeCodexManagedAccountIdsByRuntime: {
@@ -230,16 +264,19 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     launchEnv?: NodeJS.ProcessEnv
   ): boolean | null {
     const settings = this.store.getSettings()
+
     if (
       normalizeCodexRuntimeSelection(settings).host !== null ||
       hasCustomCodexHomeOverrideForLaunch(launchEnv)
     ) {
       return null
     }
+
     if (!this.hostSystemDefaultSessionMigrationPending) {
       const paths = resolveCodexSessionBackfillPaths(
         resolveHostCodexSessionSourceHome(this.store.getSettings())
       )
+
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan =
         !hasCompletedCodexSessionBackfillMarker(paths.markerPath, paths.systemSessionsRoot)
       this.pendingHostSystemDefaultSessionMigrationTarget = normalizeRuntimePathForComparison(
@@ -247,6 +284,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       )
       this.hostSystemDefaultSessionMigrationPending = true
     }
+
     return this.prepareHostSystemDefaultSessionMigrationPass()
   }
 
@@ -257,15 +295,19 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     if (process.platform !== 'win32' || !runtimeHomePath) {
       return
     }
+
     const runtimeHomeWsl = parseWslUncPath(runtimeHomePath)
     const distro = target.wslDistro?.trim() || runtimeHomeWsl?.distro || getDefaultWslDistro()
+
     if (!distro) {
       return
     }
+
     // Why: history-only override lets custom-CODEX_HOME users bridge from their real home; falls back to <wslHome>/.codex.
     const systemCodexHomePath =
       resolveWslCodexSessionSourceHome(this.store.getSettings(), distro) ??
       this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+
     if (systemCodexHomePath && systemCodexHomePath !== runtimeHomePath) {
       // Why: WSL history must be hardlinked inside the distro; host-side links can't bridge Windows and WSL filesystems in a resume-visible way.
       void startWslCodexSessionBridgeInBackground({

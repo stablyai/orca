@@ -22,16 +22,19 @@ export function prepareStartingWorkerAuthority(
   }
 ): string {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     // Why: read inside the transaction so the guarded UPDATEs below cannot lose a race with a concurrent state change.
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
+
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+
     if (
       dispatch.launch_token_hash &&
       params.launchTokenHash &&
@@ -42,14 +45,18 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} already has a different launch-token commitment.`
       )
     }
+
     const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey)
+
     if (existing && existing.id !== params.dispatchId) {
       throw new Error(
         `Terminal ${params.handle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
       )
     }
+
     const capability = `dcap_${randomBytes(32).toString('base64url')}`
     const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
+
     const contextUpdate = this.db
       .prepare(
         `UPDATE dispatch_contexts
@@ -69,13 +76,16 @@ export function prepareStartingWorkerAuthority(
         params.launchTokenHash ?? null,
         params.dispatchId
       )
+
     if (contextUpdate.changes !== 1) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+
     this.fenceUnacknowledgedMailboxDeliveries(`dispatch:${params.dispatchId}`)
+
     const workerUpdate = this.db
       .prepare(
         `UPDATE worker_dispatches
@@ -100,12 +110,14 @@ export function prepareStartingWorkerAuthority(
         ),
         params.dispatchId
       )
+
     if (workerUpdate.changes !== 1) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+
     if (params.terminalOwnership && !this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
       if (params.terminalOwnership === 'created') {
         this.createWorkerTerminalResourceStatement({
@@ -126,6 +138,7 @@ export function prepareStartingWorkerAuthority(
           processIncarnation: params.processIncarnation,
           hostScope: params.hostScope ?? null
         })
+
         if (transferable) {
           this.transferWorkerTerminalResourceStatement({
             resourceId: transferable.id,
@@ -152,7 +165,9 @@ export function prepareStartingWorkerAuthority(
         }
       }
     }
+
     this.db.exec('COMMIT')
+
     return capability
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -181,17 +196,20 @@ export function recordCreatedWorkerTerminalCustody(
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     // Same guard as prepareStartingWorkerAuthority, read inside the transaction: a dispatch stopped
     // while the terminal was being created must not acquire an owner.
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
+
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+
     if (!this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
       this.createWorkerTerminalResourceStatement({
         dispatchId: params.dispatchId,
@@ -205,6 +223,7 @@ export function recordCreatedWorkerTerminalCustody(
         ownership: 'owned'
       })
     }
+
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')

@@ -17,6 +17,7 @@ type FirstWindowStartupServicesResult = {
 }
 
 export const FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS = 12_000
+
 // Why: a slow (but succeeding) daemon start must not flip terminals to the
 // LocalPtyProvider fallback — local PTYs are killed on quit, so panes bound to
 // them lose their daemon sessions permanently (#5232). The PTY gate therefore
@@ -32,6 +33,7 @@ function startService(
   const abortController = new AbortController()
   let settled = false
   let reportedTimeout = false
+
   const ready = Promise.resolve()
     .then(() => start(abortController.signal))
     .catch((error) => {
@@ -49,6 +51,7 @@ function startService(
       if (settled) {
         return
       }
+
       reportedTimeout = true
       abortController.abort()
       onError(new Error(`${label} startup timed out`))
@@ -77,14 +80,17 @@ export function startFirstWindowStartupServices({
   const allServicesReady = Promise.all([daemon.ready, hooks.ready]).then(() => undefined)
   let windowTimeout: ReturnType<typeof setTimeout> | null = null
   let failOpenTimeout: ReturnType<typeof setTimeout> | null = null
+
   const servicesSettled = allServicesReady.finally(() => {
     if (windowTimeout) {
       clearTimeout(windowTimeout)
     }
+
     if (failOpenTimeout) {
       clearTimeout(failOpenTimeout)
     }
   })
+
   const failOpenReady = new Promise<void>((resolve) => {
     failOpenTimeout = setTimeout(() => {
       daemon.reportTimeout()
@@ -92,12 +98,14 @@ export function startFirstWindowStartupServices({
       resolve()
     }, LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS)
   })
+
   const firstWindowReady = Promise.race([
     servicesSettled,
     new Promise<void>((resolve) => {
       windowTimeout = setTimeout(resolve, FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
     })
   ])
+
   const localPtyReady = Promise.race([servicesSettled, failOpenReady])
   // Why: destructive routing only needs daemon authority. A stalled optional
   // hook server must not hold terminal close for the full fail-open window.

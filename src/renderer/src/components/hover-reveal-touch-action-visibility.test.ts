@@ -45,6 +45,7 @@ const HOVER_REVEAL_FILES = [
 function lineHasBareOpacityZero(line: string): boolean {
   for (const match of line.matchAll(/opacity-0\b/g)) {
     const previousChar = match.index! > 0 ? line[match.index! - 1] : ''
+
     if (previousChar !== ':') {
       return true
     }
@@ -72,13 +73,17 @@ describe('hover-reveal action button touch visibility', () => {
         }
 
         const revealContext = [line, lines[index + 1] ?? '', lines[index + 2] ?? ''].join(' ')
+
         const isHoverReveal =
           /(group-hover|group-focus-within|focus-visible|focus:|data-\[state=open\]|data-\[selected=true\]):opacity-100/.test(
             revealContext
           )
+
         const hasTouchOverride = revealContext.includes('[@media(hover:none)]:opacity-100')
+
         const isPassiveSwap =
           line.includes('[@media(hover:none)]:opacity-0') && line.includes('pointer-events-none')
+
         const isPointerlessPlaceholder =
           line.includes('pointer-events-none') &&
           !/(group-hover|group-focus-within)/.test(revealContext)

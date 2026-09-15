@@ -85,12 +85,14 @@ export function diagnoseNodePtyUnavailable(
 ): NodePtyUnavailableDiagnosis {
   const { host, survey } = input
   const toolchain = input.toolchain ?? null
+
   // Why the require error is only a fallback: node-pty flattens the real cause away, so
   // its text is evidence of "did not load", never of why.
   const usableRequireError =
     input.requireError && !isFlattenedNodePtyLoaderMessage(input.requireError)
       ? input.requireError
       : null
+
   // Capped because a macOS dlopen error lists every path it tried; the message quotes this
   // verbatim when nothing classifies it, and a toast is not a log file.
   const rawError = truncate(input.loaderError ?? usableRequireError ?? input.requireError ?? null)
@@ -104,6 +106,7 @@ export function diagnoseNodePtyUnavailable(
       detail: input.unverifiableBecause
     }
   }
+
   // Before anything the loader said: a binary that aborts inside the loader never reaches
   // a catch and often prints nothing, so the signal is the only evidence there is.
   if (input.probeSignal) {
@@ -117,6 +120,7 @@ export function diagnoseNodePtyUnavailable(
 
   const classifiable = input.loaderError ?? usableRequireError
   const classified = classifiable ? classifyNodePtyLoaderMessage(classifiable) : null
+
   // Only a loader message that named the fault outranks the build record. `load_failed`
   // and `dependency_missing` do not: the first named nothing, and the second is what
   // node-pty says about a binding it never reached.
@@ -136,6 +140,7 @@ export function diagnoseNodePtyUnavailable(
         detail: `built for Node ABI ${survey.builtNodeAbi}, this host runs ABI ${host.nodeAbi}`
       }
     }
+
     if (survey.builtArch && survey.builtArch !== host.arch) {
       return {
         ...base,
@@ -144,6 +149,7 @@ export function diagnoseNodePtyUnavailable(
         detail: `built for ${survey.builtArch}, this host runs ${host.arch}`
       }
     }
+
     return {
       ...base,
       status: 'blocked',
@@ -160,6 +166,7 @@ export function diagnoseNodePtyUnavailable(
       detail: "the relay could not read node-pty's install directory"
     }
   }
+
   // Nothing compiled anywhere. On Linux that is either a compile that never ran for want
   // of a toolchain, or an install that failed for some other reason — different remedies.
   if (toolchain?.toolchainMissing) {
@@ -170,6 +177,7 @@ export function diagnoseNodePtyUnavailable(
       detail: `no compiled binding exists and ${missingToolSummary(toolchain)} missing`
     }
   }
+
   return {
     ...base,
     status: 'blocked',
@@ -184,24 +192,30 @@ function truncate(message: string | null): string | null {
   if (message === null || message.length <= RAW_ERROR_MAX) {
     return message
   }
+
   return `${message.slice(0, RAW_ERROR_MAX)}…`
 }
 
 function missingToolSummary(toolchain: BuildToolchainStatus): string {
   const present = new Set(toolchain.present)
   const missing: string[] = []
+
   if (!present.has('make')) {
     missing.push('make')
   }
+
   if (!present.has('g++') && !present.has('c++') && !present.has('clang++')) {
     missing.push('a C++ compiler')
   }
+
   if (!present.has('python3') && !present.has('python')) {
     missing.push('python3')
   }
+
   if (missing.length <= 1) {
     return `${missing[0] ?? 'the build tools'} is`
   }
+
   return `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)} are`
 }
 
@@ -237,6 +251,7 @@ export function toTerminalUnavailableCause(
   diagnosis: NodePtyUnavailableDiagnosis
 ): TerminalUnavailableCause {
   const { host } = diagnosis
+
   return {
     status: diagnosis.status,
     reason: diagnosis.reason,
@@ -261,6 +276,7 @@ export function toTerminalUnavailableCause(
 function formatNodePtyHostLine(host: NodePtyUnavailableHost): string {
   const libc =
     host.libc === 'none' ? null : `${host.libc}${host.glibcVersion ? ` ${host.glibcVersion}` : ''}`
+
   return [
     `${host.platform}/${host.arch}`,
     libc,
@@ -279,6 +295,7 @@ function formatNodePtyHostLine(host: NodePtyUnavailableHost): string {
  */
 export function formatNodePtyUnavailableMessage(diagnosis: NodePtyUnavailableDiagnosis): string {
   const { host } = diagnosis
+
   // Unverifiable deliberately prescribes nothing beyond a retry: nothing was established,
   // and dressing that up as a diagnosis is the bug this replaces.
   const opening =
@@ -286,21 +303,26 @@ export function formatNodePtyUnavailableMessage(diagnosis: NodePtyUnavailableDia
       ? `Remote terminals are unavailable, and the relay could not establish why: ${diagnosis.detail}. ` +
         `That is not evidence node-pty is broken — reconnect to retry.`
       : `Remote terminals are unavailable: ${remedyFor(diagnosis)}`
+
   const lines = [opening, `Host: ${formatNodePtyHostLine(host)}.`]
+
   // Quoted only where nothing else named the fault: elsewhere the remedy already carries
   // the numbers, and a dlopen dump would bury them.
   const quoteRaw =
     diagnosis.status === 'unverifiable' ||
     diagnosis.reason === 'load_failed' ||
     diagnosis.reason === 'unknown'
+
   if (diagnosis.rawError && quoteRaw) {
     lines.push(`Loader error: ${diagnosis.rawError}`)
   }
+
   return lines.join('\n')
 }
 
 function remedyFor(diagnosis: NodePtyUnavailableDiagnosis): string {
   const { host, survey, toolchain } = diagnosis
+
   switch (diagnosis.reason) {
     case 'toolchain_missing':
       return (

@@ -65,11 +65,13 @@ export function useFullSubmitOrchestration(input: FullSubmitOrchestrationInput) 
   const submit = useCallback(async (): Promise<void> => {
     if (isProjectGroupTarget) {
       await submitFolderTarget(tuiAgent)
+
       return
     }
 
     if (!repoId || !selectedRepo) {
       showProjectRequiredError()
+
       return
     }
 
@@ -93,25 +95,30 @@ export function useFullSubmitOrchestration(input: FullSubmitOrchestrationInput) 
           'Selected agent is disabled. Choose an enabled agent before creating.'
         )
       )
+
       return
     }
 
     setCreateError(null)
 
     setCreating(true)
+
     try {
       const smartGitHubSettlement = await settleComposerSubmit(
         resolvePendingSmartGitHubSubmit(),
         isSubmissionCancelled
       )
+
       if (smartGitHubSettlement.status === 'cancelled') {
         return
       }
+
       await executeFullCreation(smartGitHubSettlement.value, repoId)
     } catch (error) {
       if (isSubmissionCancelled()) {
         return
       }
+
       const formattedError = formatWorkspaceCreateError(error)
       setCreateError(formattedError)
       toast.error(getWorkspaceCreateErrorToastMessage(formattedError))

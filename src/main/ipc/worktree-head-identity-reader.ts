@@ -13,6 +13,7 @@ import {
 // spawn pressure that stalled terminal input. Keep it spawn-free.
 
 const MAX_SYMREF_DEPTH = 5
+
 // Head identity refreshes run on every git-common poll. Keep metadata reads
 // bounded while avoiding a serial round trip per linked worktree (especially
 // noticeable on WSL/UNC and network-backed worktrees).
@@ -59,6 +60,7 @@ type ResolvedRefOids = Map<string, string | null>
 // vocabulary. Collapsing the two evicts identities Orca still knows and turns a
 // single EMFILE into a full re-read of every worktree on the next pass.
 const UNREADABLE = Symbol('unreadable')
+
 type Unreadable = typeof UNREADABLE
 
 async function readTrimmedFile(path: string): Promise<string | null | Unreadable> {
@@ -73,23 +75,30 @@ async function readTrimmedFile(path: string): Promise<string | null | Unreadable
 async function readPackedRefs(commonDirPath: string): Promise<Map<string, string> | Unreadable> {
   const refs = new Map<string, string>()
   const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
+
   if (content === UNREADABLE) {
     return UNREADABLE
   }
+
   // No packed-refs file at all is a fact: every ref is loose.
   if (content === null) {
     return refs
   }
+
   for (const line of content.split('\n')) {
     if (!line || line.startsWith('#') || line.startsWith('^')) {
       continue
     }
+
     const separator = line.indexOf(' ')
+
     if (separator <= 0) {
       continue
     }
+
     refs.set(line.slice(separator + 1).trim(), line.slice(0, separator))
   }
+
   return refs
 }
 
@@ -100,6 +109,7 @@ function isSafeRefName(ref: string): boolean {
   if (ref.length === 0 || ref.includes('\\') || ref.includes(':')) {
     return false
   }
+
   return !ref.split('/').some((part) => part === '..' || part === '')
 }
 
@@ -117,25 +127,33 @@ async function resolveRefToOid(
   packedRefs: () => Promise<Map<string, string> | Unreadable>
 ): Promise<string | null | Unreadable> {
   let current = ref
+
   for (let depth = 0; depth < MAX_SYMREF_DEPTH; depth++) {
     if (!isSafeRefName(current)) {
       return null
     }
+
     // Branch refs are shared repo state, so loose files live in the common dir.
     const loose = await readTrimmedFile(join(commonDirPath, ...current.split('/')))
+
     if (loose === UNREADABLE) {
       return UNREADABLE
     }
+
     if (loose === null) {
       const packed = await packedRefs()
+
       return packed === UNREADABLE ? UNREADABLE : asObjectId(packed.get(current))
     }
+
     if (loose.startsWith('ref: ')) {
       current = loose.slice('ref: '.length).trim()
       continue
     }
+
     return asObjectId(loose)
   }
+
   return null
 }
 
@@ -147,28 +165,37 @@ async function readHeadIdentity(
   resolved: ResolvedRefOids
 ): Promise<WorktreeHeadIdentity | null | Unreadable> {
   const head = await readTrimmedFile(headFilePath)
+
   if (head === UNREADABLE) {
     return UNREADABLE
   }
+
   if (!head) {
     return null
   }
+
   if (head.startsWith('ref: ')) {
     const ref = head.slice('ref: '.length).trim()
     const oid = await resolveRefToOid(commonDirPath, ref, packedRefs)
+
     // Only definite outcomes are replayed onto siblings; an unknown must not
     // evict every other worktree that shares this branch.
     if (oid === UNREADABLE) {
       return UNREADABLE
     }
+
     resolved.set(ref, oid)
+
     // Unborn branches (no commit yet) stay covered by the structural listing.
     if (!oid) {
       return null
     }
+
     return { worktreePath, head: oid, branch: ref }
   }
+
   const detachedOid = asObjectId(head)
+
   return detachedOid ? { worktreePath, head: detachedOid, branch: null } : null
 }
 
@@ -180,15 +207,19 @@ async function readLinkedEntryIdentity(
 ): Promise<WorktreeHeadIdentity | null | Unreadable> {
   const entryPath = join(commonDirPath, 'worktrees', entryName)
   const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
+
   if (gitdirContent === UNREADABLE) {
     return UNREADABLE
   }
+
   if (!gitdirContent) {
     return null
   }
+
   // `gitdir` holds `<worktree>/.git`, absolute or (with relative-path
   // worktrees) relative to the entry dir.
   const gitdirAbsolute = isAbsolute(gitdirContent) ? gitdirContent : join(entryPath, gitdirContent)
+
   return readHeadIdentity(
     commonDirPath,
     join(entryPath, 'HEAD'),
@@ -204,6 +235,7 @@ async function readLinkedEntryIdentity(
 async function listLinkedEntryNames(commonDirPath: string): Promise<string[] | null> {
   try {
     const entries = await readdir(join(commonDirPath, 'worktrees'), { withFileTypes: true })
+
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : null
@@ -217,7 +249,9 @@ function knowsEveryScopedEntry(
   if (scope.entryNames.size === 0) {
     return true
   }
+
   const known = new Set(entryKeys)
+
   return [...scope.entryNames].every((key) => known.has(key))
 }
 
@@ -236,7 +270,9 @@ function retargetCachedIdentity(
   if (identity.branch === null || !resolved.has(identity.branch)) {
     return identity
   }
+
   const oid = resolved.get(identity.branch) ?? null
+
   return oid === null ? null : { ...identity, head: oid }
 }
 
@@ -244,14 +280,17 @@ function applyResolvedRefOids(cache: WorktreeHeadIdentityCache, resolved: Resolv
   if (resolved.size === 0) {
     return
   }
+
   for (const [name, identity] of cache.entries) {
     const next = retargetCachedIdentity(identity, resolved)
+
     if (next === null) {
       cache.entries.delete(name)
     } else if (next !== identity) {
       cache.entries.set(name, next)
     }
   }
+
   if (cache.primary) {
     cache.primary = retargetCachedIdentity(cache.primary, resolved)
   }
@@ -270,8 +309,10 @@ export async function readGitCommonHeadIdentities(
   scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE
 ): Promise<GitCommonHeadIdentityRead> {
   let packedRefsPromise: Promise<Map<string, string> | Unreadable> | null = null
+
   const packedRefs = (): Promise<Map<string, string> | Unreadable> =>
     (packedRefsPromise ??= readPackedRefs(commonDirPath))
+
   const resolved: ResolvedRefOids = new Map()
 
   // Only the standard `<checkout>/.git` layout maps a common dir back to its
@@ -286,7 +327,9 @@ export async function readGitCommonHeadIdentities(
       packedRefs,
       resolved
     )
+
     cache.primaryUnverified = primary === UNREADABLE
+
     if (primary !== UNREADABLE) {
       cache.primary = primary
     }
@@ -295,25 +338,32 @@ export async function readGitCommonHeadIdentities(
   let entryNames = cache.entryNames
   let listingStale = false
   let relisted = false
+
   const relist = async (): Promise<void> => {
     relisted = true
     const listing = await listLinkedEntryNames(commonDirPath)
+
     if (listing === null) {
       listingStale = true
+
       return
     }
+
     listingStale = false
     entryNames = listing
     const present = new Set(listing)
+
     for (const name of cache.entries.keys()) {
       if (!present.has(name)) {
         cache.entries.delete(name)
       }
     }
   }
+
   if (entryNames === null || scope.all || scope.listing) {
     await relist()
   }
+
   if (entryNames === null) {
     // Unreadable on the very first pass: report only the primary and leave the
     // memo unset so the next refresh re-enumerates.
@@ -321,6 +371,7 @@ export async function readGitCommonHeadIdentities(
   }
 
   let entryKeys = entryNames.map(headIdentityEntryKey)
+
   // Why: a scope naming an entry the memoized listing does not know means the
   // listing is behind, not that the entry may be skipped. Never let a named
   // entry resolve to zero work.
@@ -337,19 +388,25 @@ export async function readGitCommonHeadIdentities(
       cache.unverified.has(name) ||
       scope.entryNames.has(entryKeys[index])
   )
+
   // Bounded fan-out so a burst cannot flood the libuv threadpool; publication
   // order comes from `entryNames` below, not from completion order.
   const reads = await mapWithConcurrency(staleNames, HEAD_IDENTITY_READ_CONCURRENCY, (name) =>
     readLinkedEntryIdentity(commonDirPath, name, packedRefs, resolved)
   )
+
   staleNames.forEach((name, index) => {
     const identity = reads[index]
+
     if (identity === UNREADABLE) {
       // Unknown, not absent: keep the last verified identity and retry next pass.
       cache.unverified.add(name)
+
       return
     }
+
     cache.unverified.delete(name)
+
     if (identity) {
       cache.entries.set(name, identity)
     } else {
@@ -363,12 +420,15 @@ export async function readGitCommonHeadIdentities(
   // listing event to arrive: the next refresh re-enumerates whatever its scope.
   cache.entryNames = listingStale ? null : entryNames
   const identities: WorktreeHeadIdentity[] = cache.primary ? [cache.primary] : []
+
   for (const name of entryNames) {
     const identity = cache.entries.get(name)
+
     if (identity) {
       identities.push(identity)
     }
   }
+
   return {
     identities,
     complete: !listingStale && cache.unverified.size === 0 && !cache.primaryUnverified

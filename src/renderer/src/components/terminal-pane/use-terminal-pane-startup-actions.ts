@@ -58,6 +58,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     updateSettings,
     worktreeId
   } = controller
+
   const settleTabStartupCommand = useCallback(() => {
     if (startup) {
       consumeTabStartupCommand(tabId, startup)
@@ -68,6 +69,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     if (isVisible && shouldMeasureHiddenStartup) {
       setShouldMeasureHiddenStartup(false)
     }
+
     if (isVisible) {
       setTerminalError((previous) =>
         previous && isTerminalZeroDimensionsDiagnostic(previous) ? null : previous
@@ -84,20 +86,24 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
   const clearSessionRestoredBannerForPane = useCallback((paneId: number): void => {
     setSessionRestoredBannerPaneIds((previous) => {
       const next = removeSessionRestoredBannerPaneId(previous, paneId)
+
       return next === previous ? previous : next
     })
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [])
+
   const showRestoredSessionBanner = useCallback(
     (paneId: number, reason: SessionRestoredBannerReason = 'restored'): void => {
       setSessionRestoredBannerPaneIds((previous) => {
         const next = addSessionRestoredBannerPaneId(previous, paneId, reason)
+
         return next === previous ? previous : next
       })
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     []
   )
+
   const dismissSessionRestoredBanner = useCallback(
     (event: SessionRestoredBannerDismissEvent): void => {
       setSessionRestoredBannerPaneIds((previous) =>
@@ -107,6 +113,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     []
   )
+
   useSessionRestoredBannerDismiss(
     sessionRestoredBannerPaneIds.size > 0,
     containerRef,
@@ -124,13 +131,16 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
 
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
+
   const quickCommandRepo = useRepoById(quickCommandRepoId)
   const projectHostSetupProjection = useProjectHostSetupProjection()
+
   const quickCommandRepoLabel = quickCommandRepo
     ? quickCommandRepo.displayName || quickCommandRepo.path
     : quickCommandRepoId
       ? 'This Repo'
       : null
+
   const quickCommandGroupId =
     useAppStore(
       (state) =>
@@ -148,12 +158,14 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     []
   )
+
   const saveQuickCommand = useCallback(
     (command: TerminalQuickCommand): void => {
       void useAppStore.getState().upsertTerminalQuickCommand(quickCommandEditorHostId, command)
     },
     [quickCommandEditorHostId]
   )
+
   useEffect(() => {
     if (setupSplit) {
       consumeTabSetupSplit(tabId)
@@ -170,36 +182,45 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   settingsRef.current = settings
   const openLinksInAppPreferencePromiseRef = useRef<Promise<boolean> | null>(null)
+
   const requestOpenLinksInAppPreference = useCallback(
     (url: string): Promise<boolean> | null => {
       if (settingsRef.current?.openLinksInAppPreferencePrompted === true) {
         return null
       }
+
       if (!settingsRef.current) {
         return null
       }
+
       if (openLinksInAppPreferencePromiseRef.current) {
         return openLinksInAppPreferencePromiseRef.current
       }
+
       const preferencePromise = (async () => {
         const openInOrca = await requestLinkRoutingPreference({
           openLinksInAppDefault: settingsRef.current?.openLinksInApp === true,
           url
         })
+
         await updateSettings({
           openLinksInApp: openInOrca,
           openLinksInAppPreferencePrompted: true
         })
+
         return openInOrca
       })()
+
       openLinksInAppPreferencePromiseRef.current = preferencePromise
       void preferencePromise.finally(() => {
         openLinksInAppPreferencePromiseRef.current = null
       })
+
       return preferencePromise
     },
     [requestLinkRoutingPreference, updateSettings]
   )
+
   const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
   // Keyboard listeners need the current preference without a render lag.

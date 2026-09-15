@@ -30,5 +30,6 @@ function getRendererBridges(): BrowserClientPageRendererBridgeRegistry {
         ipcMain.removeListener(BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL, listener)
     }
   })
+
   return rendererBridges
 }

@@ -11,9 +11,12 @@ export function buildMobileBrowserTab(
 ): RuntimeMobileSessionBrowserTab {
   const pages = inputs.pagesByBrowserWorkspaceId.get(workspace.id) ?? []
   const activePage = pages.find((page) => page.id === workspace.activePageId) ?? pages[0] ?? null
+
   const title =
     activePage?.title || workspace.title || activePage?.url || workspace.url || 'Browser'
+
   const unifiedTabId = unifiedTab?.id
+
   return {
     type: 'browser',
     id: unifiedTabId ?? workspace.id,

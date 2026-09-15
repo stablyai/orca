@@ -66,12 +66,15 @@ export default function RunTargetCombobox({
   const [connectingHostIds, setConnectingHostIds] = useState<ReadonlySet<string>>(() => new Set())
 
   const hasAddHost = Boolean(onAddSshHost || onAddRemoteServer)
+
   const deriveRowKeys = useCallback(
     (query: string): string[] =>
       buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }).rows.map((row) => row.key),
     [hasAddHost, hostOptions, recipes]
   )
+
   const combobox = useTypeAheadCombobox(deriveRowKeys)
+
   const { query, setQuery, open, setOpen, armedKey, arm, moveArm, inputRef, listId, setListNode } =
     combobox
 
@@ -79,12 +82,15 @@ export default function RunTargetCombobox({
     () => buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }),
     [hasAddHost, hostOptions, query, recipes]
   )
+
   const readyHostOptions = useMemo(
     () => hostOptions.filter((option) => option.kind === 'ready'),
     [hostOptions]
   )
+
   const selectedHost =
     readyHostOptions.find((option) => option.id === hostValue) ?? readyHostOptions[0] ?? null
+
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
   // Only a committed selection paints the field; typing replaces it.
@@ -118,7 +124,9 @@ export default function RunTargetCombobox({
       if (!option.connectAction || !onConnectHost || connectingHostIds.has(option.hostId)) {
         return
       }
+
       setConnectingHostIds((current) => new Set(current).add(option.hostId))
+
       try {
         await onConnectHost(option)
       } finally {
@@ -128,8 +136,10 @@ export default function RunTargetCombobox({
           if (!current.has(option.hostId)) {
             return current
           }
+
           const next = new Set(current)
           next.delete(option.hostId)
+
           return next
         })
       }
@@ -144,6 +154,7 @@ export default function RunTargetCombobox({
       if (!option.canSetLocation || !onSetLocation) {
         return
       }
+
       close()
       onSetLocation(option)
     },
@@ -154,18 +165,24 @@ export default function RunTargetCombobox({
   const activate = useCallback(
     (key: string | null): void => {
       const row = rows.find((candidate) => candidate.key === key)
+
       if (!row) {
         return
       }
+
       if (row.kind === 'ready') {
         selectHost(row.option.id)
+
         return
       }
+
       if (row.kind === 'needs-setup') {
         // Not ready: setting the location is the only way forward from the row itself.
         setLocation(row.option)
+
         return
       }
+
       setSubmenu(row.kind === 'recipes' ? 'recipes' : 'add-host')
     },
     [rows, selectHost, setLocation]
@@ -178,21 +195,28 @@ export default function RunTargetCombobox({
         setOpen(true)
         moveArm(event.key === 'ArrowDown' ? 1 : -1)
         setSubmenu(null)
+
         return
       }
+
       if ((event.key === 'Enter' || event.key === 'ArrowRight') && open) {
         event.preventDefault()
         activate(armedRow?.key ?? null)
+
         return
       }
+
       if (event.key === 'Escape' && (open || query.length > 0)) {
         event.preventDefault()
         event.stopPropagation()
+
         // A submenu closes first, so Escape backs out one layer at a time.
         if (submenu !== null) {
           setSubmenu(null)
+
           return
         }
+
         close()
       }
     },
@@ -203,8 +227,10 @@ export default function RunTargetCombobox({
     (next: boolean): void => {
       if (next) {
         setOpen(true)
+
         return
       }
+
       close()
     },
     [close, setOpen]
@@ -213,6 +239,7 @@ export default function RunTargetCombobox({
   const fieldLabel = selectedRecipe
     ? `${getEphemeralVmLabel()} / ${selectedRecipe.name}`
     : (selectedHost?.label ?? '')
+
   const fieldDetail = selectedRecipe ? getRecipeDetail(selectedRecipe) : (selectedHost?.path ?? '')
 
   return (
@@ -285,8 +312,10 @@ export default function RunTargetCombobox({
               if (row.kind === 'add-host') {
                 return null
               }
+
               const isArmed = armedRow?.key === row.key
               const optionId = isArmed ? `${listId}-armed` : undefined
+
               if (row.kind === 'ready') {
                 return (
                   <RunTargetRow
@@ -305,10 +334,12 @@ export default function RunTargetCombobox({
                   />
                 )
               }
+
               if (row.kind === 'needs-setup') {
                 const connecting = connectingHostIds.has(row.option.hostId)
                 const hasConnect = Boolean(row.option.connectAction && onConnectHost)
                 const hasSetLocation = Boolean(row.option.canSetLocation && onSetLocation)
+
                 return (
                   <RunTargetRow
                     key={row.key}
@@ -348,6 +379,7 @@ export default function RunTargetCombobox({
                   />
                 )
               }
+
               // Recipes submenu row.
               return (
                 <RecipesSubmenuRow

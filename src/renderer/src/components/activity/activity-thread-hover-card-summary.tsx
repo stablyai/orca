@@ -44,28 +44,37 @@ export function ActivityThreadHoverCardSummary({
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
   const parsedHost = parseExecutionHostId(executionHostId)
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+
   const hostDisplayLabel = useMemo(() => {
     const override = hostLabelOverrides.get(executionHostId)
+
     if (override) {
       return override
     }
+
     if (parsedHost?.kind === 'runtime') {
       const environment = runtimeEnvironments.find((entry) => entry.id === parsedHost.environmentId)
+
       if (environment?.name) {
         return environment.name
       }
     }
+
     if (parsedHost?.kind === 'ssh') {
       const target = sshTargetLabels.get(parsedHost.targetId)
+
       if (target) {
         return target
       }
     }
+
     return getExecutionHostLabel(executionHostId)
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
+
   const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
   const { taskTitle, needsAttention } = activityThreadRowCopy(thread)
   const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)
+
   const copyPathLabel = translate(
     'auto.components.activity.ActivityThreadHoverCard.copyPath',
     'Copy path'
@@ -74,15 +83,18 @@ export function ActivityThreadHoverCardSummary({
   const isKnownWorktree = useAppStore((s) =>
     Boolean(s.getKnownWorktreeById(worktree.id, executionHostId))
   )
+
   const canJump = canJumpToWorkspace ?? isKnownWorktree
 
   const handleJumpToWorkspace = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
+
       if (onJumpToWorkspace) {
         onJumpToWorkspace(event)
       } else {
         const state = useAppStore.getState()
+
         if (state.getKnownWorktreeById(worktree.id, executionHostId)) {
           state.acknowledgeAgents([thread.paneKey])
           jumpToWorktreeFromSidebar(worktree.id, { executionHostId })
@@ -96,6 +108,7 @@ export function ActivityThreadHoverCardSummary({
     if (!worktree.path) {
       return
     }
+
     try {
       await window.api.ui.writeClipboardText(worktree.path)
       toast.success(

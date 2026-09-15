@@ -25,10 +25,12 @@ export function resolveBrowserDriverAfterMobileRelease(
   remaining: Iterable<BrowserScreencastSubscriber>
 ): RuntimeBrowserDriverState {
   let fallback: BrowserScreencastSubscriber | null = null
+
   for (const subscriber of remaining) {
     if (subscriber.drivesAsMobile) {
       fallback = subscriber
     }
   }
+
   return fallback ? { kind: 'mobile', clientId: fallback.connectionKey } : { kind: 'idle' }
 }

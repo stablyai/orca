@@ -85,6 +85,7 @@ describe('getFeatureWallSetupProgress', () => {
       join(process.cwd(), 'src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx'),
       'utf8'
     )
+
     const setupSectionIndex = source.indexOf('steps={setupSteps}')
     const milestonesSectionIndex = source.indexOf('steps={parallelWorkSteps}')
 

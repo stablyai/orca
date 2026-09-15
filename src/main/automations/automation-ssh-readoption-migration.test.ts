@@ -8,7 +8,9 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 
 const NOW = 1_700_000_000_000
+
 const OLD_ID = 'ssh-1738-a9f3x'
+
 const NEW_ID = 'ssh-1799-b2k7z'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
@@ -97,6 +99,7 @@ describe('migrateAutomationsForSshReadoption', () => {
         hostId: `ssh:${OLD_ID}`
       }
     })
+
     expect(migrate([automation], 9)).toBe(true)
     expect(automation.runContext?.hostId).toBe(`ssh:${NEW_ID}`)
     expect(automation.sourceContext?.hostId).toBe(`ssh:${NEW_ID}`)
@@ -118,6 +121,7 @@ describe('migrateAutomationsForSshReadoption', () => {
       automationId: 'auto-1',
       runContext: runContext(`ssh:${OLD_ID}`)
     } as AutomationRun
+
     expect(migrate([], 9, [run])).toBe(true)
     expect(run.runContext?.hostId).toBe(`ssh:${NEW_ID}`)
   })
@@ -128,6 +132,7 @@ describe('migrateAutomationHostFilterSshTargetId', () => {
     const ui = uiWithFilter(
       hostStableKey({ authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId: OLD_ID } })
     )
+
     expect(migrateAutomationHostFilterSshTargetId(ui, OLD_ID, NEW_ID)).toBe(true)
     expect(ui.automationHostFilter).toEqual({
       kind: 'host',
@@ -143,6 +148,7 @@ describe('migrateAutomationHostFilterSshTargetId', () => {
       authority: { kind: 'runtime', environmentId: 'env-1' },
       selector: { kind: 'ssh', targetId: OLD_ID }
     })
+
     const ui = uiWithFilter(hostKey)
     expect(migrateAutomationHostFilterSshTargetId(ui, OLD_ID, NEW_ID)).toBe(false)
     expect(ui.automationHostFilter).toEqual({ kind: 'host', hostKey })
@@ -151,10 +157,12 @@ describe('migrateAutomationHostFilterSshTargetId', () => {
   it('ignores All hosts, other hosts, and unparseable persisted values', () => {
     const all = { automationHostFilter: { kind: 'all' } } as PersistedUIState
     expect(migrateAutomationHostFilterSshTargetId(all, OLD_ID, NEW_ID)).toBe(false)
+
     const selfKey = hostStableKey({
       authority: { kind: 'desktop' },
       selector: { kind: 'self' }
     })
+
     expect(migrateAutomationHostFilterSshTargetId(uiWithFilter(selfKey), OLD_ID, NEW_ID)).toBe(
       false
     )

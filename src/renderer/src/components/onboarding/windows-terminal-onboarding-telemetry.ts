@@ -18,18 +18,23 @@ export function bucketWindowsTerminalShell(
   // bounded product bucket and never sends the path or WSL distro name.
   const normalized = (shell ?? '').toLowerCase()
   const normalizedName = normalized.replaceAll('\\', '/').split('/').pop()
+
   if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
     return 'powershell'
   }
+
   if (normalized === 'cmd.exe') {
     return 'command_prompt'
   }
+
   if (normalized === WINDOWS_GIT_BASH_SHELL || normalizedName === 'bash.exe') {
     return 'git_bash'
   }
+
   if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {
     return 'wsl'
   }
+
   return 'other'
 }
 

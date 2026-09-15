@@ -17,21 +17,35 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -52,19 +66,24 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
       exit: []
     }
+
     const offMock = vi.fn((event: string, cb: (arg?: unknown) => void) => {
       handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
       return child
     })
+
     const child = {
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
+
         if (event === 'message') {
           queueMicrotask(() =>
             cb({
@@ -75,12 +94,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
             })
           )
         }
+
         return this
       },
       off: offMock,
       disconnect: vi.fn(),
       unref: vi.fn()
     }
+
     forkMock.mockReturnValueOnce(child)
 
     await launcher('/fake/socket', '/fake/token')
@@ -125,18 +146,21 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     const child = {
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       off: vi.fn(),
       disconnect: vi.fn(),
       unref: vi.fn()
     }
+
     forkMock.mockReturnValueOnce(child)
 
     await launcher('/fake/socket', '/fake/token')
@@ -165,13 +189,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
       exit: []
     }
+
     const stderrOff = vi.fn()
     const stderrDestroy = vi.fn()
+
     const stderr = {
       on() {
         return this
@@ -179,24 +206,29 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       off: stderrOff,
       destroy: stderrDestroy
     }
+
     const child = {
       pid: 12345,
       stderr,
       on(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
+
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       once(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
+
         return this
       },
       off: vi.fn(() => child),
       disconnect: vi.fn(),
       unref: vi.fn()
     }
+
     forkMock.mockReturnValueOnce(child)
 
     await launcher('/fake/socket', '/fake/token')
@@ -215,6 +247,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
     getProcessStartedAtMsMock.mockReturnValue(null)
     launchedStartedAtMs.current = 1_700_000_123_456
@@ -224,6 +257,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_700_000_123_456 }))
         }
+
         return this
       },
       off() {

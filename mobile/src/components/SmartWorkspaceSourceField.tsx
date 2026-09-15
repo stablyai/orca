@@ -29,15 +29,19 @@ function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
   if (kind === 'github-pr') {
     return <GitPullRequest size={15} color={colors.textSecondary} />
   }
+
   if (kind === 'gitlab-mr') {
     return <GitMerge size={15} color={colors.textSecondary} />
   }
+
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
     return <CircleDot size={15} color={colors.textSecondary} />
   }
+
   if (kind === 'branch') {
     return <GitBranch size={15} color={colors.textSecondary} />
   }
+
   return <TaskProviderLogo provider="linear" size={15} color={colors.textSecondary} />
 }
 
@@ -56,6 +60,7 @@ export function SmartWorkspaceSourceField({
     if (disabled) {
       return
     }
+
     onBeforeOpen?.()
     onOpenDrawer()
   }

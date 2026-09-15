@@ -17,6 +17,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
     settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined
   ) => {
     const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
+
     return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
   }
 }))
@@ -207,6 +208,7 @@ describe('hosted review slice', () => {
 
   it('uses local hosted-review IPC for a known local repo while a runtime is focused', async () => {
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
@@ -231,6 +233,7 @@ describe('hosted review slice', () => {
 
   it('routes active runtime review lookups through runtime RPC', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
@@ -294,9 +297,11 @@ describe('hosted review slice', () => {
 
   it('uses SSH ownership instead of the focused runtime for branch review lookups', async () => {
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-focused'
     } as AppState['settings'])
+
     store.setState({
       repos: [
         {
@@ -459,9 +464,11 @@ describe('hosted review slice', () => {
       branch: 'feature/create-pr',
       base: 'main'
     })
+
     const assertion = expect(pending).rejects.toBeInstanceOf(
       HostedReviewCreationEligibilityTimeoutError
     )
+
     await vi.advanceTimersByTimeAsync(30_000)
     await assertion
     expect(vi.getTimerCount()).toBe(0)
@@ -493,6 +500,7 @@ describe('hosted review slice', () => {
       number: 12,
       url: 'https://github.com/acme/orca/pull/12'
     })
+
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
@@ -528,6 +536,7 @@ describe('hosted review slice', () => {
       stackNumber: 50,
       parentReview: { number: 41, url: 'https://github.com/acme/orca/pull/41' }
     })
+
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
@@ -561,6 +570,7 @@ describe('hosted review slice', () => {
       blockedReason: null,
       nextAction: null
     })
+
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
@@ -658,13 +668,16 @@ describe('hosted review slice', () => {
 
   it('does not dedupe a linked PR hint onto a weaker in-flight branch lookup', async () => {
     let resolveBranchLookup: (value: null) => void = () => {}
+
     const branchLookup = new Promise<null>((resolve) => {
       resolveBranchLookup = resolve
     })
+
     mockApi.hostedReview.forBranch.mockReturnValueOnce(branchLookup).mockResolvedValueOnce(review)
     const store = makeStore()
 
     const plainFetch = store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')
+
     const linkedFetch = store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
       linkedGitHubPR: 42
     })
@@ -687,6 +700,7 @@ describe('hosted review slice', () => {
       mergeable: 'MERGEABLE',
       headSha: 'aaaaaaa'
     }
+
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(mergedAtHead).mockResolvedValueOnce(null)
     const store = makeStore()
 
@@ -719,6 +733,7 @@ describe('hosted review slice', () => {
       headSha: 'aaaaaaa',
       confirmedContainedHeadOid: 'bbbbbbb'
     }
+
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(mergedBehindHead)
     const store = makeStore()
 
@@ -741,6 +756,7 @@ describe('hosted review slice', () => {
 
   it('does not preserve a merged GitHub review after the worktree moves off its head', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const cacheKey = getHostedReviewCacheKey(
       '/repo',
       'feature/merged',
@@ -750,6 +766,7 @@ describe('hosted review slice', () => {
       null,
       true
     )
+
     const store = makeStore()
     store.setState({
       hostedReviewCache: {

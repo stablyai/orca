@@ -53,6 +53,7 @@ describe('resolveMissingRepoProjectDialogState', () => {
   it('clears slug fallback dialogs once the repo slug resolves', () => {
     const slugDialog = { origin: { owner: 'stablyai', repo: 'orca' } }
     const repoNotInOrca = { owner: 'other', repo: 'tool', url: null }
+
     const result = resolveMissingRepoProjectDialogState({
       slugIndexReady: true,
       slugDialog,
@@ -68,6 +69,7 @@ describe('resolveMissingRepoProjectDialogState', () => {
   it('clears repo-not-in-orca dialogs once the repo slug resolves', () => {
     const slugDialog = { origin: { owner: 'other', repo: 'tool' } }
     const repoNotInOrca = { owner: 'stablyai', repo: 'orca', url: null }
+
     const result = resolveMissingRepoProjectDialogState({
       slugIndexReady: true,
       slugDialog,
@@ -83,6 +85,7 @@ describe('resolveMissingRepoProjectDialogState', () => {
   it('clears fallback dialogs when the repo is globally known but not selected', () => {
     const slugDialog = { origin: { owner: 'stablyai', repo: 'orca' } }
     const repoNotInOrca = { owner: 'stablyai', repo: 'orca', url: null }
+
     const result = resolveMissingRepoProjectDialogState({
       slugIndexReady: true,
       slugDialog,
@@ -97,6 +100,7 @@ describe('resolveMissingRepoProjectDialogState', () => {
   it('keeps missing-repo fallback dialogs when there are no global matches', () => {
     const slugDialog = { origin: { owner: 'stablyai', repo: 'orca' } }
     const repoNotInOrca = { owner: 'stablyai', repo: 'orca', url: null }
+
     const result = resolveMissingRepoProjectDialogState({
       slugIndexReady: true,
       slugDialog,

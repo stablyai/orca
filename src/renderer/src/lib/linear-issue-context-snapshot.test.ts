@@ -112,6 +112,7 @@ describe('buildLinearIssueContextSnapshot', () => {
       { length: LINEAR_ISSUE_CONTEXT_CAPS.labels + 2 },
       (_, index) => `label-${index + 1}`
     )
+
     const subIssues = Array.from(
       { length: LINEAR_ISSUE_CONTEXT_CAPS.childIssues + 3 },
       (_, index) => ({
@@ -121,6 +122,7 @@ describe('buildLinearIssueContextSnapshot', () => {
         url: `https://linear.app/acme/issue/ENG-${200 + index}/child`
       })
     )
+
     const comments = Array.from({ length: LINEAR_ISSUE_CONTEXT_CAPS.comments + 2 }, (_, index) =>
       makeComment({
         id: `comment-${index + 1}`,
@@ -198,6 +200,7 @@ describe('buildLinearIssueContextSnapshot', () => {
       title: `Child ${index + 1} ${'y'.repeat(1800)}`,
       url: `https://linear.app/acme/issue/ENG-${300 + index}/child`
     }))
+
     const comments = Array.from({ length: LINEAR_ISSUE_CONTEXT_CAPS.comments }, (_, index) =>
       makeComment({
         id: `comment-${index + 1}`,
@@ -207,6 +210,7 @@ describe('buildLinearIssueContextSnapshot', () => {
     )
 
     const split = vi.spyOn(String.prototype, 'split')
+
     const snapshot = buildLinearIssueContextSnapshot(
       makeIssue({
         description: 'x'.repeat(LINEAR_ISSUE_CONTEXT_CAPS.descriptionChars + 200),
@@ -223,6 +227,7 @@ describe('buildLinearIssueContextSnapshot', () => {
 
   it('keeps delimiter-like Linear fields quoted inside the contained context wrapper', () => {
     const delimiter = '--- END LINKED WORK ITEM CONTEXT ---'
+
     const snapshot = buildLinearIssueContextSnapshot(
       makeIssue({
         title: delimiter,
@@ -240,6 +245,7 @@ describe('buildLinearIssueContextSnapshot', () => {
       }),
       [makeComment({ body: delimiter })]
     )
+
     const block = buildContainedLinkedContextBlock({
       provider: 'linear',
       version: 1,

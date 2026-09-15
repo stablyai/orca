@@ -68,6 +68,7 @@ describe('repo slice runtime routing', () => {
       },
       importedExternalWorktreePaths: ['/local/wt']
     })
+
     reposList.mockImplementation(async () => [hydrated()])
     const store = createTestStore()
     await store.getState().fetchRepos()
@@ -260,6 +261,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const setup: ProjectHostSetup = {
       id: 'local-repo',
       projectId: project.id,
@@ -272,6 +274,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     projectsSetupExistingFolder.mockResolvedValue({ project, setup, repo: localRepo })
     const store = createTestStore()
     store.setState({ projects: [project] })
@@ -310,6 +313,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const setup: ProjectHostSetup = {
       id: 'remote-repo',
       projectId: project.id,
@@ -322,6 +326,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-setup',
       ok: true,
@@ -372,6 +377,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const setup: ProjectHostSetup = {
       id: 'ssh-repo',
       projectId: project.id,
@@ -385,6 +391,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     projectsSetupExistingFolder.mockResolvedValue({
       project,
       setup,
@@ -424,7 +431,9 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const clonedRepo = { ...localRepo, path: '/workspace/project' }
+
     const setup: ProjectHostSetup = {
       id: clonedRepo.id,
       projectId: project.id,
@@ -437,6 +446,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     reposClone.mockResolvedValue(clonedRepo)
     projectsSetupExistingFolder.mockResolvedValue({ project, setup, repo: clonedRepo })
     const store = createTestStore()
@@ -478,7 +488,9 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const clonedRepo = { ...remoteRepo, path: '/srv/project' }
+
     const setup: ProjectHostSetup = {
       id: clonedRepo.id,
       projectId: project.id,
@@ -491,6 +503,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     runtimeEnvironmentCall
       .mockResolvedValueOnce({
         id: 'rpc-clone',
@@ -559,7 +572,9 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const clonedRepo = { ...sshRepo, path: '/srv/project' }
+
     const setup: ProjectHostSetup = {
       id: clonedRepo.id,
       projectId: project.id,
@@ -572,6 +587,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     reposCloneRemote.mockResolvedValue(clonedRepo)
     projectsSetupExistingFolder.mockResolvedValue({ project, setup, repo: clonedRepo })
     const store = createTestStore()
@@ -807,11 +823,13 @@ describe('repo slice runtime routing', () => {
 
   it('cleans up hidden detected worktree state when removing a repo', async () => {
     const store = createTestStore()
+
     const hiddenWorktree = makeWorktree({
       id: `${localRepo.id}::/local/hidden`,
       repoId: localRepo.id,
       path: '/local/hidden'
     })
+
     store.setState({
       repos: [localRepo],
       worktreesByRepo: { [localRepo.id]: [] },

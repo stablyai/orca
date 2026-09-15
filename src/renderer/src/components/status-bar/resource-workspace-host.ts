@@ -14,6 +14,7 @@ export function resolveResourceFolderWorkspace(
   ) {
     return undefined
   }
+
   return ctx.worktreeById?.get(worktreeId)
 }
 
@@ -24,6 +25,7 @@ export function resolveResourceWorkspaceHost(
 ): { isRemote: boolean; isRuntimeScoped: boolean } {
   const folder = resolveResourceFolderWorkspace(ctx, worktreeId)
   const host = folder ? parseExecutionHostId(folder.hostId ?? 'local') : null
+
   return {
     // Folder siblings may execute on different hosts within the same project group.
     isRemote: host ? host.kind === 'ssh' : ctx.repoConnectionIdById.get(repoId) != null,

@@ -40,6 +40,7 @@ vi.mock('../main/git/status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return {
     ...actual,
     stat: vi.fn(async () => {
@@ -58,7 +59,9 @@ import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 
 const REPO_PATH = '/repo'
+
 const WORKTREE_PATH = '/repo-feature'
+
 const BRANCH = 'feature/test'
 
 function enoent(): Error {
@@ -74,9 +77,11 @@ function branchDeletionCalls(calls: string[][]): string[] {
 
 function worktreeListPorcelain(withFeature: boolean): string {
   const blocks = [[`worktree ${REPO_PATH}`, 'HEAD abc123', 'branch refs/heads/main']]
+
   if (withFeature) {
     blocks.push([`worktree ${WORKTREE_PATH}`, 'HEAD def456', `branch refs/heads/${BRANCH}`])
   }
+
   return `${blocks.map((block) => block.join('\n')).join('\n\n')}\n`
 }
 
@@ -103,23 +108,31 @@ function scriptRelayGit(stream: RefusalStream): {
 } {
   const calls: string[][] = []
   let branchDeleteCount = 0
+
   const git = vi.fn<GitExec>(async (args) => {
     calls.push(args)
+
     if (args[0] === 'rev-parse') {
       return { stdout: `${REPO_PATH}/.git\n`, stderr: '' }
     }
+
     if (args[0] === 'worktree' && args[1] === 'list') {
       return { stdout: worktreeListPorcelain(true), stderr: '' }
     }
+
     if (args[0] === 'branch' && args[1] === '-d') {
       branchDeleteCount += 1
+
       if (branchDeleteCount === 1) {
         throw branchDeleteRefusal(stream)
       }
+
       return { stdout: '', stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
+
   return { git, calls }
 }
 
@@ -128,18 +141,24 @@ function scriptDesktopGit(stream: RefusalStream): string[][] {
   let branchDeleteCount = 0
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     calls.push(args)
+
     if (args[0] === 'worktree' && args[1] === 'list') {
       return { stdout: worktreeListPorcelain(branchDeleteCount === 0), stderr: '' }
     }
+
     if (args[0] === 'branch' && args[1] === '-d') {
       branchDeleteCount += 1
+
       if (branchDeleteCount === 1) {
         throw branchDeleteRefusal(stream)
       }
+
       return { stdout: '', stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
+
   return calls
 }
 
@@ -147,11 +166,13 @@ async function removeOverRelay(
   stream: RefusalStream
 ): Promise<{ result: RemoveWorktreeResult; branchCalls: string[] }> {
   const { git, calls } = scriptRelayGit(stream)
+
   const result = await removeWorktreeOp(
     git,
     { worktreePath: WORKTREE_PATH },
     new GitCapabilityCache()
   )
+
   return { result, branchCalls: branchDeletionCalls(calls) }
 }
 
@@ -160,6 +181,7 @@ async function removeLocally(
 ): Promise<{ result: RemoveWorktreeResult; branchCalls: string[] }> {
   const calls = scriptDesktopGit(stream)
   const result = await removeWorktree(REPO_PATH, WORKTREE_PATH)
+
   return { result, branchCalls: branchDeletionCalls(calls) }
 }
 

@@ -7,13 +7,16 @@ export const SKILL_FILE_NAME = 'SKILL.md'
 
 function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): boolean {
   const rel = relative(rootPath, childPath)
+
   if (!rel) {
     return true
   }
+
   // Why: `..cache` is a valid child name; only a real parent traversal escapes.
   if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     return false
   }
+
   return rel.split(sep).length <= maxDepth
 }
 
@@ -38,41 +41,52 @@ export async function findSkillFiles(
 ): Promise<string[]> {
   const out: string[] = []
   const visitedDirectoryPaths = new Set<string>()
+
   async function visit(dirPath: string): Promise<void> {
     // Why throw rather than return what we have: a truncated listing is
     // indistinguishable from a genuinely small root, and a caller that cached it
     // would publish "these skills no longer exist".
     signal?.throwIfAborted()
     let resolvedDirPath: string
+
     try {
       resolvedDirPath = await realpath(dirPath)
     } catch {
       return
     }
+
     if (visitedDirectoryPaths.has(resolvedDirPath)) {
       return
     }
+
     visitedDirectoryPaths.add(resolvedDirPath)
 
     const entries = await readEntries(dirPath)
+
     if (!entries) {
       return
     }
+
     // Directory entry names add one segment, so siblings share the depth verdict.
     let childrenWithinDepth: boolean | undefined
+
     for (const entry of entries) {
       signal?.throwIfAborted()
+
       // Why: a staged sibling sits directly in a scanned root, so without this a
       // skill mid-transaction surfaces as a second, separately actionable row.
       if (isSkillStagingEntryName(entry.name)) {
         continue
       }
+
       const entryPath = join(dirPath, entry.name)
+
       if (entry.name === SKILL_FILE_NAME) {
         if (entry.isFile()) {
           out.push(entryPath)
           continue
         }
+
         if (entry.isSymbolicLink()) {
           try {
             if ((await stat(entryPath)).isFile()) {
@@ -82,14 +96,18 @@ export async function findSkillFiles(
             // Broken links are not valid skill files.
           }
         }
+
         continue
       }
+
       if (entry.isDirectory()) {
         if ((childrenWithinDepth ??= isWithinDepth(rootPath, entryPath, maxDepth))) {
           await visit(entryPath)
         }
+
         continue
       }
+
       if (
         entry.isSymbolicLink() &&
         (childrenWithinDepth ??= isWithinDepth(rootPath, entryPath, maxDepth))
@@ -97,11 +115,13 @@ export async function findSkillFiles(
         // Why: users commonly symlink agent skill dirs across providers; follow
         // directory links but guard by realpath so recursive links cannot loop.
         let linksToDirectory = false
+
         try {
           linksToDirectory = (await stat(entryPath)).isDirectory()
         } catch {
           // Broken links are not valid skill directories.
         }
+
         // Why outside the catch: it must not swallow the abort a nested visit
         // throws, which would let the walk return a truncated list as success.
         if (linksToDirectory) {
@@ -110,6 +130,8 @@ export async function findSkillFiles(
       }
     }
   }
+
   await visit(rootPath)
+
   return out
 }

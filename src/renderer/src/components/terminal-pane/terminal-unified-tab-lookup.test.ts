@@ -42,6 +42,7 @@ function iterableTabs(tabs: Tab[]): {
   const iterator = vi.fn(function* () {
     yield* tabs
   })
+
   return {
     value: { [Symbol.iterator]: iterator } as unknown as Tab[],
     iterator
@@ -56,6 +57,7 @@ describe('terminal unified tab lookup', () => {
         makeTerminalTab(`terminal-${index}`, `group-${index % 4}`)
       )
     ]
+
     const { value, iterator } = iterableTabs(tabs)
     const unifiedTabsByWorktree = { 'wt-1': value }
 
@@ -71,6 +73,7 @@ describe('terminal unified tab lookup', () => {
         getCachedUnifiedTerminalTabForWorktree(unifiedTabsByWorktree, 'wt-1', terminalTabId)?.label
       ).toBe(terminalTabId)
     }
+
     expect(getCachedTerminalGroupIdForWorktree(unifiedTabsByWorktree, 'wt-1', 'terminal-0')).toBe(
       'group-0'
     )

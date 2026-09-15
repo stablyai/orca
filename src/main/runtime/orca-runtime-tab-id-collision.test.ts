@@ -3,6 +3,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 
 const WORKTREE_A = 'repo-1::/tmp/worktree-a'
+
 const WORKTREE_B = 'repo-1::/tmp/worktree-b'
 
 function tab(tabId: string, worktreeId: string) {

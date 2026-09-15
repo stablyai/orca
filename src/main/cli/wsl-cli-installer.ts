@@ -18,8 +18,11 @@ import { buildWslCliInstallCommand } from './wsl-cli-registration-command'
 import { buildWslCliStatus, readWslCliCommandFile, resolveReadyWslCliState } from './wsl-cli-status'
 
 const MANAGED_MARKER = getWslLauncherMarker()
+
 const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
+
 const LEGACY_WSL_COMMAND_NAME = 'orca'
+
 const WSL_COMMAND_TIMEOUT_MS = 10_000
 
 function normalizeManagedScriptContent(content: string): string {
@@ -63,11 +66,13 @@ export class WslCliInstaller {
       getHostStatus: () => this.hostInstaller.getStatus(),
       run: (distro, command) => this.run(distro, command)
     })
+
     if ('status' in ready) {
       return ready.status
     }
 
     const content = await this.readCommandFile(ready.distro, ready.commandPath)
+
     if (content === null) {
       return this.buildStatus({
         distro: ready.distro,
@@ -95,11 +100,14 @@ export class WslCliInstaller {
     const expected = buildWslLauncher(ready.launcherPath, ready.bridgePath)
     const managed = content.includes(MANAGED_MARKER)
     const currentTarget = managed ? parseManagedLauncherTarget(content) : null
+
     if (managedScriptMatches(content, expected, managed)) {
       const bridgeContent = await this.readCommandFile(ready.distro, ready.bridgePath)
       const expectedBridge = buildWslBridgeScript()
+
       const bridgeManaged =
         typeof bridgeContent === 'string' && bridgeContent.includes(BRIDGE_MANAGED_MARKER)
+
       if (
         typeof bridgeContent === 'string' &&
         managedScriptMatches(bridgeContent, expectedBridge, bridgeManaged)
@@ -133,6 +141,7 @@ export class WslCliInstaller {
     // ours too; reporting conflict here keeps repair from a doomed install
     // whose bridge guard would fail on every startup.
     const bridgeConflict = managed && (await this.isBridgeConflict(ready.distro, ready.bridgePath))
+
     return this.buildStatus({
       distro: ready.distro,
       commandPath: ready.commandPath,
@@ -150,17 +159,21 @@ export class WslCliInstaller {
 
   private async isBridgeConflict(distro: string, bridgePath: string): Promise<boolean> {
     const bridgeContent = await this.readCommandFile(distro, bridgePath)
+
     if (bridgeContent === null) {
       return false
     }
+
     return bridgeContent === 'not_file' || !bridgeContent.includes(BRIDGE_MANAGED_MARKER)
   }
 
   async repairManagedRegistration(): Promise<ManagedWslCliRepairResult> {
     const status = await this.getStatus()
+
     if (!status.supported) {
       return { changed: false, managed: false, status }
     }
+
     if (status.state === 'conflict') {
       // Why: a user-owned bridge conflicts with repair, but the launcher is
       // still Orca-managed and must remain registered for future reconciliation.
@@ -174,13 +187,16 @@ export class WslCliInstaller {
     const legacyCommandPath = status.commandPath
       ? `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
       : null
+
     if (!legacyCommandPath || !this.distro) {
       return { changed: false, managed: status.state === 'installed', status }
     }
 
     const legacyContent = await this.readCommandFile(this.distro, legacyCommandPath)
+
     const legacyManaged =
       typeof legacyContent === 'string' && legacyContent.includes(MANAGED_MARKER)
+
     if (!legacyManaged) {
       return { changed: false, managed: status.state === 'installed', status }
     }
@@ -203,9 +219,11 @@ export class WslCliInstaller {
     // Why: repair passes its fresh probe; re-probing here would double every
     // WSL round trip on the startup reconciliation path.
     const status = precomputedStatus ?? (await this.getStatus())
+
     if (!status.supported || !status.commandPath || !status.launcherPath) {
       throw new Error(status.detail ?? 'WSL CLI registration is unavailable.')
     }
+
     if (status.state === 'conflict') {
       throw new Error(
         `Refusing to replace non-Orca command at ${status.commandPath}. Remove it and register again if it is no longer needed.`
@@ -220,15 +238,19 @@ export class WslCliInstaller {
         launcherPath: status.launcherPath
       })
     )
+
     return this.getStatus()
   }
 
   async remove(): Promise<CliInstallStatus> {
     const status = await this.getStatus()
+
     if (!status.supported || !status.commandPath) {
       return status
     }
+
     const legacyCommandPath = `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
+
     if (status.state === 'not_installed') {
       // Why: a managed legacy `orca` left behind would later be re-adopted by
       // startup reconciliation as opt-in proof, silently undoing this removal.
@@ -236,8 +258,10 @@ export class WslCliInstaller {
         this.distro as string,
         ['set -eu', buildManagedLegacyRemoveCommand(quoteShell(legacyCommandPath))].join('\n')
       )
+
       return status
     }
+
     if (status.state === 'conflict') {
       throw new Error(`Refusing to remove non-Orca command at ${status.commandPath}.`)
     }
@@ -246,6 +270,7 @@ export class WslCliInstaller {
       this.distro as string,
       buildSafeRemoveCommand(status.commandPath, legacyCommandPath)
     )
+
     return this.getStatus()
   }
 
@@ -289,11 +314,13 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
     shell: 'sh',
     timeoutMs: WSL_COMMAND_TIMEOUT_MS
   })
+
   // Timeout first: it is the more specific diagnosis, and a timed-out run also
   // leaves the environment unresolved, so the order decides which one shows.
   if (result.timedOut) {
     throw new Error(`WSL command timed out after ${WSL_COMMAND_TIMEOUT_MS}ms.`)
   }
+
   // Every command here reads the login PATH -- the `case ":$PATH:"` probe most
   // of all. Without it that probe answers from the distro default PATH, which
   // never has ~/.local/bin, and Settings states as fact that the CLI is not on
@@ -301,9 +328,11 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
   if (!result.environmentResolved) {
     throw new Error('Could not reach the WSL distro. Try again.')
   }
+
   if (result.code !== 0) {
     throw new Error(result.stderr.trim() || `WSL command failed with exit code ${result.code}.`)
   }
+
   return result.stdout
 }
 

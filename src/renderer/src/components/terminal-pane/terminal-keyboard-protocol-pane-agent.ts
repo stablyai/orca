@@ -12,5 +12,6 @@ export function resolvePaneKeyboardProtocolAgent(
   if (startup === undefined) {
     return tabLaunchAgent ?? null
   }
+
   return startup?.launchAgent ?? null
 }

@@ -31,18 +31,23 @@ function decodeSegment(value: string): string {
 
 function parseBitbucketPath(pathname: string): BitbucketRepoRef | null {
   const withoutSuffix = pathname.replace(/\/+$/, '').replace(/\.git$/i, '')
+
   const parts = withoutSuffix
     .split('/')
     .map((part) => part.trim())
     .filter(Boolean)
+
   if (parts.length < 2) {
     return null
   }
+
   const workspace = parts.at(-2)
   const repoSlug = parts.at(-1)
+
   if (!workspace || !repoSlug) {
     return null
   }
+
   return {
     workspace: decodeSegment(workspace),
     repoSlug: decodeSegment(repoSlug)
@@ -52,15 +57,18 @@ function parseBitbucketPath(pathname: string): BitbucketRepoRef | null {
 export function parseBitbucketRepoRef(remoteUrl: string): BitbucketRepoRef | null {
   const trimmed = remoteUrl.trim()
   const scpLike = trimmed.match(/^(?:[^@]+@)?bitbucket\.org:([^\s]+?)(?:\.git)?$/i)
+
   if (scpLike) {
     return parseBitbucketPath(scpLike[1])
   }
 
   try {
     const url = new URL(trimmed)
+
     if (url.hostname.toLowerCase() !== 'bitbucket.org') {
       return null
     }
+
     return parseBitbucketPath(url.pathname)
   } catch {
     return null

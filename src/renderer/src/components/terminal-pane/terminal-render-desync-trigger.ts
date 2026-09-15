@@ -24,12 +24,14 @@ type SentinelPane = {
 }
 
 let clickListener: ((event: MouseEvent) => void) | null = null
+
 let sessionArmedOverride: boolean | null = null
 
 export function maybeStartTerminalRenderDesyncSentinel(): void {
   if (!isTerminalRenderDesyncSentinelArmed()) {
     return
   }
+
   installClickListener()
 }
 
@@ -37,33 +39,44 @@ function installClickListener(): void {
   if (clickListener != null) {
     return
   }
+
   clickListener = (event) => {
     const isMac = navigator.userAgent.includes('Mac')
+
     if (event.button !== 0 || (isMac ? !event.metaKey : !event.ctrlKey)) {
       return
     }
+
     const target = event.target
+
     if (!(target instanceof Node)) {
       return
     }
+
     let clickedPaneKey: string | null = null
     let clickedPane: unknown = null
     forEachLivePaneForDesyncSentinel((paneKey, pane) => {
       const terminal = (pane as SentinelPane).terminal as { element?: HTMLElement }
+
       if (terminal.element?.contains(target)) {
         clickedPaneKey = paneKey
         clickedPane = pane
       }
     })
+
     if (!clickedPane || clickedPaneKey == null) {
       return
     }
+
     if (event.shiftKey) {
       captureRenderDesyncNow(clickedPaneKey, clickedPane)
+
       return
     }
+
     startRenderDesyncSampleBurst((clickedPane as SentinelPane).terminal)
   }
+
   document.addEventListener('mouseup', clickListener, true)
   console.warn('[terminal] render-desync sentinel armed (10s post-link bursts + ⇧-capture)')
 }
@@ -72,6 +85,7 @@ export function isTerminalRenderDesyncSentinelArmed(): boolean {
   if (sessionArmedOverride != null) {
     return sessionArmedOverride
   }
+
   try {
     return globalThis.localStorage?.getItem(RENDER_DESYNC_SENTINEL_FLAG) === '1'
   } catch {
@@ -88,6 +102,7 @@ export function isTerminalRenderDesyncSentinelArmed(): boolean {
 export function setTerminalRenderDesyncSentinelArmed(armed: boolean): void {
   try {
     const storage = globalThis.localStorage
+
     if (!storage) {
       sessionArmedOverride = armed
     } else if (armed) {
@@ -100,6 +115,7 @@ export function setTerminalRenderDesyncSentinelArmed(armed: boolean): void {
   } catch {
     sessionArmedOverride = armed
   }
+
   if (armed) {
     installClickListener()
   } else {

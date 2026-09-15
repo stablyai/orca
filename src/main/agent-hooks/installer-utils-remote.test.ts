@@ -26,25 +26,31 @@ function createFakeSftp(
   fs: FakeFs
 } {
   const plainRenameOverwrites = opts.plainRenameOverwrites ?? true
+
   const fs: FakeFs = {
     files: new Map(),
     dirs: new Set(['/']),
     modes: new Map(),
     openSshRenameCount: 0
   }
+
   const noEntryError = (path: string): { code: number; message: string } => ({
     code: 2,
     message: `ENOENT ${path}`
   })
+
   const fakeStats = (mode: number): { mode: number } => ({ mode })
 
   const sftp = {
     readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
       const v = fs.files.get(path)
+
       if (v === undefined) {
         cb(noEntryError(path))
+
         return
       }
+
       cb(null, v)
     },
     writeFile: (
@@ -55,38 +61,51 @@ function createFakeSftp(
     ): void => {
       if (opts.failDotFileWrites && path.includes('/.')) {
         cb({ code: 4, message: `write failed ${path}` })
+
         return
       }
+
       fs.files.set(path, content)
+
       if (typeof options !== 'string' && options.mode !== undefined) {
         fs.modes.set(path, options.mode)
       }
+
       cb(null)
     },
     rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
       const v = fs.files.get(src)
+
       if (v === undefined) {
         cb(noEntryError(src))
+
         return
       }
+
       if (!plainRenameOverwrites && fs.files.has(dst)) {
         cb({ code: 4, message: `SSH_FX_FAILURE destination exists ${dst}` })
+
         return
       }
+
       fs.files.set(dst, v)
       fs.files.delete(src)
       const mode = fs.modes.get(src)
+
       if (mode !== undefined) {
         fs.modes.set(dst, mode)
         fs.modes.delete(src)
       }
+
       cb(null)
     },
     unlink: (path: string, cb: (err: unknown) => void): void => {
       if (!fs.files.has(path)) {
         cb(noEntryError(path))
+
         return
       }
+
       fs.files.delete(path)
       fs.modes.delete(path)
       cb(null)
@@ -98,15 +117,19 @@ function createFakeSftp(
     stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
       if (!fs.files.has(path)) {
         cb(noEntryError(path))
+
         return
       }
+
       cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
       if (fs.dirs.has(path)) {
         cb(null, [])
+
         return
       }
+
       cb(noEntryError(path))
     },
     mkdir: (path: string, cb: (err: unknown) => void): void => {
@@ -118,22 +141,28 @@ function createFakeSftp(
           ext_openssh_rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
             fs.openSshRenameCount += 1
             const v = fs.files.get(src)
+
             if (v === undefined) {
               cb(noEntryError(src))
+
               return
             }
+
             fs.files.set(dst, v)
             fs.files.delete(src)
             const mode = fs.modes.get(src)
+
             if (mode !== undefined) {
               fs.modes.set(dst, mode)
               fs.modes.delete(src)
             }
+
             cb(null)
           }
         }
       : {})
   } as unknown as SFTPWrapper
+
   return { sftp, fs }
 }
 
@@ -168,6 +197,7 @@ describe('installer-utils-remote', () => {
         cb({ code: 3, message: 'permission denied' })
       }
     } as unknown as SFTPWrapper
+
     await expect(readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')).rejects.toMatchObject({
       code: 3
     })
@@ -175,10 +205,12 @@ describe('installer-utils-remote', () => {
 
   it('times out remote reads that never call back', async () => {
     vi.useFakeTimers()
+
     try {
       const sftp = {
         readFile: vi.fn()
       } as unknown as SFTPWrapper
+
       const pending = readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')
       let rejection: unknown = null
       pending.catch((error) => {
@@ -226,6 +258,7 @@ describe('installer-utils-remote', () => {
       plainRenameOverwrites: false,
       openSshRename: true
     })
+
     const path = '/home/u/.claude/settings.json'
     fs.files.set(path, JSON.stringify({ hooks: {} }))
 
@@ -264,6 +297,7 @@ describe('installer-utils-remote', () => {
       plainRenameOverwrites: false,
       openSshRename: true
     })
+
     const path = '/home/u/.orca/agent-hooks/claude-hook.sh'
     fs.files.set(path, 'old script')
 

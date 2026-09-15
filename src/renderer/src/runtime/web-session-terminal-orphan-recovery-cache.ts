@@ -25,10 +25,15 @@ type SurfaceInventoryAbsence = {
 }
 
 const MAX_CACHED_SURFACE_RESOLUTIONS = 512
+
 const stableSurfaceRecoveryFailures = new Map<string, StableSurfaceRecoveryFailure>()
+
 const MAX_CACHED_PANE_RESOLUTION_FAILURES = 512
+
 const cachedPaneResolutionFailures = new Map<string, StablePaneResolutionFailure>()
+
 const MAX_CACHED_INVENTORY_ABSENCES = 512
+
 const surfaceInventoryAbsences = new Map<string, SurfaceInventoryAbsence>()
 
 function buildSurfaceRecoveryCacheKey(args: {
@@ -85,15 +90,20 @@ export function readStableSurfaceRecoveryFailure(args: {
 }): boolean {
   const { key, fingerprint } = surfaceRecoveryCoordinates(args)
   const cached = stableSurfaceRecoveryFailures.get(key)
+
   if (!cached) {
     return false
   }
+
   if (cached.fingerprint !== fingerprint) {
     stableSurfaceRecoveryFailures.delete(key)
+
     return false
   }
+
   stableSurfaceRecoveryFailures.delete(key)
   stableSurfaceRecoveryFailures.set(key, cached)
+
   return true
 }
 
@@ -106,11 +116,14 @@ export function cacheStableSurfaceRecoveryFailure(args: {
   const { key, fingerprint } = surfaceRecoveryCoordinates(args)
   stableSurfaceRecoveryFailures.delete(key)
   stableSurfaceRecoveryFailures.set(key, { fingerprint })
+
   while (stableSurfaceRecoveryFailures.size > MAX_CACHED_SURFACE_RESOLUTIONS) {
     const oldest = stableSurfaceRecoveryFailures.keys().next().value
+
     if (typeof oldest !== 'string') {
       return
     }
+
     stableSurfaceRecoveryFailures.delete(oldest)
   }
 }
@@ -164,13 +177,17 @@ export function confirmSurfaceInventoryAbsence(args: {
     fingerprint,
     observations: Math.min(observations, 2)
   })
+
   while (surfaceInventoryAbsences.size > MAX_CACHED_INVENTORY_ABSENCES) {
     const oldest = surfaceInventoryAbsences.keys().next().value
+
     if (typeof oldest !== 'string') {
       break
     }
+
     surfaceInventoryAbsences.delete(oldest)
   }
+
   return observations >= 2
 }
 
@@ -196,18 +213,24 @@ export function readStablePaneResolutionFailure(args: {
     surfaceKey: args.surface.surfaceKey,
     expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
   })
+
   const fingerprint = buildPaneResolutionFingerprint(args.snapshot, args.surface)
   const cached = cachedPaneResolutionFailures.get(key)
+
   if (!cached) {
     return false
   }
+
   if (cached.fingerprint !== fingerprint) {
     cachedPaneResolutionFailures.delete(key)
+
     return false
   }
+
   // Keep frequently observed degraded surfaces hot without allowing the map to grow.
   cachedPaneResolutionFailures.delete(key)
   cachedPaneResolutionFailures.set(key, cached)
+
   return true
 }
 
@@ -223,15 +246,19 @@ export function cacheStablePaneResolutionFailure(args: {
     surfaceKey: args.surface.surfaceKey,
     expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
   })
+
   cachedPaneResolutionFailures.delete(key)
   cachedPaneResolutionFailures.set(key, {
     fingerprint: buildPaneResolutionFingerprint(args.snapshot, args.surface)
   })
+
   while (cachedPaneResolutionFailures.size > MAX_CACHED_PANE_RESOLUTION_FAILURES) {
     const oldest = cachedPaneResolutionFailures.keys().next().value
+
     if (typeof oldest !== 'string') {
       return
     }
+
     cachedPaneResolutionFailures.delete(oldest)
   }
 }

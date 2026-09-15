@@ -17,11 +17,14 @@ export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
       { runtime, authenticatedCallerFingerprint }
     ): OrchestrationMutationRequestShowResult => {
       const db = runtime.getOrchestrationDb()
+
       // Why: receipts are keyed by caller identity; a paired client brings its own
       // fingerprint, a local caller shares the one its mutations were recorded under.
       const callerFingerprint =
         authenticatedCallerFingerprint ?? db.getOrCreateLocalMutationCallerFingerprint()
+
       const row = db.getMutationReceipt(callerFingerprint, params.request)
+
       if (!row) {
         return {
           requestId: params.request,
@@ -32,6 +35,7 @@ export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
           })
         }
       }
+
       return {
         requestId: params.request,
         state: row.state,

@@ -6,6 +6,7 @@ import {
 } from './pr-comment-code-context'
 
 const FALLBACK_LINES = 20
+
 const MAX_BLOCK_LINES = 41
 
 afterEach(() => {

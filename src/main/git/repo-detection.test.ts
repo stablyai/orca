@@ -236,6 +236,7 @@ describe('isGitRepo', () => {
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
     const uppercaseAdminDir = path.join(realRepo, '.GIT')
+
     try {
       realpathSync.native(uppercaseAdminDir)
     } catch {
@@ -364,6 +365,7 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
     const expectedMainRoot = git(repoRoot, ['rev-parse', '--show-toplevel'])
       .trim()
       .replace(/\\/g, '/')
+
     expect(getLinkedWorktreeMainRepoRoot(linked)).toBe(expectedMainRoot)
   })
 
@@ -423,6 +425,7 @@ function withGitUnavailable(fn: () => void): void {
   // An empty PATH leaves no directory to resolve the bare `git` binary, so the
   // probe throws ENOENT — the indeterminate failure the fallback exists for.
   process.env.PATH = ''
+
   try {
     fn()
   } finally {

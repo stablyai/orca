@@ -18,11 +18,14 @@ export async function closeRuntimeRootWatch(
     if (root.terminalReleaseError) {
       throw root.terminalReleaseError
     }
+
     return
   }
+
   root.closed = true
   root.generation++
   root.abortController.abort()
+
   try {
     await pendingGeneration
   } catch (error) {
@@ -32,9 +35,11 @@ export async function closeRuntimeRootWatch(
       } else {
         release()
       }
+
       throw error
     }
   }
+
   try {
     await root.subscription?.unsubscribe()
     release()
@@ -44,6 +49,7 @@ export async function closeRuntimeRootWatch(
     } else {
       release()
     }
+
     throw error
   }
 }

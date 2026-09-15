@@ -22,9 +22,11 @@ export type DocumentCodeBlockRenderer = (props: {
 
 function extractCodeFenceLanguage(children: React.ReactNode): string | undefined {
   const child = React.Children.toArray(children)[0]
+
   if (!React.isValidElement<{ className?: string }>(child)) {
     return undefined
   }
+
   return child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
 }
 
@@ -32,7 +34,9 @@ export function isTrustedCompactImageSrc(src: string | undefined): src is string
   if (!src) {
     return false
   }
+
   const normalized = src.trim().toLowerCase()
+
   return (
     normalized.startsWith('blob:') || /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
   )
@@ -47,12 +51,14 @@ function handleMarkdownAnchorClick(
   // images only claim the click when an image handler is wired below.
   event.stopPropagation()
   const trimmedHref = href?.trim()
+
   if (
     trimmedHref?.toLowerCase().startsWith('file:') ||
     trimmedHref?.startsWith(NATIVE_CHAT_FILE_HREF_PREFIX)
   ) {
     event.preventDefault()
   }
+
   onLinkClick?.(event, href)
 }
 
@@ -74,6 +80,7 @@ function handleMarkdownImageClick(
   if (!onLinkClick) {
     return
   }
+
   event.stopPropagation()
   onLinkClick(event, src)
 }
@@ -176,6 +183,7 @@ export function createCompactCommentMarkdownComponents(
         if (!src) {
           return alt ? <span>{alt}</span> : null
         }
+
         return (
           <a
             href={src || undefined}
@@ -208,6 +216,7 @@ export function createCompactCommentMarkdownComponents(
           className="my-1 max-h-32 max-w-full rounded-sm object-contain outline outline-1 outline-border/70"
         />
       )
+
       return src ? (
         <a
           href={src || undefined}
@@ -310,9 +319,11 @@ export function createDocumentCommentMarkdownComponents(
         // back to a text link when the image itself can't render.
         return <GitHubUserAttachmentImage src={src} alt={alt} />
       }
+
       if (!src) {
         return alt ? <span>{alt}</span> : null
       }
+
       // Why: Jira/Linear/GitHub document bodies often embed screenshots; open a
       // viewport-centered lightbox so the preview is not trapped in the drawer.
       if (onLinkClick) {
@@ -321,6 +332,7 @@ export function createDocumentCommentMarkdownComponents(
           'outline outline-1 outline-black/10 dark:outline-white/10',
           'cursor-pointer'
         ].join(' ')
+
         return (
           <img
             src={src}
@@ -330,6 +342,7 @@ export function createDocumentCommentMarkdownComponents(
           />
         )
       }
+
       return (
         <ExpandableMarkdownImage
           src={src}
@@ -351,5 +364,6 @@ export function createDocumentCommentMarkdownComponents(
 }
 
 export const compactCommentMarkdownComponents: Components = createCompactCommentMarkdownComponents()
+
 export const documentCommentMarkdownComponents: Components =
   createDocumentCommentMarkdownComponents()

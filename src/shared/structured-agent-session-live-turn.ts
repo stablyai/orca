@@ -14,10 +14,12 @@ export function activeStructuredAgentSessionTurnId(
 ): string | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const turn = readAgentJournalTurn(items[index]?.body)
+
     if (turn) {
       return turn.state === 'running' ? turn.turnId : null
     }
   }
+
   return null
 }
 
@@ -33,15 +35,19 @@ export function isStructuredAgentSessionThinking(
   items: readonly AgentJournalRenderItem[]
 ): boolean {
   let newestContentIsReasoning: boolean | null = null
+
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
     const turn = readAgentJournalTurn(body)
+
     if (turn) {
       return turn.state === 'running' && newestContentIsReasoning === true
     }
+
     if (newestContentIsReasoning !== null) {
       continue
     }
+
     if (body?.kind === 'message') {
       newestContentIsReasoning = body.role === 'reasoning'
     } else if (
@@ -54,6 +60,7 @@ export function isStructuredAgentSessionThinking(
     }
     // Plain status copy is activity chrome, not newer transcript content.
   }
+
   return false
 }
 
@@ -65,12 +72,15 @@ export function activeStructuredAgentSessionToolCall(
 ): AgentJournalToolCallItem | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
+
     if (readAgentJournalTurn(body)) {
       return null
     }
+
     if (body?.kind === 'tool-call' && body.state === 'running') {
       return body
     }
   }
+
   return null
 }

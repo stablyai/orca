@@ -25,6 +25,7 @@ import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/s
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REMOTE_PATH = '/srv/app-feature'
+
 const WORKTREE_ID = 'repo-shared::/srv/app-feature'
 
 type RuntimeInternals = {
@@ -39,6 +40,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id)
   }
+
   const runtime = new OrcaRuntimeService(store as never)
   vi.spyOn(runtime as unknown as RuntimeInternals, 'resolveWorktreeSelector').mockResolvedValue({
     id: WORKTREE_ID,
@@ -47,6 +49,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     git: { path: REMOTE_PATH, branch: 'main', isBare: false, isMainWorktree: false },
     ...(hostId ? { hostId } : {})
   })
+
   return runtime
 }
 
@@ -61,6 +64,7 @@ describe('runtime Git target execution host', () => {
     const provider = stubProvider()
     registerSshGitProvider(connectionId, provider as never)
     registered.push(connectionId)
+
     return provider
   }
 
@@ -80,6 +84,7 @@ describe('runtime Git target execution host', () => {
   it('serves an ssh worktree from the host it names, not from a rival row on another ssh host', async () => {
     const openclaw = register('openclaw')
     const m4air = register('m4air')
+
     const runtime = makeRuntime(
       [
         { id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' },
@@ -98,6 +103,7 @@ describe('runtime Git target execution host', () => {
   it("routes to the worktree's host even when the only repo row names a different ssh host", async () => {
     const openclaw = register('openclaw')
     const m4air = register('m4air')
+
     const runtime = makeRuntime(
       [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],
       'ssh:m4air'
@@ -113,6 +119,7 @@ describe('runtime Git target execution host', () => {
   // itself. The old shape handed it out and dialled a remote host for a local workspace.
   it('ignores a stale connection on a row that declares itself local', async () => {
     const m4air = register('m4air')
+
     const runtime = makeRuntime(
       [
         {
@@ -136,6 +143,7 @@ describe('runtime Git target execution host', () => {
   // silent-local one it replaced.
   it('refuses a runtime host whose nested ssh target is also registered on this client', async () => {
     const impostor = register('nested-1')
+
     const runtime = makeRuntime(
       [
         {
@@ -169,6 +177,7 @@ describe('runtime Git target execution host', () => {
 
   it('refuses rather than guessing when rival rows disagree and the worktree names no host', async () => {
     register('m4air')
+
     const runtime = makeRuntime([
       { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' },
       { id: 'repo-shared', path: '/home/me/app' }

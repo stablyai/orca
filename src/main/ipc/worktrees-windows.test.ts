@@ -98,6 +98,7 @@ vi.mock('../git/repo', () => ({
 
 vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+
   return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
 })
 
@@ -140,6 +141,7 @@ vi.mock('../terminal-history-deletion', () => ({
 
 vi.mock('./worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     computeWorktreePath: computeWorktreePathMock,
@@ -154,12 +156,14 @@ type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 describe('registerWorktreeHandlers – Windows path handling', () => {
   const handlers: HandlerMap = {}
+
   const mainWindow = {
     isDestroyed: () => false,
     webContents: {
       send: vi.fn()
     }
   }
+
   const store = {
     getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     getRepos: vi.fn(),
@@ -313,6 +317,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         finish: vi.fn().mockResolvedValue(undefined)
       })
     }
+
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
 
@@ -505,6 +510,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     // Two calls: (1) worktrees:create finds the new worktree,
     // (2) worktrees:list enumerates worktrees again.
     listWorktreesMock.mockResolvedValueOnce([worktreeEntry]).mockResolvedValueOnce([worktreeEntry])
@@ -539,6 +545,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       linkedIssue: 123,
       linkedPR: 456
     })
+
     const listed = await handlers['worktrees:list'](null, {
       repoId: 'repo-1'
     })
@@ -562,6 +569,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     listWorktreesMock.mockResolvedValue([
       {
         path: 'C:\\repo',

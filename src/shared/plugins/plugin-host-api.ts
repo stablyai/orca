@@ -18,11 +18,15 @@ import type { PluginCapabilityKind } from './plugin-capabilities'
  */
 
 export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
+
 export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
+
 export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
+
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
 
 const workspaceReadContextParams = z.object({}).strict().optional()
+
 const workspaceReadContextResult = z
   .object({
     branch: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
@@ -49,50 +53,73 @@ const terminalSendTextParams = z.object({
   text: z.string().min(1).max(PANEL_ACTION_TEXT_MAX_LENGTH),
   enter: z.boolean().default(false)
 })
+
 const terminalSendTextResult = z.object({ accepted: z.boolean() })
 
 const notificationsShowParams = z.object({
   title: z.string().min(1).max(120),
   body: z.string().max(1000).optional()
 })
+
 const notificationsShowResult = z.object({ delivered: z.boolean() })
 
 const RESERVED_STORAGE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+
 const storageKeySchema = z
   .string()
   .min(1)
   .max(256)
   .refine((key) => !RESERVED_STORAGE_KEYS.has(key), 'reserved storage key')
+
 const pluginJsonValueSchema = z.json()
+
 /** Caps keep per-plugin storage an honest key-value store, not a database. */
 export const PLUGIN_STORAGE_VALUE_MAX_BYTES = 256 * 1024
+
 export const PLUGIN_STORAGE_TOTAL_MAX_BYTES = 5 * 1024 * 1024
+
 export const PLUGIN_STORAGE_KEY_LIMIT = 1024
 
 const storageGetParams = z.object({ key: storageKeySchema })
+
 const storageGetResult = z.object({ value: pluginJsonValueSchema })
+
 const storageSetParams = z.object({ key: storageKeySchema, value: pluginJsonValueSchema })
+
 const storageSetResult = z.object({ ok: z.literal(true) })
+
 const storageDeleteParams = z.object({ key: storageKeySchema })
+
 const storageDeleteResult = z.object({ ok: z.literal(true) })
+
 const storageKeysParams = z.object({}).strict().optional()
+
 const storageKeysResult = z.object({ keys: z.array(z.string()).max(PLUGIN_STORAGE_KEY_LIMIT) })
 
 const secretsGetParams = z.object({ key: storageKeySchema })
+
 const secretsGetResult = z.object({ value: z.string().nullable() })
+
 const secretsSetParams = z.object({ key: storageKeySchema, value: z.string().max(64 * 1024) })
+
 const secretsSetResult = z.object({ ok: z.literal(true) })
+
 const secretsDeleteParams = z.object({ key: storageKeySchema })
+
 const secretsDeleteResult = z.object({ ok: z.literal(true) })
 
 const settingsGetParams = z.object({}).strict().optional()
+
 const settingsGetResult = z.object({ settings: z.record(z.string(), pluginJsonValueSchema) })
+
 const settingsSetParams = z.object({ key: storageKeySchema, value: pluginJsonValueSchema })
+
 const settingsSetResult = z.object({ ok: z.literal(true) })
 
 const eventsSubscribeParams = z.object({
   events: z.array(z.enum(PLUGIN_EVENT_NAMES)).min(1).max(PLUGIN_EVENT_NAMES.length)
 })
+
 const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT_NAMES)) })
 
 export type PluginHostMethodSpec = {

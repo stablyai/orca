@@ -27,6 +27,7 @@ export function useMobileDefaultSessionViewPreference(): MobileDefaultSessionVie
         setDefaultViewState(view)
       }
     })
+
     return () => {
       stale = true
       mountedRef.current = false
@@ -41,6 +42,7 @@ export function useMobileDefaultSessionViewPreference(): MobileDefaultSessionVie
     // mutation order even when this route unmounts and a new instance takes over.
     void saveDefaultSessionView(view).catch(async () => {
       const persisted = await loadDefaultSessionView()
+
       if (mountedRef.current && mutationRevisionRef.current === revision) {
         setDefaultViewState(persisted)
       }

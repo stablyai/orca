@@ -35,6 +35,7 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
 } {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     // Why: getCwd falls back to OS pid lookup; an implausibly-high fake pid can't collide with a real process' cwd.
     pid: 999_999_999,
@@ -50,6 +51,7 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
+
       if (dataOnSubscribe) {
         cb(dataOnSubscribe)
       }
@@ -69,10 +71,12 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
 
 export async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now()
+
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('waitFor timed out')
     }
+
     await new Promise((r) => setTimeout(r, 10))
   }
 }
@@ -85,12 +89,15 @@ export async function startDaemonAdapterHarness(
   const socketPath = getDaemonSocketPath(dir)
   const tokenPath = join(dir, 'test.token')
   const daemonLogEvents: string[] = []
+
   const daemonLog: DaemonFileLog = {
     log: (event) => daemonLogEvents.push(event),
     close() {}
   }
+
   const server = new DaemonServer({ socketPath, tokenPath, log: daemonLog, spawnSubprocess })
   await server.start()
   const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+
   return { dir, socketPath, tokenPath, server, adapter, daemonLog, daemonLogEvents }
 }

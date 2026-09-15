@@ -19,6 +19,7 @@ export function getEphemeralVmRecipeDestroyFailure(
       ...result
     }
   }
+
   if (result.exitCode !== 0) {
     return {
       ok: false,
@@ -27,5 +28,6 @@ export function getEphemeralVmRecipeDestroyFailure(
       ...result
     }
   }
+
   return null
 }

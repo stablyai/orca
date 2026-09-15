@@ -29,6 +29,7 @@ export function createFloatingTerminalPanelDragActions({
     if (maximized || event.button !== 0 || !isFloatingTerminalDragTarget(event.target)) {
       return
     }
+
     focusPanelForShortcuts()
     dragRef.current = {
       pointerId: event.pointerId,
@@ -39,16 +40,21 @@ export function createFloatingTerminalPanelDragActions({
     }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
+
   const handleDragMove = (event: PointerEvent<HTMLDivElement>): void => {
     const drag = dragRef.current
+
     if (!drag || drag.pointerId !== event.pointerId) {
       return
     }
+
     const dx = event.clientX - drag.startX
     const dy = event.clientY - drag.startY
+
     if (dx === 0 && dy === 0) {
       return
     }
+
     drag.moved = true
     previewUserBounds({
       ...drag.bounds,
@@ -56,22 +62,29 @@ export function createFloatingTerminalPanelDragActions({
       top: drag.bounds.top + dy
     })
   }
+
   const handleDragEnd = (event: PointerEvent<HTMLDivElement>): void => {
     const drag = dragRef.current
+
     if (!drag || drag.pointerId !== event.pointerId) {
       return
     }
+
     if (drag.moved) {
       commitUserBounds()
     }
+
     dragRef.current = null
   }
+
   const handleTitlebarDoubleClick = (event: MouseEvent<HTMLDivElement>): void => {
     if (event.button !== 0 || !isFloatingTerminalDragTarget(event.target)) {
       return
     }
+
     event.preventDefault()
     toggleMaximized()
   }
+
   return { handleDragStart, handleDragMove, handleDragEnd, handleTitlebarDoubleClick }
 }

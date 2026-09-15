@@ -20,11 +20,13 @@ export function useSourceControlPanelModel() {
   const foundation = useSourceControlPanelFoundation()
   const commitFlows = useSourceControlCommitFlows(foundation)
   const reviewFlows = useSourceControlReviewFlows(foundation)
+
   const createPrIntentFlows = useSourceControlCreatePrIntentFlows(
     foundation,
     commitFlows,
     reviewFlows
   )
+
   const {
     activeRepoSettings,
     activeWorktree,
@@ -70,6 +72,7 @@ export function useSourceControlPanelModel() {
     unresolvedConflicts,
     worktreePath
   } = foundation
+
   const {
     handleAbortMerge,
     handleAbortRebase,
@@ -77,6 +80,7 @@ export function useSourceControlPanelModel() {
     runCompoundCommitAction,
     runRemoteAction
   } = commitFlows
+
   const { handleCreatePullRequest, prGenerating } = reviewFlows
 
   const actionModel = useSourceControlActionModel({
@@ -106,10 +110,12 @@ export function useSourceControlPanelModel() {
     conflictOperation,
     effectiveBaseRef
   })
+
   const handleRelinkSuppressedGitHubPR = useCallback(() => {
     if (!activeWorktree || !activeWorktreeId || suppressedGitHubPRState?.status !== 'matched') {
       return
     }
+
     openGitHubPRLinkModal({
       openModal,
       worktree: activeWorktree,
@@ -117,6 +123,7 @@ export function useSourceControlPanelModel() {
       currentPR: suppressedGitHubPRState.number
     })
   }, [activeWorktree, activeWorktreeId, openModal, suppressedGitHubPRState])
+
   const actionDispatch = useSourceControlActionDispatch({
     createPrHeaderAction: actionModel.createPrHeaderAction,
     handleAbortMerge,
@@ -134,6 +141,7 @@ export function useSourceControlPanelModel() {
     runCreatePrIntent: createPrIntentFlows.runCreatePrIntent,
     runRemoteAction
   })
+
   useSourceControlUpstreamStatusFetch({
     activeRepoSettings,
     activeWorktree,
@@ -143,12 +151,14 @@ export function useSourceControlPanelModel() {
     isFolder,
     worktreePath
   })
+
   const gitHistoryCommitActions = useGitHistoryCommitActions({
     activeWorktreeId,
     worktreePath,
     activeRepoSettings,
     resolveSplitTargetGroupId
   })
+
   const noteOpening = useSourceControlNoteOpening({
     activeWorktreeId,
     worktreePath,
@@ -159,12 +169,14 @@ export function useSourceControlPanelModel() {
     openCommittedDiff,
     sourceControlRef
   })
+
   const entryMutations = useSourceControlEntryMutations({
     activeRepoSettings,
     activeWorktreeId,
     worktreePath,
     refreshActiveGitStatusAfterMutation
   })
+
   const discardConfirmation = useSourceControlDiscardConfirmation({
     activeRepoSettings,
     activeWorktreeId,

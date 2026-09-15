@@ -57,6 +57,7 @@ describe('composeTrayAttentionIcon', () => {
 
     const pixel = (x: number, y: number): [number, number, number, number] => {
       const o = (y * width + x) * 4
+
       return [bitmap[o], bitmap[o + 1], bitmap[o + 2], bitmap[o + 3]]
     }
 
@@ -66,14 +67,17 @@ describe('composeTrayAttentionIcon', () => {
     let sumX = 0
     let sumY = 0
     let paintedInBottomLeft = 0
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const [b, g, r, a] = pixel(x, y)
+
         if (b === AMBER.b && g === AMBER.g && r === AMBER.r && a === 0xff) {
           amberCount++
           sumX += x
           sumY += y
         }
+
         if (a !== 0 && x < width / 2 && y >= height / 2) {
           paintedInBottomLeft++
         }
@@ -91,6 +95,7 @@ describe('tintTrayTemplateForAttention', () => {
   it('preserves alpha while selecting literal black pixels for a light menu bar', () => {
     createFromBitmapMock.mockClear()
     const bitmap = Buffer.from([0x22, 0x33, 0x44, 0x80, 0xaa, 0xbb, 0xcc, 0x00])
+
     const base = {
       getSize: () => ({ width: 2, height: 1 }),
       toBitmap: () => bitmap
@@ -105,6 +110,7 @@ describe('tintTrayTemplateForAttention', () => {
 
   it('selects literal white pixels for a dark menu bar', () => {
     createFromBitmapMock.mockClear()
+
     const base = {
       getSize: () => ({ width: 1, height: 1 }),
       toBitmap: () => Buffer.from([0x00, 0x00, 0x00, 0xff])
@@ -117,6 +123,7 @@ describe('tintTrayTemplateForAttention', () => {
 
   it('keeps white edge pixels premultiplied-valid at partial alpha', () => {
     createFromBitmapMock.mockClear()
+
     const base = {
       getSize: () => ({ width: 1, height: 1 }),
       toBitmap: () => Buffer.from([0x00, 0x00, 0x00, 0x80])
@@ -131,6 +138,7 @@ describe('tintTrayTemplateForAttention', () => {
   it('reads and sizes the requested scale factor', () => {
     createFromBitmapMock.mockClear()
     const toBitmap = vi.fn(() => Buffer.from([0x00, 0x00, 0x00, 0xff]))
+
     const base = {
       getSize: () => ({ width: 1, height: 1 }),
       toBitmap

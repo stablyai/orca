@@ -3,6 +3,7 @@ import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-utils
 
 // A connection that held this long is treated as healthy, so the next drop restarts the delay ladder.
 export const STABLE_CONNECTION_MS = 60_000
+
 // Existing-relay attach and one bounded PTY reattach attempt each allow 10s.
 export const RELAY_REESTABLISH_BUDGET_MS = 20_000
 
@@ -15,7 +16,9 @@ export const RELAY_REESTABLISH_BUDGET_MS = 20_000
 export const FLAP_DELAY_CAP_MS = (() => {
   const budgetMs =
     MIN_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000 - CONNECT_TIMEOUT_MS - RELAY_REESTABLISH_BUDGET_MS
+
   const fitting = RECONNECT_BACKOFF_MS.filter((delayMs) => delayMs < budgetMs)
+
   return fitting.length > 0 ? Math.max(...fitting) : RECONNECT_BACKOFF_MS[0]
 })()
 
@@ -38,21 +41,26 @@ export class SshReconnectLadder {
     const connectedAt = this.connectedAtMs
     // Why: consume it — one reset per connection, never a rolling reset mid-outage (the table sums past the window).
     this.connectedAtMs = null
+
     if (connectedAt !== null && nowMs - connectedAt >= STABLE_CONNECTION_MS) {
       this.delayIndex = 0
     }
+
     if (this.consecutiveFailedAttempts >= RECONNECT_BACKOFF_MS.length) {
       return { kind: 'give-up' }
     }
+
     const attemptIndex = Math.min(this.delayIndex, RECONNECT_BACKOFF_MS.length - 1)
     this.delayIndex = attemptIndex + 1
     const tableDelayMs = RECONNECT_BACKOFF_MS[attemptIndex]
+
     // Why: only a flap (no failed handshake) means the remote relay is alive and burning grace; a dead
     // host keeps the full table because nothing over there is waiting for us.
     const delayMs =
       this.consecutiveFailedAttempts === 0
         ? Math.min(tableDelayMs, FLAP_DELAY_CAP_MS)
         : tableDelayMs
+
     return { kind: 'retry', delayMs, attemptIndex }
   }
 

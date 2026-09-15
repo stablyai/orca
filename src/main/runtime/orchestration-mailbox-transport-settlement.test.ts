@@ -34,6 +34,7 @@ vi.mock('electron', () => ({
 describe('orchestration mailbox transport settlement', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -89,21 +90,25 @@ describe('orchestration mailbox transport settlement', () => {
     const db = createDatabase('orca-mailbox-ambiguous-settlement-')
     const first = createRuntime(db)
     const transported: Buffer[] = []
+
     const mux = new SshChannelMultiplexer({
       supportsWriteSettlement: true,
       write: (frame) => {
         transported.push(frame)
+
         return true
       },
       onData: () => {},
       onClose: () => {}
     })
+
     const observed: WriteSettlement[] = []
     first.runtime.setPtyController({
       write: vi.fn(() => true),
       writeWithSettlement: (ptyId, data) =>
         writeToSshPtyWithSettlement(mux, ptyId, data).then((settlement) => {
           observed.push(settlement)
+
           return settlement
         }),
       kill: vi.fn(),
@@ -140,9 +145,11 @@ describe('orchestration mailbox transport settlement', () => {
       write: observedWrite,
       writeWithSettlement: (ptyId: string, data: string) => {
         observedWrite(ptyId, data)
+
         if (isMailboxPointer(data)) {
           throw new Error('relay socket destroyed mid-write')
         }
+
         return WRITE_ACCEPTED
       },
       kill: vi.fn(),
@@ -175,6 +182,7 @@ describe('orchestration mailbox transport settlement', () => {
       write: observedWrite,
       writeWithSettlement: (ptyId: string, data: string) => {
         observedWrite(ptyId, data)
+
         return Promise.resolve(
           data === '\r' ? writeUnverifiable('transport_settlement_lost', true) : WRITE_ACCEPTED
         )

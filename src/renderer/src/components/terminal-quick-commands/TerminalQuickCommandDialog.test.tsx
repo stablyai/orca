@@ -36,9 +36,11 @@ function findAnimatedRowContaining(text: string): HTMLElement {
   const row = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden]')).find(
     (element) => element.textContent?.includes(text)
   )
+
   if (!row) {
     throw new Error(`Could not find animated row containing ${text}`)
   }
+
   return row
 }
 
@@ -74,9 +76,11 @@ describe('TerminalQuickCommandDialog animation structure', () => {
 
     for (const field of fields) {
       expect(field).not.toBeNull()
+
       if (!field) {
         continue
       }
+
       field.setSelectionRange(field.value.length, field.value.length)
       await act(async () => {
         field.dispatchEvent(

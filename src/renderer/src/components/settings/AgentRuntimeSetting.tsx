@@ -18,6 +18,7 @@ type AgentRuntimeSettingProps = {
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
+
 const NO_DISTRO_VALUE = '__select_wsl_distro__'
 
 function getHostRuntimeLabel(): string {
@@ -42,14 +43,18 @@ export function AgentRuntimeSetting({
   const runtimeDefault = normalizeGlobalWindowsRuntimeDefault(settings.localWindowsRuntimeDefault)
   const nextWslDistro = getNextWslDistro(runtimeDefault, wslDistros)
   const distroOptions = getVisibleDistroOptions(runtimeDefault, wslDistros)
+
   const updateAgentRuntime = (updates: Partial<GlobalSettings>): void => {
     void Promise.resolve(updateSettings(updates)).then(() => refresh())
   }
+
   const handleRuntimeChange = (value: AgentRuntimeSegment): void => {
     if (value === 'windows-host') {
       updateAgentRuntime({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+
       return
     }
+
     if (nextWslDistro) {
       updateAgentRuntime({
         localWindowsRuntimeDefault: { kind: 'wsl', distro: nextWslDistro }
@@ -143,6 +148,7 @@ function getNextWslDistro(
   if (runtimeDefault.kind === 'wsl' && runtimeDefault.distro?.trim()) {
     return runtimeDefault.distro.trim()
   }
+
   return wslDistros.find((distro) => distro.trim().length > 0) ?? null
 }
 
@@ -151,6 +157,7 @@ function getVisibleDistroOptions(
   wslDistros: readonly string[]
 ): string[] {
   const options = [...wslDistros]
+
   if (
     runtimeDefault.kind === 'wsl' &&
     runtimeDefault.distro &&
@@ -158,6 +165,7 @@ function getVisibleDistroOptions(
   ) {
     return [runtimeDefault.distro, ...options]
   }
+
   return options
 }
 
@@ -172,18 +180,21 @@ function getDescription(
       'Detect and launch agents on Windows for projects that do not override their runtime.'
     )
   }
+
   if (!wslAvailable && !wslCapabilitiesLoading) {
     return translate(
       'auto.components.settings.AgentRuntimeSetting.wslUnavailable',
       'WSL is not available on this machine.'
     )
   }
+
   if (!runtimeDefault.distro) {
     return translate(
       'auto.components.settings.AgentRuntimeSetting.distroRequired',
       'Choose a WSL distro before projects can inherit WSL.'
     )
   }
+
   return translate(
     'auto.components.settings.AgentRuntimeSetting.wslDescription',
     'Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime.',

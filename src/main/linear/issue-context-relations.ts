@@ -16,36 +16,45 @@ export async function readIssueRelations(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueRelation[]; meta: LinearCollectionMeta }> {
   const entry = getRequiredEntry(resolved.workspace.id)
+
   const response = await readConnectionPages(LINEAR_RELATIONS_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<
         RawRelationsResponse,
         Record<string, unknown>
       >(RELATIONS_QUERY, { id: resolved.issue.id, ...page })
+
       return raw.data?.issue?.relations ?? null
     })
   })
+
   const outbound = response.nodes
     .slice(0, LINEAR_RELATIONS_CAP)
     .map((node) => mapRelation(node, 'outbound', node.relatedIssue))
+
   const remaining = LINEAR_RELATIONS_CAP - outbound.length
   // Why: when outbound relations exactly fill the cap, probe inverse relations so
   // the response cannot claim completeness while silently omitting inbound ones.
   const inverseReadLimit = Math.max(1, remaining)
+
   const inverse = await readConnectionPages(inverseReadLimit, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<
         RawRelationsResponse,
         Record<string, unknown>
       >(INVERSE_RELATIONS_QUERY, { id: resolved.issue.id, ...page })
+
       return raw.data?.issue?.inverseRelations ?? null
     })
   })
+
   const inbound = inverse.nodes
     .slice(0, remaining)
     .map((node) => mapRelation(node, 'inbound', node.issue))
+
   const items = [...outbound, ...inbound]
   const inverseOverflow = inverse.nodes.length > remaining
+
   return {
     items,
     meta: collectionMeta(
@@ -62,6 +71,7 @@ function mapRelation(
   relatedIssue: RawIssue | null | undefined
 ): LinearIssueRelation {
   const type = node.type ?? null
+
   return {
     id: node.id,
     type,
@@ -85,11 +95,14 @@ function relationPerspective(
   if (type === 'blocks') {
     return direction === 'outbound' ? 'blocks' : 'blockedBy'
   }
+
   if (type === 'duplicate') {
     return direction === 'outbound' ? 'duplicateOf' : 'duplicatedBy'
   }
+
   if (type === 'similar') {
     return 'similar'
   }
+
   return 'relatedTo'
 }

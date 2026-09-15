@@ -39,6 +39,7 @@ describe('agent prompt submission runtime', () => {
 
   it('submits exactly once after an observed lifecycle transition', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
       (runtime, data) => {
         if (data === '\r') {
@@ -56,6 +57,7 @@ describe('agent prompt submission runtime', () => {
 
   it('accepts a working-to-idle cycle completed before the first poll', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
@@ -72,6 +74,7 @@ describe('agent prompt submission runtime', () => {
 
   it('reports redraw-only activity as stalled without retrying Enter', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
         runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› review this', Date.now())
@@ -79,6 +82,7 @@ describe('agent prompt submission runtime', () => {
         runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› review this', Date.now())
       }
     })
+
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
 
@@ -90,12 +94,14 @@ describe('agent prompt submission runtime', () => {
 
   it('reports a neutral title transition as stalled without retrying Enter', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;plain shell\x07', Date.now())
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
       }
     })
+
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
@@ -108,11 +114,13 @@ describe('agent prompt submission runtime', () => {
 
   it('does not send Enter after a permission state appears', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
       }
     })
+
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
 
@@ -167,11 +175,13 @@ describe('agent prompt submission runtime', () => {
 
   it('does not paste when split status stripping completes a permission title', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
       }
     })
+
     runtime.onPtyData(
       'pty-prompt',
       '\x1b]0;Codex waiting for permission\x1b]9999;{"state":"working","agentType":"aider"',
@@ -209,11 +219,13 @@ describe('agent prompt submission runtime', () => {
 
   it('does not block on permission text restored only as history', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
       }
     })
+
     runtime.seedTerminalRestoreTail('pty-prompt', {
       text: 'Permission required\r\nAllow once\r\nAllow always\r\nReject\r\n'
     })
@@ -228,6 +240,7 @@ describe('agent prompt submission runtime', () => {
   it('does not send Enter after output-only permission appears during settlement', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
         vi.setSystemTime(2_000)
@@ -238,6 +251,7 @@ describe('agent prompt submission runtime', () => {
         )
       }
     })
+
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
@@ -256,11 +270,13 @@ describe('agent prompt submission runtime', () => {
       '\x1b]9999;{"state":"working","agentType":"aider"}\x07'
   ])('does not send Enter after coalesced permission activity', async (output) => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
         runtime.onPtyData('pty-prompt', output, Date.now())
       }
     })
+
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
 
@@ -277,6 +293,7 @@ describe('agent prompt submission runtime', () => {
     const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(20_000), {
       beforeWrite: () => {
         writeChecks += 1
+
         if (writeChecks === 2) {
           runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
         }
@@ -297,6 +314,7 @@ describe('agent prompt submission runtime', () => {
     const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(20_000), {
       beforeWrite: () => {
         writeChecks += 1
+
         if (writeChecks === 2) {
           runtime.onPtyData(
             'pty-prompt',
@@ -334,6 +352,7 @@ describe('agent prompt submission runtime', () => {
     vi.setSystemTime(1_000)
     let handle = ''
     const writes: string[] = []
+
     const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -348,13 +367,16 @@ describe('agent prompt submission runtime', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         if (data === '\r') {
           runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
         }
+
         return true
       },
       kill: () => true,
@@ -382,11 +404,13 @@ describe('agent prompt submission runtime', () => {
 
   it('prefers a later working title over an earlier explicit idle status', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
       }
     })
+
     runtime.onPtyData(
       'pty-prompt',
       '\x1b]9999;{"state":"done","agentType":"aider"}\x07',
@@ -425,11 +449,13 @@ describe('agent prompt submission runtime', () => {
   it('accepts pane output after Enter while the agent is already working', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', 'queued for the current turn', Date.now())
       }
     })
+
     runtime.onPtyData(
       'pty-prompt',
       '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
@@ -445,11 +471,13 @@ describe('agent prompt submission runtime', () => {
 
   it('keeps a queued receipt pending when only the existing turn emits output', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle } = await createAgentPromptSubmissionRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', 'output from the existing turn', Date.now())
       }
     }, 'codex')
+
     runtime.onPtyData(
       'pty-prompt',
       '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
@@ -461,6 +489,7 @@ describe('agent prompt submission runtime', () => {
       requestId: 'queued-output-only',
       observationTimeoutMs: 0
     })
+
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({
@@ -483,6 +512,7 @@ describe('agent prompt submission runtime', () => {
   }> {
     let handle = ''
     const writes: string[] = []
+
     const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -498,10 +528,12 @@ describe('agent prompt submission runtime', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -512,6 +544,7 @@ describe('agent prompt submission runtime', () => {
         launchAgent
       })
     ).handle
+
     return { runtime, handle, writes }
   }
 
@@ -524,11 +557,13 @@ describe('agent prompt submission runtime', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         if (data === '\r') {
           vi.setSystemTime(3_000)
           hook.state = 'working'
           hook.stateStartedAt = 3_000
         }
+
         return true
       },
       kill: () => true,
@@ -547,6 +582,7 @@ describe('agent prompt submission runtime', () => {
   it('does not accept a hook row refreshed without a new working turn', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     const { runtime, handle, writes } = await createHookOnlyPromptRuntime({
       state: 'working',
       stateStartedAt: 1_000
@@ -571,6 +607,7 @@ describe('agent prompt submission runtime', () => {
       requestId: 'hook-queued-first',
       observationTimeoutMs: 0
     })
+
     await vi.runAllTimersAsync()
     const first = await firstPromise
     expect(first.prompt?.stages).toEqual(['input_accepted'])
@@ -580,19 +617,23 @@ describe('agent prompt submission runtime', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         if (data === '\r') {
           hook.stateStartedAt = Date.now()
         }
+
         return true
       },
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
       acceptQueued: true,
       requestId: 'hook-queued-second',
       observationTimeoutMs: 500
     })
+
     await vi.runAllTimersAsync()
 
     await expect(firstObserved).resolves.toMatchObject({
@@ -654,6 +695,7 @@ describe('agent prompt submission runtime', () => {
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
       signal: controller.signal
     })
+
     const rejected = expect(submission).rejects.toThrow('request_aborted')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -665,11 +707,13 @@ describe('agent prompt submission runtime', () => {
 
   it('does not reuse output-only permission across a provider generation reset', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
       }
     })
+
     runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-prompt',
       { value: 0, generation: 'continued' },
@@ -722,11 +766,13 @@ describe('agent prompt submission runtime', () => {
 
   it('reports permission reached after the first Enter as blocked', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
       }
     })
+
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
 
@@ -739,6 +785,7 @@ describe('agent prompt submission runtime', () => {
   it('serializes concurrent prompt submissions within one PTY generation', async () => {
     vi.useFakeTimers()
     let enterCount = 0
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         enterCount += 1
@@ -773,13 +820,16 @@ describe('agent prompt submission runtime', () => {
       requestId: 'queued-first',
       observationTimeoutMs: 0
     })
+
     await vi.runAllTimersAsync()
     const first = await firstPromise
+
     const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
       acceptQueued: true,
       requestId: 'queued-second',
       observationTimeoutMs: 0
     })
+
     await vi.runAllTimersAsync()
     const second = await secondPromise
 
@@ -801,12 +851,15 @@ describe('agent prompt submission runtime', () => {
     vi.useFakeTimers()
     let releaseFirst!: () => void
     let firstWriteReached!: () => void
+
     const firstWrite = new Promise<void>((resolve) => {
       firstWriteReached = resolve
     })
+
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data === '\r') {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
@@ -819,6 +872,7 @@ describe('agent prompt submission runtime', () => {
         await firstGate
       }
     })
+
     await firstWrite
     runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-prompt',
@@ -842,6 +896,7 @@ describe('agent prompt submission runtime', () => {
     const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(20_000), {
       beforeWrite: () => {
         writeChecks += 1
+
         if (writeChecks === 2) {
           runtime.synchronizePtyOutputSequenceFromProvider(
             'pty-prompt',
@@ -861,9 +916,11 @@ describe('agent prompt submission runtime', () => {
     vi.useFakeTimers()
     const controller = new AbortController()
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
+
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
       signal: controller.signal
     })
+
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
     await vi.advanceTimersByTimeAsync(0)
@@ -878,9 +935,11 @@ describe('agent prompt submission runtime', () => {
     vi.useFakeTimers()
     const controller = new AbortController()
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
+
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
       signal: controller.signal
     })
+
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
     // Why compute it: the submit delay now follows the payload size and the executing host,

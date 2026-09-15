@@ -65,15 +65,18 @@ function makePage(overrides: Partial<BrowserPage> = {}): BrowserPage {
 }
 
 const worktreeA = makeWorktree()
+
 const worktreeB = makeWorktree({
   id: 'wt-2',
   repoId: 'repo-2',
   displayName: 'Other Worktree'
 })
+
 const repoMap = new Map([
   ['repo-1', { displayName: 'repo/one' }],
   ['repo-2', { displayName: 'repo/two' }]
 ])
+
 const worktreeOrder = new Map([
   ['wt-1', 0],
   ['wt-2', 1]
@@ -144,21 +147,25 @@ describe('buildSearchableBrowserPages', () => {
   it('keeps same-id browser tabs isolated by execution host', () => {
     const sharedId = 'repo-shared::/workspace'
     const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
+
     const remote = makeWorktree({
       id: sharedId,
       hostId: 'runtime:host-b',
       displayName: 'Remote workspace'
     })
+
     const localWorkspace = makeWorkspace({
       id: 'ws-local',
       worktreeId: sharedId,
       activePageId: 'page-local'
     })
+
     const remoteWorkspace = makeWorkspace({
       id: 'ws-remote',
       worktreeId: sharedId,
       activePageId: 'page-remote'
     })
+
     const entries = buildSearchableBrowserPages({
       worktrees: [local, remote],
       repoMap,
@@ -213,6 +220,7 @@ describe('buildSearchableBrowserPages', () => {
   it('does not re-host a tab whose stamped owner is absent from the catalog', () => {
     const sharedId = 'repo-shared::/workspace'
     const remote = makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
+
     const entries = buildSearchableBrowserPages({
       worktrees: [remote],
       repoMap,
@@ -367,6 +375,7 @@ describe('buildSearchableBrowserPages', () => {
       activeWorktreeId: null,
       activeTabType: 'browser'
     })
+
     expect(unfocused.lastActiveAt).toBeNull()
 
     const entries = buildSearchableBrowserPages({
@@ -401,7 +410,9 @@ describe('buildSearchableBrowserPages', () => {
       createdAt: 0,
       lastFocusedAt: 8_000
     }
+
     const pages = [makePage({ createdAt: 1_000 }), makePage({ id: 'page-2', createdAt: 2_000 })]
+
     const build = (activePageId: string) =>
       buildSearchableBrowserPages({
         worktrees: [worktreeA],
@@ -480,13 +491,16 @@ function browserUnifiedTab(
 
 it('indexes workspace tabs when building a large browser palette', () => {
   let reads = 0
+
   const workspaces = Array.from({ length: 1000 }, (_, i) =>
     makeWorkspace({ id: `workspace-${i}`, activePageId: `page-${i}` })
   )
+
   const tabs: Tab[] = workspaces.map((workspace, i) => ({
     id: `tab-${i}`,
     get entityId() {
       reads++
+
       return workspace.id
     },
     groupId: 'group-1',
@@ -498,18 +512,21 @@ it('indexes workspace tabs when building a large browser palette', () => {
     sortOrder: i,
     createdAt: 0
   }))
+
   const pages = Object.fromEntries(
     workspaces.map((workspace, i) => [
       workspace.id,
       [makePage({ id: `page-${i}`, workspaceId: workspace.id })]
     ])
   )
+
   const entries = buildFixture({
     worktrees: [worktreeA],
     browserTabsByWorktree: { 'wt-1': workspaces },
     browserPagesByWorkspace: pages,
     unifiedTabsByWorktree: { 'wt-1': tabs }
   })
+
   expect(reads).toBeLessThan(6000)
   expect(entries.map((entry) => entry.workspace.id)).toEqual(
     workspaces.map((workspace) => workspace.id)

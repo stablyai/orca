@@ -23,9 +23,11 @@ export function useTerminalPaneMountLifecycle(
 
   useEffect(() => {
     const preparation = prepareTerminalPaneMount(deps, refs, mountFollowsTerminalPark)
+
     if (!preparation) {
       return
     }
+
     const {
       container,
       deferredSplitHandoffs,
@@ -33,11 +35,15 @@ export function useTerminalPaneMountLifecycle(
       ptyDeps,
       unregisterRuntimeTab
     } = preparation
+
     let shouldPersistLayout = false
+
     const releaseWebviewDragPassthrough: { current: (() => void) | null } = {
       current: null
     }
+
     const queueResizeAll = preparation.queueResizeAll
+
     const managerContext = {
       deps,
       refs,
@@ -71,12 +77,15 @@ export function useTerminalPaneMountLifecycle(
       shouldPersistLayout: () => shouldPersistLayout,
       osc7UncHost: preparation.osc7UncHost
     }
+
     const manager = new PaneManager(container, createTerminalPaneManagerOptions(managerContext))
     deps.managerRef.current = manager
+
     if (e2eConfig.exposeStore) {
       window.__paneManagers = window.__paneManagers ?? new Map()
       window.__paneManagers.set(deps.tabId, manager)
     }
+
     restoreTerminalPaneLayout({
       manager,
       deps,
@@ -98,6 +107,7 @@ export function useTerminalPaneMountLifecycle(
     queueResizeAll(deps.isActive)
     deps.persistLayoutSnapshot()
     scheduleRuntimeGraphSync()
+
     const removeMountEvents = installTerminalPaneMountEvents({
       manager,
       deps: {
@@ -111,6 +121,7 @@ export function useTerminalPaneMountLifecycle(
       },
       ptyDeps
     })
+
     return () => {
       removeMountEvents()
       cleanupTerminalPaneMount({

@@ -11,6 +11,7 @@ describe('windows command line budget', () => {
     const args = ['node.exe', '-e', '"\\abc'.repeat(6000)]
     const expected = referenceCommandLineLength(args)
     const match = vi.spyOn(String.prototype, 'match')
+
     try {
       expect(commandLineLength(args)).toBe(expected)
       expect(match.mock.calls.length).toBe(0)
@@ -87,8 +88,10 @@ describe('windows command line budget', () => {
       ' ',
       'plain'
     ]
+
     let seed = 0x2545f491
     const next = (): number => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
+
     for (let index = 0; index < 5000; index += 1) {
       const args = Array.from({ length: Math.floor(next() * 6) }, () =>
         Array.from(
@@ -96,6 +99,7 @@ describe('windows command line budget', () => {
           () => pieces[Math.floor(next() * pieces.length)]
         ).join('')
       )
+
       expect(commandLineLength(args)).toBe(referenceCommandLineLength(args))
     }
   })

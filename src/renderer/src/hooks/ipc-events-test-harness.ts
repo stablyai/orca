@@ -82,19 +82,25 @@ export async function loadIpcEventsHarness(
   const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
+
   let focusEditorTabListener: ((request: { tabId: string; worktreeId: string }) => void) | null =
     null
+
   let navigationUpdateListener:
     | ((event: { browserPageId: string; url: string; title: string }) => void)
     | null = null
+
   let certificateFailureListener:
     | ((event: { browserPageId: string; failure: unknown }) => void)
     | null = null
+
   let clientHostedBrowserRowsListener: ((event: ClientHostedBrowserRowsEvent) => void) | null = null
   let resolveClientHostedBrowserRowsSnapshot: (() => void) | null = null
+
   const clientHostedBrowserRowsSnapshotGate = new Promise<void>((resolve) => {
     resolveClientHostedBrowserRowsSnapshot = resolve
   })
+
   const indexJumpListeners = new Map<string, (index: number) => void>()
 
   vi.resetModules()
@@ -102,6 +108,7 @@ export async function loadIpcEventsHarness(
 
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
+
     return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
   })
   vi.doMock('../store', () => ({
@@ -154,24 +161,29 @@ export async function loadIpcEventsHarness(
           replyTerminalCreate,
           onCreateTerminal: (listener: (request: CreateTerminalRequest) => void) => {
             createTerminalListener = listener
+
             return () => {}
           },
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
+
             return () => {}
           },
           onFocusEditorTab: (
             listener: (request: { tabId: string; worktreeId: string }) => void
           ) => {
             focusEditorTabListener = listener
+
             return () => {}
           },
           onJumpToWorktreeIndex: (listener: (index: number) => void) => {
             indexJumpListeners.set('worktree', listener)
+
             return () => {}
           },
           onJumpToTabIndex: (listener: (index: number) => void) => {
             indexJumpListeners.set('tab', listener)
+
             return () => {}
           }
         }),
@@ -190,13 +202,16 @@ export async function loadIpcEventsHarness(
             listener: (event: ClientHostedBrowserRowsEvent) => void
           ) => {
             clientHostedBrowserRowsListener = listener
+
             return () => {}
           },
           getClientHostedBrowserRows: async () => {
             await clientHostedBrowserRowsSnapshotGate
+
             if (options.clientHostedBrowserRowsSnapshotError) {
               throw options.clientHostedBrowserRowsSnapshotError
             }
+
             return options.clientHostedBrowserRowsSnapshot ?? []
           }
         },
@@ -222,12 +237,14 @@ export async function loadIpcEventsHarness(
             listener: (event: { browserPageId: string; url: string; title: string }) => void
           ) => {
             navigationUpdateListener = listener
+
             return () => {}
           },
           onCertificateFailureChanged: (
             listener: (event: { browserPageId: string; failure: unknown }) => void
           ) => {
             certificateFailureListener = listener
+
             return () => {}
           }
         }),
@@ -241,24 +258,28 @@ export async function loadIpcEventsHarness(
   })
 
   const { useIpcEvents } = await import('./useIpcEvents')
+
   return {
     useIpcEvents,
     createTerminal: (request) => {
       if (typeof createTerminalListener !== 'function') {
         throw new Error('Expected the create-terminal listener to be registered')
       }
+
       createTerminalListener(request)
     },
     requestTerminalCreate: (request) => {
       if (typeof requestTerminalCreateListener !== 'function') {
         throw new Error('Expected the request-terminal-create listener to be registered')
       }
+
       requestTerminalCreateListener(request)
     },
     focusEditorTab: (request) => {
       if (typeof focusEditorTabListener !== 'function') {
         throw new Error('Expected the focus-editor-tab listener to be registered')
       }
+
       focusEditorTabListener(request)
     },
     replyTerminalCreate,
@@ -268,18 +289,21 @@ export async function loadIpcEventsHarness(
       if (typeof navigationUpdateListener !== 'function') {
         throw new Error('Expected the browser navigation listener to be registered')
       }
+
       navigationUpdateListener(event)
     },
     certificateFailureChanged: (event) => {
       if (typeof certificateFailureListener !== 'function') {
         throw new Error('Expected the browser certificate-failure listener to be registered')
       }
+
       certificateFailureListener(event)
     },
     clientHostedBrowserRowsChanged: (event) => {
       if (typeof clientHostedBrowserRowsListener !== 'function') {
         throw new Error('Expected the client-hosted browser rows listener to be registered')
       }
+
       clientHostedBrowserRowsListener(event)
     },
     settleClientHostedBrowserRowsSnapshot: async () => {
@@ -298,8 +322,10 @@ function fireIndexJump(
   index: number
 ): void {
   const listener = listeners.get(kind)
+
   if (!listener) {
     throw new Error(`Expected the ${kind}-index jump listener to be registered`)
   }
+
   listener(index)
 }

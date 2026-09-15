@@ -32,6 +32,7 @@ export function createFileExplorerRowProjectionFromParts(
   rowsByPath: ReadonlyMap<string, TreeNode>
 ): FileExplorerRowProjection {
   let indexByPath: Map<string, number> | null = null
+
   const getIndexByPathMap = (): Map<string, number> => {
     if (indexByPath !== null) {
       return indexByPath
@@ -40,10 +41,13 @@ export function createFileExplorerRowProjectionFromParts(
     // Why: normal refresh/render paths need path lookup, not path-to-index.
     // Defer the index until reveal, inline create, or multi-selection asks for it.
     const nextIndexByPath = new Map<string, number>()
+
     for (let index = 0; index < visibleFlatRows.length; index += 1) {
       nextIndexByPath.set(visibleFlatRows[index].path, index)
     }
+
     indexByPath = nextIndexByPath
+
     return nextIndexByPath
   }
 
@@ -71,30 +75,39 @@ export function createFileExplorerRowProjectionFromParts(
 
 function getParentIndex(visibleFlatRows: readonly TreeNode[], index: number): number | null {
   const current = visibleFlatRows[index]
+
   if (!current) {
     return null
   }
+
   if (current.depth <= 0) {
     return null
   }
+
   for (let i = index - 1; i >= 0; i -= 1) {
     const node = visibleFlatRows[i]
+
     if (node && node.depth < current.depth) {
       return i
     }
   }
+
   return null
 }
 
 function getFirstChildIndex(visibleFlatRows: readonly TreeNode[], index: number): number | null {
   const current = visibleFlatRows[index]
+
   if (!current || !current.isDirectory) {
     return null
   }
+
   const next = visibleFlatRows[index + 1]
+
   if (next && next.depth === current.depth + 1) {
     return index + 1
   }
+
   return null
 }
 
@@ -107,22 +120,27 @@ function getRowsByPathsInProjectionOrder(
   if (paths.size === 0) {
     return []
   }
+
   if (paths.size === 1) {
     const path = paths.values().next().value
     const row = path ? rowsByPath.get(path) : null
+
     return row ? [row] : []
   }
 
   const visibleIndexes: number[] = []
   const indexByPath = getIndexByPathMap()
+
   for (const path of paths) {
     const index = indexByPath.get(path)
+
     if (index !== undefined) {
       visibleIndexes.push(index)
     }
   }
 
   visibleIndexes.sort((a, b) => a - b)
+
   return visibleIndexes.map((index) => visibleFlatRows[index])
 }
 
@@ -132,11 +150,13 @@ function countVisiblePaths(rowsByPath: ReadonlyMap<string, TreeNode>, paths: Set
   }
 
   let count = 0
+
   for (const path of paths) {
     if (rowsByPath.has(path)) {
       count += 1
     }
   }
+
   return count
 }
 
@@ -151,14 +171,17 @@ function getInsertIndexAfterSubtree(
   }
 
   const parentIndex = getIndexByPathMap().get(parentPath)
+
   if (parentIndex === undefined) {
     return 0
   }
 
   const parentDepth = visibleFlatRows[parentIndex].depth
   let insertIndex = parentIndex + 1
+
   while (insertIndex < visibleFlatRows.length && visibleFlatRows[insertIndex].depth > parentDepth) {
     insertIndex += 1
   }
+
   return insertIndex
 }

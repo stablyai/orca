@@ -28,6 +28,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   it('quietly skips SSH repos without a resolved GitHub remote in next-page fetches', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const item = {
       type: 'issue',
       number: 8,
@@ -143,6 +144,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       url: 'https://example.test/9',
       updatedAt: '2026-05-22T00:00:00Z'
     } as GitHubWorkItem
+
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-work-items-page',
       ok: true,

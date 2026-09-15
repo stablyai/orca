@@ -28,6 +28,7 @@ function keyboardEvent(
     isComposing: { value: overrides.isComposing ?? false },
     keyCode: { value: overrides.keyCode ?? 0 }
   })
+
   return event
 }
 
@@ -40,14 +41,18 @@ function trackCompositionListeners(element: HTMLElement): () => number {
     if (watched.has(type) && listener) {
       live.add(listener)
     }
+
     addEventListener.call(this, type, listener, options)
   }
+
   element.removeEventListener = function (type, listener, options): void {
     if (watched.has(type) && listener) {
       live.delete(listener)
     }
+
     removeEventListener.call(this, type, listener, options)
   }
+
   return () => live.size
 }
 
@@ -72,13 +77,16 @@ function createHarness(): {
   document.body.append(scope)
 
   const wire: string[] = []
+
   const transport = {
     getPtyId: () => 'pty-1',
     sendInput: (data: string) => {
       wire.push(data)
+
       return true
     }
   } as unknown as PtyTransport
+
   const pane = {
     id: 1,
     leafId: '00000000-0000-4000-8000-000000000001',
@@ -88,10 +96,12 @@ function createHarness(): {
       getSelection: vi.fn(() => '')
     }
   }
+
   const manager = {
     getActivePane: () => pane,
     getPanes: () => [pane]
   } as unknown as PaneManager
+
   const route = installTerminalImeCompositionRoute({
     terminalElement,
     // The committed glyph takes this route; the chord takes the transport. Both land in `wire`,
@@ -100,6 +110,7 @@ function createHarness(): {
     capturedTransport: transport,
     getCurrentTransport: () => transport
   })
+
   // Installed after the route so only the deferral's own registrations are counted.
   const deferralListenerCount = trackCompositionListeners(terminalElement)
 

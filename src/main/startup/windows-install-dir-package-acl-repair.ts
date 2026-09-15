@@ -32,17 +32,22 @@ import { getIcaclsExePath } from '../win32-utils'
  */
 
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_BREADCRUMB = 'windows_install_dir_acl_repair'
+
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_MARKER_FILE = 'windows-install-dir-acl-repair.json'
+
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION = 1
 
 /** `*`-prefixed so icacls reads it as a SID on every locale. */
 const RESTRICTED_APP_PACKAGES_SID = '*S-1-15-2-2'
+
 /** Root only: inheritable, so files added by a later update inherit the grant. */
 export const INSTALL_DIR_ROOT_GRANT = `${RESTRICTED_APP_PACKAGES_SID}:(OI)(CI)(RX)`
+
 /** Existing entries: flagless, the only form icacls actually writes onto a file. */
 export const INSTALL_DIR_TREE_GRANT = `${RESTRICTED_APP_PACKAGES_SID}:(RX)`
 
 const ROOT_GRANT_TIMEOUT_MS = 15_000
+
 // A packaged Orca install tree is ~3.2k entries (a bare Electron dist is ~80, which
 // is NOT the shape that ships: app.asar.unpacked and node_modules dominate). At the
 // ~2.2ms/entry this repo measured for a /T walk in windows-user-data-acl.ts, that is
@@ -130,6 +135,7 @@ function readMarkerFor(args: WindowsInstallDirAclRepairArgs): Partial<RepairMark
     const parsed = JSON.parse(readFileSync(markerPath(args.userDataPath), 'utf-8')) as
       | Partial<RepairMarker>
       | undefined
+
     if (
       parsed?.schemeVersion !== WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION ||
       parsed.installDir !== args.installDir ||
@@ -137,6 +143,7 @@ function readMarkerFor(args: WindowsInstallDirAclRepairArgs): Partial<RepairMark
     ) {
       return null
     }
+
     return parsed
   } catch {
     return null // missing or corrupt -> attempt again
@@ -145,12 +152,15 @@ function readMarkerFor(args: WindowsInstallDirAclRepairArgs): Partial<RepairMark
 
 function markerHitFor(args: WindowsInstallDirAclRepairArgs): { alreadyRepaired: boolean } | null {
   const marker = readMarkerFor(args)
+
   if (!marker) {
     return null
   }
+
   if (marker.outcome === 'repaired' && args.poisonEvidenceOutstanding !== true) {
     return { alreadyRepaired: true }
   }
+
   return (marker.attempts ?? 0) >= MAX_REPAIR_ATTEMPTS ? { alreadyRepaired: false } : null
 }
 
@@ -165,9 +175,11 @@ function writeMarker(args: WindowsInstallDirAclRepairArgs, outcome: string): voi
     outcome,
     attempts: (readMarkerFor(args)?.attempts ?? 0) + 1
   }
+
   if (!existsSync(args.userDataPath)) {
     mkdirSync(args.userDataPath, { recursive: true })
   }
+
   writeFileSync(markerPath(args.userDataPath), JSON.stringify(marker))
 }
 
@@ -190,17 +202,22 @@ async function runGrant(
       args: [installDir, '/grant', grant, ...extraArgs],
       timeoutMs
     })
+
     const summary = FAILED_PROCESSING.exec(`${result.stdout}\n${result.stderr}`)
     const failedFileCount = summary ? Number(summary[1]) : null
+
     if (result.timedOut) {
       return { ok: false, failedFileCount, reason: 'timeout' }
     }
+
     if (result.code !== 0) {
       return { ok: false, failedFileCount, reason: `exit ${result.code}` }
     }
+
     if (failedFileCount !== null && failedFileCount > 0) {
       return { ok: false, failedFileCount, reason: 'failed-files' }
     }
+
     return { ok: true, failedFileCount }
   } catch (error) {
     return {
@@ -217,13 +234,16 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
   const resolved: WindowsInstallDirAclRepairArgs = { ...args, installDir }
   let result: WindowsInstallDirAclRepairResult
   let data: CrashReportBreadcrumbData
+
   try {
     const markerHit = markerHitFor(resolved)
+
     if (markerHit) {
       result = { mode: 'marker-hit', alreadyRepaired: markerHit.alreadyRepaired }
       data = { status: 'skipped', reason: 'marker-hit', alreadyRepaired: markerHit.alreadyRepaired }
     } else {
       const runner = args.runProcessFn ?? runProcess
+
       const root = await runGrant(
         runner,
         installDir,
@@ -231,6 +251,7 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
         [],
         ROOT_GRANT_TIMEOUT_MS
       )
+
       // Unconditional: the root grant failing does not make the per-file pass —
       // the one that actually unblocks the shipped modules — any less worth trying.
       const tree = await runGrant(
@@ -240,7 +261,9 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
         ['/T', '/C'],
         TREE_GRANT_TIMEOUT_MS
       )
+
       const failedFileCount = tree.failedFileCount ?? root.failedFileCount
+
       if (root.ok && tree.ok) {
         result = { mode: 'repaired' }
         data = { status: 'ok', failedFileCount: failedFileCount ?? -1 }
@@ -251,6 +274,7 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
         ]
           .filter(Boolean)
           .join('; ')
+
         result = { mode: 'failed', reason, failedFileCount }
         data = {
           status: 'failed',
@@ -259,6 +283,7 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
           failedFileCount: failedFileCount ?? -1
         }
       }
+
       try {
         writeMarker(resolved, result.mode)
       } catch (error) {
@@ -275,6 +300,7 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
       reason: sanitizeCrashReportString(`repair: ${String(error)}`, 200)
     }
   }
+
   record(WINDOWS_INSTALL_DIR_ACL_REPAIR_BREADCRUMB, data)
   args.onDone?.(result)
 }
@@ -299,10 +325,13 @@ export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepa
   if ((args.platform ?? process.platform) !== 'win32' || args.isServeMode === true) {
     return false
   }
+
   if (repairStarted) {
     return false
   }
+
   repairStarted = true
+
   try {
     setImmediate(() => {
       void runRepair(args).catch(() => undefined)
@@ -310,5 +339,6 @@ export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepa
   } catch {
     // Nothing left to report to that would not throw again.
   }
+
   return true
 }

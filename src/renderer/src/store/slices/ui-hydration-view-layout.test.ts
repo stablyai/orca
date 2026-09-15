@@ -241,6 +241,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('preserves persisted repo filters until repos are loaded', () => {
     const store = createUIStore()
+
     const remoteDismissalKey = getSetupScriptPromptDismissalKey(
       getRepoHostIdentityForParts('remote-repo', 'runtime:env-1')
     )
@@ -265,12 +266,15 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('validates persisted repo filters when repos are already loaded', () => {
     const store = createUIStore()
+
     const localDismissalKey = getSetupScriptPromptDismissalKey(
       getRepoHostIdentityForParts('local-repo', 'local')
     )
+
     const staleDismissalKey = getSetupScriptPromptDismissalKey(
       getRepoHostIdentityForParts('stale-repo', 'local')
     )
+
     store.setState({
       repos: [
         { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
@@ -364,6 +368,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('hydrates and immediately applies the manual cross-host repo order', () => {
     const store = createUIStore()
+
     const local: Repo = {
       id: 'same',
       path: '/local',
@@ -372,12 +377,14 @@ describe('createUISlice hydratePersistedUI', () => {
       addedAt: 1,
       executionHostId: 'local'
     }
+
     const remote: Repo = {
       ...local,
       path: '/remote',
       displayName: 'Remote',
       executionHostId: 'runtime:node-b'
     }
+
     store.setState({ repos: [local, remote] })
 
     store.getState().hydratePersistedUI(
@@ -507,6 +514,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('does not churn persisted UI references when hydration is identical by value', () => {
     const store = createUIStore()
+
     const persistedUI = makePersistedUI({
       featureTipsSeenIds: ['voice-dictation'],
       contextualToursSeenIds: ['tasks'],
@@ -519,6 +527,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
     store.getState().hydratePersistedUI(persistedUI)
     const before = store.getState()
+
     const references = {
       acknowledgedAgentsByPaneKey: before.acknowledgedAgentsByPaneKey,
       featureTipsSeenIds: before.featureTipsSeenIds,

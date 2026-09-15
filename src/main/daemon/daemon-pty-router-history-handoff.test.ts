@@ -16,6 +16,7 @@ function createMockSubprocess(): SubprocessHandle & {
 } {
   let onData: ((data: string) => void) | undefined
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 999_999_999,
     getForegroundProcess: () => null,
@@ -61,6 +62,7 @@ describe('DaemonPtyRouter history handoff', () => {
       log,
       spawnSubprocess: () => {
         legacySubprocess = createMockSubprocess()
+
         return legacySubprocess
       }
     })
@@ -93,6 +95,7 @@ describe('DaemonPtyRouter history handoff', () => {
       legacyAdapter?.dispose()
       currentAdapter?.dispose()
     }
+
     await Promise.all([legacyServer?.shutdown(), currentServer?.shutdown()])
     rmSync(testDir, { recursive: true, force: true })
     vi.unstubAllEnvs()
@@ -112,11 +115,13 @@ describe('DaemonPtyRouter history handoff', () => {
     vi.stubEnv('ORCA_DAEMON_SESSION_SCROLLBACK_ROWS', String(DAEMON_SESSION_SCROLLBACK_ROWS))
     router = new DaemonPtyRouter({ current: currentAdapter, legacy: [legacyAdapter] })
     await router.discoverLegacySessions()
+
     const client = (
       currentAdapter as unknown as {
         client: { request: (type: string, payload?: unknown) => Promise<unknown> }
       }
     ).client
+
     const request = vi.spyOn(client, 'request')
 
     await router.shutdown(sessionId, { immediate: true, keepHistory: true })

@@ -24,6 +24,7 @@ import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-i
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
 
 const VAULT_ROW_OVERSCAN = 8
+
 const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
 
 export function AiVaultSessionVirtualList({
@@ -92,14 +93,17 @@ export function AiVaultSessionVirtualList({
 
   const vaultRows = useMemo(() => {
     const rows: AiVaultListRow[] = []
+
     for (const sessionGroup of groups) {
       rows.push({ type: 'group', group: sessionGroup })
+
       if (!collapsedGroups.has(sessionGroup.key)) {
         for (const session of sessionGroup.sessions) {
           rows.push({ type: 'session', groupKey: sessionGroup.key, session })
         }
       }
     }
+
     return rows
   }, [collapsedGroups, groups])
 
@@ -110,12 +114,15 @@ export function AiVaultSessionVirtualList({
     getScrollElement: () => listScrollRef.current,
     estimateSize: (index) => {
       const row = vaultRows[index]
+
       if (row?.type === 'group') {
         return VAULT_GROUP_HEADER_ROW_HEIGHT
       }
+
       if (row?.type === 'session' && expandedSessionIds.has(row.session.id)) {
         return VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT
       }
+
       return VAULT_SESSION_ROW_HEIGHT
     },
     overscan: VAULT_ROW_OVERSCAN,
@@ -124,15 +131,18 @@ export function AiVaultSessionVirtualList({
     rangeExtractor: useCallback(
       (range) => {
         stickyRangeStartIndexRef.current = range.startIndex
+
         return extractVaultVirtualRowIndexes({ range, stickyHeaderIndexes })
       },
       [stickyHeaderIndexes]
     ),
     getItemKey: (index) => {
       const row = vaultRows[index]
+
       if (!row) {
         return `missing:${index}`
       }
+
       return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
     }
   })
@@ -140,11 +150,13 @@ export function AiVaultSessionVirtualList({
   const toggleSessionDetails = useCallback((sessionId: string) => {
     setExpandedSessionIds((current) => {
       const next = new Set(current)
+
       if (next.has(sessionId)) {
         next.delete(sessionId)
       } else {
         next.add(sessionId)
       }
+
       return next
     })
   }, [])

@@ -10,6 +10,7 @@ describe('SshGitProvider merge operations', () => {
       dispose: vi.fn(),
       isDisposed: vi.fn().mockReturnValue(false)
     }
+
     const provider = new SshGitProvider('conn-1', mux as never)
 
     await provider.abortMerge('/home/user/repo')
@@ -27,6 +28,7 @@ describe('SshGitProvider merge operations', () => {
       dispose: vi.fn(),
       isDisposed: vi.fn().mockReturnValue(false)
     }
+
     const provider = new SshGitProvider('conn-1', mux as never)
 
     await provider.abortRebase('/home/user/repo')

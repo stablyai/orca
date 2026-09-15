@@ -35,6 +35,7 @@ describe('SshPtySourceObligationCoordinator', () => {
           settle: (result: { ok: true } | { ok: false; error: Error }) => void
         }
       | undefined
+
     const coordinator = new SshPtySourceObligationCoordinator({
       publish: (_providerGeneration, batch, settle) => {
         written = { batch, settle }
@@ -42,6 +43,7 @@ describe('SshPtySourceObligationCoordinator', () => {
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coordinator.open(identity)
     const reservation = coordinator.reserve(identity, span, ['model', 'desktop'])
     coordinator.commit(reservation)
@@ -73,6 +75,7 @@ describe('SshPtySourceObligationCoordinator', () => {
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coordinator.open(identity)
     coordinator.commit(coordinator.reserve(identity, span, ['model']))
 
@@ -88,11 +91,13 @@ describe('SshPtySourceObligationCoordinator', () => {
 
   it('keeps later generations publishable after closing one generation', () => {
     const publish = vi.fn()
+
     const coordinator = new SshPtySourceObligationCoordinator({
       publish,
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coordinator.open(identity)
     coordinator.closeGeneration(1, 'replaced')
     const nextIdentity = { ...identity, providerGeneration: 2, deliveryToken: 'token-2' }
@@ -122,6 +127,7 @@ describe('SshPtySourceObligationCoordinator', () => {
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coordinator.open(identity)
     coordinator.commit(coordinator.reserve(identity, span, ['model']))
 

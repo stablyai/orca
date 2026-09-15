@@ -12,6 +12,7 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+
   return textarea
 }
 
@@ -20,14 +21,17 @@ function captureInputEvents(target: HTMLElement): InputEvent[] {
   target.addEventListener('input', (event) => {
     events.push(event as InputEvent)
   })
+
   return events
 }
 
 function getPastePayloadCorpusText(name: string): string {
   const entry = PASTE_PAYLOAD_CORPUS.find((item) => item.name === name)
+
   if (!entry) {
     throw new Error(`Missing paste payload corpus case: ${name}`)
   }
+
   return entry.text
 }
 
@@ -81,6 +85,7 @@ describe('text control paste', () => {
     if (result.status !== 'pasted') {
       throw new Error('Expected chunked paste to complete')
     }
+
     expect(result.mode).toBe('chunked')
     expect(result.chunksWritten).toBeGreaterThan(1)
     expect(result.redactedDiagnostic).toContain('lines=7')
@@ -129,6 +134,7 @@ describe('text control paste', () => {
     const disconnectedResult = await pasteTextIntoTextControl(textarea, 'text', {
       canContinue: () => false
     })
+
     const disabledResult = await pasteTextIntoTextControl(disabled, 'text')
 
     expect(disconnectedResult).toMatchObject({
@@ -203,6 +209,7 @@ describe('text control paste', () => {
     const textarea = appendTextarea('safe')
     textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     const valuesObservedDuringYield: string[] = []
+
     const yieldToEventLoop = vi.fn(async () => {
       valuesObservedDuringYield.push(textarea.value)
     })
@@ -226,6 +233,7 @@ describe('text control paste', () => {
     textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     const events = captureInputEvents(textarea)
     const valuesObservedDuringYield: string[] = []
+
     const yieldToEventLoop = vi.fn(async () => {
       valuesObservedDuringYield.push(textarea.value)
     })

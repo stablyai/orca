@@ -45,6 +45,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   afterEach(() => {
     restorePlatform()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -58,6 +59,7 @@ describe('ClaudeAccountService credential capture', () => {
     mkdirSync(managedAuthPath, { recursive: true })
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(join(managedAuthPath, '.credentials.json'), '{"old":true}\n', 'utf-8')
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -74,22 +76,28 @@ describe('ClaudeAccountService credential capture', () => {
       ],
       activeClaudeManagedAccountId: 'account-1'
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       evictInactiveClaudeCache: vi.fn(),
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
@@ -116,6 +124,7 @@ describe('ClaudeAccountService credential capture', () => {
     const secondAuthPath = join(tempDir, 'claude-accounts', 'account-2', 'auth')
     mkdirSync(firstAuthPath, { recursive: true })
     mkdirSync(secondAuthPath, { recursive: true })
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -150,22 +159,28 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: 'account-1',
       activeClaudeManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
     const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
@@ -173,6 +188,7 @@ describe('ClaudeAccountService credential capture', () => {
     )
 
     markClaudePtySpawned('live-claude-pty')
+
     try {
       await service.selectAccount('account-2')
     } finally {
@@ -198,6 +214,7 @@ describe('ClaudeAccountService credential capture', () => {
     const secondAuthPath = join(tempDir, 'claude-accounts', 'account-2', 'auth')
     mkdirSync(firstAuthPath, { recursive: true })
     mkdirSync(secondAuthPath, { recursive: true })
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -232,23 +249,29 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: 'account-1',
       activeClaudeManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {
         throw new Error('runtime sync failed')
       }),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
@@ -274,6 +297,7 @@ describe('ClaudeAccountService credential capture', () => {
     const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
     mkdirSync(hostAuthPath, { recursive: true })
     mkdirSync(wslAuthPath, { recursive: true })
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -308,21 +332,27 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: 'host-account',
       activeClaudeManagedAccountIdsByRuntime: { host: 'host-account', wsl: { Ubuntu: null } }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
@@ -359,6 +389,7 @@ describe('ClaudeAccountService credential capture', () => {
     rmSync(tempDir, { recursive: true, force: true })
     const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
     mkdirSync(wslAuthPath, { recursive: true })
+
     const settings = {
       claudeManagedAccounts: [
         {
@@ -379,18 +410,23 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: null,
       activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn()
     }
+
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
@@ -413,6 +449,7 @@ describe('ClaudeAccountService credential capture', () => {
     mkdirSync(hostAuthPath, { recursive: true })
     mkdirSync(wslAuthPath, { recursive: true })
     writeFileSync(join(wslAuthPath, '.orca-managed-claude-auth'), 'wsl-account\n', 'utf-8')
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -450,22 +487,28 @@ describe('ClaudeAccountService credential capture', () => {
         wsl: { Ubuntu: 'wsl-account' }
       }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       evictInactiveClaudeCache: vi.fn(),
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,

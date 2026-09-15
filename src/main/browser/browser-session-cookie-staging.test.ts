@@ -14,8 +14,11 @@ import {
 import { loadBrowserSessionMeta, persistBrowserSessionMeta } from './browser-session-meta-store'
 
 const defaultPartition = 'persist:orca-browser-default'
+
 const routePartition = `persist:orca-browser-v1-${'c'.repeat(64)}`
+
 let userData = ''
+
 const metadataPath = (): string => join(userData, 'browser-session-meta.json')
 
 beforeEach(() => {
@@ -40,9 +43,11 @@ describe('applyPendingBrowserCookieImports', () => {
   it('unlinks the plaintext staged database when the partition is not replayable', () => {
     const stagedPath = join(userData, 'cookie-import-staging', 'Cookies-route')
     mkdirSync(join(userData, 'cookie-import-staging'), { recursive: true })
+
     for (const suffix of ['', '-wal', '-shm']) {
       writeFileSync(stagedPath + suffix, 'plaintext cookies', { flag: 'w' })
     }
+
     persistBrowserSessionMeta(metadataPath, defaultPartition, {
       pendingCookieImports: { [routePartition]: stagedPath }
     })
@@ -56,6 +61,7 @@ describe('applyPendingBrowserCookieImports', () => {
     for (const suffix of ['', '-wal', '-shm']) {
       expect(existsSync(stagedPath + suffix)).toBe(false)
     }
+
     expect(loadBrowserSessionMeta(metadataPath, defaultPartition).pendingCookieImports).toEqual({})
   })
 })

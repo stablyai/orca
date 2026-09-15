@@ -20,6 +20,7 @@ describe('SecurePathHardeningCache', () => {
       maxKeyBytes: 6,
       maxTotalKeyBytes: 12
     })
+
     cache.set('kept', 1)
 
     expect(cache.set('1234567', 2)).toBe(false)
@@ -32,6 +33,7 @@ describe('SecurePathHardeningCache', () => {
       maxKeyBytes: 32,
       maxTotalKeyBytes: 64
     })
+
     cache.set('old', 1)
     cache.set('hot', 2)
     expect(cache.get('old')).toBe(1)
@@ -48,6 +50,7 @@ describe('SecurePathHardeningCache', () => {
       maxKeyBytes: 12,
       maxTotalKeyBytes: 12
     })
+
     cache.set('aaaa', 1)
     cache.set('bbbb', 2)
 

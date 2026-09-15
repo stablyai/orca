@@ -36,6 +36,7 @@ export type WorktreeDiffStamp = {
 export const DIFF_STAMP_RACY_WRITE_MARGIN_MS = 2_000
 
 const MISSING = '-'
+
 const ABSENT: StampComponent = { text: MISSING, mtimeMs: Number.NEGATIVE_INFINITY }
 
 type StampComponent = { text: string; mtimeMs: number }
@@ -74,16 +75,20 @@ export async function readWorktreeDiffStamp(
   options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
 ): Promise<WorktreeDiffStamp | null> {
   const capturedAtMs = Date.now()
+
   try {
     // Git can run in the distro against a raw Linux worktree path while Node stats it through Win32.
     const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
+
     if (!hostWorktreePath) {
       // Only an empty worktree path lands here, and nothing about it is provably unchanged.
       return null
     }
+
     // Why still pass options: the host spelling above only encodes the distro when it lands on a
     // UNC share, so a drvfs-spelled worktree needs it again to resolve a non-drvfs gitdir pointer.
     const gitDir = await resolveGitDir(hostWorktreePath, options)
+
     const [head, index, gitmodules, workingTree] = await Promise.all([
       readHeadComponent(gitDir),
       // Over-invalidates on purpose: git run outside Orca (a terminal `git status`/`git add`)
@@ -97,10 +102,13 @@ export async function readWorktreeDiffStamp(
         ? readWorkingTreeComponent(path.join(hostWorktreePath, filePath))
         : Promise.resolve(ABSENT)
     ])
+
     if (!head) {
       return null
     }
+
     const components = [head, index, gitmodules, workingTree]
+
     return {
       // Why JSON: a path or a ref can contain any separator character, and an ambiguous
       // join is a stamp collision — two different states that compare equal.
@@ -131,21 +139,27 @@ async function readHeadComponent(gitDir: string): Promise<StampComponent | null>
     readTrimmedFile(path.join(gitDir, 'HEAD')),
     readTrimmedFile(path.join(gitDir, 'commondir'))
   ])
+
   if (!head) {
     return null
   }
+
   const commonDir = commonDirEntry ? path.resolve(gitDir, commonDirEntry) : gitDir
   const refName = head.match(/^ref:\s*(.+?)\s*$/)?.[1]
+
   if (!refName || !isSafeRefName(refName)) {
     // Detached HEAD already holds the object id; an unrecognized HEAD is covered by its own text.
     return { text: head, mtimeMs: Number.NEGATIVE_INFINITY }
   }
+
   // Per-worktree refs (`refs/bisect`, `refs/worktree`) live beside the checkout; branches are shared.
   const [perWorktreeTip, sharedTip] = await Promise.all([
     readTrimmedFile(path.join(gitDir, refName)),
     commonDir === gitDir ? Promise.resolve(null) : readTrimmedFile(path.join(commonDir, refName))
   ])
+
   const looseTip = perWorktreeTip ?? sharedTip
+
   if (looseTip) {
     // A loose ref shadows any packed entry, so its bytes settle the tip on their own.
     return {
@@ -153,10 +167,12 @@ async function readHeadComponent(gitDir: string): Promise<StampComponent | null>
       mtimeMs: Number.NEGATIVE_INFINITY
     }
   }
+
   const [packedRefs, reftable] = await Promise.all([
     readFileStampComponent(path.join(commonDir, 'packed-refs')),
     readFileStampComponent(path.join(commonDir, 'reftable'))
   ])
+
   return {
     text: JSON.stringify([head, 'packed', packedRefs.text, reftable.text]),
     mtimeMs: Math.max(packedRefs.mtimeMs, reftable.mtimeMs)
@@ -166,6 +182,7 @@ async function readHeadComponent(gitDir: string): Promise<StampComponent | null>
 /** Keep a hand-edited HEAD from steering the stamp outside the repo's ref store. */
 function isSafeRefName(refName: string): boolean {
   const segments = refName.split(/[\\/]/)
+
   return (
     segments[0] === 'refs' &&
     segments.length > 1 &&
@@ -177,11 +194,13 @@ function isSafeRefName(refName: string): boolean {
 async function readTrimmedFile(filePath: string): Promise<string | null> {
   try {
     const trimmed = (await readFile(filePath, 'utf-8')).trim()
+
     return trimmed.length > 0 ? trimmed : null
   } catch (error) {
     if (isMissingEntryError(error)) {
       return null
     }
+
     throw error
   }
 }
@@ -189,11 +208,13 @@ async function readTrimmedFile(filePath: string): Promise<string | null> {
 async function readFileStampComponent(filePath: string): Promise<StampComponent> {
   try {
     const stats = await stat(filePath)
+
     return { text: `${requireMtimeMs(stats.mtimeMs)}:${stats.size}`, mtimeMs: stats.mtimeMs }
   } catch (error) {
     if (isMissingEntryError(error)) {
       return ABSENT
     }
+
     throw error
   }
 }
@@ -207,6 +228,7 @@ async function readWorkingTreeComponent(filePath: string): Promise<StampComponen
     // the stamp never hit on exactly the host this cache exists for. Fold it in only when
     // the filesystem gives a real one.
     const inode = isUsableInode(stats.ino) ? String(stats.ino) : MISSING
+
     return {
       text: `${requireMtimeMs(stats.mtimeMs)}:${stats.size}:${inode}`,
       mtimeMs: stats.mtimeMs
@@ -215,6 +237,7 @@ async function readWorkingTreeComponent(filePath: string): Promise<StampComponen
     if (isMissingEntryError(error)) {
       return ABSENT
     }
+
     throw error
   }
 }
@@ -228,10 +251,12 @@ function requireMtimeMs(mtimeMs: unknown): number {
   if (typeof mtimeMs !== 'number' || !Number.isFinite(mtimeMs)) {
     throw new Error('stat reported no usable mtime')
   }
+
   return mtimeMs
 }
 
 function isMissingEntryError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
+
   return code === 'ENOENT' || code === 'ENOTDIR'
 }

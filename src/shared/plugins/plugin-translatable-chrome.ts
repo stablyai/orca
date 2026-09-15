@@ -78,11 +78,13 @@ export function translatablePluginChrome(path: string): boolean {
  */
 export function translatablePluginChromeContainer(path: string): boolean {
   const prefix = `${path}.`
+
   for (const exempt of TRANSLATABLE_PLUGIN_CHROME) {
     if (exempt.startsWith(prefix)) {
       return true
     }
   }
+
   return false
 }
 

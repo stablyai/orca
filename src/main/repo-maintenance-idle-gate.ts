@@ -34,6 +34,7 @@ export function installRepoMaintenanceIdleGate(
       hasWorktreeRemovalsInFlight() ||
       isOnBatteryPower()
   )
+
   // Do-not-start, never stop-what-is-running. Killing a pack to honour a battery
   // or focus change would strand a ref lock roughly one time in five to save at
   // most a couple of minutes of background unlinking; pushing the next attempt
@@ -41,11 +42,14 @@ export function installRepoMaintenanceIdleGate(
   const onBattery = (): void => {
     postponeRepoRefMaintenance()
   }
+
   const onFocus = (): void => {
     postponeRepoRefMaintenance()
   }
+
   powerMonitor.on('on-battery', onBattery)
   app.on('browser-window-focus', onFocus)
+
   return () => {
     app.off('browser-window-focus', onFocus)
     powerMonitor.off('on-battery', onBattery)
@@ -53,6 +57,7 @@ export function installRepoMaintenanceIdleGate(
     // against a gate that can no longer see agents, creates, or shutdown.
     const stopped = disposeLocalRepoRefMaintenance()
     setRepoMaintenanceActivityProbe(null)
+
     return stopped
   }
 }

@@ -54,6 +54,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   ) {
     return 'structured-native-chat'
   }
+
   const initialViewMode = decideInitialAgentTabViewMode({
     experimentalNativeChat: input.settings?.experimentalNativeChat,
     openAgentTabsInChatByDefault: input.settings?.openAgentTabsInChatByDefault,
@@ -62,6 +63,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     launchDraftText: input.launchText,
     nativeChatTranscriptIsLocalReadable: input.nativeChatTranscriptIsLocalReadable
   })
+
   return initialViewMode === 'chat' ? 'legacy-native-chat' : 'terminal-tui'
 }
 

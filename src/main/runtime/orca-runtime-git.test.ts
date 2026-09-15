@@ -83,6 +83,7 @@ function makeWorktree(path: string, linkedIssue: number | null = null): Resolved
       head: 'a'.repeat(40)
     }
   } satisfies Partial<ResolvedRuntimeGitWorktree>
+
   return worktree as unknown as ResolvedRuntimeGitWorktree
 }
 
@@ -127,6 +128,7 @@ describe('RuntimeGitCommands', () => {
   // asserts this call site supplies them.
   it('passes the repo shared link paths through local runtime status', async () => {
     mocks.getStatus.mockResolvedValue({ entries: [], conflictOperation: 'none' })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         executionHostId: 'local',
@@ -147,6 +149,7 @@ describe('RuntimeGitCommands', () => {
   it('does not resolve shared link paths for a remote runtime status', async () => {
     const provider = { getStatus: vi.fn().mockResolvedValue({ entries: [] }) }
     mocks.getSshGitProvider.mockReturnValue(provider)
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
@@ -165,6 +168,7 @@ describe('RuntimeGitCommands', () => {
   it('checks out a local branch through the resolved worktree', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         executionHostId: 'local',
@@ -173,6 +177,7 @@ describe('RuntimeGitCommands', () => {
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
+
     mocks.checkoutBranch.mockResolvedValue(undefined)
 
     await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
@@ -189,6 +194,7 @@ describe('RuntimeGitCommands', () => {
   it('checks out a remote branch through the SSH git provider', async () => {
     const provider = { checkoutBranch: vi.fn().mockResolvedValue(undefined) }
     mocks.getSshGitProvider.mockReturnValue(provider)
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
@@ -241,6 +247,7 @@ describe('RuntimeGitCommands', () => {
   it('keeps a remote single-file discard owned by the SSH provider', async () => {
     const provider = { discardChanges: vi.fn() }
     mocks.getSshGitProvider.mockReturnValue(provider)
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
@@ -259,7 +266,9 @@ describe('RuntimeGitCommands', () => {
     const provider = {
       listLocalBranches: vi.fn().mockResolvedValue({ current: 'main', branches: ['main'] })
     }
+
     mocks.getSshGitProvider.mockReturnValue(provider)
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
@@ -293,11 +302,13 @@ describe('RuntimeGitCommands', () => {
   it('prepares the selected local agent environment before generating commit messages', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
+
     const context = {
       branch: 'main',
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
     mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
     mocks.getStagedCommitContext.mockResolvedValue(context)
@@ -305,6 +316,7 @@ describe('RuntimeGitCommands', () => {
       success: true,
       message: 'docs: update readme'
     })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () =>
@@ -344,11 +356,13 @@ describe('RuntimeGitCommands', () => {
   it('routes local WSL project runtime commit-message generation through the runtime target', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
+
     const context = {
       branch: 'main',
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
     const prepareForCodexLaunch = vi.fn(() => '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex')
     mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
@@ -357,6 +371,7 @@ describe('RuntimeGitCommands', () => {
       success: true,
       message: 'docs: update readme'
     })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         executionHostId: 'local',
@@ -401,22 +416,26 @@ describe('RuntimeGitCommands', () => {
   it('uses one-shot resolved params before runtime commit-message defaults', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
+
     const context = {
       branch: 'main',
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const sourceControlAiResolvedParams = {
       agentId: 'codex' as const,
       model: 'gpt-5.5',
       thinkingLevel: 'high',
       customPrompt: 'Use Conventional Commits.'
     }
+
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({
       success: true,
       message: 'feat: update readme'
     })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () =>
@@ -452,6 +471,7 @@ describe('RuntimeGitCommands', () => {
   it('uses one-shot resolved params before runtime pull-request defaults', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
+
     const context = {
       base: 'main',
       branch: 'feature/source-control-ai',
@@ -462,12 +482,14 @@ describe('RuntimeGitCommands', () => {
       currentBody: '',
       currentDraft: false
     }
+
     const sourceControlAiResolvedParams = {
       agentId: 'codex' as const,
       model: 'gpt-5.5',
       thinkingLevel: 'high',
       commandInputTemplate: '{basePrompt}\n\nUse release-note style.'
     }
+
     mocks.getPullRequestDraftContext.mockResolvedValue(context)
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({
       success: true,
@@ -478,6 +500,7 @@ describe('RuntimeGitCommands', () => {
         draft: false
       }
     })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () =>
@@ -523,6 +546,7 @@ describe('RuntimeGitCommands', () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
     const templateBody = '## Summary\n\n## Testing\n\n- [ ] Required checks'
+
     const context = {
       base: 'main',
       branch: 'feature/template-aware-pr',
@@ -534,10 +558,12 @@ describe('RuntimeGitCommands', () => {
       currentBody: templateBody,
       currentDraft: false
     }
+
     const sourceControlAiResolvedParams = {
       agentId: 'codex' as const,
       model: 'gpt-5.5'
     }
+
     mocks.resolveHostedReviewBodyForGeneration.mockResolvedValue(templateBody)
     mocks.getPullRequestDraftContext.mockResolvedValue(context)
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({
@@ -549,6 +575,7 @@ describe('RuntimeGitCommands', () => {
         draft: false
       }
     })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () => ({}) as GlobalSettings
@@ -584,22 +611,27 @@ describe('RuntimeGitCommands', () => {
 
   it('resolves remote commit-message settings against the SSH host cache', async () => {
     const worktreePath = '/remote/repo'
+
     const context = {
       branch: 'main',
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
+
     const params = { agentId: 'cursor', model: 'remote-model' }
     mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
     mocks.generateCommitMessageFromContext.mockResolvedValue({
       success: true,
       message: 'docs: update remote readme'
     })
+
     const provider = {
       getStagedCommitContext: vi.fn().mockResolvedValue(context),
       executeCommitMessagePlan: vi.fn()
     }
+
     mocks.getSshGitProvider.mockReturnValue(provider)
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree(worktreePath),
@@ -644,6 +676,7 @@ describe('RuntimeGitCommands', () => {
     mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings
@@ -668,6 +701,7 @@ describe('RuntimeGitCommands', () => {
       getStagedCommitContext: vi.fn().mockResolvedValue(context),
       executeCommitMessagePlan: vi.fn()
     })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree(worktreePath, 77),
@@ -694,6 +728,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
     const getWorktreeLinkedIssue = vi.fn(() => 321)
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
@@ -720,6 +755,7 @@ describe('RuntimeGitCommands', () => {
     })
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
@@ -741,6 +777,7 @@ describe('RuntimeGitCommands', () => {
     mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
@@ -760,6 +797,7 @@ describe('RuntimeGitCommands', () => {
   it('reads pull-request linked issues from live meta too', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
+
     const context = {
       base: 'main',
       branch: 'feature/login',
@@ -770,8 +808,10 @@ describe('RuntimeGitCommands', () => {
       currentBody: '',
       currentDraft: false
     }
+
     mocks.getPullRequestDraftContext.mockResolvedValue(context)
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
+
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
@@ -817,6 +857,7 @@ describe('RuntimeGitCommands', () => {
       currentBody: '',
       currentDraft: false
     }
+
     const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
     mocks.getSshGitProvider.mockReturnValue({
@@ -828,10 +869,13 @@ describe('RuntimeGitCommands', () => {
       const worktreePath = connectionId
         ? '/home/tester/wt'
         : mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+
       if (!connectionId) {
         tempDirs.push(worktreePath)
       }
+
       mocks.getPullRequestDraftContext.mockResolvedValue(context)
+
       const commands = new RuntimeGitCommands({
         resolveRuntimeGitTarget: async () => ({
           worktree: makeWorktree(worktreePath, 55),
@@ -848,6 +892,7 @@ describe('RuntimeGitCommands', () => {
     }
 
     expect(mocks.generatePullRequestFieldsFromContext.mock.calls).toHaveLength(2)
+
     for (const call of mocks.generatePullRequestFieldsFromContext.mock.calls) {
       expect(call[0]).toEqual({ ...context, linkedIssue: 55 })
     }
@@ -856,6 +901,7 @@ describe('RuntimeGitCommands', () => {
   it('leaves the pull-request context untouched when no issue is linked', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
+
     const context = {
       base: 'main',
       branch: 'feature/login',
@@ -866,6 +912,7 @@ describe('RuntimeGitCommands', () => {
       currentBody: '',
       currentDraft: false
     }
+
     const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
     mocks.getPullRequestDraftContext.mockResolvedValue(context)
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })

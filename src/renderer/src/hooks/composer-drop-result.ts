@@ -46,6 +46,7 @@ export function collectComposerDropResult(
   }
 
   const firstFailure = failures[0]
+
   return {
     filePaths,
     folderPaths,

@@ -33,9 +33,11 @@ export function decodeOmpTranscriptLine(
   fallbackId: string
 ): NativeChatMessage | null {
   const record = parseJsonObject(line)
+
   if (!record || (record.type !== 'message' && record.type !== 'custom_message')) {
     return null
   }
+
   const id = extractString(record.id) ?? fallbackId
   const timestamp = parseTimestamp(record.timestamp)
 
@@ -44,15 +46,18 @@ export function decodeOmpTranscriptLine(
     // transcript renders them — but only when `display` is set; the rest are
     // extension state it never shows (CustomMessageEntry, session-entries.d.ts).
     const customBlocks = record.display === true ? ompContentBlocks(record.content) : []
+
     return customBlocks.length === 0
       ? null
       : { id, role: 'system', blocks: customBlocks, timestamp, source: 'transcript' }
   }
 
   const message = asRecord(record.message)
+
   if (!message) {
     return null
   }
+
   const role = extractString(message.role)
 
   if (role === 'toolResult') {
@@ -89,6 +94,7 @@ export function decodeOmpTranscriptLine(
     // renders. List the paths only — `files[].content` is an auto-read dump that
     // would bury the conversation.
     const paths = ompFileMentionPaths(message.files)
+
     return paths.length === 0
       ? null
       : {
@@ -108,7 +114,9 @@ export function decodeOmpTranscriptLine(
   if ((role === 'custom' || role === 'hookMessage') && message.display !== true) {
     return null
   }
+
   const blocks = ompContentBlocks(message.content)
+
   if (blocks.length === 0) {
     // Why: omp stamps an aborted turn onto the assistant message itself
     // (`stopReason: 'aborted'`), and when nothing streamed before the abort the
@@ -124,7 +132,9 @@ export function decodeOmpTranscriptLine(
         }
       : null
   }
+
   const messageRole = role === 'assistant' ? 'assistant' : role === 'user' ? 'user' : 'system'
+
   return { id, role: messageRole, blocks, timestamp, source: 'transcript' }
 }
 
@@ -138,12 +148,14 @@ function ompExecutionBlocks(
   // or trailing whitespace is meaningful in captured command output.
   const source = isBash ? message.command : message.code
   const output = message.output
+
   // Why: every cancel/timeout path returns `{exitCode: undefined, cancelled: true}`,
   // and JSON.stringify drops the undefined key, so a cancelled run carries NO
   // exitCode on disk. Without the `cancelled` arm it would render as a clean
   // success next to partial output; omp's own cell shows a cancelled marker.
   const failed =
     message.cancelled === true || (typeof message.exitCode === 'number' && message.exitCode !== 0)
+
   return [
     {
       type: 'tool-call',
@@ -163,13 +175,17 @@ function ompFileMentionPaths(files: unknown): string[] {
   if (!Array.isArray(files)) {
     return []
   }
+
   const paths: string[] = []
+
   for (const file of files) {
     const path = extractString(asRecord(file)?.path)
+
     if (path) {
       paths.push(path)
     }
   }
+
   return paths
 }
 
@@ -178,16 +194,21 @@ function ompContentBlocks(content: unknown): NativeChatBlock[] {
   if (typeof content === 'string') {
     return content.trim() ? [{ type: 'text', text: content }] : []
   }
+
   if (!Array.isArray(content)) {
     return []
   }
+
   const blocks: NativeChatBlock[] = []
+
   for (const item of content) {
     const block = ompContentBlock(asRecord(item))
+
     if (block) {
       blocks.push(block)
     }
   }
+
   return blocks
 }
 
@@ -196,19 +217,26 @@ function ompContentBlock(record: Record<string, unknown> | null): NativeChatBloc
   if (!record) {
     return null
   }
+
   switch (record.type) {
     case 'text': {
       const text = extractString(record.text)
+
       return text ? { type: 'text', text } : null
     }
+
     case 'thinking': {
       const text = extractString(record.thinking) ?? extractString(record.text)
+
       return text ? { type: 'text', text } : null
     }
+
     case 'toolCall': {
       const name = extractString(record.name) ?? 'tool'
+
       return { type: 'tool-call', name, input: record.arguments }
     }
+
     case 'image':
       // Why: omp stores images as content-addressed blob handles
       // (`blob:sha256:…`) rather than a path or URL, so there is nothing the
@@ -223,5 +251,6 @@ function ompContentBlock(record: Record<string, unknown> | null): NativeChatBloc
 /** `timestampMs` yields NaN for an unparsable value; the chat model wants null. */
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
+
   return Number.isFinite(parsed) ? parsed : null
 }

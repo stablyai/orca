@@ -40,6 +40,7 @@ export async function dispatchRemoteLinearRelationWrite(
     1,
     'id'
   )
+
   return await call(dispatcher, 'linear.issueRelationWrite', {
     ...buildRemoteTargetRequest(parsed, env, 3),
     relatedInput: requiredString(parsed.flags, 'related'),
@@ -55,11 +56,13 @@ function parseRelationship(value: string): LinearIssueRelationship {
     related: 'relatedTo',
     'duplicate-of': 'duplicateOf'
   }[value]
+
   if (!relationship) {
     throw new RemoteLinearWriteArgumentError(
       'invalid_argument',
       '--type must be blocks, blocked-by, related, or duplicate-of'
     )
   }
+
   return relationship as LinearIssueRelationship
 }

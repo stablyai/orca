@@ -19,6 +19,7 @@ describe('worktree.ps catalog snapshots', () => {
   it('preserves the exact legacy response when no snapshot field is sent', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
     const response = await dispatcher.dispatch({
       id: 'legacy',
       authToken: 'token',
@@ -36,12 +37,14 @@ describe('worktree.ps catalog snapshots', () => {
   it('returns a full snapshot followed by a tiny unchanged response', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
     const first = await dispatcher.dispatch({
       id: 'first',
       authToken: 'token',
       method: 'worktree.ps',
       params: { limit: 10_000, afterSnapshotId: null }
     })
+
     const snapshotId = (first as { result: { snapshotId: string } }).result.snapshotId
 
     const second = await dispatcher.dispatch({

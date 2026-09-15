@@ -6,6 +6,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Button } from '@/components/ui/button'
 import { ChevronDown, Check, X, LoaderCircle } from 'lucide-react'
 import { TaskPageLinearIssueAttributes } from './IssueAttributes'
+
 export function TaskPageLinearIssueDialog({
   model
 }: {
@@ -26,6 +27,7 @@ export function TaskPageLinearIssueDialog({
     newLinearIssueTargetTeam,
     handleCreateNewLinearIssue
   } = model
+
   return (
     <Dialog
       open={newLinearIssueOpen}

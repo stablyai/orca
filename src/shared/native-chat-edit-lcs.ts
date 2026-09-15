@@ -13,10 +13,12 @@ export function editLinesFromContents(
 ): { lines: NativeChatEditLine[]; truncated: boolean } {
   const original = splitEditContent(originalContent)
   const modified = splitEditContent(modifiedContent)
+
   const lines =
     original.lines.length * modified.lines.length <= MAX_EDIT_DIFF_CELLS
       ? lcsLines(original.lines, modified.lines)
       : prefixSuffixLines(original.lines, modified.lines)
+
   return { lines, truncated: original.truncated || modified.truncated }
 }
 
@@ -35,6 +37,7 @@ function addition(text: string, newNo: number): NativeChatEditLine {
 function lcsLines(original: string[], modified: string[]): NativeChatEditLine[] {
   const width = modified.length + 1
   const dp = new Uint32Array((original.length + 1) * width)
+
   for (let i = original.length - 1; i >= 0; i -= 1) {
     for (let j = modified.length - 1; j >= 0; j -= 1) {
       dp[i * width + j] =
@@ -47,6 +50,7 @@ function lcsLines(original: string[], modified: string[]): NativeChatEditLine[] 
   const lines: NativeChatEditLine[] = []
   let oldIndex = 0
   let newIndex = 0
+
   while (oldIndex < original.length && newIndex < modified.length) {
     if (original[oldIndex] === modified[newIndex]) {
       lines.push(context(original[oldIndex] ?? '', oldIndex + 1, newIndex + 1))
@@ -60,17 +64,21 @@ function lcsLines(original: string[], modified: string[]): NativeChatEditLine[] 
       newIndex += 1
     }
   }
+
   for (; oldIndex < original.length; oldIndex += 1) {
     lines.push(removal(original[oldIndex] ?? '', oldIndex + 1))
   }
+
   for (; newIndex < modified.length; newIndex += 1) {
     lines.push(addition(modified[newIndex] ?? '', newIndex + 1))
   }
+
   return lines
 }
 
 function prefixSuffixLines(original: string[], modified: string[]): NativeChatEditLine[] {
   let prefix = 0
+
   while (
     prefix < original.length &&
     prefix < modified.length &&
@@ -78,7 +86,9 @@ function prefixSuffixLines(original: string[], modified: string[]): NativeChatEd
   ) {
     prefix += 1
   }
+
   let suffix = 0
+
   while (
     suffix + prefix < original.length &&
     suffix + prefix < modified.length &&
@@ -88,18 +98,23 @@ function prefixSuffixLines(original: string[], modified: string[]): NativeChatEd
   }
 
   const lines: NativeChatEditLine[] = []
+
   for (let i = 0; i < prefix; i += 1) {
     lines.push(context(original[i] ?? '', i + 1, i + 1))
   }
+
   for (let i = prefix; i < original.length - suffix; i += 1) {
     lines.push(removal(original[i] ?? '', i + 1))
   }
+
   for (let i = prefix; i < modified.length - suffix; i += 1) {
     lines.push(addition(modified[i] ?? '', i + 1))
   }
+
   for (let i = original.length - suffix; i < original.length; i += 1) {
     const newIndex = modified.length - suffix + (i - (original.length - suffix))
     lines.push(context(original[i] ?? '', i + 1, newIndex + 1))
   }
+
   return lines
 }

@@ -16,6 +16,7 @@ import {
 } from './new-workspace-duplicate-project-details'
 
 export const NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX = 'project-group:'
+
 export const NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX = 'folder-source:'
 
 export type NewWorkspaceProjectOption =
@@ -76,7 +77,9 @@ function getProjectModel({
   if (projects.length > 0 || projectHostSetups.length > 0) {
     return { projects, projectHostSetups }
   }
+
   const projection = projectHostSetupProjectionFromRepos(eligibleRepos)
+
   return {
     projects: projection.projects,
     projectHostSetups: projection.setups
@@ -87,9 +90,11 @@ function getProjectDetail(project: Project, readySetupCount: number): string {
   if (project.providerIdentity) {
     return `${project.providerIdentity.owner}/${project.providerIdentity.repo}`
   }
+
   if (readySetupCount > 1) {
     return `${readySetupCount} hosts configured`
   }
+
   return 'Project'
 }
 
@@ -112,6 +117,7 @@ export function buildNewWorkspaceProjectOptions(
     ) {
       continue
     }
+
     readySetupCountsByProjectId.set(
       setup.projectId,
       (readySetupCountsByProjectId.get(setup.projectId) ?? 0) + 1
@@ -142,6 +148,7 @@ export function buildNewWorkspaceProjectOptions(
   return options
     .map(({ detailSource: _detailSource, ...option }) => {
       const directoryDetail = duplicateProjectDetailsById.get(option.id)
+
       return directoryDetail ? { ...option, detail: directoryDetail } : option
     })
     .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
@@ -173,10 +180,13 @@ function getProjectGroupDetail(group: ProjectGroup): string {
 
 export function getNewWorkspaceProjectGroupHostId(group: ProjectGroup): ExecutionHostId {
   const executionHost = parseExecutionHostId(group.executionHostId)
+
   if (executionHost) {
     return executionHost.id
   }
+
   const connectionId = group.connectionId?.trim()
+
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
@@ -196,6 +206,7 @@ export function findActionableFolderProjectGroup({
   if (!groupId) {
     return null
   }
+
   return (
     projectGroups.find(
       (group) =>
@@ -227,6 +238,7 @@ export function buildNewWorkspaceCreateTargetOptions({
 }: BuildNewWorkspaceCreateTargetOptionsInput): NewWorkspaceProjectOption[] {
   const projectOptions = buildNewWorkspaceProjectOptions(projectInput)
   const liveHostIds = projectInput.hosts ? new Set(projectInput.hosts.map((host) => host.id)) : null
+
   const groupOptions = projectGroups
     .filter(
       (group) =>
@@ -259,10 +271,13 @@ export function searchNewWorkspaceProjectOptions(
   if (isNewWorkspaceProjectOptionQueryTooLarge(rawQuery)) {
     return []
   }
+
   const query = rawQuery.trim().toLowerCase()
+
   if (!query) {
     return [...options]
   }
+
   return options.filter((option: NewWorkspaceProjectOptionBase) =>
     [option.displayName, option.detail].some((value) => value.toLowerCase().includes(query))
   )

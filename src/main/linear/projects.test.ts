@@ -3,8 +3,11 @@ import type { LinearClientForWorkspace } from './client'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
 const rawRequest = vi.fn()
+
 const getClients = vi.fn()
+
 const clearToken = vi.fn()
+
 const isAuthError = vi.fn()
 
 vi.mock('./linear-request-concurrency', () => ({
@@ -179,9 +182,11 @@ function customViewIssuesConnectionResponse(
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 

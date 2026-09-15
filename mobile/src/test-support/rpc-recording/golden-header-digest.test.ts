@@ -12,17 +12,25 @@ import type { RecordingScenario, ScenarioStep } from './recording-scenario'
 
 /** Spelled, not imported: a rename of the excluded directory must fail this suite, not follow it. */
 const MUTANT_DIRECTORY = `${RECORDER_DIRECTORY}/mutants`
+
 const root = resolve(import.meta.dirname, '../../../..')
+
 const manifest = readScenarios(
   process.env.RPC_FOUNDATION_SCENARIOS ??
     resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')
 ).scenarios
+
 const BASELINE = 'a'.repeat(40)
+
 const EDITED_SCENARIO = 'b1'
+
 const EDITED_SITE = 'files.searchPaths#1'
+
 /** The only `legacy-inventory` scenario with a fulfilled reply at `EDITED_SITE`. */
 const REPLAYED_SCENARIO = 'inventory-repeat-query'
+
 const REPLAYED_GOLDEN = 'matrix-legacy-inventory-files.searchpaths-1'
+
 /**
  * Every golden derived from `b1`: its own, and its family's four matrix sites, which expand from it
  * as the family's base. The two other `legacy-inventory` scenarios and the interruption and
@@ -35,9 +43,11 @@ const EDITED_GOLDENS = [
   'matrix-legacy-inventory-fresh-inventory',
   'matrix-legacy-inventory-old-inventory'
 ]
+
 type Header = Omit<GoldenRecording, 'recording'>
 
 const created: string[] = []
+
 afterAll(() => {
   for (const directory of created) {
     rmSync(directory, { recursive: true, force: true })
@@ -62,23 +72,29 @@ function stubRoot(revision: Revision, scenarioFile: string): string {
   created.push(directory)
   mkdirSync(join(directory, ADAPTER_DIRECTORY), { recursive: true })
   writeFileSync(join(directory, RECORDER_DIRECTORY, 'runner.ts'), revision.engine)
+
   for (const { source } of revision.registered ?? MOUNTED_OPERATION_MODULES) {
     const stub = revision.sources?.[source] ?? 'export const adapter = 1'
     writeFileSync(join(directory, ADAPTER_DIRECTORY, source), stub)
   }
+
   mkdirSync(join(directory, MUTANT_DIRECTORY), { recursive: true })
+
   for (const [file, source] of Object.entries(revision.mutants ?? {})) {
     writeFileSync(join(directory, MUTANT_DIRECTORY, file), source)
   }
+
   writeFileSync(join(directory, 'mobile/pnpm-lock.yaml'), 'lockfile: stub\n')
   mkdirSync(join(directory, 'mobile/rpc-foundation'), { recursive: true })
   writeFileSync(join(directory, 'mobile/rpc-foundation/pilot-scenarios.json'), scenarioFile)
+
   return directory
 }
 
 /** Every golden's header for one recorder revision and one manifest, both written to a stub root. */
 function headers(revision: Revision, scenarios: readonly RecordingScenario[]): Map<string, Header> {
   const stub = stubRoot(revision, JSON.stringify({ baseline: BASELINE, scenarios }))
+
   return new Map(
     derivedGoldens(scenarios).map((golden) => {
       const { recording: _recording, ...header } = goldenRecording(
@@ -88,6 +104,7 @@ function headers(revision: Revision, scenarios: readonly RecordingScenario[]): M
         { scenario: golden.id, checkpoints: [] },
         revision.registered ?? MOUNTED_OPERATION_MODULES
       )
+
       return [golden.id, header]
     })
   )
@@ -152,6 +169,7 @@ function editCompletion(
   rewrite: (step: Completion) => Completion
 ): RecordingScenario[] {
   let edits = 0
+
   const edited = scenarios.map((scenario) =>
     scenario.id !== scenarioId
       ? scenario
@@ -161,14 +179,18 @@ function editCompletion(
             if (!('complete' in step) || step.complete !== request) {
               return step
             }
+
             edits++
+
             return rewrite(step)
           })
         }
   )
+
   if (edits !== 1) {
     throw new Error(`Expected one ${request} completion in ${scenarioId}, edited ${edits}`)
   }
+
   return edited
 }
 
@@ -183,6 +205,7 @@ describe('golden header digests', () => {
       { engine: ENGINE, mutants: { 'operation-mutations.ts': 'one' } },
       manifest
     )
+
     const after = headers(
       {
         engine: ENGINE,
@@ -191,6 +214,7 @@ describe('golden header digests', () => {
       },
       [...manifest, ADDED_FAMILY]
     )
+
     expect(moved(before, after)).toEqual([])
     // The added family did derive goldens of its own: a pilot golden and one matrix site.
     expect(after.size).toBe(before.size + 2)
@@ -198,6 +222,7 @@ describe('golden header digests', () => {
 
   it('re-digests exactly the goldens recorded through an edited adapter module', () => {
     const before = headers({ engine: ENGINE }, manifest)
+
     const after = headers(
       {
         engine: ENGINE,
@@ -205,7 +230,9 @@ describe('golden header digests', () => {
       },
       manifest
     )
+
     expect(moved(before, after)).toEqual([...NEW_TAB_GOLDENS].sort())
+
     for (const id of NEW_TAB_GOLDENS) {
       expect(after.get(id)?.recorderSha256).toBe(before.get(id)?.recorderSha256)
       expect(after.get(id)?.scenarioSha256).toBe(before.get(id)?.scenarioSha256)
@@ -215,6 +242,7 @@ describe('golden header digests', () => {
 
   it('re-digests exactly the goldens derived from an edited scenario', () => {
     const before = headers({ engine: ENGINE }, manifest)
+
     const after = headers(
       { engine: ENGINE },
       editCompletion(manifest, EDITED_SCENARIO, EDITED_SITE, (step) => ({
@@ -222,7 +250,9 @@ describe('golden header digests', () => {
         params: { worktree: 'id:A', query: 'old', limit: 17 }
       }))
     )
+
     expect(moved(before, after)).toEqual([...EDITED_GOLDENS].sort())
+
     for (const id of EDITED_GOLDENS) {
       expect(after.get(id)?.recorderSha256).toBe(before.get(id)?.recorderSha256)
       expect(after.get(id)?.adapterSha256).toBe(before.get(id)?.adapterSha256)
@@ -235,6 +265,7 @@ describe('golden header digests', () => {
   // matrix golden that its own scenario never appears in.
   it('re-digests a matrix golden whose replayed success comes from an edited sibling', () => {
     const before = headers({ engine: ENGINE }, manifest)
+
     const after = headers(
       { engine: ENGINE },
       editCompletion(manifest, REPLAYED_SCENARIO, EDITED_SITE, (step) => ({
@@ -242,6 +273,7 @@ describe('golden header digests', () => {
         reply: { ok: true, result: { files: [{ relativePath: 'edited.ts' }] } }
       }))
     )
+
     expect(moved(before, after)).toEqual([REPLAYED_SCENARIO, REPLAYED_GOLDEN].sort())
   })
 
@@ -249,6 +281,7 @@ describe('golden header digests', () => {
     const before = headers({ engine: ENGINE }, manifest)
     const after = headers({ engine: 'export const runner = 2' }, manifest)
     expect(moved(before, after)).toEqual([...before.keys()].sort())
+
     for (const [id, header] of before) {
       expect(after.get(id)?.recorderSha256).not.toBe(header.recorderSha256)
       expect(after.get(id)?.adapterSha256).toBe(header.adapterSha256)

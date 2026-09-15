@@ -45,30 +45,38 @@ export function detectLibcFromReportHeader(
   if (platform !== 'linux') {
     return { libc: 'none', glibcVersion: null }
   }
+
   if (!header || typeof header !== 'object') {
     // Why glibc and not 'unknown': an unreadable report is not evidence of musl, and
     // glibc is the overwhelmingly common Linux case. The null version keeps the floor
     // check from claiming a number it does not have.
     return { libc: 'glibc', glibcVersion: null }
   }
+
   const runtime = (header as ReportHeader).glibcVersionRuntime
+
   if (typeof runtime === 'string' && runtime.length > 0) {
     return { libc: 'glibc', glibcVersion: runtime }
   }
+
   if ('glibcVersionRuntime' in (header as object)) {
     return { libc: 'glibc', glibcVersion: null }
   }
+
   return { libc: 'musl', glibcVersion: null }
 }
 
 export function detectNativeHostAbi(): NativeHostAbi {
   let header: unknown
+
   try {
     header = (process.report?.getReport?.() as { header?: unknown } | undefined)?.header
   } catch {
     header = undefined
   }
+
   const { libc, glibcVersion } = detectLibcFromReportHeader(process.platform, header)
+
   return {
     platform: process.platform,
     arch: process.arch,
@@ -89,12 +97,15 @@ export function nativeSlotName(abi: Pick<NativeHostAbi, 'platform' | 'arch' | 'l
 export function compareDottedVersions(left: string, right: string): number {
   const a = left.split('.').map((part) => Number.parseInt(part, 10) || 0)
   const b = right.split('.').map((part) => Number.parseInt(part, 10) || 0)
+
   for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
     const diff = (a[i] ?? 0) - (b[i] ?? 0)
+
     if (diff !== 0) {
       return diff > 0 ? 1 : -1
     }
   }
+
   return 0
 }
 
@@ -103,6 +114,7 @@ export function isBelowGlibcFloor(glibcVersion: string | null): boolean | null {
   if (!glibcVersion) {
     return null
   }
+
   return compareDottedVersions(glibcVersion, GLIBC_FLOOR) < 0
 }
 
@@ -113,12 +125,14 @@ export function isBelowGlibcFloor(glibcVersion: string | null): boolean | null {
  */
 export function parseUnmetGlibcVersion(loaderError: string): string | null {
   const match = loaderError.match(/version `?GLIBC_([0-9][0-9.]*)'? not found/)
+
   return match ? match[1] : null
 }
 
 /** `NODE_MODULE_VERSION 115 ... requires NODE_MODULE_VERSION 127` -> { built: '115', host: '127' }. */
 export function parseNodeAbiMismatch(loaderError: string): { built: string; host: string } | null {
   const match = loaderError.match(/NODE_MODULE_VERSION\s+(\d+)\D+NODE_MODULE_VERSION\s+(\d+)/)
+
   return match ? { built: match[1], host: match[2] } : null
 }
 
@@ -134,12 +148,15 @@ export function parseIncompatibleArchitecture(
   const machO = loaderError.match(
     /incompatible architecture \(have '?([\w.]+)'?,?\s*need '?([\w.]+)'?/
   )
+
   if (machO) {
     return { built: machO[1], host: machO[2] }
   }
+
   if (/invalid ELF header|wrong ELF class|Exec format error|ELFCLASS(?:32|64)/.test(loaderError)) {
     return { built: null, host: null }
   }
+
   return null
 }
 
@@ -152,9 +169,12 @@ export function parseIncompatibleArchitecture(
  */
 export function parseMissingSharedLibrary(loaderError: string): string | null {
   const elf = loaderError.match(/([\w.+-]+\.so[\w.]*): cannot open shared object file/)
+
   if (elf) {
     return elf[1]
   }
+
   const machO = loaderError.match(/Library not loaded:\s*(\S+)/)
+
   return machO ? machO[1] : null
 }

@@ -9,6 +9,7 @@ export function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean 
 
 export function canRestorePairedParkedTerminal(ptyId: string): boolean {
   const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
   return (
     environmentId !== null &&
     useAppStore
@@ -23,8 +24,10 @@ export function canRestorePairedParkedTerminal(ptyId: string): boolean {
 // preventing cross-workspace contamination during restore.
 export function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolean {
   const separatorIdx = sessionId.lastIndexOf('@@')
+
   if (separatorIdx === -1) {
     return true
   }
+
   return sessionId.slice(0, separatorIdx) === worktreeId
 }

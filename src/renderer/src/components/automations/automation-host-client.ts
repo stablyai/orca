@@ -36,9 +36,11 @@ export function getAutomationHostTargetFromKey(key: string | null): AutomationHo
   if (!key) {
     return null
   }
+
   if (key.startsWith('environment:')) {
     return { kind: 'environment', environmentId: key.slice('environment:'.length) }
   }
+
   return { kind: 'local' }
 }
 
@@ -46,6 +48,7 @@ export function getAutomationTargetFromHostId(
   hostId: string | null | undefined
 ): AutomationHostTarget {
   const parsed = parseExecutionHostId(hostId)
+
   return parsed?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsed.environmentId }
     : { kind: 'local' }
@@ -63,6 +66,7 @@ export function getAutomationListTarget(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): AutomationHostTarget {
   const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
+
   return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
 }
 
@@ -73,6 +77,7 @@ export function getAutomationOwnerTarget(
   if (sourceTarget?.kind === 'environment') {
     return sourceTarget
   }
+
   return getAutomationTargetFromHostId(automation.runContext?.hostId)
 }
 
@@ -81,6 +86,7 @@ export function toRuntimeAutomationCreateInput(
   input: AutomationCreateInput
 ): RuntimeAutomationCreateInput {
   const { projectId, workspaceId, ...rest } = input
+
   return {
     ...rest,
     // Machine selectors must not fall back to path/name matching on a remote host.
@@ -88,11 +94,13 @@ export function toRuntimeAutomationCreateInput(
     workspace: input.workspaceMode === 'existing' && workspaceId ? `id:${workspaceId}` : undefined
   }
 }
+
 /** Renames the desktop input's target fields to the wire contract every authority speaks. */
 export function toRuntimeAutomationUpdateInput(
   input: AutomationUpdateInput
 ): RuntimeAutomationUpdateInput {
   const { projectId, workspaceId, ...rest } = input
+
   return {
     ...rest,
     ...(projectId !== undefined ? { repo: `id:${projectId}` } : {}),
@@ -111,6 +119,7 @@ export async function listAutomationsForTarget(
     undefined,
     { timeoutMs: 15_000 }
   )
+
   return result.automations
 }
 
@@ -129,6 +138,7 @@ export async function listAutomationRunsForTarget(
     { automationId },
     { timeoutMs: 15_000 }
   )
+
   return result.runs
 }
 
@@ -143,6 +153,7 @@ export async function listAutomationRunsPageForTarget(
     { automationId, ...options },
     { timeoutMs: 15_000 }
   )
+
   return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
@@ -152,12 +163,14 @@ export async function updateAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
+
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',
     { id: automation.id, updates: toRuntimeAutomationUpdateInput(updates) },
     { timeoutMs: 15_000 }
   )
+
   return result.automation
 }
 
@@ -174,11 +187,13 @@ export async function runAutomationNowForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<AutomationRun> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
+
   const result = await callRuntimeRpc<{ run: AutomationRun }>(
     target,
     'automation.runNow',
     { id: automation.id },
     { timeoutMs: 15_000 }
   )
+
   return result.run
 }

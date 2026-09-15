@@ -9,12 +9,19 @@ import { ACTIVITY_PORTAL_READINESS_MAX_FLIPS } from './activity-portal-readiness
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const TAB_ID = 'tab-readiness-churn'
+
 const OTHER_TAB_ID = 'tab-readiness-churn-other'
+
 const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+
 const LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
+
 const LEAF_C = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1'
+
 const PANE_A = `${TAB_ID}:${LEAF_A}`
+
 const PANE_B = `${TAB_ID}:${LEAF_B}`
+
 const OTHER_PANE_B = `${OTHER_TAB_ID}:${LEAF_B}`
 
 let root: Root
@@ -36,6 +43,7 @@ afterEach(() => {
 function buildNeverReadyRoot(target: HTMLElement, tabId: string = TAB_ID): void {
   const tabRoot = document.createElement('div')
   tabRoot.dataset.terminalTabId = tabId
+
   for (const leafId of [LEAF_A, LEAF_C]) {
     const pane = document.createElement('div')
     pane.dataset.leafId = leafId
@@ -44,6 +52,7 @@ function buildNeverReadyRoot(target: HTMLElement, tabId: string = TAB_ID): void 
     Object.defineProperty(pane, 'getClientRects', { value: () => [{}], configurable: true })
     tabRoot.appendChild(pane)
   }
+
   target.replaceChildren(tabRoot)
 }
 
@@ -66,6 +75,7 @@ describe('Activity portal readiness subscription churn', () => {
     document.body.append(target)
 
     let selectPane: (paneKey: string) => void = () => {}
+
     let readinessCommits = 0
     let lastStatus = 'loading'
 
@@ -73,10 +83,12 @@ describe('Activity portal readiness subscription churn', () => {
       const [paneKey, setPaneKey] = useState(PANE_A)
       selectPane = setPaneKey
       const status = useActivityTerminalPortalStatus(target, paneKey)
+
       if (status !== lastStatus) {
         readinessCommits += 1
         lastStatus = status
       }
+
       return null
     }
 
@@ -104,6 +116,7 @@ describe('Activity portal readiness subscription churn', () => {
     document.body.append(target)
 
     let selectPane: (paneKey: string) => void = () => {}
+
     let renders = 0
     let status = 'loading'
 
@@ -112,6 +125,7 @@ describe('Activity portal readiness subscription churn', () => {
       const [paneKey, setPaneKey] = useState(PANE_A)
       selectPane = setPaneKey
       status = useActivityTerminalPortalStatus(target, paneKey)
+
       return null
     }
 
@@ -158,11 +172,13 @@ describe('Activity portal readiness subscription churn', () => {
     const targets = [document.createElement('div'), document.createElement('div')]
     buildNeverReadyRoot(targets[0], TAB_ID)
     buildNeverReadyRoot(targets[1], OTHER_TAB_ID)
+
     for (const target of targets) {
       document.body.append(target)
     }
 
     let selectFlip: (flip: number) => void = () => {}
+
     let status = 'loading'
     const settledStatuses: string[] = []
 
@@ -174,6 +190,7 @@ describe('Activity portal readiness subscription churn', () => {
         targets[flip % 2],
         flip % 2 === 0 ? PANE_A : OTHER_PANE_B
       )
+
       return null
     }
 
@@ -199,6 +216,7 @@ describe('Activity portal readiness subscription churn', () => {
     document.body.append(target)
 
     let selectPane: (paneKey: string) => void = () => {}
+
     let status = 'loading'
     const settledStatuses: string[] = []
 
@@ -206,6 +224,7 @@ describe('Activity portal readiness subscription churn', () => {
       const [paneKey, setPaneKey] = useState(PANE_A)
       selectPane = setPaneKey
       status = useActivityTerminalPortalStatus(target, paneKey)
+
       return null
     }
 
@@ -232,18 +251,22 @@ describe('Activity portal readiness subscription churn', () => {
     buildNeverReadyRoot(churnTarget, TAB_ID)
     const attachingTarget = document.createElement('div')
     buildNeverReadyRoot(attachingTarget, OTHER_TAB_ID)
+
     for (const target of [churnTarget, attachingTarget]) {
       document.body.append(target)
     }
 
     type SelectedPane = { target: HTMLElement; paneKey: string }
+
     let selectPane: (pane: SelectedPane) => void = () => {}
+
     let status = 'loading'
 
     function ActivityTerminalSlot(): null {
       const [pane, setPane] = useState<SelectedPane>({ target: churnTarget, paneKey: PANE_A })
       selectPane = setPane
       status = useActivityTerminalPortalStatus(pane.target, pane.paneKey)
+
       return null
     }
 

@@ -50,9 +50,11 @@ async function scanLocalEntry(
     classifyEntry: async (path) => {
       const stats = await lstat(path)
       throwIfWorkspaceSpaceScanAborted(signal)
+
       if (stats.isSymbolicLink()) {
         return { kind: 'symlink', sizeBytes: stats.size }
       }
+
       return stats.isDirectory()
         ? { kind: 'directory', sizeBytes: stats.size }
         : { kind: 'file', sizeBytes: stats.size }
@@ -74,12 +76,15 @@ async function scanLocalTopLevelEntry(
   throwIfWorkspaceSpaceScanAborted(signal)
   const stats = await lstat(entryPath)
   throwIfWorkspaceSpaceScanAborted(signal)
+
   if (stats.isSymbolicLink()) {
     return { name, path: entryPath, kind: 'symlink', sizeBytes: stats.size, skippedEntryCount: 0 }
   }
+
   if (!stats.isDirectory()) {
     return { name, path: entryPath, kind: 'file', sizeBytes: stats.size, skippedEntryCount: 0 }
   }
+
   return {
     name,
     path: entryPath,
@@ -99,19 +104,23 @@ async function scanLocalWorktreeWithDu(
 ): Promise<WorkspaceSpaceWorktree> {
   throwIfWorkspaceSpaceScanAborted(signal)
   const rootStats = await lstat(worktree.path)
+
   if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
     const root = await scanLocalEntry(
       worktree.path,
       basenameWorkspaceFilesystemPath(worktree.path),
       signal
     )
+
     const compact = compactWorkspaceSpaceItems((root.children ?? []).map(toWorkspaceSpaceItem))
+
     return createScannedWorkspaceSpaceRow(repo, worktree, scannedAt, {
       sizeBytes: root.sizeBytes,
       skippedEntryCount: root.skippedEntryCount,
       ...compact
     })
   }
+
   const [entries, duSizes] = await Promise.all([
     opendir(worktree.path).then(async (directory) => {
       const admission = await collectWorkspaceSpaceDirectoryEntries(
@@ -121,11 +130,14 @@ async function scanLocalWorktreeWithDu(
         createWorkspaceSpaceScanBudget(),
         () => throwIfWorkspaceSpaceScanAborted(signal)
       )
+
       return admission.entries
     }),
     readDu(worktree.path, signal)
   ])
+
   throwIfWorkspaceSpaceScanAborted(signal)
+
   const childStats = await mapWithConcurrency(entries, LOCAL_FS_CONCURRENCY, async (entry) => {
     try {
       return await scanLocalTopLevelEntry(
@@ -139,13 +151,17 @@ async function scanLocalWorktreeWithDu(
       if (error instanceof WorkspaceSpaceScanCancelledError) {
         throw error
       }
+
       return null
     }
   })
+
   const children = childStats.filter((child): child is WorkspaceSpaceEntryScan => child !== null)
+
   const rootSize =
     duSizes.get(normalizeDuPath(worktree.path)) ??
     rootStats.size + children.reduce((sum, child) => sum + child.sizeBytes, 0)
+
   return createScannedWorkspaceSpaceRow(repo, worktree, scannedAt, {
     sizeBytes: rootSize,
     skippedEntryCount: childStats.length - children.length,
@@ -165,6 +181,7 @@ async function scanLocalWorktreeWithNode(
       basenameWorkspaceFilesystemPath(worktree.path),
       signal
     )
+
     return createScannedWorkspaceSpaceRow(repo, worktree, scannedAt, {
       sizeBytes: root.sizeBytes,
       skippedEntryCount: root.skippedEntryCount,
@@ -174,7 +191,9 @@ async function scanLocalWorktreeWithNode(
     if (error instanceof WorkspaceSpaceScanCancelledError) {
       throw error
     }
+
     const classified = classifyWorkspaceSpaceError(error)
+
     return createUnavailableWorkspaceSpaceRow(
       repo,
       worktree,
@@ -194,6 +213,7 @@ export async function scanLocalWorkspaceSpaceWorktree(
   signal?: AbortSignal
 ): Promise<WorkspaceSpaceWorktree> {
   throwIfWorkspaceSpaceScanAborted(signal)
+
   if (platform !== 'win32') {
     try {
       return await scanLocalWorktreeWithDu(
@@ -206,11 +226,14 @@ export async function scanLocalWorkspaceSpaceWorktree(
       )
     } catch (error) {
       throwIfWorkspaceSpaceScanAborted(signal)
+
       if (error instanceof WorkspaceSpaceScanCancelledError) {
         throw error
       }
+
       if (error instanceof WorkspaceSpaceScanCapacityError) {
         const classified = classifyWorkspaceSpaceError(error)
+
         return createUnavailableWorkspaceSpaceRow(
           repo,
           worktree,
@@ -221,5 +244,6 @@ export async function scanLocalWorkspaceSpaceWorktree(
       }
     }
   }
+
   return scanLocalWorktreeWithNode(repo, worktree, scannedAt, signal)
 }

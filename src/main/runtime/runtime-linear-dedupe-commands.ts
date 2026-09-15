@@ -21,18 +21,22 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     const comment = await this.readLinearWriteLookup(() =>
       getLinearCommentByUuidForAgent(writeId, workspaceId)
     )
+
     if (!comment) {
       return null
     }
+
     if (comment.issue.id === issueId && comment.parentId === parentId) {
       return comment
     }
+
     if (required) {
       throw linearError(
         'linear_invalid_write_id',
         'The write id belongs to a different comment target.'
       )
     }
+
     return null
   }
 
@@ -45,18 +49,22 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     const attachment = await this.readLinearWriteLookup(() =>
       getLinearAttachmentByUuidForAgent(writeId, workspaceId)
     )
+
     if (!attachment) {
       return null
     }
+
     if (attachment.issue.id === issueId) {
       return attachment
     }
+
     if (required) {
       throw linearError(
         'linear_invalid_write_id',
         'The write id belongs to a different attachment target.'
       )
     }
+
     return null
   }
 
@@ -71,9 +79,11 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     const issue = await this.readLinearWriteLookup(() =>
       getLinearIssueByUuidForAgent(writeId, workspaceId)
     )
+
     if (!issue) {
       return null
     }
+
     if (
       issue.team.id === teamId &&
       (issue.parent?.id ?? null) === parentId &&
@@ -81,12 +91,14 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     ) {
       return issue
     }
+
     if (required) {
       throw linearError(
         'linear_invalid_write_id',
         'The write id belongs to a different issue target.'
       )
     }
+
     return null
   }
 
@@ -106,6 +118,7 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
         workspaceId,
         true
       )
+
       if (comment) {
         return comment
       }
@@ -113,12 +126,14 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
       if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
         throw error
       }
+
       throw unconfirmed(
         error instanceof Error
           ? sanitizeLinearErrorMessage(error.message)
           : sanitizeLinearErrorMessage(String(error))
       )
     }
+
     throw unconfirmed()
   }
 
@@ -136,6 +151,7 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
         workspaceId,
         true
       )
+
       if (attachment) {
         return attachment
       }
@@ -143,12 +159,14 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
       if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
         throw error
       }
+
       throw unconfirmed(
         error instanceof Error
           ? sanitizeLinearErrorMessage(error.message)
           : sanitizeLinearErrorMessage(String(error))
       )
     }
+
     throw unconfirmed()
   }
 
@@ -170,6 +188,7 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
         true,
         intent
       )
+
       if (issue) {
         return issue
       }
@@ -177,12 +196,14 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
       if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
         throw error
       }
+
       throw unconfirmed(
         error instanceof Error
           ? sanitizeLinearErrorMessage(error.message)
           : sanitizeLinearErrorMessage(String(error))
       )
     }
+
     throw unconfirmed()
   }
 
@@ -200,25 +221,33 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     if (intent.stateId !== undefined && issue.state?.id !== intent.stateId) {
       return false
     }
+
     if (intent.assigneeId !== undefined && (issue.assignee?.id ?? null) !== intent.assigneeId) {
       return false
     }
+
     if (intent.priority !== undefined && issue.priority !== intent.priority) {
       return false
     }
+
     if (intent.estimate !== undefined && (issue.estimate ?? null) !== intent.estimate) {
       return false
     }
+
     if (intent.dueDate !== undefined && (issue.dueDate ?? null) !== intent.dueDate) {
       return false
     }
+
     if (intent.projectId !== undefined && (issue.project?.id ?? null) !== intent.projectId) {
       return false
     }
+
     const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
+
     if (intent.labelIds !== undefined && !sameStringSet(issueLabelIds, intent.labelIds)) {
       return false
     }
+
     return true
   }
 }

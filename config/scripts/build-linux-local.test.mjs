@@ -12,6 +12,7 @@ describe('local Linux build target', () => {
     const packageJson = JSON.parse(
       readFileSync(resolve(import.meta.dirname, '../../package.json'), 'utf8')
     )
+
     expect(packageJson.scripts['build:linux']).toContain(
       'node config/scripts/build-linux-local.mjs'
     )

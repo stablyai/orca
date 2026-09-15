@@ -45,16 +45,21 @@ async function toggleTerminalTabToChatView(
 ): Promise<void> {
   await page.evaluate(({ tabId, worktreeId }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
+
     const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
       (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
     )
+
     if (!unifiedTab) {
       throw new Error('Unified terminal tab not found for chat toggle')
     }
+
     state.toggleTabViewMode(unifiedTab.id)
   }, args)
 }
@@ -63,6 +68,7 @@ async function toggleTerminalTabToChatView(
 function pendingAskTranscript(args: { sessionId: string; userText: string }): string {
   const userTime = new Date()
   const assistantTime = new Date(userTime.getTime() + 2_000)
+
   const lines = [
     {
       sessionId: args.sessionId,
@@ -98,6 +104,7 @@ function pendingAskTranscript(args: { sessionId: string; userText: string }): st
       }
     }
   ]
+
   return `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`
 }
 

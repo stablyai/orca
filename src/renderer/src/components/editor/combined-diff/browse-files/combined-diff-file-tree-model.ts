@@ -17,6 +17,7 @@ import {
 import type { CombinedDiffTreeNode } from './combined-diff-file-tree-row'
 
 const UNCOMMITTED_AREA_ORDER: readonly GitStagingArea[] = ['unstaged', 'staged', 'untracked']
+
 const UNCOMMITTED_AREA_LABELS: Record<GitStagingArea, string> = {
   unstaged: 'Changes',
   staged: 'Staged Changes',
@@ -45,11 +46,13 @@ export function buildCombinedDiffUncommittedTreeGroups(
     const areaEntries = entries.filter(
       (entry): entry is GitStatusEntry => isGitStatusEntry(entry) && entry.area === area
     )
+
     if (areaEntries.length === 0) {
       return null
     }
 
     const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
+
     return {
       area,
       label: UNCOMMITTED_AREA_LABELS[area],
@@ -66,8 +69,10 @@ export function buildCombinedDiffBranchTreeRoots(
   const branchEntries = entries.filter(
     (entry): entry is GitBranchChangeEntry => !isGitStatusEntry(entry)
   )
+
   const area: CombinedDiffBranchTreeArea = mode === 'commit' ? 'combined-commit' : 'combined-branch'
   const roots = compactSourceControlTree(buildSourceControlTree(area, [...branchEntries]))
+
   return roots as CombinedDiffTreeNode[]
 }
 
@@ -112,12 +117,15 @@ export function getViewedCombinedDiffTreeVisibility({
         ? null
         : { source: node, children: [], fileCount: 1 }
     }
+
     const children = node.children
       .map((child) => projectVisibleTree(child as CombinedDiffTreeNode))
       .filter((child): child is VisibleTreeNode => child !== null)
+
     if (children.length === 0) {
       return null
     }
+
     return {
       source: node,
       children,
@@ -129,8 +137,10 @@ export function getViewedCombinedDiffTreeVisibility({
     if (projected.source.type === 'file') {
       return { ...projected.source, depth }
     }
+
     const names = [projected.source.name]
     let compacted = projected
+
     // Keep a collapsed directory as a visible boundary; filtering must not compact it away and
     // accidentally expose descendants that the user explicitly hid.
     while (
@@ -141,10 +151,13 @@ export function getViewedCombinedDiffTreeVisibility({
       compacted = compacted.children[0]
       names.push(compacted.source.name)
     }
+
     const compactedSource = compacted.source
+
     if (compactedSource.type !== 'directory') {
       throw new Error('Combined diff directory projection lost its source node')
     }
+
     const node = {
       ...compactedSource,
       name: names.join('/'),
@@ -152,12 +165,15 @@ export function getViewedCombinedDiffTreeVisibility({
       fileCount: compacted.fileCount,
       children: compacted.children.map((child) => compactVisibleTree(child, depth + 1))
     } satisfies CombinedDiffTreeNode
+
     visibleFileCounts.set(node.key, node.fileCount)
+
     return node
   }
 
   const visit = (node: CombinedDiffTreeNode): void => {
     rows.push(node)
+
     if (node.type === 'directory' && !collapsedDirectoryKeys.has(node.key)) {
       for (const child of node.children) {
         visit(child)
@@ -166,14 +182,18 @@ export function getViewedCombinedDiffTreeVisibility({
   }
 
   let visibleFileCount = 0
+
   for (const root of roots) {
     const projected = projectVisibleTree(root)
+
     if (!projected) {
       continue
     }
+
     const compacted = compactVisibleTree(projected, 0)
     visibleFileCount += projected.fileCount
     visit(compacted)
   }
+
   return { rows, visibleFileCount, visibleFileCounts }
 }

@@ -43,6 +43,7 @@ export function admitSelfInitiatedTreeKill(target: {
   // `getAppMetrics()` entry cannot orphan a macOS/Linux tree.
   const isOwnChromiumPid =
     target.scope === 'win-taskkill-tree' && readOrcaChromiumProcessPids().has(target.pid)
+
   try {
     if (isOwnChromiumPid) {
       recordRefusedOwnChromiumTreeKill(target)
@@ -53,6 +54,7 @@ export function admitSelfInitiatedTreeKill(target: {
     // Recording must never turn a successful termination into a failed one, and
     // never flip the decision: it is taken above, before anything can throw.
   }
+
   return !isOwnChromiumPid
 }
 

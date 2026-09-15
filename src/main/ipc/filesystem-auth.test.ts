@@ -27,6 +27,7 @@ import {
 
 vi.mock('../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
+
   return {
     ...actual,
     listRepoWorktreeGraph: vi.fn()
@@ -112,6 +113,7 @@ describe('filesystem auth worktree roots', () => {
         isMainWorktree: false
       })
     )
+
     vi.mocked(listRepoWorktreeGraph).mockResolvedValue(worktrees)
     const store = makeStore()
 
@@ -162,6 +164,7 @@ describe('filesystem auth worktree roots', () => {
     // Register mid-listing: the rebuild's own result was computed before this worktree existed.
     vi.mocked(listRepoWorktreeGraph).mockImplementation(async () => {
       registerCreatedWorktreeRoot(store, repo.id, recovered)
+
       return []
     })
 
@@ -203,6 +206,7 @@ describe('filesystem auth worktree roots', () => {
       id: `repo-${index}`,
       path: `/repos/app-${index}`
     }))
+
     let active = 0
     let maxActive = 0
     vi.mocked(listRepoWorktreeGraph).mockImplementation(async () => {
@@ -210,6 +214,7 @@ describe('filesystem auth worktree roots', () => {
       maxActive = Math.max(maxActive, active)
       await new Promise((resolve) => setTimeout(resolve, 1))
       active -= 1
+
       return []
     })
 
@@ -223,6 +228,7 @@ describe('filesystem auth worktree roots', () => {
 describe('filesystem-auth path containment', () => {
   it('authorizes missing nested descendants under an allowed repo', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-missing-'))
+
     try {
       const repoPath = join(tempRoot, 'repo')
       await mkdir(repoPath)
@@ -239,12 +245,14 @@ describe('filesystem-auth path containment', () => {
 
   it('authorizes local folder workspace roots outside child repo roots', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-folder-workspace-'))
+
     try {
       const folderPath = join(tempRoot, 'platform')
       const repoPath = join(folderPath, 'web')
       await mkdir(repoPath, { recursive: true })
       const projectGroup = makeProjectGroup({ parentPath: folderPath })
       const folderWorkspace = makeFolderWorkspace({ folderPath, projectGroupId: projectGroup.id })
+
       const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }], {
         projectGroups: [projectGroup],
         folderWorkspaces: [folderWorkspace]
@@ -263,11 +271,13 @@ describe('filesystem-auth path containment', () => {
 
   it('authorizes local folder-backed project group roots outside child repo roots', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-project-group-'))
+
     try {
       const folderPath = join(tempRoot, 'platform')
       const repoPath = join(folderPath, 'web')
       await mkdir(repoPath, { recursive: true })
       const projectGroup = makeProjectGroup({ parentPath: folderPath })
+
       const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }], {
         projectGroups: [projectGroup]
       })
@@ -282,12 +292,14 @@ describe('filesystem-auth path containment', () => {
 
   it('does not authorize SSH-only folder workspace roots as local paths', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-folder-workspace-'))
+
     try {
       const folderPath = join(tempRoot, 'remote-platform')
       const repoPath = join(folderPath, 'web')
       await mkdir(repoPath, { recursive: true })
       const projectGroup = makeProjectGroup({ parentPath: folderPath })
       const folderWorkspace = makeFolderWorkspace({ folderPath, projectGroupId: projectGroup.id })
+
       const store = makeStore(
         [{ ...repo, id: 'repo-temp', path: repoPath, connectionId: 'ssh-1' }],
         {
@@ -304,15 +316,18 @@ describe('filesystem-auth path containment', () => {
 
   it('does not authorize repo-less SSH-provenance folder roots as local paths', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-folder-provenance-'))
+
     try {
       const folderPath = join(tempRoot, 'remote-platform')
       await mkdir(folderPath, { recursive: true })
       const projectGroup = makeProjectGroup({ parentPath: folderPath, connectionId: 'ssh-1' })
+
       const folderWorkspace = makeFolderWorkspace({
         folderPath,
         projectGroupId: projectGroup.id,
         connectionId: 'ssh-1'
       })
+
       const store = makeStore([], {
         projectGroups: [projectGroup],
         folderWorkspaces: [folderWorkspace]
@@ -326,11 +341,13 @@ describe('filesystem-auth path containment', () => {
 
   it('does not authorize SSH-only folder-backed project group roots as local paths', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-project-group-'))
+
     try {
       const folderPath = join(tempRoot, 'remote-platform')
       const repoPath = join(folderPath, 'web')
       await mkdir(repoPath, { recursive: true })
       const projectGroup = makeProjectGroup({ parentPath: folderPath })
+
       const store = makeStore(
         [{ ...repo, id: 'repo-temp', path: repoPath, connectionId: 'ssh-1' }],
         {
@@ -348,6 +365,7 @@ describe('filesystem-auth path containment', () => {
     'rejects missing descendants under a symlinked ancestor outside the repo',
     async () => {
       const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-symlink-'))
+
       try {
         const repoPath = join(tempRoot, 'repo')
         const outsidePath = join(tempRoot, 'outside')
@@ -396,6 +414,7 @@ describe('filesystem-auth path containment', () => {
     }))
     vi.doMock('path', async () => {
       const path = await vi.importActual<typeof NodePath>('node:path')
+
       return {
         ...path.win32,
         default: path.win32
@@ -424,6 +443,7 @@ describe('filesystem-auth authorized external path bound', () => {
   // Empty allow-list store, so a path is allowed only if it (or an ancestor) is
   // in the session-authorized external-path set.
   const emptyStore = makeStore([])
+
   const flood = (n: number): string =>
     resolve(`/leak-audit-ext/flood-${String(n).padStart(6, '0')}`)
 
@@ -434,8 +454,10 @@ describe('filesystem-auth authorized external path bound', () => {
     // Flood past the cap with distinct external paths, re-authorizing `keep`
     // periodically so LRU keeps it hot.
     const total = AUTHORIZED_EXTERNAL_PATHS_MAX + 200
+
     for (let i = 0; i < total; i += 1) {
       authorizeExternalPath(flood(i))
+
       if (i % 250 === 0) {
         authorizeExternalPath(keep)
       }
@@ -450,9 +472,11 @@ describe('filesystem-auth authorized external path bound', () => {
 
   it('re-authorizes an evicted path on next use (self-healing)', () => {
     const path = resolve('/leak-audit-ext/evicted-then-reused')
+
     for (let i = 0; i < AUTHORIZED_EXTERNAL_PATHS_MAX + 50; i += 1) {
       authorizeExternalPath(flood(100_000 + i))
     }
+
     expect(isPathAllowed(path, emptyStore)).toBe(false)
     authorizeExternalPath(path)
     expect(isPathAllowed(path, emptyStore)).toBe(true)

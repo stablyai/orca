@@ -16,6 +16,7 @@ export function useComposerDropListener(
   useEffect(() => {
     const instanceId = instanceIdRef.current
     composerDropStack.push(instanceId)
+
     const unsubscribe = window.api.ui.onFileDrop((data) => {
       if (
         data.target !== 'composer' ||
@@ -26,13 +27,17 @@ export function useComposerDropListener(
       ) {
         return
       }
+
       const isCurrentOwner = (): boolean =>
         isCurrentComposerDropOwner(composerDropStack, instanceId)
+
       applyDropRef.current(data.paths, isCurrentOwner)
     })
+
     return () => {
       unsubscribe()
       const index = composerDropStack.lastIndexOf(instanceId)
+
       if (index !== -1) {
         composerDropStack.splice(index, 1)
       }

@@ -10,6 +10,7 @@ import {
 // Why built, not literal: a hardcoded id would silently stop parsing as SSH if the
 // prefix/separator changed, turning these positive cases into fallback expectations.
 const SSH_PTY_ID = toAppSshPtyId('conn-1', 'relay-pty-1')
+
 const LOCAL_PTY_ID = 'repo::/worktree@@session-1'
 
 afterEach(() => {
@@ -74,6 +75,7 @@ describe('memoizeSshReattachModelSnapshotProbe', () => {
 
   it('single-flights concurrent callers onto one probe', async () => {
     let resolveProbe: (value: string | null) => void = () => {}
+
     const probe = vi.fn(() => new Promise<string | null>((resolve) => (resolveProbe = resolve)))
     const fetchSnapshot = memoizeSshReattachModelSnapshotProbe(probe)
 

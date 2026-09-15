@@ -22,6 +22,7 @@ function transcriptTextIncludesPath(text: string, pathText: string, absolutePath
   if (recentTerminalOutputIncludesPath(text, pathText, absolutePath)) {
     return true
   }
+
   // Mobile excludes a sentence-final period from the tappable path span.
   return recentTerminalOutputIncludesPath(text, `${pathText}.`, `${absolutePath}.`)
 }
@@ -37,8 +38,10 @@ export async function nativeChatTranscriptIncludesPath(args: {
     (candidate): candidate is RuntimeMobileSessionTerminalClientTab =>
       candidate.type === 'terminal' && candidate.id === args.context.tabId
   )
+
   const providerSession = tab?.agentStatus?.providerSession
   const agent = tab?.agentStatus?.agentType ?? tab?.launchAgent
+
   if (
     !tab ||
     !providerSession ||
@@ -56,9 +59,11 @@ export async function nativeChatTranscriptIncludesPath(args: {
       ...(providerSession.transcriptPath ? { transcriptPath: providerSession.transcriptPath } : {}),
       limit: NATIVE_CHAT_FILE_PROVENANCE_WINDOW
     })
+
     if (!('messages' in result)) {
       return false
     }
+
     return result.messages.some(
       (message) =>
         message.role === 'assistant' &&

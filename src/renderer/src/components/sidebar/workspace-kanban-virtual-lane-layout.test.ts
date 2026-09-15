@@ -9,7 +9,9 @@ import {
 } from './workspace-kanban-virtual-lane-layout'
 
 const ITEM_COUNT = 102
+
 const ITEM_STRIDE = 44
+
 const ITEM_HEIGHT = 36
 
 function createLayoutElements(): {
@@ -27,6 +29,7 @@ function createLayoutElements(): {
       height: 500
     })
   } as unknown as HTMLElement
+
   const spacerElement = {
     getBoundingClientRect: () => ({
       left: 26,
@@ -37,6 +40,7 @@ function createLayoutElements(): {
       height: ITEM_COUNT * ITEM_STRIDE
     })
   } as unknown as HTMLElement
+
   return { scrollElement, spacerElement }
 }
 
@@ -86,12 +90,14 @@ describe('workspace kanban virtual lane layout', () => {
     const { scrollElement, spacerElement } = createLayoutElements()
     const unregister = registerLayout(scrollElement, spacerElement)
     scrollElement.scrollTop = 3_980
+
     const board = {
       querySelectorAll: (selector: string) =>
         selector === '[data-workspace-board-lane-scroll]' ? [scrollElement] : []
     } as unknown as HTMLElement
 
     const cardRects = getAreaSelectionCardRects(board)
+
     const selectedIds = getAreaSelectionCardIds(
       cardRects,
       { left: 0, top: 110, width: 300, height: 480 },
@@ -109,12 +115,14 @@ describe('workspace kanban virtual lane layout', () => {
 
   it('does not let stale cleanup remove a newer lane registration', () => {
     const { scrollElement, spacerElement } = createLayoutElements()
+
     const unregisterFirst = registerWorkspaceKanbanVirtualLaneLayout({
       scrollElement,
       spacerElement,
       getItemIds: () => ['old'],
       getMeasurements: () => [{ index: 0, start: 0, end: ITEM_HEIGHT }]
     })
+
     const unregisterSecond = registerWorkspaceKanbanVirtualLaneLayout({
       scrollElement,
       spacerElement,
@@ -132,12 +140,14 @@ describe('workspace kanban virtual lane layout', () => {
 
   it('places empty-lane and boundary drop indicators from the spacer', () => {
     const { scrollElement, spacerElement } = createLayoutElements()
+
     const unregisterEmpty = registerWorkspaceKanbanVirtualLaneLayout({
       scrollElement,
       spacerElement,
       getItemIds: () => [],
       getMeasurements: () => []
     })
+
     expect(resolveWorkspaceKanbanVirtualLaneDropIndex(scrollElement, 200)).toBe(0)
     expect(resolveWorkspaceKanbanVirtualLaneDropIndicatorY(scrollElement, 0)).toBe(114)
     unregisterEmpty()
@@ -151,12 +161,14 @@ describe('workspace kanban virtual lane layout', () => {
 
   it('returns null when measurements are incomplete or mismatched', () => {
     const { scrollElement, spacerElement } = createLayoutElements()
+
     const unregisterShort = registerWorkspaceKanbanVirtualLaneLayout({
       scrollElement,
       spacerElement,
       getItemIds: () => ['a', 'b'],
       getMeasurements: () => [{ index: 0, start: 0, end: ITEM_HEIGHT }]
     })
+
     expect(getWorkspaceKanbanVirtualLaneItemRects(scrollElement)).toBeNull()
     expect(resolveWorkspaceKanbanVirtualLaneDropIndex(scrollElement, 120)).toBeNull()
     unregisterShort()
@@ -167,6 +179,7 @@ describe('workspace kanban virtual lane layout', () => {
       getItemIds: () => ['a'],
       getMeasurements: () => [{ index: 3, start: 0, end: ITEM_HEIGHT }]
     })
+
     expect(getWorkspaceKanbanVirtualLaneItemRects(scrollElement)).toBeNull()
     unregisterBadIndex()
   })

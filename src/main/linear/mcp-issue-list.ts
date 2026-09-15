@@ -20,7 +20,9 @@ import { buildIssueFilter } from './mcp-issue-list-filter'
 // caps: the CLI abandons an RPC at 60s, so a walk that would outlive it has to stop early and
 // say `truncated` with a continuation cursor rather than fail the whole command.
 const LIST_ISSUES_PAGE_SIZE = 250
+
 const LIST_ISSUES_MAX_PAGES = 200
+
 const LIST_ISSUES_READ_BUDGET_MS = 20_000
 
 type RawListIssuesResponse = {
@@ -67,21 +69,26 @@ export async function listMcpIssues(
   const limit = resolveLimit(request.limit)
   const orderBy = request.orderBy ?? 'updatedAt'
   const { entries, failures: entryFailures } = getIssueListEntries(pagination.workspaceId)
+
   if (entries.length === 0) {
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
+
     throw linearError('linear_not_connected', 'Linear is not connected.', {
       nextSteps: ['Connect Linear from Orca settings, then retry the issue list.']
     })
   }
+
   const pagedRequest = {
     ...request,
     cursor: pagination.linearCursor,
     workspaceId: pagination.workspaceId
   }
+
   // One deadline for the whole call, so fanning out over many workspaces cannot multiply it.
   const deadline = Date.now() + LIST_ISSUES_READ_BUDGET_MS
+
   const { pages, failures } = await readIssueListWorkspaces(
     entries,
     pagedRequest,
@@ -89,15 +96,19 @@ export async function listMcpIssues(
     orderBy,
     entryFailures
   )
+
   const issues = pages.flatMap((page) => page.issues)
   let hasMore = pages.some((page) => page.hasMore)
 
   issues.sort((left, right) => compareIssues(left, right, orderBy))
+
   if (limit !== null && issues.length > limit) {
     hasMore = true
     issues.length = limit
   }
+
   const workspaceId = pagination.workspaceId === 'all' ? 'all' : entries[0].workspace.id
+
   return {
     issues,
     truncated: hasMore,
@@ -127,9 +138,11 @@ function getIssueListEntries(workspaceId?: (string & {}) | 'all'): {
   if (workspaceId === 'all') {
     return getFanoutClientEntries()
   }
+
   if (workspaceId) {
     resolveWorkspaceSelector({ workspaceId }, getStatus().workspaces ?? [])
   }
+
   return { entries: getClients(workspaceId), failures: [] }
 }
 
@@ -150,19 +163,25 @@ async function readIssueListWorkspaces(
   const settled = await Promise.allSettled(
     entries.map((entry) => readIssueListWorkspace(entry, request, budget, orderBy))
   )
+
   const pages: WorkspaceIssuePage[] = []
   const failures = [...initialFailures]
+
   for (let index = 0; index < settled.length; index += 1) {
     const result = settled[index]
+
     if (result.status === 'fulfilled') {
       pages.push(result.value)
       continue
     }
+
     failures.push(workspaceFailure(entries[index].workspace, result.reason))
   }
+
   if (pages.length === 0 && failures.length === entries.length + initialFailures.length) {
     throw failures[0].error
   }
+
   return { pages, failures }
 }
 
@@ -177,11 +196,13 @@ async function readIssueListWorkspace(
   let after = request.cursor
   let hasMore = false
   let nextCursor: string | undefined
+
   for (let page = 0; page < LIST_ISSUES_MAX_PAGES; page += 1) {
     const first =
       limit === null
         ? LIST_ISSUES_PAGE_SIZE
         : Math.min(limit - issues.length, LIST_ISSUES_PAGE_SIZE)
+
     // Each page takes its own concurrency slot so a long walk cannot starve other reads.
     const connection = await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<
@@ -194,27 +215,35 @@ async function readIssueListWorkspace(
         orderBy,
         includeArchived: request.includeArchived ?? false
       })
+
       return raw.data?.issues
     })
+
     for (const issue of connection?.nodes ?? []) {
       issues.push({
         ...mapIssue(issue),
         workspace: { id: entry.workspace.id, name: entry.workspace.organizationName }
       })
     }
+
     hasMore = connection?.pageInfo?.hasNextPage === true
     nextCursor = connection?.pageInfo?.endCursor ?? undefined
+
     if (!hasMore || !nextCursor) {
       break
     }
+
     if (limit !== null && issues.length >= limit) {
       break
     }
+
     if (Date.now() >= deadline) {
       break
     }
+
     after = nextCursor
   }
+
   return { issues, hasMore, nextCursor }
 }
 

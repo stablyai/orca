@@ -13,7 +13,9 @@ describe('files.readDocPreview', () => {
         isBinary: false
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
     const request: RpcRequest = {
       id: 'req-1',
       authToken: 'tok',

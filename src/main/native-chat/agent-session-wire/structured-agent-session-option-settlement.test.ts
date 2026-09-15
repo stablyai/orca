@@ -25,24 +25,40 @@ import type {
 } from './structured-agent-session-handoff-types'
 
 const CALLER = { callerKey: 'client-1' }
+
 const DEFAULT_MODEL = 'gpt-default'
+
 const PICKED_MODEL = 'gpt-picked'
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let router: StructuredAgentSessionAdapter
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 let closeNativeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
+
 let activeModel: string
+
 let activeEffort: string | null
+
 let transcriptPath: string
+
 let optionFailure: Error | null
+
 let tuiLaunchFailure: Error | null
+
 /** What the adapter's closeSession reports about the child's exit. */
 let closeSessionExit = true
+
 const dispatchedModels: string[] = []
+
 const launchedOptions: (Readonly<Record<string, string>> | undefined)[] = []
+
 const closedTuiOwners: StructuredTuiOwner[] = []
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
@@ -87,7 +103,9 @@ function handoffTransport(): StructuredAgentSessionHandoffTransport {
         tuiLaunchFailure = null
         throw error
       }
+
       launchedOptions.push(record.options)
+
       return tuiOwner(fence, spawnToken)
     },
     reproveTuiOwner: async ({ owner }) => owner,
@@ -99,6 +117,7 @@ function handoffTransport(): StructuredAgentSessionHandoffTransport {
     stopRecoveredOwner: async () => undefined,
     closeTuiOwner: async (owner) => {
       closedTuiOwners.push(owner)
+
       return { transcriptPath: owner.transcriptPath }
     },
     waitForTuiExit: async (owner) => ({ transcriptPath: owner.transcriptPath }),
@@ -111,6 +130,7 @@ function adapter(): StructuredAgentSessionAdapter {
   acquire = vi.fn(async ({ fence, spawnToken, options }) => {
     activeModel = options?.model ?? DEFAULT_MODEL
     activeEffort = options?.effort ?? null
+
     return {
       process: {
         hostId: 'local',
@@ -129,13 +149,16 @@ function adapter(): StructuredAgentSessionAdapter {
   })
   closeNativeSession = vi.fn(async () => {
     activeModel = DEFAULT_MODEL
+
     return closeSessionExit
   })
+
   return {
     supportsLocation: () => true,
     acquire,
     dispatch: vi.fn<StructuredAgentSessionAdapter['dispatch']>(async () => {
       dispatchedModels.push(activeModel)
+
       return {
         state: 'accepted',
         providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
@@ -149,11 +172,13 @@ function adapter(): StructuredAgentSessionAdapter {
         optionFailure = null
         throw error
       }
+
       if (key === 'model') {
         activeModel = value
       } else if (key === 'effort') {
         activeEffort = value
       }
+
       return {
         model: activeModel,
         ...(activeEffort ? { effort: activeEffort } : {})
@@ -202,10 +227,12 @@ beforeEach(async () => {
     handoffTransport: handoffTransport(),
     now: () => NOW
   })
+
   const attached = await host.attach(
     CALLER,
     hostTestAttachParams(null, { accountHome: { variable: 'CODEX_HOME', path: accountHome } })
   )
+
   expect(attached).toMatchObject({ ok: true })
 })
 
@@ -221,6 +248,7 @@ describe('structured session options and close', () => {
       role: 'user' as const,
       blocks: [{ type: 'text' as const, text: 'first task' }]
     }
+
     await host.send(CALLER, {
       envelope: envelope('agentSession.send', { body }),
       body
@@ -251,6 +279,7 @@ describe('structured session options and close', () => {
   it('settles a pre-mutation rejection so a fresh retry can succeed', async () => {
     optionFailure = new AgentSessionOptionRejectedError('model list unavailable')
     const fields = { key: 'model', value: PICKED_MODEL }
+
     const rejected = {
       envelope: envelope('agentSession.setOption', fields),
       ...fields

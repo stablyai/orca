@@ -23,17 +23,24 @@ class FakeClassList {
   toggle(token: string, force?: boolean): boolean {
     if (force === true) {
       this.tokens.add(token)
+
       return true
     }
+
     if (force === false) {
       this.tokens.delete(token)
+
       return false
     }
+
     if (this.tokens.has(token)) {
       this.tokens.delete(token)
+
       return false
     }
+
     this.tokens.add(token)
+
     return true
   }
 
@@ -54,10 +61,12 @@ function createFrameQueue(): {
 } {
   let nextHandle = 1
   const callbacks = new Map<number, FrameRequestCallback>()
+
   return {
     requestAnimationFrame: (callback) => {
       const handle = nextHandle++
       callbacks.set(handle, callback)
+
       return handle
     },
     cancelAnimationFrame: (handle) => {
@@ -65,9 +74,11 @@ function createFrameQueue(): {
     },
     flushNextFrame: () => {
       const [handle, callback] = callbacks.entries().next().value ?? []
+
       if (handle === undefined || !callback) {
         return
       }
+
       callbacks.delete(handle)
       callback(0)
     },

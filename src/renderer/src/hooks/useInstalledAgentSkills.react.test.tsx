@@ -26,9 +26,13 @@ import {
 } from './useInstalledAgentSkills'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
+
 let latestState: InstalledAgentSkillState | null = null
+
 const renderedStates: InstalledAgentSkillState[] = []
+
 /** When set, the next Probe render suspends on it, so React throws that render away. */
 let suspendNextProbeRender: Promise<void> | null = null
 
@@ -82,10 +86,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -124,12 +130,15 @@ function Probe({ discoveryTarget }: { discoveryTarget?: SkillDiscoveryTarget }):
     discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   if (suspendNextProbeRender) {
     const pending = suspendNextProbeRender
     suspendNextProbeRender = null
     throw pending
   }
+
   renderedStates.push(latestState)
+
   return null
 }
 
@@ -139,6 +148,7 @@ function ensureRoot(): Root {
     document.body.appendChild(container)
     root = createRoot(container)
   }
+
   return root!
 }
 
@@ -166,6 +176,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null
@@ -216,9 +227,11 @@ describe('useInstalledAgentSkill', () => {
   // "not installed" there is what offered Install for an already-installed skill.
   it('says the scan was incomplete when an in-scope root did not answer', async () => {
     const scan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValue(scan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -236,9 +249,11 @@ describe('useInstalledAgentSkill', () => {
 
   it('keeps a negative authoritative when the unread root is out of scope', async () => {
     const scan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValue(scan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -259,9 +274,11 @@ describe('useInstalledAgentSkill', () => {
 
   it('does not flag an incomplete scan once the skill is found anyway', async () => {
     const scan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValue(scan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -280,10 +297,12 @@ describe('useInstalledAgentSkill', () => {
   it('ignores stale discovery results after the discovery target changes', async () => {
     const hostScan = deferred<SkillDiscoveryResult>()
     const wslScan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(hostScan.promise)
       .mockReturnValueOnce(wslScan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -320,10 +339,12 @@ describe('useInstalledAgentSkill', () => {
   it('ignores same-target background discovery results when a forced refresh is waiting', async () => {
     const backgroundScan = deferred<SkillDiscoveryResult>()
     const forcedScan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(backgroundScan.promise)
       .mockReturnValueOnce(forcedScan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -363,10 +384,12 @@ describe('useInstalledAgentSkill', () => {
   it('returns installed from refresh when a legacy Linear skill is discovered', async () => {
     const backgroundScan = deferred<SkillDiscoveryResult>()
     const forcedScan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(backgroundScan.promise)
       .mockReturnValueOnce(forcedScan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -394,6 +417,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -417,6 +441,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -442,10 +467,12 @@ describe('useInstalledAgentSkill', () => {
     // could otherwise cross it mid-test and turn this into a flake.
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     const firstScan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(firstScan.promise)
       .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -481,9 +508,11 @@ describe('useInstalledAgentSkill', () => {
     const nowSpy = vi.spyOn(Date, 'now')
     const startedAt = 1_700_000_000_000
     nowSpy.mockReturnValue(startedAt)
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -511,6 +540,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -534,10 +564,12 @@ describe('useInstalledAgentSkill', () => {
   it('clears loading when a silent refresh supersedes an in-flight forced rescan', async () => {
     const firstScan = deferred<SkillDiscoveryResult>()
     const forcedScan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(firstScan.promise)
       .mockReturnValueOnce(forcedScan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -574,10 +606,12 @@ describe('useInstalledAgentSkill', () => {
   it('reports unsettled again when the discovery target changes', async () => {
     const hostScan = deferred<SkillDiscoveryResult>()
     const wslScan = deferred<SkillDiscoveryResult>()
+
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockReturnValueOnce(hostScan.promise)
       .mockReturnValueOnce(wslScan.promise)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -605,6 +639,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([]))
+
     const call = vi.fn(
       async (args: { method: string; selector?: string }) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
@@ -613,6 +648,7 @@ describe('useInstalledAgentSkill', () => {
           result: discoveryResult([skill({ name: 'linear-tickets' })])
         }
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover }, runtimeEnvironments: { call } }
@@ -647,6 +683,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+
     const call = vi.fn()
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -666,6 +703,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([]))
+
     const call = vi.fn()
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -694,6 +732,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover }, runtimeEnvironments: { call: vi.fn() } }
@@ -717,6 +756,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockRejectedValue(new Error('runtime host unreachable'))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -741,6 +781,7 @@ describe('useInstalledAgentSkill', () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -769,6 +810,7 @@ describe('useInstalledAgentSkill', () => {
   it('rescans a mounted consumer when the focused runtime re-pairs under the same id', async () => {
     const discover = vi.fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
     let remoteSkills = [skill({ name: 'linear-tickets' })]
+
     const call = vi.fn(
       async (args: { method: string; selector?: string }) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
@@ -777,6 +819,7 @@ describe('useInstalledAgentSkill', () => {
           result: discoveryResult(remoteSkills)
         }
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover }, runtimeEnvironments: { call } }
@@ -787,9 +830,11 @@ describe('useInstalledAgentSkill', () => {
     await renderProbe()
     await flushMicrotasks()
     expect(latestState?.installed).toBe(true)
+
     const scansBeforeRepair = call.mock.calls.filter(
       (entry) => entry[0].method === 'skills.discover'
     ).length
+
     expect(scansBeforeRepair).toBe(1)
 
     remoteSkills = []
@@ -808,17 +853,23 @@ describe('useInstalledAgentSkill', () => {
     const staleScan = deferred<SkillDiscoveryResult>()
     const freshScan = deferred<SkillDiscoveryResult>()
     const scans = [staleScan, freshScan]
+
     const call = vi.fn(async (args: { method: string; selector?: string }) => {
       const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (status) {
         return status
       }
+
       const scan = scans.shift()
+
       if (!scan) {
         throw new Error('unexpected extra skills.discover call')
       }
+
       return { id: 'skills', ok: true, result: await scan.promise }
     })
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover }, runtimeEnvironments: { call } }
@@ -857,6 +908,7 @@ describe('useInstalledAgentSkill', () => {
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValueOnce(discoveryResult([skill({ name: 'linear-tickets' })]))
       .mockResolvedValue(discoveryResult([]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }
@@ -889,6 +941,7 @@ describe('useInstalledAgentSkill', () => {
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValueOnce(discoveryResult([]))
       .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { discover } }

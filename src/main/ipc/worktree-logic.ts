@@ -19,6 +19,7 @@ type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDi
    *  placement, so any caller that cannot resolve the runtime is unaffected. */
   wslMirrorDistro?: string
 }
+
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
 export {
@@ -26,7 +27,9 @@ export {
   getConfiguredBranchPrefix,
   computeValidatedBranchName
 } from './worktree-branch-name'
+
 export { mergeWorktree } from './worktree-metadata-merge'
+
 export { areWorktreePathsEqual } from './worktree-path-comparison'
 
 /**
@@ -123,10 +126,13 @@ function computeWorktreePathFromWorkspaceRoot(
   nestWorkspaces: boolean
 ): string {
   const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+
   if (nestWorkspaces) {
     const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+
     return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
+
   return pathOps.join(workspaceRoot, sanitizedName)
 }
 
@@ -154,6 +160,7 @@ export async function computeWorkspaceRootAsync(
   settings: { workspaceDir: string; wslMirrorDistro?: string }
 ): Promise<string> {
   const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+
   return workspaceRootForMirrorHome(
     repoPath,
     settings.workspaceDir,
@@ -166,6 +173,7 @@ export function computeWorkspaceRoot(
   settings: { workspaceDir: string; wslMirrorDistro?: string }
 ): string {
   const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+
   return workspaceRootForMirrorHome(
     repoPath,
     settings.workspaceDir,
@@ -180,6 +188,7 @@ function mirrorDistroForWorkspaceRoot(
   settings: { workspaceDir: string; wslMirrorDistro?: string }
 ): string | undefined {
   const distro = resolveMirrorDistro(repoPath, settings)
+
   return distro && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)
     ? distro
     : undefined
@@ -211,10 +220,12 @@ export function computeRemoteWorktreePath(
   ) {
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
+
   // Why: absolute global workspaceDir values belong to the desktop machine.
   // SSH falls back to repo-qualified sibling paths so origin/main is not shared.
   const pathOps = getRuntimePathOps(repoPath, repoPath)
   const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+
   return pathOps.join(repoPath, '..', `${repoName}-${sanitizedName}`)
 }
 
@@ -258,6 +269,7 @@ function getRuntimePathOps(
 
 function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {
   const pathOps = getRuntimePathOps(repoPath, workspaceDir)
+
   return pathOps.isAbsolute(workspaceDir)
     ? pathOps.normalize(workspaceDir)
     : resolveRuntimePath(repoPath, workspaceDir)
@@ -272,14 +284,17 @@ function getEffectiveWorktreeBasePath(
   settings: WorktreePathSettings
 ): string {
   const basePath = getRepoWorktreeBasePath(repo)
+
   if (basePath === undefined) {
     return settings.workspaceDir
   }
+
   return resolveWslRepoWorktreeBasePath(repo.path, basePath)
 }
 
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
   const trimmed = repo.worktreeBasePath?.trim()
+
   return trimmed || undefined
 }
 
@@ -297,9 +312,11 @@ function resolveMirrorDistro(
   settings: { wslMirrorDistro?: string }
 ): string | undefined {
   const wsl = parseWslPath(repoPath)
+
   if (wsl) {
     return wsl.distro
   }
+
   return isWindowsAbsolutePathLike(repoPath) ? settings.wslMirrorDistro : undefined
 }
 
@@ -307,6 +324,7 @@ function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: strin
   if (isWorkspaceDirRelativeToRepo(repoPath, workspaceDir)) {
     return false
   }
+
   return !isWslUncPath(workspaceDir)
 }
 
@@ -320,9 +338,11 @@ function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: strin
  */
 export function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
   const parsed = splitWorktreeId(worktreeId)
+
   if (!parsed) {
     throw new Error(`Invalid worktreeId: ${worktreeId}`)
   }
+
   return parsed
 }
 
@@ -335,7 +355,9 @@ export function isOrphanedWorktreeError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   const msg = (error as { stderr?: string }).stderr || error.message
+
   return /is not a working tree/.test(msg)
 }
 
@@ -346,7 +368,9 @@ export function isWindowsLongPathWorktreeRemovalError(
   if (platform !== 'win32' || typeof error !== 'object' || error === null) {
     return false
   }
+
   const errorWithDetails = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+
   const details = [errorWithDetails.stderr, errorWithDetails.stdout, errorWithDetails.message]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join('\n')
@@ -360,10 +384,13 @@ export function isOrphanCompatiblePreflightError(error: unknown): boolean {
   if (isOrphanedWorktreeError(error)) {
     return true
   }
+
   if (!(error instanceof Error)) {
     return false
   }
+
   const errorWithDetails = error as Error & { code?: unknown; stderr?: string; stdout?: string }
+
   const details = [
     errorWithDetails.stderr,
     errorWithDetails.stdout,
@@ -372,6 +399,7 @@ export function isOrphanCompatiblePreflightError(error: unknown): boolean {
   ]
     .filter((value): value is string => Boolean(value))
     .join('\n')
+
   return /not a git repository/i.test(details) || /\bENOENT\b/i.test(details)
 }
 
@@ -392,6 +420,7 @@ export function formatWorktreeRemovalError(
   }
 
   const errorWithStreams = error as Error & { stderr?: string; stdout?: string }
+
   const details = [errorWithStreams.stderr, errorWithStreams.stdout, error.message]
     .map((value) => value?.trim())
     .find(Boolean)

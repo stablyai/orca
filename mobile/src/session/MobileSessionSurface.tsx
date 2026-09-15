@@ -7,6 +7,7 @@ import { MobileSessionSheets } from './MobileSessionSheets'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   const { setMobileSessionRootRef } = controller
+
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>

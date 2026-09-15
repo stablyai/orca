@@ -5,9 +5,11 @@ export function requireExternalAutomationMultiplexer(
   connectionId: string
 ): NonNullable<ReturnType<typeof getActiveMultiplexer>> {
   const mux = getActiveMultiplexer(connectionId)
+
   if (!mux || mux.isDisposed()) {
     throw new Error(`SSH target "${connectionId}" is not connected.`)
   }
+
   return mux
 }
 
@@ -31,5 +33,6 @@ export function externalAutomationRelayErrorMessage(error: unknown): string {
   if (isRelayMethodNotFoundError(error)) {
     return 'Remote relay does not support external automation management. Reconnect the SSH target to deploy the latest relay.'
   }
+
   return error instanceof Error ? error.message : String(error)
 }

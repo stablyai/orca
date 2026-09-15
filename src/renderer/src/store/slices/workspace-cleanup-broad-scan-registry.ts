@@ -6,6 +6,7 @@ type BroadScanEntry = {
 }
 
 const inFlightScans = new Map<string, BroadScanEntry>()
+
 const supersededScanIds = new Set<string>()
 
 export class WorkspaceCleanupScanSupersededError extends Error {
@@ -47,6 +48,7 @@ export function releaseInFlightWorkspaceCleanupScan(
   if (inFlightScans.get(key)?.promise === promise) {
     inFlightScans.delete(key)
   }
+
   supersededScanIds.delete(scanId)
 }
 
@@ -62,16 +64,19 @@ export function supersedeInFlightWorkspaceCleanupScans(
     if (!shouldSupersede(key)) {
       continue
     }
+
     supersededScanIds.add(scanId)
     inFlightScans.delete(key)
     void cancelScan?.(scanId).catch((error: unknown) => {
       console.warn('Failed to cancel superseded workspace cleanup scan:', error)
     })
   }
+
   for (const scanId of supersededScanIds) {
     if (supersededScanIds.size <= MAX_SUPERSEDED_SCAN_IDS) {
       break
     }
+
     supersededScanIds.delete(scanId)
   }
 }

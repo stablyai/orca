@@ -39,6 +39,7 @@ describe('coalescedBreadcrumbs stays bounded (leak regression)', () => {
         minIntervalMs: 30_000
       })
     }
+
     expect(getCoalescedKeyCountForTest()).toBeLessThanOrEqual(MAX_COALESCE_KEYS)
   })
 
@@ -57,6 +58,7 @@ describe('coalescedBreadcrumbs stays bounded (leak regression)', () => {
         minIntervalMs: 30_000
       })
     }
+
     // The newest key survives; record it again — still suppressed (still present).
     recordCoalescedCrashBreadcrumb({
       name: 'agent_state',

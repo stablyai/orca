@@ -29,30 +29,36 @@ export function wireWslRelayLink(options: WslRelayLinkOptions): void {
     if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
       return
     }
+
     if (typeof (params as { paneKey?: unknown }).paneKey !== 'string') {
       return
     }
+
     if (process.env.ORCA_WSL_HOOK_RELAY_DEBUG === '1') {
       const p = params as { paneKey?: string; payload?: { state?: string } }
       warn(
         `[agent-hooks] WSL relay envelope (${distro}): pane=${p.paneKey} state=${p.payload?.state ?? '?'}`
       )
     }
+
     // Trust boundary: ingestRemote re-validates paneKey/tabId and
     // re-normalizes the payload, same as the SSH relay path.
     ingest(params, connectionId)
   })
 
   let dead = false
+
   const die = (reason: string): void => {
     if (dead) {
       return
     }
+
     dead = true
     mux.dispose()
     child.kill()
     onDead(reason)
   }
+
   mux.onDispose((reason) => die(`mux disposed (${reason})`))
   child.on('close', () => die('process exited'))
 }

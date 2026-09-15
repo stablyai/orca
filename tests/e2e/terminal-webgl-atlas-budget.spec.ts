@@ -72,19 +72,23 @@ async function forceActivePaneWebgl(page: Page): Promise<boolean> {
   const tabId = await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     return state?.activeTabType === 'terminal'
       ? state.activeTabId
       : worktreeId
         ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
         : null
   })
+
   if (!tabId) {
     return false
   }
+
   await page.evaluate(
     (id) => window.__paneManagers?.get(id)?.setTerminalGpuAcceleration?.('on'),
     tabId
   )
+
   return page
     .waitForFunction(
       (id) =>
@@ -102,13 +106,16 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
   return page.evaluate(async () => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
+
     const pane = manager
       ? ([
           ...((
@@ -116,6 +123,7 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
           ).panes?.values() ?? [])
         ][0] ?? null)
       : null
+
     if (!pane?.webglAddon) {
       throw new Error('Active pane WebGL internals unavailable')
     }
@@ -130,10 +138,12 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
     host.style.cssText =
       'position:fixed;inset:0;width:2700px;height:800px;opacity:0.001;pointer-events:none;z-index:-1'
     const containers = [document.createElement('div'), document.createElement('div')]
+
     for (const container of containers) {
       container.style.cssText = 'display:inline-block;width:1300px;height:700px'
       host.appendChild(container)
     }
+
     document.body.appendChild(host)
 
     const options = {
@@ -144,6 +154,7 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
       cursorBlink: false,
       scrollback: 5000
     }
+
     const makeTerminal = (
       container: HTMLElement
     ): { terminal: TestTerminal; addon: TestWebglAddon } => {
@@ -151,28 +162,37 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
       terminal.open(container)
       const addon = new WebglCtor()
       terminal.loadAddon(addon)
+
       return { terminal, addon }
     }
+
     const write = (terminal: TestTerminal, data: string): Promise<void> =>
       new Promise((resolve) => terminal.write(data, resolve))
+
     const render = (terminal: TestTerminal): void => {
       terminal._core._renderService._isPaused = false
       terminal._core._renderService._needsFullRefresh = false
       terminal._core._renderService.refreshRows(0, terminal.rows - 1, true)
     }
+
     const capture = (addon: TestWebglAddon, height: number): Uint8ClampedArray => {
       const canvas = document.createElement('canvas')
       canvas.width = addon._renderer._canvas.width
       canvas.height = height
       const context = canvas.getContext('2d')
+
       if (!context) {
         throw new Error('Screenshot canvas context unavailable')
       }
+
       context.drawImage(addon._renderer._canvas, 0, 0)
+
       return context.getImageData(0, 0, canvas.width, height).data
     }
+
     const pixelDiff = (a: Uint8ClampedArray, b: Uint8ClampedArray): number => {
       let count = 0
+
       for (let i = 0; i < Math.min(a.length, b.length); i += 4) {
         if (
           Math.abs(a[i] - b[i]) > 8 ||
@@ -182,11 +202,14 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
           count += 1
         }
       }
+
       return count
     }
+
     const pixelsDifferentFromFirst = (pixels: Uint8ClampedArray): number => {
       const [red, green, blue] = pixels
       let count = 0
+
       for (let i = 0; i < pixels.length; i += 4) {
         if (
           Math.abs(pixels[i] - red) > 8 ||
@@ -196,11 +219,13 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
           count += 1
         }
       }
+
       return count
     }
 
     let terminalA: TestTerminal | undefined
     let terminalB: TestTerminal | undefined
+
     try {
       AtlasCtor.maxAtlasPages = budget
       const A = makeTerminal(containers[0])
@@ -212,38 +237,49 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
       const shared = A.addon._renderer._charAtlas === atlas
       let evictions = 0
       const originalEvict = atlas._evictAllPages?.bind(atlas)
+
       if (originalEvict) {
         atlas._evictAllPages = () => {
           evictions += 1
           originalEvict()
         }
       }
+
       let maxPages = atlas.pages.length
       let nextCodePoint = 0x4e00
       let stormRounds = 0
+
       while (evictions === 0 && atlas.pages.length <= budget && stormRounds < 120) {
         let chunk = ''
+
         for (let i = 0; i < 400; i += 1) {
           chunk += `\x1b[38;5;${16 + (nextCodePoint % 216)}m${String.fromCodePoint(nextCodePoint++)}`
+
           if (i % 50 === 49) {
             chunk += '\r\n'
           }
         }
+
         await write(A.terminal, `${chunk}\x1b[0m\r\n`)
         render(A.terminal)
         maxPages = Math.max(maxPages, atlas.pages.length)
         stormRounds += 1
       }
+
       const stormEvictions = evictions
+
       const unbindableGlyphs = (): number =>
         atlas.pages.slice(budget).reduce((count, atlasPage) => count + atlasPage._glyphs.length, 0)
+
       const pagesAfterStorm = atlas.pages.length
       const unbindableAfterStorm = unbindableGlyphs()
       const line = 'The quick brown fox jumps over 0123456789 =[]{}<>'
       let content = ''
+
       for (let row = 0; row < options.rows - 1; row += 1) {
         content += `${line}\r\n`
       }
+
       await write(B.terminal, content)
       render(B.terminal)
       const captureHeight = B.addon._renderer.dimensions.device.cell.height * (options.rows - 1) - 4
@@ -254,6 +290,7 @@ async function runAtlasBudgetScenario(page: Page): Promise<AtlasBudgetResult> {
       render(A.terminal)
       render(B.terminal)
       const afterWipe = capture(B.addon, captureHeight)
+
       return {
         baselineInkPixels,
         budget,
@@ -283,13 +320,16 @@ async function runAtlasReplacementScenario(page: Page): Promise<AtlasReplacement
   return page.evaluate(async () => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
+
     const pane = manager
       ? ([
           ...((
@@ -297,22 +337,27 @@ async function runAtlasReplacementScenario(page: Page): Promise<AtlasReplacement
           ).panes?.values() ?? [])
         ][0] ?? null)
       : null
+
     if (!pane?.webglAddon) {
       throw new Error('Active pane WebGL internals unavailable')
     }
 
     const TerminalCtor = pane.terminal.constructor
+
     const WebglCtor = pane.webglAddon.constructor as new (options?: {
       customGlyphs?: boolean
     }) => TestWebglAddon
+
     const host = document.createElement('div')
     host.style.cssText =
       'position:fixed;inset:0;width:2200px;height:700px;opacity:0.001;pointer-events:none;z-index:-1'
     const containers = [document.createElement('div'), document.createElement('div')]
+
     for (const container of containers) {
       container.style.cssText = 'display:inline-block;width:1000px;height:650px'
       host.appendChild(container)
     }
+
     document.body.appendChild(host)
 
     const makeTerminal = (
@@ -327,32 +372,42 @@ async function runAtlasReplacementScenario(page: Page): Promise<AtlasReplacement
         cursorBlink: false,
         scrollback: 100
       })
+
       terminal.open(container)
       const addon = new WebglCtor({ customGlyphs })
       terminal.loadAddon(addon)
+
       return { terminal, addon }
     }
+
     const write = (terminal: TestTerminal, data: string): Promise<void> =>
       new Promise((resolve) => terminal.write(data, resolve))
+
     const render = (terminal: TestTerminal): void => {
       terminal._core._renderService._isPaused = false
       terminal._core._renderService._needsFullRefresh = false
       terminal._core._renderService.refreshRows(0, terminal.rows - 1, true)
     }
+
     const capture = (addon: TestWebglAddon): Uint8ClampedArray => {
       const source = addon._renderer._canvas
       const canvas = document.createElement('canvas')
       canvas.width = source.width
       canvas.height = source.height
       const context = canvas.getContext('2d')
+
       if (!context) {
         throw new Error('Screenshot canvas context unavailable')
       }
+
       context.drawImage(source, 0, 0)
+
       return context.getImageData(0, 0, canvas.width, canvas.height).data
     }
+
     const pixelDiff = (a: Uint8ClampedArray, b: Uint8ClampedArray): number => {
       let count = 0
+
       for (let i = 0; i < Math.min(a.length, b.length); i += 4) {
         if (
           Math.abs(a[i] - b[i]) > 8 ||
@@ -362,11 +417,14 @@ async function runAtlasReplacementScenario(page: Page): Promise<AtlasReplacement
           count += 1
         }
       }
+
       return count
     }
+
     const pixelsDifferentFromFirst = (pixels: Uint8ClampedArray): number => {
       const [red, green, blue] = pixels
       let count = 0
+
       for (let i = 0; i < pixels.length; i += 4) {
         if (
           Math.abs(pixels[i] - red) > 8 ||
@@ -376,11 +434,14 @@ async function runAtlasReplacementScenario(page: Page): Promise<AtlasReplacement
           count += 1
         }
       }
+
       return count
     }
+
     const content = (start: number): string => {
       let output = '\x1b[2J\x1b[H\x1b[?25l'
       let key = start
+
       for (let row = 0; row < 16; row += 1) {
         for (let column = 0; column < 48; column += 1) {
           const red = (key * 29) & 255
@@ -389,13 +450,16 @@ async function runAtlasReplacementScenario(page: Page): Promise<AtlasReplacement
           output += `\x1b[38;2;${red};${green};${blue}m${String.fromCharCode(33 + (key % 94))}`
           key += 1
         }
+
         output += '\r\n'
       }
+
       return `${output}\x1b[0m`
     }
 
     let terminalA: TestTerminal | undefined
     let terminalB: TestTerminal | undefined
+
     try {
       const A = makeTerminal(containers[0], true)
       terminalA = A.terminal

@@ -95,24 +95,29 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+
     vi.mocked(parseOrcaYaml).mockReturnValue({
       scripts: {},
       issueCommand: 'claude -p "Fix #{{issue}}"'
     })
+
     const fsProvider = {
       readFile: vi.fn(async (filePath: string) => {
         if (filePath.endsWith('.orca/issue-command')) {
           throw Object.assign(new Error('missing'), { code: 'ENOENT' })
         }
+
         if (filePath.endsWith('orca.yaml')) {
           return { content: 'issueCommand: claude -p "Fix #{{issue}}"', isBinary: false }
         }
+
         return { content: '', isBinary: false }
       }),
       writeFile: vi.fn().mockResolvedValue(undefined),
       createDir: vi.fn().mockResolvedValue(undefined),
       deletePath: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
@@ -145,6 +150,7 @@ describe('OrcaRuntimeService', () => {
     listGitHubIssuesMock.mockResolvedValueOnce({
       items: [{ number: 7, title: 'Remote issue list item' }]
     })
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -158,6 +164,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     await expect(runtime.getRepoSlug('id:repo-1')).resolves.toBeNull()
@@ -196,6 +203,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime GitHub repo identity helpers through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -214,6 +222,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     getRepoSlugMock.mockResolvedValueOnce({ owner: 'acme', repo: 'orca' })
     getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
@@ -234,6 +243,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime GitHub issue and work-item actions through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -252,6 +262,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const localGitOptions = { wslDistro: 'Ubuntu' }
     const issueFields = { labels: ['bug'], assignees: ['octo'] }
@@ -352,11 +363,13 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       issueSourcePreference: 'origin' as const
     }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [originRepo],
       getRepo: (id: string) => (id === originRepo.id ? originRepo : undefined)
     } as never)
+
     const prRepo = { owner: 'acme', repo: 'orca' }
 
     await runtime.getRepoWorkItem('id:repo-1', 42, 'pr')

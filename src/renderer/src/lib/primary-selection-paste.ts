@@ -34,6 +34,7 @@ function dispatchInputEvent(target: Element, text: string | null): void {
           inputType: 'insertFromPaste'
         })
       : new Event('input', { bubbles: true, cancelable: false })
+
   target.dispatchEvent(event)
 }
 
@@ -47,11 +48,13 @@ function setContentEditableCaretFromPoint(
 ): void {
   const ownerDocument = target.ownerDocument
   const selection = ownerDocument.getSelection()
+
   if (!selection) {
     return
   }
 
   const caretPosition = ownerDocument.caretPositionFromPoint?.(point.clientX, point.clientY)
+
   const range = caretPosition
     ? ownerDocument.createRange()
     : (ownerDocument as CaretRangeDocument).caretRangeFromPoint?.(point.clientX, point.clientY)
@@ -71,6 +74,7 @@ function setContentEditableCaretFromPoint(
 
 function insertTextIntoContentEditable(target: HTMLElement, text: string): boolean {
   const ownerDocument = target.ownerDocument
+
   if (
     ownerDocument.queryCommandSupported?.('insertText') &&
     ownerDocument.execCommand('insertText', false, text)
@@ -79,6 +83,7 @@ function insertTextIntoContentEditable(target: HTMLElement, text: string): boole
   }
 
   const selection = ownerDocument.getSelection()
+
   if (!selection || selection.rangeCount === 0) {
     return false
   }
@@ -92,6 +97,7 @@ function insertTextIntoContentEditable(target: HTMLElement, text: string): boole
   selection.removeAllRanges()
   selection.addRange(range)
   dispatchInputEvent(target, text)
+
   return true
 }
 
@@ -104,13 +110,17 @@ function isContentEditablePasteTargetAvailable(
 
 function getContentEditableInsertionRange(target: HTMLElement): Range | null {
   const selection = target.ownerDocument.getSelection()
+
   if (!selection || selection.rangeCount === 0) {
     return null
   }
+
   const range = selection.getRangeAt(0)
+
   if (!target.contains(range.startContainer) || !target.contains(range.endContainer)) {
     return null
   }
+
   return range
 }
 
@@ -123,6 +133,7 @@ function insertContentEditableChunk(target: HTMLElement, range: Range, text: str
   const selection = target.ownerDocument.getSelection()
   selection?.removeAllRanges()
   selection?.addRange(range)
+
   return range
 }
 
@@ -133,9 +144,11 @@ async function pasteLargeTextIntoContentEditable(
 ): Promise<boolean> {
   const chunkMaxBytes = options.chunkMaxBytes ?? TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES
   let range = getContentEditableInsertionRange(target)
+
   if (!range) {
     return false
   }
+
   range.deleteContents()
   let textIndex = 0
 
@@ -146,17 +159,21 @@ async function pasteLargeTextIntoContentEditable(
       if (textIndex > 0) {
         dispatchInputEvent(target, null)
       }
+
       return false
     }
+
     const nextIndex = getUtf8ChunkEndIndex(text, textIndex, chunkMaxBytes)
     range = insertContentEditableChunk(target, range, text.slice(textIndex, nextIndex))
     textIndex = nextIndex
+
     if (textIndex < text.length) {
       await (options.yieldToEventLoop ?? yieldToEventLoop)()
     }
   }
 
   dispatchInputEvent(target, null)
+
   return true
 }
 
@@ -168,16 +185,21 @@ async function pasteIntoContentEditable(
 ): Promise<boolean> {
   const maxBytes = options.maxBytes ?? TEXT_CONTROL_PASTE_MAX_BYTES
   const directMaxBytes = options.directMaxBytes ?? TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
+
   const directByteLengthMeasurement = measureTextControlPasteByteLength(text, {
     stopAfterBytes: Math.min(directMaxBytes, maxBytes)
   })
+
   const { byteLength } = directByteLengthMeasurement
+
   if (byteLength === 0) {
     return false
   }
+
   if (maxBytes <= directMaxBytes && directByteLengthMeasurement.exceededLimit) {
     return false
   }
+
   const largeByteLengthMeasurement = directByteLengthMeasurement.exceededLimit
     ? await measureTextControlPasteByteLengthWithYield(text, {
         stopAfterBytes: maxBytes,
@@ -185,18 +207,22 @@ async function pasteIntoContentEditable(
         yieldToEventLoop: options.yieldToEventLoop
       })
     : directByteLengthMeasurement
+
   if (largeByteLengthMeasurement.exceededLimit) {
     return false
   }
 
   target.focus()
   setContentEditableCaretFromPoint(target, point)
+
   if (!isContentEditablePasteTargetAvailable(target, options.canContinue)) {
     return false
   }
+
   if (largeByteLengthMeasurement.byteLength <= directMaxBytes) {
     return insertTextIntoContentEditable(target, text)
   }
+
   return pasteLargeTextIntoContentEditable(target, text, options)
 }
 
@@ -206,26 +232,32 @@ export function findEditablePrimarySelectionPasteTarget(
   if (!(target instanceof Element)) {
     return null
   }
+
   if (target.closest('.xterm-helper-textarea')) {
     return null
   }
 
   const textControl = target.closest('input, textarea')
+
   if (textControl && isPrimarySelectionTextControl(textControl)) {
     if (textControl.disabled || textControl.readOnly) {
       return null
     }
+
     return textControl
   }
 
   let element: HTMLElement | null = target instanceof HTMLElement ? target : target.parentElement
+
   while (element) {
     if (element.getAttribute('contenteditable') === 'false') {
       return null
     }
+
     if (element.isContentEditable) {
       return element
     }
+
     element = element.parentElement
   }
 
@@ -242,6 +274,7 @@ export async function pastePrimarySelectionTextIntoTarget(
     const targetStillFocused = (candidate: HTMLInputElement | HTMLTextAreaElement): boolean =>
       candidate.ownerDocument.activeElement === candidate &&
       (options.canContinue?.(candidate) ?? true)
+
     const result = await pasteTextIntoTextControl(target, text, {
       source: 'primary-selection',
       directMaxBytes: options.directMaxBytes,
@@ -253,8 +286,10 @@ export async function pastePrimarySelectionTextIntoTarget(
       // during chunked textarea insertion.
       canContinue: targetStillFocused
     })
+
     return result.status === 'pasted'
   }
+
   return pasteIntoContentEditable(target, text, point, {
     ...options,
     canContinue: (candidate) =>

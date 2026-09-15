@@ -39,6 +39,7 @@ describe('terminal send RPC response', () => {
       error: { code: 'terminal_error', message: 'failed' },
       _meta: runtimeMeta
     }
+
     const malformedSuccess: RpcResponse = {
       id: '2',
       ok: true,

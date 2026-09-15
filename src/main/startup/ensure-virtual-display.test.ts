@@ -15,15 +15,18 @@ const { spawnMock, existsSyncMock, readFileSyncMock, rmSyncMock, statSyncMock, a
   }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
   rmSync: rmSyncMock,
   statSync: statSyncMock
 }))
+
 vi.mock('electron', () => ({ app: appMock }))
 
 const ORIGINAL_PLATFORM = process.platform
+
 const ORIGINAL_DISPLAY = process.env.DISPLAY
 
 function setPlatform(platform: NodeJS.Platform): void {
@@ -44,11 +47,13 @@ function mockXvfbTakesDisplay(pid = 1234): void {
     if (!bound) {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
+
     return `${pid}\n`
   })
   vi.spyOn(process, 'kill').mockImplementation(() => true)
   spawnMock.mockImplementation(() => {
     bound = true
+
     return { pid, once: vi.fn(), kill: vi.fn(), killed: false }
   })
 }
@@ -73,6 +78,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     stopVirtualDisplay()
     vi.restoreAllMocks()
     setPlatform(ORIGINAL_PLATFORM)
+
     if (ORIGINAL_DISPLAY === undefined) {
       delete process.env.DISPLAY
     } else {
@@ -115,6 +121,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
   it('reports unsupported when Xvfb cannot be launched', async () => {
     setPlatform('linux')
     spawnMock.mockReturnValue({ pid: undefined, once: vi.fn(), kill: vi.fn(), killed: false })
+
     const { ensureVirtualDisplayForHeadlessServe, MISSING_LINUX_DISPLAY_MESSAGE } =
       await import('./ensure-virtual-display')
 
@@ -199,15 +206,19 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     let bound = false
     statSyncMock.mockImplementation(() => ({ isSocket: () => true }))
     readFileSyncMock.mockImplementation(() => (bound ? '1234\n' : '9999\n'))
+
     // The orphan lock names a dead PID; the freshly spawned Xvfb is alive.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid) => {
       if (pid === 9999) {
         throw new Error('ESRCH')
       }
+
       return true as never
     })
+
     spawnMock.mockImplementation(() => {
       bound = true
+
       return { pid: 1234, once: vi.fn(), kill: vi.fn(), killed: false }
     })
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
@@ -253,11 +264,13 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       if (!lockWritten) {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
+
       return '4242\n'
     })
     vi.spyOn(process, 'kill').mockImplementation(() => true)
     spawnMock.mockImplementation(() => {
       lockWritten = true
+
       return { pid: 4242, once: vi.fn(), kill: vi.fn(), killed: false }
     })
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
@@ -298,6 +311,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
             ''
           ].join('\n')
         }
+
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       })
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
@@ -314,6 +328,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
         if (path === '/proc/net/unix') {
           return '0000000000000000: 00000003 00000000 00000000 0001 03 12014 @/tmp/.X11-unix/X10\n'
         }
+
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       })
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
@@ -469,6 +484,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
         isSocket: () => path === '/run/user/1000/wayland-0'
       }))
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
       const env = {
         DISPLAY: ':77',
         WAYLAND_DISPLAY: 'wayland-0',

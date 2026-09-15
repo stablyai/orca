@@ -30,9 +30,11 @@ function referenceId(
       prior.filePath === file.filePath &&
       isSameEditorOwner(prior, worktreeId, file.runtimeEnvironmentId)
   )
+
   if (existing) {
     return existing.id
   }
+
   return files.some((prior) =>
     isEditorFileIdOccupiedByOtherOwner(prior, file.filePath, worktreeId, file.runtimeEnvironmentId)
   )
@@ -44,6 +46,7 @@ describe('legacy hydrated editor file index', () => {
   it('matches the old lookup for mixed owners, first-wins duplicates and ID reservations', () => {
     const index = new LegacyHydratedEditorFileIndex()
     const prior: LegacyHydratedEditorFile[] = []
+
     const paths = [
       '/same.ts',
       'C:\\work\\same.ts',
@@ -52,8 +55,10 @@ describe('legacy hydrated editor file index', () => {
       '',
       '/preview.md'
     ]
+
     const worktrees = ['folder:one', 'wt:two', 'floating-terminals']
     const runtimes = [null, '', ' ', 'local', 'peer', ' peer ', 'a:b', '["a","b"]']
+
     for (let step = 0; step < 120; step++) {
       for (const filePath of paths) {
         for (const worktreeId of worktrees) {
@@ -68,6 +73,7 @@ describe('legacy hydrated editor file index', () => {
           }
         }
       }
+
       const row: LegacyHydratedEditorFile = {
         filePath: paths[step % paths.length],
         id: paths[(step * 3) % paths.length],
@@ -75,6 +81,7 @@ describe('legacy hydrated editor file index', () => {
         runtimeEnvironmentId: runtimes[Math.floor(step / worktrees.length) % runtimes.length],
         ...(step % 4 === 0 ? { markdownPreviewSourceFileId: '/preview.md' } : {})
       }
+
       index.add(row)
       prior.push(row)
     }

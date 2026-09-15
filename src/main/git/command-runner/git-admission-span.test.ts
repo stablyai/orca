@@ -8,6 +8,7 @@ const { execFileMock, spawnMock, span, withGitSpanMock, startGitSpanMock } = vi.
     end: vi.fn(),
     fail: vi.fn()
   }
+
   return {
     execFileMock: vi.fn(),
     spawnMock: vi.fn(),
@@ -16,6 +17,7 @@ const { execFileMock, spawnMock, span, withGitSpanMock, startGitSpanMock } = vi.
       try {
         const result = await run(span)
         span.end()
+
         return result
       } catch (error) {
         span.fail(error)
@@ -31,6 +33,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
   execFile: execFileMock,
   spawn: spawnMock
 }))
+
 vi.mock('../../observability/instrumentation', () => ({
   withGitSpan: withGitSpanMock,
   startGitSpan: startGitSpanMock
@@ -54,6 +57,7 @@ function mockChild(): ChildProcess {
   child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child as unknown as ChildProcess
 }
 
@@ -62,13 +66,16 @@ async function queueBehindBlocker(): Promise<{
   advance: () => void
 }> {
   let now = 0
+
   const scheduler = new GitAdmissionScheduler({
     generalCap: 1,
     generalHeadroom: 0,
     now: () => now
   })
+
   _resetGitAdmissionForTests(scheduler)
   const blocker = await scheduler.acquire({ args: ['status'], cwd: '/blocker' })
+
   return {
     release: blocker.release,
     advance: () => {
@@ -103,6 +110,7 @@ describe('git admission span coverage', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, received: ExecCallback) => {
         callback = received
+
         return child
       }
     )
@@ -124,6 +132,7 @@ describe('git admission span coverage', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, received: ExecCallback) => {
         callback = received
+
         return child
       }
     )

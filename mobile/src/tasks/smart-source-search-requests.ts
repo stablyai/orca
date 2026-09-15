@@ -14,7 +14,9 @@ import { PER_REPO_FETCH_LIMIT } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
 
 const GITLAB_PER_PAGE = 50
+
 const LINEAR_LIMIT = 50
+
 const BRANCH_LIMIT = 20
 
 // Why: the desktop Smart picker returns BOTH issues and PRs — the runtime's
@@ -36,8 +38,10 @@ export async function searchGitHubItems(
     limit: PER_REPO_FETCH_LIMIT,
     query: scopeGitHubQuery(query)
   })
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const envelope = githubWorkItemSearchRead.interpret(reply) as { items: GitHubWorkItem[] }
+
   // Stamp repoId so the shared row builder + create flow can attribute each item
   // to the searched repo (the runtime omits it, like the desktop fetcher).
   return (envelope.items ?? []).map((item) => ({ ...item, repoId }))
@@ -56,14 +60,17 @@ export async function searchGitLabItems(
     perPage: GITLAB_PER_PAGE,
     query: query.trim() || undefined
   })
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
     items: GitLabWorkItem[]
     error?: { type?: string; message: string }
   }
+
   if (envelope.error?.type && envelope.error.type !== 'not_found') {
     throw new Error(envelope.error.message)
   }
+
   return (envelope.items ?? []).map((item) => ({ ...item, repoId }))
 }
 
@@ -73,6 +80,7 @@ export async function searchLinearIssues(
   linearWorkspaceId: string | null | undefined
 ): Promise<LinearIssue[]> {
   const trimmed = query.trim()
+
   // The reader yields the mobile issue-read shape; the fields the row builder/create flow read
   // (id/identifier/title/url/state/team) are a subset.
   const issues = trimmed
@@ -92,6 +100,7 @@ export async function searchLinearIssues(
           workspaceId: linearWorkspaceId ?? undefined
         })
       )
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   return issues as LinearIssue[]
 }
@@ -106,11 +115,13 @@ export async function searchBranches(
     { repo: `id:${repoId}`, query: query.trim(), limit: BRANCH_LIMIT },
     { timeoutMs: 30_000 }
   )
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const result = repoBaseRefSearchRead.interpret(reply) as {
     refDetails?: BaseRefSearchResult[]
     refs?: string[]
   }
+
   return (
     result.refDetails ??
     (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))

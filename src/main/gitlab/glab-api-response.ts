@@ -8,20 +8,25 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
   // Why: response is HTTP status, headers, blank line, then body.
   // Find the first blank line (CRLF or LF) as the boundary.
   const separator = findHeaderBodySeparator(stdout)
+
   if (!separator) {
     return { body: stdout, headers: {} }
   }
+
   const headerBlock = stdout.slice(0, separator.index)
   const body = stdout.slice(separator.bodyStart)
   const headers: Record<string, string> = {}
   // Skip the status line and parse the rest as key: value.
   const lines = headerBlock.split(/\r?\n/)
+
   for (const line of lines) {
     const m = line.match(/^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/)
+
     if (m) {
       headers[m[1].toLowerCase()] = m[2].trim()
     }
   }
+
   return { body, headers }
 }
 
@@ -33,7 +38,9 @@ export function parseGlabPaginationHeader(
   if (!value) {
     return undefined
   }
+
   const parsed = Number.parseInt(value, 10)
+
   return Number.isFinite(parsed) && parsed >= minimum ? parsed : undefined
 }
 
@@ -51,13 +58,17 @@ const REPORTED_PAYLOAD_LIMIT = 300
  */
 export function parseGlabJsonList<T>(payload: string): T[] {
   const parsed: unknown = JSON.parse(payload)
+
   if (Array.isArray(parsed)) {
     return parsed as T[]
   }
+
   const reported = gitlabErrorText(parsed)
+
   if (reported) {
     throw new Error(`GitLab returned an error: ${reported}`)
   }
+
   // Why: slice the raw payload rather than re-serializing `parsed` — same text, without
   // stringifying a multi-megabyte body just to keep the preview.
   throw new GlabNonListResponseError(
@@ -70,31 +81,40 @@ function gitlabErrorText(parsed: unknown): string | null {
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
+
   const { message, error } = parsed as { message?: unknown; error?: unknown }
+
   for (const value of [message, error]) {
     if (typeof value === 'string' && value.trim()) {
       return value.trim().slice(0, REPORTED_PAYLOAD_LIMIT)
     }
   }
+
   return null
 }
 
 function findHeaderBodySeparator(stdout: string): { index: number; bodyStart: number } | null {
   let lineStart = 0
+
   for (let index = 0; index < stdout.length; index++) {
     const code = stdout.charCodeAt(index)
+
     if (code !== 10 && code !== 13) {
       continue
     }
 
     const lineEnd = index
+
     const nextLineStart =
       stdout.charCodeAt(index) === 13 && stdout.charCodeAt(index + 1) === 10 ? index + 2 : index + 1
+
     if (lineEnd === lineStart) {
       return { index: lineStart, bodyStart: nextLineStart }
     }
+
     lineStart = nextLineStart
     index = nextLineStart - 1
   }
+
   return null
 }

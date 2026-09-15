@@ -37,6 +37,7 @@ function renderResolution(
 
 function DraftProbe({ paneKey, sessionId }: { paneKey: string; sessionId: string | null }) {
   const { draft, setDraft } = useNativeChatDraft(paneKey)
+
   return (
     <label>
       Session {sessionId ?? 'none'}
@@ -91,11 +92,13 @@ describe('NativeChatSessionGate', () => {
 
   it('preserves the open composer, session, and draft through disconnect and reconnect', () => {
     const paneKey = 'tab-1:leaf-1'
+
     const connectedEntry = entry({
       paneKey,
       agentType: 'codex',
       providerSession: { key: 'session_id', id: 'codex-session' }
     })
+
     const renderGate = (
       agentStatusEntry?: AgentStatusEntry,
       launchAgent: 'codex' | null = null
@@ -112,6 +115,7 @@ describe('NativeChatSessionGate', () => {
         )}
       </NativeChatSessionGate>
     )
+
     const view = render(renderGate(connectedEntry))
     const composer = screen.getByRole('textbox', { name: 'Message draft' })
 

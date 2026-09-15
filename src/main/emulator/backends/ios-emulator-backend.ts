@@ -59,6 +59,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   // so it only runs when an emulator command is actually issued.
   private get serveSimExecutable(): ServeSimExecutable {
     this.cachedServeSimExecutable ??= resolveServeSimExecutable()
+
     return this.cachedServeSimExecutable
   }
 
@@ -75,9 +76,11 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (!this.isSupportedOnHost()) {
       return false
     }
+
     try {
       const needle = id.toLowerCase()
       const devices = await listSimulatorDevices()
+
       return devices.some((device) => device.udid === id || device.name.toLowerCase() === needle)
     } catch {
       return false
@@ -86,6 +89,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async listDevices(): Promise<EmulatorDevice[]> {
     const devices = await listSimulatorDevices()
+
     return devices.map((device) => toEmulatorDevice(device))
   }
 
@@ -107,7 +111,9 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (!this.isSupportedOnHost()) {
       return { available: false, devices: [], message: 'iOS Simulator requires macOS.' }
     }
+
     let devices: EmulatorDevice[] = []
+
     try {
       devices = await this.listDevices()
     } catch (error) {
@@ -117,6 +123,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
         message: error instanceof Error ? error.message : 'xcrun simctl is unavailable.'
       }
     }
+
     if (devices.length === 0) {
       return {
         available: false,
@@ -124,6 +131,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
         message: 'No iOS simulators found. Add one in Xcode Settings > Platforms.'
       }
     }
+
     try {
       await this.checkServeSimAvailable()
     } catch (error) {
@@ -133,6 +141,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
         message: error instanceof Error ? error.message : 'serve-sim is unavailable.'
       }
     }
+
     return { available: true, devices, message: 'Ready' }
   }
 
@@ -149,9 +158,11 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (points.length === 0) {
       return
     }
+
     if (!wsUrl) {
       throw new EmulatorError('emulator_no_active', 'No active emulator stream for gesture input')
     }
+
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
@@ -173,6 +184,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   async exec(deviceId: string, command: string): Promise<unknown> {
     const udid = await this.resolveDeviceId(deviceId)
     const rawArgs = stripEmulatorTargetArgs(parseServeSimCommandArgs(command.trim()))
+
     return this.execServeSim([...rawArgs, '-d', udid], { json: true })
   }
 
@@ -183,14 +195,17 @@ export class IosEmulatorBackend implements EmulatorBackend {
         'No active iOS emulator AX endpoint — attach the simulator first.'
       )
     }
+
     return requestServeSimAccessibilityTree(axUrl)
   }
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
     const udid = await this.resolveDeviceId(deviceId)
     await ensureSimulatorBooted(udid)
+
     const startDetachedHelper = async (): Promise<EmulatorSessionInfo> => {
       const raw = await this.execServeSim(['--detach', '-q', udid], { json: true })
+
       return parseServeSimDetachedSession(raw, udid)
     }
 
@@ -201,10 +216,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
       ) {
         return true
       }
+
       await this.stopHelperForDevice(info.deviceUdid, {
         helperPid: info.helperPid,
         includeOrphaned: true
       })
+
       return false
     }
 
@@ -218,6 +235,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
     // Why: CoreSimulator can report "Booted" with the display IO ports down
     // (HID alive, no framebuffer); a shutdown/boot recycle is the only recovery.
     let didRecycleWedgedBoot = false
+
     const startHelperRecyclingWedgedBoot = async (): Promise<EmulatorSessionInfo> => {
       try {
         return await startDetachedHelper()
@@ -225,26 +243,32 @@ export class IosEmulatorBackend implements EmulatorBackend {
         if (!isMissingFramebufferError(error)) {
           throw error
         }
+
         if (didRecycleWedgedBoot) {
           return throwPersistentMissingFramebuffer(error)
         }
+
         didRecycleWedgedBoot = true
         await shutdownSimulatorDevice(udid)
         await ensureSimulatorBooted(udid)
+
         try {
           return await startDetachedHelper()
         } catch (retryError) {
           if (!isMissingFramebufferError(retryError)) {
             throw retryError
           }
+
           return throwPersistentMissingFramebuffer(retryError)
         }
       }
     }
 
     let info = await startHelperRecyclingWedgedBoot()
+
     if (!(await waitForReadyOrKill(info))) {
       info = await startHelperRecyclingWedgedBoot()
+
       if (!(await waitForReadyOrKill(info))) {
         throw new EmulatorError(
           'emulator_helper_failed',
@@ -252,8 +276,10 @@ export class IosEmulatorBackend implements EmulatorBackend {
         )
       }
     }
+
     // Why: serve-sim/CoreSimulator can surface Simulator.app while Orca embeds the stream.
     await hideNativeSimulatorApp().catch(() => {})
+
     return { ...info, streamCodec: 'mjpeg', backend: 'ios' }
   }
 
@@ -275,6 +301,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (!(await this.waitForEndpointReady(info.streamUrl))) {
       return false
     }
+
     return this.hasHelperForSession(info)
   }
 
@@ -283,6 +310,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
       helperPid: info.helperPid,
       includeOrphaned: true
     }).catch(() => [])
+
     return helpers.length > 0
   }
 

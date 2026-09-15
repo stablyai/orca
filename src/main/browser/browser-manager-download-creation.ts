@@ -13,6 +13,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
     const { guestWebContentsId, item } = args
     const downloadId = randomUUID()
+
     const requestedFilename = (() => {
       try {
         return item.getFilename() || 'download'
@@ -20,22 +21,27 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
         return 'download'
       }
     })()
+
     const totalBytes = (() => {
       try {
         const total = item.getTotalBytes()
+
         return total > 0 ? total : null
       } catch {
         return null
       }
     })()
+
     const mimeType = (() => {
       try {
         const mime = item.getMimeType()
+
         return mime || null
       } catch {
         return null
       }
     })()
+
     const origin = (() => {
       try {
         return safeOrigin(item.getURL())
@@ -48,10 +54,13 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     // instead of reserving a name in the desktop Downloads folder. A popup downloads to its
     // opener's page: the popup itself is a client-local transient with no logical page of its own.
     const ownerContext = this.resolvePopupOwnerContext(guestWebContentsId)
+
     const decision = routeBrowserClientDownload({
       guestWebContentsId: ownerContext?.rootGuestWebContentsId ?? guestWebContentsId
     })
+
     const clientRoute = decision.kind === 'remote' ? decision.route : null
+
     const destination = (() => {
       if (clientRoute) {
         return {
@@ -60,15 +69,18 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
           reservationKey: null
         }
       }
+
       // Why: a client-hosted download with no resolvable remote destination is canceled rather than
       // written to this desktop's Downloads folder.
       if (decision.kind === 'blocked') {
         return null
       }
+
       try {
         return browserDownloadDestinationReservations.reserve(requestedFilename)
       } catch (error) {
         console.error('[browser-download] Failed to choose download destination:', error)
+
         return null
       }
     })()
@@ -95,9 +107,11 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       startedSent: false,
       cleanup: null
     }
+
     this.downloadsById.set(downloadId, download)
 
     const browserTabId = ownerContext?.browserTabId ?? null
+
     if (browserTabId) {
       this.bindDownloadToTab(downloadId, browserTabId)
     } else {
@@ -114,11 +128,13 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
           ? 'Could not save the download to the remote workspace.'
           : 'Could not choose a Downloads file name.'
       )
+
       try {
         item.cancel()
       } catch {
         // Why: with no destination Chromium must not keep writing invisibly; cancel is best-effort after surfacing the failure.
       }
+
       return
     }
 
@@ -127,11 +143,13 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     } catch (error) {
       console.error('[browser-download] Failed to set download destination:', error)
       this.finishDownloadInternal(downloadId, 'failed', 'Failed to set download destination.')
+
       try {
         item.cancel()
       } catch {
         // Why: a failed setSavePath can leave Electron partially finalized; cancel is best-effort after the UI is made terminal.
       }
+
       return
     }
 
@@ -146,21 +164,27 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
         state
       })
     }
+
     const doneHandler = (_event: Electron.Event, state: BrowserDownloadDoneState): void => {
       const status: BrowserDownloadFinishedEvent['status'] =
         state === 'completed' ? 'completed' : state === 'cancelled' ? 'canceled' : 'failed'
+
       const failure =
         status === 'failed'
           ? state === 'interrupted'
             ? 'Download was interrupted.'
             : 'Download failed.'
           : null
+
       if (download.clientRoute) {
         void this.settleClientHostedDownload(download, status, failure)
+
         return
       }
+
       this.finishDownloadInternal(download.downloadId, status, failure)
     }
+
     download.cleanup = (): void => {
       try {
         download.item.off('updated', updatedHandler)
@@ -169,6 +193,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
         // Why: a completed DownloadItem may already be finalized; keep cleanup best-effort so teardown never crashes main.
       }
     }
+
     item.on('updated', updatedHandler)
     item.once('done', doneHandler)
 
@@ -179,10 +204,13 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
 
   cancelDownload(args: { downloadId: string; senderWebContentsId: number }): boolean {
     const download = this.downloadsById.get(args.downloadId)
+
     if (!download || download.rendererWebContentsId !== args.senderWebContentsId) {
       return false
     }
+
     this.cancelDownloadInternal(args.downloadId, 'Canceled.')
+
     return true
   }
 }

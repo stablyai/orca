@@ -26,6 +26,7 @@ import {
 } from './legacy-terminal-shim-dir'
 
 const itOnPosix = process.platform === 'win32' ? it.skip : it
+
 // Why: the failure case uses directory permissions, which Windows ignores and root bypasses.
 const itOnPosixNonRoot = process.platform === 'win32' || process.getuid?.() === 0 ? it.skip : it
 
@@ -43,6 +44,7 @@ describe('legacy terminal shim neutralization', () => {
   const makeUserDataDir = (): string => {
     const userData = mkdtempSync(join(tmpdir(), 'orca-legacy-shim-'))
     tempRoots.push(userData)
+
     return userData
   }
 
@@ -52,6 +54,7 @@ describe('legacy terminal shim neutralization', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     for (const tempRoot of tempRoots.splice(0)) {
       rmSync(tempRoot, { recursive: true, force: true })
     }
@@ -77,10 +80,12 @@ describe('legacy terminal shim neutralization', () => {
     ]) {
       expect(existsSync(path)).toBe(true)
       expect(readFileSync(path, 'utf8')).not.toContain('Co-authored-by: Orca')
+
       if (process.platform !== 'win32') {
         expect(statSync(path).mode & 0o111).not.toBe(0)
       }
     }
+
     // Why: must not equal the retired shim's own '7', or a rolled-back build treats its wrappers
     // as current and never rewrites them.
     const version = readFileSync(join(legacyRoot, 'VERSION'), 'utf8')
@@ -110,6 +115,7 @@ describe('legacy terminal shim neutralization', () => {
     const relDir = join(userData, 'relbin')
     mkdirSync(absDir, { recursive: true })
     mkdirSync(relDir, { recursive: true })
+
     for (const dir of [absDir, relDir]) {
       writeFileSync(join(dir, 'bash'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
     }
@@ -123,6 +129,7 @@ describe('legacy terminal shim neutralization', () => {
     const cwdRelName = `.orca-interp-${process.pid}`
     const cwdRelDir = join(process.cwd(), cwdRelName)
     mkdirSync(cwdRelDir, { recursive: true })
+
     try {
       writeFileSync(join(cwdRelDir, 'bash'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
       expect(resolvePosixTombstoneInterpreter(`.:${cwdRelName}`, [])).toBeNull()
@@ -206,9 +213,11 @@ describe('legacy terminal shim neutralization', () => {
     const posixDir = join(userData, 'orca-terminal-attribution', 'posix')
     const legacyDir = join(userData, 'legacy-shim')
     const realBin = join(userData, 'real-bin')
+
     for (const dir of [posixDir, legacyDir, realBin]) {
       mkdirSync(dir, { recursive: true })
     }
+
     writeFileSync(join(posixDir, 'git'), 'legacy attribution wrapper')
 
     neutralizeLegacyTerminalShimDir(userData)
@@ -238,9 +247,11 @@ describe('legacy terminal shim neutralization', () => {
     const posixDir = join(userData, 'orca-terminal-attribution', 'posix')
     const legacyDir = join(userData, 'legacy-shim')
     const realBin = join(userData, 'real-bin')
+
     for (const dir of [posixDir, legacyDir, realBin]) {
       mkdirSync(dir, { recursive: true })
     }
+
     writeFileSync(join(posixDir, 'git'), 'legacy attribution wrapper')
 
     neutralizeLegacyTerminalShimDir(userData)
@@ -260,6 +271,7 @@ describe('legacy terminal shim neutralization', () => {
         encoding: 'utf8',
         timeout: 20_000
       })
+
       expect(run.stdout, `spelling ${spelling}`).toContain('REAL')
       expect(run.stdout, `spelling ${spelling}`).not.toContain('HOSTILE')
     }
@@ -305,8 +317,10 @@ describe('legacy terminal shim neutralization', () => {
       const actual = await vi.importActual<typeof PosixTombstoneModule>(
         './legacy-terminal-posix-tombstone'
       )
+
       return { ...actual, resolvePosixTombstoneInterpreter: () => null }
     })
+
     try {
       const shimDir = await import('./legacy-terminal-shim-dir')
       shimDir.__resetLegacyTerminalShimNeutralizationForTests()
@@ -353,6 +367,7 @@ describe('legacy terminal shim neutralization', () => {
       PATH: '/custom/elsewhere///:/usr/bin',
       ORCA_ATTRIBUTION_SHIM_DIR: '/custom/elsewhere'
     }
+
     stripLegacyTerminalShimEnv(posixEnv, 'linux')
     expect(posixEnv.PATH).toBe('/usr/bin')
 
@@ -360,6 +375,7 @@ describe('legacy terminal shim neutralization', () => {
       Path: 'C:\\Custom\\Else\\\\;C:\\Windows',
       ORCA_ATTRIBUTION_SHIM_DIR: 'C:\\Custom\\Else'
     }
+
     stripLegacyTerminalShimEnv(windowsEnv, 'win32')
     expect(windowsEnv.Path).toBe('C:\\Windows')
   })
@@ -374,9 +390,11 @@ describe('legacy terminal shim neutralization', () => {
       const posixDir = join(userData, 'orca-terminal-attribution', 'posix')
       const safeBin = join(userData, 'safe-bin')
       const laterBin = join(userData, 'later-bin')
+
       for (const dir of [posixDir, safeBin, laterBin]) {
         mkdirSync(dir, { recursive: true })
       }
+
       writeFileSync(join(posixDir, 'git'), 'legacy attribution wrapper')
 
       neutralizeLegacyTerminalShimDir(userData)
@@ -395,6 +413,7 @@ describe('legacy terminal shim neutralization', () => {
           encoding: 'utf8',
           timeout: 20_000
         })
+
         return run.stdout.trim()
       })
 
@@ -411,6 +430,7 @@ describe('legacy terminal shim neutralization', () => {
       PATH: '/tmp/captured\\',
       ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/captured'
     }
+
     stripLegacyTerminalShimEnv(env, 'linux')
     expect(env.PATH).toBe('/tmp/captured\\')
 
@@ -479,9 +499,11 @@ describe('legacy terminal shim neutralization', () => {
     const shimDir = join(userData, 'orca-terminal-attribution', 'posix')
     const realBin = join(userData, 'real-bin')
     const hostile = join(userData, 'hostile')
+
     for (const dir of [shimDir, realBin, hostile]) {
       mkdirSync(dir, { recursive: true })
     }
+
     writeFileSync(join(shimDir, 'git'), 'legacy attribution wrapper')
 
     neutralizeLegacyTerminalShimDir(userData)
@@ -502,6 +524,7 @@ describe('legacy terminal shim neutralization', () => {
         env: { ...process.env, PATH: hostilePath },
         encoding: 'utf8'
       })
+
       expect(run.stdout, `PATH=${hostilePath}`).toContain('REAL')
       expect(run.stdout, `PATH=${hostilePath}`).not.toContain('HOSTILE-BASH')
     }
@@ -558,6 +581,7 @@ describe('legacy terminal shim neutralization', () => {
         env: { ...process.env, PATH: cwdSpelling },
         encoding: 'utf8'
       })
+
       expect(run.stdout, `PATH=${cwdSpelling}`).toContain('REAL')
       expect(run.stdout, `PATH=${cwdSpelling}`).not.toContain('HOSTILE')
     }
@@ -569,6 +593,7 @@ describe('legacy terminal shim neutralization', () => {
       env: { ...process.env, PATH: `${shimDir}:${realBin}:/usr/bin:/bin` },
       encoding: 'utf8'
     })
+
     expect(noSlash.stdout).toContain('REAL')
   })
 
@@ -618,6 +643,7 @@ describe('legacy terminal shim neutralization', () => {
     mkdirSync(posixDir, { recursive: true })
     writeFileSync(gitWrapper, 'legacy attribution wrapper')
     chmodSync(posixDir, 0o500)
+
     try {
       neutralizeLegacyTerminalShimDir(userData)
       expect(readFileSync(gitWrapper, 'utf8')).toBe('legacy attribution wrapper')
@@ -646,6 +672,7 @@ describe('legacy terminal shim neutralization', () => {
     writeFileSync(join(posixDir, 'git'), 'legacy attribution wrapper')
     // Why: keep every attempt failing so the ladder runs to exhaustion.
     chmodSync(posixDir, 0o500)
+
     try {
       neutralizeLegacyTerminalShimDir(userData)
       // 1s + 5s + 15s + 30s covers every configured delay, plus slack for a fifth that must not fire.
@@ -693,6 +720,7 @@ describe('legacy terminal shim neutralization', () => {
       "#!/usr/bin/env bash\nprintf 'arg=<%s>\\n' \"$@\"\ncat\nprintf 'fixture stderr\\n' >&2\nexit 23\n",
       { mode: 0o755 }
     )
+
     const child = spawn('bash', ['--noprofile', '--norc'], {
       cwd: shimDir,
       env: {
@@ -704,6 +732,7 @@ describe('legacy terminal shim neutralization', () => {
       },
       stdio: ['pipe', 'pipe', 'pipe']
     })
+
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf8')
@@ -723,6 +752,7 @@ describe('legacy terminal shim neutralization', () => {
       child.kill('SIGKILL')
       throw error
     }
+
     neutralizeLegacyTerminalShimDir(userData)
     const closed = waitForChildClose(child, 2_000)
     child.stdin.end("printf 'stdin payload\\n' | git commit -m 'subject with spaces'; exit $?\n")
@@ -732,6 +762,7 @@ describe('legacy terminal shim neutralization', () => {
     } finally {
       child.kill('SIGKILL')
     }
+
     expect(stdout).toContain('arg=<commit>\narg=<-m>\narg=<subject with spaces>\nstdin payload\n')
     expect(stdout).not.toContain('Co-authored-by: Orca')
     expect(stderr).toBe('fixture stderr\n')
@@ -762,6 +793,7 @@ describe('legacy terminal shim neutralization', () => {
       PATH: '/custom/elsewhere/:/usr/bin',
       ORCA_ATTRIBUTION_SHIM_DIR: '/custom/elsewhere'
     }
+
     stripLegacyTerminalShimEnv(posix, 'linux')
     expect(posix.PATH).toBe('/usr/bin')
 
@@ -770,12 +802,14 @@ describe('legacy terminal shim neutralization', () => {
       Path: 'C:\\Custom\\Else;C:\\Windows',
       ORCA_ATTRIBUTION_SHIM_DIR: 'C:\\Custom\\Else\\'
     }
+
     stripLegacyTerminalShimEnv(win, 'win32')
     expect(win.Path).toBe('C:\\Windows')
   })
 
   it('uses the captured POSIX shim directory literally when it contains a colon', () => {
     const shimDir = '/tmp/orca:user/orca-terminal-attribution/posix'
+
     const env: Record<string, string> = {
       PATH: `/usr/local/bin:${shimDir}:/usr/bin`,
       ORCA_ATTRIBUTION_SHIM_DIR: shimDir
@@ -788,6 +822,7 @@ describe('legacy terminal shim neutralization', () => {
 
   it('treats legacy Windows environment keys case-insensitively', () => {
     const shimDir = 'C:\\Users\\orca;user\\orca-terminal-attribution\\win32'
+
     const env: Record<string, string> = {
       Path: `${shimDir};C:\\Windows\\System32`,
       orca_attribution_shim_dir: shimDir,
@@ -839,6 +874,7 @@ describe('legacy terminal shim neutralization', () => {
     const posix: Record<string, string> = {
       PATH: '/home/u/.orca/orca-terminal-attribution/posix/:/usr/bin'
     }
+
     stripLegacyTerminalShimEnv(posix, 'linux')
     expect(posix.PATH).toBe('/usr/bin')
 
@@ -846,12 +882,14 @@ describe('legacy terminal shim neutralization', () => {
     const many: Record<string, string> = {
       PATH: '/home/u/.orca/orca-terminal-attribution/posix///:/usr/bin'
     }
+
     stripLegacyTerminalShimEnv(many, 'linux')
     expect(many.PATH).toBe('/usr/bin')
 
     const win: Record<string, string> = {
       Path: 'C:\\Users\\u\\orca-terminal-attribution\\win32\\;C:\\Windows'
     }
+
     stripLegacyTerminalShimEnv(win, 'win32')
     expect(win.Path).toBe('C:\\Windows')
   })
@@ -882,21 +920,26 @@ function quoteBash(value: string): string {
 function waitForOutput(stream: NodeJS.ReadableStream, marker: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let output = ''
+
     const onData = (chunk: string | Buffer): void => {
       output += chunk.toString()
+
       if (output.includes(marker)) {
         cleanup()
         resolve()
       }
     }
+
     const onEnd = (): void => {
       cleanup()
       reject(new Error(`Bash exited before emitting ${marker}`))
     }
+
     const cleanup = (): void => {
       stream.off('data', onData)
       stream.off('end', onEnd)
     }
+
     stream.on('data', onData)
     stream.on('end', onEnd)
   })
@@ -911,6 +954,7 @@ function waitForChildClose(
       child.kill('SIGKILL')
       reject(new Error(`Bash did not exit within ${timeoutMs}ms`))
     }, timeoutMs)
+
     child.once('close', (exitCode) => {
       clearTimeout(timeout)
       resolve(exitCode)

@@ -16,11 +16,14 @@ function isMissingRemoteTrackingRefError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   const candidate = error as Error & { code?: unknown; stderr?: unknown }
   const stderr = typeof candidate.stderr === 'string' ? candidate.stderr.trim() : ''
+
   if (stderr.length > 0) {
     return false
   }
+
   return candidate.code === 1 || /(?:exited with|exit code) 1\b/i.test(candidate.message)
 }
 
@@ -38,6 +41,7 @@ export async function getPublishTargetStatus(
     if (!isMissingRemoteTrackingRefError(error)) {
       throw error
     }
+
     return {
       hasUpstream: false,
       upstreamName,
@@ -49,9 +53,11 @@ export async function getPublishTargetStatus(
 
   const { stdout } = await runGit(['rev-list', '--left-right', '--count', `HEAD...${remoteRef}`])
   const counts = parseGitRevListAheadBehindCounts(stdout)
+
   if (counts.status === 'unexpected-field-count') {
     throw new Error(`Unexpected git rev-list output: ${JSON.stringify(stdout)}`)
   }
+
   if (counts.status === 'unparseable-counts') {
     throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(stdout)}`)
   }

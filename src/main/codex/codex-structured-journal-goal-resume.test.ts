@@ -43,6 +43,7 @@ function goalJournal(
   const rows = new Map<string, AgentJournalRenderItem>()
   const writes: string[] = []
   const deferred = createDeferredStructuredAgentSessionEventSink(options)
+
   const journal = {
     get epoch() {
       return `epoch-${epochNumber}`
@@ -60,6 +61,7 @@ function goalJournal(
         sequence: existing?.sequence ?? rowSequence,
         observedAt: existing?.observedAt ?? rowSequence
       })
+
       return { cursor: { epoch: `epoch-${epochNumber}`, sequence: rowSequence }, itemId, revision }
     },
     snapshot: () => ({
@@ -70,12 +72,14 @@ function goalJournal(
     }),
     visitItems: (visit: (itemId: string, sequence: number) => void) => {
       visits += 1
+
       for (const item of rows.values()) {
         visitedItems += 1
         visit(item.itemId, item.sequence)
       }
     }
   } as unknown as StructuredAgentSessionEventTarget['journal']
+
   const target = {
     journal,
     fence: 1,
@@ -83,7 +87,9 @@ function goalJournal(
       publishes += 1
     }
   }
+
   deferred.bind(target)
+
   return {
     sink: deferred.sink,
     writes,
@@ -94,12 +100,14 @@ function goalJournal(
     seedProviderItems: (count: number) => {
       for (let index = 0; index < count; index += 1) {
         rowSequence += 1
+
         const identity = {
           provider: 'codex' as const,
           threadId: THREAD,
           turnId: `seed-${index}`,
           ordinal: 0
         }
+
         const itemId = agentJournalItemKey(identity)
         rows.set(itemId, {
           itemId,
@@ -166,6 +174,7 @@ describe('codex goal lifecycle resume', () => {
         })
       })
     }
+
     await journal.drained()
 
     expect(journal.visits()).toBe(visits)
@@ -199,6 +208,7 @@ describe('codex goal lifecycle resume', () => {
     journal.seedProviderItems(10_000)
     const goals = new CodexJournalGoals(journal.sink)
     const threadCount = MAX_CODEX_GOAL_THREADS + 1
+
     const sendRound = () => {
       for (let index = 0; index < threadCount; index += 1) {
         goals.handle({
@@ -211,9 +221,11 @@ describe('codex goal lifecycle resume', () => {
 
     sendRound()
     await journal.drained()
+
     for (let round = 0; round < 10; round += 1) {
       sendRound()
     }
+
     await journal.drained()
 
     expect(journal.visits()).toBe(1)
@@ -235,6 +247,7 @@ describe('codex goal lifecycle resume', () => {
         params: goalFrame()
       })
     }
+
     expect(journal.visits()).toBe(0)
 
     journal.rebind()
@@ -305,6 +318,7 @@ describe('codex goal lifecycle resume', () => {
     }
   ])('does not duplicate a $name snapshot after translator recreation', async (scenario) => {
     const journal = goalJournal()
+
     const send = (
       goals: CodexJournalGoals,
       state: (typeof scenario.beforeResume)[number]
@@ -317,9 +331,11 @@ describe('codex goal lifecycle resume', () => {
     }
 
     const prior = new CodexJournalGoals(journal.sink)
+
     for (const state of scenario.beforeResume) {
       send(prior, state)
     }
+
     await journal.drained()
     const acceptedOccurrence = journal.writes.at(-1)
     const writesBeforeResume = journal.writes.length

@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -28,6 +32,7 @@ describe('createMainWindow', () => {
 
   it('supports all minus key variants for terminal zoom out', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -41,6 +46,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -54,6 +60,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -96,6 +103,7 @@ describe('createMainWindow', () => {
 
   it('routes Electron zoom command events to terminal zoom', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -106,6 +114,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -119,6 +128,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -138,6 +148,7 @@ describe('createMainWindow', () => {
 
   it('respects custom zoom bindings for Electron zoom command fallbacks', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -148,6 +159,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -161,6 +173,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -183,6 +196,7 @@ describe('createMainWindow', () => {
 
   it('does not intercept ctrl/cmd+r in before-input-event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -196,6 +210,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -209,6 +224,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -229,6 +245,7 @@ describe('createMainWindow', () => {
 
   it('forwards the platform tab-number jump shortcut to the renderer', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -242,6 +259,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -255,6 +273,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -265,6 +284,7 @@ describe('createMainWindow', () => {
       process.platform === 'darwin'
         ? { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: true, alt: false }
         : { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: false, alt: true }
+
     const preventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault } as never, input as never)
 
@@ -277,6 +297,7 @@ describe('createMainWindow', () => {
   // repeats in main (preventDefault, no dispatch) since the renderer skips e.repeat.
   it('yields indexed-switch chords to the floating panel and contains their repeats', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -290,6 +311,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -303,6 +325,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -312,6 +335,7 @@ describe('createMainWindow', () => {
     const setFloatingFocus = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setFloatingFocus')?.[1]
+
     expect(setFloatingFocus).toBeTypeOf('function')
     setFloatingFocus?.(
       { sender: webContents } as never,
@@ -320,11 +344,13 @@ describe('createMainWindow', () => {
 
     const beforeInputEvent = windowHandlers['before-input-event']
     const isDarwin = process.platform === 'darwin'
+
     // jumpToTabIndex chord (Ctrl+digit on mac, Alt+digit elsewhere) and jumpToWorktreeIndex chord
     // (Mod+digit) both yield while the panel owns focus.
     const tabIndexInput = isDarwin
       ? { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: true, alt: false }
       : { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: false, alt: true }
+
     const worktreeIndexInput = isDarwin
       ? { type: 'keyDown', code: 'Digit5', key: '5', meta: true, control: false, alt: false }
       : { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: true, alt: false }
@@ -352,6 +378,7 @@ describe('createMainWindow', () => {
   // renderer index path skips e.repeat, so yielding one would leak a raw digit to xterm.
   it('contains indexed-switch repeats without dispatching them', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -365,6 +392,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -378,6 +406,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -385,9 +414,11 @@ describe('createMainWindow', () => {
     createMainWindow(null)
 
     const isDarwin = process.platform === 'darwin'
+
     const input = isDarwin
       ? { type: 'keyDown', code: 'Digit3', key: '3', meta: true, control: false, alt: false }
       : { type: 'keyDown', code: 'Digit3', key: '3', meta: false, control: true, alt: false }
+
     const preventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault } as never,
@@ -400,6 +431,7 @@ describe('createMainWindow', () => {
 
   it('lets main-window Ctrl+Tab flow to the renderer held switcher', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -413,6 +445,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -426,6 +459,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -433,11 +467,14 @@ describe('createMainWindow', () => {
     createMainWindow(null)
 
     const beforeInputEvent = windowHandlers['before-input-event']
+
     const dispatchInput = (input: Electron.Input): ReturnType<typeof vi.fn> => {
       const preventDefault = vi.fn()
       beforeInputEvent({ preventDefault } as never, input as never)
+
       return preventDefault
     }
+
     const ctrlTabInput = {
       code: 'Tab',
       key: 'Tab',
@@ -445,6 +482,7 @@ describe('createMainWindow', () => {
       meta: false,
       alt: false
     }
+
     const preventDefaults = [
       { type: 'keyDown', shift: false },
       { type: 'keyDown', shift: true },
@@ -455,12 +493,14 @@ describe('createMainWindow', () => {
     for (const preventDefault of preventDefaults) {
       expect(preventDefault).not.toHaveBeenCalled()
     }
+
     expect(webContents.send).not.toHaveBeenCalledWith('ui:ctrlTabKeyDown', expect.anything())
     expect(webContents.send).not.toHaveBeenCalledWith('ui:ctrlTabKeyUp')
   })
 
   it('does not hardcode Ctrl+Tab when the recent-tab binding is disabled', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -474,6 +514,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -487,6 +528,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })

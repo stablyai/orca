@@ -22,6 +22,7 @@ import type {
 } from './use-tab-bar-runtime-model'
 
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
+
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 
 export type TabBarCreateMenuController = {
@@ -89,42 +90,52 @@ export function useTabBarCreateMenuController({
   const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
   const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
+
   const clearPendingNewTabMenuFocusAnimation = (): void => {
     if (pendingNewTabMenuFocusAnimationRef.current === null) {
       return
     }
+
     cancelAnimationFrame(pendingNewTabMenuFocusAnimationRef.current)
     pendingNewTabMenuFocusAnimationRef.current = null
   }
+
   const clearPendingNewTabMenuFocusRetry = (): void => {
     if (pendingNewTabMenuFocusRetryRef.current === null) {
       return
     }
+
     window.clearTimeout(pendingNewTabMenuFocusRetryRef.current)
     pendingNewTabMenuFocusRetryRef.current = null
   }
+
   const focusNewActiveTerminalWhenReady = (
     previousActiveTabId: string | null,
     expiresAt: number,
     now: number
   ): void => {
     const state = useAppStore.getState()
+
     if (
       (state.activeTabType === 'terminal' || state.activeTabType === 'simulator') &&
       state.activeTabId &&
       state.activeTabId !== previousActiveTabId
     ) {
       focusTerminalTabSurface(state.activeTabId)
+
       return
     }
+
     if (now >= expiresAt) {
       return
     }
+
     pendingNewTabMenuFocusRetryRef.current = window.setTimeout(() => {
       pendingNewTabMenuFocusRetryRef.current = null
       focusNewActiveTerminalWhenReady(previousActiveTabId, expiresAt, Date.now())
     }, NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS)
   }
+
   const queueNewActiveTerminalFocusAfterNewTabMenuClose = (): void => {
     const previousActiveTabId = useAppStore.getState().activeTabId
     pendingNewTabMenuFocusRef.current = () => {
@@ -136,12 +147,15 @@ export function useTabBarCreateMenuController({
       )
     }
   }
+
   const queueTerminalTabFocusAfterNewTabMenuClose = (tabId: string): void => {
     pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
   }
+
   const queueFocusAfterNewTabMenuClose = (focus: () => void): void => {
     pendingNewTabMenuFocusRef.current = focus
   }
+
   const windowsShellEntries = useMemo(() => {
     return buildWindowsShellMenuEntries({
       showWindowsShellMenu,
@@ -159,6 +173,7 @@ export function useTabBarCreateMenuController({
     windowsTerminalCapabilities.gitBashAvailable,
     windowsTerminalCapabilities.wslAvailable
   ])
+
   const createMenuOptions = useMemo(
     () =>
       buildTabCreateMenuOptions({
@@ -186,6 +201,7 @@ export function useTabBarCreateMenuController({
       workspaceHasSimulatorTab
     ]
   )
+
   const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
     switch (option.kind) {
       case 'new-terminal':
@@ -196,6 +212,7 @@ export function useTabBarCreateMenuController({
         if (!onNewTerminalWithShell || !option.shell) {
           break
         }
+
         queueNewActiveTerminalFocusAfterNewTabMenuClose()
         onNewTerminalWithShell(
           resolveWindowsShellLaunchTarget(
@@ -220,14 +237,17 @@ export function useTabBarCreateMenuController({
         break
     }
   }
+
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
     const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
+
     const result = launchAgentInNewTab({
       agent,
       worktreeId,
       groupId: resolvedGroupId,
       launchSource: 'tab_bar_quick_launch'
     })
+
     if (!result) {
       toast.error(
         translate(
@@ -236,21 +256,27 @@ export function useTabBarCreateMenuController({
           { value0: option?.label ?? agent }
         )
       )
+
       return
     }
+
     if (result.tabId) {
       queueTerminalTabFocusAfterNewTabMenuClose(result.tabId)
+
       return
     }
+
     if (shouldQueueTerminalFocusAfterMenuClose(result)) {
       queueNewActiveTerminalFocusAfterNewTabMenuClose()
     }
   }
+
   const runPendingNewTabMenuFocusAfterClose = (): void => {
     const pendingFocus = pendingNewTabMenuFocusRef.current
     pendingNewTabMenuFocusRef.current = null
     clearPendingNewTabMenuFocusAnimation()
     clearPendingNewTabMenuFocusRetry()
+
     if (pendingFocus) {
       pendingNewTabMenuFocusAnimationRef.current = requestAnimationFrame(() => {
         pendingNewTabMenuFocusAnimationRef.current = null
@@ -258,27 +284,33 @@ export function useTabBarCreateMenuController({
       })
     }
   }
+
   const clearPendingNewTabMenuFocusOnUnmountRef = useRef<
     ((node: HTMLDivElement | null) => void) | null
   >(null)
+
   if (clearPendingNewTabMenuFocusOnUnmountRef.current === null) {
     clearPendingNewTabMenuFocusOnUnmountRef.current = (node: HTMLDivElement | null): void => {
       if (node !== null) {
         return
       }
+
       // Why: cancel the delayed focus handoff via this root ref cleanup, avoiding an otherwise cleanup-only React Effect.
       clearPendingNewTabMenuFocusAnimation()
       clearPendingNewTabMenuFocusRetry()
     }
   }
+
   const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
 
   useEffect(() => {
     if (!newTabMenuOpen) {
       return
     }
+
     const dismiss = (): void => setNewTabMenuOpen(false)
     window.addEventListener('blur', dismiss)
+
     return () => window.removeEventListener('blur', dismiss)
   }, [newTabMenuOpen])
 

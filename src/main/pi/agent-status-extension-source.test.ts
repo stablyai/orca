@@ -11,6 +11,7 @@ describe('getPiAgentStatusExtensionSource', () => {
       kind: 'prime-agent',
       env: { PRIME_AGENT_INTERNAL_DAEMON_WORKER: undefined }
     })
+
     const worker = createHarness({
       kind: 'prime-agent',
       env: { ORCA_PI_STATUS_OWNED: String(SELF_PID - 1) }
@@ -86,6 +87,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('waits until Pi creates its planned session file before advertising resume identity', async () => {
     let sessionFileExists = false
+
     const harness = createHarness({
       kind: 'pi',
       existsSync: (path) => path === '/tmp/pi-session-1.jsonl' && sessionFileExists
@@ -153,9 +155,11 @@ describe('getPiAgentStatusExtensionSource', () => {
       await harness.callHook('agent_start')
 
       await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+
       const payloads = harness.fetchMock.mock.calls.map(
         ([_event, init]) => JSON.parse(String(init?.body)).payload
       )
+
       expect(payloads).toEqual([
         { hook_event_name: 'session_start' },
         { hook_event_name: 'agent_start' }
@@ -226,6 +230,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     'keeps queued %s status bound to the session active when it was posted',
     async (_name, args) => {
       const finishDeliveries: (() => void)[] = []
+
       const harness = createHarness({
         ...args,
         fetchImpl: vi.fn(
@@ -281,8 +286,10 @@ describe('getPiAgentStatusExtensionSource', () => {
 
       expect(child.handlers).toEqual({})
       expect(grandchild.handlers).toEqual({})
+
       const ownerKey =
         kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+
       expect(child.processEnv[ownerKey]).toBe(String(SELF_PID))
       expect(grandchild.processEnv[ownerKey]).toBe(String(SELF_PID))
       expect(child.fetchMock).not.toHaveBeenCalled()
@@ -388,6 +395,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('uses current Windows coordinates when a same-token guest endpoint is stale', async () => {
     const endpointPath = '/home/u/.orca-wsl/agent-hooks/instance-test/endpoint.env'
+
     const harness = createHarness({
       kind: 'prime-agent',
       env: { WSL_DISTRO_NAME: 'Ubuntu', ORCA_AGENT_HOOK_ENDPOINT: endpointPath },
@@ -397,6 +405,7 @@ describe('getPiAgentStatusExtensionSource', () => {
         if (path === endpointPath) {
           return 'ORCA_AGENT_HOOK_PORT=9999\nORCA_AGENT_HOOK_TOKEN=token-1\n'
         }
+
         throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
       },
       fetchImpl: vi.fn(async () => {
@@ -419,6 +428,7 @@ describe('getPiAgentStatusExtensionSource', () => {
         if (path === '/proc/sys/kernel/osrelease') {
           return 'microsoft-standard-WSL2'
         }
+
         throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
       },
       fetchImpl: vi.fn(async () => {
@@ -430,11 +440,13 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_end')
 
     await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(2))
+
     // Why: WSL-ness and curl.exe presence are process-lifetime constants;
     // the per-event failure path must not re-probe /proc or /mnt/c.
     const procReads = harness.fsMock.readFileSync.mock.calls.filter(([path]) =>
       String(path).startsWith('/proc/')
     )
+
     expect(procReads).toHaveLength(1)
     expect(harness.fsMock.existsSync).toHaveBeenCalledTimes(1)
   })
@@ -456,6 +468,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('does not hold Pi event dispatch open while hook delivery is pending', async () => {
     let finishDelivery: (() => void) | undefined
+
     const harness = createHarness({
       kind: 'pi',
       fetchImpl: vi.fn(
@@ -467,9 +480,11 @@ describe('getPiAgentStatusExtensionSource', () => {
     })
 
     let handlerReturned = false
+
     const handlerCall = harness.callHook('agent_start').then(() => {
       handlerReturned = true
     })
+
     await Promise.resolve()
 
     // Why: Pi awaits extension handlers, so loopback status delivery cannot
@@ -493,6 +508,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('bounds stalled delivery to one active request and the latest pending status', async () => {
     const finishDeliveries: (() => void)[] = []
+
     const harness = createHarness({
       kind: 'pi',
       fetchImpl: vi.fn(
@@ -520,12 +536,15 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('abandons a stalled request after one second and delivers the latest status', async () => {
     vi.useFakeTimers()
+
     try {
       let requestCount = 0
+
       const harness = createHarness({
         kind: 'pi',
         fetchImpl: vi.fn(() => {
           requestCount += 1
+
           return requestCount === 1 ? new Promise(() => {}) : Promise.resolve({ ok: true })
         })
       })
@@ -550,6 +569,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('reports only agent_settled after multiple first-run agent_end events', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createHarness({ kind: 'pi' })
       const context = { isIdle: vi.fn(() => false) }
@@ -558,6 +578,7 @@ describe('getPiAgentStatusExtensionSource', () => {
         await harness.callHook('agent_end', undefined, context)
         await vi.advanceTimersByTimeAsync(700)
       }
+
       expect(harness.fetchMock).not.toHaveBeenCalled()
 
       await harness.callHook('agent_settled')
@@ -575,6 +596,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('does not duplicate completion when idle is observed before agent_settled', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createHarness({ kind: 'pi' })
       const context = { isIdle: vi.fn(() => true) }
@@ -595,6 +617,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('cancels an ambiguous agent_end when modern Pi resumes work', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createHarness({ kind: 'pi' })
       const context = { isIdle: vi.fn(() => false) }
@@ -610,6 +633,7 @@ describe('getPiAgentStatusExtensionSource', () => {
       const events = harness.fetchMock.mock.calls.map(
         (call) => JSON.parse(String(call[1]?.body)).payload.hook_event_name
       )
+
       expect(events).toEqual(['agent_start', 'agent_end'])
       expect(vi.getTimerCount()).toBe(0)
     } finally {
@@ -619,14 +643,17 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('drops a pending legacy fallback when its context becomes stale on reload', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createHarness({ kind: 'pi' })
       let active = true
+
       const context = {
         isIdle: vi.fn(() => {
           if (!active) {
             throw new Error('stale extension context')
           }
+
           return false
         })
       }
@@ -646,6 +673,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('keeps polling Pi and Prime until their agent_end handlers settle', async () => {
     vi.useFakeTimers()
+
     try {
       for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createHarness({ kind })
@@ -692,6 +720,7 @@ describe('getPiAgentStatusExtensionSource', () => {
         if (path === '/proc/sys/kernel/osrelease' || path === '/proc/version') {
           return 'Linux 6.8.0 generic'
         }
+
         throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
       },
       fetchImpl: vi.fn(async () => {

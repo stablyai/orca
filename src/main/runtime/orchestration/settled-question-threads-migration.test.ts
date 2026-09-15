@@ -15,6 +15,7 @@ describe('OrchestrationDb v37 to v38 migration', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
@@ -26,11 +27,13 @@ describe('OrchestrationDb v37 to v38 migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v38-'))
     const dbPath = join(tempDir, 'orchestration.db')
     const seed = new OrchestrationDb(dbPath)
+
     const run = seed.createRun({
       objective: 'pre-v38 run',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     })
+
     const ask = (dispatchId: string) =>
       seed.createQuestion({
         runId: run.id,
@@ -38,6 +41,7 @@ describe('OrchestrationDb v37 to v38 migration', () => {
         askerHandle: 'term_worker',
         question: 'still pending?'
       }).question.message_id
+
     const settledTask = seed.createTask({ spec: 'settled before v38', runId: run.id })
     const settledDispatch = createRootDispatch(seed, settledTask.id, 'term_worker')
     const settled = ask(settledDispatch.id)
@@ -53,6 +57,7 @@ describe('OrchestrationDb v37 to v38 migration', () => {
     raw.prepare("UPDATE question_threads SET status = 'pending', closed_at = NULL").run()
     raw.pragma('user_version = 37')
     raw.close()
+
     return { path: dbPath, settled, active }
   }
 

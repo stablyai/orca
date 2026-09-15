@@ -9,6 +9,7 @@ import { resolveGitDir } from './resolve-git-dir'
 
 // Expectations go through `path` so they hold on whichever host runs the suite.
 const linkedGitDir = path.resolve('/repo/feature', '../main/.git/worktrees/feature')
+
 const ownDotGit = path.join('/repo/feature', '.git')
 
 describe('resolveGitDir', () => {

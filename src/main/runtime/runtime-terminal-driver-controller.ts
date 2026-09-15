@@ -38,21 +38,26 @@ export class RuntimeTerminalDriverController {
 
   set(ptyId: string, next: DriverState): void {
     const prev = this.get(ptyId)
+
     if (prev.kind === next.kind) {
       if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
         return
       }
+
       if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
         return
       }
     }
+
     if (next.kind === 'idle') {
       this.current.delete(ptyId)
     } else {
       this.current.set(ptyId, next)
     }
+
     this.deps.notifyChanged(ptyId, next)
     const listeners = this.listeners.get(ptyId)
+
     if (listeners) {
       notifyRuntimeListeners(listeners, (listener) => listener(next), 'pty-driver')
     }
@@ -62,7 +67,9 @@ export class RuntimeTerminalDriverController {
     if (!this.current.delete(ptyId)) {
       return false
     }
+
     this.deps.notifyChanged(ptyId, { kind: 'idle' })
+
     return true
   }
 
@@ -70,8 +77,10 @@ export class RuntimeTerminalDriverController {
     const listeners = this.listeners.get(ptyId) ?? new Set<(driver: DriverState) => void>()
     listeners.add(listener)
     this.listeners.set(ptyId, listeners)
+
     return () => {
       listeners.delete(listener)
+
       if (listeners.size === 0) {
         this.listeners.delete(ptyId)
       }
@@ -85,29 +94,36 @@ export class RuntimeTerminalDriverController {
     if (!this.deps.canClaimMobileFloor(ptyId, clientId)) {
       return null
     }
+
     const state = this.inputFloorClaims.get(ptyId) ?? {
       base: this.get(ptyId),
       generation: 0,
       committedGeneration: 0,
       pending: new Map<symbol, { clientId: string; generation: number }>()
     }
+
     this.inputFloorClaims.set(ptyId, state)
     const token = Symbol('mobile-input-floor')
     const generation = ++state.generation
     state.pending.set(token, { clientId, generation })
     this.set(ptyId, { kind: 'mobile', clientId })
     let settled = false
+
     return {
       commit: async () => {
         if (settled) {
           return
         }
+
         settled = true
         state.pending.delete(token)
+
         if (generation < state.committedGeneration) {
           this.deleteSettledClaim(ptyId, state)
+
           return
         }
+
         const previousFloor = state.base
         state.committedGeneration = generation
         state.base = { kind: 'mobile', clientId }
@@ -124,12 +140,16 @@ export class RuntimeTerminalDriverController {
         if (settled) {
           return
         }
+
         settled = true
         state.pending.delete(token)
+
         if (this.inputFloorClaims.get(ptyId) !== state) {
           return
         }
+
         const current = this.get(ptyId)
+
         if (current.kind === 'mobile' && current.clientId === clientId) {
           const pendingClientId = Array.from(state.pending.values()).at(-1)?.clientId
           this.set(
@@ -137,6 +157,7 @@ export class RuntimeTerminalDriverController {
             pendingClientId ? { kind: 'mobile', clientId: pendingClientId } : state.base
           )
         }
+
         this.deleteSettledClaim(ptyId, state)
       }
     }

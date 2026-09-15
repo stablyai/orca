@@ -26,9 +26,11 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const task = db.getTask(params.task)
+
       if (!task) {
         throw taskNotFoundError(`Task not found: ${params.task}`, { taskId: params.task })
       }
+
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.from,
@@ -36,6 +38,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence
       })
+
       if (task.run_id !== run.id) {
         throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
           taskId: task.id,
@@ -46,10 +49,12 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
         const maxDepth = runtime.getNestedWorkerMaxDepth()
+
         const previewDepth = db.resolveChildDispatchDepth(
           resolveDispatchCreator(runtime, params.from),
           maxDepth
         )
+
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
@@ -62,12 +67,14 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
             ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
             : {})
         })
+
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
 
       if (!params.to) {
         throw new Error('Missing --to')
       }
+
       const to = params.to
 
       if (task.status !== 'ready') {
@@ -79,12 +86,15 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       }
 
       const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
+
       const assigneePaneKey =
         dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
+
       const processIncarnation =
         dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
           ? dispatchAuthority.processIncarnation
           : undefined
+
       // Why: the assignee side prefers dispatch authority, so the caller side must too — getTerminalPaneKey
       // alone returns null for a handle reachable only through the window-graph leaf, going inert here.
       const callerPane = params.from
@@ -92,6 +102,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           runtime.getTerminalPaneKey(params.from) ??
           null)
         : null
+
       if (
         params.inject &&
         params.from &&
@@ -109,6 +120,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
       if (params.inject) {
         const hasAgent = await runtime.isTerminalRunningAgent(to)
+
         if (!hasAgent) {
           throw injectRejectedError(to, 'no_agent_detected')
         }
@@ -122,6 +134,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       }
 
       revalidateLegacyCoordinator?.()
+
       const ctx = db.createDispatchContext({
         taskId: params.task,
         assigneeHandle: to,
@@ -131,6 +144,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         creator: resolveDispatchCreator(runtime, params.from),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
+
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
             dispatchId: ctx.id,
@@ -154,6 +168,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
       let injected = false
       let prompt
+
       if (params.inject) {
         try {
           prompt = await runtime.sendTerminalAgentPrompt(to, preamble, {
@@ -178,6 +193,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           ...(prompt?.prompt ? { prompt: prompt.prompt } : {})
         }
       }
+
       return { dispatch: ctx, injected, ...(prompt?.prompt ? { prompt: prompt.prompt } : {}) }
     }
   }),
@@ -187,18 +203,23 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     params: DispatchShowParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+
       if (!params.task) {
         throw new Error('Missing --task')
       }
+
       const ctx = db.getDispatchContext(params.task)
 
       // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
       if (params.preamble) {
         const task = db.getTask(params.task)
+
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
         }
+
         const workerHandle = ctx?.assignee_handle ?? 'worker'
+
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
@@ -210,6 +231,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           devMode: params.devMode,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })
+
         return { dispatch: ctx ?? null, preamble }
       }
 

@@ -8,6 +8,7 @@ function createClaimedSubprocess(): SubprocessHandle & {
 } {
   let onData: ((data: string) => void) | null = null
   let onExit: ((code: number) => void) | null = null
+
   return {
     pid: 99_999,
     getForegroundProcess: () => 'codex',
@@ -32,10 +33,13 @@ function createClaimedSubprocess(): SubprocessHandle & {
 describe('TerminalHost agent-session claims', () => {
   let host: TerminalHost
   let subprocess: ReturnType<typeof createClaimedSubprocess> | undefined
+
   const spawnSubprocess = vi.fn(() => {
     subprocess = createClaimedSubprocess()
+
     return subprocess
   })
+
   const claim = {
     digestVersion: 1 as const,
     keyId: 'key',
@@ -43,6 +47,7 @@ describe('TerminalHost agent-session claims', () => {
     worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     agent: 'codex' as const
   }
+
   const surface = {
     worktreeId: 'worktree',
     tabId: 'tab',
@@ -68,6 +73,7 @@ describe('TerminalHost agent-session claims', () => {
       streamClient: { onData: vi.fn(), onExit: vi.fn() },
       agentSessionEnsure: { claim, surface }
     })
+
     const second = await host.createOrAttach({
       sessionId: 'session-claimed-retry',
       cols: 80,
@@ -96,6 +102,7 @@ describe('TerminalHost agent-session claims', () => {
       spawnSubprocess: () => {
         const handle = createClaimedSubprocess()
         subprocesses.push(handle)
+
         return handle
       }
     })
@@ -128,6 +135,7 @@ describe('TerminalHost agent-session claims', () => {
     host.write('replacement-resume-session', 'replacement-writer')
     expect(subprocesses[0]?.write).toHaveBeenCalledWith('original-writer')
     expect(subprocesses[1]?.write).toHaveBeenCalledWith('replacement-writer')
+
     for (const handle of subprocesses) {
       handle.exit()
     }
@@ -135,13 +143,16 @@ describe('TerminalHost agent-session claims', () => {
 
   it('rejects a competing claim without replacing the winning stream', async () => {
     let releaseSpawn: () => void = () => {}
+
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
     })
+
     host = new TerminalHost({
       spawnSubprocess: async () => {
         await spawnGate
         subprocess = createClaimedSubprocess()
+
         return subprocess
       }
     })
@@ -155,6 +166,7 @@ describe('TerminalHost agent-session claims', () => {
       streamClient: { onData: winningData, onExit: vi.fn() },
       agentSessionEnsure: { claim, surface }
     })
+
     const competing = host.createOrAttach({
       sessionId: 'shared-requested-id',
       cols: 80,
@@ -181,13 +193,16 @@ describe('TerminalHost agent-session claims', () => {
 
   it('does not attach a canceled adopter after waiting for a reservation', async () => {
     let releaseSpawn: () => void = () => {}
+
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
     })
+
     host = new TerminalHost({
       spawnSubprocess: async () => {
         await spawnGate
         subprocess = createClaimedSubprocess()
+
         return subprocess
       }
     })
@@ -202,6 +217,7 @@ describe('TerminalHost agent-session claims', () => {
       streamClient: { onData: winningData, onExit: vi.fn() },
       agentSessionEnsure: { claim, surface }
     })
+
     const adopter = host.createOrAttach({
       sessionId: 'reservation-adopter',
       cols: 80,

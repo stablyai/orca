@@ -33,6 +33,7 @@ export async function settleGitBranchLineTotalWithinSoftDeadline(input: {
   softDeadlineMs?: number
 }): Promise<GitBranchLineTotal | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const deadline = new Promise<typeof BRANCH_LINE_TOTAL_PENDING>((resolve) => {
     timer = setTimeout(
       () => resolve(BRANCH_LINE_TOTAL_PENDING),
@@ -41,16 +42,20 @@ export async function settleGitBranchLineTotalWithinSoftDeadline(input: {
     // Why: a pending status timer must not hold the process open at shutdown.
     timer.unref?.()
   })
+
   const settled = await Promise.race([input.total, deadline])
   clearTimeout(timer)
+
   if (settled !== BRANCH_LINE_TOTAL_PENDING) {
     return settled
   }
+
   void input.total.then((late) => {
     if (late) {
       input.onLateArrival(late)
     }
   })
+
   return undefined
 }
 
@@ -93,6 +98,7 @@ export function sumGitBranchLineTotal(input: {
   let testRemoved = 0
   let generatedAdded = 0
   let generatedRemoved = 0
+
   for (const source of [input.tracked, input.untracked]) {
     for (const [filePath, stats] of source) {
       // Binary files parse to undefined in numstat and contribute nothing, matching
@@ -101,6 +107,7 @@ export function sumGitBranchLineTotal(input: {
       const fileRemoved = stats.removed ?? 0
       added += fileAdded
       removed += fileRemoved
+
       // Generated wins the overlap (a snapshot is both): the point of the bucket
       // is to separate authored lines from churn, and a regenerated file is churn
       // wherever it lives.
@@ -113,6 +120,7 @@ export function sumGitBranchLineTotal(input: {
       }
     }
   }
+
   return {
     added,
     removed,
@@ -131,38 +139,49 @@ const rangedNumstatLeaseOwner = new GitStatusReadLeaseOwner<Map<string, GitLineS
 // backoff, so an overrunning one would restart the moment it finished. Make it
 // wait out its own measured cost; the cache carry-forward keeps the chip up.
 const GIT_BRANCH_LINE_TOTAL_MAX_COOLDOWN_MS = 30_000
+
 const GIT_BRANCH_LINE_TOTAL_COOLDOWN_MAX_KEYS = 256
+
 const rangedNumstatCooldownUntilMs = new Map<string, number>()
 
 const monotonicNowMs = (): number => performance.now()
 
 function isRangedNumstatCoolingDown(leaseKey: string, nowMs: number): boolean {
   const readyAtMs = rangedNumstatCooldownUntilMs.get(leaseKey)
+
   if (readyAtMs === undefined) {
     return false
   }
+
   if (nowMs >= readyAtMs) {
     rangedNumstatCooldownUntilMs.delete(leaseKey)
+
     return false
   }
+
   return true
 }
 
 function recordRangedNumstatDuration(leaseKey: string, durationMs: number, nowMs: number): void {
   if (durationMs <= GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS) {
     rangedNumstatCooldownUntilMs.delete(leaseKey)
+
     return
   }
+
   rangedNumstatCooldownUntilMs.delete(leaseKey)
   rangedNumstatCooldownUntilMs.set(
     leaseKey,
     nowMs + Math.min(durationMs, GIT_BRANCH_LINE_TOTAL_MAX_COOLDOWN_MS)
   )
+
   while (rangedNumstatCooldownUntilMs.size > GIT_BRANCH_LINE_TOTAL_COOLDOWN_MAX_KEYS) {
     const oldestKey = rangedNumstatCooldownUntilMs.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     rangedNumstatCooldownUntilMs.delete(oldestKey)
   }
 }
@@ -195,20 +214,25 @@ export async function computeGitBranchLineTotal(input: {
   if (!isGitBranchLineTotalMergeBase(input.mergeBase)) {
     return undefined
   }
+
   const leaseKey = `${input.hostKey}\0${input.worktreePath}\0${input.mergeBase}`
+
   // Safe before the lease: a cooldown is only armed once a diff settled, so there
   // is never an in-flight one to join while it is active.
   if (isRangedNumstatCoolingDown(leaseKey, monotonicNowMs())) {
     return undefined
   }
+
   const [tracked, untracked] = await Promise.all([
     rangedNumstatLeaseOwner.lease(leaseKey, input.signal, async (sharedSignal) => {
       const startedAtMs = monotonicNowMs()
+
       try {
         const stdout = await input.runDiffNumstat(
           buildGitBranchLineTotalDiffArgs(input.mergeBase),
           sharedSignal
         )
+
         return parseNumstat(stdout)
       } catch (error) {
         // Why: an aborted pass must reject so a cancelled scan is never treated
@@ -217,6 +241,7 @@ export async function computeGitBranchLineTotal(input: {
         if (sharedSignal.aborted) {
           throw error
         }
+
         return null
       } finally {
         // `finally`, not the success path: a timeout is the costliest outcome.
@@ -235,8 +260,10 @@ export async function computeGitBranchLineTotal(input: {
       input.signal
     )
   ])
+
   if (tracked === null) {
     return undefined
   }
+
   return sumGitBranchLineTotal({ mergeBase: input.mergeBase, tracked, untracked })
 }

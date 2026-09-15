@@ -15,10 +15,12 @@ type WorktreeSnapshot = {
 // Why: Zustand reruns selectors on every write, so identity projections need
 // cross-render caching without pinning replaced store snapshots in memory.
 const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
+
 const repoMapCache = new WeakMap<AppState['repos'], Map<string, Repo>>()
 
 function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
   const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
+
   if (cachedSnapshot) {
     return cachedSnapshot
   }
@@ -32,20 +34,24 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   // from the sidebar entirely. Last wins within a host: fetchWorktrees replaces,
   // so the later entry is the current one.
   const byHostAndId = new Map<string, Worktree>()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       byHostAndId.set(composeWorktreeHostIdentity(worktree.hostId, worktree.id), worktree)
     }
   }
+
   const allWorktrees: Worktree[] = []
   const worktreeMap = new Map<string, Worktree>()
   const worktreesById = new Map<string, Worktree[]>()
+
   // Why the identity round-trip: `worktree.id` is a getter on some snapshots and
   // retained selectors assert it is read exactly once per row, so recover the id
   // from the key instead of reading the property again.
   for (const [identity, worktree] of byHostAndId) {
     const worktreeId = getWorktreeIdFromHostIdentity(identity)
     allWorktrees.push(worktree)
+
     // FIRST wins across hosts, matching `buildWorktreeByIdIndex` and the `.find()`
     // both replaced. Freshness is not the question here: the same-host duplicate
     // was already collapsed above, so what is left is a genuine two-host collision
@@ -53,15 +59,19 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
     if (!worktreeMap.has(worktreeId)) {
       worktreeMap.set(worktreeId, worktree)
     }
+
     const rows = worktreesById.get(worktreeId)
+
     if (rows) {
       rows.push(worktree)
     } else {
       worktreesById.set(worktreeId, [worktree])
     }
   }
+
   const snapshot = { allWorktrees, worktreeMap, worktreesById }
   worktreeSnapshotCache.set(worktreesByRepo, snapshot)
+
   return snapshot
 }
 
@@ -99,10 +109,13 @@ export function getIndexedWorktreeById(
 
 export function getIndexedRepoMap(repos: AppState['repos']): Map<string, Repo> {
   const cachedMap = repoMapCache.get(repos)
+
   if (cachedMap) {
     return cachedMap
   }
+
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
   repoMapCache.set(repos, repoMap)
+
   return repoMap
 }

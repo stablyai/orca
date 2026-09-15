@@ -19,18 +19,22 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   session.onAgentBecameWorking = (): void => {
     session.suppressNativeWindowsIdleCodexFocusReports = false
     session.clearSuppressedTitleSideEffects()
+
     if (session.syncAgentTaskCompleteTrackingEnabled()) {
       session.requiresFreshWorkingForAgentTaskCompleteNotification = false
       session.agentCompletionCoordinator.observeTitleWorking()
     }
+
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
     // countdown. The timer will restart when the agent becomes idle again.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     session.clearPendingAgentTaskCompleteNotification()
+
     if (session.pendingTerminalBellNotification) {
       session.scheduleTerminalBellNotification()
     }
   }
+
   session.onAgentExited = (): void => {
     // Why: eligibility can disappear transiently during reconnect, but a
     // confirmed shell-title transition is authoritative for native-chat exit.
@@ -46,6 +50,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     // Why: title reversion alone is not process death. The process/PTY tracker
     // owns removing agent rows when the TUI actually exits.
   }
+
   // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
   // callbacks to the correct Orca pane without resolving worktrees from cwd.
   // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
@@ -59,10 +64,12 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
         )
       : null
   session.workspaceEnv = { ORCA_WORKSPACE_ID: session.deps.worktreeId }
+
   if (session.folderWorkspace) {
     session.workspaceEnv.ORCA_PROJECT_GROUP_ID = session.folderWorkspace.projectGroupId
     session.workspaceEnv.ORCA_WORKSPACE_ROOT = session.folderWorkspace.folderPath
   }
+
   session.paneIdentityEnv = {
     ...session.workspaceEnv,
     ORCA_PANE_KEY: session.cacheKey,
@@ -135,13 +142,16 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     session.runtimeEnvironmentId === null
       ? (session.worktreeConnectionId ?? null)
       : null
+
   type DirectSshRetryLease = Pick<
     DirectSshPaneRetryAttempt,
     'attemptId' | 'authority' | 'tabGeneration'
   >
+
   session.directSshRetryAttempt = (() => {
     const pendingAttempt = session.state.directSshPaneRetryByTabId?.[session.deps.tabId]
     const liveBinding = session.state.directSshLivePtyBindingByTabId?.[session.deps.tabId]
+
     const attempt =
       pendingAttempt?.authority.targetId === session.connectionId &&
       pendingAttempt.tabGeneration === (session.tab?.generation ?? 0)
@@ -150,6 +160,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
             liveBinding.tabGeneration === (session.tab?.generation ?? 0)
           ? liveBinding
           : undefined
+
     return attempt
   })()
   // Only the PENDING retry marks a mount that a reconnect created. directSshRetryAttempt also
@@ -158,6 +169,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   // not just this one.
   session.followsDirectSshReconnect = (() => {
     const pending = session.state.directSshPaneRetryByTabId?.[session.deps.tabId]
+
     return (
       pending?.authority.targetId === session.connectionId &&
       pending.tabGeneration === (session.tab?.generation ?? 0)
@@ -179,13 +191,17 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     if (!session.directSshRetryAttempt) {
       return true
     }
+
     const currentState = useAppStore.getState()
+
     const currentConnection = currentState.sshConnectionStates.get(
       session.directSshRetryAttempt.authority.targetId
     )
+
     const currentTab = (currentState.tabsByWorktree[session.deps.worktreeId] ?? []).find(
       (candidate) => candidate.id === session.deps.tabId
     )
+
     if (
       currentConnection?.providerEpoch !== session.directSshRetryAttempt.authority.providerEpoch ||
       currentConnection?.connectionGeneration !==
@@ -194,7 +210,9 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     ) {
       return false
     }
+
     const pendingAttempt = currentState.directSshPaneRetryByTabId?.[session.deps.tabId]
+
     const pendingMatches =
       pendingAttempt?.attemptId === session.directSshRetryAttempt.attemptId &&
       directSshAuthoritiesEqual(
@@ -202,40 +220,53 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
         session.directSshRetryAttempt.authority
       ) &&
       pendingAttempt.tabGeneration === session.directSshRetryAttempt.tabGeneration
+
     const liveBinding = currentState.directSshLivePtyBindingByTabId?.[session.deps.tabId]
+
     const liveBindingMatchesAttempt =
       liveBinding?.attemptId === session.directSshRetryAttempt.attemptId &&
       directSshAuthoritiesEqual(liveBinding.authority, session.directSshRetryAttempt.authority) &&
       liveBinding.tabGeneration === session.directSshRetryAttempt.tabGeneration
+
     return pendingMatches || liveBindingMatchesAttempt
   }
+
   session.capturedDirectSshRetryStateMatches = (ptyId: string): boolean => {
     if (!session.directSshRetryAttempt) {
       return true
     }
+
     const currentConnection = useAppStore
       .getState()
       .sshConnectionStates.get(session.directSshRetryAttempt.authority.targetId)
+
     return (
       parseAppSshPtyId(ptyId)?.connectionId === session.directSshRetryAttempt.authority.targetId &&
       currentConnection?.status === 'connected' &&
       session.capturedDirectSshRetryLeaseMatches()
     )
   }
+
   session.claimCapturedDirectSshRetryPty = (ptyId: string): boolean => {
     if (!session.capturedDirectSshRetryStateMatches(ptyId)) {
       return false
     }
+
     session.capturedDirectSshRetryPtyAccepted = session.directSshRetryAttempt !== undefined
+
     return true
   }
+
   session.canAdoptCapturedDirectSshRetryPty = (ptyId: string): boolean => {
     const canAdopt = session.capturedDirectSshRetryStateMatches(ptyId)
+
     if (canAdopt && session.directSshRetryAttempt) {
       session.capturedDirectSshRetryPtyAccepted = true
     }
+
     return canAdopt
   }
+
   // One settle for this pane's attach attempt, reporting to both ledgers that
   // track it: the direct-SSH pane retry (when a lease owns this attempt) and
   // the tab's recovery ledger. Keeping them on one call is what stops a second
@@ -245,9 +276,11 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     status: 'success' | 'failed' | 'timed-out'
   ): void => {
     settleTerminalPaneRecovery(session.deps.tabId, session.terminalRecoveryGeneration, status)
+
     if (!attempt || status === 'success') {
       return
     }
+
     useAppStore.getState().settleDirectSshPaneRetry?.({
       status,
       tabId: session.deps.tabId,

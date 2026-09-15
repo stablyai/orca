@@ -7,7 +7,9 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 export const hostPlatform = process.platform
+
 export const testState = {
   userDataDir: '',
   fakeHomeDir: '',
@@ -53,8 +55,10 @@ export function createKeychainMock() {
         if (configDir !== expectedRuntimeConfigDir()) {
           return testState.legacyKeychainCredentials
         }
+
         return testState.scopedKeychainCredentials ?? testState.legacyKeychainCredentials
       }
+
       return testState.legacyKeychainCredentials
     }),
     writeActiveClaudeKeychainCredentials: vi.fn(async (contents: string, configDir?: string) => {
@@ -62,13 +66,16 @@ export function createKeychainMock() {
         if (configDir !== expectedRuntimeConfigDir()) {
           throw new Error(`Unexpected Claude config dir: ${configDir}`)
         }
+
         if (testState.throwScopedKeychainWrite) {
           throw new Error('scoped keychain write failed')
         }
+
         testState.scopedKeychainCredentials = contents
       } else {
         testState.legacyKeychainCredentials = contents
       }
+
       testState.activeKeychainCredentials = contents
     }),
     deleteActiveClaudeKeychainCredentials: vi.fn(async () => {
@@ -81,10 +88,12 @@ export function createKeychainMock() {
         if (configDir !== expectedRuntimeConfigDir()) {
           throw new Error(`Unexpected Claude config dir: ${configDir}`)
         }
+
         testState.scopedKeychainCredentials = null
       } else {
         testState.legacyKeychainCredentials = null
       }
+
       testState.activeKeychainCredentials = null
     }),
     readActiveClaudeKeychainCredentialsStrict: vi.fn(async (configDir?: string) =>
@@ -93,6 +102,7 @@ export function createKeychainMock() {
             if (testState.throwScopedKeychainRead) {
               throw new Error('scoped keychain read failed')
             }
+
             return configDir === expectedRuntimeConfigDir()
               ? testState.scopedKeychainCredentials
               : null
@@ -101,6 +111,7 @@ export function createKeychainMock() {
             if (testState.throwLegacyKeychainRead) {
               throw new Error('legacy keychain read failed')
             }
+
             return testState.legacyKeychainCredentials
           })()
     ),
@@ -109,14 +120,18 @@ export function createKeychainMock() {
         if (configDir !== expectedRuntimeConfigDir()) {
           throw new Error(`Unexpected Claude config dir: ${configDir}`)
         }
+
         if (testState.throwRuntimeKeychainWrite) {
           throw new Error('runtime keychain write failed')
         }
+
         testState.runtimeWriteConfigDir = configDir
         testState.scopedKeychainCredentials = contents
+
         if (testState.throwLegacyRuntimeKeychainWrite) {
           throw new Error('legacy runtime keychain write failed')
         }
+
         testState.legacyKeychainCredentials = contents
         testState.activeKeychainCredentials = contents
       }
@@ -162,6 +177,7 @@ export function cleanupRuntimeAuthTestState(): void {
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
+
   rmSync(testState.userDataDir, { recursive: true, force: true })
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
 }
@@ -185,6 +201,7 @@ export function createStore(settings: GlobalSettings) {
           ...updates.notifications
         }
       }
+
       return settings
     })
   }
@@ -202,6 +219,7 @@ export function createManagedClaudeAuth(
   writeFileSync(join(managedAuthPath, '.credentials.json'), credentialsJson, 'utf-8')
   writeFileSync(join(managedAuthPath, 'oauth-account.json'), oauthAccountJson, 'utf-8')
   testState.managedKeychainCredentials.set(accountId, credentialsJson)
+
   return managedAuthPath
 }
 
@@ -263,14 +281,17 @@ export function readManagedCredentialsForTest(
   if (process.platform === 'darwin') {
     return testState.managedKeychainCredentials.get(accountId) ?? null
   }
+
   return readFileSync(join(managedAuthPath, '.credentials.json'), 'utf-8')
 }
 
 export function readRuntimeOauthAccountForTest(): unknown {
   const configPath = join(testState.fakeHomeDir, '.claude.json')
+
   if (!existsSync(configPath)) {
     return null
   }
+
   return (
     (JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>).oauthAccount ?? null
   )

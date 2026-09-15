@@ -24,8 +24,11 @@ vi.mock('../../../shared/child-process/run-process', () => ({
 // Why: stands in for the icacls cold start; long enough that a gated response would be obvious,
 // short enough that the suite stays fast. Assertions use the recorded ordering, never this number.
 const INJECTED_SPAWN_LATENCY_MS = 5
+
 const USER_SID = 'S-1-5-21-1000'
+
 const OK: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+
 /**
  * One secure write hardens two paths: the staged temp file, fresh and still on the inherited DACL,
  * costs the full verify/reset/grant/verify pass; the published file, whose protected DACL came
@@ -45,25 +48,34 @@ function fakeIcacls(spec: ProcessSpec): ProcessResult {
   const args = spec.args ?? []
   const path = args[0] ?? ''
   const grantIndex = args.indexOf('/grant:r')
+
   if (grantIndex !== -1) {
     hardenedByFake.set(path, args[grantIndex + 1]!.includes('(OI)(CI)') ? 'OICI' : '')
+
     return OK
   }
+
   const saveIndex = args.indexOf('/save')
+
   if (saveIndex === -1) {
     return OK // /reset
   }
+
   writeFileSync(args[saveIndex + 1]!, fakeSddl(path), 'utf16le')
+
   return OK
 }
 
 function fakeSddl(path: string): string {
   const aceFlags = hardenedByFake.get(path)
+
   if (aceFlags === undefined) {
     // Never hardened: the inherited DACL a fresh file carries, so the first verify must fail.
     return `name\r\nD:(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;${USER_SID})\r\n`
   }
+
   const ace = (sid: string): string => `(A;${aceFlags};FA;;;${sid})`
+
   return `name\r\nD:PAI${ace('BA')}${ace('SY')}${ace(USER_SID)}\r\n`
 }
 
@@ -116,10 +128,12 @@ describe('mobile auth critical path', () => {
       if (spec.program.endsWith('whoami.exe')) {
         return { ...OK, stdout: `"USER","${USER_SID}"` }
       }
+
       timeline.push('acl-spawn')
       // Why: the real spawn blocks the main thread, so the fake must too — and via Atomics, not a
       // Date.now() spin, which would never terminate under fake timers.
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, INJECTED_SPAWN_LATENCY_MS)
+
       return fakeIcacls(spec)
     })
     // The directory harden stays on the async lane, so it never lands on the timeline.
@@ -128,14 +142,17 @@ describe('mobile auth critical path', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     if (originalSystemRoot === undefined) {
       delete process.env.SystemRoot
     } else {
       process.env.SystemRoot = originalSystemRoot
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -155,6 +172,7 @@ describe('mobile auth critical path', () => {
       timeline.push(type === 'e2ee_ready' || type === 'e2ee_authenticated' ? type : 'other-frame')
     })
     const transport = new FakeTransport()
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registry,
       e2eeKeypair: {
@@ -166,6 +184,7 @@ describe('mobile auth critical path', () => {
       onBinary: vi.fn(),
       onClose: vi.fn()
     })
+
     wiring.attachTransport(transport)
     transport.receive(
       ws,
@@ -178,6 +197,7 @@ describe('mobile auth critical path', () => {
       ws,
       encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: device.token }), sharedKey)
     )
+
     return { ws, sharedKey }
   }
 

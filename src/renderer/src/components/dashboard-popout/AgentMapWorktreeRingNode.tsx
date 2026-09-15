@@ -67,7 +67,9 @@ function WorktreeDetails({
     worktree.statusCounts.monitoring +
     worktree.statusCounts.blocked +
     worktree.statusCounts.waiting
+
   const doneCount = worktree.statusCounts.done + worktree.statusCounts['done-seen']
+
   return (
     <PopoverContent align="center" sideOffset={10} className="w-80 p-0">
       <header className="border-b border-border px-3 py-2.5">
@@ -242,6 +244,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
               if (exiting) {
                 return
               }
+
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
                 setDetailsOpen((open) => !open)
@@ -274,6 +277,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                 const parent = child.card.parentPaneKey
                   ? agentsByPaneKey.get(child.card.parentPaneKey)
                   : undefined
+
                 // Why no y-gate: both endpoints are drawn nodes, so the relationship is
                 // real whatever the layout ranked them. Suppressing the edge only hid
                 // lineage that packing pressure had placed side by side.
@@ -284,6 +288,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                 if (!parent || parent.card.paneKey === child.card.paneKey) {
                   return null
                 }
+
                 return (
                   <path
                     key={child.card.paneKey}
@@ -301,6 +306,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
               const iconSize = Math.max(12, Math.min(22, agent.radius * 1.05))
               const agentExiting = exiting || agent.motionState === 'exiting'
               const flareStatus = recentFlareStatuses.get(agent.card.paneKey)
+
               // `done` here is the unread finish only — `done-seen` demotes to a bare
               // emerald ring so the halo keeps meaning "this one is still unread".
               const hasStatusGlow =
@@ -308,6 +314,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                 agent.status === 'waiting' ||
                 agent.status === 'blocked' ||
                 agent.status === 'done'
+
               return (
                 <g
                   key={agent.card.paneKey}
@@ -331,6 +338,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                     if (agentExiting) {
                       return
                     }
+
                     event.currentTarget.focus()
                     onSelectAgent(agent.card)
                   }}

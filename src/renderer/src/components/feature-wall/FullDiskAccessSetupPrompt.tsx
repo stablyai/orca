@@ -47,9 +47,11 @@ function getFullDiskAccessStatusLabel(args: FullDiskAccessStatusState): string {
       'Checking'
     )
   }
+
   if (isFullDiskAccessReady(args.status)) {
     return translate('auto.components.feature.wall.FullDiskAccessSetupPrompt.48d87edcd2', 'Granted')
   }
+
   return translate(
     'auto.components.feature.wall.FullDiskAccessSetupPrompt.6db9a69f4e',
     'Recommended'
@@ -63,9 +65,11 @@ function getFullDiskAccessButtonLabel(args: FullDiskAccessButtonState): string {
       'Opening...'
     )
   }
+
   if (args.ready) {
     return translate('auto.components.feature.wall.FullDiskAccessSetupPrompt.48d87edcd2', 'Granted')
   }
+
   return translate(
     'auto.components.feature.wall.FullDiskAccessSetupPrompt.6e3d62b816',
     'Open Full Disk Access'
@@ -76,9 +80,11 @@ function FullDiskAccessButtonIcon(props: FullDiskAccessButtonState): React.JSX.E
   if (props.requesting) {
     return <Loader2 className="size-3.5 animate-spin" />
   }
+
   if (props.ready) {
     return <Check className="size-3.5" />
   }
+
   return <ExternalLink className="size-3.5" />
 }
 
@@ -86,6 +92,7 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
   const isMac = isMacUserAgent()
   const mountedRef = useMountedRef()
   const refreshSequenceRef = useRef(0)
+
   const [state, setState] = useState<FullDiskAccessStatusState>({
     status: undefined,
     checking: isMac
@@ -96,6 +103,7 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
       if (!mountedRef.current) {
         return
       }
+
       setState((current) =>
         current.status === status && !current.checking ? current : { status, checking: false }
       )
@@ -106,11 +114,14 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
   const refresh = useCallback((): void => {
     if (!isMac) {
       finishRefresh('unsupported')
+
       return
     }
+
     if (mountedRef.current) {
       setState((current) => (current.checking ? current : { ...current, checking: true }))
     }
+
     const refreshId = ++refreshSequenceRef.current
     window.api.developerPermissions
       .getStatus()
@@ -132,13 +143,17 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
         refresh()
       }
     }
+
     refreshIfLive()
+
     if (!isMac) {
       return
     }
+
     // Why: users grant Full Disk Access outside Orca, so focus is the first
     // cheap signal that System Settings may have changed the permission state.
     window.addEventListener('focus', refreshIfLive)
+
     return () => {
       window.removeEventListener('focus', refreshIfLive)
     }
@@ -156,14 +171,18 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
 
   const handleOpenFullDiskAccess = useCallback(async (): Promise<void> => {
     setRequesting(true)
+
     try {
       const result = await window.api.developerPermissions.request({
         id: FULL_DISK_ACCESS_PERMISSION_ID
       })
+
       if (!mountedRef.current) {
         return
       }
+
       refresh()
+
       if (result.status === 'granted') {
         toast.success(
           translate('auto.components.feature.wall.FullDiskAccessSetupPrompt.48d87edcd2', 'Granted')

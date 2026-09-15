@@ -28,6 +28,7 @@ function SkillLines({ group }: { group: SkillManagedInstallGroup }): React.JSX.E
     <ul className="space-y-1">
       {group.installs.map((install) => {
         const note = managedSkillStateNote(install.state)
+
         return (
           <li key={install.name} className="flex items-baseline justify-between gap-3 text-xs">
             <span className="min-w-0 truncate">{install.name}</span>

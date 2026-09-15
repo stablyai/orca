@@ -32,12 +32,15 @@ function recordTransactionDurations(durations: number[]): () => void {
     if (sql === 'BEGIN IMMEDIATE') {
       started = performance.now()
     }
+
     exec.call(this, sql)
+
     if (sql === 'COMMIT' && started > 0) {
       durations.push(performance.now() - started)
       started = 0
     }
   }
+
   return () => {
     SyncDatabase.prototype.exec = exec
   }
@@ -46,6 +49,7 @@ function recordTransactionDurations(durations: number[]): () => void {
 /** The writer commits synchronously, so a peer chain samples the gap each read leaves. */
 async function sampleLoopStalls(running: () => boolean, stalls: number[]): Promise<void> {
   let previous = performance.now()
+
   while (running()) {
     await yieldToEventLoop()
     const now = performance.now()
@@ -59,10 +63,12 @@ function tableBytes(db: SyncDatabase): Record<string, number> {
     name: string
     bytes: number
   }[]
+
   const group = (prefix: string): number =>
     rows
       .filter((row) => row.name === prefix || row.name.startsWith(`${prefix}_`))
       .reduce((sum, row) => sum + row.bytes, 0)
+
   return {
     messagesFts: group('messages_fts'),
     messages: group('messages') - group('messages_fts'),
@@ -75,7 +81,9 @@ function assertIndexedMessages(db: SyncDatabase, expected: number): number {
   const { n } = db
     .prepare('SELECT count(*) AS n FROM messages m JOIN sessions s ON s.id = m.session_row_id')
     .get() as { n: number }
+
   assert.equal(n, expected, 'indexed message count')
+
   return n
 }
 
@@ -83,14 +91,18 @@ async function checkpointedFileBytes(db: SyncDatabase, path: string): Promise<nu
   // Flush committed WAL pages before reporting the final database footprint.
   const [checkpoint] = db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[]
   assert.equal(checkpoint?.busy, 0, 'storage measurement requires a completed checkpoint')
+
   return (await stat(path)).size
 }
 
 // The default corpus puts tool output at about half the message text; set this
 // far higher to price the tool-row cap against the real 80-97 % band.
 const toolResultWords = Number(process.env.ORCA_SEARCH_BENCH_TOOL_WORDS ?? 200)
+
 const corpus = await writeSyntheticTranscriptCorpus({ toolResultWords })
+
 const indexPath = join(corpus.root, 'index.sqlite')
+
 try {
   const errors: unknown[] = []
   const store = new SessionSearchStore(indexPath, (error) => errors.push(error))
@@ -99,10 +111,12 @@ try {
   const transactions: number[] = []
   const restoreExec = recordTransactionDurations(transactions)
   let indexing = true
+
   try {
     const stats = createSessionParseStats()
     const started = performance.now()
     const sampler = sampleLoopStalls(() => indexing, stalls)
+
     for (const path of corpus.files) {
       await parseAgentSessionFileCached(
         await sessionCandidate('claude', path),
@@ -110,6 +124,7 @@ try {
         stats
       )
     }
+
     indexing = false
     await sampler
     restoreExec()
@@ -117,17 +132,22 @@ try {
     assert.deepEqual(errors, [])
 
     const reader = new SyncDatabase(indexPath, { readonly: true })
+
     try {
       const rows = assertIndexedMessages(reader, corpus.messageCount)
+
       const sessions = (
         reader.prepare('SELECT count(*) AS n FROM sessions').get() as {
           n: number
         }
       ).n
+
       assert.equal(sessions, corpus.files.length)
       const bytes = tableBytes(reader)
+
       const perMb = (value: number): number =>
         Math.round((value / (corpus.transcriptBytes / (1024 * 1024))) * 10) / 10
+
       const fileBytes = await checkpointedFileBytes(store.connection, indexPath)
       stalls.sort((a, b) => a - b)
       transactions.sort((a, b) => a - b)
@@ -181,18 +201,22 @@ try {
 // Phase two: one transcript far larger than any real one, to price the ceiling
 // that decides whether a file commits once or in chunks.
 const largeTurns = Number(process.env.ORCA_SEARCH_BENCH_LARGE_TURNS ?? 23_000)
+
 const large = await writeSyntheticTranscriptCorpus({
   sessions: 1,
   turnsPerSession: largeTurns,
   seed: 2
 })
+
 const largeIndexPath = join(large.root, 'index.sqlite')
+
 try {
   const errors: unknown[] = []
   const store = new SessionSearchStore(largeIndexPath, (error) => errors.push(error))
   const unregister = registerSessionSearchIndexConsumer(store)
   const transactions: number[] = []
   const restoreExec = recordTransactionDurations(transactions)
+
   try {
     const stats = createSessionParseStats()
     const started = performance.now()

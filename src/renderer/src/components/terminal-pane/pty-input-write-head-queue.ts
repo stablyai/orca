@@ -20,11 +20,13 @@ export function shiftHeadQueue(queue: HeadQueue): PendingPtyInputWrite | undefin
   const removed = queue.items[queue.head]
   queue.items[queue.head] = undefined
   queue.head += 1
+
   if (queue.head === queue.items.length) {
     resetHeadQueue(queue)
   } else if (queue.head >= 1024 && queue.head * 2 >= queue.items.length) {
     queue.items = queue.items.slice(queue.head)
     queue.head = 0
   }
+
   return removed
 }

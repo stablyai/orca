@@ -42,12 +42,16 @@ const testState: {
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: typeof testState.store) => unknown) =>
     selector(testState.store)
+
   useAppStore.getState = () => testState.store
+
   return { useAppStore }
 })
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
+
 // Real notice strings, so a copy of the wording here cannot outlive the string
 // users actually read, and a newly added export cannot go missing from the mock.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
@@ -64,19 +68,24 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
         }
       : { kind: testState.ownerKind }
 }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))
+
 vi.mock('./NativeChatComposerActions', () => ({
   NativeChatComposerActions: () => <div data-testid="composer-actions" />
 }))
+
 vi.mock('./NativeChatAutocompleteMenus', () => ({
   NativeChatMentionHint: () => null,
   NativeChatPickerMenu: () => null
 }))
+
 vi.mock('./NativeChatImageAttachmentPreview', () => ({
   NativeChatImageAttachmentPreview: ({
     attachment
@@ -120,6 +129,7 @@ type ProbeProps = {
 }
 
 let latestInput: NativeChatComposerInput | null = null
+
 const bubbledDrop = vi.fn()
 
 function ComposerProbe({
@@ -134,6 +144,7 @@ function ComposerProbe({
   const [notice, setNotice] = useState<string | null>(null)
   const inputRef = useRef<NativeChatComposerInput>(null)
   const imeEnterGesture = useImeEnterGestureOwnership()
+
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: `pane:${workspaceId}`,
     allowWithoutTarget: structured,
@@ -147,6 +158,7 @@ function ComposerProbe({
     setDraft,
     setNotice
   })
+
   const workspaceFileDropHandlers = useNativeChatWorkspaceFileDrop({
     terminalTabId: 'terminal-tab-1',
     structuredWorktreeId: structured ? (structuredWorkspaceId ?? workspaceId) : undefined,
@@ -155,6 +167,7 @@ function ComposerProbe({
     attachResolvedPaths: attachments.attachResolvedPaths,
     setNotice
   })
+
   useLayoutEffect(() => {
     latestInput = inputRef.current
   })
@@ -218,13 +231,16 @@ function internalTransfer(
 ): FileDragDataTransfer {
   const transfer = new FileDragDataTransfer()
   transfer.setData(WORKSPACE_FILE_PATH_MIME, paths[0] ?? '')
+
   if (paths.length > 1) {
     transfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
   }
+
   writeWorkspaceFileDragSource(transfer, {
     executionHostId: source.executionHostId ?? 'local',
     workspaceId: source.workspaceId ?? 'worktree-1'
   })
+
   return transfer
 }
 
@@ -243,6 +259,7 @@ function dispatchDragEvent(
   act(() => {
     accepted = target.dispatchEvent(event)
   })
+
   return accepted
 }
 
@@ -276,6 +293,7 @@ describe('native chat workspace file drops', () => {
       '/repo/My File.ts',
       '/repo/My File.ts'
     ])
+
     transfer.setData('text/plain', 'must not be inserted by ProseMirror')
     const accepted = dispatchDragEvent('drop', editor(), transfer)
 

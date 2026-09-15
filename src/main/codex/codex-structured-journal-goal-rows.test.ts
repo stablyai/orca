@@ -29,19 +29,23 @@ function frames(): {
   frames: Pick<CodexJournalGenericFrames, 'appendUnhandled'>
 } {
   const rows: AgentJournalItemBody[] = []
+
   const sink = {
     appendItem: (_identity: unknown, body: AgentJournalItemBody) => {
       rows.push(body)
     },
     publish: vi.fn()
   } as unknown as StructuredAgentSessionEventSink
+
   const goals = new CodexJournalGoals(sink)
   const generic = new CodexJournalGenericFrames({ sink }, () => null)
+
   return {
     rows,
     frames: {
       appendUnhandled: (kind, payload, threadId = 'session') => {
         const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
+
         return (
           goals.handle({ threadId, method, params: payload }) ??
           generic.appendUnhandled(kind, payload, threadId)

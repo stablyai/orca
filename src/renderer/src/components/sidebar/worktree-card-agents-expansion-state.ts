@@ -27,14 +27,17 @@ const DEFAULT_EXPANSION_STATE: WorktreeAgentExpansionState = {
 // matching the ephemeral live-agent lineage it tracks, and never grows without
 // bound in a long-lived renderer.
 export const MAX_PERSISTED_WORKTREE_AGENT_EXPANSIONS = 512
+
 const expansionByWorktreeId = new Map<string, WorktreeAgentExpansionState>()
 
 function trimPersistedExpansions(): void {
   while (expansionByWorktreeId.size > MAX_PERSISTED_WORKTREE_AGENT_EXPANSIONS) {
     const oldest = expansionByWorktreeId.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     expansionByWorktreeId.delete(oldest)
   }
 }
@@ -47,6 +50,7 @@ function persistExpansionState(worktreeId: string, state: WorktreeAgentExpansion
   // Re-insert to refresh LRU order; drop entries that carry no non-default
   // state so idle worktrees never occupy a slot.
   expansionByWorktreeId.delete(worktreeId)
+
   if (state.compactRootListExpanded || state.collapsedLineageParents.size > 0) {
     expansionByWorktreeId.set(worktreeId, state)
     trimPersistedExpansions()
@@ -91,11 +95,13 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
     (paneKey: string) => {
       const base = readExpansionState(worktreeId)
       const nextParents = new Set(base.collapsedLineageParents)
+
       if (nextParents.has(paneKey)) {
         nextParents.delete(paneKey)
       } else {
         nextParents.add(paneKey)
       }
+
       commit({ ...base, collapsedLineageParents: nextParents })
     },
     [commit, worktreeId]

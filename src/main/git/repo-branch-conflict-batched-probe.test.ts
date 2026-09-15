@@ -13,7 +13,9 @@ vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 import { getBranchConflictKind } from './repo-branch-conflict'
 
 const REMOTES = Array.from({ length: 58 }, (_, index) => `r${index}`)
+
 const BRANCH = 'user/feature'
+
 const WSL_BANNER =
   'Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 5.15.167.4-microsoft-standard-WSL2 x86_64)\n' +
   'To run a command as administrator (user "root"), use "sudo <command>".\n'
@@ -28,28 +30,35 @@ function installLoginShellRunner(): { argv: string[][] } {
   const argv: string[][] = []
   gitExecFileAsyncMock.mockImplementation(async (args: string[], options: GitExecOptions = {}) => {
     argv.push(args)
+
     if (args[0] === 'rev-parse') {
       throw new Error('local branch is absent')
     }
+
     if (args[0] === 'remote') {
       return { stdout: `${WSL_BANNER}${REMOTES.join('\n')}\n`, stderr: '' }
     }
+
     if (args[0] === 'show-ref') {
       throw Object.assign(new Error('missing ref'), { code: 1, stderr: '' })
     }
+
     if (args[0] === 'cat-file') {
       const payload = `${(options.stdin ?? '')
         .split('\n')
         .filter(Boolean)
         .map((ref) => `${ref} missing`)
         .join('\n')}\n`
+
       return {
         stdout: options.captureWslLoginShellOutput ? payload : `${WSL_BANNER}${payload}`,
         stderr: ''
       }
     }
+
     throw new Error(`unexpected git command: ${args.join(' ')}`)
   })
+
   return { argv }
 }
 
@@ -85,15 +94,19 @@ describe('getBranchConflictKind batched remote probe', () => {
       if (args[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (args[0] === 'remote') {
         return { stdout: `${REMOTES.join('\n')}\n`, stderr: '' }
       }
+
       if (args[0] === 'cat-file') {
         throw new Error('cat-file is unavailable on this host')
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: '', stderr: '' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 

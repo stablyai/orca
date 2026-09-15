@@ -14,11 +14,14 @@ export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
   async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
+
     // Why: reject flag-like base refs to prevent rev-parse option injection.
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
+
     const gitBound = this.git.bind(this)
+
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
       // Why: preserve non-ASCII filenames as UTF-8 for parseBranchDiff.
       const [{ stdout }, { stdout: numstat }] = await Promise.all([
@@ -31,6 +34,7 @@ export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
           worktreePath
         )
       ])
+
       return parseBranchDiff(stdout, parseNumstat(numstat))
     })
   }
@@ -38,6 +42,7 @@ export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
   async commitCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const commitId = params.commitId as string
+
     return commitCompareOp(this.git.bind(this), worktreePath, commitId)
   }
 
@@ -49,12 +54,14 @@ export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
         assertGitPushTargetShape(params.pushTarget)
         const pushTarget = params.pushTarget as GitPushTarget
         await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+
         return await getPublishTargetStatus(
           ((args) => this.git(args, worktreePath)) as GitCommandRunner,
           pushTarget,
           (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
         )
       }
+
       return await getEffectiveGitUpstreamStatus(
         (args) => this.git(args, worktreePath),
         (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
@@ -64,6 +71,7 @@ export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
       if (isNoUpstreamError(error)) {
         return { hasUpstream: false, ahead: 0, behind: 0 }
       }
+
       // Why: match fetch/push/pull normalization so execFile preamble and local paths don't leak to the renderer.
       throw new Error(normalizeGitErrorMessage(error, 'upstream'))
     }
@@ -78,6 +86,7 @@ export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
         ['log', '--oneline', '--cherry-mark', '--right-only', `HEAD...${upstreamName}`, '--'],
         worktreePath
       )
+
       return upstreamOnlyCommitsArePatchEquivalent(stdout)
     } catch {
       // Why: this only identifies stale post-rebase upstreams; if the probe fails over SSH, keep the conservative pull-first sync path.

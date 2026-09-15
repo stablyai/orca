@@ -40,13 +40,17 @@ export async function checkPtySpawnHealth(): Promise<void> {
   if (!preflightPtySpawnHealth()) {
     return
   }
+
   let lastError: unknown
+
   for (let attempt = 1; attempt <= PTY_SPAWN_HEALTH_RETRY_ATTEMPTS; attempt++) {
     try {
       await runPtySpawnHealthProbe()
+
       return
     } catch (error) {
       lastError = error
+
       if (attempt < PTY_SPAWN_HEALTH_RETRY_ATTEMPTS) {
         console.warn(
           `[daemon] PTY spawn health probe attempt ${attempt} failed; retrying`,
@@ -55,6 +59,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
       }
     }
   }
+
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
@@ -76,11 +81,13 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     sessionId: opts.sessionId,
     ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
   })
+
   if (opts.isCanceled?.()) {
     throw new TerminalAttachCanceledError(opts.sessionId)
   }
 
   let spawned: SpawnedDaemonPty
+
   try {
     spawned = spawnNativeDaemonPty({
       shellPath: launch.shellPath,
@@ -96,6 +103,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     if (process.platform === 'win32') {
       throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
     }
+
     throw error
   }
 

@@ -53,9 +53,11 @@ describe('task provider identity RPC validation', () => {
   it.each(['gitlab', 'linear', 'jira'])('keeps %s fields optional and nullable', (provider) => {
     expect(TaskProviderIdentity.parse({ provider })).toEqual({ provider })
     const full = identities.find((identity) => identity.provider === provider)!
+
     const nullable = Object.fromEntries(
       Object.keys(full).map((key) => [key, key === 'provider' ? provider : null])
     )
+
     expect(TaskProviderIdentity.parse(nullable)).toEqual(nullable)
   })
 
@@ -74,6 +76,7 @@ describe('task provider identity RPC validation', () => {
   it('preserves absent and explicit-null identities in folder contexts on local and SSH hosts', () => {
     expect(TaskProviderIdentity.parse(undefined)).toBeUndefined()
     expect(TaskProviderIdentity.parse(null)).toBeNull()
+
     for (const hostId of ['local', 'ssh:host']) {
       const context = { kind: 'task-source', provider: 'github', projectId: 'folder', hostId }
       expect(TaskSourceContext.parse(context)).not.toHaveProperty('providerIdentity')
@@ -136,6 +139,7 @@ describe('github identity blank fields', () => {
       owner: ' stablyai ',
       repo: 'orca'
     })
+
     expect(parsed.success && parsed.data?.owner).toBe(' stablyai ')
   })
 })

@@ -23,6 +23,7 @@ export function clearDidFinishLoadHandler(): void {
   if (didFinishLoadHandler && didFinishLoadWebContents) {
     didFinishLoadWebContents.removeListener('did-finish-load', didFinishLoadHandler)
   }
+
   setDidFinishLoadHandler(null, null)
 }
 
@@ -35,6 +36,7 @@ export function markRendererPtysHiddenForRendererLifecycleReset(): void {
   visibleRendererPtys.clear()
   // Why: the dead page never ACKs its in-flight bytes, so leaked accounting would delivery-gate surviving PTYs forever after a reload/crash.
   resetRendererDeliveryAccountingForLifecycleReset()
+
   if (activePriorityChanged) {
     invalidatePendingPtyDrainPriority()
   }
@@ -44,12 +46,14 @@ export function clearRendererLifecycleResetHandlers(): void {
   if (!rendererLifecycleResetWebContents) {
     return
   }
+
   if (rendererDidStartNavigationHandler) {
     rendererLifecycleResetWebContents.removeListener(
       'did-start-navigation',
       rendererDidStartNavigationHandler
     )
   }
+
   if (rendererLifecycleResetHandler) {
     rendererLifecycleResetWebContents.removeListener(
       'render-process-gone',
@@ -57,6 +61,7 @@ export function clearRendererLifecycleResetHandlers(): void {
     )
     rendererLifecycleResetWebContents.removeListener('destroyed', rendererLifecycleResetHandler)
   }
+
   setRendererLifecycleResetState({ contents: null, handler: null, navigation: null })
 }
 
@@ -64,12 +69,15 @@ export function registerRendererLifecycleResetHandlers(webContents: WebContents)
   clearRendererLifecycleResetHandlers()
   markRendererPtysHiddenForRendererLifecycleReset()
   const handler = markRendererPtysHiddenForRendererLifecycleReset
+
   const navigationHandler = (details: { isMainFrame: boolean; isSameDocument: boolean }) => {
     if (!details.isMainFrame || details.isSameDocument) {
       return
     }
+
     markRendererPtysHiddenForRendererLifecycleReset()
   }
+
   setRendererLifecycleResetState({
     contents: webContents,
     handler,
@@ -85,6 +93,7 @@ export function clearRendererGateResetHandlers(): void {
     if (rendererGateResetLoadHandler) {
       rendererGateResetWebContents.removeListener('did-finish-load', rendererGateResetLoadHandler)
     }
+
     if (rendererGateResetGoneHandler) {
       rendererGateResetWebContents.removeListener(
         'render-process-gone',
@@ -92,5 +101,6 @@ export function clearRendererGateResetHandlers(): void {
       )
     }
   }
+
   setRendererGateResetState({ contents: null, load: null, gone: null })
 }

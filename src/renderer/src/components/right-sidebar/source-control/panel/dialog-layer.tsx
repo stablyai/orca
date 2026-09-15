@@ -17,8 +17,11 @@ import { SourceControlTextGenerationDialog } from '../ai/text-generation-dialog'
 import { SourceControlDiscardDialog } from '../commit/discard-dialog'
 
 type AgentDialogProps = React.ComponentProps<typeof SourceControlAgentActionDialog>
+
 type BaseRefPickerProps = React.ComponentProps<typeof BaseRefPicker>
+
 type DiscardDialogProps = React.ComponentProps<typeof SourceControlDiscardDialog>
+
 type TextGenerationDialogProps = React.ComponentProps<typeof SourceControlTextGenerationDialog>
 
 export function SourceControlDialogLayer({

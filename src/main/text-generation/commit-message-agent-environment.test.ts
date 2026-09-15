@@ -6,19 +6,24 @@ import { prepareLocalCommitMessageAgentEnv } from './commit-message-agent-enviro
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 const originalEnv = { ...process.env }
+
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const tempDirs: string[] = []
 
 afterEach(() => {
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
+
   for (const key of Object.keys(process.env)) {
     if (!(key in originalEnv)) {
       delete process.env[key]
     }
   }
+
   Object.assign(process.env, originalEnv)
+
   while (tempDirs.length > 0) {
     rmSync(tempDirs.pop()!, { recursive: true, force: true })
   }
@@ -32,6 +37,7 @@ function makeHome(): string {
   process.env.SHELL = '/bin/zsh'
   delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
   delete process.env.ORCA_PI_SOURCE_AGENT_DIR
+
   return dir
 }
 
@@ -190,6 +196,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       {
         prepareForCodexLaunch: (target) => {
           expect(target).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
           return '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex'
         }
       },

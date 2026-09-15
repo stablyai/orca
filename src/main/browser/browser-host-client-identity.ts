@@ -6,6 +6,7 @@ import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-writ
 export const BROWSER_HOST_CLIENT_IDENTITY_FILE_NAME = 'browser-host-client-identity.json'
 
 const IDENTITY_STORE_VERSION = 1
+
 // The wire caps the id at 256 chars; a UUID is far below it, but a corrupt file must not smuggle
 // an oversized value onto every attach.
 const MAX_IDENTITY_LENGTH = 256
@@ -27,10 +28,13 @@ export function browserHostClientIdentityPath(profileDirectory: string): string 
 export function readOrCreateBrowserHostClientId(profileDirectory: string): string {
   const filePath = browserHostClientIdentityPath(profileDirectory)
   const stored = readStoredBrowserHostClientId(filePath)
+
   if (stored) {
     return stored
   }
+
   const minted = randomUUID()
+
   try {
     mkdirSync(dirname(filePath), { recursive: true })
     writeFileDurableSync(
@@ -42,12 +46,14 @@ export function readOrCreateBrowserHostClientId(profileDirectory: string): strin
     // Why: an unwritable profile degrades to today's per-process identity, which still hosts pages.
     console.warn('[browser-client-host] could not persist the hosting identity:', error)
   }
+
   return minted
 }
 
 function readStoredBrowserHostClientId(filePath: string): string | null {
   try {
     const parsed: unknown = JSON.parse(readFileSync(filePath, 'utf-8'))
+
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -55,7 +61,9 @@ function readStoredBrowserHostClientId(filePath: string): string | null {
     ) {
       return null
     }
+
     const identity = (parsed as { browserHostClientId?: unknown }).browserHostClientId
+
     return typeof identity === 'string' &&
       identity.length > 0 &&
       identity.length <= MAX_IDENTITY_LENGTH

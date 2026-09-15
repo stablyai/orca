@@ -23,27 +23,34 @@ type ActiveWorkspaceSshTargetInput = {
  */
 export function collectActiveWorkspaceSshTargetIds(input: ActiveWorkspaceSshTargetInput): string[] {
   const { activeWorktreeId } = input
+
   if (!activeWorktreeId) {
     return []
   }
+
   const targetIds = new Set<string>()
   const repoId = getRepoIdFromWorktreeId(activeWorktreeId)
   const connectionId = input.repos.find((repo) => repo.id === repoId)?.connectionId
+
   if (connectionId) {
     targetIds.add(connectionId)
   }
+
   for (const tab of input.tabsByWorktree[activeWorktreeId] ?? []) {
     const ptyIds = [
       tab.ptyId,
       input.pendingReconnectPtyIdByTabId[tab.id],
       ...Object.values(input.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
     ]
+
     for (const ptyId of ptyIds) {
       const parsed = ptyId ? parseAppSshPtyId(ptyId) : null
+
       if (parsed) {
         targetIds.add(parsed.connectionId)
       }
     }
   }
+
   return [...targetIds]
 }

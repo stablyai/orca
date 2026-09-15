@@ -5,6 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
@@ -45,6 +46,7 @@ function makeScan(
 
 function makeRepo(path: string): Repo {
   const id = path.split('/').pop() ?? path
+
   return {
     id,
     path,
@@ -137,7 +139,9 @@ describe('useAddRepoLocalFolderFlow', () => {
         selectedPathKind: 'non_git_folder',
         repos: [{ path: '/projects/monorepo/app', displayName: 'app', depth: 1 }]
       })
+
       controls?.onProgress?.(scan)
+
       return scan
     })
     const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
@@ -214,6 +218,7 @@ describe('useAddRepoLocalFolderFlow', () => {
       })
     )
     const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
     const flow = useAddRepoLocalFolderFlow({
       isOpen: true,
       droppedLocalPath: '',

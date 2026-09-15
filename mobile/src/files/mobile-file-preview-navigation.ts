@@ -21,6 +21,7 @@ export function navigateToMobileFilePreview(
   options: NavigateOptions = {}
 ): void {
   router.push(createMobileFilePreviewHref(params))
+
   if (options.embedded && options.onRequestClose) {
     // Why: closing the dock immediately can unmount the subtree before Expo
     // commits the route transition.

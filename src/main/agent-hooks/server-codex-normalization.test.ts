@@ -37,6 +37,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(root?.payload.model).toBe('gpt-5.4')
 
     const started = _internals.normalizeHookPayload(
@@ -50,6 +51,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(started?.providerSession).toBeUndefined()
     expect(started?.payload).toMatchObject({
       state: 'working',
@@ -77,6 +79,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(waiting?.payload.state).toBe('waiting')
     expect(waiting?.payload.subagents?.[0].state).toBe('waiting')
 
@@ -92,6 +95,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(workingAgain?.payload.state).toBe('working')
     expect(workingAgain?.payload.subagents?.[0].state).toBe('working')
 
@@ -100,6 +104,7 @@ describe('Codex hook normalization', () => {
       buildBody({ hook_event_name: 'Stop', model: 'gpt-5.4' }),
       'production'
     )
+
     expect(rootStop?.payload.state).toBe('done')
     expect(rootStop?.payload.subagents).toBeUndefined()
 
@@ -115,6 +120,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(resumedChild?.payload.state).toBe('working')
     expect(resumedChild?.payload.subagents?.[0]).toMatchObject({
       id: 'child-session',
@@ -126,6 +132,7 @@ describe('Codex hook normalization', () => {
       buildBody({ hook_event_name: 'SubagentStop', agent_id: 'child-session' }),
       'production'
     )
+
     expect(stopped?.payload.state).toBe('done')
     expect(stopped?.payload.subagents).toBeUndefined()
   })
@@ -139,6 +146,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.lastAssistantMessage).toBe('Summary of what I did.')
   })
@@ -154,6 +162,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('exec_command')
     expect(result?.payload.toolInput).toBe('git status')
@@ -170,6 +179,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('waiting')
     expect(result?.payload.agentType).toBe('codex')
     expect(result?.payload.toolName).toBe('exec_command')
@@ -188,6 +198,7 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBeUndefined()
     expect(result?.payload.toolInput).toBeUndefined()
@@ -203,11 +214,13 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({ hook_event_name: 'SessionStart' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.lastAssistantMessage).toBeUndefined()
   })
@@ -221,11 +234,13 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({ hook_event_name: 'SessionStart' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('')
   })

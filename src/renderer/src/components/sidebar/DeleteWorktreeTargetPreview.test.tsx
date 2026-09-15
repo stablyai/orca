@@ -87,6 +87,7 @@ describe('DeleteWorktreeTargetPreview host labels', () => {
       makeWorktree('shared', 'collide', 'ssh:qa-linux-42'),
       makeWorktree('shared', 'collide', 'runtime:runtime-7')
     ]
+
     renderPreview({
       worktrees,
       hostLabelById: buildHostLabels(

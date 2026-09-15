@@ -28,6 +28,7 @@ import {
 } from './xterm-patch-text.mjs'
 
 const DEFAULT_REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
+
 const MANIFEST_RELATIVE_PATH = path.join('config', 'patches', 'xterm-upstream.json')
 
 export function stampVersionSource(source, version) {
@@ -35,9 +36,11 @@ export function stampVersionSource(source, version) {
     /export const XTERM_VERSION = '[^']+';/,
     `export const XTERM_VERSION = '${version}';`
   )
+
   if (stamped === source && !source.includes(`'${version}'`)) {
     throw new Error('Version stamp file does not declare XTERM_VERSION')
   }
+
   return stamped
 }
 
@@ -52,6 +55,7 @@ export function assertPublishedCommit(publishedPackageJson, packageEntry, upstre
       `${packageEntry.name}: registry served ${publishedPackageJson.version}, manifest pins ${packageEntry.version}`
     )
   }
+
   if (publishedPackageJson.commit !== upstreamCommit) {
     throw new Error(
       [
@@ -68,9 +72,11 @@ export function assertPublishedCommit(publishedPackageJson, packageEntry, upstre
 /** Guards the publish-order trap: a dev esbuild pass would silently de-minify lib/*.mjs. */
 export function assertBuildStepsAllowed(manifest) {
   const forbidden = new Set(manifest.forbiddenBuildScripts?.scripts ?? [])
+
   for (const packageEntry of manifest.packages) {
     for (const step of packageEntry.build) {
       const script = step.command === 'npm' && step.args[0] === 'run' ? step.args[1] : undefined
+
       if (script !== undefined && forbidden.has(script)) {
         throw new Error(
           `${packageEntry.name}: build step \`npm run ${script}\` is forbidden. ${manifest.forbiddenBuildScripts.why}`
@@ -87,11 +93,13 @@ export const SOURCEMAP_POLICIES = new Set(['include'])
 /** An unrecognised policy is a manifest bug, not a default to fall through to. */
 export function assertSourcemapPolicy(manifest) {
   const policy = manifest.sourcemaps?.policy
+
   if (!SOURCEMAP_POLICIES.has(policy)) {
     throw new Error(
       `sourcemaps.policy must be one of ${[...SOURCEMAP_POLICIES].join(', ')}, got ${JSON.stringify(policy)}`
     )
   }
+
   return policy
 }
 
@@ -112,9 +120,11 @@ function lockfilePatchHashPattern(packageKey) {
 
 export function readLockfilePatchHash(lockfileText, packageKey) {
   const match = lockfilePatchHashPattern(packageKey).exec(lockfileText)
+
   if (!match) {
     throw new Error(`pnpm-lock.yaml has no patchedDependencies entry for '${packageKey}'`)
   }
+
   return match[2]
 }
 
@@ -122,6 +132,7 @@ function lockfileResolutionHashPattern(packageKey) {
   const separator = packageKey.lastIndexOf('@')
   const name = escapeRegExp(packageKey.slice(0, separator))
   const version = escapeRegExp(packageKey.slice(separator + 1))
+
   // Two spellings: `name@version(patch_hash=…)` in dependency keys, and a bare
   // `: version(patch_hash=…)` under `version:` and in resolved dependency maps.
   return new RegExp(`(?:${name}@|: )${version}\\(patch_hash=([0-9a-f]{64})\\)`, 'g')
@@ -153,6 +164,7 @@ export function lockfilePatchHashIsStale(lockfileText, packageKey, hash) {
 
 export function updateLockfilePatchHash(lockfileText, packageKey, hash) {
   readLockfilePatchHash(lockfileText, packageKey)
+
   return lockfileText
     .replace(lockfilePatchHashPattern(packageKey), `$1${hash}`)
     .replace(lockfileResolutionHashPattern(packageKey), (match, current) =>
@@ -166,6 +178,7 @@ const WINDOWS_SHIM_COMMANDS = new Set(['npm', 'npx', 'pnpm', 'yarn'])
 
 function run(command, args, options = {}) {
   const shim = process.platform === 'win32' && WINDOWS_SHIM_COMMANDS.has(command)
+
   return execFileSync(shim ? `${command}.cmd` : command, args, {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
@@ -177,14 +190,17 @@ function run(command, args, options = {}) {
 
 function listFilesRelative(root, base = root) {
   const files = []
+
   for (const entry of readdirSync(base, { withFileTypes: true })) {
     const absolute = path.join(base, entry.name)
+
     if (entry.isDirectory()) {
       files.push(...listFilesRelative(root, absolute))
     } else if (entry.isFile()) {
       files.push(path.relative(root, absolute))
     }
   }
+
   return files.sort()
 }
 
@@ -199,11 +215,14 @@ function fetchPristinePackage(packageEntry, workDir) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
   const spec = `${packageEntry.name}@${packageEntry.version}`
+
   const output = run('npm', ['pack', spec, '--pack-destination', target, '--silent'], {
     cwd: workDir
   })
+
   const tarball = path.join(target, output.trim().split('\n').at(-1).trim())
   run('tar', ['xzf', tarball, '-C', target])
+
   return path.join(target, 'package')
 }
 
@@ -218,16 +237,20 @@ function hasCommit(root, commit) {
 function ensureUpstreamCheckout(manifest, workDir) {
   const root = path.join(workDir, 'upstream')
   const { repository, commit } = manifest.upstream
+
   if (!existsSync(path.join(root, '.git'))) {
     mkdirSync(root, { recursive: true })
     run('git', ['init', '--quiet'], { cwd: root })
     run('git', ['remote', 'add', 'origin', repository], { cwd: root })
   }
+
   if (!hasCommit(root, commit)) {
     run('git', ['fetch', '--depth=1', 'origin', commit], { cwd: root, stdio: 'inherit' })
   }
+
   run('git', ['checkout', '--quiet', '--detach', commit], { cwd: root })
   run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
+
   return root
 }
 
@@ -235,9 +258,11 @@ function ensureDependencies(upstreamRoot, manifest) {
   const lockfile = path.join(upstreamRoot, 'package-lock.json')
   const stamp = path.join(upstreamRoot, 'node_modules', '.orca-xterm-install-stamp')
   const want = `${manifest.upstream.commit}\n${statSync(lockfile).size}\n`
+
   if (existsSync(stamp) && readFileSync(stamp, 'utf8') === want) {
     return
   }
+
   run('npm', ['ci'], {
     cwd: upstreamRoot,
     env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1', PUPPETEER_SKIP_DOWNLOAD: '1' }
@@ -248,17 +273,22 @@ function ensureDependencies(upstreamRoot, manifest) {
 
 function assertToolchain(upstreamRoot, manifest) {
   const expected = manifest.toolchain
+
   for (const [name, version] of Object.entries(expected)) {
     if (name === 'why') {
       continue
     }
+
     const installed = path.join(upstreamRoot, 'node_modules', name, 'package.json')
+
     if (!existsSync(installed)) {
       throw new Error(
         `Upstream install is missing ${name}. The pinned toolchain is no longer resolvable; see the tsgo note in docs/reference/xterm-patch-regeneration.md.`
       )
     }
+
     const actual = JSON.parse(readFileSync(installed, 'utf8')).version
+
     if (actual !== version) {
       throw new Error(
         `Upstream ${name} resolved to ${actual}, manifest expects ${version}. Update the toolchain block only together with a verified rebuild.`
@@ -275,6 +305,7 @@ function assertToolchain(upstreamRoot, manifest) {
 function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
   const stampFile = packageEntry.versionStampFile
   const sourceRoot = path.join(pristineDir, 'src')
+
   const drifted = listFilesRelative(sourceRoot)
     .map((relative) => path.join('src', relative))
     .filter((relative) => relative !== stampFile)
@@ -285,6 +316,7 @@ function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
           path.join(upstreamRoot, packageEntry.packageDir, relative)
         )
     )
+
   if (drifted.length > 0) {
     throw new Error(
       `Published src/ does not match ${packageEntry.packageDir} at the pinned commit: ${drifted.join(', ')}`
@@ -294,9 +326,11 @@ function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
 
 function buildPackage(upstreamRoot, packageEntry, manifest) {
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+
   for (const directory of ['lib', 'out', 'out-esbuild']) {
     rmSync(path.join(packageRoot, directory), { recursive: true, force: true })
   }
+
   if (packageEntry.versionStampFile) {
     const stampPath = path.join(packageRoot, packageEntry.versionStampFile)
     writeFileSync(
@@ -304,7 +338,9 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
       stampVersionSource(readFileSync(stampPath, 'utf8'), packageEntry.version)
     )
   }
+
   assertBuildStepsAllowed(manifest)
+
   for (const step of packageEntry.build) {
     run(step.command, step.args, { cwd: path.join(packageRoot, step.cwd), stdio: 'inherit' })
   }
@@ -313,6 +349,7 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
 /** Proves the pinned toolchain still reproduces the untouched published bundles. */
 function assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry) {
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+
   const drifted = listFilesRelative(pristineDir)
     .filter((relative) =>
       packageEntry.generatedPaths.some((prefix) => toPosix(relative).startsWith(prefix))
@@ -320,6 +357,7 @@ function assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry
     .filter(
       (relative) => !sameBytes(path.join(pristineDir, relative), path.join(packageRoot, relative))
     )
+
   if (drifted.length > 0) {
     throw new Error(
       [
@@ -341,22 +379,27 @@ function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination
   rmSync(destination, { recursive: true, force: true })
   cpSync(pristineDir, destination, { recursive: true })
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+
   for (const relative of listFilesRelative(pristineDir)) {
     // package.json carries the registry's version/commit stamp, which the build
     // tree has no way to reproduce and which we never want to patch.
     if (relative === 'package.json') {
       continue
     }
+
     const built = path.join(packageRoot, relative)
+
     if (!existsSync(built)) {
       throw new Error(`Published file has no build-tree counterpart: ${relative}`)
     }
+
     copyFileSync(built, path.join(destination, relative))
   }
 }
 
 function diffFolders(folderA, folderB) {
   let stdout
+
   try {
     stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, folderA, folderB], {
       encoding: 'utf8',
@@ -369,8 +412,10 @@ function diffFolders(folderA, folderB) {
     if (error.status !== 1 || error.stderr?.length > 0) {
       throw error
     }
+
     stdout = error.stdout
   }
+
   return normalizePnpmDiff(stdout, folderA, folderB)
 }
 
@@ -423,6 +468,7 @@ function regeneratePackage(packageEntry, manifest, context) {
   }
 
   const source = diffCheckoutSource(path.join(upstreamRoot, packageEntry.packageDir))
+
   if (source.trim().length === 0) {
     throw new Error(
       `${packageEntry.name}: applying ${packageEntry.sourcePatch} left the checkout unchanged. ` +
@@ -430,8 +476,10 @@ function regeneratePackage(packageEntry, manifest, context) {
         'not an empty patch.'
     )
   }
+
   const patch = diffFolders(pristineDir, patchedDir)
   assertSourceDerivationsAgree(source, patch)
+
   return { patch, source }
 }
 
@@ -452,14 +500,17 @@ export function regenerateXtermPatches({
 
   const failures = []
   const pendingInstall = []
+
   for (const packageEntry of manifest.packages) {
     const shortCommit = manifest.upstream.commit.slice(0, 12)
     log(`${packageEntry.name}@${packageEntry.version}: regenerating from ${shortCommit}`)
+
     const { patch: regenerated, source: canonicalSource } = regeneratePackage(
       packageEntry,
       manifest,
       { workDir, repoRoot }
     )
+
     const patchPath = path.join(repoRoot, packageEntry.patch)
     const sourcePatchPath = path.join(repoRoot, packageEntry.sourcePatch)
     const packageKey = `${packageEntry.name}@${packageEntry.version}`
@@ -470,6 +521,7 @@ export function regenerateXtermPatches({
       writeFileSync(sourcePatchPath, canonicalSource)
       log(`  wrote ${packageEntry.patch} (${Buffer.byteLength(regenerated)} bytes)`)
       log(`  wrote ${packageEntry.sourcePatch} (${Buffer.byteLength(canonicalSource)} bytes)`)
+
       if (!lockfileHasPatchEntry(lockfile, packageKey)) {
         pendingInstall.push(packageKey)
         log(`  pnpm-lock.yaml has no entry for ${packageKey} yet; run pnpm install`)
@@ -478,6 +530,7 @@ export function regenerateXtermPatches({
         lockfileChanged = true
         log(`  updated pnpm-lock.yaml patch hash to ${hash}`)
       }
+
       continue
     }
 
@@ -489,6 +542,7 @@ export function regenerateXtermPatches({
       const stale = Array.from(
         new Set(readLockfileResolutionHashes(lockfile, packageKey).filter((v) => v !== hash))
       )
+
       failures.push(
         [
           `${packageKey}: pnpm-lock.yaml records a stale patch hash.`,
@@ -503,6 +557,7 @@ export function regenerateXtermPatches({
     }
 
     const committed = readFileSync(patchPath, 'utf8')
+
     if (committed !== regenerated) {
       failures.push(
         formatCheckFailure({
@@ -514,7 +569,9 @@ export function regenerateXtermPatches({
       )
       continue
     }
+
     const committedSource = readFileSync(sourcePatchPath, 'utf8')
+
     if (committedSource !== canonicalSource) {
       failures.push(
         formatCheckFailure({
@@ -526,18 +583,21 @@ export function regenerateXtermPatches({
       )
       continue
     }
+
     log(`  in sync (${Buffer.byteLength(regenerated)} bytes)`)
   }
 
   if (lockfileChanged) {
     writeFileSync(lockfilePath, lockfile)
   }
+
   if (pendingInstall.length > 0) {
     log(
       `\nRun pnpm install to key the lockfile to the new patches: ${pendingInstall.join(', ')}\n` +
         'Then rerun with --check, which is the authority on the lockfile.'
     )
   }
+
   if (failures.length > 0) {
     throw new Error(failures.join('\n\n'))
   }
@@ -553,26 +613,34 @@ const USAGE =
 function main(argv) {
   if (argv.includes('--help') || argv.includes('-h')) {
     console.info(USAGE)
+
     return
   }
+
   // --check is the default, so an unrecognised flag would otherwise silently run a full
   // upstream build instead of whatever the caller meant.
   const known = (v) =>
     !v.startsWith('-') || ['--write', '--check'].includes(v) || v.startsWith('--work-dir=')
+
   const unknown = argv.filter((value) => !known(value))
+
   if (unknown.length > 0) {
     throw new Error(`Unknown option: ${unknown.join(', ')}\n${USAGE}`)
   }
+
   const write = argv.includes('--write')
   const check = argv.includes('--check') || !write
+
   if (write && argv.includes('--check')) {
     throw new Error('Pass either --write or --check, not both')
   }
+
   const workDirArgument = argv.find((value) => value.startsWith('--work-dir='))
   regenerateXtermPatches({
     mode: write ? 'write' : 'check',
     workDir: workDirArgument ? path.resolve(workDirArgument.slice('--work-dir='.length)) : undefined
   })
+
   if (check) {
     console.info('xterm patches are in sync with the pinned upstream build.')
   }
@@ -580,6 +648,7 @@ function main(argv) {
 
 // realpathSync so a symlinked checkout path still registers as a direct run.
 const invokedPath = process.argv[1] ? pathToFileURL(realpathSync(process.argv[1])).href : null
+
 if (invokedPath === import.meta.url) {
   try {
     main(process.argv.slice(2))

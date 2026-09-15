@@ -4,6 +4,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+
 export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsModel) {
   const {
     setTaskRefreshNonce,
@@ -26,15 +27,20 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
     newIssueSourceContext,
     newIssueRuntimeTarget
   } = model
+
   const handleCreateNewIssue = useCallback(async (): Promise<void> => {
     if (!newIssueTargetRepo) {
       return
     }
+
     const title = newIssueTitle.trim()
+
     if (!title || newIssueSubmitting) {
       return
     }
+
     setNewIssueSubmitting(true)
+
     try {
       const result = newIssueRuntimeTarget
         ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.createIssue>>>(
@@ -64,13 +70,16 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
             labels: newIssueLabels,
             assignees: newIssueAssignees.map((assignee) => assignee.login)
           })
+
       if (!result.ok) {
         toast.error(
           result.error ||
             translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.')
         )
+
         return
       }
+
       const createdIssueToast = translate(
         'auto.components.TaskPage.3f9604efc7',
         'Opened issue #{{value0}}',
@@ -78,6 +87,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
           value0: result.number
         }
       )
+
       const createdIssueToastOptions = {
         action: result.url
           ? {
@@ -86,6 +96,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
             }
           : undefined
       }
+
       if (result.bodySaveWarning) {
         toast.warning(createdIssueToast, {
           ...createdIssueToastOptions,
@@ -94,7 +105,9 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
       } else {
         toast.success(createdIssueToast, createdIssueToastOptions)
       }
+
       setNewIssueOpen(false)
+
       if (result.bodySaveWarning) {
         // Why: keep the unsaved body for recovery but clear the title so reopening can't one-click repeat the create.
         setNewIssueTitle('')
@@ -109,6 +122,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
         // Why: only a complete success discards the recovery draft; a partial body save keeps the text for recovery.
         clearNewIssueDraft()
       }
+
       // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
@@ -126,8 +140,10 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
         updatedAt: new Date().toISOString(),
         author: null
       }
+
       openGitHubDetailPage(stub)
       const stubRepoId = newIssueTargetRepo.id
+
       const fullIssuePromise = newIssueRuntimeTarget
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
             newIssueRuntimeTarget,
@@ -151,6 +167,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
             number: result.number,
             type: 'issue'
           })
+
       void fullIssuePromise
         .then((full) => {
           if (full) {
@@ -159,6 +176,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
               ...full,
               repoId: stubRepoId
             } as unknown as GitHubWorkItem
+
             setDialogWorkItem(withRepoId)
           }
         })
@@ -187,10 +205,14 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
     setNewIssueLabels,
     setNewIssueAssignees
   ])
+
   const nextModel = model as typeof model & {
     handleCreateNewIssue: typeof handleCreateNewIssue
   }
+
   nextModel.handleCreateNewIssue = handleCreateNewIssue
+
   return nextModel
 }
+
 export type TaskPageGitHubIssueCreationModel = ReturnType<typeof useTaskPageGitHubIssueCreation>

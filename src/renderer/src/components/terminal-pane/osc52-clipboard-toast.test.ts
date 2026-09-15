@@ -100,6 +100,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
     for (const locale of locales) {
       const description =
         locale.auto.components.terminal.pane.osc52.clipboard.blocked.toast['7cf51f74fd']
+
       expect(description).toContain('Grok')
       expect(description).toContain('Zellij')
     }

@@ -21,6 +21,7 @@ describe('clearNativeChatSessionOptionModel', () => {
       persistedGrok('grok-build', { 'grok-build': { effort: 'low' } }),
       'grok'
     )
+
     expect(cleared.grok?.model).toBeUndefined()
     // Resolution keys off `model`, so clearing it is what stops the flag going out.
     expect(resolveNativeChatSessionOptionDefaults(cleared, 'grok')).toBeUndefined()
@@ -31,7 +32,9 @@ describe('clearNativeChatSessionOptionModel', () => {
       persistedGrok('grok-build', { 'grok-build': { effort: 'low' } }),
       'grok'
     )
+
     expect(cleared.grok?.valuesByModel).toEqual({ 'grok-build': { effort: 'low' } })
+
     const reselected = updateNativeChatSessionOptionDefaults({
       persisted: cleared,
       agent: 'grok',
@@ -39,6 +42,7 @@ describe('clearNativeChatSessionOptionModel', () => {
       optionId: 'model',
       value: 'grok-build'
     })
+
     expect(resolveNativeChatSessionOptionDefaults(reselected, 'grok')).toEqual({
       model: 'grok-build',
       effort: 'low'
@@ -50,6 +54,7 @@ describe('clearNativeChatSessionOptionModel', () => {
       { ...persistedGrok('grok-build'), claude: { model: 'opus', valuesByModel: {} } },
       'grok'
     )
+
     expect(cleared.claude).toEqual({ model: 'opus', valuesByModel: {} })
   })
 

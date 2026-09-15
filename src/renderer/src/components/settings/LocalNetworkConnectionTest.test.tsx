@@ -6,7 +6,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { LocalNetworkConnectionTest } from './LocalNetworkConnectionTest'
 
 let container: HTMLDivElement
+
 let root: Root
+
 const testConnectionMock = vi.fn()
 
 beforeEach(() => {

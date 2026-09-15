@@ -53,6 +53,7 @@ describe('useDebouncedSettingsTextDraft', () => {
 
   it('commits a pending edit when the field unmounts', () => {
     const commit = vi.fn()
+
     const { result, unmount } = renderHook(() =>
       useDebouncedSettingsTextDraft({ value: '', commit })
     )
@@ -65,6 +66,7 @@ describe('useDebouncedSettingsTextDraft', () => {
 
   it('adopts an external value while the field is untouched', () => {
     const commit = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ value }) => useDebouncedSettingsTextDraft({ value, commit }),
       { initialProps: { value: 'first' } }
@@ -78,6 +80,7 @@ describe('useDebouncedSettingsTextDraft', () => {
 
   it('does not let an external value overwrite an in-progress edit', () => {
     const commit = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ value }) => useDebouncedSettingsTextDraft({ value, commit }),
       { initialProps: { value: 'first' } }
@@ -102,6 +105,7 @@ describe('useDebouncedSettingsTextDraft', () => {
 describe('useDebouncedSettingsTextDraft flush paths', () => {
   it('commits a pending edit on beforeunload, since a window close never unmounts the tree', () => {
     const commit = vi.fn()
+
     const { result, unmount } = renderHook(() =>
       useDebouncedSettingsTextDraft({ value: '', commit })
     )
@@ -134,6 +138,7 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
 
   it('stops listening for beforeunload after unmount', () => {
     const commit = vi.fn()
+
     const { result, unmount } = renderHook(() =>
       useDebouncedSettingsTextDraft({ value: '', commit })
     )
@@ -166,6 +171,7 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
 
   it('adopts external values again once a pending edit has been committed', () => {
     const commit = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ value }) => useDebouncedSettingsTextDraft({ value, commit }),
       { initialProps: { value: '' } }
@@ -186,6 +192,7 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
 
   it('keeps a keystroke typed while the previous commit is still in flight', () => {
     const commit = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ value }) => useDebouncedSettingsTextDraft({ value, commit }),
       { initialProps: { value: '' } }
@@ -208,6 +215,7 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
 
   it('does not spuriously commit under StrictMode effect replay', () => {
     const commit = vi.fn()
+
     const { result } = renderHook(() => useDebouncedSettingsTextDraft({ value: 'x', commit }), {
       wrapper: StrictMode
     })

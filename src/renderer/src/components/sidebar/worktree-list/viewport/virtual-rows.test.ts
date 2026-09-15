@@ -55,7 +55,9 @@ const rows: RenderRow[] = [
   groupRow('b1'),
   itemStub('wt-3')
 ]
+
 const stickyHeaderIndexes = getStickyHeaderIndexes(rows)
+
 // Geometry: each row 100px tall for easy math.
 const virtualItems = rows.map((_, index) => virtualItem(index, index * 100))
 
@@ -109,6 +111,7 @@ describe('getActiveStickyIndexesForScroll', () => {
       stickyHeaderIndexes,
       virtualItems
     })
+
     // group-a1 (index 1) must not survive into host b's tenure; group-b1 only
     // pins once it reaches the slot beneath the pinned host card.
     expect(result.groupIndex === 1).toBe(false)
@@ -124,6 +127,7 @@ describe('getActiveStickyIndexesForScroll', () => {
       stickyHeaderIndexes,
       virtualItems
     })
+
     const after = getActiveStickyIndexesForScroll({
       rows,
       rangeStartIndex: 5,
@@ -131,6 +135,7 @@ describe('getActiveStickyIndexesForScroll', () => {
       stickyHeaderIndexes,
       virtualItems
     })
+
     expect(before.groupIndex).not.toBe(5)
     expect(after).toEqual({ hostIndex: 4, groupIndex: 5 })
   })
@@ -142,6 +147,7 @@ describe('getActiveStickyIndexesForScroll', () => {
       groupRow('g2'),
       itemStub('wt-2')
     ]
+
     const flatSticky = getStickyHeaderIndexes(flatRows)
     const flatItems = flatRows.map((_, index) => virtualItem(index, index * 100))
     expect(
@@ -159,6 +165,7 @@ describe('getActiveStickyIndexesForScroll', () => {
     // Why: after scrollToIndex/reveal, rangeStart can sit on group-b1 while
     // TanStack has only mounted host-b (and maybe a later item) this frame.
     const partialItems = [virtualItem(4, 400), virtualItem(6, 600)]
+
     const result = getActiveStickyIndexesForScroll({
       rows,
       rangeStartIndex: 5,
@@ -166,6 +173,7 @@ describe('getActiveStickyIndexesForScroll', () => {
       stickyHeaderIndexes,
       virtualItems: partialItems
     })
+
     expect(result.hostIndex).toBe(4)
     // group-b1 (index 5) must not become sticky without geometry — that is what
     // paints the project label across the host card.
@@ -180,9 +188,11 @@ describe('getActiveStickyIndexesForScroll', () => {
       groupRow('a2'),
       itemStub('wt-2')
     ]
+
     const multiSticky = getStickyHeaderIndexes(multiGroupRows)
     // rangeStart points at a2 (index 3) but only host + a1 + item are mounted.
     const partialItems = [virtualItem(0, 0), virtualItem(1, 100), virtualItem(2, 200)]
+
     const result = getActiveStickyIndexesForScroll({
       rows: multiGroupRows,
       rangeStartIndex: 3,
@@ -190,6 +200,7 @@ describe('getActiveStickyIndexesForScroll', () => {
       stickyHeaderIndexes: multiSticky,
       virtualItems: partialItems
     })
+
     expect(result.hostIndex).toBe(0)
     expect(result.groupIndex).toBe(1)
   })
@@ -208,6 +219,7 @@ describe('extractWorktreeVirtualRowIndexes', () => {
       stickyHeaderIndexes,
       rows
     })
+
     expect(indexes).toContain(0)
   })
 })
@@ -282,6 +294,7 @@ describe('buildLineageRowRekeyMap', () => {
       worktreeRow('pinned', 'p'),
       worktreeRow('all', 'p')
     ])
+
     expect(dissolvedRekeys.get('lineage-group:pinned:lineage:p')).toBe('wt:pinned:p')
     expect(dissolvedRekeys.get('lineage-group:all:lineage:p')).toBe('wt:all:p')
   })
@@ -305,19 +318,23 @@ describe('pruneStaleVirtualRowElementCache', () => {
       getAttribute: (name: string) =>
         name === 'data-worktree-virtual-row-key' ? 'wt:active' : null
     } as Element
+
     const staleElement = {
       isConnected: false,
       getAttribute: (name: string) => (name === 'data-worktree-virtual-row-key' ? 'wt:stale' : null)
     } as Element
+
     const connectedStaleElement = {
       isConnected: true,
       getAttribute: (name: string) =>
         name === 'data-worktree-virtual-row-key' ? 'wt:connected-stale' : null
     } as Element
+
     const retainedScope = {
       defaultHostId: 'runtime:env-1',
       handlerName: 'handleOpenReviewInOrca'
     }
+
     Object.assign(staleElement, { __retainedWorktreeCardScopeForTest: retainedScope })
 
     const virtualizer = {

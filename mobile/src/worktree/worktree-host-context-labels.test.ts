@@ -38,6 +38,7 @@ describe('buildHostLabelById', () => {
       ],
       hostSettingOverrides: { [sshHostId]: { displayLabel: 'openclaw (renamed)' } }
     })
+
     expect(labels.get(sshHostId)).toBe('openclaw (renamed)')
     expect(labels.has('ssh:ssh-blank')).toBe(false)
   })
@@ -47,6 +48,7 @@ describe('buildHostLabelById', () => {
       sshTargets: [],
       hostSettingOverrides: { 'ssh-1785104650217-eduhep': { displayLabel: 'openclaw' } }
     })
+
     expect(labels.get(sshHostId)).toBe('openclaw')
   })
 
@@ -55,6 +57,7 @@ describe('buildHostLabelById', () => {
       sshTargets: [{ id: sshHostId, label: 'openclaw' }],
       hostSettingOverrides: undefined
     })
+
     expect(labels.get(sshHostId)).toBe('openclaw')
     expect(labels.has('ssh:ssh:ssh-1785104650217-eduhep')).toBe(false)
   })
@@ -72,6 +75,7 @@ describe('resolveWorktreeHostId', () => {
       { id: 'repo-2', executionHostId: 'runtime:env-1' },
       { id: 'repo-3' }
     ])
+
     expect(resolveWorktreeHostId(worktree({ hostId: 'local', repoId: 'repo-1' }), repoHosts)).toBe(
       'local'
     )
@@ -102,6 +106,7 @@ describe('getWorktreeHostContextLabels', () => {
       worktree({ hostId: 'ssh:unlabeled', worktreeId: 'c' }),
       worktree({ hostId: 'runtime:env-1', worktreeId: 'd' })
     ]
+
     const labeled = applyWorktreeHostContextLabels(rows, sources)
     expect(labeled.map((row) => row.hostContextLabel)).toEqual([
       'Local Mac',
@@ -116,6 +121,7 @@ describe('getWorktreeHostContextLabels', () => {
       worktree({ hostId: 'local', worktreeId: 'a' }),
       worktree({ hostId: sshHostId, worktreeId: 'b' })
     ]
+
     const linux = applyWorktreeHostContextLabels(rows, { ...sources, hostPlatform: 'linux' })
     expect(linux[0].hostContextLabel).toBe('Local Linux')
     const unknown = applyWorktreeHostContextLabels(rows, { ...sources, hostPlatform: null })
@@ -127,6 +133,7 @@ describe('getWorktreeHostContextLabels', () => {
       worktree({ hostId: 'local', worktreeId: 'same' }),
       worktree({ hostId: sshHostId, worktreeId: 'same' })
     ]
+
     const labeled = applyWorktreeHostContextLabels(rows, sources)
     expect(labeled.map((row) => row.hostContextLabel)).toEqual(['Local Mac', 'openclaw'])
   })
@@ -136,6 +143,7 @@ describe('getWorktreeHostContextLabels', () => {
       worktree({ repoId: 'repo-local', worktreeId: 'a' }),
       worktree({ repoId: 'repo-ssh', worktreeId: 'b' })
     ]
+
     const labeled = applyWorktreeHostContextLabels(rows, {
       ...sources,
       repoHostIdByRepoId: buildRepoHostIdByRepoId([
@@ -143,6 +151,7 @@ describe('getWorktreeHostContextLabels', () => {
         { id: 'repo-ssh', connectionId: 'ssh-1785104650217-eduhep' }
       ])
     })
+
     expect(labeled.map((row) => row.hostContextLabel)).toEqual(['Local Mac', 'openclaw'])
     expect(labeled.map((row) => row.hostContextHostId)).toEqual(['local', sshHostId])
   })
@@ -152,6 +161,7 @@ describe('getWorktreeHostContextLabels', () => {
       worktree({ repoId: 'repo-local', worktreeId: 'same' }),
       worktree({ repoId: 'repo-ssh', worktreeId: 'same' })
     ]
+
     const labeled = applyWorktreeHostContextLabels(rows, {
       ...sources,
       repoHostIdByRepoId: buildRepoHostIdByRepoId([
@@ -159,6 +169,7 @@ describe('getWorktreeHostContextLabels', () => {
         { id: 'repo-ssh', connectionId: 'ssh-1785104650217-eduhep' }
       ])
     })
+
     expect(labeled.map((row) => row.hostContextLabel)).toEqual(['Local Mac', 'openclaw'])
   })
 })

@@ -13,6 +13,7 @@ export type AndroidCommandRunner = (
 ) => Promise<AndroidCommandResult>
 
 const DEFAULT_TIMEOUT_MS = 60_000
+
 const MAX_BUFFER_BYTES = 16 * 1024 * 1024
 
 export const execFileAndroidCommandRunner: AndroidCommandRunner = (binary, args, options) =>
@@ -28,11 +29,13 @@ export const execFileAndroidCommandRunner: AndroidCommandRunner = (binary, args,
             : error
               ? 1
               : 0
+
         const result = {
           stdout: stdout?.toString() ?? '',
           stderr: stderr?.toString() ?? '',
           code: exitCode
         }
+
         // PROBE: every adb/emulator command + outcome, for test diagnostics.
         if (exitCode === 0) {
           emulatorProbe('cmd', { bin: basename(binary), args })
@@ -44,6 +47,7 @@ export const execFileAndroidCommandRunner: AndroidCommandRunner = (binary, args,
             stderr: result.stderr.slice(0, 400)
           })
         }
+
         resolve(result)
       }
     )

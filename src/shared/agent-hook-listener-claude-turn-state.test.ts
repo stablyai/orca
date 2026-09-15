@@ -121,6 +121,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart', source: 'compact' } },
       'production'
     )
+
     // Why: unknown/missing sources fail closed — only startup/resume/clear are idle boundaries.
     const unknownSource = normalizeHookPayload(
       state,
@@ -128,6 +129,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart' } },
       'production'
     )
+
     const child = normalizeHookPayload(
       state,
       'claude',
@@ -137,6 +139,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const stopped = normalizeAndAccept(state, 'claude', { hook_event_name: 'Stop' })
 
     // Why: auto-compact restarts mid-turn (PreCompact/PostCompact own that lifecycle) and a
@@ -158,6 +161,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).toBeNull()
   })
 
@@ -168,6 +172,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
       'production'
     )
+
     const event = normalizeHookPayload(
       state,
       'claude',
@@ -180,6 +185,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).not.toBeNull()
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('fix login')
@@ -199,6 +205,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).not.toBeNull()
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('')
@@ -220,6 +227,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).toBeNull()
   })
 
@@ -230,6 +238,7 @@ describe('shared agent-hook-listener', () => {
       prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
       session_id: 'session-a'
     })
+
     // Why: PreCompact fires before the compact is validated — an aborted compact emits it alone —
     // so it is neither registered nor mapped. Only the completion may move the pane.
     const pre = normalizeAndAccept(state, 'claude', {
@@ -238,6 +247,7 @@ describe('shared agent-hook-listener', () => {
       prompt_id: CLAUDE_PROMPT_ID,
       session_id: 'session-a'
     })
+
     expect(pre).toBeNull()
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
 
@@ -247,6 +257,7 @@ describe('shared agent-hook-listener', () => {
       prompt_id: CLAUDE_PROMPT_ID,
       session_id: 'session-a'
     })
+
     expect(post).not.toBeNull()
     expect(post!.payload.state).toBe('done')
     expect(post!.payload.agentType).toBe('claude')
@@ -260,12 +271,14 @@ describe('shared agent-hook-listener', () => {
       prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
       session_id: 'session-a'
     })
+
     const post = normalizeAndAccept(state, 'claude', {
       hook_event_name: 'PostCompact',
       trigger: 'manual',
       prompt_id: CLAUDE_PROMPT_ID,
       session_id: 'session-a'
     })
+
     expect(post).not.toBeNull()
     expect(post!.payload.state).toBe('done')
     expect(post!.payload.prompt).toBe('work before compact')
@@ -278,6 +291,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
       'production'
     )
+
     // Why: a real prompt starting with an unknown kebab tag (<my-custom-element>)
     // is the user's turn — it must reset the cached prompt and count as explicit,
     // so interrupt recovery does not leave the pane visibly done.
@@ -293,6 +307,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('<my-custom-element> render this component')
     expect(event!.hasExplicitPrompt).toBe(true)
@@ -311,6 +326,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).not.toBeNull()
     // Grok wraps the real typed prompt; the envelope is stripped but it stays explicit.
     expect(event!.payload.prompt).toBe('fix the bug')
@@ -326,6 +342,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' } },
       'production'
     )
+
     // The second listener has no cached prompt for this paneKey, so a tool
     // event without a fresh prompt should produce empty prompt string.
     const event = normalizeHookPayload(
@@ -341,14 +358,17 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('')
   })
 
   it('bounds Amp thread-scoped caches for a long-lived pane', () => {
     let latestPrompt = ''
+
     for (let i = 0; i < 40; i++) {
       const threadId = `thread-${i}`
+
       const started = normalizeHookPayload(
         state,
         'amp',
@@ -362,6 +382,7 @@ describe('shared agent-hook-listener', () => {
         },
         'production'
       )
+
       expect(started?.payload.state).toBe('working')
 
       const ended = normalizeHookPayload(
@@ -377,17 +398,21 @@ describe('shared agent-hook-listener', () => {
         },
         'production'
       )
+
       expect(ended?.payload.state).toBe('done')
       latestPrompt = ended?.payload.prompt ?? ''
     }
 
     const scopedPrefix = `${PANE_KEY}\0amp:`
+
     const promptKeys = [...state.lastPromptByPaneKey.keys()].filter((key) =>
       key.startsWith(scopedPrefix)
     )
+
     const toolKeys = [...state.lastToolByPaneKey.keys()].filter((key) =>
       key.startsWith(scopedPrefix)
     )
+
     const completedKeys = [...state.ampCompletedCacheKeys].filter((key) =>
       key.startsWith(scopedPrefix)
     )

@@ -8,6 +8,7 @@ import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 export function getPathDisplayName(path: string, fallback: string): string {
   const normalized = path.trim().replace(/[\\/]+$/g, '')
   const basename = normalized.split(/[\\/]/).findLast(Boolean)?.trim()
+
   return basename || fallback
 }
 
@@ -27,23 +28,32 @@ export function buildRuntimeSessionPlaceholders({
   // rerendered every whole-array/map selector on every hydration with no data change.
   let nextRepos: readonly Repo[] = repos
   let nextWorktreesByRepo = worktreesByRepo
+
   for (const workspaceSessionKey of Object.keys(runtimeHostIdByWorkspaceSessionKey)) {
     const hostId = runtimeHostIdByWorkspaceSessionKey[workspaceSessionKey]
+
     if (parseExecutionHostId(hostId)?.kind !== 'runtime') {
       continue
     }
+
     const workspaceScope = parseWorkspaceKey(workspaceSessionKey)
+
     if (workspaceScope?.type === 'folder') {
       continue
     }
+
     const worktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : workspaceSessionKey
+
     // Why: strip the synthetic `::workspace:<uuid>` suffix so path is the real folder — Git callers must not spawn against a nonexistent cwd.
     const parsed = splitWorktreeIdForFilesystem(worktreeId)
+
     if (!parsed) {
       continue
     }
+
     const existingRepo = nextRepos.some((repo) => repo.id === parsed.repoId)
+
     if (!existingRepo) {
       // Why: remote catalogs load after hydration but host-split session writes need owner metadata; skip if the repo id already exists to avoid duplicates.
       nextRepos = [
@@ -59,10 +69,13 @@ export function buildRuntimeSessionPlaceholders({
         }
       ]
     }
+
     const current = nextWorktreesByRepo[parsed.repoId] ?? []
+
     if (current.some((worktree) => worktree.id === worktreeId)) {
       continue
     }
+
     const placeholder: Worktree = {
       id: worktreeId,
       repoId: parsed.repoId,
@@ -85,9 +98,11 @@ export function buildRuntimeSessionPlaceholders({
       isBare: false,
       isMainWorktree: false
     }
+
     nextWorktreesByRepo =
       nextWorktreesByRepo === worktreesByRepo ? { ...worktreesByRepo } : nextWorktreesByRepo
     nextWorktreesByRepo[parsed.repoId] = [...current, placeholder]
   }
+
   return { repos: nextRepos, worktreesByRepo: nextWorktreesByRepo }
 }

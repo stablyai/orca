@@ -25,9 +25,11 @@ async function callEnvironment<TResult>(
         method,
         params
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { environmentId, method, params }
@@ -76,6 +78,7 @@ async function readHostLayout(
       worktree: `id:${worktreeId}`
     })
   ).result
+
   return (
     snapshot.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === hostTabId)
       ?.parentLayout ?? null
@@ -125,9 +128,11 @@ test('retries an identical remote pane layout after reconnect', async ({
         { timeout: 60_000, message: 'paired client never saw a host worktree' }
       )
       .toBeGreaterThan(0)
+
     const worktreeId = await client.page.evaluate(
       () => window.__store?.getState().allWorktrees()[0]?.id ?? null
     )
+
     if (!worktreeId) {
       throw new Error('Paired client did not receive the host worktree')
     }
@@ -140,10 +145,13 @@ test('retries an identical remote pane layout after reconnect', async ({
       select: false,
       navigation: 'caller'
     })
+
     terminal = created.tab.terminal
+
     if (!terminal) {
       throw new Error('Host terminal was not created')
     }
+
     const hostTabId = created.tab.parentTabId
     const webTabId = toWebTerminalSurfaceTabId(hostTabId)
     await openClientTab(client.page, worktreeId, webTabId)
@@ -162,6 +170,7 @@ test('retries an identical remote pane layout after reconnect', async ({
         message.text().includes('[web-runtime-session] failed to update pane layout:'),
       timeout: 30_000
     })
+
     await setPaneTitle(client.page, title)
     await failedPush
     const failedLayout = await readClientLayout(client.page, webTabId)
@@ -175,6 +184,7 @@ test('retries an identical remote pane layout after reconnect', async ({
         () =>
           client.page.evaluate(async (selector) => {
             const response = await window.api.runtimeEnvironments.connect({ selector })
+
             return response.ok
           }, client.environmentId),
         { timeout: 60_000, message: 'paired client never reconnected to the host runtime' }
@@ -201,9 +211,11 @@ test('retries an identical remote pane layout after reconnect', async ({
     ).toBeVisible({ timeout: 30_000 })
   } finally {
     await observer?.dispose()
+
     if (terminal) {
       await host.client.call('terminal.closeTab', { terminal }).catch(() => undefined)
     }
+
     await client?.dispose()
     await host.dispose()
   }

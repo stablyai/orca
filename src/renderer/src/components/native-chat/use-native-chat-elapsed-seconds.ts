@@ -10,5 +10,6 @@ export function useNativeChatElapsedSeconds(startedAt: number | null, counting: 
   // Why: preserves the `startedAt ?? Date.now()` epoch for the single frame
   // before the turn's startedAt lands.
   const [mountedAt] = useState(() => Date.now())
+
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
 }

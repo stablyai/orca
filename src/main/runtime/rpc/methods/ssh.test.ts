@@ -35,6 +35,7 @@ describe('ssh RPC methods', () => {
       error: null,
       reconnectAttempt: 0
     }
+
     getRegisteredSshStateMock.mockReturnValueOnce(state)
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
@@ -52,6 +53,7 @@ describe('ssh RPC methods', () => {
       error: null,
       reconnectAttempt: 0
     }
+
     connectRegisteredSshTargetMock.mockResolvedValueOnce(state)
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
@@ -87,6 +89,7 @@ describe('ssh RPC methods', () => {
     const stateResponse = await dispatcher.dispatch(
       makeRequest('ssh.getState', { targetId: 'ssh-1' })
     )
+
     const connectResponse = await dispatcher.dispatch(
       makeRequest('ssh.connect', { targetId: 'ssh-1' })
     )
@@ -115,6 +118,7 @@ describe('ssh RPC methods', () => {
         proxyCommand: 'private proxy'
       }
     ]
+
     listRegisteredSshTargetsMock.mockReturnValueOnce(targets)
     getRegisteredSshStateMock.mockReturnValueOnce({ status: 'connected', remotePlatform: 'win32' })
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
@@ -184,6 +188,7 @@ describe('ssh RPC methods', () => {
         jumpHost: 'bastion'
       }
     ]
+
     listRegisteredSshTargetsMock.mockReturnValueOnce(targets)
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })

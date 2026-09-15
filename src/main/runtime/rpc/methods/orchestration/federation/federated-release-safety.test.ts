@@ -6,8 +6,11 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { eraseRpcMethods } from '../../../core'
 
 const HOME_FINGERPRINT = 'home-peer'
+
 const PANE_KEY = 'tab_remote:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
 const PROCESS_INCARNATION = 'runtime:pty:7'
+
 const TERMINAL_HANDLE = 'term_remote'
 
 describe('federated worker release ownership', () => {
@@ -195,9 +198,11 @@ describe('federated worker release ownership', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method.handler(method.params!.parse(params), {
       runtime,
       authenticatedCallerFingerprint: HOME_FINGERPRINT

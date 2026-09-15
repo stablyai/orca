@@ -12,14 +12,17 @@ describe('RpcSessionLivenessWatchdog', () => {
   function fixture() {
     const sendProbe = vi.fn(() => true)
     const terminate = vi.fn()
+
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
       sendProbe,
       terminate,
       now: Date.now
     })
+
     const identity = {}
     watchdog.start(identity)
+
     return { identity, sendProbe, terminate, watchdog }
   }
 
@@ -50,6 +53,7 @@ describe('RpcSessionLivenessWatchdog', () => {
     const onTimeout = vi.fn()
     const terminate = vi.fn()
     const identity = {}
+
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'relay',
       idleProbeMs: null,
@@ -60,6 +64,7 @@ describe('RpcSessionLivenessWatchdog', () => {
       onTimeout,
       now: Date.now
     })
+
     watchdog.start(identity)
     watchdog.probeNow(identity)
 
@@ -89,6 +94,7 @@ describe('RpcSessionLivenessWatchdog', () => {
   it('does not churn timers during continuous authenticated traffic', async () => {
     const setTimer = vi.fn(setTimeout)
     const sendProbe = vi.fn(() => true)
+
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
       sendProbe,
@@ -96,13 +102,16 @@ describe('RpcSessionLivenessWatchdog', () => {
       now: Date.now,
       setTimer
     })
+
     const identity = {}
     watchdog.start(identity)
 
     await vi.advanceTimersByTimeAsync(10_000)
+
     for (let index = 0; index < 100; index++) {
       watchdog.noteAuthenticatedInbound(identity)
     }
+
     expect(setTimer).toHaveBeenCalledOnce()
 
     await vi.advanceTimersByTimeAsync(10_000)
@@ -114,6 +123,7 @@ describe('RpcSessionLivenessWatchdog', () => {
     let now = 0
     let callback: (() => void) | null = null
     const terminate = vi.fn()
+
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'relay',
       idleProbeMs: null,
@@ -124,10 +134,12 @@ describe('RpcSessionLivenessWatchdog', () => {
       now: () => now,
       setTimer: (next) => {
         callback = next
+
         return 1 as unknown as ReturnType<typeof setTimeout>
       },
       clearTimer: () => {}
     })
+
     const identity = {}
     watchdog.start(identity)
     watchdog.probeNow(identity)
@@ -141,6 +153,7 @@ describe('RpcSessionLivenessWatchdog', () => {
   it('invalidates late callbacks after identity replacement', () => {
     const callbacks: (() => void)[] = []
     const terminate = vi.fn()
+
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
       sendProbe: () => true,
@@ -148,10 +161,12 @@ describe('RpcSessionLivenessWatchdog', () => {
       now: () => 0,
       setTimer: (callback) => {
         callbacks.push(callback)
+
         return callbacks.length as unknown as ReturnType<typeof setTimeout>
       },
       clearTimer: () => {}
     })
+
     const first = {}
     const replacement = {}
     watchdog.start(first)
@@ -164,11 +179,13 @@ describe('RpcSessionLivenessWatchdog', () => {
   it('terminates immediately when a probe cannot be written', () => {
     const terminate = vi.fn()
     const identity = {}
+
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
       sendProbe: () => false,
       terminate
     })
+
     watchdog.start(identity)
     watchdog.probeNow(identity)
     expect(terminate).toHaveBeenCalledWith(identity)

@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url'
 // baseline may only shrink.
 
 const BASELINE_PATH = 'config/ts-nocheck-baseline.txt'
+
 // These two files legitimately contain the directive text as data (regex, fixtures),
 // so scanning them would self-flag. The ratchet does not police itself.
 const SELF_FILES = new Set([
@@ -30,33 +31,43 @@ const SELF_FILES = new Set([
 export function hasTsNoCheck(sourceText) {
   let i = 0
   const n = sourceText.length
+
   while (i < n) {
     const rest = sourceText.slice(i)
     const blank = /^[ \t]*\r?\n/.exec(rest)
+
     if (blank) {
       i += blank[0].length
       continue
     }
+
     if (rest.startsWith('//')) {
       const end = sourceText.indexOf('\n', i)
       const line = end === -1 ? sourceText.slice(i) : sourceText.slice(i, end)
+
       if (/^\/\/\s*@ts-nocheck\b/.test(line)) {
         return true
       }
+
       i = end === -1 ? n : end + 1
       continue
     }
+
     if (rest.startsWith('/*')) {
       const end = sourceText.indexOf('*/', i + 2)
       const block = end === -1 ? sourceText.slice(i) : sourceText.slice(i, end + 2)
+
       if (/^\/\*\s*@ts-nocheck\b/.test(block)) {
         return true
       }
+
       i = end === -1 ? n : end + 2
       continue
     }
+
     break
   }
+
   return false
 }
 
@@ -74,6 +85,7 @@ export function diffBaseline(current, baseline) {
   const base = baseline instanceof Set ? baseline : new Set(baseline)
   const added = [...cur].filter((e) => !base.has(e)).sort()
   const stale = [...base].filter((e) => !cur.has(e)).sort()
+
   return { added, stale }
 }
 
@@ -89,13 +101,16 @@ export function collectCurrentTsNoCheckFiles(root = process.cwd()) {
     .filter((f) => !SELF_FILES.has(f))
 
   const entries = []
+
   for (const rel of tracked) {
     let src
+
     try {
       src = fs.readFileSync(path.join(root, rel), 'utf8')
     } catch {
       continue
     }
+
     if (hasTsNoCheck(src)) {
       entries.push(rel)
     }
@@ -108,6 +123,7 @@ function printAddedFailure(added) {
   for (const entry of added) {
     console.error(`::error::New @ts-nocheck not allowed: ${entry}`)
   }
+
   console.error('')
   console.error('╭────────────────────────────────────────────────────────────────────────────╮')
   console.error('│  ❌  ts-nocheck ratchet failed — a NEW file adds a @ts-nocheck directive.    │')
@@ -115,9 +131,11 @@ function printAddedFailure(added) {
   console.error('')
   console.error(`  ${added.length} file(s) newly add a \`@ts-nocheck\` header:`)
   console.error('')
+
   for (const entry of added) {
     console.error(`    • ${entry}`)
   }
+
   console.error('')
   console.error('  `@ts-nocheck` disables ALL type checking for the whole file, not just one line.')
   console.error(
@@ -136,6 +154,7 @@ function printStaleFailure(stale) {
   for (const entry of stale) {
     console.error(`::error::Stale ts-nocheck baseline entry (prune it): ${entry}`)
   }
+
   console.error('')
   console.error('╭────────────────────────────────────────────────────────────────────────────╮')
   console.error('│  ⚠️  ts-nocheck baseline is out of date — nice work removing a suppression!   │')
@@ -146,9 +165,11 @@ function printStaleFailure(stale) {
     '  The baseline may only shrink, so these must be removed to keep re-adding blocked:'
   )
   console.error('')
+
   for (const entry of stale) {
     console.error(`    • ${entry}`)
   }
+
   console.error('')
   console.error(`  ✅  Fix it (one command):  pnpm check:ts-nocheck-ratchet --prune`)
   console.error('')
@@ -156,33 +177,42 @@ function printStaleFailure(stale) {
 
 export function main(root = process.cwd()) {
   const baselineFile = path.join(root, BASELINE_PATH)
+
   if (!fs.existsSync(baselineFile)) {
     console.error(
       `::error::Missing ${BASELINE_PATH}. Generate it with: node config/scripts/check-ts-nocheck-ratchet.mjs --init`
     )
+
     return 1
   }
+
   const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
   const current = collectCurrentTsNoCheckFiles(root)
   const { added, stale } = diffBaseline(current, baseline)
 
   if (added.length > 0) {
     printAddedFailure(added)
+
     if (stale.length > 0) {
       console.error(
         `  (Also: ${stale.length} stale baseline entr(y/ies) can be pruned — see below.)`
       )
       printStaleFailure(stale)
     }
+
     return 1
   }
+
   if (stale.length > 0) {
     printStaleFailure(stale)
+
     return 1
   }
+
   console.log(
     `ts-nocheck ratchet OK — ${current.length} grandfathered file(s), no new suppressions.`
   )
+
   return 0
 }
 
@@ -195,12 +225,14 @@ function writeBaseline(root, entries) {
     '# Regenerate/prune: pnpm check:ts-nocheck-ratchet --prune   (removes stale entries only)',
     ''
   ].join('\n')
+
   fs.writeFileSync(path.join(root, BASELINE_PATH), `${header}${entries.join('\n')}\n`)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.cwd()
   const arg = process.argv[2]
+
   if (arg === '--init') {
     // One-time bootstrap: capture the current @ts-nocheck set as the baseline.
     const entries = collectCurrentTsNoCheckFiles(root)
@@ -208,6 +240,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`Wrote ${BASELINE_PATH} with ${entries.length} entries.`)
     process.exit(0)
   }
+
   if (arg === '--prune') {
     // Remove baseline entries whose @ts-nocheck is gone (shrink only; never adds).
     const current = new Set(collectCurrentTsNoCheckFiles(root))
@@ -218,13 +251,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(
       `Pruned baseline to ${kept.length} entries (removed ${baseline.size - kept.length}).`
     )
+
     if (newlyAdded.length > 0) {
       console.error(
         `::error::--prune does not add entries; ${newlyAdded.length} new suppression(s) remain — fix those files' types.`
       )
       process.exit(1)
     }
+
     process.exit(0)
   }
+
   process.exit(main(root))
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+
 vi.mock('./wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
@@ -124,11 +126,13 @@ describe('failure modes stay distinguishable', () => {
       stderr: '',
       timedOut: false
     })
+
     const result = await runWslProcess({
       loginPath: 'preferred',
       distro: 'Ubuntu',
       program: '/bin/false'
     })
+
     expect(result.code).toBe(3)
     expect(result.timedOut).toBe(false)
   })
@@ -141,11 +145,13 @@ describe('failure modes stay distinguishable', () => {
       stderr: '',
       timedOut: true
     })
+
     const result = await runWslProcess({
       loginPath: 'preferred',
       distro: 'Ubuntu',
       program: '/bin/true'
     })
+
     expect(result.timedOut).toBe(true)
   })
 
@@ -158,12 +164,14 @@ describe('failure modes stay distinguishable', () => {
       stderr: 'stopped',
       timedOut: false
     })
+
     // Every knob this runner used to carry existed because this case threw.
     const result = await runWslProcess({
       loginPath: 'preferred',
       distro: 'Ubuntu',
       program: 'codex'
     })
+
     expect(result.environmentResolved).toBe(false)
   })
 })

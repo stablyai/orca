@@ -9,8 +9,11 @@ import { findRemoteForUrl } from './worktree-push-target-setup'
 import type { GitRemoteExec } from './worktree-push-target-cleanup'
 
 const SSH_FORK = 'git@github.com:contributor/orca.git'
+
 const HTTPS_FORK = 'https://github.com/contributor/orca.git'
+
 const GITLAB_FORK = 'https://gitlab.com/contributor/orca.git'
+
 const UPSTREAM = 'https://github.com/stablyai/orca.git'
 
 type RemoteRow = { name: string; fetchUrl: string; pushUrl?: string }
@@ -19,11 +22,14 @@ type CountingExec = GitRemoteExec & { spawns: string[][] }
 
 function makeExec(remotes: readonly RemoteRow[]): CountingExec {
   const spawns: string[][] = []
+
   const exec: GitRemoteExec = async (args: string[]) => {
     spawns.push(args)
+
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: `${remotes.map((remote) => remote.name).join('\n')}\n` }
     }
+
     if (args[0] === 'remote' && args[1] === '-v') {
       return {
         stdout: remotes
@@ -34,15 +40,20 @@ function makeExec(remotes: readonly RemoteRow[]): CountingExec {
           .join('\n')
       }
     }
+
     if (args[0] === 'remote' && args[1] === 'get-url') {
       const match = remotes.find((remote) => remote.name === args[2])
+
       if (!match) {
         throw new Error(`No such remote ${args[2]}`)
       }
+
       return { stdout: `${match.fetchUrl}\n` }
     }
+
     throw new Error(`unexpected git command: ${args.join(' ')}`)
   }
+
   return Object.assign(exec, { spawns })
 }
 
@@ -53,8 +64,10 @@ async function findRemoteForUrlPerRemote(
   remoteUrl: string
 ): Promise<string | null> {
   const target = parseGitHubOwnerRepo(remoteUrl)
+
   try {
     const { stdout } = await execGit(['remote'], repoPath)
+
     for (const remote of stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -63,6 +76,7 @@ async function findRemoteForUrlPerRemote(
         const { stdout: urlStdout } = await execGit(['remote', 'get-url', remote], repoPath)
         const candidateUrl = urlStdout.trim()
         const candidate = parseGitHubOwnerRepo(candidateUrl)
+
         if (
           target &&
           candidate &&
@@ -71,6 +85,7 @@ async function findRemoteForUrlPerRemote(
         ) {
           return remote
         }
+
         if (candidateUrl === remoteUrl) {
           return remote
         }
@@ -81,6 +96,7 @@ async function findRemoteForUrlPerRemote(
   } catch {
     return null
   }
+
   return null
 }
 
@@ -173,6 +189,7 @@ describe('findRemoteForUrl', () => {
     const failing: GitRemoteExec = async () => {
       throw new Error('not a git repository')
     }
+
     await expect(findRemoteForUrl(failing, '/repo', SSH_FORK)).resolves.toBeNull()
   })
 })

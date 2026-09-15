@@ -190,6 +190,7 @@ describe('terminal surface ownership', () => {
       },
       terminalLayoutsByTabId: {}
     })
+
     expect(loaded.ok).toBe(true)
     const session = loaded.ok ? loaded.value : null
     const reloadedRow = session?.tabsByWorktree[WORKTREE_ID]?.[0]
@@ -236,6 +237,7 @@ describe('terminal surface ownership', () => {
       },
       terminalLayoutsByTabId: {}
     })
+
     expect(loaded.ok).toBe(true)
     setTerminalTabs(
       (loaded.ok ? loaded.value.tabsByWorktree[WORKTREE_ID] : []) as StoredTerminalTab[]

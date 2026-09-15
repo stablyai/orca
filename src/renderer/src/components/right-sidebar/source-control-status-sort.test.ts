@@ -17,11 +17,14 @@ function referenceCompare(a: GitStatusEntry, b: GitStatusEntry): number {
     if (value.conflictStatus === 'unresolved') {
       return 0
     }
+
     if (value.conflictStatus === 'resolved_locally') {
       return 1
     }
+
     return 2
   }
+
   // 'en' pinned to match the shared collator — an undefined locale would make
   // this oracle environment-dependent (sv/cs/da collate differently).
   return rank(a) - rank(b) || a.path.localeCompare(b.path, 'en', { numeric: true })
@@ -49,6 +52,7 @@ describe('compareGitStatusEntries', () => {
       'src/10.ts',
       'src/9.ts'
     ]
+
     const entries = paths.map((path) => entry(path))
     const sorted = [...entries].sort(compareGitStatusEntries).map((value) => value.path)
     const reference = [...entries].sort(referenceCompare).map((value) => value.path)
@@ -61,6 +65,7 @@ describe('compareGitStatusEntries', () => {
       entry('a-resolved.ts', 'resolved_locally'),
       entry('m-unresolved.ts', 'unresolved')
     ]
+
     expect([...entries].sort(compareGitStatusEntries).map((value) => value.path)).toEqual([
       'm-unresolved.ts',
       'a-resolved.ts',

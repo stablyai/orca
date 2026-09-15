@@ -51,6 +51,7 @@ describe('signalPosixPtyForegroundGroup', () => {
   it('signals the negated foreground group', () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     const fallback = vi.fn()
+
     try {
       signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
         platform: 'darwin',
@@ -104,7 +105,9 @@ describe('signalPosixPtyForegroundGroup', () => {
       error.code = 'ESRCH'
       throw error
     })
+
     const fallback = vi.fn()
+
     try {
       signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
         platform: 'darwin',
@@ -123,7 +126,9 @@ describe('signalPosixPtyForegroundGroup', () => {
       error.code = 'EPERM'
       throw error
     })
+
     const fallback = vi.fn()
+
     try {
       signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
         platform: 'darwin',
@@ -162,6 +167,7 @@ describe('process table lookup', () => {
 
       expect(execFileSyncMock).toHaveBeenCalled()
       let timeoutBudget = 0
+
       for (const call of execFileSyncMock.mock.calls) {
         const args = call[1] as string[]
         const options = call[2] as { timeout: number }
@@ -170,6 +176,7 @@ describe('process table lookup', () => {
         expect(args.filter((arg) => arg === '-p')).toHaveLength(1)
         timeoutBudget += options.timeout
       }
+
       expect(timeoutBudget).toBeLessThanOrEqual(250)
     } finally {
       kill.mockRestore()
@@ -183,6 +190,7 @@ describe('process table lookup', () => {
     // tab switch eight synchronous ~3ms `ps` calls on the main event loop.
     const execFileSyncMock = vi.mocked(execFileSync)
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     const panes = [
       { rootPid: 900, tty: 'ttys301' },
       { rootPid: 901, tty: 'ttys302' },
@@ -194,10 +202,13 @@ describe('process table lookup', () => {
       execFileSyncMock.mockClear()
       execFileSyncMock.mockImplementation(((_file: string, args: string[]) => {
         const pid = Number(args[args.indexOf('-p') + 1])
+
         if (pid === 4242) {
           return '4242 4242 ttys002'
         }
+
         const pane = panes.find((entry) => entry.rootPid === pid)
+
         return pane ? `${pane.rootPid} ${pane.rootPid + 50} ${pane.tty}` : ''
       }) as never)
 
@@ -214,6 +225,7 @@ describe('process table lookup', () => {
       const pidArgs = execFileSyncMock.mock.calls.map((call) =>
         Number((call[1] as string[])[(call[1] as string[]).indexOf('-p') + 1])
       )
+
       // 8 root-pid reads (one per signal) + exactly ONE read of Orca's own row.
       expect(pidArgs.filter((pid) => pid === 4242)).toHaveLength(1)
       expect(pidArgs).toHaveLength(9)

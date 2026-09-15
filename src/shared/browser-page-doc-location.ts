@@ -17,6 +17,7 @@ export function browserPageDocLocationsEqual(
   if (left === null || right === null) {
     return left === right
   }
+
   return left.worktreeId === right.worktreeId && left.filePath === right.filePath
 }
 
@@ -37,10 +38,12 @@ export function remapBrowserPageDocLocation(
   if (location.worktreeId !== oldWorktreeId) {
     return location
   }
+
   const relativePath =
     oldWorktreePath && newWorktreePath
       ? relativePathInsideRoot(oldWorktreePath, location.filePath)
       : null
+
   return {
     ...location,
     worktreeId: newWorktreeId,

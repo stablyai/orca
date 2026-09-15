@@ -6,6 +6,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const PANE = makePaneKey('external-live', '11111111-1111-4111-8111-111111111111')
+
 const PROVIDER_SESSION = { key: 'session_id' as const, id: 'session-live' }
 
 function seedLocalIdentity(server: AgentHookServer): void {
@@ -43,6 +44,7 @@ describe('AgentHookServer AI Vault liveness identity', () => {
   it('hydrates dismissed provider identity without reviving visible status', async () => {
     const userDataPath = await mkdtemp(join(tmpdir(), 'orca-ai-vault-liveness-'))
     const first = new AgentHookServer()
+
     try {
       await first.start({ env: 'production', userDataPath })
       seedLocalIdentity(first)
@@ -52,6 +54,7 @@ describe('AgentHookServer AI Vault liveness identity', () => {
 
       const second = new AgentHookServer()
       await second.start({ env: 'production', userDataPath })
+
       try {
         expect(second.getStatusSnapshot()).toEqual([
           expect.objectContaining({

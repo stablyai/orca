@@ -13,7 +13,9 @@ import { AgentMap } from './AgentMap'
 import * as StoreSelectors from '@/store/selectors'
 
 const NOW = 2_000_000_000
+
 const EXECUTION_HOST_ID = 'runtime:env-1' as const
+
 const initialState = useAppStore.getState()
 
 const repo = {
@@ -314,17 +316,20 @@ describe('Agent Map workspace context menu', () => {
       clientX: 100,
       clientY: 110
     })
+
     const createWorktree = await screen.findByText(
       'Create new worktree for Orca',
       {},
       { timeout: 5_000 }
     )
+
     // Radix restores focus after unmount; drain it before the next test opens a menu.
     const focusRestored = new Promise<void>((resolve) => {
       screen
         .getByRole('menu')
         .addEventListener('focusScope.autoFocusOnUnmount', () => resolve(), { once: true })
     })
+
     fireEvent.click(createWorktree)
     await act(async () => focusRestored)
 
@@ -337,6 +342,7 @@ describe('Agent Map workspace context menu', () => {
 
   it('opens the folder-workspace composer from a synthetic project ring', async () => {
     useAppStore.setState({ projectGroups: [folderProjectGroup] })
+
     const folderCard = {
       ...card,
       repoId: `folder-workspace:${folderProjectGroup.id}`,
@@ -345,6 +351,7 @@ describe('Agent Map workspace context menu', () => {
       worktreeName: 'Docs',
       workspaceKind: 'folder' as const
     }
+
     const { container } = render(
       <TooltipProvider>
         <AgentMap
@@ -371,6 +378,7 @@ describe('Agent Map workspace context menu', () => {
     useAppStore.setState({
       repos: [repo, { ...repo, path: '/local/repo', executionHostId: 'local' }]
     })
+
     const { container } = render(
       <TooltipProvider>
         <AgentMap cards={[card]} now={NOW} workspaceContextMenusEnabled onOpenTerminal={() => {}} />

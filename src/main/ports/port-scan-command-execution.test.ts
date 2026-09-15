@@ -15,6 +15,7 @@ vi.mock('child_process', () => ({
 // Why (#11161): must outlast the whole watchdog budget, otherwise a watchdog
 // armed before execFile still survives the stall and the ordering goes unpinned.
 const SPAWN_STALL_MS = PORT_SCAN_COMMAND_TIMEOUT_MS + WATCHDOG_GRACE_MS + 200
+
 const LSOF_OUTPUT = ['p123', 'cnode', 'n127.0.0.1:5173'].join('\n')
 
 /** Emulates a hooked CreateProcessW: blocks the calling thread inside uv_spawn. */
@@ -34,6 +35,7 @@ describe('runPortScanCommandInProcess', () => {
         blockCallingThread(SPAWN_STALL_MS)
         // The command itself is healthy once it finally starts.
         setTimeout(() => (callback as (e: null, out: string) => void)(null, LSOF_OUTPUT), 5)
+
         return { kill: vi.fn() }
       }
     )
@@ -53,8 +55,10 @@ describe('runPortScanCommandInProcess', () => {
     execFileMock.mockImplementation(() => ({ kill: killMock }))
 
     let settled = false
+
     const promise = runPortScanCommandInProcess('lsof', []).catch((error: unknown) => {
       settled = true
+
       return error
     })
 
@@ -74,7 +78,9 @@ describe('runPortScanCommandInProcess', () => {
           killed: true,
           signal: 'SIGTERM'
         })
+
         setTimeout(() => (callback as (e: Error) => void)(killed), 0)
+
         return { kill: vi.fn() }
       }
     )
@@ -88,6 +94,7 @@ describe('runPortScanCommandInProcess', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, callback: unknown) => {
         setTimeout(() => (callback as (e: Error) => void)(new Error('spawn ENOENT')), 0)
+
         return { kill: vi.fn() }
       }
     )

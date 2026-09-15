@@ -21,21 +21,28 @@ export function registerContentCreationIpcBridge(
   unsubs.push(
     window.api.ui.onNewBrowserTab(() => {
       const store = useAppStore.getState()
+
       if (isFloatingWorkspacePanelFocused()) {
         void createFloatingWorkspaceBrowserTab(store).catch((error) => {
           toast.error(error instanceof Error ? error.message : String(error))
         })
+
         return
       }
+
       const worktreeId = store.activeWorktreeId
+
       if (!worktreeId) {
         return
       }
+
       const targetGroupId =
         store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+
       if (!targetGroupId) {
         return
       }
+
       void store.openNewBrowserTabInActiveWorkspace(targetGroupId).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
       })
@@ -45,6 +52,7 @@ export function registerContentCreationIpcBridge(
   unsubs.push(
     window.api.ui.onNewMarkdownTab(() => {
       const store = useAppStore.getState()
+
       if (isFloatingWorkspacePanelFocused()) {
         void createFloatingWorkspaceMarkdownTab(store).catch((err) => {
           toast.error(
@@ -56,14 +64,19 @@ export function registerContentCreationIpcBridge(
                 )
           )
         })
+
         return
       }
+
       const worktreeId = store.activeWorktreeId
+
       if (!worktreeId) {
         return
       }
+
       const targetGroupId =
         store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+
       if (targetGroupId) {
         void store.openNewMarkdownInActiveWorkspace(targetGroupId)
       }
@@ -75,15 +88,19 @@ export function registerContentCreationIpcBridge(
     if (isRuntimeEnvironmentActive()) {
       return
     }
+
     const store = useAppStore.getState()
     const worktreeId = store.activeWorktreeId
+
     if (!worktreeId) {
       return
     }
+
     void openMobileEmulatorTab(worktreeId, { placement: 'rightSplit' }).catch((error) => {
       toast.error(error instanceof Error ? error.message : String(error))
     })
   })
+
   if (unsubscribeNewSimulatorTab) {
     unsubs.push(unsubscribeNewSimulatorTab)
   }
@@ -93,11 +110,14 @@ export function registerContentCreationIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       if (isManualSimulatorLaunchPending(worktreeId)) {
         // Why: manual launches pre-attach so the ready pane opens in the right split, not as a hidden tab in this group.
         rememberPrelaunchedSimulatorSession(worktreeId, info)
+
         return
       }
+
       ensureSimulatorTab(worktreeId, {
         surfacePane: false,
         executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -112,6 +132,7 @@ export function registerContentCreationIpcBridge(
       }, 0)
     }
   )
+
   if (unsubscribeEmulatorAutoAttach) {
     unsubs.push(unsubscribeEmulatorAutoAttach)
   }
@@ -120,11 +141,13 @@ export function registerContentCreationIpcBridge(
     if (isRuntimeEnvironmentActive()) {
       return
     }
+
     ensureSimulatorTab(worktreeId, {
       surfacePane: true,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
   })
+
   if (unsubscribeEmulatorPaneFocus) {
     unsubs.push(unsubscribeEmulatorPaneFocus)
   }

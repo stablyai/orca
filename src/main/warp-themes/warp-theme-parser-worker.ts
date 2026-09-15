@@ -7,6 +7,7 @@ const data = workerData as {
   fileLabel?: unknown
   options?: unknown
 }
+
 const options =
   data.options && typeof data.options === 'object' ? (data.options as ParseWarpThemeOptions) : {}
 

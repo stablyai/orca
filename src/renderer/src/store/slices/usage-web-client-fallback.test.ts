@@ -11,6 +11,7 @@ import {
 
 function stubWebClientFallback(): void {
   const undefinedAsync = vi.fn(() => Promise.resolve(undefined))
+
   const provider = {
     getScanState: undefinedAsync,
     setEnabled: undefinedAsync,
@@ -21,6 +22,7 @@ function stubWebClientFallback(): void {
     getBreakdown: undefinedAsync,
     getRecentSessions: undefinedAsync
   }
+
   vi.stubGlobal('window', {
     api: {
       claudeUsage: provider,

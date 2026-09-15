@@ -28,9 +28,11 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (s.contextualToursAutoEligible === eligible) {
           return s
         }
+
         if (typeof window !== 'undefined') {
           window.api.ui.set({ contextualToursAutoEligible: eligible }).catch(console.error)
         }
+
         return { contextualToursAutoEligible: eligible }
       }),
     setContextualToursOnboardingVisible: (visible) =>
@@ -48,6 +50,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
       set((s) => {
         const tour = getContextualTour(id)
+
         const decision = getContextualTourRequestDecision({
           tour,
           persistedUIReady: s.persistedUIReady,
@@ -60,19 +63,27 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
           targetExists: hasContextualTourTarget
         })
+
         if (decision.kind !== 'start') {
           if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
             return s
           }
+
           const { [id]: _consumed, ...remainingNavigationSnapshot } =
             s.contextualTourNavigationInteractionSnapshot
+
           void _consumed
+
           return { contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot }
         }
+
         const navigationSnapshot = s.contextualTourNavigationInteractionSnapshot[id]
+
         const { [id]: _consumed, ...remainingNavigationSnapshot } =
           s.contextualTourNavigationInteractionSnapshot
+
         void _consumed
+
         return {
           activeContextualTourId: id,
           activeContextualTourStepIndex: decision.stepIndex,
@@ -97,6 +108,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         ) {
           return s
         }
+
         return s.activeContextualTourSuppressed ? s : { activeContextualTourSuppressed: true }
       }),
     detachContextualTourSource: (id, source) =>
@@ -104,6 +116,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (s.activeContextualTourId !== id || s.activeContextualTourSource !== source) {
           return s
         }
+
         return s.activeContextualTourSourceDetached
           ? s
           : { activeContextualTourSourceDetached: true }
@@ -113,15 +126,19 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (!s.activeContextualTourId) {
           return s
         }
+
         const tour = getContextualTour(s.activeContextualTourId)
+
         const nextStepIndex = getNextVisibleContextualTourStepIndex({
           tour,
           currentStepIndex: s.activeContextualTourStepIndex,
           targetExists: hasContextualTourTarget
         })
+
         if (nextStepIndex !== null) {
           return { activeContextualTourStepIndex: nextStepIndex }
         }
+
         // Why: browser step 3's target lives in a closed menu until that step is active.
         if (
           s.activeContextualTourId === 'browser' &&
@@ -129,6 +146,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         ) {
           return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
         }
+
         return s
       }),
     regressContextualTour: () =>
@@ -136,29 +154,37 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (!s.activeContextualTourId) {
           return s
         }
+
         const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
           tour: getContextualTour(s.activeContextualTourId),
           currentStepIndex: s.activeContextualTourStepIndex,
           targetExists: hasContextualTourTarget
         })
+
         if (previousStepIndex === null) {
           return s
         }
+
         return { activeContextualTourStepIndex: previousStepIndex }
       }),
     dismissContextualTour: (id) => {
       const activeTourId = get().activeContextualTourId
+
       if (id && activeTourId !== id) {
         return
       }
+
       const tourId = id ?? activeTourId
+
       if (tourId) {
         get().markContextualToursSeen([tourId])
       }
+
       set((s) => {
         if (id && s.activeContextualTourId !== id) {
           return s
         }
+
         return {
           activeContextualTourId: null,
           activeContextualTourStepIndex: 0,
@@ -172,17 +198,22 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     },
     completeContextualTour: (id) => {
       const activeTourId = get().activeContextualTourId
+
       if (id && activeTourId !== id) {
         return
       }
+
       const tourId = id ?? activeTourId
+
       if (tourId) {
         get().markContextualToursSeen([tourId])
       }
+
       set((s) => {
         if (id && s.activeContextualTourId !== id) {
           return s
         }
+
         return {
           activeContextualTourId: null,
           activeContextualTourStepIndex: 0,
@@ -198,10 +229,13 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
       set((s) => {
         const activeTourId = s.activeContextualTourId
         const tourId = id ?? activeTourId
+
         if (!tourId || (id && activeTourId !== id)) {
           return s
         }
+
         const alreadyShown = s.contextualToursSeenIds.includes(tourId)
+
         return {
           activeContextualTourId: null,
           activeContextualTourStepIndex: 0,
@@ -218,21 +252,27 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (ids.length === 0) {
           return s
         }
+
         const current = new Set(s.contextualToursSeenIds)
         let changed = false
+
         for (const id of ids) {
           if (!current.has(id)) {
             current.add(id)
             changed = true
           }
         }
+
         if (!changed) {
           return s
         }
+
         const next = [...current]
+
         if (typeof window !== 'undefined') {
           window.api.ui.set({ contextualToursSeenIds: next }).catch(console.error)
         }
+
         return { contextualToursSeenIds: next }
       })
   }

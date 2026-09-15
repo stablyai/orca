@@ -12,9 +12,11 @@ import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
 function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
   const diffMs = Math.max(0, now - updatedAt)
+
   if (diffMs < 60_000) {
     return translate('auto.components.settings.AccountsPane.3a30aaf526', 'just now')
   }
+
   return formatUiRelativeTime(-diffMs)
 }
 
@@ -41,6 +43,7 @@ function MiniMaxCookieHelpPopover({ consoleUrl }: { consoleUrl: string }): React
     ),
     translate('auto.components.settings.AccountsPane.7492fb3bba', 'Paste it here and click Save.')
   ]
+
   return (
     <div className="space-y-3 p-3 text-xs">
       <div className="space-y-1">
@@ -84,7 +87,9 @@ export function MiniMaxCredentials({
     saveMiniMaxApiKey,
     clearMiniMaxApiKey
   } = model
+
   const now = useNow(60_000)
+
   return (
     <>
       <SearchableSetting

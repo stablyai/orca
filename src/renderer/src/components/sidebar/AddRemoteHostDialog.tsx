@@ -38,9 +38,11 @@ export function AddRemoteHostDialog({
   // dialog is still animating out, so the title/fields would flash to the SSH default. Latch the
   // last non-null mode for rendering so the closing dialog keeps showing what the user saw.
   const [renderMode, setRenderMode] = useState<AddRemoteHostMode>(mode ?? 'ssh')
+
   if (mode !== null && mode !== renderMode) {
     setRenderMode(mode)
   }
+
   const [sshForm, setSshForm] = useState<EditingTarget>(EMPTY_FORM)
   const [sshView, setSshView] = useState<SshDialogView>('form')
   const [configHosts, setConfigHosts] = useState<SshConfigHostSummary[]>([])
@@ -61,10 +63,12 @@ export function AddRemoteHostDialog({
   const configSearchQuery = useRef('')
   const configResolveGeneration = useRef(0)
   const parsedServerLink = useMemo(() => parseHostAccessLink(pairingCode), [pairingCode])
+
   const serverFormCanSubmit =
     serverName.trim() !== '' &&
     parsedServerLink.ok &&
     (parsedServerLink.value.endpointKind !== 'loopback' || allowLoopback)
+
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const recordSshRepoReadoptions = useAppStore((s) => s.recordSshRepoReadoptions)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
@@ -102,12 +106,14 @@ export function AddRemoteHostDialog({
     if (isSaving || isBulkImporting) {
       return
     }
+
     reset()
     onOpenChange(null)
   }
 
   const saveSshHost = async () => {
     setIsSaving(true)
+
     try {
       const outcome = await saveNewSshHostFromForm({
         form: sshForm,
@@ -116,6 +122,7 @@ export function AddRemoteHostDialog({
         setSshTargetsMetadata,
         recordFeatureInteraction
       })
+
       if (outcome === 'saved') {
         reset()
         onOpenChange(null)
@@ -131,13 +138,16 @@ export function AddRemoteHostDialog({
     configSearchGeneration.current = generation
     setIsLoadingConfigHosts(true)
     setConfigHostsError(null)
+
     const result = await loadSshConfigHostsForPicker(window.api.ssh, {
       query,
       ...(options?.refresh ? { refresh: true } : {})
     })
+
     if (generation !== configSearchGeneration.current) {
       return
     }
+
     if (result.ok) {
       setConfigHosts(result.result.hosts)
       setConfigHostCount(result.result.totalHostCount)
@@ -147,6 +157,7 @@ export function AddRemoteHostDialog({
       setConfigHosts([])
       setConfigHostsError(result.error)
     }
+
     setIsLoadingConfigHosts(false)
   }
 
@@ -168,12 +179,14 @@ export function AddRemoteHostDialog({
     // Why: a slower earlier pick must not overwrite the host the user settled on.
     const isStale = () => generation !== configResolveGeneration.current
     let resolved: Awaited<ReturnType<typeof prefillFormFromSshConfigHost>>
+
     try {
       resolved = await prefillFormFromSshConfigHost(host, window.api.ssh)
     } catch (error) {
       if (isStale()) {
         return
       }
+
       setResolvingConfigAlias(null)
       toast.error(
         error instanceof Error
@@ -183,12 +196,16 @@ export function AddRemoteHostDialog({
               'Failed to resolve that SSH config host.'
             )
       )
+
       return
     }
+
     if (isStale()) {
       return
     }
+
     setResolvingConfigAlias(null)
+
     if (!resolved) {
       toast.error(
         translate(
@@ -196,8 +213,10 @@ export function AddRemoteHostDialog({
           'Failed to resolve that SSH config host.'
         )
       )
+
       return
     }
+
     const { form, preferAdvancedOpen: openAdvanced } = resolved
     setSshForm(form)
     setPreferAdvancedOpen(openAdvanced)
@@ -215,6 +234,7 @@ export function AddRemoteHostDialog({
 
   const addAllConfigHostsToOrca = async () => {
     setIsBulkImporting(true)
+
     try {
       const result = await addAllSshConfigHostsToOrca({
         ssh: window.api.ssh,
@@ -222,11 +242,14 @@ export function AddRemoteHostDialog({
         setSshTargetsMetadata,
         recordFeatureInteraction
       })
+
       if (result.kind === 'added') {
         reset()
         onOpenChange(null)
+
         return
       }
+
       if (result.kind === 'already-synced') {
         // Why: reuse the loader so the refresh keeps the active filter and stays inside the
         // generation guard against an in-flight debounced search.
@@ -240,6 +263,7 @@ export function AddRemoteHostDialog({
   const saveRemoteServer = async () => {
     const trimmedName = serverName.trim()
     const trimmedPairingCode = pairingCode.trim()
+
     if (!trimmedName || !trimmedPairingCode) {
       toast.error(
         translate(
@@ -247,12 +271,16 @@ export function AddRemoteHostDialog({
           'Server name and pairing code are required.'
         )
       )
+
       return
     }
+
     if (!parsedServerLink.ok) {
       toast.error(translateHostAccessLinkError(parsedServerLink.kind))
+
       return
     }
+
     if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback) {
       toast.error(
         translate(
@@ -260,16 +288,19 @@ export function AddRemoteHostDialog({
           'Enable the SSH tunnel override or create a new link using the other host’s Tailscale or LAN address.'
         )
       )
+
       return
     }
 
     setIsSaving(true)
+
     try {
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
         allowLoopback
       })
+
       if (!result.ok) {
         toast.error(
           result.kind === 'environment-save-failed'
@@ -279,8 +310,10 @@ export function AddRemoteHostDialog({
                 parsedServerLink.value.displayEndpoint
               )
         )
+
         return
       }
+
       const environments = await window.api.runtimeEnvironments.list()
       setRuntimeEnvironments(environments)
       await readRuntimeHostStatusSnapshots()

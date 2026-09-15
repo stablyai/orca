@@ -40,6 +40,7 @@ export function beginStructuredManualRecovery(input: {
     restore,
     setStatus
   } = input
+
   const sessionId = params.envelope.sessionId
   operationGuard.start(sessionId, {
     callerKey,
@@ -54,9 +55,11 @@ export function beginStructuredManualRecovery(input: {
     operationId: params.envelope.clientOperationId,
     hostLabel: deps.transport?.hostLabel
   })
+
   return deps
     .schedule(sessionId, async () => {
       let record = requireRecord(sessionId)
+
       if (record.lease.claimStatus === 'reserved' && record.lease.handoffOperationId !== null) {
         record = await setStoredAgentSessionHandoffStage(deps.store, {
           sessionId,
@@ -66,13 +69,16 @@ export function beginStructuredManualRecovery(input: {
           now: deps.now()
         })
       }
+
       await restore(record.sessionId)
+
       if (requireRecord(sessionId).lease.handoffStage === 'manual-recovery') {
         throw new Error('The TUI owner proof is still unavailable.')
       }
     })
     .then(() => {
       operationGuard.finish(sessionId, params.envelope.clientOperationId)
+
       return deps.store.recordOperationOutcome({
         callerKey,
         operationId: params.envelope.clientOperationId,

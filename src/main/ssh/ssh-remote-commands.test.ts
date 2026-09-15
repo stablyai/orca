@@ -39,10 +39,13 @@ import {
 } from '../../shared/relay-artifacts'
 
 const posix = getRemoteHostPlatform('linux-x64')
+
 const nativePosix = getRemoteHostPlatform(
   process.platform === 'darwin' ? 'darwin-x64' : 'linux-x64'
 )
+
 const windows = getRemoteHostPlatform('win32-x64')
+
 const powerShellExecutable = [
   process.env.ORCA_POWERSHELL_EXECUTABLE,
   ...(process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh'])
@@ -50,11 +53,14 @@ const powerShellExecutable = [
   if (!candidate) {
     return false
   }
+
   const result = spawnSync(candidate, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], {
     stdio: 'ignore'
   })
+
   return result.status === 0
 })
+
 const powerShell51Executable =
   process.platform === 'win32' &&
   spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], {
@@ -72,6 +78,7 @@ function runShellCommand(command: string): Promise<string> {
     const child = spawn('/bin/sh', ['-c', command], {
       stdio: ['ignore', 'pipe', 'pipe']
     })
+
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf8')
@@ -86,8 +93,10 @@ function runShellCommand(command: string): Promise<string> {
     child.on('close', (code) => {
       if (code === 0) {
         resolve(stdout)
+
         return
       }
+
       reject(new Error(`shell exited ${code}: ${stderr}`))
     })
   })
@@ -98,6 +107,7 @@ function runPowerShellCommand(executable: string, script: string): Promise<strin
     const child = spawn(executable, ['-NoProfile', '-NonInteractive', '-Command', script], {
       stdio: ['ignore', 'pipe', 'pipe']
     })
+
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf8')
@@ -112,8 +122,10 @@ function runPowerShellCommand(executable: string, script: string): Promise<strin
     child.on('close', (code) => {
       if (code === 0) {
         resolve(stdout)
+
         return
       }
+
       reject(new Error(`PowerShell exited ${code}: ${stderr}`))
     })
   })
@@ -131,9 +143,11 @@ describe('ssh remote command builders', () => {
 
   it('requires every declared relay artifact before calling an install complete', () => {
     const posixProbe = probeRelayInstalledCommand(posix, '/home/me/relay')
+
     for (const filename of relayArtifactFilenames(false)) {
       expect(posixProbe, `POSIX probe ignores ${filename}`).toContain(filename)
     }
+
     expect(posixProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
     // A POSIX relay must not be asked for the Windows-only node-pty patch.
     expect(posixProbe).not.toContain('node-pty-1.1.0-console-list-agent-patch.cjs')
@@ -141,19 +155,24 @@ describe('ssh remote command builders', () => {
     const windowsProbe = decodePowerShellCommand(
       probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
     )
+
     for (const filename of relayArtifactFilenames(true)) {
       expect(windowsProbe, `Windows probe ignores ${filename}`).toContain(filename)
     }
+
     expect(windowsProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
   })
 
   // Stage a complete install, then remove one companion: the probe must flip.
   function stageRelayInstall(isWindows: boolean): string {
     const dir = mkdtempSync(join(tmpdir(), 'orca-relay-probe-'))
+
     for (const filename of relayArtifactFilenames(isWindows)) {
       writeFileSync(join(dir, filename), '')
     }
+
     writeFileSync(join(dir, RELAY_INSTALL_COMPLETE_FILENAME), '')
+
     return dir
   }
 
@@ -162,6 +181,7 @@ describe('ssh remote command builders', () => {
     async () => {
       const dir = stageRelayInstall(true)
       const probe = (): string => decodePowerShellCommand(probeRelayInstalledCommand(windows, dir))
+
       try {
         expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('OK')
 
@@ -179,6 +199,7 @@ describe('ssh remote command builders', () => {
     async () => {
       const dir = stageRelayInstall(false)
       const probe = (): string => probeRelayInstalledCommand(posix, dir)
+
       try {
         expect((await runShellCommand(probe())).trim()).toBe('OK')
 
@@ -205,6 +226,7 @@ describe('ssh remote command builders', () => {
     const mkdirScript = decodePowerShellCommand(
       makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')
     )
+
     const lockScript = decodePowerShellCommand(
       tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
     )
@@ -221,9 +243,11 @@ describe('ssh remote command builders', () => {
     expect(moveRemoteTreeCommand(posix, '/relay/old', '/relay/old.gc-tombstone')).toContain(
       "mv '/relay/old' '/relay/old.gc-tombstone'"
     )
+
     const windowsScript = decodePowerShellCommand(
       moveRemoteTreeCommand(windows, 'C:/Users/me/relay/old', 'C:/Users/me/relay/old.gc-tombstone')
     )
+
     expect(windowsScript).toContain('Move-Item -LiteralPath')
     expect(windowsScript).toContain("-Destination 'C:/Users/me/relay/old.gc-tombstone'")
     expect(windowsScript).toContain("'MOVED'")
@@ -233,6 +257,7 @@ describe('ssh remote command builders', () => {
     const script = decodePowerShellCommand(
       promoteRemoteTreeContentsCommand(windows, 'C:/Users/me/relay.upload-123', 'C:/Users/me/relay')
     )
+
     expect(script).toContain('Get-ChildItem -LiteralPath')
     expect(script).toContain(' -Force -ErrorAction Stop | Copy-Item -Destination')
     expect(script).not.toContain('Copy-Item -LiteralPath')
@@ -247,6 +272,7 @@ describe('ssh remote command builders', () => {
       '/home/u/relay.upload-123',
       '/home/u/relay'
     )
+
     expect(command).toContain("cp -a '/home/u/relay.upload-123'/. '/home/u/relay'/")
     expect(command).toContain("&& rm -rf '/home/u/relay.upload-123'")
     expect(command.indexOf('cp -a')).toBeLessThan(command.indexOf('rm -rf'))
@@ -265,6 +291,7 @@ describe('ssh remote command builders', () => {
       nodePath: 'C:/Program Files/nodejs/node.exe',
       pipePaths: ['\\\\.\\pipe\\orca-relay-1234567890abcdef1234']
     })
+
     const script = decodePowerShellCommand(command)
 
     expect(command).toContain('powershell.exe')
@@ -282,10 +309,12 @@ describe('ssh remote command builders', () => {
     'bounds real POSIX GC output with more than the exec-cap stage population',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-relay-gc-scale-'))
+
       try {
         for (let index = 0; index < 15_197; index += 1) {
           mkdirSync(join(root, `relay-0.1.0+abc.upload-${String(index).padStart(12, '0')}`))
         }
+
         mkdirSync(join(root, 'relay-0.1.0+aaa'))
         mkdirSync(join(root, 'relay-0.1.0+bbb'))
 
@@ -306,6 +335,7 @@ describe('ssh remote command builders', () => {
     'fails closed when real POSIX GC enumeration fails',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-relay-gc-failure-'))
+
       try {
         const command = `find() { return 23; }\n${listRelayBaseDirsCommand(posix, root)}`
         await expect(runShellCommand(command)).rejects.toThrow('shell exited 1')
@@ -352,6 +382,7 @@ describe('ssh remote command builders', () => {
 
   it('computes install-lock age on the remote host clock', () => {
     const posixCommand = lockAgeSecondsCommand(posix, '/home/me/.orca-remote/relay/.install-lock')
+
     const windowsScript = decodePowerShellCommand(
       lockAgeSecondsCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
     )
@@ -368,6 +399,7 @@ describe('ssh remote command builders', () => {
       '/home/me/.orca-remote/relay/.install-lock',
       20 * 60
     )
+
     const windowsScript = decodePowerShellCommand(
       tryStealInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock', 20 * 60)
     )
@@ -400,6 +432,7 @@ describe('ssh remote command builders', () => {
           20 * 60
         )
       )
+
       const result = spawnSync(
         powerShellExecutable!,
         ['-NoProfile', '-NonInteractive', '-Command', script],
@@ -416,9 +449,11 @@ describe('ssh remote command builders', () => {
     'lets only one Windows PowerShell 5.1 caller acquire an install lock',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-race-'))
+
       try {
         const lockPath = join(root, '.install-lock')
         const script = decodePowerShellCommand(tryCreateInstallLockCommand(windows, lockPath))
+
         const outputs = await Promise.all(
           Array.from({ length: 16 }, () => runPowerShellCommand(powerShell51Executable!, script))
         )
@@ -438,9 +473,11 @@ describe('ssh remote command builders', () => {
     'atomically replaces a fresh Windows lock only after the remote boot changes',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-reboot-'))
+
       try {
         const lockPath = join(root, '.install-lock')
         const acquire = decodePowerShellCommand(tryCreateInstallLockCommand(windows, lockPath))
+
         const recover = decodePowerShellCommand(
           tryStealInstallLockCommand(windows, lockPath, 20 * 60)
         )
@@ -456,6 +493,7 @@ describe('ssh remote command builders', () => {
         )
 
         writeFileSync(join(lockPath, '.boot-id'), 'win32:0')
+
         const outputs = await Promise.all(
           Array.from({ length: 4 }, () => runPowerShellCommand(powerShell51Executable!, recover))
         )
@@ -474,16 +512,19 @@ describe('ssh remote command builders', () => {
     'recovers a stale Windows lock past abandoned steal generations',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-stale-'))
+
       try {
         const lockPath = join(root, '.install-lock')
         mkdirSync(lockPath)
         const staleDate = new Date(Date.now() - 60 * 60_000)
         utimesSync(lockPath, staleDate, staleDate)
+
         for (let i = 0; i < 12; i++) {
           const orphan = `${lockPath}.steal.${i}`
           mkdirSync(orphan)
           utimesSync(orphan, staleDate, staleDate)
         }
+
         const script = decodePowerShellCommand(
           tryStealInstallLockCommand(windows, lockPath, 20 * 60)
         )
@@ -506,11 +547,13 @@ describe('ssh remote command builders', () => {
     'lets only one Windows PowerShell 5.1 caller replace a stale lock',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-steal-race-'))
+
       try {
         const lockPath = join(root, '.install-lock')
         mkdirSync(lockPath)
         const staleDate = new Date(Date.now() - 60 * 60_000)
         utimesSync(lockPath, staleDate, staleDate)
+
         const script = decodePowerShellCommand(
           tryStealInstallLockCommand(windows, lockPath, 20 * 60)
         )
@@ -534,6 +577,7 @@ describe('ssh remote command builders', () => {
     'keeps a new Windows lock visible to the previous directory-only GC probe',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-compat-'))
+
       try {
         const lockPath = join(root, '.install-lock')
         const acquire = decodePowerShellCommand(tryCreateInstallLockCommand(windows, lockPath))
@@ -554,12 +598,14 @@ describe('ssh remote command builders', () => {
     'recovers and cleans more than eight orphaned numbered steal claims',
     () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-'))
+
       try {
         const lockDir = join(root, '.install-lock')
         mkdirSync(lockDir)
         const staleDate = new Date(Date.now() - 60 * 60_000)
         utimesSync(lockDir, staleDate, staleDate)
         const lockMtimeSeconds = Math.floor(statSync(lockDir).mtimeMs / 1000)
+
         for (let i = 0; i < 12; i++) {
           const orphan = `${lockDir}.steal.${i}`
           mkdirSync(orphan)
@@ -583,6 +629,7 @@ describe('ssh remote command builders', () => {
     'atomically replaces a fresh POSIX lock only after the execution host changes',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-reboot-'))
+
       try {
         const lockDir = join(root, '.install-lock')
         const acquire = tryCreateInstallLockCommand(nativePosix, lockDir)
@@ -595,7 +642,9 @@ describe('ssh remote command builders', () => {
 
         const previousBootId =
           nativePosix.os === 'darwin' ? 'darwin:0' : 'linux:00000000-0000-0000-0000-000000000000:0'
+
         writeFileSync(join(lockDir, '.boot-id'), previousBootId)
+
         const outputs = await Promise.all(
           Array.from({ length: 32 }, () => runShellCommand(recover))
         )
@@ -613,6 +662,7 @@ describe('ssh remote command builders', () => {
     'keeps a fresh legacy POSIX lock when no boot identity is available',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-legacy-'))
+
       try {
         const lockDir = join(root, '.install-lock')
         mkdirSync(lockDir)
@@ -638,15 +688,18 @@ describe('ssh remote command builders', () => {
     'lets only one POSIX caller move and recreate a stale install lock',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-race-'))
+
       try {
         const lockDir = join(root, '.install-lock')
         mkdirSync(lockDir)
         const staleDate = new Date(Date.now() - 60 * 60_000)
         utimesSync(lockDir, staleDate, staleDate)
         const command = tryStealInstallLockCommand(posix, lockDir, 20 * 60)
+
         const outputs = await Promise.all(
           Array.from({ length: 64 }, () => runShellCommand(command))
         )
+
         const okCount = outputs.filter((output) => output.trim().endsWith('OK')).length
 
         expect(okCount).toBe(1)
@@ -662,6 +715,7 @@ describe('ssh remote command builders', () => {
     const scopedCommand = decodePowerShellCommand(
       commandInRemoteDirectory(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', "'READY'")
     )
+
     const nodeScopedCommand = decodePowerShellCommand(
       commandWithNodePath(
         windows,

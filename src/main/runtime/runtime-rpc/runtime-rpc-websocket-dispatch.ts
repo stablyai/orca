@@ -16,10 +16,13 @@ import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowli
 function injectDeviceScope(response: string, scope: DeviceScope): string {
   try {
     const parsed = JSON.parse(response) as RpcResponse
+
     if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
       return response
     }
+
     ;(parsed.result as Record<string, unknown>).deviceScope = scope
+
     return JSON.stringify(parsed)
   } catch {
     return response
@@ -38,19 +41,24 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
     authenticatedSocket?: AuthenticatedMobileSocket
   ): Promise<void> {
     let request: RpcRequest
+
     try {
       request = JSON.parse(rawMessage) as RpcRequest
     } catch {
       reply(JSON.stringify(this.buildError('unknown', 'bad_request', 'Invalid JSON request')))
+
       return
     }
 
     if (typeof request.id !== 'string' || request.id.length === 0) {
       reply(JSON.stringify(this.buildError('unknown', 'bad_request', 'Missing request id')))
+
       return
     }
+
     if (typeof request.method !== 'string' || request.method.length === 0) {
       reply(JSON.stringify(this.buildError(request.id, 'bad_request', 'Missing RPC method')))
+
       return
     }
 
@@ -58,21 +66,30 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
       typeof (request as Record<string, unknown>).deviceToken === 'string'
         ? ((request as Record<string, unknown>).deviceToken as string)
         : null
+
     if (authenticatedDeviceToken && requestToken && requestToken !== authenticatedDeviceToken) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Device token mismatch')))
+
       return
     }
+
     // Why: E2EE already authenticated the channel; authorize by that bound identity, not a repeated request field.
     const token = authenticatedDeviceToken ?? requestToken
+
     if (!token) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
+
       return
     }
+
     const device = this.deviceRegistry?.validateToken(token)
+
     if (!device) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
+
       return
     }
+
     if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
       reply(
         JSON.stringify(
@@ -83,6 +100,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
           )
         )
       )
+
       return
     }
 
@@ -93,8 +111,10 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
 
     const longPoll = classifyRuntimeLongPoll(request)
     const rejection = this.admitLongPoll(longPoll, device.deviceId)
+
     if (rejection) {
       reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
+
       return
     }
 
@@ -108,6 +128,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
     const pairingProvider = this.mobileRelayPairingProvider
+
     const pairingContext =
       pairingProvider && authenticatedSocket
         ? {
@@ -131,6 +152,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
               )
           }
         : undefined
+
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         // Why: the validated credential preserves existing federation ownership without trusting request fields.

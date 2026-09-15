@@ -30,18 +30,23 @@ export function findOwnedTextControlPasteTarget(
   if (!(activeElement instanceof Element)) {
     return null
   }
+
   // xterm focuses a hidden helper textarea; it is terminal input, not a native
   // text-control target for app-menu or large-paste ownership.
   if (activeElement.closest('.xterm-helper-textarea')) {
     return null
   }
+
   const textControl = activeElement.closest('input, textarea')
+
   if (!textControl || !isPrimarySelectionTextControl(textControl)) {
     return null
   }
+
   if (textControl.disabled || textControl.readOnly) {
     return null
   }
+
   return textControl
 }
 
@@ -52,13 +57,17 @@ export function findOwnedPasteEventTextControlTarget(
   if (!(eventTarget instanceof Element)) {
     return null
   }
+
   if (eventTarget.closest('.xterm-helper-textarea')) {
     return null
   }
+
   const textControl = eventTarget.closest('input, textarea')
+
   if (!textControl || activeElement !== textControl) {
     return null
   }
+
   return findOwnedTextControlPasteTarget(textControl)
 }
 
@@ -80,9 +89,11 @@ export function classifyTextControlPastePayloadOwnership(
 
   const maxBytes = options.maxBytes ?? TEXT_CONTROL_PASTE_MAX_BYTES
   const directMaxBytes = options.directMaxBytes ?? TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
+
   const ownershipMeasurement = measureTextControlPasteByteLength(text, {
     stopAfterBytes: Math.min(directMaxBytes, maxBytes)
   })
+
   if (!ownershipMeasurement.exceededLimit) {
     return {
       action: 'allow-native',
@@ -122,5 +133,6 @@ function measureRejectedTextControlPasteByteLength(text: string, maxBytes: numbe
   if (maxBytes <= TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES) {
     return measureTextControlPasteByteLength(text, { stopAfterBytes: maxBytes }).byteLength
   }
+
   return maxBytes + 1
 }

@@ -22,6 +22,7 @@ function isDirectEchoInput(event: KeyboardEvent): boolean {
   if (isImeOwnedKeyboardEvent(event) || event.key === 'Process') {
     return false
   }
+
   return event.key.length === 1 || event.key === 'Enter' || event.key === 'Backspace'
 }
 
@@ -31,21 +32,27 @@ export function installTypingLatencyInputEvents(
   onInput: (signal: TypingInputSignal) => TypingInputRegistration | void
 ): () => void {
   const pendingCompositionInputs = new WeakMap<Event, TypingInputRegistration>()
+
   const onKeydown = (event: Event): void => {
     if (event instanceof KeyboardEvent && isDirectEchoInput(event)) {
       onInput({ source: 'direct', text: event.key, event })
     }
   }
+
   const onCompositionSessionEnd = (event: Event): void => {
     const detail = readTerminalImeCompositionSessionDetail(event)
+
     if (!detail?.data || detail.dataPendingReconciliation) {
       return
     }
+
     const registration = onInput({ source: 'ime', text: detail.data, event })
+
     if (registration) {
       pendingCompositionInputs.set(event, registration)
     }
   }
+
   const settleCompositionSessionEnd = (event: Event): void => {
     const registration = pendingCompositionInputs.get(event)
     pendingCompositionInputs.delete(event)
@@ -57,6 +64,7 @@ export function installTypingLatencyInputEvents(
     capture: true
   })
   target.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, settleCompositionSessionEnd)
+
   return () => {
     target.removeEventListener('keydown', onKeydown, { capture: true })
     target.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onCompositionSessionEnd, {

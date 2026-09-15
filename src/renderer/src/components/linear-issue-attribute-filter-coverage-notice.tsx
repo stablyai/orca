@@ -8,6 +8,7 @@ type LinearCoverageFacet = 'status' | 'labels'
 
 function shortfallMessage(facet: LinearCoverageFacet, applied: number, intended: number): string {
   const counts = { value0: applied, value1: intended }
+
   return facet === 'status'
     ? translate(
         'auto.components.linear-issue-attribute-filter-coverage-notice.statusPartialTeamCoverage',
@@ -51,9 +52,11 @@ export function LinearFacetCoverageNotice({
   truncated: boolean
 }): React.JSX.Element | null {
   const { applied, intended } = linearMetadataGroupCoverage(options, selectedIds)
+
   if (intended <= applied && !truncated) {
     return null
   }
+
   return (
     <p className="border-t border-border/50 px-3 py-2 text-xs text-muted-foreground">
       {intended > applied ? shortfallMessage(facet, applied, intended) : idLimitMessage(facet, max)}

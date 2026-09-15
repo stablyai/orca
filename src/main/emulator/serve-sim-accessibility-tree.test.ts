@@ -33,6 +33,7 @@ describe('requestServeSimAccessibilityTree', () => {
         ]
       }
     ]
+
     netFetchMock.mockResolvedValue(new Response(JSON.stringify(raw), { status: 200 }))
 
     const tree = await requestServeSimAccessibilityTree(AX_URL)

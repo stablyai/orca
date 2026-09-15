@@ -37,6 +37,7 @@ export async function resolveRemoteNodePath(
   // .bashrc and zsh -lc skips .zshrc, but those are exactly the files where
   // nvm/mise/asdf hooks live. Probing directories directly is deterministic.
   const probedPath = await tryResolveViaKnownPaths(conn, options)
+
   if (probedPath) {
     return probedPath
   }
@@ -44,6 +45,7 @@ export async function resolveRemoteNodePath(
   // Strategy 2 (fallback): ask the user's login shell. Catches custom PATH
   // setups in ~/.profile / ~/.bash_profile that the probes don't cover.
   const loginShellPath = await tryResolveViaLoginShell(conn, options)
+
   if (loginShellPath) {
     return loginShellPath
   }
@@ -64,14 +66,19 @@ async function tryResolveViaKnownPaths(
   try {
     const result = await execCommandWithOptionalOptions(conn, script, signalOnlyOptions(options))
     const seen = new Set<string>()
+
     for (const line of result.split('\n')) {
       const candidate = line.trim()
+
       if (!candidate || seen.has(candidate)) {
         continue
       }
+
       seen.add(candidate)
+
       if (await nodeToolchainMeetsRequirements(conn, candidate, options)) {
         console.log(`[ssh-relay] Found node via path probe: ${candidate}`)
+
         return candidate
       }
     }
@@ -79,9 +86,11 @@ async function tryResolveViaKnownPaths(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+
     throwIfAborted(options)
     // Fall through to login shell.
   }
+
   return null
 }
 
@@ -102,7 +111,9 @@ async function tryResolveViaLoginShell(
       'echo "${SHELL:-/bin/sh}"',
       commandOptions({ timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
     )
+
     const shell = shellResult.trim().split('\n')[0]
+
     if (!shell) {
       return null
     }
@@ -112,22 +123,27 @@ async function tryResolveViaLoginShell(
       buildSshLoginShellCommand(shell, 'command -v node'),
       commandOptions({ wrapCommand: false, timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
     )
+
     const candidate = nodePath.trim().split('\n')[0]
+
     if (!candidate) {
       return null
     }
 
     if (await nodeToolchainMeetsRequirements(conn, candidate, options)) {
       console.log(`[ssh-relay] Found node via login shell (${shell}): ${candidate}`)
+
       return candidate
     }
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+
     throwIfAborted(options)
     // Fall through.
   }
+
   return null
 }
 
@@ -148,12 +164,15 @@ async function nodeToolchainMeetsRequirements(
       // and csh cannot parse when sshd delegates directly to the login shell.
       commandOptions({ wrapCommand: true }, options)
     )
+
     return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+
     throwIfAborted(options)
+
     // Binary missing or fails to run — not usable.
     return false
   }
@@ -188,14 +207,19 @@ async function resolveRemoteWindowsNodePath(
       powerShellCommand(script),
       commandOptions({ wrapCommand: false }, options)
     )
+
     for (const line of result.split('\n')) {
       const nodePath = line.trim()
+
       if (!nodePath) {
         continue
       }
+
       const normalized = normalizeWindowsRemotePath(nodePath)
+
       if (await windowsNodeToolchainMeetsRequirements(conn, normalized, options)) {
         console.log(`[ssh-relay] Found Windows node at: ${normalized}`)
+
         return normalized
       }
     }
@@ -203,6 +227,7 @@ async function resolveRemoteWindowsNodePath(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+
     throwIfAborted(options)
     // Fall through to the shared error below.
   }
@@ -221,12 +246,15 @@ async function windowsNodeToolchainMeetsRequirements(
       powerShellCommand(buildWindowsNodeToolchainProbe(nodePath)),
       commandOptions({ wrapCommand: false }, options)
     )
+
     return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+
     throwIfAborted(options)
+
     return false
   }
 }

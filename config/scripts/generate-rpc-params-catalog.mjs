@@ -18,10 +18,15 @@ import * as esbuild from 'esbuild'
 import { resolveOxcCliInvocation } from './oxc-cli-invocation.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
+
 const SHARED_DIR = path.join(REPO_ROOT, 'src', 'shared')
+
 const CONTRACT_DIR = path.join(SHARED_DIR, 'rpc-contract')
+
 const RPC_DIR = path.join(REPO_ROOT, 'src', 'main', 'runtime', 'rpc')
+
 const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'index.ts')
+
 const OUTPUT_PATH = path.join(CONTRACT_DIR, 'rpc-params-catalog.generated.ts')
 
 // Why mkdirSync first: out/ is gitignored and absent on a fresh checkout, so
@@ -31,10 +36,12 @@ const OUTPUT_PATH = path.join(CONTRACT_DIR, 'rpc-params-catalog.generated.ts')
 function scratchDir(prefix) {
   const root = path.join(REPO_ROOT, 'out')
   mkdirSync(root, { recursive: true })
+
   return mkdtempSync(path.join(root, prefix))
 }
 
 const posix = (value) => value.split(path.sep).join('/')
+
 const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
 
 // Every module the catalog may import from: the extracted params modules plus the
@@ -43,14 +50,19 @@ function indexableModules() {
   const modules = new Set(
     globSync('*.ts', { cwd: CONTRACT_DIR }).map((name) => path.join(CONTRACT_DIR, name))
   )
+
   modules.delete(OUTPUT_PATH)
+
   for (const file of globSync('**/*.ts', { cwd: RPC_DIR })) {
     if (file.endsWith('.test.ts')) {
       continue
     }
+
     const source = readFileSync(path.join(RPC_DIR, file), 'utf8')
+
     for (const [, specifier] of source.matchAll(/from\s+'(\.[^']+)'/g)) {
       const resolved = `${path.resolve(path.dirname(path.join(RPC_DIR, file)), specifier)}.ts`
+
       // Never re-add the generator's own output: a module under RPC_DIR may import the
       // catalog for a type-only contract, and bundling a stale catalog makes regeneration
       // crash in exactly the state that requires regenerating.
@@ -63,6 +75,7 @@ function indexableModules() {
       }
     }
   }
+
   return [...modules].sort()
 }
 
@@ -70,6 +83,7 @@ function indexableModules() {
 // instances, so schema object identity is what maps a method to its export.
 function loadRegistryAndSchemas(modules) {
   const buildDir = scratchDir('rpc-params-catalog-')
+
   try {
     const entry = path.join(buildDir, 'entry.ts')
     const importOf = (file) => JSON.stringify(posix(path.relative(buildDir, file)))
@@ -95,6 +109,7 @@ function loadRegistryAndSchemas(modules) {
       packages: 'external'
     })
     const loaded = createRequire(import.meta.url)(outfile)
+
     return { methods: loaded.ALL_RPC_METHODS, schemaModules: loaded.SCHEMA_MODULES }
   } finally {
     rmSync(buildDir, { recursive: true, force: true })
@@ -105,17 +120,21 @@ function loadRegistryAndSchemas(modules) {
 // identical schemas are still two different wire contracts.
 function buildSchemaIndex(schemaModules) {
   const index = new Map()
+
   for (const [modulePath, moduleExports] of Object.entries(schemaModules)) {
     for (const [exportName, value] of Object.entries(moduleExports)) {
       if (!value || typeof value !== 'object' || typeof value.safeParse !== 'function') {
         continue
       }
+
       if (index.has(value)) {
         continue
       }
+
       index.set(value, { modulePath, exportName })
     }
   }
+
   return index
 }
 
@@ -123,16 +142,20 @@ function localNameFor(origin, taken) {
   if (!taken.has(origin.exportName)) {
     return origin.exportName
   }
+
   const hint = path
     .basename(origin.modulePath, '.ts')
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('')
+
   let candidate = `${origin.exportName}Of${hint}`
   let suffix = 2
+
   while (taken.has(candidate)) {
     candidate = `${origin.exportName}Of${hint}${suffix++}`
   }
+
   return candidate
 }
 
@@ -148,29 +171,38 @@ function render({ methods, schemaModules }) {
       entries.push(`  '${method.name}': null`)
       continue
     }
+
     const origin = index.get(method.params)
+
     if (!origin) {
       uncataloged.push(method.name)
       continue
     }
+
     const key = `${origin.modulePath}#${origin.exportName}`
     let local = imports.get(key)
+
     if (!local) {
       local = localNameFor(origin, taken)
       taken.add(local)
       imports.set(key, local)
     }
+
     entries.push(`  '${method.name}': ${local}`)
   }
 
   const byModule = new Map()
+
   for (const [key, local] of imports) {
     const [modulePath, exportName] = key.split('#')
+
     if (!byModule.has(modulePath)) {
       byModule.set(modulePath, [])
     }
+
     byModule.get(modulePath).push(local === exportName ? exportName : `${exportName} as ${local}`)
   }
+
   const importLines = [...byModule]
     .sort(([left], [right]) => (left < right ? -1 : 1))
     .map(([modulePath, names]) => {
@@ -178,9 +210,11 @@ function render({ methods, schemaModules }) {
         /\.ts$/,
         ''
       )
+
       if (!specifier.startsWith('.')) {
         specifier = `./${specifier}`
       }
+
       return `import { ${names.sort().join(', ')} } from '${specifier}'`
     })
 
@@ -219,6 +253,7 @@ export type RpcParams<Method extends RpcMethodName> =
 // formatter would produce or every run would look like drift.
 function formatted(source) {
   const buildDir = scratchDir('rpc-params-catalog-fmt-')
+
   try {
     const file = path.join(buildDir, 'rpc-params-catalog.generated.ts')
     writeFileSync(file, source)
@@ -227,6 +262,7 @@ function formatted(source) {
       stdio: 'ignore',
       windowsHide: true
     })
+
     return readFileSync(file, 'utf8')
   } finally {
     rmSync(buildDir, { recursive: true, force: true })
@@ -237,19 +273,24 @@ function main() {
   const check = process.argv.includes('--check')
   const generated = formatted(render(loadRegistryAndSchemas(indexableModules())))
   const current = existsSync(OUTPUT_PATH) ? readFileSync(OUTPUT_PATH, 'utf8') : null
+
   if (generated === current) {
     if (!check) {
       console.log(`rpc params catalog already up to date: ${repoPath(OUTPUT_PATH)}`)
     }
+
     return
   }
+
   if (check) {
     console.error(
       `${repoPath(OUTPUT_PATH)} is out of date. Run \`pnpm run generate:rpc-params-catalog\`.`
     )
     process.exitCode = 1
+
     return
   }
+
   writeFileSync(OUTPUT_PATH, generated)
   console.log(`wrote ${repoPath(OUTPUT_PATH)}`)
 }

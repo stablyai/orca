@@ -3,9 +3,13 @@ import os from 'node:os'
 import path from 'node:path'
 
 const FILL_ROWS = 6_000
+
 const FLOOD_ROWS = 4_000
+
 const TITLE_FRAME_INTERVAL_MS = 70
+
 const TITLE_FRAME_COUNT = 30
+
 const TITLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
 function shellQuote(value: string): string {
@@ -14,6 +18,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(fixturePath: string, marker: string): string {
   const command = [process.execPath, fixturePath, marker]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -74,6 +79,7 @@ export function createPairedTerminalParkingFixture(): {
       'process.stdin.resume()'
     ].join('\n')
   )
+
   return {
     command: (marker) => fixtureCommand(fixturePath, marker),
     dispose: () => rmSync(scratch, { recursive: true, force: true })

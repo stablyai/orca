@@ -55,9 +55,11 @@ export function resolveNativeChatAttachmentOwner(
   terminalTabId: string
 ): NativeChatAttachmentOwner {
   const worktreeId = findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
+
   if (!worktreeId) {
     return { kind: 'not-ready' }
   }
+
   return resolveNativeChatAttachmentOwnerForWorktree(state, worktreeId, terminalTabId)
 }
 
@@ -69,19 +71,25 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
     return { kind: 'runtime' }
   }
+
   const connectionId = getConnectionIdFromState(state, worktreeId)
+
   if (connectionId === undefined) {
     return { kind: 'not-ready' }
   }
+
   if (connectionId === null) {
     return { kind: 'local' }
   }
+
   const worktreePath = terminalTabId
     ? resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
     : state.getKnownWorktreeById(worktreeId)?.path
+
   if (!worktreePath) {
     return { kind: 'not-ready' }
   }
+
   try {
     return {
       kind: 'ssh',
@@ -141,6 +149,7 @@ export async function uploadNativeChatAttachmentPaths(
       { value0: paths.length }
     )
   )
+
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
       paths,
@@ -150,10 +159,13 @@ export async function uploadNativeChatAttachmentPaths(
       expectedSshTargetId: owner.expectedSshTargetId,
       expectedSshConnectionGeneration: owner.expectedSshConnectionGeneration
     })
+
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
+
     return resolvedPaths
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+
     return null
   } finally {
     toast.dismiss(pending)

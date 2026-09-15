@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '../index'
 
 const A = 'a@example.com'
+
 const B = 'b@example.com'
+
 const C = 'c@example.com'
 
 function switchAccount(ptyId: string, from: string, to: string): void {

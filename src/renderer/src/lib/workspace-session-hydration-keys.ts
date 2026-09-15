@@ -53,7 +53,9 @@ function addFolderWorkspaceKey(keys: Set<WorkspaceKey>, value: unknown): void {
   if (typeof value !== 'string') {
     return
   }
+
   const scope = parseWorkspaceKey(value)
+
   if (scope?.type === 'folder') {
     keys.add(value as WorkspaceKey)
   }
@@ -65,6 +67,7 @@ function collectWorkspaceSessionKeys(
   includeEntry: (value: unknown) => boolean = () => true
 ): string[] {
   const keys = new Set<string>()
+
   const addKey = (value: unknown): void => {
     if (typeof value === 'string') {
       keys.add(value)
@@ -73,28 +76,35 @@ function collectWorkspaceSessionKeys(
 
   addKey(session.activeWorkspaceKey)
   addKey(session.activeWorktreeId)
+
   for (const field of fields) {
     const value = session[field]
+
     if (!isPlainRecord(value)) {
       continue
     }
+
     for (const [key, entry] of Object.entries(value)) {
       if (includeEntry(entry)) {
         addKey(key)
       }
     }
   }
+
   for (const worktreeId of session.activeWorktreeIdsOnShutdown ?? []) {
     addKey(worktreeId)
   }
+
   for (const pages of Object.values(session.browserPagesByWorkspace ?? {})) {
     if (!Array.isArray(pages)) {
       continue
     }
+
     for (const page of pages) {
       addKey(page.worktreeId)
     }
   }
+
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
     addKey(record.worktreeId)
   }
@@ -106,9 +116,11 @@ function hasRestorableWorkspaceChrome(value: unknown): boolean {
   if (Array.isArray(value)) {
     return value.length > 0
   }
+
   if (isPlainRecord(value)) {
     return Object.keys(value).length > 0
   }
+
   return value !== null && value !== undefined && value !== ''
 }
 
@@ -116,6 +128,7 @@ export function collectFolderWorkspaceKeysFromSession(
   session: WorkspaceSessionState
 ): WorkspaceKey[] {
   const keys = new Set<WorkspaceKey>()
+
   for (const key of collectWorkspaceSessionKeys(session, WORKSPACE_KEYED_SESSION_FIELDS)) {
     addFolderWorkspaceKey(keys, key)
   }
@@ -128,18 +141,24 @@ export function collectWorktreeHydrationRepoIdsFromSession(
   runtimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 ): string[] {
   const repoIds = new Set<string>()
+
   const addWorktreeRepoId = (value: unknown): void => {
     if (typeof value !== 'string') {
       return
     }
+
     const scope = parseWorkspaceKey(value)
+
     if (scope?.type === 'folder') {
       return
     }
+
     const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : value
+
     const isRuntimeOwned = [value, rawWorktreeId].some(
       (key) => parseExecutionHostId(runtimeHostIdByWorkspaceSessionKey?.[key])?.kind === 'runtime'
     )
+
     if (!isRuntimeOwned) {
       repoIds.add(getRepoIdFromWorktreeId(rawWorktreeId))
     }
@@ -154,6 +173,7 @@ export function collectWorktreeHydrationRepoIdsFromSession(
   )) {
     addWorktreeRepoId(key)
   }
+
   // Why: a repo referenced only by activeRepoId (no active worktree, no tabs) still needs
   // enumeration so hydrateWorkspaceSession can restore its main worktree from worktreesByRepo.
   addWorktreeRepoId(session.activeRepoId)

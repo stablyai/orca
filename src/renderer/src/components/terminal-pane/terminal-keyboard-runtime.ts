@@ -73,6 +73,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     keybindings,
     terminalShortcutPolicy
   } = options
+
   const optionKeyLocations = createOptionKeyLocationTracker()
   const optionKittyReleases = createTerminalOptionKittyReleaseTracker()
   const heldImeEnterModifiers = new Set<'shift' | 'ctrl'>()
@@ -91,31 +92,41 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       const belongs =
         preserve &&
         modifiedEnterChordOwner.absorb({ kind, code: event.code, timeStamp: event.timeStamp })
+
       if (!pressed && !belongs && heldImeEnterModifiers.delete(kind)) {
         modifiedEnterChordOwner.release({ kind, code: event.code, timeStamp: event.timeStamp })
       }
     }
   }
+
   const getHeldImeEnterModifier = () =>
     heldImeEnterModifiers.size === 1 ? (heldImeEnterModifiers.values().next().value ?? null) : null
+
   const getImeEnterModifier = (event: KeyboardEvent) => {
     const kind = getTerminalImeModifiedEnterKind(event)
+
     if (kind || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
       return kind
     }
+
     return getHeldImeEnterModifier()
   }
+
   const getModifiedEnterChord = (event: KeyboardEvent) => {
     const kind = getImeEnterModifier(event)
+
     return kind ? { kind, code: event.code, timeStamp: event.timeStamp } : null
   }
+
   const onModifierDown = (event: KeyboardEvent): void => {
     reconcileHeldImeEnterModifiers(event, event.key === 'Enter' && event.keyCode === 13)
     optionKeyLocations.keyDown(event)
+
     if (isWindows && (event.key === 'Shift' || event.key === 'Control')) {
       const manager = managerRef.current
       const scope = keyboardScopeRef.current
       const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
       if (
         pane &&
         (!scope || keyboardEventBelongsToScope(event, scope)) &&
@@ -127,12 +138,15 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       }
     }
   }
+
   const isLocalWindowsConptyPane = (): boolean => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
     if (!pane) {
       return false
     }
+
     return isLocalWindowsConptyPaneForCtrlArrow({
       isWindows,
       userAgent: navigator.userAgent,
@@ -145,23 +159,29 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       transport: paneTransportsRef.current.get(pane.id) ?? null
     })
   }
+
   const getActivePaneWindowsShiftEnterEncoding = () => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
     if (!pane) {
       return 'alt-enter' as const
     }
+
     const state = useAppStore.getState()
     const paneKey = makePaneKey(tabId, pane.leafId)
+
     return resolveWindowsShiftEnterEncodingForPane(
       state,
       paneKey,
       isLocalWindowsConptyPane() ? state.runtimePaneTitlesByTabId[tabId]?.[pane.id] : undefined
     )
   }
+
   const isActivePaneWindowsTerminalHost = (): boolean => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
     return (
       resolveTerminalInputHostPlatform({
         clientPlatform: shortcutPlatform,
@@ -171,24 +191,31 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       }) === 'win32'
     )
   }
+
   const getKittyKeyboardFlagsActivePane = (): number => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
     return pane ? (paneKittyKeyboardModesRef?.current.get(pane.id)?.flags ?? 0) : 0
   }
+
   const hasActivePaneCtrlEnterCsiUAuthority = (): boolean => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
     if (!pane) {
       return false
     }
+
     const state = useAppStore.getState()
+
     return hasCtrlEnterCsiUAuthorityForPane(
       state,
       makePaneKey(tabId, pane.leafId),
       isLocalWindowsConptyPane() ? state.runtimePaneTitlesByTabId[tabId]?.[pane.id] : undefined
     )
   }
+
   const resolveShortcutEvent = (
     event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0]
   ) =>
@@ -207,14 +234,18 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       terminalShortcutPolicy,
       hasActivePaneCtrlEnterCsiUAuthority
     )
+
   const createCapturedInputSender = (pane: { id: number; leafId: string }, data: string) => {
     const capturedTransport = paneTransportsRef.current.get(pane.id)
     const capturedPtyId = capturedTransport?.getPtyId() ?? null
+
     const capturedBinding = panePtyBindingsRef.current.get(pane.id) as
       | (IDisposable & TerminalCapturedInputBinding)
       | undefined
+
     return (overrideData = data) => {
       const currentManager = managerRef.current
+
       const sent = sendCapturedTerminalInput({
         targetPaneMounted:
           currentManager
@@ -231,8 +262,10 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
           }
         }
       })
+
       if (sent) {
         recordTerminalUserInputForLeaf(tabId, pane.leafId)
+
         if (overrideData === '\x1b[13;2u') {
           requestCapturedTerminalReconfirmation(
             panePtyBindingsRef.current.get(pane.id),
@@ -242,6 +275,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       }
     }
   }
+
   return {
     optionKeyLocations,
     optionKittyReleases,

@@ -55,9 +55,11 @@ export function FilePathCursorTooltip({
   React.useLayoutEffect(() => {
     const rect = triggerRef.current?.getBoundingClientRect()
     const pointer = pointerRef.current
+
     if (!open || !rect || !pointer) {
       return
     }
+
     const next = cursorTooltipOffsets(pointer, rect)
     setOffset((current) =>
       current.align === next.align && current.side === next.side ? current : next
@@ -77,6 +79,7 @@ export function FilePathCursorTooltip({
             if (open) {
               return
             }
+
             pointerRef.current = { x: event.clientX, y: event.clientY }
           }}
         >

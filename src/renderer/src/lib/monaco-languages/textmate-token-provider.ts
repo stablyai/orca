@@ -19,11 +19,13 @@ async function loadBrowserOniguruma(): Promise<IOnigLib> {
   browserOnigurumaPromise ??= (async () => {
     const oniguruma = await import('vscode-oniguruma')
     const response = await fetch(onigurumaWasmUrl)
+
     if (!response.ok) {
       throw new Error(`Failed to load TextMate regex engine from ${onigurumaWasmUrl}`)
     }
 
     await oniguruma.loadWASM(response)
+
     return {
       createOnigScanner: oniguruma.createOnigScanner,
       createOnigString: oniguruma.createOnigString
@@ -56,6 +58,7 @@ function createTokensProvider(
     tokenize(line, state) {
       const textMateState =
         state instanceof TextMateTokenizerState ? state : new TextMateTokenizerState(INITIAL)
+
       const result = grammar.tokenizeLine(line, textMateState.ruleStack)
 
       return {
@@ -78,7 +81,9 @@ export async function createTextMateTokensProvider(
     onigLib: (options.loadOniguruma ?? loadBrowserOniguruma)(),
     loadGrammar: options.loadGrammar
   })
+
   let grammar: IGrammar | null
+
   try {
     grammar = await registry.loadGrammar(options.scopeName)
   } catch (error) {
@@ -88,8 +93,10 @@ export async function createTextMateTokensProvider(
     ) {
       throw new Error(`No TextMate grammar registered for scope ${options.scopeName}`)
     }
+
     throw error
   }
+
   if (!grammar) {
     throw new Error(`No TextMate grammar registered for scope ${options.scopeName}`)
   }

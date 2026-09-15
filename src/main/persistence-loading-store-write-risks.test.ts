@@ -12,6 +12,7 @@ const testState = { dir: '' }
 const writeControl = vi.hoisted(() => {
   let releaseRename: (() => void) | null = null
   let markRenameStarted: (() => void) | null = null
+
   return {
     blockPrimaryRename: false,
     failPrimaryOpen: false,
@@ -38,10 +39,12 @@ const writeControl = vi.hoisted(() => {
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     open: async (...args: Parameters<typeof actual.open>) => {
       const target = String(args[0])
+
       if (
         writeControl.failPrimaryOpen &&
         target.includes('orca-data.json.') &&
@@ -49,14 +52,17 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       ) {
         throw Object.assign(new Error('profile mount rejected write'), { code: 'EIO' })
       }
+
       return actual.open(...args)
     },
     rename: async (...args: Parameters<typeof actual.rename>) => {
       const target = String(args[1])
+
       if (writeControl.blockPrimaryRename && target.endsWith('orca-data.json')) {
         writeControl.markRenameStarted()
         await writeControl.renameRelease
       }
+
       return actual.rename(...args)
     }
   }
@@ -70,11 +76,14 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
+
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
+
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
@@ -82,6 +91,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 function createStore(): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store({ dataFile: join(testState.dir, 'orca-data.json') })
 }
 
@@ -111,6 +121,7 @@ describe('loading Store write-risk characterization', () => {
     const persisted = JSON.parse(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')) as {
       ui: { sidebarWidth: number }
     }
+
     expect(persisted.ui.sidebarWidth).toBe(712)
   })
 
@@ -131,9 +142,11 @@ describe('loading Store write-risk characterization', () => {
     writeControl.failPrimaryOpen = false
     store.updateUI({ sidebarWidth: 713 })
     await store.flushPendingOrThrowAsync()
+
     const persisted = JSON.parse(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')) as {
       sshPtyConsumerRecoveries: { clientInstanceId: string }[]
     }
+
     expect(persisted.sshPtyConsumerRecoveries[0]?.clientInstanceId).toBe('client-1')
   })
 })

@@ -26,6 +26,7 @@ const VALID_DATA = {
   action: 'terminal.sendText',
   params: { terminalId: 'term-1', text: '/model haiku', enter: true }
 }
+
 const SESSION_TOKEN = 's'.repeat(43)
 
 function createHandler(
@@ -33,11 +34,13 @@ function createHandler(
   outcome: PluginPanelActionOutcome = { ok: true, value: { accepted: true } }
 ): { handler: (event: MessageEvent) => void; callPanelAction: ReturnType<typeof vi.fn> } {
   const callPanelAction = vi.fn().mockResolvedValue(outcome)
+
   const handler = createPanelBridgeMessageHandler({
     sessionToken: SESSION_TOKEN,
     getPanelWindow: () => panelWindow,
     callPanelAction
   })
+
   return { handler, callPanelAction }
 }
 
@@ -137,6 +140,7 @@ describe('createPanelBridgeMessageHandler', () => {
   it('refuses a valid request after malformed and pong traffic exhaust the budget', () => {
     const panelWindow = createFakePanelWindow()
     const callPanelAction = vi.fn()
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
@@ -162,6 +166,7 @@ describe('createPanelBridgeMessageHandler', () => {
 
   it('relays a denial outcome (missing manifest permission) back to the panel', async () => {
     const panelWindow = createFakePanelWindow()
+
     const { handler } = createHandler(panelWindow, {
       ok: false,
       code: 'capability_denied',
@@ -186,6 +191,7 @@ describe('createPanelBridgeMessageHandler', () => {
   it('reports a rejected relay call as action_failed', async () => {
     const panelWindow = createFakePanelWindow()
     const callPanelAction = vi.fn().mockRejectedValue(new Error('ipc broke'))
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
@@ -205,9 +211,11 @@ describe('createPanelBridgeMessageHandler', () => {
     const panelWindow = createFakePanelWindow()
     let active = true
     let resolveCall!: (outcome: PluginPanelActionOutcome) => void
+
     const callPanelAction = vi.fn(
       () => new Promise<PluginPanelActionOutcome>((resolve) => (resolveCall = resolve))
     )
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
@@ -228,6 +236,7 @@ describe('createPanelBridgeMessageHandler', () => {
     const admit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
     const controlAdmit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
     const onPong = vi.fn()
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
@@ -251,6 +260,7 @@ describe('createPanelBridgeMessageHandler', () => {
     const panelWindow = createFakePanelWindow()
     const admit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
     const controlAdmit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
@@ -271,6 +281,7 @@ describe('createPanelBridgeMessageHandler', () => {
   it('keeps answering the watchdog while the data budget is saturated', () => {
     const panelWindow = createFakePanelWindow()
     const onPong = vi.fn()
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
@@ -288,6 +299,7 @@ describe('createPanelBridgeMessageHandler', () => {
     const panelWindow = createFakePanelWindow()
     const onPong = vi.fn()
     let clock = 0
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
@@ -303,6 +315,7 @@ describe('createPanelBridgeMessageHandler', () => {
       handler(messageEvent({ type: 'orca-panel-pong', pingId: i }, panelWindow))
       clock += 1
     }
+
     handler(messageEvent({ type: 'orca-panel-pong', pingId: 99 }, panelWindow))
 
     expect(onPong).toHaveBeenLastCalledWith(99)
@@ -311,6 +324,7 @@ describe('createPanelBridgeMessageHandler', () => {
   it('refuses an oversized frame on the reserved lane', () => {
     const panelWindow = createFakePanelWindow()
     const onPong = vi.fn()
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,

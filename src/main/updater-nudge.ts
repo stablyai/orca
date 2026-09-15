@@ -12,16 +12,19 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
     const res = await net.fetch('https://onorca.dev/whats-new/nudge.json', {
       signal: AbortSignal.timeout(5000)
     })
+
     if (!res.ok) {
       return null
     }
 
     const json: unknown = await res.json()
+
     if (!json || typeof json !== 'object' || Array.isArray(json)) {
       return null
     }
 
     const { id, minVersion, maxVersion } = json as Record<string, unknown>
+
     if (typeof id !== 'string' || !id.trim()) {
       return null
     }
@@ -33,15 +36,19 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
     if (minVersion !== undefined && typeof minVersion !== 'string') {
       return null
     }
+
     if (maxVersion !== undefined && typeof maxVersion !== 'string') {
       return null
     }
+
     if (minVersion !== undefined && !isValidVersion(minVersion)) {
       return null
     }
+
     if (maxVersion !== undefined && !isValidVersion(maxVersion)) {
       return null
     }
+
     if (
       minVersion !== undefined &&
       maxVersion !== undefined &&
@@ -67,9 +74,11 @@ export function versionMatchesRange(
   if (range.minVersion !== undefined && compareVersions(appVersion, range.minVersion) < 0) {
     return false
   }
+
   if (range.maxVersion !== undefined && compareVersions(appVersion, range.maxVersion) > 0) {
     return false
   }
+
   return true
 }
 

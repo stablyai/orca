@@ -12,14 +12,23 @@ import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { createJiraSlice } from './jira'
 
 const jiraStatus = vi.fn()
+
 const jiraConnect = vi.fn()
+
 const jiraDisconnect = vi.fn()
+
 const jiraGetIssue = vi.fn()
+
 const jiraLookupIssueSummary = vi.fn()
+
 const jiraListIssues = vi.fn()
+
 const jiraReadStatus = vi.fn()
+
 const jiraSearchIssues = vi.fn()
+
 const jiraSelectSite = vi.fn()
+
 const jiraTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-jira-client', () => ({
@@ -55,9 +64,11 @@ function createTestStore() {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -175,9 +186,11 @@ describe('createJiraSlice runtime context', () => {
     const requestA = store.getState().fetchJiraIssue('ALP-1', 'site-1', {
       sourceContext: sourceA
     })
+
     const requestB = store.getState().fetchJiraIssue('ALP-1', 'site-1', {
       sourceContext: sourceB
     })
+
     runtimeBIssue.resolve({ ...issue('ALP-1'), title: 'Runtime B' })
     await requestB
     runtimeAIssue.resolve({ ...issue('ALP-1'), title: 'Runtime A' })
@@ -214,11 +227,13 @@ describe('createJiraSlice runtime context', () => {
 
   it('keeps isolated status failures from mutating the focused Jira Settings state', async () => {
     const store = createTestStore()
+
     const focusedStatus = {
       connected: true,
       viewer: { email: 'focused@example.com' } as JiraViewer,
       selectedSiteId: 'site-1'
     }
+
     store.setState({
       jiraStatus: focusedStatus,
       jiraStatusChecked: true,
@@ -328,6 +343,7 @@ describe('createJiraSlice runtime context', () => {
     jiraLookupIssueSummary.mockImplementation(
       (_settings: unknown, _key: string, _siteId: string, signal: AbortSignal) => {
         readSignal = signal
+
         return pending.promise
       }
     )
@@ -337,9 +353,11 @@ describe('createJiraSlice runtime context', () => {
     const firstRead = store
       .getState()
       .lookupJiraIssueSummary(source, 'ALP-1', 'site-1', { signal: first.signal })
+
     const secondRead = store
       .getState()
       .lookupJiraIssueSummary(source, 'ALP-1', 'site-1', { signal: second.signal })
+
     expect(jiraLookupIssueSummary).toHaveBeenCalledTimes(1)
 
     first.abort()
@@ -357,6 +375,7 @@ describe('createJiraSlice runtime context', () => {
     jiraLookupIssueSummary.mockImplementation(
       (_settings: unknown, _key: string, _siteId: string, signal: AbortSignal) => {
         readSignal = signal
+
         return new Promise<JiraIssue>((_resolve, reject) => {
           signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
         })
@@ -367,6 +386,7 @@ describe('createJiraSlice runtime context', () => {
     const read = store
       .getState()
       .lookupJiraIssueSummary(source, 'ALP-1', 'site-1', { signal: controller.signal })
+
     controller.abort()
 
     await expect(read).rejects.toMatchObject({ name: 'AbortError' })
@@ -437,6 +457,7 @@ describe('createJiraSlice runtime context', () => {
       email: 'local@example.com',
       apiToken: 'token'
     })
+
     store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
 
     connectResult.resolve({ ok: true, viewer: { email: 'local@example.com' } as JiraViewer })

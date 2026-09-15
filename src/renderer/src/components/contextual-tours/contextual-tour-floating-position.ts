@@ -20,14 +20,19 @@ export type ContextualTourFloatingPosition = {
 }
 
 const PANEL_GAP = 12
+
 const COLLISION_PADDING = 12
+
 const ARROW_PADDING = 16
+
 const ARROW_WIDTH = 18
+
 const ARROW_HEIGHT = 8
 
 // Why: frames of no movement before the tracker parks. Long enough to ride out
 // a dropped frame mid-animation, short enough to stop within a few hundred ms.
 const MOTION_SETTLE_FRAMES = 12
+
 // Why: safety net for movement that fires no observer at all (a stubbed or
 // unsupported IntersectionObserver). 4 rect reads/s instead of one per frame.
 const PARKED_PROBE_MS = 250
@@ -57,6 +62,7 @@ export async function getContextualTourFloatingPosition(args: {
 }): Promise<ContextualTourFloatingPosition> {
   const initialPlacement = args.preferredPlacement ?? 'right'
   const boundary = getContextualTourCollisionBoundary(args.panelHost)
+
   const result = await computePosition(args.targetElement, args.floatingElement, {
     // Why: the strategy must match the panel's actual CSS position — hosted
     // panels are absolute children of the dialog/sheet, floating ones fixed.
@@ -82,6 +88,7 @@ export async function getContextualTourFloatingPosition(args: {
 
   const panelPlacement = getContextualTourPanelPlacement(result.placement)
   const panelPosition: CSSProperties = { left: result.x, top: result.y }
+
   const arrowPosition = getContextualTourArrowPosition({
     arrowX: result.middlewareData.arrow?.x,
     arrowY: result.middlewareData.arrow?.y,
@@ -102,6 +109,7 @@ export function watchContextualTourFloatingPosition(args: {
   let disposed = false
   let updateSequence = 0
   let lastDelivered: ContextualTourFloatingPosition | null = null
+
   const update = (): void => {
     const sequence = ++updateSequence
     void getContextualTourFloatingPosition(args)
@@ -111,11 +119,13 @@ export function watchContextualTourFloatingPosition(args: {
         if (disposed || sequence !== updateSequence) {
           return
         }
+
         // Why: an unchanged position must not re-render the panel — ancestor
         // scrolling recomputes far more often than the panel actually moves.
         if (arePositionsEqual(lastDelivered, position)) {
           return
         }
+
         lastDelivered = position
         args.onPosition(position)
       })
@@ -123,6 +133,7 @@ export function watchContextualTourFloatingPosition(args: {
   }
 
   const tracker = createTargetMotionTracker(args.targetElement, update)
+
   // Why: tour targets move with layout animation (sidebar slide, pane resize).
   // autoUpdate's own observers report that the target moved; the tracker then
   // follows it frame by frame until it settles, instead of polling every frame
@@ -131,6 +142,7 @@ export function watchContextualTourFloatingPosition(args: {
     update()
     tracker.wake()
   })
+
   return () => {
     disposed = true
     tracker.stop()
@@ -152,13 +164,17 @@ function createTargetMotionTracker(target: Element, onMove: () => void): TargetM
     if (stopped || probeTimer !== null) {
       return
     }
+
     probeTimer = window.setTimeout(() => {
       probeTimer = null
+
       if (readMovement()) {
         onMove()
         startTracking()
+
         return
       }
+
       park()
     }, PARKED_PROBE_MS)
   }
@@ -167,48 +183,60 @@ function createTargetMotionTracker(target: Element, onMove: () => void): TargetM
     const rect = target.getBoundingClientRect()
     const moved = !rectsMatch(lastRect, rect)
     lastRect = rect
+
     return moved
   }
 
   const trackFrame = (): void => {
     frameId = null
+
     if (stopped) {
       return
     }
+
     if (readMovement()) {
       settledFrames = 0
       onMove()
     } else {
       settledFrames += 1
     }
+
     if (settledFrames >= MOTION_SETTLE_FRAMES) {
       park()
+
       return
     }
+
     frameId = requestAnimationFrame(trackFrame)
   }
 
   const startTracking = (): void => {
     settledFrames = 0
+
     if (stopped || frameId !== null) {
       return
     }
+
     if (probeTimer !== null) {
       window.clearTimeout(probeTimer)
       probeTimer = null
     }
+
     frameId = requestAnimationFrame(trackFrame)
   }
 
   startTracking()
+
   return {
     wake: startTracking,
     stop: () => {
       stopped = true
+
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
         frameId = null
       }
+
       if (probeTimer !== null) {
         window.clearTimeout(probeTimer)
         probeTimer = null
@@ -254,6 +282,7 @@ function getContextualTourArrowPosition(args: {
     bottom: 'top',
     left: 'right'
   }[args.panelPlacement]
+
   return {
     left: args.arrowX,
     top: args.arrowY,

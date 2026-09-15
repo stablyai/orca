@@ -4,10 +4,12 @@ type MockRequestHandler = (
   params: Record<string, unknown>,
   context?: { clientId: number; isStale: () => boolean }
 ) => Promise<unknown>
+
 type MockNotificationHandler = (
   params: Record<string, unknown>,
   context?: { clientId: number; isStale: () => boolean }
 ) => void
+
 type MockCallContext = { clientId?: number; isStale: () => boolean }
 
 // Explicit rather than inferred: vi.fn()'s inferred type is not nameable across project boundaries.
@@ -42,6 +44,7 @@ export function createMockDispatcher(): MockRelayFsDispatcher {
       context?: { clientId: number; isStale: () => boolean }
     ) => Promise<unknown>
   >()
+
   const notificationHandlers = new Map<
     string,
     (
@@ -49,6 +52,7 @@ export function createMockDispatcher(): MockRelayFsDispatcher {
       context?: { clientId: number; isStale: () => boolean }
     ) => void
   >()
+
   const detachListeners = new Set<(clientId: number) => void>()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
 
@@ -81,6 +85,7 @@ export function createMockDispatcher(): MockRelayFsDispatcher {
     notifyClient: vi.fn(),
     onClientDetached: vi.fn((listener: (clientId: number) => void) => {
       detachListeners.add(listener)
+
       return () => detachListeners.delete(listener)
     }),
     _requestHandlers: requestHandlers,
@@ -92,9 +97,11 @@ export function createMockDispatcher(): MockRelayFsDispatcher {
       context?: { clientId?: number; isStale: () => boolean }
     ) {
       const handler = requestHandlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       return handler(params, {
         clientId: context?.clientId ?? 1,
         isStale: context?.isStale ?? (() => false)
@@ -106,9 +113,11 @@ export function createMockDispatcher(): MockRelayFsDispatcher {
       context?: { clientId: number; isStale: () => boolean }
     ) {
       const handler = notificationHandlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       handler(params, context ?? { clientId: 1, isStale: () => false })
     },
     detachClient(clientId: number) {

@@ -9,6 +9,7 @@ const capturedPanel = vi.hoisted(() => ({
 vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: Record<string, unknown>) => {
     capturedPanel.props = props
+
     return <div data-testid="browser-use-skill-step" />
   }
 }))
@@ -17,6 +18,7 @@ describe('BrowserUseSkillStep', () => {
   it('forwards a single-skill installed command even when setup installs a bundle', () => {
     const bundleInstallCommand =
       'npx skills add https://github.com/stablyai/orca --skill orca-cli --skill orchestration --global'
+
     const updateCommand = 'npx skills update orca-cli --global'
 
     renderToStaticMarkup(

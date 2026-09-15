@@ -10,6 +10,7 @@ import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/types'
+
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
@@ -17,6 +18,7 @@ const MAX_TOMBSTONES = 1000
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
+
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(id, false)
     }
@@ -28,18 +30,22 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     // dropped SSH/daemon connection to SessionNotFound would authorize a
     // duplicate shell or retire a live persisted owner.
     const size = await this.readAppliedSize(id, 'preserve')
+
     if (!size) {
       throw new SessionNotFoundError(id)
     }
+
     const result = await this.spawn({
       sessionId: id,
       cols: size.cols,
       rows: size.rows,
       attachOnly: true
     })
+
     if (result.exitedBeforeSpawnReply) {
       throw new SessionNotFoundError(id)
     }
+
     return result.providerSequence ? { providerSequence: result.providerSequence } : undefined
   }
 
@@ -56,6 +62,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
             { sessionId: id },
             LIVENESS_PROBE_TIMEOUT_MS
           )
+
           return result.size !== null
         } catch (error) {
           // Why the capability probe rather than the version alone: `getSize` shipped into an
@@ -65,9 +72,11 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
           if (!isUnknownRequestTypeError(error)) {
             throw error
           }
+
           this.getSizeUnsupported = true
         }
       }
+
       // Why: a daemon without `getSize` would otherwise answer `null` forever, and one `null`
       // makes the whole owner fan-out unprovable — a dead pane could then never be retired.
       // `listSessions` is the same inventory legacy discovery routes by, and has existed since
@@ -79,6 +88,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         undefined,
         LIVENESS_PROBE_TIMEOUT_MS
       )
+
       return sessions.some((session) => session.sessionId === id && session.isAlive)
     } catch {
       return null
@@ -92,12 +102,17 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
+
     const shutdown = this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
+
     if (!opts.keepHistory) {
       await shutdown
+
       return
     }
+
     this.keepHistoryShutdowns.add(shutdown)
+
     try {
       await shutdown
     } finally {
@@ -116,6 +131,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     // the whole teardown budget before the kill even starts. Only the waits are
     // bounded — the checkpoint itself stays deadline-free and lossless (STA-4228).
     await this.ensureConnected(opts.deadlineMs)
+
     // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
     // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
@@ -125,15 +141,18 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         },
         { callerDeadlineMs: opts.deadlineMs }
       )
+
       // Why throw instead of killing anyway: the snapshot the caller asked us to prove is still
       // being written. Killing here would race the wake-time restore source to disk, so report the
       // pty unverified and leave it alive — worktree sleep declines to commit it and retries.
       if (!committed) {
         throw new FinalCheckpointWaitExpiredError(id)
       }
+
       const wslDistro = this.wslDistrosBySessionId.get(id)
       const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
       const detected = detection?.status === 'restored' ? detection.restoreInfo : null
+
       const restoreInfo = detected
         ? {
             ...detected,
@@ -145,12 +164,16 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
               }) ?? ''
           }
         : null
+
       const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
+
       if (coldRestore) {
         this.coldRestoreCache.set(id, coldRestore)
+
         if (this.coldRestoreCache.has(id)) {
           this.sleepRestoreSessionIds.add(id)
         }
+
         // Why: physical exit must not mark intentional sleep as a clean end; the final checkpoint stays the wake-time recovery authority.
         this.historyManager?.suspendSession(id)
       } else if (
@@ -160,6 +183,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         this.historyManager?.suspendSession(id)
       }
     }
+
     await this.client.request(
       'kill',
       { sessionId: id, immediate: opts.immediate ?? false },
@@ -168,10 +192,12 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     this.activeSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)
     this.dirtySessionVersions.delete(id)
+
     if (!opts.keepHistory) {
       this.coldRestoreCache.delete(id)
       this.sleepRestoreSessionIds.delete(id)
     }
+
     // Why: the !keepHistory path takes no final checkpoint, so clear sessionsNeedingFullCheckpoint here or it stays stranded (no-op under keepHistory).
     this.sessionsNeedingFullCheckpoint.delete(id)
     this.sessionsNeedingLiveCheckpoint.delete(id)
@@ -183,6 +209,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     this.wslDistrosBySessionId.delete(id)
+
     // Why: only remove history on explicit close; sleep also calls shutdown but wake needs the dir intact for cold restore (opts.keepHistory).
     if (this.historyManager && !opts.keepHistory) {
       await this.historyManager
@@ -194,8 +221,10 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     if (!opts.keepHistory) {
       this.killedSessionTombstones.delete(id)
       this.killedSessionTombstones.set(id, Date.now())
+
       if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
         const oldest = this.killedSessionTombstones.keys().next().value
+
         if (oldest) {
           this.killedSessionTombstones.delete(oldest)
         }
@@ -217,9 +246,11 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     const scrollback = restoreInfo.modes.alternateScreen
       ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
       : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+
     if (!scrollback) {
       return null
     }
+
     return {
       scrollback,
       cwd: restoreInfo.cwd,
@@ -239,6 +270,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       const result = await this.client.request<{ cwd: string | null }>('getCwd', {
         sessionId: id
       })
+
       return result.cwd ?? ''
     } catch {
       return ''

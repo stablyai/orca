@@ -17,6 +17,7 @@ import {
 afterEach(() => resetWslLinkedWorktreeGitRoutingForTests())
 
 const fileMarker = { isDirectory: () => false, isFile: () => true }
+
 const directoryMarker = { isDirectory: () => true, isFile: () => false }
 
 function missingMarker(): NodeJS.ErrnoException {
@@ -80,6 +81,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
         if (path === String.raw`C:\repo\.git`) {
           return fileMarker
         }
+
         throw missingMarker()
       }),
       readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
@@ -131,6 +133,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
         .mockResolvedValueOnce('')
         .mockResolvedValueOnce('gitdir: C:/main/.git/worktrees/linked\n')
     }
+
     const prepare = (): Promise<boolean> =>
       prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
         platform: 'win32',
@@ -170,12 +173,14 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
   it('backs off repeated marker stat errors after one immediate retry', async () => {
     let currentTime = 1_000
     const now = (): number => currentTime
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(async () => {
         throw Object.assign(new Error('device unavailable'), { code: 'EIO' })
       }),
       readFile: vi.fn(async () => '')
     }
+
     const prepare = (): Promise<boolean> =>
       prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
         platform: 'win32',
@@ -246,6 +251,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
     let linked = true
     let currentTime = 1_000
     const now = (): number => currentTime
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(async () => (linked ? fileMarker : directoryMarker)),
       readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
@@ -286,6 +292,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
     let linked = false
     let currentTime = 1_000
     const now = (): number => currentTime
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(async () => (linked ? fileMarker : directoryMarker)),
       readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
@@ -324,11 +331,13 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
   it('does not let a sibling route supersede an unexpired nested-repository miss', async () => {
     let linked = false
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(async (path) => {
         if (path === String.raw`C:\repo\.git`) {
           return linked ? fileMarker : directoryMarker
         }
+
         throw missingMarker()
       }),
       readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
@@ -381,13 +390,16 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
   it('coalesces delayed discovery without blocking an event-loop turn', async () => {
     let releaseStat: ((marker: typeof fileMarker) => void) | undefined
+
     const delayedStat = new Promise<typeof fileMarker>((resolve) => {
       releaseStat = resolve
     })
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(() => delayedStat),
       readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
     }
+
     let settled = false
 
     const first = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
@@ -396,10 +408,12 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
     }).finally(() => {
       settled = true
     })
+
     const second = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
       platform: 'win32',
       fileSystem
     })
+
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     expect(settled).toBe(false)
@@ -411,13 +425,16 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
   it('cancels a waiter without canceling or duplicating shared discovery', async () => {
     let releaseStat: ((marker: typeof fileMarker) => void) | undefined
+
     const delayedStat = new Promise<typeof fileMarker>((resolve) => {
       releaseStat = resolve
     })
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(() => delayedStat),
       readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
     }
+
     const controller = new AbortController()
 
     const cancelled = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
@@ -425,6 +442,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
       fileSystem,
       signal: controller.signal
     })
+
     controller.abort()
 
     await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
@@ -441,13 +459,16 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
   it('ignores an old probe that settles after reset and a new same-path probe starts', async () => {
     let releaseOld: ((marker: typeof fileMarker) => void) | undefined
+
     const oldMarker = new Promise<typeof fileMarker>((resolve) => {
       releaseOld = resolve
     })
+
     const oldFileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(() => oldMarker),
       readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
     }
+
     const oldRoute = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
       platform: 'win32',
       fileSystem: oldFileSystem
@@ -455,13 +476,16 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
     resetWslLinkedWorktreeGitRoutingForTests()
     let releaseCurrent: ((marker: typeof directoryMarker) => void) | undefined
+
     const currentMarker = new Promise<typeof directoryMarker>((resolve) => {
       releaseCurrent = resolve
     })
+
     const currentFileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(() => currentMarker),
       readFile: vi.fn(async () => '')
     }
+
     const currentRoute = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
       platform: 'win32',
       fileSystem: currentFileSystem
@@ -470,10 +494,12 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
     releaseOld?.(fileMarker)
     await expect(oldRoute).resolves.toBe(false)
     expect(usesHostGitForWslLinkedWorktree(String.raw`C:\repo`, 'Ubuntu', 'win32')).toBe(false)
+
     const currentJoiner = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
       platform: 'win32',
       fileSystem: currentFileSystem
     })
+
     expect(currentFileSystem.stat).toHaveBeenCalledTimes(1)
 
     releaseCurrent?.(directoryMarker)
@@ -483,6 +509,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
   it('fails closed and retries after a stalled discovery deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
         stat: vi
@@ -496,10 +523,12 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
         platform: 'win32',
         fileSystem
       })
+
       const second = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
         platform: 'win32',
         fileSystem
       })
+
       await vi.advanceTimersByTimeAsync(WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS)
 
       await expect(Promise.all([first, second])).resolves.toEqual([false, false])
@@ -519,11 +548,13 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
   it('caps outstanding probes for one working directory after repeated deadlines', async () => {
     vi.useFakeTimers()
+
     try {
       const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
         stat: vi.fn(() => new Promise<typeof fileMarker>(() => {})),
         readFile: vi.fn(async () => '')
       }
+
       const prepare = (): Promise<boolean> =>
         prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
           platform: 'win32',
@@ -535,6 +566,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
         await vi.advanceTimersByTimeAsync(WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS)
         await expect(route).resolves.toBe(false)
       }
+
       await vi.advanceTimersByTimeAsync(WSL_LINKED_WORKTREE_ROUTE_RETRY_BASE_MS)
       await expect(prepare()).resolves.toBe(false)
       expect(fileSystem.stat).toHaveBeenCalledTimes(WSL_LINKED_WORKTREE_ROUTE_MAX_PROBES_PER_CWD)
@@ -545,11 +577,13 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
 
   it('caps outstanding probes across working directories', async () => {
     vi.useFakeTimers()
+
     try {
       const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
         stat: vi.fn(() => new Promise<typeof fileMarker>(() => {})),
         readFile: vi.fn(async () => '')
       }
+
       const pending = Array.from(
         { length: WSL_LINKED_WORKTREE_ROUTE_MAX_PROBES_TOTAL },
         (_, index) =>
@@ -579,9 +613,11 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
     let currentTime = 1_000
     const now = (): number => currentTime
     let releaseStat: ((marker: typeof fileMarker) => void) | undefined
+
     const delayedStat = new Promise<typeof fileMarker>((resolve) => {
       releaseStat = resolve
     })
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi
         .fn<WslLinkedWorktreeRoutingFileSystem['stat']>()
@@ -604,6 +640,7 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
       fileSystem,
       now
     })
+
     const second = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
       platform: 'win32',
       fileSystem,

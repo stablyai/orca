@@ -82,34 +82,45 @@ describe('getBranchCompare', () => {
       if (value === undefined) {
         throw new Error(`unexpected git call: ${label}`)
       }
+
       return value instanceof Error ? Promise.reject(value) : Promise.resolve({ stdout: value })
     }
+
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'branch') {
         return reply(responses.branch, 'branch --show-current')
       }
+
       if (args[0] === 'rev-parse' && args.includes('--quiet')) {
         const probed = args.find((arg) => arg.endsWith('^{commit}')) ?? ''
+
         return reply(responses.probe?.[probed], `probe ${probed}`)
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return reply(responses.headOid, 'rev-parse HEAD')
       }
+
       if (args[0] === 'rev-parse') {
         return reply(responses.baseOid, `rev-parse ${args.at(-1)}`)
       }
+
       if (args[0] === 'merge-base') {
         return reply(responses.mergeBase, 'merge-base')
       }
+
       if (args.includes('--name-status')) {
         return reply(responses.nameStatus, 'diff --name-status')
       }
+
       if (args.includes('--numstat')) {
         return reply(responses.numstat, 'diff --numstat')
       }
+
       if (args[0] === 'rev-list') {
         return reply(responses.revList, 'rev-list')
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
   }
@@ -345,6 +356,7 @@ describe('getBranchCompare', () => {
       if (args[0] === 'branch') {
         return Promise.resolve({ stdout: 'feature\n' })
       }
+
       if (
         args[0] === 'rev-parse' &&
         args.includes('--quiet') &&
@@ -352,24 +364,31 @@ describe('getBranchCompare', () => {
       ) {
         return Promise.resolve({ stdout: 'peeled-base-oid\n' })
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return Promise.resolve({ stdout: 'head-oid\n' })
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
         return Promise.resolve({ stdout: 'raw-base-oid\n' })
       }
+
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
       }
+
       if (args.includes('--name-status')) {
         return Promise.resolve({ stdout: '' })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '' })
       }
+
       if (args[0] === 'rev-list') {
         return Promise.resolve({ stdout: '0\n' })
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
 
@@ -395,26 +414,33 @@ describe('getBranchCompare', () => {
       if (args[0] === 'branch') {
         return Promise.resolve({ stdout: 'main\n' })
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return Promise.resolve({ stdout: 'head-oid\n' })
       }
+
       if (args[0] === 'rev-parse') {
         return Promise.resolve({ stdout: 'base-oid\n' })
       }
+
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
       }
+
       if (args.includes('--name-status')) {
         return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({
           stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
         })
       }
+
       if (args[0] === 'rev-list') {
         return Promise.resolve({ stdout: '1\n' })
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
 
@@ -451,17 +477,21 @@ describe('getCommitCompare', () => {
       if (args[0] === 'rev-parse') {
         return Promise.resolve({ stdout: 'commit-oid\n' })
       }
+
       if (args[0] === 'rev-list') {
         return Promise.resolve({ stdout: 'commit-oid parent-oid\n' })
       }
+
       if (args.includes('--name-status')) {
         return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({
           stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
         })
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
 

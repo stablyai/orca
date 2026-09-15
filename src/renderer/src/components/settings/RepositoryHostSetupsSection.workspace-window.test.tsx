@@ -15,6 +15,7 @@ import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 
 let container: HTMLDivElement
+
 let root: Root
 
 const repo: Repo = {
@@ -26,6 +27,7 @@ const repo: Repo = {
   kind: 'git',
   executionHostId: 'runtime:hub'
 }
+
 const project: Project = {
   id: 'github:stablyai/orca',
   displayName: 'Orca',
@@ -34,6 +36,7 @@ const project: Project = {
   createdAt: 100,
   updatedAt: 100
 }
+
 const setup: ProjectHostSetup = {
   id: 'hub-setup',
   projectId: project.id,

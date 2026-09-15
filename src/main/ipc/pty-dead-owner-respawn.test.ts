@@ -5,45 +5,61 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -57,14 +73,17 @@ describe('registerPtyHandlers', () => {
     const tabId = 'tab-proven-absent-owner'
     const leafId = '78787878-7878-4878-8878-787878787878'
     const paneKey = makePaneKey(tabId, leafId)
+
     const providerSpawn = vi.fn(
       async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
         if (options.attachOnly) {
           throw new SessionNotFoundError('pty-proven-absent-owner')
         }
+
         return { id: 'pty-fresh-proven', incarnationId: 'inc-fresh-proven' }
       }
     )
+
     setLocalPtyProvider({
       spawn: providerSpawn,
       write: vi.fn(),
@@ -88,6 +107,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     let session = {
       tabsByWorktree: {
         [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-proven-absent-owner' }]
@@ -102,6 +122,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-proven-absent-owner' }
     }
+
     const store = {
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
@@ -114,6 +135,7 @@ describe('registerPtyHandlers', () => {
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {
@@ -179,14 +201,17 @@ describe('registerPtyHandlers', () => {
     const tabId = 'tab-probe-blip-owner'
     const leafId = '67676767-6767-4767-8767-676767676767'
     const paneKey = makePaneKey(tabId, leafId)
+
     const providerSpawn = vi.fn(
       async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
         if (options.attachOnly) {
           throw new SessionNotFoundError('pty-probe-blip-owner')
         }
+
         return { id: 'pty-fresh-probe-blip', incarnationId: 'inc-fresh-probe-blip' }
       }
     )
+
     const probePtyLiveness = vi.fn(async () => null)
     setLocalPtyProvider({
       spawn: providerSpawn,
@@ -212,6 +237,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     let session = {
       tabsByWorktree: {
         [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-probe-blip-owner' }]
@@ -226,6 +252,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-probe-blip-owner' }
     }
+
     const store = {
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
@@ -238,6 +265,7 @@ describe('registerPtyHandlers', () => {
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {
@@ -301,14 +329,17 @@ describe('registerPtyHandlers', () => {
     const tabId = 'tab-already-retired-owner'
     const leafId = '89898989-8989-4989-8989-898989898989'
     const paneKey = makePaneKey(tabId, leafId)
+
     const providerSpawn = vi.fn(
       async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
         if (options.attachOnly) {
           throw new SessionNotFoundError('pty-already-retired-owner')
         }
+
         return { id: 'pty-fresh-already-retired', incarnationId: 'inc-fresh-already-retired' }
       }
     )
+
     const probePtyLiveness = vi.fn(async () => false)
     setLocalPtyProvider({
       spawn: providerSpawn,
@@ -334,6 +365,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     // Persistence kept the tab but already dropped this leaf's PTY binding, exactly as an
     // earlier keep-history stop leaves it.
     let session = {
@@ -350,6 +382,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: {}
     }
+
     const store = {
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
@@ -362,13 +395,16 @@ describe('registerPtyHandlers', () => {
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
     }
+
     let runtimeOwnsPane = true
+
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {
         if (!runtimeOwnsPane) {
           throw new Error('terminal_not_found')
         }
+
         return {
           ptyId: 'pty-already-retired-owner',
           tabId,

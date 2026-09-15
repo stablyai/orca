@@ -23,12 +23,14 @@ export function createE2EConfig(input: E2EConfigInput): E2EConfig {
   const userDataDir = input.userDataDir?.trim() || null
   const headless = Boolean(input.headless)
   const exposeStore = Boolean(input.exposeStore)
+
   const terminalParkingDelayMs =
     typeof input.terminalParkingDelayMs === 'number' &&
     Number.isFinite(input.terminalParkingDelayMs) &&
     input.terminalParkingDelayMs > 0
       ? input.terminalParkingDelayMs
       : null
+
   // Why: a worktree count — only a positive integer is a meaningful budget.
   const terminalRetentionLimit =
     typeof input.terminalRetentionLimit === 'number' &&

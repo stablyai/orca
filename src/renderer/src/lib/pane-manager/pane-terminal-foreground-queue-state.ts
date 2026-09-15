@@ -7,8 +7,11 @@ import {
 } from './pane-terminal-output-queue-registry'
 
 const DEFAULT_FOREGROUND_COALESCE_DELAY_MS = 1000
+
 export const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
+
 export const LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS = 16
+
 export const LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS = 32
 
 export function createQueueEntry(
@@ -50,6 +53,7 @@ function armForegroundReleaseDeadline(
     (mayExtend && !entry.foregroundReleaseDeadlineFixed)
       ? requested
       : Math.min(entry.foregroundReleaseDeadlineAt, requested)
+
   return Math.max(0, entry.foregroundReleaseDeadlineAt - now)
 }
 
@@ -69,6 +73,7 @@ export function clearForegroundHoldSafety(entry: QueueEntry): void {
   if (entry.foregroundHoldSafetyTimer === null) {
     return
   }
+
   clearTimeout(entry.foregroundHoldSafetyTimer)
   entry.foregroundHoldSafetyTimer = null
   entry.foregroundHoldSafetyDelayMs = FOREGROUND_HOLD_SAFETY_DELAY_MS
@@ -79,6 +84,7 @@ export function clearForegroundCoalesce(entry: QueueEntry): void {
     clearTimeout(entry.foregroundCoalesceTimer)
     entry.foregroundCoalesceTimer = null
   }
+
   entry.foregroundCoalesce = false
   entry.foregroundCoalesceDelayMs = DEFAULT_FOREGROUND_COALESCE_DELAY_MS
 }
@@ -91,6 +97,7 @@ export function scheduleForegroundHoldSafety(entry: QueueEntry): void {
     entry.foregroundHold = false
     clearForegroundCoalesce(entry)
     resetForegroundReleaseGate(entry)
+
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }
@@ -104,11 +111,14 @@ export function scheduleForegroundCoalesceRelease(
   if (entry.foregroundCoalesceTimer !== null) {
     if (options?.rescheduleEarlier !== true) {
       entry.foregroundCoalesce = true
+
       return
     }
+
     clearTimeout(entry.foregroundCoalesceTimer)
     entry.foregroundCoalesceTimer = null
   }
+
   entry.foregroundCoalesce = true
   // Why fixed from here: a later hold chunk must clamp to this deadline instead of restarting the pair's mutual re-arm (#8754).
   entry.foregroundReleaseDeadlineFixed = true
@@ -117,6 +127,7 @@ export function scheduleForegroundCoalesceRelease(
     entry.foregroundCoalesceTimer = null
     entry.foregroundCoalesce = false
     resetForegroundReleaseGate(entry)
+
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }

@@ -59,11 +59,13 @@ export function useCombinedDiffSectionActions({
   const openSection = useCallback(
     (index: number) => {
       const section = sectionsRef.current[index]
+
       if (!section) {
         return
       }
 
       const language = detectLanguage(section.path)
+
       const entry: GitBranchChangeEntry = {
         path: section.path,
         status: section.status as GitBranchChangeEntry['status'],
@@ -76,11 +78,13 @@ export function useCombinedDiffSectionActions({
 
       if ((isBranchMode || (isAllMode && isBranchEntry)) && branchCompare) {
         openBranchDiff(file.worktreeId, file.filePath, entry, branchCompare, language)
+
         return
       }
 
       if (isCommitMode && commitCompare) {
         openCommitDiff(file.worktreeId, file.filePath, entry, commitCompare, language)
+
         return
       }
 
@@ -125,9 +129,11 @@ export function useCombinedDiffSectionActions({
       ) {
         return
       }
+
       // Why: use this combined-diff tab's group, not worktree activeGroupId —
       // in a multi-pane layout the active group may be a different split.
       const state = useAppStore.getState()
+
       const sourceGroupId =
         (state.unifiedTabsByWorktree[file.worktreeId] ?? []).find(
           (tab) =>
@@ -135,6 +141,7 @@ export function useCombinedDiffSectionActions({
         )?.groupId ??
         activeGroupId ??
         null
+
       openFilePreviewToSide({
         language: detectLanguage(section.path),
         filePath: joinPath(file.filePath, section.path),
@@ -155,10 +162,13 @@ export function useCombinedDiffSectionActions({
   const handleSectionSave = useCallback(
     async (index: number) => {
       const section = sections[index]
+
       if (!section) {
         return
       }
+
       const modifiedEditor = modifiedEditorsRef.current.get(index)
+
       if (!modifiedEditor && !section.dirty) {
         return
       }
@@ -166,11 +176,14 @@ export function useCombinedDiffSectionActions({
       const sectionKey = section.key
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
+
       try {
         const state = useAppStore.getState()
+
         const worktree = file.worktreeId
           ? findWorktreeById(state.worktreesByRepo, file.worktreeId)
           : null
+
         await writeRuntimeFile(
           getEditorFileOperationContext(
             state,
@@ -187,9 +200,11 @@ export function useCombinedDiffSectionActions({
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
         // by key — the captured index may now point at a different file.
         const savedIndex = sectionsRef.current.findIndex((s) => s.key === sectionKey)
+
         if (savedIndex === -1) {
           return
         }
+
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, savedIndex))
         setSections((prev) =>
           prev.map((s) => {
@@ -207,10 +222,12 @@ export function useCombinedDiffSectionActions({
             }
 
             const nextDiffResult = { ...s.diffResult, modifiedContent: content }
+
             const nextLargeDiffRenderLimit = getLargeDiffRenderLimit({
               originalContent: s.originalContent,
               modifiedContent: content
             })
+
             const storedContent = getStoredTextDiffContent(nextDiffResult, nextLargeDiffRenderLimit)
 
             return {

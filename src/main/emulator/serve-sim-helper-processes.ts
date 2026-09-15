@@ -18,8 +18,10 @@ function execFileText(command: string, args: string[]): Promise<string> {
     execFile(command, args, { timeout: 5_000, maxBuffer: 1024 * 1024 }, (error, stdout) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve(stdout.toString())
     })
   })
@@ -27,18 +29,24 @@ function execFileText(command: string, args: string[]): Promise<string> {
 
 export function parseServeSimHelperProcesses(psOutput: string): ServeSimHelperProcess[] {
   const helpers: ServeSimHelperProcess[] = []
+
   for (const line of iterateProcessOutputLines(psOutput)) {
     const match = /^\s*(\d+)\s+(.+)$/.exec(line)
+
     if (!match) {
       continue
     }
+
     const pid = Number(match[1])
     const command = match[2] ?? ''
+
     if (!Number.isInteger(pid) || !/(^|\/)serve-sim-bin(?:\s|$)/.test(command)) {
       continue
     }
+
     helpers.push({ pid, command })
   }
+
   return helpers
 }
 
@@ -53,16 +61,20 @@ export async function listServeSimHelperProcessesForDevice(
   if (platform() !== 'darwin') {
     return []
   }
+
   const knownPid = options.helperPid
   const includeOrphaned = options.includeOrphaned === true
   const output = await execFileText('ps', ['-axo', 'pid=,command=']).catch(() => '')
+
   if (!output) {
     return []
   }
+
   return parseServeSimHelperProcesses(output).filter((helper) => {
     if (knownPid !== undefined && helper.pid === knownPid) {
       return true
     }
+
     return includeOrphaned && commandTargetsDevice(helper.command, deviceUdid)
   })
 }

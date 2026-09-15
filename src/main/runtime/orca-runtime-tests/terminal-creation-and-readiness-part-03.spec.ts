@@ -38,6 +38,7 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const remoteStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -51,6 +52,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: {}
       })
     }
+
     const provider = {
       exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
       listWorktrees: vi.fn().mockResolvedValue([
@@ -63,6 +65,7 @@ describe('OrcaRuntimeService', () => {
         }
       ])
     }
+
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-windows-bare' })
     registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -92,6 +95,7 @@ describe('OrcaRuntimeService', () => {
 
   it('matches canonical bare agent commands when a command override is configured', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -102,6 +106,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: {}
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
@@ -122,6 +127,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps non-bare agent command terminal creates unchanged', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -132,6 +138,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: {}
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
@@ -147,12 +154,14 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; env?: Record<string, string> }
       | undefined
+
     expect(spawnCall?.command).toBe('codex exec summarize')
     expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
   })
 
   it('keeps disabled bare agent command terminal creates unchanged', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -163,6 +172,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: {}
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
@@ -178,6 +188,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; env?: Record<string, string> }
       | undefined
+
     expect(spawnCall?.command).toBe('codex')
     expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
   })
@@ -193,6 +204,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } }
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
 
     const webContents = { send: vi.fn() }
@@ -250,6 +262,7 @@ describe('OrcaRuntimeService', () => {
 
   it('injects runtime hook receiver env into terminal sessions', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-hooked' })
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       buildAgentHookPtyEnv: () => ({
         ORCA_AGENT_HOOK_PORT: '5678',
@@ -258,6 +271,7 @@ describe('OrcaRuntimeService', () => {
         ORCA_AGENT_HOOK_VERSION: '1'
       })
     })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -279,6 +293,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { env?: Record<string, string>; envToDelete?: string[] }
       | undefined
+
     expect(spawnCall?.env).toEqual(
       expect.objectContaining({
         ORCA_AGENT_HOOK_PORT: '5678',
@@ -303,9 +318,11 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-folder' })
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -327,6 +344,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
       | undefined
+
     const spawnedEnv = spawnCall?.env ?? {}
     expect(spawnCall).toMatchObject({
       cwd: folderPath,
@@ -374,6 +392,7 @@ describe('OrcaRuntimeService', () => {
           worktreeId?: string
         }
       | undefined
+
     expect(spawnCall).toMatchObject({
       cwd: homedir(),
       connectionId: null,
@@ -390,9 +409,11 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-folder' })
     const folderWorkspace = makeFolderWorkspace({ folderPath: missingPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: missingPath })
+
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -409,10 +430,12 @@ describe('OrcaRuntimeService', () => {
   it('rejects folder workspace folderPath updates when the new path is missing', async () => {
     const missingPath = join(tmpdir(), `orca-missing-folder-update-${randomUUID()}`)
     const folderWorkspace = makeFolderWorkspace()
+
     const runtimeStore = {
       ...createFolderWorkspaceRuntimeStore(folderWorkspace),
       updateFolderWorkspace: vi.fn()
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await expect(
@@ -423,6 +446,7 @@ describe('OrcaRuntimeService', () => {
 
   it('enables Claude Agent Teams only for direct Claude launches when configured in-process', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -430,6 +454,7 @@ describe('OrcaRuntimeService', () => {
         claudeAgentTeamsMode: 'in-process' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
@@ -452,10 +477,12 @@ describe('OrcaRuntimeService', () => {
       command?: string
       env?: Record<string, string>
     }
+
     const compoundClaude = spawn.mock.calls[1]?.[0] as {
       command?: string
       env?: Record<string, string>
     }
+
     const normalAgent = spawn.mock.calls[2]?.[0] as {
       command?: string
       env?: Record<string, string>
@@ -477,6 +504,7 @@ describe('OrcaRuntimeService', () => {
   it('reveals Claude Agent Teams launches with the rewritten launch config', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -484,6 +512,7 @@ describe('OrcaRuntimeService', () => {
         claudeAgentTeamsMode: 'in-process' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
@@ -544,6 +573,7 @@ describe('OrcaRuntimeService', () => {
 
   it('preserves Claude Agent Teams for sequenced Claude launches', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -551,6 +581,7 @@ describe('OrcaRuntimeService', () => {
         claudeAgentTeamsMode: 'in-process' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,

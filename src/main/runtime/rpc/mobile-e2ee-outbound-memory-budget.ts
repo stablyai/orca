@@ -1,6 +1,9 @@
 export const MOBILE_E2EE_PROCESS_MAX_BUFFERED_BYTES = 32 * 1024 * 1024
+
 export const MOBILE_E2EE_PROCESS_MAX_QUEUED_BYTES = 128 * 1024 * 1024
+
 export const MOBILE_E2EE_PROCESS_MAX_QUEUED_FRAMES = 16_384
+
 export const MOBILE_E2EE_PROCESS_MAX_SOCKET_SOURCES = 256
 
 export type MobileE2EEOutboundSocketMemory = {
@@ -37,9 +40,11 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
 
   const bufferedBytes = (): number => {
     let total = 0
+
     for (const read of bufferedSources) {
       try {
         const value = read()
+
         if (Number.isFinite(value) && value > 0) {
           total += value
         }
@@ -47,6 +52,7 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
         // Closed sockets can reject a late read before channel teardown releases the source.
       }
     }
+
     return total
   }
 
@@ -60,8 +66,10 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
       ) {
         return null
       }
+
       queuedBytes += bytes
       queuedFrames += 1
+
       return createRelease(() => {
         queuedBytes -= bytes
         queuedFrames -= 1
@@ -71,8 +79,10 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
       if (bufferedSources.size >= maxSocketSources) {
         return null
       }
+
       bufferedSources.add(readBufferedAmount)
       let registered = true
+
       return {
         canSend: (bytes) =>
           registered &&
@@ -96,10 +106,12 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
 
 function createRelease(release: () => void): () => void {
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
     release()
   }

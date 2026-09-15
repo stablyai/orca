@@ -52,62 +52,78 @@ export function projectLiveness(
   if (worker.workerStage === 'released') {
     return { verdict: 'exited', source: 'execution_host' }
   }
+
   if (worker.resource?.releaseState === 'released') {
     return { verdict: 'exited', source: 'resource_release' }
   }
+
   if (worker.workerState === 'stopped') {
     return { verdict: 'exited', source: 'worker_stop' }
   }
+
   // An operator close settles the worker as `failed`, which used to fall through to
   // `missing_status` and report a proven-dead worker as absence in the same receipt.
   if (hasCertifiedExit(worker)) {
     return { verdict: 'exited', source: 'execution_host' }
   }
+
   // A settled Dispatch with no worker row never had a supervised process, so there is no
   // absence to report. Not `exited`: nothing ever certified an exit, and absence is not proof.
   if (!evidence && isUnsupervisedSettledDispatch(worker)) {
     return { verdict: 'unverifiable', reason: 'unsupervised_settled' }
   }
+
   if (!evidence) {
     return { verdict: 'unverifiable', reason: 'missing_status' }
   }
+
   // The clock is an arm, not a fallback: a host with no observation clock reports `delivery`
   // explicitly, so a producer that simply forgot to stamp one cannot look like an old host.
   const observedAt = evidence.clock.at
   const activity = evidence.activity
+
   if (activity.restoredUnconfirmed) {
     return { verdict: 'unverifiable', reason: 'restored_unconfirmed', observedAt }
   }
+
   if (activity.providerSessionOnly) {
     return { verdict: 'unverifiable', reason: 'missing_status', observedAt }
   }
+
   if (observedAt - now > FLEET_STATUS_FUTURE_TOLERANCE_MS) {
     return { verdict: 'unverifiable', reason: 'future_status', observedAt }
   }
+
   const remoteHost =
     projectHost(activity.connectionId, worker.resource?.hostScope).kind === 'remote'
+
   if (remoteHost && !activity.connectionId) {
     return { verdict: 'unverifiable', reason: 'missing_status', observedAt }
   }
+
   if (now - observedAt > AGENT_STATUS_STALE_AFTER_MS) {
     return { verdict: 'unverifiable', reason: 'stale_status', observedAt }
   }
+
   return { verdict: 'live', observedAt, source: 'agent_status' }
 }
 
 function projectResource(worker: FleetDurableWorker): FleetResourceProjection {
   const resource = worker.resource
+
   if (!resource) {
     return {
       state: 'absent',
       reason: worker.workerState === 'unsupervised' ? 'unsupervised' : 'not_materialized'
     }
   }
+
   const state = ['owned', 'transferred', 'user_owned', 'external', 'released'].includes(
     resource.ownershipState
   )
     ? (resource.ownershipState as Exclude<FleetResourceProjection['state'], 'absent'>)
     : 'external'
+
   return {
     state,
     id: resource.id,
@@ -126,12 +142,14 @@ export function projectFleetNextAction(
   if (worker.workerStage === 'released') {
     return { kind: 'none', argv: [] }
   }
+
   if (worker.terminalState === 'reclaimable') {
     return {
       kind: 'release',
       argv: ['orchestration', 'worker-release', '--dispatch', worker.dispatchId]
     }
   }
+
   // A completed Dispatch with no worker row and no resource kept a stale pre-v3 terminal handle:
   // there is no worker to show and nothing to release, so `inspect` was a self-loop on this row.
   if (
@@ -141,6 +159,7 @@ export function projectFleetNextAction(
   ) {
     return { kind: 'none', argv: [] }
   }
+
   // A settled worker still owning its terminal owes the release decision. Pointing it at
   // worker-show was a self-loop: the command that reported the settlement.
   if (SETTLED_WORKER_STATES.has(worker.workerState) && worker.resource) {
@@ -151,6 +170,7 @@ export function projectFleetNextAction(
         }
       : { kind: 'none', argv: [] }
   }
+
   // A proven exit under a worker that never settled is a stall; worker-show would
   // only restate it. Read the transcript, then stop or abandon. `unverifiable` is
   // absence and must never land here.
@@ -165,6 +185,7 @@ export function projectFleetNextAction(
       argv: ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
     }
   }
+
   // A running worker with a live verdict and nothing pending owes the coordinator
   // nothing; `inspect` is the unknown-state bucket, and worker-show publishes this
   // same projection, so pointing there was a self-loop on its own receipt.
@@ -176,10 +197,12 @@ export function projectFleetNextAction(
   ) {
     return { kind: 'none', argv: [] }
   }
+
   // worker-show repeats this projection; absence alone cannot earn another command.
   if (liveness.verdict === 'unverifiable' && !worker.pendingInput && !worker.pendingApproval) {
     return { kind: 'none', argv: [] }
   }
+
   return {
     kind: 'inspect',
     argv: ['orchestration', 'worker-show', '--dispatch', worker.dispatchId]
@@ -193,7 +216,9 @@ function projectHost(
   if (connectionId) {
     return { kind: 'remote', id: connectionId }
   }
+
   const read = readWorkerTerminalHostScope(hostScope)
+
   switch (read.kind) {
     // A missing host scope is the legacy/default representation for local and
     // folder-workspace authority; do not infer a remote host from resource
@@ -217,13 +242,16 @@ export function projectOrchestrationFleetWorker(
   const liveness = projectLiveness(worker, evidence, now)
   const fresh = liveness.verdict === 'live'
   const activity = evidence?.activity
+
   const workspaceId =
     activity?.worktreeId ?? worker.worktreeId ?? worker.resource?.worktreeId ?? null
+
   const outcome = resolveFleetWorkerOutcome({
     attemptOutcome: worker.outcome,
     workerState: worker.workerState,
     dispatchStatus: worker.dispatchStatus
   })
+
   return {
     id: worker.dispatchId,
     dispatchId: worker.dispatchId,

@@ -65,9 +65,12 @@ export class OrchestrationLegacyCompatibility {
     if (!request.method.startsWith('orchestration.')) {
       return { handled: false }
     }
+
     const values = params as Record<string, unknown>
+
     if (CURRENT_AUTHORITY_PREFLIGHT_METHODS.has(request.method)) {
       const callerAuthority = this.resolveCurrentAuthority(request, values)
+
       if (callerAuthority) {
         return {
           handled: false,
@@ -75,13 +78,17 @@ export class OrchestrationLegacyCompatibility {
         }
       }
     }
+
     const result = await this.route(request, params, signal)
+
     if (result !== undefined) {
       return { handled: true, result }
     }
+
     if (!COORDINATOR_PREFLIGHT_METHODS.has(request.method)) {
       return { handled: false }
     }
+
     if (request.method === 'orchestration.runUse' && values.takeoverLegacy === true) {
       // Why: takeover is a current-contract recovery action. An exact fresh runtime launch
       // already proves its live PTY, process, pane, host, handle, and launch secret.
@@ -89,17 +96,22 @@ export class OrchestrationLegacyCompatibility {
         request.orchestrationCompatibilityEvidence,
         { currentRuntimeLaunchSufficient: true }
       )
+
       return {
         handled: false,
         ...(callerAuthority ? { orchestrationCompatibilityCallerAuthority: callerAuthority } : {})
       }
     }
+
     const requestedRunId =
       request.method === 'orchestration.runUse' ? stringValue(values.id) : stringValue(values.run)
+
     if (request.method === 'orchestration.taskList' && requestedRunId) {
       return { handled: false }
     }
+
     const authority = this.coordinatorAuthority.resolve(request, requestedRunId)
+
     return authority
       ? {
           handled: false,
@@ -135,32 +147,44 @@ export class OrchestrationLegacyCompatibility {
   ): OrchestrationCompatibilityCallerAuthority | undefined {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
+
     if (!adoption || stringValue(params.run) || request.method === 'orchestration.runUse') {
       return undefined
     }
+
     const evidence = request.orchestrationCompatibilityEvidence
+
     if (!evidence?.terminalHandle || !evidence.paneKey) {
       return undefined
     }
+
     const claimedHandle = currentCallerHandle(request.method, params)
+
     if (claimedHandle && claimedHandle !== evidence.terminalHandle) {
       return undefined
     }
+
     const dispatch = db.getActiveDispatchForIdentity(evidence.terminalHandle, evidence.paneKey)
+
     if (dispatch) {
       if (dispatch.contract_version !== CURRENT_CONTRACT_VERSION) {
         return undefined
       }
+
       const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
+
       return caller &&
         caller.terminalHandle === evidence.terminalHandle &&
         db.getActiveDispatchForIdentity(caller.terminalHandle, caller.paneKey)?.id === dispatch.id
         ? caller
         : undefined
     }
+
     const remoteAttachment = db.findActiveRemoteAttachmentForPane(evidence.paneKey)
+
     if (remoteAttachment) {
       const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
+
       return caller &&
         caller.terminalHandle === evidence.terminalHandle &&
         db.findActiveRemoteAttachmentForPane(caller.paneKey)?.dispatch_id ===
@@ -168,10 +192,13 @@ export class OrchestrationLegacyCompatibility {
         ? caller
         : undefined
     }
+
     const boundRun = db.getCurrentRunForPane(evidence.paneKey)
+
     if (!boundRun) {
       return undefined
     }
+
     const legacyCandidate =
       boundRun.id === adoption.adopted_run_id
         ? db.resolveLegacyCoordinatorCandidate({
@@ -180,10 +207,13 @@ export class OrchestrationLegacyCompatibility {
             paneKey: evidence.paneKey
           })
         : undefined
+
     if (legacyCandidate) {
       return undefined
     }
+
     const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
+
     if (
       !caller ||
       caller.terminalHandle !== evidence.terminalHandle ||
@@ -191,9 +221,11 @@ export class OrchestrationLegacyCompatibility {
     ) {
       return undefined
     }
+
     if (boundRun.id !== adoption.adopted_run_id) {
       return caller
     }
+
     return !db.resolveLegacyCoordinatorCandidate({
       runId: adoption.adopted_run_id,
       terminalHandle: caller.terminalHandle,
@@ -216,6 +248,7 @@ export class OrchestrationLegacyCompatibility {
         params: params as LegacySendParams
       })
     }
+
     if (request.method === 'orchestration.check') {
       return await handleLegacyCheck({
         runtime: this.runtime,
@@ -225,6 +258,7 @@ export class OrchestrationLegacyCompatibility {
         signal
       })
     }
+
     if (request.method === 'orchestration.ask') {
       return await handleLegacyAsk({
         runtime: this.runtime,
@@ -234,6 +268,7 @@ export class OrchestrationLegacyCompatibility {
         signal
       })
     }
+
     if (request.method === 'orchestration.reply') {
       return await handleLegacyReply({
         runtime: this.runtime,
@@ -242,6 +277,7 @@ export class OrchestrationLegacyCompatibility {
         params: params as LegacyReplyParams
       })
     }
+
     return undefined
   }
 }
@@ -270,8 +306,10 @@ function currentCallerHandle(method: string, params: Record<string, unknown>): s
   ) {
     return stringValue(params.callerTerminalHandle)
   }
+
   if (method === 'orchestration.check') {
     return stringValue(params.terminal)
   }
+
   return stringValue(params.from)
 }

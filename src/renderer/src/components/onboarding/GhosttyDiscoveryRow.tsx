@@ -51,6 +51,7 @@ export function GhosttyDiscoveryRow({
   }
 
   const { preview, fields } = discovery
+
   return (
     <div className="flex items-center gap-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.06] px-3.5 py-2.5">
       <img src={ghosttyIcon} alt="" className="size-4 shrink-0" />

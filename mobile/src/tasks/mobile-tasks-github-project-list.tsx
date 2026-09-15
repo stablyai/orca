@@ -38,6 +38,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
     taskUiReady,
     visibleGitHubProjectRows
   } = model
+
   return githubProjectLoading ? (
     <View style={styles.centered}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -52,6 +53,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
           if (!taskUiReady) {
             return
           }
+
           setShowGitHubProjectPicker(true)
         }}
       >
@@ -86,11 +88,13 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
               onPress={() =>
                 setCollapsedGitHubProjectGroups((current) => {
                   const next = new Set(current)
+
                   if (next.has(entry.group.key)) {
                     next.delete(entry.group.key)
                   } else {
                     next.add(entry.group.key)
                   }
+
                   return next
                 })
               }
@@ -107,8 +111,10 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
             </Pressable>
           )
         }
+
         const row = entry.row
         const repo = findProjectRowRepo(row)
+
         return (
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
@@ -154,6 +160,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
                   {githubProjectSummaryFields.slice(0, 4).map((field) => {
                     const value = projectFieldDisplayLabel(row, field)
                     const isEmpty = value === 'Empty'
+
                     return (
                       <View key={field.id} style={styles.projectFieldPill}>
                         <Text style={styles.projectFieldPillText} numberOfLines={1}>

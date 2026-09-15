@@ -64,9 +64,11 @@ describe('orcad lifecycle cleanup', () => {
     const startupError = new Error('bind failed')
     const cleanupError = new Error('daemon stop failed')
     const cleanupRuntime = vi.fn(async () => {})
+
     const cleanupHost = vi.fn(async () => {
       throw cleanupError
     })
+
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     try {
@@ -85,8 +87,10 @@ describe('orcad lifecycle cleanup', () => {
   it('coalesces concurrent and repeated normal stops', async () => {
     const cleanupRuntime = vi.fn(async () => {})
     const cleanupHost = vi.fn(async () => {})
+
     const handle = await startOrcadWithLifecycle(async (registerCleanup) => {
       registerCleanup(cleanupRuntime)
+
       return { readiness: 'ready' }
     }, cleanupHost)
 

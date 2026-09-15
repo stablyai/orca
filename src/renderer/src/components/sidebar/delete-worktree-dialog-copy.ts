@@ -11,7 +11,9 @@ export function isFolderWorkspaceDelete(
   if (!worktree) {
     return false
   }
+
   const repo = repoMap.get(worktree.repoId)
+
   return repo ? isFolderRepo(repo) : false
 }
 
@@ -38,10 +40,12 @@ export function getDeleteWorktreeDialogCopy(args: {
     args.isBatchDelete &&
     args.worktreeCount > 0 &&
     args.folderWorkspaceDeleteCount === args.worktreeCount
+
   const mixedFolderWorkspaceDeletes =
     args.isBatchDelete &&
     args.folderWorkspaceDeleteCount > 0 &&
     args.folderWorkspaceDeleteCount < args.worktreeCount
+
   return {
     targetLabel: args.isBatchDelete
       ? `${args.worktreeCount} workspaces`
@@ -74,6 +78,7 @@ export function getDeleteWorktreeLineageDialogCopy(args: {
 } {
   const allFolderWorkspaceDeletes =
     args.deleteTargetCount > 0 && args.folderWorkspaceDeleteCount === args.deleteTargetCount
+
   const mixedFolderWorkspaceDeletes =
     args.folderWorkspaceDeleteCount > 0 && args.folderWorkspaceDeleteCount < args.deleteTargetCount
 

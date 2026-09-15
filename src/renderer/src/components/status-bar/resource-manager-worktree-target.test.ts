@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 
 const LOCAL = 'local' as ExecutionHostId
+
 const SSH = 'ssh:box' as ExecutionHostId
 
 describe('resolveResourceManagerWorktreeTarget', () => {

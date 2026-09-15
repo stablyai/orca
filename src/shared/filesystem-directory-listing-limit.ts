@@ -1,5 +1,7 @@
 export const FILESYSTEM_DIRECTORY_MAX_ENTRIES = 100_000
+
 export const FILESYSTEM_DIRECTORY_MAX_RETAINED_BYTES = 12 * 1024 * 1024
+
 export const FILESYSTEM_DIRECTORY_LIMIT_MESSAGE =
   'This folder is too large to list safely (limit: 100,000 items or a 12 MB listing).'
 
@@ -44,6 +46,7 @@ export function trackFilesystemDirectoryEntry(
 ): void {
   state.entries += 1
   state.retainedBytes += estimateFilesystemDirectoryEntryBytes(entry)
+
   if (
     state.entries > state.limits.maxEntries ||
     state.retainedBytes > state.limits.maxRetainedBytes
@@ -57,6 +60,7 @@ export function assertFilesystemDirectoryWithinLimit(
   requested?: Partial<FilesystemDirectoryListingLimits>
 ): void {
   const state = createFilesystemDirectoryLimitState(requested)
+
   for (const entry of entries) {
     trackFilesystemDirectoryEntry(state, entry)
   }
@@ -71,5 +75,6 @@ function clampLimit(value: number | undefined, maximum: number): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     return maximum
   }
+
   return Math.min(value, maximum)
 }

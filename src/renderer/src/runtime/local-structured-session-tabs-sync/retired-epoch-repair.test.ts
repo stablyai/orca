@@ -13,6 +13,7 @@ import {
 } from './retired-epoch-repair'
 
 const WORKTREE = 'folder:ws-1'
+
 const EPOCH = 'renderer:53c8f87d'
 
 const runRepair = vi.fn(async (_generation: number) => undefined)
@@ -78,6 +79,7 @@ describe('retired-epoch repair scheduling', () => {
       scheduleRetiredEpochRepair(WORKTREE, EPOCH, runRepair)
       await vi.advanceTimersByTimeAsync(5000)
     }
+
     expect(runRepair).toHaveBeenCalledTimes(3)
 
     // A quiet minute later the worktree gets its budget back rather than staying hidden forever.

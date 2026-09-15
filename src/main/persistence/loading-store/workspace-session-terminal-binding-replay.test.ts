@@ -3,8 +3,11 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-session-terminal-binding-replay'
 
 const LEAF_ONE = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_TWO = '22222222-2222-4222-8222-222222222222'
+
 const WORKTREE_A = 'worktree-a'
+
 const WORKTREE_B = 'worktree-b'
 
 function session(ptyId: string | null): WorkspaceSessionState {
@@ -196,6 +199,7 @@ describe('workspace session terminal binding replay', () => {
       ...terminalTab('worktree', `tab-${i}`, `pty-${i}`),
       get id() {
         reads++
+
         return `tab-${i}`
       }
     }))

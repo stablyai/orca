@@ -29,53 +29,71 @@ export function resolveExplicitWorktreeOperationRouteResult(
   const exactRoutes = new Map<string, WorktreeOperationRoute>()
   const exactRepoIds = new Set<string>()
   const indexedWorktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+
   if (indexedWorktree.kind === 'ambiguous') {
     return { kind: 'ambiguous' }
   }
+
   if (indexedWorktree.kind === 'resolved') {
     exactRepoIds.add(indexedWorktree.owner.repoId)
     const resolution = resolveExactWorktreeRoute(state, indexedWorktree.owner)
+
     if (resolution.kind === 'ambiguous') {
       return resolution
     }
+
     if (resolution.kind === 'resolved') {
       addRoute(exactRoutes, resolution.route)
     }
   }
+
   for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
     exactRepoIds.add(worktree.repoId)
     const resolution = resolveExactWorktreeRoute(state, worktree)
+
     if (resolution.kind === 'ambiguous') {
       return resolution
     }
+
     if (resolution.kind === 'resolved') {
       addRoute(exactRoutes, resolution.route)
     }
   }
+
   if (exactRoutes.size > 0) {
     const route = exactRoutes.values().next().value
+
     return exactRoutes.size === 1 && route ? { kind: 'resolved', route } : { kind: 'ambiguous' }
   }
+
   if (exactRepoIds.size === 0) {
     exactRepoIds.add(getRepoIdFromWorktreeId(worktreeId))
   }
+
   const repoRoutes = new Map<string, WorktreeOperationRoute>()
+
   for (const repoId of exactRepoIds) {
     const resolution = resolveIndexedRepoOperationRoute(state.repos, repoId)
+
     if (resolution.kind === 'ambiguous') {
       return resolution
     }
+
     if (resolution.kind === 'resolved') {
       addRoute(repoRoutes, resolution.route)
     }
   }
+
   const route = repoRoutes.values().next().value
+
   if (repoRoutes.size === 1 && route) {
     return { kind: 'resolved', route }
   }
+
   if (repoRoutes.size > 1) {
     return { kind: 'ambiguous' }
   }
+
   return { kind: 'missing' }
 }
 
@@ -86,19 +104,27 @@ function resolveIndexedRepoOperationRoute(
   if (!repos) {
     return { kind: 'missing' }
   }
+
   let index = repoOperationRouteIndexCache.get(repos)
+
   if (!index) {
     const next = new Map<string, WorktreeOperationRouteResolution>()
+
     for (const repo of repos) {
       const repoId = repo.id
+
       if (!repo.executionHostId?.trim() && !repo.connectionId?.trim()) {
         continue
       }
+
       const route = routeForOwner({ hostId: getRepoExecutionHostId(repo) })
+
       if (!route) {
         continue
       }
+
       const current = next.get(repoId)
+
       if (!current) {
         next.set(repoId, { kind: 'resolved', route })
       } else if (
@@ -108,8 +134,10 @@ function resolveIndexedRepoOperationRoute(
         next.set(repoId, { kind: 'ambiguous' })
       }
     }
+
     index = next
     repoOperationRouteIndexCache.set(repos, index)
   }
+
   return index.get(repoId) ?? { kind: 'missing' }
 }

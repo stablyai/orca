@@ -70,6 +70,7 @@ describe('native handoff acquisition', () => {
       workspaceId: 'workspace-1',
       workspaceKind: 'git-worktree' as const
     }
+
     const reserved = await store.reserveOwner({
       sessionId,
       location,
@@ -88,6 +89,7 @@ describe('native handoff acquisition', () => {
       },
       now
     })
+
     const journal = await journals.open({
       identity: {
         sessionId,
@@ -98,6 +100,7 @@ describe('native handoff acquisition', () => {
       },
       journalDir: join(root, 'journal')
     })
+
     const eventSink = createDeferredStructuredAgentSessionEventSink()
     const order: string[] = []
     const appendEntered = Promise.withResolvers<void>()
@@ -109,6 +112,7 @@ describe('native handoff acquisition', () => {
       await appendGate.promise
       const result = await originalAppend(...args)
       order.push('append-complete')
+
       return result
     })
     eventSink.bind({
@@ -122,13 +126,16 @@ describe('native handoff acquisition', () => {
     )
     await appendEntered.promise
     const originalUnbind = eventSink.unbind.bind(eventSink)
+
     const unbind = vi.spyOn(eventSink, 'unbind').mockImplementation(() => {
       order.push('unbind')
       originalUnbind()
     })
+
     const adapter = {
       acquire: vi.fn(async ({ fence, spawnToken }) => {
         order.push('acquire')
+
         return {
           process: {
             hostId: 'local',
@@ -147,6 +154,7 @@ describe('native handoff acquisition', () => {
         }
       })
     }
+
     const session = {
       journal,
       params: {
@@ -167,6 +175,7 @@ describe('native handoff acquisition', () => {
       hasProviderChild: false,
       acquisitionGeneration: null
     }
+
     const acquiring = acquireNativeHandoffOwner(
       {
         store,
@@ -194,6 +203,7 @@ describe('native handoff acquisition', () => {
         spawnToken: 'native-handoff'
       }
     )
+
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(adapter.acquire).not.toHaveBeenCalled()
     expect(unbind).not.toHaveBeenCalled()
@@ -211,7 +221,9 @@ describe('native handoff acquisition', () => {
       workspaceId: 'workspace-unsupported',
       workspaceKind: 'folder'
     }
+
     const operationId = `${now}-00000000000000000000000000000011`
+
     const reserved = await store.reserveOwner({
       sessionId: 'session-handoff-unsupported',
       location,
@@ -226,6 +238,7 @@ describe('native handoff acquisition', () => {
       operation: { callerKey: 'test', operationId, fingerprint: 'unsupported' },
       now
     })
+
     const journal = await journals.open({
       identity: {
         sessionId: 'session-handoff-unsupported',
@@ -236,14 +249,17 @@ describe('native handoff acquisition', () => {
       },
       journalDir: join(root, 'unsupported-journal')
     })
+
     const eventSink = createDeferredStructuredAgentSessionEventSink()
     eventSink.bind({ journal, fence: reserved.record.lease.runtimeFence, publish: () => undefined })
     const unbind = vi.spyOn(eventSink, 'unbind')
     const acquire = vi.fn<NonNullable<StructuredAgentSessionHostDeps['adapter']['acquire']>>()
+
     const adapter = {
       supportsLocation: vi.fn(() => false),
       acquire
     }
+
     const session = {
       journal,
       params: {
@@ -300,13 +316,16 @@ describe('native handoff acquisition', () => {
 
   it('rechecks adapter support immediately before handoff acquisition', async () => {
     const sessionId = 'session-handoff-drift'
+
     const location: AgentSessionExecutionLocation = {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       wslDistro: null,
       workspaceId: 'workspace-drift',
       workspaceKind: 'folder'
     }
+
     const operationId = `${now}-00000000000000000000000000000021`
+
     const reserved = await store.reserveOwner({
       sessionId,
       location,
@@ -321,6 +340,7 @@ describe('native handoff acquisition', () => {
       operation: { callerKey: 'test', operationId, fingerprint: 'drift' },
       now
     })
+
     const journal = await journals.open({
       identity: {
         sessionId,
@@ -331,6 +351,7 @@ describe('native handoff acquisition', () => {
       },
       journalDir: join(root, 'drift-journal')
     })
+
     const eventSink = createDeferredStructuredAgentSessionEventSink()
     eventSink.bind({ journal, fence: reserved.record.lease.runtimeFence, publish: () => undefined })
     const unbind = vi.spyOn(eventSink, 'unbind')
@@ -338,6 +359,7 @@ describe('native handoff acquisition', () => {
     supportsLocation.mockReturnValueOnce(true).mockReturnValueOnce(false)
     const acquire = vi.fn<NonNullable<StructuredAgentSessionHostDeps['adapter']['acquire']>>()
     const adapter = { supportsLocation, acquire }
+
     const session = {
       journal,
       params: {
@@ -393,6 +415,7 @@ describe('native handoff acquisition', () => {
 describe('handoff status published for a session the host no longer holds', () => {
   const sessionId = 'session-handoff-publish-detached'
   const now = 1_800_000_000_000
+
   const failed: AgentSessionHandoffStatus = {
     owner: 'native',
     direction: 'to-tui',
@@ -400,6 +423,7 @@ describe('handoff status published for a session the host no longer holds', () =
     stage: null,
     operationId: null
   }
+
   let root: string
   let store: AgentSessionRecordStore
 
@@ -462,6 +486,7 @@ describe('handoff status published for a session the host no longer holds', () =
       },
       now
     })
+
     const frames: { fence: number; status: AgentSessionHandoffStatus }[] = []
 
     expect(() => detachedHandoff(frames).setStatus(sessionId, failed)).not.toThrow()

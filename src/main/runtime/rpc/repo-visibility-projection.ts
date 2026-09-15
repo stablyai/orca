@@ -16,6 +16,7 @@ export function projectRepoVisibilityForClient(repo: Repo, context: RepoProjecti
   ) {
     return repo
   }
+
   return {
     ...repo,
     externalWorktreeVisibility: effectiveExternalWorktreeVisibility(
@@ -31,5 +32,6 @@ export function projectRepoResultVisibilityForClient<T extends object>(
   context: RepoProjectionContext
 ): T {
   const repo = (result as { repo?: Repo }).repo
+
   return repo ? { ...result, repo: projectRepoVisibilityForClient(repo, context) } : result
 }

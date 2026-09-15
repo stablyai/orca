@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -42,6 +43,7 @@ describe('reconnectPersistedTerminals', () => {
     mockApi.pty.kill = vi.fn().mockResolvedValue(undefined)
     ;(mockApi.pty as Record<string, unknown>).spawn = vi.fn().mockImplementation(() => {
       ptyIdCounter++
+
       return Promise.resolve({ id: `pty-${ptyIdCounter}` })
     })
   })
@@ -508,6 +510,7 @@ describe('reconnectPersistedTerminals', () => {
       configurable: true,
       get: () => {
         abortReads += 1
+
         return abortReads > 1
       }
     })
@@ -529,11 +532,13 @@ describe('reconnectPersistedTerminals', () => {
     const store = createDaemonEnabledStore()
     const targetId = 'ssh-1'
     const worktreeId = 'repo1::/remote/wt1'
+
     const staleAuthority: DirectSshAuthority = {
       targetId,
       providerEpoch: 'epoch-1' as SshProviderEpoch,
       connectionGeneration: 1
     }
+
     store.setState({
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab1', worktreeId, ptyId: null })]
@@ -579,12 +584,15 @@ describe('reconnectPersistedTerminals', () => {
     const store = createDaemonEnabledStore()
     const targetId = 'ssh-1'
     const worktreeId = 'repo1::/remote/wt1'
+
     const authority: DirectSshAuthority = {
       targetId,
       providerEpoch: 'epoch-1' as SshProviderEpoch,
       connectionGeneration: 1
     }
+
     let authorityReads = 0
+
     const currentAuthorityState = {
       targetId,
       status: 'connected' as const,
@@ -593,10 +601,12 @@ describe('reconnectPersistedTerminals', () => {
       providerEpoch: authority.providerEpoch,
       connectionGeneration: authority.connectionGeneration
     }
+
     const rotatedAuthorityState = {
       ...currentAuthorityState,
       connectionGeneration: 2
     }
+
     const sshConnectionStates = new Map([[targetId, currentAuthorityState]])
     const originalGet = sshConnectionStates.get.bind(sshConnectionStates)
     // Rotate from the first read after the entry authority check, so the
@@ -604,6 +614,7 @@ describe('reconnectPersistedTerminals', () => {
     // intermediate reads the reconnect pass happens to make.
     sshConnectionStates.get = ((key: string) => {
       authorityReads += 1
+
       return authorityReads >= 2 ? rotatedAuthorityState : originalGet(key)
     }) as typeof sshConnectionStates.get
     store.setState({

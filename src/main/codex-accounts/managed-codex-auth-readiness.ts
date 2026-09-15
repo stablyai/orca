@@ -6,6 +6,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 
 const AUTH_READY_TIMEOUT_MS = 1_500
+
 const AUTH_READY_RETRY_MS = 25
 
 type StoredCodexAuth = {
@@ -25,6 +26,7 @@ const KNOWN_CREDENTIAL_KEYS = [
   'personal_access_token',
   'bedrock_api_key'
 ] as const
+
 const KNOWN_AGENT_IDENTITY_RECORD_KEYS = [
   'agent_runtime_id',
   'agent_private_key',
@@ -40,6 +42,7 @@ export function waitForManagedCodexAuthReady(args: {
   if (isCodexHomeAuthReadyForLaunch(args)) {
     return
   }
+
   return waitForStoredCodexCredential(join(args.codexHomePath!, 'auth.json'))
 }
 
@@ -58,8 +61,10 @@ export function isCodexHomeAuthReadyForLaunch(args: {
 
 async function waitForStoredCodexCredential(authPath: string): Promise<boolean> {
   const deadline = Date.now() + AUTH_READY_TIMEOUT_MS
+
   do {
     await delay(AUTH_READY_RETRY_MS)
+
     if (hasStoredCodexCredential(authPath)) {
       return true
     }
@@ -68,6 +73,7 @@ async function waitForStoredCodexCredential(authPath: string): Promise<boolean> 
   console.warn(
     `[codex-auth-readiness] Managed credential remained unavailable after ${AUTH_READY_TIMEOUT_MS}ms`
   )
+
   return false
 }
 
@@ -76,6 +82,7 @@ function isManagedHostCodexHome(
   settings: GlobalSettings | undefined
 ): boolean {
   const expected = normalizeRuntimePathForComparison(codexHomePath)
+
   return (
     settings?.codexManagedAccounts?.some(
       (account) =>
@@ -97,31 +104,40 @@ export type StoredCodexCredentialState =
 // an absent file ('missing') — collapsing them to false logs users out on races.
 export function readStoredCodexCredentialState(authPath: string): StoredCodexCredentialState {
   let raw: string
+
   try {
     raw = readFileSync(authPath, 'utf8')
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
+
     // Why: Windows auth.json rotation can surface transient EPERM/EBUSY reads.
     return code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'unreadable'
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(raw)
   } catch {
     // Torn JSON means a write is in flight, not that the credential is gone.
     return 'unreadable'
   }
+
   if (!isRecord(parsed) || Object.keys(parsed).length === 0) {
     return 'no-credential'
   }
+
   const auth = parsed as StoredCodexAuth
+
   const hasCredential =
     auth.auth_mode == null
       ? hasCredentialWithoutDeclaredMode(auth)
       : hasCredentialForDeclaredMode(auth)
+
   if (hasCredential) {
     return 'present'
   }
+
   return hasIncompleteCredentialMaterial(auth) ? 'incomplete' : 'no-credential'
 }
 
@@ -133,6 +149,7 @@ function hasCredentialForDeclaredMode(auth: StoredCodexAuth): boolean {
   if (!isNonEmptyString(auth.auth_mode)) {
     return false
   }
+
   switch (auth.auth_mode) {
     case 'apikey':
       return isNonEmptyString(auth.OPENAI_API_KEY)
@@ -152,6 +169,7 @@ function hasCredentialForDeclaredMode(auth: StoredCodexAuth): boolean {
 
 function hasCredentialWithoutDeclaredMode(auth: StoredCodexAuth): boolean {
   const knownCredentialPresent = KNOWN_CREDENTIAL_KEYS.some((key) => key in auth)
+
   if (knownCredentialPresent) {
     return (
       isNonEmptyString(auth.OPENAI_API_KEY) ||
@@ -161,6 +179,7 @@ function hasCredentialWithoutDeclaredMode(auth: StoredCodexAuth): boolean {
       hasBedrockApiKey(auth.bedrock_api_key)
     )
   }
+
   return Object.keys(auth).some((key) => key !== 'auth_mode' && key !== 'last_refresh')
 }
 
@@ -176,6 +195,7 @@ function hasChatGptCredential(tokens: unknown): boolean {
   if (!isRecord(tokens)) {
     return false
   }
+
   return (
     isNonEmptyString(tokens.access_token) &&
     isNonEmptyString(tokens.id_token) &&
@@ -187,9 +207,11 @@ function hasAgentIdentityCredential(value: unknown): boolean {
   if (isNonEmptyString(value)) {
     return true
   }
+
   if (!isRecord(value) || Object.keys(value).length === 0) {
     return false
   }
+
   return KNOWN_AGENT_IDENTITY_RECORD_KEYS.some((key) => key in value)
     ? isNonEmptyString(value.agent_runtime_id) && isNonEmptyString(value.agent_private_key)
     : true

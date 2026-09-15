@@ -31,11 +31,13 @@ import {
 } from './generate-skill-bundle-manifest.mjs'
 
 const temporaryDirectories = []
+
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 
 async function createPackage() {
   const directory = await mkdtemp(path.join(tmpdir(), 'orca-skill-manifest-'))
   temporaryDirectories.push(directory)
+
   return directory
 }
 
@@ -52,6 +54,7 @@ async function createReleaseSandbox() {
   await mkdir(skillRoot, { recursive: true })
   await copyFile(path.join(import.meta.dirname, 'generate-skill-bundle-manifest.mjs'), script)
   await writeFile(path.join(skillRoot, 'SKILL.md'), 'demo skill\n')
+
   return {
     generate: (...args) => execFileSync(process.execPath, [script, ...args], { stdio: 'pipe' }),
     read: (name) => readFile(path.join(root, 'resources', 'skills', name), 'utf8'),
@@ -93,9 +96,11 @@ describe('skill bundle manifest generator', () => {
   it('orders git-history files identically to the filesystem walk', async () => {
     const packageRoot = await createPackage()
     await mkdir(path.join(packageRoot, 'sub'))
+
     for (const name of ['apple.md', 'sub.md', 'Zebra.md', path.join('sub', 'inner.txt')]) {
       await writeFile(path.join(packageRoot, name), `${name}\n`)
     }
+
     const walked = await collectPackageFiles(packageRoot)
 
     // Why: git ls-tree emits [Zebra.md, apple.md, sub.md, sub/inner.txt]; index-based
@@ -116,6 +121,7 @@ describe('skill bundle manifest generator', () => {
 
   it('rejects rewrites of released snapshots and allows floating-tail replacement', () => {
     const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
+
     const artifacts = {
       releasedSnapshotCounts: { 'orca-cli': 2 },
       snapshotRegistry: {
@@ -175,12 +181,14 @@ describe('skill bundle manifest generator', () => {
 
   it('protects only revisions named by the committed release mapping', () => {
     const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
+
     const committedRegistry = {
       schemaVersion: 1,
       skills: {
         'linear-tickets': [snapshot(1, 'released'), snapshot(2, 'unreleased-tail')]
       }
     }
+
     const artifacts = {
       releasedSnapshotCounts: { 'linear-tickets': 2 },
       snapshotRegistry: {
@@ -205,14 +213,17 @@ describe('skill bundle manifest generator', () => {
 
   it('tolerates only redundant trailing release-mapping rows', () => {
     const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`
+
     const rows = [
       { appVersion: '1.0.0', skills: { 'orca-cli': 1 } },
       { appVersion: '1.1.0', skills: { 'orca-cli': 2 } }
     ]
+
     const artifacts = {
       currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 2 }] },
       releaseMapping: { schemaVersion: 1, releases: rows }
     }
+
     const committedPrefix = serialized({ schemaVersion: 1, releases: [rows[0]] })
 
     // A just-cut tag whose bytes equal the working tree may lag in the mapping.
@@ -255,6 +266,7 @@ describe('skill bundle manifest generator', () => {
 
   it('seeds released history from the committed ledger and drops the floating tail', () => {
     const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
+
     const committedRegistry = {
       schemaVersion: 1,
       skills: {
@@ -264,6 +276,7 @@ describe('skill bundle manifest generator', () => {
         'orca-linear': [snapshot(1, 'ccc'), snapshot(2, 'tail')]
       }
     }
+
     const committedMapping = {
       schemaVersion: 1,
       releases: [{ appVersion: '1.0.0', skills: { 'orca-cli': 2 } }]
@@ -353,10 +366,12 @@ describe('skill bundle manifest generator', () => {
     const sandbox = await createReleaseSandbox()
 
     sandbox.generate('--write')
+
     const [manifest, registry] = await Promise.all([
       sandbox.read('current-manifest.json'),
       sandbox.read('snapshot-registry.json')
     ])
+
     sandbox.generate('--release', 'v1.4.156')
 
     // The cut records provenance for bytes that are already committed, so a
@@ -378,6 +393,7 @@ describe('skill bundle manifest generator', () => {
 
   it('freezes a revision once a release records it, and only until then', async () => {
     const sandbox = await createReleaseSandbox()
+
     const demoSnapshots = async () =>
       JSON.parse(await sandbox.read('snapshot-registry.json')).skills.demo
 
@@ -496,6 +512,7 @@ describe('skill bundle manifest generator', () => {
   // case-fold map are covered too, not just the name test.
   it('skips exactly the names the scanner skips', async () => {
     const packageRoot = await createPackage()
+
     for (const name of [
       'SKILL.md',
       '.DS_Store',
@@ -529,6 +546,7 @@ describe('skill bundle manifest generator', () => {
     // Compare the same bytes even when the skill has uncommitted edits.
     execFileSync('git', ['init', '--quiet'], { cwd: packageRoot })
     execFileSync('git', ['-c', 'core.autocrlf=false', 'add', '-A'], { cwd: packageRoot })
+
     const expected = execFileSync('git', ['write-tree'], {
       cwd: packageRoot,
       encoding: 'utf8'
@@ -545,6 +563,7 @@ describe('skill bundle manifest generator', () => {
     const files = await collectPackageFiles(packageRoot)
     execFileSync('git', ['init', '--quiet'], { cwd: packageRoot })
     execFileSync('git', ['add', '-A'], { cwd: packageRoot })
+
     const expected = execFileSync('git', ['write-tree'], {
       cwd: packageRoot,
       encoding: 'utf8'
@@ -563,9 +582,11 @@ describe('skill bundle manifest generator', () => {
     const workflow = parse(
       await readFile(path.join(REPO_ROOT, '.github/workflows/release-cut.yml'), 'utf8')
     )
+
     const runSteps = workflow.jobs.cut.steps
       .filter((step) => typeof step.run === 'string')
       .map((step) => ({ name: step.name ?? '(unnamed)', run: step.run.replace(/^\s*#.*$/gm, '') }))
+
     const bumpStep = runSteps.find((step) => step.name === 'Bump package.json and tag')
 
     // The load-bearing check: whatever staged it and however the commit was
@@ -588,6 +609,7 @@ describe('skill bundle manifest generator', () => {
     expect(runSteps.filter((s) => /resources[/\\]skills/.test(s.run)).map((s) => s.name)).toEqual([
       'Bump package.json and tag'
     ])
+
     for (const step of runSteps) {
       expect(step.run, step.name).not.toMatch(/--write|generate:skill-bundle-manifest/)
     }

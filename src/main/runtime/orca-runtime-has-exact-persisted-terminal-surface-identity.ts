@@ -35,16 +35,21 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     incarnationId: string
   }): boolean {
     const session = this.getWorkspaceSessionForWorktree(expected.worktreeId)
+
     const sessionWorktreeId = session
       ? resolveTerminalSessionWorktreeId(session, expected.worktreeId)
       : null
+
     if (!session || !sessionWorktreeId) {
       return false
     }
+
     const tab = session.tabsByWorktree[sessionWorktreeId]?.find(
       (candidate) => candidate.id === expected.tabId
     )
+
     const paneKey = makePaneKey(expected.tabId, expected.leafId)
+
     return Boolean(
       tab &&
       session.terminalLayoutsByTabId[expected.tabId]?.ptyIdsByLeafId?.[expected.leafId] ===
@@ -57,6 +62,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(candidate.worktreeId)
+
     if (snapshot) {
       const retired = retireTerminalSurfacesFromSnapshot({
         snapshot,
@@ -64,6 +70,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
         exactSurfaces: [{ parentTabId: candidate.tabId, leafId: candidate.leafId }],
         exactOnly: true
       })
+
       if (retired) {
         this.storeMobileSessionSnapshot(candidate.worktreeId, retired.snapshot)
         this.notifyMobileSessionTabsChanged(candidate.worktreeId)
@@ -73,6 +80,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     const leafKey = this.getLeafKey(candidate.tabId, candidate.leafId)
     const leaf = this.leaves.get(leafKey)
     const pty = this.ptysById.get(candidate.ptyId)
+
     if (
       leaf?.ptyId === candidate.ptyId &&
       runtimeWorktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
@@ -81,6 +89,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
       const surfaceHandle = this.handleByLeafKey.get(leafKey)
       this.handleByLeafKey.delete(leafKey)
       const handleRecord = surfaceHandle ? this.handles.get(surfaceHandle) : undefined
+
       if (
         surfaceHandle &&
         handleRecord?.tabId === candidate.tabId &&
@@ -89,15 +98,19 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
       ) {
         this.handles.delete(surfaceHandle)
       }
+
       this.rebuildLeafPtyIndex()
+
       if (![...this.leaves.values()].some((entry) => entry.tabId === candidate.tabId)) {
         this.tabs.delete(candidate.tabId)
       }
     }
+
     if (pty?.tabId === candidate.tabId) {
       pty.tabId = null
       pty.paneKey = null
     }
+
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,
       'rolled_back',
@@ -110,9 +123,12 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     activeGroupId?: string
   } {
     const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+
     const session =
       this.store?.getWorkspaceSession?.(hostId) ?? this.getWorkspaceSessionForWorktree(worktreeId)
+
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
+
     return {
       ...(sessionWorktreeId && session?.activeTabIdByWorktree?.[sessionWorktreeId]
         ? { activeTabId: session.activeTabIdByWorktree[sessionWorktreeId] }
@@ -153,9 +169,11 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     candidate: LegacyWorkerRecoveryCandidate
   ): Promise<boolean | null> {
     const pty = this.ptysById.get(candidate.ptyId)
+
     if (!pty || !this.notifier?.revealTerminalSession) {
       return null
     }
+
     const reveal = await this.notifier.revealTerminalSession(candidate.worktreeId, {
       ptyId: candidate.ptyId,
       title: getLatestPtyTitle(pty) ?? pty.controllerTitle,
@@ -169,7 +187,9 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
         incarnationId: candidate.incarnationId
       }
     })
+
     const identity = reveal?.identity
+
     return Boolean(
       identity &&
       runtimeWorktreeIdsEqual(identity.worktreeId, candidate.worktreeId) &&

@@ -43,10 +43,12 @@ import { registerRepoHandlers } from './repos'
 
 describe('repos folder pickers', () => {
   const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
+
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   }
+
   const mockStore = {
     getRepos: vi.fn().mockReturnValue([]),
     addRepo: vi.fn(),
@@ -57,17 +59,21 @@ describe('repos folder pickers', () => {
 
   const callPickFolders = (): Promise<string[]> => {
     const handler = handlers.get('repos:pickFolders')
+
     if (!handler) {
       throw new Error('repos:pickFolders handler was never registered')
     }
+
     return handler(null, undefined) as Promise<string[]>
   }
 
   const callPickDirectory = (): Promise<string | null> => {
     const handler = handlers.get('repos:pickDirectory')
+
     if (!handler) {
       throw new Error('repos:pickDirectory handler was never registered')
     }
+
     return handler(null, undefined) as Promise<string | null>
   }
 

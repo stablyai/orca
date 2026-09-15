@@ -25,8 +25,10 @@ import type { DirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordin
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() }
 }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -34,8 +36,11 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const TARGET_A = 'ssh-target-a'
+
 const PATH_A = '/srv/proj/target-a'
+
 const WORKTREE_A = `repoA::${PATH_A}`
+
 const WORKTREE_B = 'repoB::/srv/other/target-b'
 
 const authority: DirectSshAuthority = {
@@ -151,6 +156,7 @@ describe('session writes deferred by a direct-SSH apply', () => {
       // Runs inside the apply, which is when the write gate is shut.
       finalizeHydratedTerminals: () => {
         onApplied()
+
         return 0
       }
     })
@@ -181,12 +187,14 @@ describe('session writes deferred by a direct-SSH apply', () => {
     seedBothTargets(store)
 
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+
     const cleanup = createSessionWriteSubscriber({
       store,
       persist,
       shouldSchedulePersist: () => !isDirectSshRemoteWorkspaceApplyInProgress(),
       subscribeToPersistGateOpen: onDirectSshRemoteWorkspaceApplyWindowClosed
     })
+
     try {
       store.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
       vi.advanceTimersByTime(200)
@@ -220,12 +228,14 @@ describe('session writes deferred by a direct-SSH apply', () => {
     const startedAt = Date.now()
 
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+
     const cleanup = createSessionWriteSubscriber({
       store,
       persist,
       shouldSchedulePersist: () => !isDirectSshRemoteWorkspaceApplyInProgress(),
       subscribeToPersistGateOpen: onDirectSshRemoteWorkspaceApplyWindowClosed
     })
+
     try {
       store.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
       vi.advanceTimersByTime(200)

@@ -41,6 +41,7 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
       ahead: 0,
       behind: 0
     })
+
     expect(eligibility).toMatchObject({
       blockedReason: 'dirty',
       nextAction: 'commit',

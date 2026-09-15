@@ -7,12 +7,14 @@ import { startBrowserScreencast } from './browser-screencast-stream'
 
 function createMockWebContents() {
   let attached = false
+
   const dbg = new EventEmitter() as EventEmitter & {
     isAttached: ReturnType<typeof vi.fn>
     attach: ReturnType<typeof vi.fn>
     detach: ReturnType<typeof vi.fn>
     sendCommand: ReturnType<typeof vi.fn>
   }
+
   dbg.isAttached = vi.fn(() => attached)
   dbg.attach = vi.fn(() => {
     attached = true
@@ -64,6 +66,7 @@ describe('startBrowserScreencast', () => {
       if (method === 'Page.captureScreenshot') {
         return { data: firstFrame.toString('base64') }
       }
+
       return {}
     })
     const onFrame = vi.fn()
@@ -99,6 +102,7 @@ describe('startBrowserScreencast', () => {
       if (method === 'Page.captureScreenshot') {
         return { data: jpegWithSize(1200, 800).toString('base64') }
       }
+
       return {}
     })
     const onFrame = vi.fn()
@@ -124,13 +128,16 @@ describe('startBrowserScreencast', () => {
   it('does not emit a stale initial capture after a live screencast frame arrives', async () => {
     const webContents = createMockWebContents()
     let resolveInitialCapture!: (value: { data: string }) => void
+
     const initialCapture = new Promise<{ data: string }>((resolve) => {
       resolveInitialCapture = resolve
     })
+
     webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
       if (method === 'Page.captureScreenshot') {
         return await initialCapture
       }
+
       return {}
     })
     const onFrame = vi.fn()
@@ -174,6 +181,7 @@ describe('startBrowserScreencast', () => {
       if (method === 'Page.captureScreenshot') {
         return await new Promise<{ data: string }>((resolve) => pendingCaptures.push(resolve))
       }
+
       return {}
     })
     const onFrame = vi.fn()
@@ -235,6 +243,7 @@ describe('startBrowserScreencast', () => {
       if (method === 'Page.captureScreenshot') {
         return { data: jpegWithSize(958, 609).toString('base64') }
       }
+
       return {}
     })
     const onFrame = vi.fn()
@@ -254,6 +263,7 @@ describe('startBrowserScreencast', () => {
 
     try {
       await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+
       const beforeNavigation = webContents.debugger.sendCommand.mock.calls.filter(
         ([method]) => method === 'Emulation.setDeviceMetricsOverride'
       ).length
@@ -265,6 +275,7 @@ describe('startBrowserScreencast', () => {
       const afterNavigation = webContents.debugger.sendCommand.mock.calls.filter(
         ([method]) => method === 'Emulation.setDeviceMetricsOverride'
       ).length
+
       expect(afterNavigation).toBeGreaterThan(beforeNavigation)
       expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
         'Emulation.setDeviceMetricsOverride',
@@ -288,8 +299,10 @@ describe('startBrowserScreencast', () => {
     webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
       if (method === 'Page.captureScreenshot') {
         captureCount += 1
+
         return { data: Buffer.from(`capture-${captureCount}`).toString('base64') }
       }
+
       return {}
     })
     const onFrame = vi.fn()
@@ -422,8 +435,10 @@ describe('startBrowserScreencast', () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
     let sendAttempts = 0
+
     const onFrame = vi.fn(() => {
       sendAttempts += 1
+
       return sendAttempts > 1
     })
 
@@ -480,6 +495,7 @@ describe('startBrowserScreencast', () => {
     })
 
     let stopped = false
+
     try {
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
         data: Buffer.from('before-stop').toString('base64'),
@@ -513,10 +529,12 @@ describe('startBrowserScreencast', () => {
       })
     } finally {
       dateNow.mockRestore()
+
       if (!stopped) {
         session.stop()
         await session.done
       }
+
       vi.useRealTimers()
     }
   })

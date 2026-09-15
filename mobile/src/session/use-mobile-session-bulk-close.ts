@@ -28,6 +28,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     parkedPendingTerminalContext,
     retryPendingTerminalRecovery
   } = scope
+
   const bulkCloseActions = createBulkCloseSheetActions({
     sessionTabsRef,
     markdownDocs,
@@ -35,16 +36,19 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     switchSessionTab,
     closeSessionTab: handleCloseSessionTab
   })
+
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
 
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
   const activeFileTab = activeSessionTab?.type === 'file' ? activeSessionTab : null
   const activeBrowserTab = activeSessionTab?.type === 'browser' ? activeSessionTab : null
+
   const activePendingTerminalTab =
     activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal !== 'string'
       ? activeSessionTab
       : null
+
   const isPendingTerminalRecoveryParked =
     pendingTerminalRecoveryContextKey !== null &&
     pendingTerminalRecoveryContextKey === parkedPendingTerminalContext
@@ -54,12 +58,16 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
       if (connState !== 'connected' || !activePendingTerminalTab) {
         pendingTerminalActivationAttemptRef.current = null
       }
+
       return
     }
+
     const activationKey = `${worktreeId}:${activePendingTerminalTab.id}:${activePendingTerminalTab.leafId ?? ''}`
+
     if (pendingTerminalActivationAttemptRef.current === activationKey) {
       return
     }
+
     // Why: a server-owned tab can be active but still pending; activation is the RPC that materializes its PTY handle.
     pendingTerminalActivationAttemptRef.current = activationKey
     void activateMobileSessionTab(client, {
@@ -77,8 +85,10 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
           if (pendingTerminalActivationAttemptRef.current === activationKey) {
             pendingTerminalActivationAttemptRef.current = null
           }
+
           return
         }
+
         applySessionTabs((response as RpcSuccess).result as SessionTabsResult)
         scheduleDelayedAction(() => void fetchSessionTabs(), 300)
         scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
@@ -97,6 +107,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     scheduleDelayedAction,
     worktreeId
   ])
+
   return {
     bulkCloseActions,
     closeWithBulkActions,

@@ -46,6 +46,7 @@ describe('native preload destructive app actions', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+
     if (originalContextIsolated) {
       Object.defineProperty(process, 'contextIsolated', originalContextIsolated)
     } else {
@@ -55,6 +56,7 @@ describe('native preload destructive app actions', () => {
 
   const loadApi = async (): Promise<PreloadApi> => {
     await import('./index')
+
     return exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
   }
 
@@ -65,6 +67,7 @@ describe('native preload destructive app actions', () => {
       eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, () => calls.push('prepared'))
       invoke.mockImplementation(async (channel: string) => {
         calls.push(channel)
+
         return channel === 'app:await-before-unload-checkpoint' ? { ok: true } : undefined
       })
 
@@ -112,9 +115,11 @@ describe('native preload destructive app actions', () => {
     await api.app.getKeyboardLayoutSnapshot()
     const onKeyboardLayoutChanged = vi.fn()
     const unsubscribe = api.app.onKeyboardLayoutChanged(onKeyboardLayoutChanged)
+
     const listener = on.mock.calls.find(
       ([channel]) => channel === KEYBOARD_LAYOUT_CHANGED_CHANNEL
     )?.[1] as ((event: unknown, payload: unknown) => void) | undefined
+
     const payload = { phase: 'invalidated', generation: 1 }
     listener?.({}, payload)
     unsubscribe()

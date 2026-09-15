@@ -12,18 +12,22 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExec }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: mocks.getProvider,
   getSshGitProviderGeneration: mocks.getProviderGeneration,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable'
 }))
+
 vi.mock('./registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRegisteredPath
 }))
+
 vi.mock('./local-worktree-runtime-options', () => ({
   getLocalRepoForRegisteredWorktree: mocks.getLocalRepo,
   getLocalGitOptionsForRepo: mocks.getLocalOptions
 }))
+
 vi.mock('./worktree-base-directory-watcher', () => ({
   setWorktreeGitStatusRefWatch: mocks.setWatch
 }))
@@ -72,6 +76,7 @@ describe('applyGitStatusUpstreamRefWatchRequest', () => {
       stdout:
         'refs/heads/feature/main\0refs/remotes/team/fork/feature/main\0team/fork/feature/main\n'
     })
+
     mocks.getProvider.mockReturnValue({ exec })
     mocks.getProviderGeneration.mockReturnValue(7)
 

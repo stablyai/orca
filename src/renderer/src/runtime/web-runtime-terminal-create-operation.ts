@@ -51,6 +51,7 @@ export async function createWebRuntimeSessionTerminalResult(
     args.environmentId,
     useAppStore.getState().settings?.activeRuntimeEnvironmentId
   )
+
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return {
       outcome: {
@@ -62,10 +63,12 @@ export async function createWebRuntimeSessionTerminalResult(
       }
     }
   }
+
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
   let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
+
   if (args.selectWorktree !== false) {
     const previous = readActiveWorkspaceSelection()
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
@@ -77,19 +80,24 @@ export async function createWebRuntimeSessionTerminalResult(
       }
     }
   }
+
   let hostCreated = false
   let createdTabId: string | undefined
   let createdLeafId: string | undefined
+
   try {
     const agent = args.launchAgent ?? args.agent
+
     const agentArgsOverride =
       args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
+
     if (agent) {
       let legacyAlreadyPlacedInGroup = false
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
       // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
       // Why: rebuilding a prepared command through host authority can discard its embedded prompt and delivery flags.
       const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
+
       const hostAuthority = mustUseLegacyAgentCreate
         ? undefined
         : args.agentSessionKind === 'resume'
@@ -143,8 +151,10 @@ export async function createWebRuntimeSessionTerminalResult(
                   })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
                 )
               )
+
       const resumeHostAuthorityCapability =
         args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
+
       const created = await runRemoteAgentSessionLaunch<{
         terminal: CreatedAgentTerminalIdentity
       }>({
@@ -177,10 +187,13 @@ export async function createWebRuntimeSessionTerminalResult(
             },
             timeoutMs: 15_000
           })
+
           const legacyCreated = unwrapRuntimeRpcResult(
             response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
           )
+
           legacyAlreadyPlacedInGroup = true
+
           return {
             terminal: {
               tabId: legacyCreated.tab.id,
@@ -189,11 +202,13 @@ export async function createWebRuntimeSessionTerminalResult(
           }
         }
       })
+
       hostCreated = true
       createdTabId = created.terminal.tabId
       createdLeafId = legacyAlreadyPlacedInGroup
         ? created.terminal.leafId
         : createdTerminalLeafId(created.terminal)
+
       if (args.targetGroupId && createdTabId && !legacyAlreadyPlacedInGroup) {
         await callEnvironment({
           method: 'session.tabs.move',
@@ -228,13 +243,16 @@ export async function createWebRuntimeSessionTerminalResult(
         },
         timeoutMs: 15_000
       })
+
       const created = unwrapRuntimeRpcResult(
         response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
       )
+
       hostCreated = true
       createdTabId = created.tab.id
       createdLeafId = created.tab.leafId
     }
+
     if (args.targetGroupId && createdTabId) {
       // Why: the host drops client-minted group ids, so this client's own record is what
       // lands the mirrored tab in the requested pane under client-owned placement.
@@ -245,13 +263,16 @@ export async function createWebRuntimeSessionTerminalResult(
         groupId: args.targetGroupId
       })
     }
+
     if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
       // Why: record focus intent so the reconcile follows the snapshot's active
       // tab to THIS new terminal, instead of sticky-keeping the prior tab.
       recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
+
     const placementTabId =
       createdTabId && (args.targetGroupId || args.afterTabId) ? createdTabId : undefined
+
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
       expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
       // Why: the publication can beat the RPC response; replay it once after caller intent exists.
@@ -260,6 +281,7 @@ export async function createWebRuntimeSessionTerminalResult(
       // Why: a placement record needs a post-create list; a deduped in-flight one can predate it.
       ...(placementTabId ? { afterCurrentInFlight: true } : {})
     })
+
     if (placementTabId) {
       await settleWebRuntimeTerminalPlacement(
         environmentId,
@@ -272,6 +294,7 @@ export async function createWebRuntimeSessionTerminalResult(
         }
       )
     }
+
     return {
       outcome: { status: 'created' },
       ...(createdTabId ? { hostTabId: createdTabId } : {})
@@ -284,6 +307,7 @@ export async function createWebRuntimeSessionTerminalResult(
         : '[web-runtime-session] failed to create terminal:',
       message
     )
+
     if (createdTabId) {
       // Why: a record that outlives the create flow could yank a user-dragged tab back later.
       forgetWebSessionTerminalPlacement({
@@ -292,9 +316,11 @@ export async function createWebRuntimeSessionTerminalResult(
         hostTabId: webTerminalPlacementParentTabId(createdTabId)
       })
     }
+
     if (!hostCreated && workspaceSelectionRollback) {
       restoreActiveWorkspaceSelection(workspaceSelectionRollback)
     }
+
     // Why: once the host accepted creation, reporting failure invites the user
     // to retry with a new operation ID and can duplicate a fresh agent.
     return {

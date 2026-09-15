@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UNC_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\session.jsonl'
+
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn<() => Promise<string | null>>(),
   stat: vi.fn(),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./session-file-resolver', () => ({
   resolveSessionFilePath: mocks.resolve
 }))
+
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat,
@@ -50,6 +52,7 @@ function transcriptHandle(body = BODY) {
     read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
       const slice = body.subarray(position, Math.min(position + length, body.length))
       slice.copy(buffer, offset)
+
       return { bytesRead: slice.length, buffer }
     }),
     close: vi.fn(async () => {})

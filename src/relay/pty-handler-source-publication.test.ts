@@ -34,8 +34,10 @@ function notification(buffer: Buffer): Notification | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
   const message = JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
+
   return typeof message.method === 'string' && message.id === undefined ? message : null
 }
 
@@ -43,8 +45,10 @@ function responseResult(buffer: Buffer, id: number): Record<string, unknown> | n
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
   const message = JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
+
   return message.id === id ? (message.result ?? null) : null
 }
 
@@ -102,26 +106,37 @@ describe('PtyHandler negotiated source publication', () => {
     dispatcher = new RelayDispatcher(
       (data, settle) => {
         writes.push(Buffer.from(data))
+
         if (heldResponseId !== null && responseResult(data, heldResponseId)) {
           heldResponseSettlements.push(settle)
+
           return true
         }
+
         const frame = notification(data)
+
         if (holdDataSettlements && frame?.method === 'pty.data') {
           heldDataSettlements.push(settle)
+
           return true
         }
+
         if (frame?.method === 'pty.exit') {
           if (holdExitSettlements) {
             heldExitSettlements.push(settle)
+
             return true
           }
+
           // Why: real sockets never settle inside write(); a synchronous settle would re-enter
           // the legacy capacity path before the pending exit is retired.
           queueMicrotask(() => settle({ ok: true }))
+
           return true
         }
+
         settle({ ok: true })
+
         return true
       },
       {
@@ -152,9 +167,11 @@ describe('PtyHandler negotiated source publication', () => {
   afterEach(async () => {
     await handler.dispose({ waitForPhysicalExit: false }).catch(() => {})
     dispatcher.dispose()
+
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     vi.useRealTimers()
   })
 
@@ -228,24 +245,31 @@ describe('PtyHandler negotiated source publication', () => {
     holdDataSettlement?: (settle: (result: SinkWriteSettlement) => void) => boolean
   ): Promise<Buffer[]> {
     const subscriberWrites: Buffer[] = []
+
     const clientId = dispatcher.attachClient(
       (data, settle) => {
         subscriberWrites.push(Buffer.from(data))
         const frame = notification(data)
+
         if (frame?.method === 'pty.data' && holdDataSettlement?.(settle)) {
           return true
         }
+
         if (frame?.method === 'pty.exit') {
           // Why: real sockets never settle inside write(); see the primary sink above.
           queueMicrotask(() => settle({ ok: true }))
+
           return true
         }
+
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       clientId,
       requestFrame(20, 'pty.openClient', {
@@ -255,6 +279,7 @@ describe('PtyHandler negotiated source publication', () => {
       })
     )
     await vi.advanceTimersByTimeAsync(0)
+
     return subscriberWrites
   }
 
@@ -312,13 +337,17 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
     await cancelSourceDelivery(spawnResult)
+
     const subscriberWrites = await attachSubscriber((settle) => {
       if (!holdDataSettlements) {
         return false
       }
+
       heldDataSettlements.push(settle)
+
       return true
     })
+
     holdDataSettlements = true
 
     dataCallback!('first')
@@ -343,6 +372,7 @@ describe('PtyHandler negotiated source publication', () => {
         (frame): frame is Notification =>
           frame?.method === 'pty.data' || frame?.method === 'pty.exit'
       )
+
     expect(frames.map((frame) => frame.method)).toEqual(['pty.data', 'pty.data', 'pty.exit'])
     expect(frames.map((frame) => frame.params.data)).toEqual(['first', 'second', undefined])
     expect(frames.at(-1)!.params).toMatchObject({ id: spawnResult.id, code: 3 })
@@ -352,6 +382,7 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       handler.setSourcePublication(
         stubPublication({
@@ -379,11 +410,13 @@ describe('PtyHandler negotiated source publication', () => {
     const id = String(spawnResult.id)
     const subscriberWrites = await attachSubscriber()
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     const publishOwnerExit = vi
       .spyOn(dispatcher, 'tryNotifyPtyExitToClient')
       .mockImplementationOnce(() => {
         throw new Error('owner write failed')
       })
+
     try {
       expect(() => exitCallback!({ exitCode: 8 })).not.toThrow()
       await vi.advanceTimersByTimeAsync(0)
@@ -409,9 +442,11 @@ describe('PtyHandler negotiated source publication', () => {
     const id = String(spawnResult.id)
     const subscriberWrites = await attachSubscriber()
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     const settleOwnerExit = vi.spyOn(adapter, 'settleExitPublication').mockImplementation(() => {
       throw new Error('exit settlement failed')
     })
+
     try {
       exitCallback!({ exitCode: 9 })
       await vi.advanceTimersByTimeAsync(0)
@@ -468,6 +503,7 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       handler.setSourcePublication(
         stubPublication({
@@ -621,15 +657,18 @@ describe('PtyHandler negotiated source publication', () => {
     expect(adapter.getDebugSnapshot()).toMatchObject({ deliveryTokens: 0 })
 
     const replacementWrites: Buffer[] = []
+
     const replacementClientId = dispatcher.attachClient(
       (data, settle) => {
         replacementWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       replacementClientId,
       requestFrame(3, 'pty.openClient', {
@@ -680,9 +719,11 @@ describe('PtyHandler negotiated source publication', () => {
   it('republishes the identical memoized span after a failed projection', async () => {
     await spawn({})
     const appendSpy = vi.spyOn(adapter, 'appendSource')
+
     const projectSpy = vi
       .spyOn(dispatcher, 'projectPtyDataToMatchingClients')
       .mockReturnValueOnce(false)
+
     // Why: a larger capacity result on the retry must not move the memoized span boundary.
     const maxCharsSpy = vi.spyOn(dispatcher, 'maxLegacyPtyDataChars')
     maxCharsSpy.mockReturnValueOnce(4).mockReturnValue(8)
@@ -711,12 +752,15 @@ describe('PtyHandler negotiated source publication', () => {
     const healthyWrites: Buffer[] = []
     let saturateSubscriber = false
     dispatcher.onClientDetached((clientId) => detached.push(clientId))
+
     const saturatedId = dispatcher.attachClient(
       (_data, settle) => {
         if (saturateSubscriber) {
           return false
         }
+
         settle({ ok: true })
+
         return true
       },
       {
@@ -726,15 +770,18 @@ describe('PtyHandler negotiated source publication', () => {
       },
       endpointIdentity
     )
+
     const healthyId = dispatcher.attachClient(
       (data, settle) => {
         healthyWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       saturatedId,
       requestFrame(20, 'pty.openClient', {
@@ -755,6 +802,7 @@ describe('PtyHandler negotiated source publication', () => {
     saturateSubscriber = true
     const payload = 's'.repeat(16 * 1024)
     let admitted = 0
+
     while (
       dispatcher.tryNotifyPtyDataToClient(saturatedId, { id: 'saturated', data: payload }, () => {})
     ) {
@@ -788,6 +836,7 @@ describe('PtyHandler negotiated source publication', () => {
       writes = []
       dispatcher.feed(requestFrame(id, 'pty.attach', { id: PTY_1, ...params }))
       await vi.advanceTimersByTimeAsync(0)
+
       return writes.map((buffer) => responseResult(buffer, id)).find(Boolean)
     }
 

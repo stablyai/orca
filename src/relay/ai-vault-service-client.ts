@@ -74,11 +74,14 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     this.clearReadyTimer()
     this.restartPolicy.dispose()
     const error = new Error('Relay AI Vault service was disposed.')
+
     for (const call of [...this.active.values(), ...this.queue.splice(0)]) {
       settleRelayAiVaultServiceCall(call, error)
     }
+
     this.active.clear()
     const child = this.detachChild()
+
     if (child) {
       await shutdownRelayAiVaultServiceChild(child)
     }
@@ -91,12 +94,15 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     if (this.disposed) {
       return Promise.reject(new Error('Relay AI Vault service was disposed.'))
     }
+
     if (signal?.aborted) {
       return Promise.reject(relayAiVaultAbortError())
     }
+
     if (this.queue.length + this.active.size >= RELAY_AI_VAULT_MAX_CALLS) {
       return Promise.reject(new Error('Relay AI Vault service queue is full.'))
     }
+
     return new Promise<T>((resolve, reject) => {
       const call = createRelayAiVaultServiceCall({
         request,
@@ -104,10 +110,12 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
         resolve: resolve as RelayAiVaultServiceCall['resolve'],
         reject
       })
+
       if (signal) {
         call.onAbort = () => this.cancel(call)
         signal.addEventListener('abort', call.onAbort, { once: true })
       }
+
       this.queue.push(call)
       this.idleRetirement.clear()
       this.pump()
@@ -118,14 +126,18 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     if (this.disposed || this.restartPolicy.restartScheduled) {
       return
     }
+
     for (const lane of ['cache', 'interactive'] as const) {
       if (this.active.has(lane)) {
         continue
       }
+
       const index = this.queue.findIndex((call) => call.lane === lane)
+
       if (index === -1) {
         continue
       }
+
       const call = this.queue.splice(index, 1)[0]!
       this.active.set(lane, call)
       void this.ensureChild(call.forceStart).then(
@@ -134,12 +146,14 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
           if (this.active.get(lane) !== call) {
             return
           }
+
           this.active.delete(lane)
           this.retryStartOrSettle(call, error)
           this.pump()
         }
       )
     }
+
     this.scheduleIdleIfNeeded()
   }
 
@@ -147,10 +161,12 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     if (this.active.get(call.lane) !== call || call.settled) {
       return
     }
+
     const timeout =
       call.request.operation === 'list'
         ? RELAY_AI_VAULT_SCAN_TIMEOUT_MS
         : RELAY_AI_VAULT_TITLE_TIMEOUT_MS
+
     call.timer = setTimeout(
       () => this.onFault(new Error(`Relay AI Vault service timed out after ${timeout}ms.`)),
       timeout
@@ -170,19 +186,25 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     if (this.child && !this.ready) {
       return Promise.resolve(this.child)
     }
+
     if (this.ready) {
       return this.ready
     }
+
     const startError = this.restartPolicy.startError(forceStart)
+
     if (startError) {
       return Promise.reject(startError)
     }
+
     let child: ChildProcess
+
     try {
       child = this.options.processFactory()
     } catch (error) {
       return Promise.reject(relayAiVaultError(error))
     }
+
     this.child = child
     this.ready = new Promise<ChildProcess>((resolve, reject) => {
       this.readyReject = reject
@@ -199,8 +221,10 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
           this.ready = null
           this.readyReject = null
           resolve(child)
+
           return
         }
+
         this.onMessage(message)
       })
     })
@@ -215,22 +239,29 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
       protocol: RELAY_AI_VAULT_SERVICE_PROTOCOL,
       ...this.options.init
     } satisfies RelayAiVaultServiceInit)
+
     return this.ready
   }
 
   private onMessage(raw: unknown): void {
     if (!isRelayAiVaultServiceChildMessage(raw)) {
       this.onFault(new Error('Relay AI Vault service sent a malformed message.'))
+
       return
     }
+
     const message = raw as RelayAiVaultServiceChildMessage
+
     if (message.type === 'ready') {
       return
     }
+
     const call = [...this.active.values()].find((entry) => entry.request.id === message.id)
+
     if (!call) {
       return
     }
+
     this.active.delete(call.lane)
     settleRelayAiVaultServiceCall(
       call,
@@ -241,12 +272,15 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
 
   private cancel(call: RelayAiVaultServiceCall): void {
     const index = this.queue.indexOf(call)
+
     if (index !== -1) {
       this.queue.splice(index, 1)
       settleRelayAiVaultServiceCall(call, relayAiVaultAbortError())
       this.pump()
+
       return
     }
+
     if (this.active.get(call.lane) === call) {
       // Why: a call cancelled before it reached the sidecar gets no acknowledgement,
       // so waiting on one would kill a healthy sidecar and stall the lane.
@@ -254,8 +288,10 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
         this.active.delete(call.lane)
         settleRelayAiVaultServiceCall(call, relayAiVaultAbortError())
         this.pump()
+
         return
       }
+
       this.child?.send({ type: 'cancel', id: call.request.id })
       settleRelayAiVaultServiceCall(call, relayAiVaultAbortError())
       armRelayAiVaultCancellationTimeout(call, () =>
@@ -268,6 +304,7 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     if (!this.child) {
       return
     }
+
     this.idleRetirement.clear()
     this.detachChild()?.kill()
     this.clearReadyTimer()
@@ -276,10 +313,13 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     this.ready = null
     const active = [...this.active.values()]
     this.active.clear()
+
     for (const call of active) {
       this.retryStartOrSettle(call, error)
     }
+
     this.restartPolicy.recordFault()
+
     if (this.queue.length > 0 && !this.disposed) {
       this.restartPolicy.scheduleRestart(() => this.pump())
     }
@@ -296,6 +336,7 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     const child = this.child
     this.child = null
     child?.removeAllListeners()
+
     return child
   }
 
@@ -305,6 +346,7 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
       this.options.idleTimeoutMs ?? RELAY_AI_VAULT_IDLE_TIMEOUT_MS,
       () => {
         const child = this.detachChild()
+
         if (child) {
           retireRelayAiVaultServiceChild(child)
         }

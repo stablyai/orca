@@ -19,9 +19,11 @@ export function SkillDeleteResultBand({
   onDismiss: () => void
 }): React.JSX.Element | null {
   const lines = skillDeleteResultLines(result.skills)
+
   if (lines.length === 0) {
     return null
   }
+
   return (
     <div className="shrink-0 border-b border-border bg-muted/40">
       <div className={cn(SKILLS_PAGE_COLUMN, 'flex items-start gap-2 py-2')} role="status">

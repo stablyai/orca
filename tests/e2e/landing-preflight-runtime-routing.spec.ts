@@ -14,6 +14,7 @@ import { addPairedRuntimeEnvironment } from './helpers/nested-runtime-ssh-client
 const missingGitPath = mkdtempSync(path.join(os.tmpdir(), 'orca-preflight-path-'))
 
 test.use({ seedTestRepo: false })
+
 test.describe.configure({ mode: 'serial' })
 
 test.afterAll(() => {
@@ -49,11 +50,14 @@ async function expectLandingGitState(
 async function selectRuntime(client: PairedElectronClient, environmentId: string): Promise<void> {
   const selected = await client.page.evaluate(async (nextEnvironmentId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Paired desktop store is unavailable')
     }
+
     return store.getState().setActiveRuntimeEnvironmentPreference(nextEnvironmentId)
   }, environmentId)
+
   expect(selected).toBe(true)
 }
 
@@ -67,6 +71,7 @@ async function runRuntimePreflightJourney(
   const hubBSession = createRestartSession(testInfo)
   let hubB: Awaited<ReturnType<typeof hubBSession.launch>> | null = null
   let client: PairedElectronClient | null = null
+
   try {
     await hubAPage.waitForFunction(
       () => window.__store?.getState().workspaceSessionReady === true,
@@ -86,6 +91,7 @@ async function runRuntimePreflightJourney(
     client = await launchPairedElectronClient(offerA, testInfo, 'Preflight runtime A')
     await setProcessPath(client.app, missingGitPath)
     expect(await client.app.evaluate(() => process.env.PATH)).toBe(missingGitPath)
+
     if (headed) {
       await client.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show())
       expect(
@@ -99,14 +105,17 @@ async function runRuntimePreflightJourney(
         )
       ).toBe(true)
     }
+
     expect(await directGitPreflight(client.page)).toBe(false)
     await client.page.evaluate(() => window.dispatchEvent(new Event('focus')))
 
     const environmentA = client.environmentId
     await expectLandingGitState(client, true)
+
     const contextA = await client.page.evaluate(
       () => window.__store?.getState().preflightStatusContextKey
     )
+
     expect(contextA).toContain(`runtime:${environmentA}#`)
 
     const offerB = await createRuntimeDesktopPairingOffer(hubB.page)
@@ -119,20 +128,25 @@ async function runRuntimePreflightJourney(
           method: 'preflight.check',
           params: { force: true }
         })
+
         return response.ok && (response.result as { git: { installed: boolean } }).git.installed
       }, environmentB)
     ).toBe(true)
 
     await selectRuntime(client, environmentA)
     await expectLandingGitState(client, true)
+
     const beforeDisconnectContext = await client.page.evaluate(
       () => window.__store?.getState().preflightStatusContextKey
     )
+
     await client.page.evaluate(async (environmentId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Paired desktop store is unavailable')
       }
+
       await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
       store.getState().setRuntimeEnvironmentStatus(environmentId, {
         status: null,
@@ -146,34 +160,42 @@ async function runRuntimePreflightJourney(
 
     await client.page.evaluate(async (environmentId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Paired desktop store is unavailable')
       }
+
       const response = await window.api.runtimeEnvironments.connect({
         selector: environmentId,
         timeoutMs: 15_000
       })
+
       if (!response.ok) {
         throw new Error(response.error.message)
       }
+
       store.getState().setRuntimeEnvironmentStatus(environmentId, {
         status: response.result,
         checkedAt: Date.now()
       })
     }, environmentA)
     await expectLandingGitState(client, true)
+
     const reconnectedContext = await client.page.evaluate(
       () => window.__store?.getState().preflightStatusContextKey
     )
+
     expect(reconnectedContext).not.toBe(beforeDisconnectContext)
 
     await selectRuntime(client, environmentB)
     await expectLandingGitState(client, true)
   } finally {
     await client?.dispose()
+
     if (hubB) {
       await hubBSession.close(hubB.app)
     }
+
     await hubBSession.dispose()
   }
 }

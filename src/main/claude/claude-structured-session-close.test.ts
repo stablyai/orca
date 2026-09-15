@@ -17,11 +17,14 @@ describe('Claude published session close lifecycle', () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
     const persistenceError = new Error('store unavailable')
+
     const persistHandle = vi
       .fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>()
       .mockRejectedValueOnce(persistenceError)
       .mockResolvedValueOnce(undefined)
+
     const backgroundStates: (AgentSessionBackgroundTaskState | null)[] = []
+
     const adapter = adapterFor(
       claude,
       {},
@@ -32,11 +35,13 @@ describe('Claude published session close lifecycle', () => {
       persistHandle,
       (_sessionId, state) => backgroundStates.push(state)
     )
+
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
       appendTombstone: () => {},
       publish: () => {}
     }
+
     await adapter.acquire({
       identity: identityFor(),
       fence: 7,
@@ -61,11 +66,13 @@ describe('Claude published session close lifecycle', () => {
         supportsTaskStop: true
       }
     ])
+
     const session = (
       adapter as unknown as {
         sessions: Map<string, { translator: { dispose: () => void } | null }>
       }
     ).sessions.get('session-1')
+
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
     await expect(adapter.closeSession('session-1')).rejects.toBe(persistenceError)

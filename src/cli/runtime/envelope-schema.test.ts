@@ -9,6 +9,7 @@ describe('RuntimeRpcEnvelopeSchema', () => {
       result: { anything: 1 },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -39,6 +40,7 @@ describe('RuntimeRpcEnvelopeSchema', () => {
       error: { code: 'not_found', message: 'not_found' },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -93,6 +95,7 @@ describe('RuntimeRpcEnvelopeSchema', () => {
       ok: false,
       error: { code: 'runtime_unavailable', message: 'runtime_unavailable' }
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -102,6 +105,7 @@ describe('RuntimeRpcEnvelopeSchema', () => {
       result: {},
       _meta: { runtimeId: 'runtime-1' }
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -112,6 +116,7 @@ describe('RuntimeRpcEnvelopeSchema', () => {
       result: {},
       _meta: { runtimeId: 'runtime-1' }
     })
+
     expect(parsed.success).toBe(false)
   })
 

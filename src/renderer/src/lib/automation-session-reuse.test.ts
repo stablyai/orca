@@ -4,8 +4,11 @@ import type { AutomationRun } from '../../../shared/automations-types'
 import { findReusableAutomationSession } from './automation-session-reuse'
 
 const leafId = '11111111-1111-4111-8111-111111111111'
+
 const paneKey = `tab-1:${leafId}`
+
 const splitLeafId = '22222222-2222-4222-8222-222222222222'
+
 const splitPaneKey = `tab-1:${splitLeafId}`
 
 function run(overrides: Partial<AutomationRun>): AutomationRun {

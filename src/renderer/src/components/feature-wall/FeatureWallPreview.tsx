@@ -58,12 +58,15 @@ export function RelatedFeatures(props: {
   source: FeatureWallOpenSourceTelemetry
 }): JSX.Element | null {
   const { workflow, source } = props
+
   const items = workflow.relatedTileIds
     .map((id) => getFeatureWallMediaTile(id))
     .filter((tile): tile is NonNullable<typeof tile> => tile !== null)
+
   if (items.length === 0) {
     return null
   }
+
   return (
     <div className="border-t border-border pt-3.5">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

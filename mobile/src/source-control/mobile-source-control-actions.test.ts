@@ -69,6 +69,7 @@ describe('buildMobileSourceControlActions', () => {
     const actions = buildMobileSourceControlActions(
       args({ upstream: { hasUpstream: true, ahead: 2, behind: 3 } as MobileGitUpstreamStatus })
     )
+
     expect(action(actions, 'Fast-forward')?.disabled).toBe(true)
   })
 
@@ -76,6 +77,7 @@ describe('buildMobileSourceControlActions', () => {
     const actions = buildMobileSourceControlActions(
       args({ upstream: { hasUpstream: true, ahead: 0, behind: 3 } as MobileGitUpstreamStatus })
     )
+
     expect(action(actions, 'Fast-forward')?.disabled).toBe(false)
   })
 

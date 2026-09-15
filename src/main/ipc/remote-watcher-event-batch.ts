@@ -21,6 +21,7 @@ export type RemoteWatcherEventBatch = {
 // delete→create→delete also remains a net delete because the path predated the batch.
 function posixEventIdentity(absolutePath: string): string {
   const normalized = absolutePath.replace(/\/+/g, '/')
+
   return normalized === '/' ? normalized : normalized.replace(/\/+$/, '')
 }
 
@@ -36,20 +37,24 @@ function coalesceRemoteEvents(raw: FsChangeEvent[], rootPath: string): FsChangeE
       passthrough.push(event)
       continue
     }
+
     // POSIX event identity keeps byte-distinct names; Windows still folds separators and casing.
     const key = windowsPaths
       ? normalizeRuntimePathForComparison(event.absolutePath)
       : posixEventIdentity(event.absolutePath)
+
     const prev = lastByKey.get(key)
 
     if (prev) {
       if (prev.kind === 'delete' && event.kind === 'create') {
         deleteBeforeCreate.set(key, prev)
       }
+
       if (prev.kind === 'create' && event.kind === 'delete') {
         // Why: cancel only a path created and removed entirely inside the window; an earlier delete means
         // the file predates it, so the window nets out to a delete the renderer still has to act on.
         const netNoOp = !deleteBeforeCreate.delete(key)
+
         if (netNoOp) {
           lastByKey.delete(key)
           continue
@@ -86,6 +91,7 @@ export function createRemoteWatcherEventBatch({
       clearTimeout(timer)
       timer = null
     }
+
     const pending = buffered
     const latched = overflowed
     buffered = []
@@ -94,9 +100,12 @@ export function createRemoteWatcherEventBatch({
 
     if (latched) {
       deliver([{ kind: 'overflow', absolutePath: rootPath }])
+
       return
     }
+
     const coalesced = coalesceRemoteEvents(pending, rootPath)
+
     if (coalesced.length > 0) {
       deliver(coalesced)
     }
@@ -104,16 +113,21 @@ export function createRemoteWatcherEventBatch({
 
   function schedule(): void {
     const now = Date.now()
+
     if (firstEventAt === 0) {
       firstEventAt = now
     }
+
     if (now - firstEventAt >= maxWaitMs) {
       flush()
+
       return
     }
+
     if (timer) {
       clearTimeout(timer)
     }
+
     timer = setTimeout(flush, trailingMs)
   }
 
@@ -123,6 +137,7 @@ export function createRemoteWatcherEventBatch({
       if (closed) {
         return
       }
+
       if (!overflowed) {
         if (
           buffered.length + events.length > maxEvents ||
@@ -138,14 +153,17 @@ export function createRemoteWatcherEventBatch({
           }
         }
       }
+
       schedule()
     },
     close() {
       closed = true
+
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
+
       buffered = []
       overflowed = false
       firstEventAt = 0

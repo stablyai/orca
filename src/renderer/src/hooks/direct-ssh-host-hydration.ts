@@ -53,6 +53,7 @@ function isAuthoritativeHost(
   if (!authority.authoritative || authority.authority.kind !== 'direct-ssh') {
     return false
   }
+
   return (
     authority.authority.executionHostId === toSshExecutionHostId(expected.targetId) &&
     directSshAuthoritiesEqual(authority.authority, expected)
@@ -63,7 +64,9 @@ function mergeExactHostCatalog(state: AppState, snapshot: HostRepoCatalogSnapsho
   if (!snapshot.authoritative || snapshot.authority.kind !== 'direct-ssh') {
     return state
   }
+
   const hostId = snapshot.authority.executionHostId
+
   // Why re-apply the overlay: re-appending the host's rows puts them at the tail, which would
   // undo the user's manual cross-host order on every connect.
   return {
@@ -86,6 +89,7 @@ function overlayHostScopedLineage<T>(
     ...Object.entries(previous).filter(([key]) => !isHostScoped(key)),
     ...Object.entries(incoming).filter(([key]) => isHostScoped(key))
   ])
+
   return reuseEqualRecordMap(previous, next)
 }
 
@@ -96,22 +100,26 @@ function mergeExactHostLineage(
   catalogRevision: number
 ): AppState {
   const scope = directSshHostHydrationScope(state, authority, catalogRevision)
+
   const worktreeLineageById = overlayHostScopedLineage(
     state.worktreeLineageById,
     snapshot.worktreeLineageById,
     (worktreeId) => scope.gitWorktreeIds.has(worktreeId)
   )
+
   const workspaceLineageByChildKey = overlayHostScopedLineage(
     state.workspaceLineageByChildKey,
     snapshot.workspaceLineageByChildKey,
     (childKey) => isWorkspaceKey(childKey) && scope.lineageWorkspaceKeys.has(childKey)
   )
+
   if (
     worktreeLineageById === state.worktreeLineageById &&
     workspaceLineageByChildKey === state.workspaceLineageByChildKey
   ) {
     return state
   }
+
   return { ...state, worktreeLineageById, workspaceLineageByChildKey }
 }
 
@@ -120,8 +128,10 @@ export function createDirectSshHostHydration(
 ): DirectSshHostHydration {
   const setTimer: NonNullable<DirectSshHostHydrationDeps['setTimer']> =
     deps.setTimer ?? ((callback, delayMs) => setTimeout(callback, delayMs))
+
   const clearTimer: NonNullable<DirectSshHostHydrationDeps['clearTimer']> =
     deps.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>))
+
   const catalogRevisionByTarget = new Map<string, number>()
   const catalogInFlight = new Map<string, Promise<'complete' | 'degraded' | 'stale'>>()
   const pendingDeadlines = new Set<{ timer: HostReadTimer; settle: () => void }>()
@@ -129,12 +139,14 @@ export function createDirectSshHostHydration(
 
   const bounded = async <T>(operation: Promise<T>): Promise<BoundedResult<T>> => {
     let pendingDeadline: { timer: HostReadTimer; settle: () => void } | undefined
+
     const deadline = new Promise<BoundedResult<T>>((resolve) => {
       const settle = (): void => resolve({ status: 'timed-out' })
       const timer = setTimer(settle, DIRECT_SSH_HOST_READ_TIMEOUT_MS)
       pendingDeadline = { timer, settle }
       pendingDeadlines.add(pendingDeadline)
     })
+
     try {
       return await Promise.race([
         operation.then<BoundedResult<T>, BoundedResult<T>>(
@@ -159,22 +171,30 @@ export function createDirectSshHostHydration(
       authority.providerEpoch,
       authority.connectionGeneration
     ])
+
     const existing = catalogInFlight.get(key)
+
     if (existing) {
       return existing
     }
+
     const operation = (async (): Promise<'complete' | 'degraded' | 'stale'> => {
       const boundedResult = await bounded(Promise.resolve().then(() => deps.listRepos(authority)))
+
       if (stopped || !deps.isCurrentAuthority(authority)) {
         return 'stale'
       }
+
       if (boundedResult.status !== 'complete') {
         return 'degraded'
       }
+
       const snapshot = boundedResult.value
+
       if (!snapshot.authoritative) {
         return snapshot.reason === 'stale' || snapshot.reason === 'rejected' ? 'stale' : 'degraded'
       }
+
       if (
         !isAuthoritativeHost(snapshot, authority) ||
         snapshot.repos.some(
@@ -185,28 +205,36 @@ export function createDirectSshHostHydration(
       ) {
         return 'stale'
       }
+
       let admitted = false
       deps.store.setState((state) => {
         if (stopped || !deps.isCurrentAuthority(authority)) {
           return state
         }
+
         admitted = true
+
         return mergeExactHostCatalog(state, snapshot)
       })
+
       if (!admitted) {
         return 'stale'
       }
+
       catalogRevisionByTarget.set(
         authority.targetId,
         (catalogRevisionByTarget.get(authority.targetId) ?? 0) + 1
       )
+
       return 'complete'
     })().finally(() => {
       if (catalogInFlight.get(key) === operation) {
         catalogInFlight.delete(key)
       }
     })
+
     catalogInFlight.set(key, operation)
+
     return operation
   }
 
@@ -218,11 +246,14 @@ export function createDirectSshHostHydration(
     const catalogStartedAt = Date.now()
     const catalogOutcome = await refreshCatalog(authority)
     const catalogDurationMs = Math.max(0, Date.now() - catalogStartedAt)
+
     if (catalogOutcome === 'stale' || stopped || !deps.isCurrentAuthority(authority)) {
       return null
     }
+
     const catalogRevision = catalogRevisionByTarget.get(authority.targetId) ?? 0
     const scope = directSshHostHydrationScope(deps.store.getState(), authority, catalogRevision)
+
     return {
       ...authority,
       catalogRevision,
@@ -242,7 +273,9 @@ export function createDirectSshHostHydration(
       providerEpoch: input.providerEpoch,
       connectionGeneration: input.connectionGeneration
     }
+
     const boundedResult = await bounded(Promise.resolve().then(() => deps.listLineage(authority)))
+
     if (
       stopped ||
       !deps.isCurrentAuthority(authority) ||
@@ -250,16 +283,21 @@ export function createDirectSshHostHydration(
     ) {
       return 'stale'
     }
+
     if (boundedResult.status !== 'complete') {
       return 'degraded'
     }
+
     const snapshot = boundedResult.value
+
     if (!snapshot.authoritative) {
       return snapshot.reason === 'stale' || snapshot.reason === 'rejected' ? 'stale' : 'degraded'
     }
+
     if (!isAuthoritativeHost(snapshot, authority)) {
       return 'stale'
     }
+
     let admitted = false
     deps.store.setState((state) => {
       if (
@@ -269,9 +307,12 @@ export function createDirectSshHostHydration(
       ) {
         return state
       }
+
       admitted = true
+
       return mergeExactHostLineage(state, snapshot, authority, input.catalogRevision)
     })
+
     return admitted ? 'complete' : 'stale'
   }
 
@@ -286,16 +327,20 @@ export function createDirectSshHostHydration(
       ) {
         return false
       }
+
       const scope = directSshHostHydrationScope(
         deps.store.getState(),
         token.authority,
         token.catalogRevision
       )
+
       const sortedRepos = [...scope.gitRepos].sort((left, right) => {
         const leftKey = `${left.executionHostId}\0${left.repoId}`
         const rightKey = `${right.executionHostId}\0${right.repoId}`
+
         return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
       })
+
       return (
         JSON.stringify(sortedRepos.map((repo) => [repo.executionHostId, repo.repoId])) ===
         token.repoFingerprint
@@ -303,10 +348,12 @@ export function createDirectSshHostHydration(
     },
     stop: () => {
       stopped = true
+
       for (const deadline of pendingDeadlines) {
         clearTimer(deadline.timer)
         deadline.settle()
       }
+
       pendingDeadlines.clear()
       catalogInFlight.clear()
     }

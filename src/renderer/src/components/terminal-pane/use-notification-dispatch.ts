@@ -43,6 +43,7 @@ function hasFreshActiveHookStatus(
     snapshot?.agentType &&
     snapshot.agentType !== 'unknown' &&
     !shareCompatibleTitleIdentityGroup(snapshot.agentType, explicitTitleAgentType)
+
   return Boolean(isFreshNonDoneAgentStatus(snapshot) && !titleNamesDifferentKnownAgent)
 }
 
@@ -66,6 +67,7 @@ export function dispatchTerminalNotification(
   event: TerminalNotificationEvent
 ): void {
   const state = useAppStore.getState()
+
   // Why: the completion title is the live identity. If it explicitly names an
   // agent, any snapshot from another agent is stale pane-reuse residue and must
   // not lend its prompt/agentType or timing id to this notification.
@@ -73,21 +75,25 @@ export function dispatchTerminalNotification(
     event.source === 'agent-task-complete' && event.terminalTitle
       ? resolveCommittedTitleAgentType(event.terminalTitle)
       : null
+
   const storedAgentStatus =
     event.source === 'agent-task-complete' && event.paneKey
       ? state.agentStatusByPaneKey[event.paneKey]
       : undefined
+
   const eventAgentStatusSnapshot =
     event.source === 'agent-task-complete' &&
     agentSnapshotMatchesExplicitTitle(event.agentStatusSnapshot, explicitTitleAgentType)
       ? event.agentStatusSnapshot
       : undefined
+
   const freshStoredAgentStatus =
     storedAgentStatus &&
     Date.now() - storedAgentStatus.updatedAt <= AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS &&
     agentSnapshotMatchesExplicitTitle(storedAgentStatus, explicitTitleAgentType)
       ? storedAgentStatus
       : undefined
+
   if (
     event.source === 'agent-task-complete' &&
     event.agentCompletionSource !== 'process-exit' &&
@@ -98,6 +104,7 @@ export function dispatchTerminalNotification(
     // confirmed process exit is independent authority that the turn ended.
     return
   }
+
   // Why: a process can die before its hook emits done; do not label the
   // resulting completion notification with that stale active state or prompt.
   const agentStatus =
@@ -107,14 +114,17 @@ export function dispatchTerminalNotification(
           ? undefined
           : freshStoredAgentStatus))
       : undefined
+
   if (
     event.source === 'agent-task-complete' &&
     isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
   ) {
     return
   }
+
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
+
   const attentionDecision = resolveAgentAttention(
     {
       subject: { workspaceId: worktreeId, surfaceKey: event.paneKey },
@@ -128,6 +138,7 @@ export function dispatchTerminalNotification(
     },
     createTerminalAttentionSurface(state)
   )
+
   if (!attentionDecision.admitted) {
     return
   }
@@ -143,6 +154,7 @@ export function dispatchTerminalNotification(
   const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
   const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
   const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
+
   // Why: pane keys are reused across turns. A rich OS notification must not
   // expose the previous turn's prompt if the current turn has no fresh hook snapshot yet.
   const agentSnapshot = agentStatus
@@ -156,6 +168,7 @@ export function dispatchTerminalNotification(
         agentInterrupted: agentStatus.interrupted
       }
     : {}
+
   const notificationId =
     event.source === 'agent-task-complete'
       ? buildAgentNotificationId({
@@ -185,8 +198,10 @@ export function dispatchTerminalNotification(
       .then((result) => {
         if (result.delivered) {
           void playDesktopNotificationSound(customSoundId, customSoundVolume)
+
           return
         }
+
         // Why: macOS is silently swallowing notifications (permission off or
         // prompt unanswered) — surface an in-app pointer at the fix instead of
         // letting the alert vanish without a trace.

@@ -49,31 +49,40 @@ type PendingOperation = { id: string; token: number }
 // Why: per-tab records survive chat↔terminal flips and remounts, like desktop's
 // scope cache. Bounded so long sessions across many tabs can't grow unbounded.
 const MOBILE_SESSION_OPTION_RECORD_CAP = 32
+
 const recordsByScope = new Map<string, NativeChatSessionOptionRecord>()
+
 // The catalog model id last taken from a hook report, per scope. Mobile cannot
 // read the agent's screen, so a repeat of the same report is not new evidence.
 const appliedReportByScope = new Map<string, string>()
 
 function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOptionRecord {
   const existing = recordsByScope.get(scopeKey)
+
   const record =
     existing && existing.agent === agent ? existing : createNativeChatSessionOptionRecord(agent)
+
   if (record !== existing) {
     appliedReportByScope.delete(scopeKey)
   }
+
   // Why: delete-then-set on every read makes the touched scope most-recent, so
   // eviction only sheds the oldest UNTOUCHED tab. Insertion order alone would let
   // a long-lived active tab be the oldest key and lose its tracked model.
   recordsByScope.delete(scopeKey)
   recordsByScope.set(scopeKey, record)
+
   while (recordsByScope.size > MOBILE_SESSION_OPTION_RECORD_CAP) {
     const oldest = recordsByScope.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     recordsByScope.delete(oldest)
     appliedReportByScope.delete(oldest)
   }
+
   return record
 }
 
@@ -108,6 +117,7 @@ export function useMobileNativeChatSessionOptions(args: {
   onAgentPicker?: () => void
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
+
   const catalog = useMemo(
     // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
     // effective-model resolution desktop does — `previousModelId` below is tracked-only,
@@ -115,11 +125,14 @@ export function useMobileNativeChatSessionOptions(args: {
     () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
     [agent]
   )
+
   const identity = agent && scopeKey ? `${scopeKey}\0${agent}` : null
   const [version, setVersion] = useState(0)
+
   const [pendingByIdentity, setPendingByIdentity] = useState<
     Record<string, PendingOperation | undefined>
   >({})
+
   const pendingId = identity ? (pendingByIdentity[identity]?.id ?? null) : null
   const bump = useCallback(() => setVersion((current) => current + 1), [])
   const activeIdentityRef = useRef(identity)
@@ -128,6 +141,7 @@ export function useMobileNativeChatSessionOptions(args: {
 
   useLayoutEffect(() => {
     activeIdentityRef.current = identity
+
     return () => {
       activeIdentityRef.current = null
     }
@@ -139,10 +153,13 @@ export function useMobileNativeChatSessionOptions(args: {
     if (!catalog || !scopeKey || !agent || !reportedModel) {
       return
     }
+
     const matched = matchNativeChatCatalogModelId(catalog, reportedModel)
+
     if (!matched) {
       return
     }
+
     // Why: the same report is re-delivered whenever the tab is re-entered or the
     // status stream reconnects, and a session-start report cannot have observed a
     // `/model` sent after it. Re-applying it would revert the user's pick. Only a
@@ -150,8 +167,10 @@ export function useMobileNativeChatSessionOptions(args: {
     if (appliedReportByScope.get(scopeKey) === matched) {
       return
     }
+
     appliedReportByScope.set(scopeKey, matched)
     const record = getScopedRecord(scopeKey, agent)
+
     if (applyNativeChatReportedSessionOptions(record, { model: matched })) {
       bump()
     }
@@ -161,9 +180,11 @@ export function useMobileNativeChatSessionOptions(args: {
     if (!catalog || !scopeKey || !agent) {
       return EMPTY_SNAPSHOT
     }
+
     // Why: `version` invalidates this memo after in-place record mutations.
     void version
     const record = getScopedRecord(scopeKey, agent)
+
     return buildNativeChatSessionOptionSnapshot({
       catalog,
       // The snapshot no longer self-heals an unlisted tracked model; every caller
@@ -179,13 +200,17 @@ export function useMobileNativeChatSessionOptions(args: {
   const runSerialized = useCallback(
     (operationIdentity: string, id: string, run: () => Promise<boolean>): Promise<boolean> => {
       const previous = applyQueuesRef.current.get(operationIdentity) ?? Promise.resolve()
+
       const runIfCurrent = (): Promise<boolean> =>
         activeIdentityRef.current === operationIdentity ? run() : Promise.resolve(false)
+
       const chained = previous.then(runIfCurrent, runIfCurrent)
+
       const tail = chained.then(
         () => undefined,
         () => undefined
       )
+
       applyQueuesRef.current.set(operationIdentity, tail)
       operationTokenRef.current += 1
       const token = operationTokenRef.current
@@ -197,15 +222,19 @@ export function useMobileNativeChatSessionOptions(args: {
         if (applyQueuesRef.current.get(operationIdentity) === tail) {
           applyQueuesRef.current.delete(operationIdentity)
         }
+
         setPendingByIdentity((current) => {
           if (current[operationIdentity]?.token !== token) {
             return current
           }
+
           const next = { ...current }
           delete next[operationIdentity]
+
           return next
         })
       })
+
       return chained
     },
     []
@@ -216,30 +245,38 @@ export function useMobileNativeChatSessionOptions(args: {
       if (!catalog || !scopeKey || !agent || !identity) {
         return Promise.resolve(false)
       }
+
       return runSerialized(identity, id, async () => {
         const record = getScopedRecord(scopeKey, agent)
         const previousModelId = typeof record.model?.value === 'string' ? record.model.value : null
+
         const apply =
           id === 'model'
             ? catalog.modelApply
             : activeModels(catalog, record)
                 .find((model) => model.id === previousModelId)
                 ?.options.find((option) => option.id === id)?.apply
+
         if (!apply || apply.midSession?.kind === 'agent-picker') {
           return false
         }
+
         const flipOnly = isFlipOnlyMidSession(apply.midSession)
+
         const trackedToggle = flipOnly
           ? getTrackedSessionOption(record, previousModelId, id)
           : undefined
+
         if (flipOnly && !trackedToggle) {
           // Why: a flip from an unknown baseline cannot honor an absolute target.
           return false
         }
+
         // Why: same absolute target must never re-dispatch a flip (would invert the agent).
         if (flipOnly && trackedToggle?.value === value) {
           return true
         }
+
         const command = buildNativeChatSessionOptionCommand({
           optionId: id,
           value,
@@ -249,24 +286,30 @@ export function useMobileNativeChatSessionOptions(args: {
           models: activeModels(catalog, record),
           record
         })
+
         if (!command) {
           return false
         }
+
         // Baseline for detecting a hook report or typed command that lands while
         // the dispatch is in flight — the record is shared mutable state and the
         // report effect is not on this queue.
         const trackedBeforeDispatch =
           id === 'model' ? undefined : getTrackedSessionOption(record, previousModelId, id)
+
         const outcome = await dispatchCommand(command)
+
         if (outcome === 'rejected') {
           return false
         }
+
         if (id !== 'model') {
           // Why (desktop parity): `setTrackedSessionOption` resolves the owning
           // model when it commits, not when the command was built. If the model
           // moved during the dispatch, committing now would file this value under
           // the NEW model — claiming an effort the agent was never asked for.
           const modelStill = typeof record.model?.value === 'string' ? record.model.value : null
+
           if (
             modelStill !== previousModelId ||
             getTrackedSessionOption(record, previousModelId, id) !== trackedBeforeDispatch
@@ -274,15 +317,18 @@ export function useMobileNativeChatSessionOptions(args: {
             return true
           }
         }
+
         if (id === 'model') {
           if (typeof value === 'string' && previousModelId !== value) {
             // Why: switching models can reset effort/toggles for the destination model.
             delete record.valuesByModel[value]
           }
         }
+
         // Why: flip-only never heals via agent report — track as applied best-known.
         setTrackedSessionOption(record, id, value, flipOnly ? 'applied' : 'dispatched')
         bump()
+
         return true
       })
     },
@@ -294,32 +340,41 @@ export function useMobileNativeChatSessionOptions(args: {
       if (!catalog || !scopeKey || !agent || !identity) {
         return Promise.resolve(false)
       }
+
       return runSerialized(identity, id, async () => {
         const record = getScopedRecord(scopeKey, agent)
         const modelId = typeof record.model?.value === 'string' ? record.model.value : null
+
         const apply =
           id === 'model'
             ? catalog.modelApply
             : activeModels(catalog, record)
                 .find((model) => model.id === modelId)
                 ?.options.find((option) => option.id === id)?.apply
+
         const midSession = apply?.midSession
+
         if (midSession?.kind === 'agent-picker') {
           const outcome = midSession.delivery
             ? await dispatchCommand(midSession.command, { delivery: midSession.delivery })
             : await dispatchCommand(midSession.command)
+
           if (outcome === 'rejected') {
             return false
           }
+
           clearNativeChatSessionModel(record)
           bump()
           onAgentPicker?.()
+
           return true
         }
+
         if (isFlipOnlyMidSession(midSession) && !getTrackedSessionOption(record, modelId, id)) {
           // Why: an unknown baseline remains unknown after one inversion.
           return (await dispatchCommand(midSession.command)) !== 'rejected'
         }
+
         return false
       })
     },
@@ -331,16 +386,20 @@ export function useMobileNativeChatSessionOptions(args: {
       if (!catalog || !scopeKey || !agent) {
         return
       }
+
       const record = getScopedRecord(scopeKey, agent)
+
       const result = recordNativeChatSessionOptionCommand({
         catalog,
         models: activeModels(catalog, record),
         record,
         command
       })
+
       if (result.changed) {
         bump()
       }
+
       if (result.opensAgentPicker) {
         onAgentPicker?.()
       }

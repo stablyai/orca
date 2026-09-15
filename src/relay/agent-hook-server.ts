@@ -118,9 +118,11 @@ export class RelayAgentHookServer {
     if (this.server) {
       return
     }
+
     this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
     this.portFallbackApplied = false
+
     try {
       drainAgentHookSpool({
         endpointDir: this.endpointDir,
@@ -134,6 +136,7 @@ export class RelayAgentHookServer {
         `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
       )
     }
+
     try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
@@ -145,6 +148,7 @@ export class RelayAgentHookServer {
         throw err
       }
     }
+
     if (options.publishEndpoint !== false) {
       this.publishEndpointFile()
     }
@@ -156,6 +160,7 @@ export class RelayAgentHookServer {
 
   private listenOn(port: number): Promise<void> {
     this.server = createServer((req, res) => this.handleRequest(req, res))
+
     return new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
@@ -163,17 +168,21 @@ export class RelayAgentHookServer {
         this.server = null
         reject(err)
       }
+
       const onListening = (): void => {
         this.server?.off('error', onStartupError)
         this.server?.on('error', (err) => {
           process.stderr.write(`[relay-hook-server] server error: ${err.message}\n`)
         })
         const address = this.server!.address()
+
         if (address && typeof address === 'object') {
           this.port = address.port
         }
+
         resolve()
       }
+
       this.server!.once('error', onStartupError)
       // Why: loopback only — reachable by the in-box agent CLI (127.0.0.1), not from outside the box.
       this.server!.listen(port, '127.0.0.1', onListening)
@@ -183,8 +192,10 @@ export class RelayAgentHookServer {
   publishEndpointFile(): boolean {
     if (this.port <= 0 || !this.token) {
       this.endpointFileWritten = false
+
       return false
     }
+
     this.endpointFileWritten = writeEndpointFile(this.endpointDir, this.endpointFilePath, {
       port: this.port,
       token: this.token,
@@ -192,6 +203,7 @@ export class RelayAgentHookServer {
       version: ORCA_HOOK_PROTOCOL_VERSION,
       transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
+
     return this.endpointFileWritten
   }
 
@@ -215,11 +227,13 @@ export class RelayAgentHookServer {
       isPaneSurfaceRetired: this.isPaneSurfaceRetired,
       dropPane: (paneKey) => this.clearPaneState(paneKey)
     })
+
     for (const { event, meta } of replayable) {
       this.forward(
         buildRelayHookEnvelope(event, meta.source, meta.env, meta.version, { isReplay: true })
       )
     }
+
     return replayable.length
   }
 
@@ -253,32 +267,42 @@ export class RelayAgentHookServer {
     if (req.method !== 'POST') {
       res.writeHead(404)
       res.end()
+
       return
     }
+
     if (req.headers['x-orca-agent-hook-token'] !== this.token) {
       res.writeHead(403)
       res.end()
+
       return
     }
+
     // Why: track our own destroy so the slowloris cap can't be misread as outside interference.
     let destroyedBySlowlorisCap = false
     req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
       destroyedBySlowlorisCap = true
       req.destroy()
     })
+
     try {
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
       const source = resolveHookSource(pathname)
+
       if (!source) {
         res.writeHead(404)
         res.end()
+
         return
       }
+
       const body = await readRequestBody(req)
       const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+
       const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
         deferCompactOwnershipToClient: true
       })
+
       if (event) {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = hookBodyEnv(hookBody)
@@ -287,6 +311,7 @@ export class RelayAgentHookServer {
         this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
         this.retryScheduler.scheduleCodexSubagentPoll(source, hookBody, event, env, version)
       }
+
       res.writeHead(204)
       res.end()
     } catch (err) {
@@ -295,6 +320,7 @@ export class RelayAgentHookServer {
       if (isHookRequestTruncatedError(err) && !destroyedBySlowlorisCap) {
         this.transportInterference.record({ source: null, error: err })
       }
+
       // Why: hooks fail open (204 on any error) so a buggy agent never blocks the run; still log so the 204 doesn't mask bugs.
       process.stderr.write(
         `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
@@ -317,11 +343,14 @@ export class RelayAgentHookServer {
     // transcript the orphan is still writing (#12447). Drop the stale cache with it.
     if (this.isPaneSurfaceRetired(event.paneKey)) {
       this.clearPaneState(event.paneKey)
+
       return
     }
+
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.retryScheduler.clearAssistantMessageRetry(event.paneKey)
     }
+
     // Why: keep PostCompact identity in the replay cache so the client can re-run ownership when
     // it reconnects. Stripping it would let a cold relay replay a completion as an ordinary `done`
     // row and resurrect a pane that the client had already retired.
@@ -339,13 +368,17 @@ export class RelayAgentHookServer {
     if (!isAgentHookSource(record.source)) {
       return
     }
+
     const body = buildSpoolHookBody(record)
+
     const event = normalizeHookPayload(this.state, record.source, body, this.env, {
       deferCompactOwnershipToClient: true
     })
+
     if (!event) {
       return
     }
+
     this.applyEvent(event, record.source, hookBodyEnv(body), hookBodyVersion(body), {
       isReplay: true
     })

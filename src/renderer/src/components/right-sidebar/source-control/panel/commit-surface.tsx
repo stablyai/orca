@@ -165,6 +165,7 @@ export function SourceControlCommitSurface({
         if (!activeWorktreeId) {
           return
         }
+
         updateCommitDrafts((prev) => writeCommitDraftForWorktree(prev, activeWorktreeId, value))
       }}
       onGenerate={handleGenerateCommitMessageClick}

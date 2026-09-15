@@ -22,9 +22,11 @@ export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
   if (env.ORCA_BACKGROUND_LAUNCH === '1') {
     return true
   }
+
   if (env.ORCA_E2E_FOREGROUND === '1') {
     return false
   }
+
   return env.ORCA_E2E_HEADLESS === '1' || env.ORCA_E2E_HEADFUL === '1'
 }
 
@@ -49,16 +51,20 @@ export function applyBackgroundActivationPolicy(
   } = {}
 ): boolean {
   const platform = options.platform ?? process.platform
+
   if (platform !== 'darwin' || !isWindowlessLaunch(options.env ?? process.env)) {
     return false
   }
+
   try {
     const app = options.app ?? electronApp
     app.dock?.hide()
     app.setActivationPolicy('accessory')
+
     return true
   } catch (error) {
     options.warn?.('[window] Failed to apply background activation policy', error)
+
     return false
   }
 }
@@ -74,12 +80,16 @@ export function showWindowWithoutStealingFocus(
   if (window.isDestroyed()) {
     return
   }
+
   if (isWindowlessLaunch(env)) {
     return
   }
+
   if (isBackgroundLaunch(env)) {
     window.showInactive()
+
     return
   }
+
   window.show()
 }

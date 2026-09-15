@@ -11,5 +11,6 @@ export const HOLD_ALTERNATE_SCREEN_OPEN = 'setInterval(() => {}, 1000)'
 export function alternateScreenFixtureScript(payload: string, delayMs = 0): string {
   const write = `process.stdout.write(${JSON.stringify(payload)})`
   const paint = delayMs > 0 ? `setTimeout(() => ${write}, ${delayMs})` : write
+
   return `${paint}\n${HOLD_ALTERNATE_SCREEN_OPEN}\n`
 }

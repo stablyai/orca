@@ -17,6 +17,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -31,9 +32,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -85,6 +88,7 @@ async function storeWithBoundSshPane(): Promise<Awaited<ReturnType<typeof create
       }
     }
   })
+
   return store
 }
 
@@ -220,6 +224,7 @@ describe('Store', () => {
         leafId: TEST_LEAF_2,
         state: siblingState
       })
+
       const layout = {
         root: {
           type: 'split' as const,
@@ -231,6 +236,7 @@ describe('Store', () => {
         activeLeafId: TEST_LEAF_1,
         expandedLeafId: null
       }
+
       const tabs = {
         wt1: [
           {
@@ -245,6 +251,7 @@ describe('Store', () => {
           }
         ]
       }
+
       store.setWorkspaceSession({
         activeRepoId: 'r1',
         activeWorktreeId: 'wt1',

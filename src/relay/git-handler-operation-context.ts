@@ -17,6 +17,7 @@ export type GitHandlerCommandOptions = {
 }
 
 export type GitHandlerCommandResult = { stdout: string; stderr: string }
+
 export type GitHandlerWatcherRegistry = Pick<RelayFilesystemWatchRegistry, 'runWithRemovalFence'>
 
 export type GitHandlerOperationHost = {

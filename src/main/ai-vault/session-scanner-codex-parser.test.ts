@@ -65,6 +65,7 @@ describe('parseCodexSessionFile', () => {
     )
 
     const sessionStat = await stat(sessionPath)
+
     const session = await parseCodexSessionFile(
       {
         path: sessionPath,
@@ -118,6 +119,7 @@ describe('parseCodexSessionFile', () => {
     )
 
     const sessionStat = await stat(sessionPath)
+
     const session = await parseCodexSessionFile(
       {
         path: sessionPath,
@@ -188,6 +190,7 @@ describe('parseCodexSessionFile', () => {
     )
 
     const sessionStat = await stat(sessionPath)
+
     const session = await parseCodexSessionFile(
       {
         path: sessionPath,
@@ -239,6 +242,7 @@ describe('parseCodexSessionFile', () => {
     )
 
     const sessionStat = await stat(sessionPath)
+
     const session = await parseCodexSessionFile(
       {
         path: sessionPath,

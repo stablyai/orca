@@ -15,6 +15,7 @@ let probe: Promise<boolean> | null = null
 
 export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS): Promise<boolean> {
   let directory: string | null = null
+
   try {
     directory = await mkdtemp(join(tmpdir(), 'orca-shallow-probe-'))
     const { promise, resolve } = Promise.withResolvers<boolean>()
@@ -29,6 +30,7 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
     const delivered = await promise
     clearTimeout(timer)
     watcher.close()
+
     return delivered
   } catch {
     return false
@@ -44,6 +46,7 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
  *  Measured once per process. */
 export function detectShallowWatchDelivery(): Promise<boolean> {
   probe ??= measureShallowWatchDelivery()
+
   return probe
 }
 

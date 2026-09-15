@@ -47,6 +47,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
   args.onStage('dispatch_input')
+
   const promptDelivery = await deliverWorkerDispatchPreamble({
     runtime,
     structuredSession,
@@ -60,6 +61,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     devMode: args.devMode,
     requestId: args.requestId
   })
+
   effects.push({
     kind: 'dispatch_input',
     role: 'agent',
@@ -68,6 +70,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   })
 
   args.onStage('turn_observation')
+
   // The write above was accepted without waiting on provider hooks; now demand the positive
   // evidence the receipt claims is observable. A worker whose turn never starts must not be
   // reported ready — a wedged agent and a working one looked identical before this gate.
@@ -76,6 +79,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const turnStart: WorkerTurnStartObservation = structuredSession
     ? { verdict: 'observed' }
     : await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery })
+
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({
     runtime,
@@ -88,6 +92,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // A worker report can settle the dispatch while turn observation is outstanding.
   const currentWorker = db.getWorkerDispatch(args.dispatchId)
   const alreadySettled = currentWorker && currentWorker.state !== 'starting'
+
   if (turnStart.verdict === 'unobserved' && !alreadySettled) {
     // Honest `unverifiable`: keep the dispatch capability and the terminal — the worker may
     // still recover and report (worker-report settlement reconnects a start_unknown worker) —
@@ -99,12 +104,14 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       state: 'turn_unobserved'
     })
     const reason = describeUnobservedWorkerTurnStart(args.agent)
+
     const worker = db.markWorkerStartUnknown(
       args.dispatchId,
       'turn_start_unobserved',
       reason,
       effects
     )
+
     return {
       runId: run.id,
       taskId: task.id,
@@ -128,14 +135,17 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
     }
   }
+
   const worker = alreadySettled
     ? currentWorker
     : db.markWorkerDispatchReady(args.dispatchId, effects)
+
   // A completed task proves start succeeded; older callers use only 'ready' as start success.
   const reportedOutcome =
     worker.stage === 'settled' && (worker.state === 'succeeded' || worker.state === 'failed')
       ? worker.state
       : undefined
+
   return {
     runId: run.id,
     taskId: task.id,

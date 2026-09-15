@@ -13,8 +13,11 @@ import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 
 const openUrl = vi.fn()
+
 const createBrowserTab = vi.fn()
+
 const setActiveWorktree = vi.fn()
+
 const openRuntimeBrowserTab = vi.fn(() => Promise.resolve())
 
 function plainEvent(): MouseEvent {

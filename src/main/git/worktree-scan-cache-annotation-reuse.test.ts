@@ -14,6 +14,7 @@ vi.mock('./worktree-sparse-state', () => ({
   detectSparseCheckout: detectSparseCheckoutMock,
   resolveGitCommonDir: vi.fn()
 }))
+
 vi.mock('./worktree-list-reader', () => ({
   readCheckedOutBranchRef: vi.fn(),
   readRepoCommonDirFromGit: vi.fn(),
@@ -27,6 +28,7 @@ import { _resetWorktreeScanCacheForTests, listWorktreeGraph, listWorktrees } fro
 import { __resetSparseCheckoutStateCacheForTests } from './worktree-sparse-checkout-cache'
 
 const REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+
 const ROW: GitWorktreeInfo = {
   path: 'C:\\wt\\x',
   head: 'a'.repeat(40),

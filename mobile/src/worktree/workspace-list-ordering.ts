@@ -5,6 +5,7 @@ export const CREATE_GRACE_MS = 5 * 60 * 1000
 
 function getManualSortRank(worktree: Worktree): number | null {
   const rank = worktree.manualOrder ?? worktree.sortOrder
+
   return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
 }
 
@@ -15,6 +16,7 @@ function compareDisplayName(a: Worktree, b: Worktree): number {
 function getRecentActivity(worktree: Worktree): number {
   const lastActivityAt = worktree.lastActivityAt ?? 0
   const lastOutputAt = worktree.lastOutputAt ?? 0
+
   // Why: headless serve hosts only stamp lastActivityAt at creation, so live
   // terminal output must still count as recency for mobile-only pairings.
   return Math.max(
@@ -26,6 +28,7 @@ function getRecentActivity(worktree: Worktree): number {
 function effectiveRecentActivity(worktree: Worktree, now: number): number {
   const lastActivityAt = getRecentActivity(worktree)
   const { createdAt } = worktree
+
   if (
     createdAt === undefined ||
     !Number.isFinite(createdAt) ||
@@ -33,6 +36,7 @@ function effectiveRecentActivity(worktree: Worktree, now: number): number {
   ) {
     return lastActivityAt
   }
+
   return Math.max(lastActivityAt, createdAt + CREATE_GRACE_MS)
 }
 
@@ -60,42 +64,54 @@ export function sortWorktrees(
     return [...worktrees].sort((a, b) => {
       const aRank = getManualSortRank(a)
       const bRank = getManualSortRank(b)
+
       if (aRank !== null && bRank !== null && aRank !== bRank) {
         // Why: desktop assigns higher sort/manual ranks to earlier list positions.
         return bRank - aRank
       }
+
       if (aRank !== null && bRank === null) {
         return -1
       }
+
       if (aRank === null && bRank !== null) {
         return 1
       }
+
       return compareDisplayName(a, b)
     })
   }
+
   return [...worktrees].sort((a, b) => {
     if (mode === 'name') {
       return compareDisplayName(a, b)
     }
+
     if (mode === 'recent') {
       return compareByRecent(a, b, now)
     }
+
     if (mode === 'repo') {
       const repoComparison = a.repo.localeCompare(b.repo)
+
       return repoComparison || compareDisplayName(a, b)
     }
+
     const aRank = typeof a.sortOrder === 'number' && Number.isFinite(a.sortOrder) ? a.sortOrder : 0
     const bRank = typeof b.sortOrder === 'number' && Number.isFinite(b.sortOrder) ? b.sortOrder : 0
+
     if (aRank !== bRank) {
       // Why: desktop persists its computed Agent activity order into sortOrder;
       // mobile should render that source-of-truth before local fallback signals.
       return bRank - aRank
     }
+
     if (aRank === 0) {
       // Why: headless serve hosts never persist desktop smart ranks; unranked
       // rows fall back to agent attention order instead of a frozen A-Z list.
       return compareByAgentAttention(a, b, now)
     }
+
     return compareDisplayName(a, b)
   })
 }
@@ -108,17 +124,22 @@ export function getWorktreeStatus(
   if (w.hasHostSidebarActivity === false) {
     return 'inactive'
   }
+
   if (w.status && w.status !== 'inactive') {
     return w.status
   }
+
   if (w.hasHostSidebarActivity === true) {
     return 'active'
   }
+
   if (w.status) {
     return w.status
   }
+
   if (w.liveTerminalCount > 0) {
     return 'active'
   }
+
   return 'inactive'
 }

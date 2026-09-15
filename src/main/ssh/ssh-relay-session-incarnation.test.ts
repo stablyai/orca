@@ -8,6 +8,7 @@ const { acceptOutputExitMock, muxRequestMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: vi.fn(async (_mux, options) => ({
     clientInstanceId: options.clientInstanceId,
@@ -16,6 +17,7 @@ vi.mock('./ssh-pty-consumer-session', () => ({
     ownerLease: 'test-owner-lease'
   }))
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
   acceptSshPtyOutputExit: acceptOutputExitMock,
@@ -31,7 +33,9 @@ vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   installSshPtySourceAckPublisher: vi.fn(() => () => {}),
   installSshPtySourceCancellationPublisher: vi.fn(() => () => {})
 }))
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
+
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
     notify = vi.fn()
@@ -45,9 +49,11 @@ vi.mock('./ssh-channel-multiplexer', () => ({
     isDisposed = vi.fn().mockReturnValue(false)
   }
 }))
+
 vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
   installRemoteManagedAgentHooks: vi.fn().mockResolvedValue([])
 }))
+
 vi.mock('../providers/ssh-pty-provider', () => ({
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockReturnValue(() => {})
@@ -58,14 +64,17 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -79,11 +88,13 @@ vi.mock('../ipc/pty', () => ({
   isCurrentPtyExit: vi.fn(() => true),
   answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -103,6 +114,7 @@ describe('SSH relay PTY incarnation exits', () => {
   it('drops a stale exit before ownership cleanup and propagates a current incarnation', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const runtime = { onPtyData: vi.fn(), onPtyExit: vi.fn() }
+
     const session = new SshRelaySession(
       'target-1',
       getMainWindow,
@@ -110,10 +122,13 @@ describe('SSH relay PTY incarnation exits', () => {
       mockPortForward,
       runtime as never
     )
+
     await session.establish(mockConn)
+
     const provider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
       onExit: ReturnType<typeof vi.fn>
     }
+
     const onExit = provider.onExit.mock.calls[0]?.[0] as (payload: {
       id: string
       code: number
@@ -121,6 +136,7 @@ describe('SSH relay PTY incarnation exits', () => {
       providerGeneration: number
       ptyIncarnation: string
     }) => void
+
     vi.mocked(isCurrentPtyExit).mockReturnValueOnce(false)
 
     onExit({

@@ -51,6 +51,7 @@ describe('fetchWorktrees', () => {
 
   it('shows persisted secondary worktrees while SSH is connecting', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-ssh',
       path: '/home/orca/repo',
@@ -59,16 +60,19 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const queued = makeWorktree({
       id: 'repo-ssh::/home/orca/queued',
       repoId: 'repo-ssh',
       path: '/home/orca/queued',
       displayName: 'queued'
     })
+
     const detected = makeDetectedResult('repo-ssh', [queued], {
       authoritative: false,
       source: 'metadata-fallback'
     })
+
     listKnownForExecutionHostMock.mockResolvedValueOnce({
       status: 'complete',
       repoId: sshRepo.id,
@@ -105,6 +109,7 @@ describe('fetchWorktrees', () => {
 
   it('adds metadata rows without replacing richer cached SSH worktrees', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-ssh',
       path: '/home/orca/repo',
@@ -113,6 +118,7 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const existing = makeWorktree({
       id: 'repo-ssh::/home/orca/existing',
       repoId: 'repo-ssh',
@@ -121,12 +127,15 @@ describe('fetchWorktrees', () => {
       head: 'live-head',
       branch: 'refs/heads/live-branch'
     })
+
     const metadataExisting = { ...existing, head: '', branch: '' }
+
     const queued = makeWorktree({
       id: 'repo-ssh::/home/orca/queued',
       repoId: 'repo-ssh',
       path: '/home/orca/queued'
     })
+
     listKnownForExecutionHostMock.mockResolvedValueOnce({
       status: 'complete',
       repoId: sshRepo.id,
@@ -152,6 +161,7 @@ describe('fetchWorktrees', () => {
 
   it('inserts metadata rows inside the SSH block instead of past sibling hosts', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-shared',
       path: '/home/orca/repo',
@@ -160,24 +170,29 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const localRepo = { ...sshRepo, path: '/local/repo', connectionId: undefined }
+
     const sshExisting = makeWorktree({
       id: 'repo-shared::/home/orca/existing',
       repoId: sshRepo.id,
       path: '/home/orca/existing',
       hostId: 'ssh:ssh-1'
     })
+
     const localExisting = makeWorktree({
       id: 'repo-shared::/local/existing',
       repoId: sshRepo.id,
       path: '/local/existing',
       hostId: LOCAL_EXECUTION_HOST_ID
     })
+
     const queued = makeWorktree({
       id: 'repo-shared::/home/orca/queued',
       repoId: sshRepo.id,
       path: '/home/orca/queued'
     })
+
     listKnownForExecutionHostMock.mockResolvedValueOnce({
       status: 'complete',
       repoId: sshRepo.id,
@@ -204,6 +219,7 @@ describe('fetchWorktrees', () => {
 
   it('drops metadata rows when SSH authority lands during the read', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-ssh',
       path: '/home/orca/repo',
@@ -212,18 +228,21 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const live = makeWorktree({
       id: 'repo-ssh::/home/orca/live',
       repoId: 'repo-ssh',
       path: '/home/orca/live',
       hostId: 'ssh:ssh-1'
     })
+
     // Why: deleted on the host, so an authoritative scan already purged it; the late metadata write must not resurrect it.
     const purged = makeWorktree({
       id: 'repo-ssh::/home/orca/purged',
       repoId: 'repo-ssh',
       path: '/home/orca/purged'
     })
+
     listKnownForExecutionHostMock.mockImplementationOnce(async (args) => {
       store.setState({
         sshConnectionStates: new Map([
@@ -241,6 +260,7 @@ describe('fetchWorktrees', () => {
         ]),
         worktreesByRepo: { [sshRepo.id]: [live] }
       } as Partial<AppState>)
+
       return {
         status: 'complete',
         repoId: args.repoId,
@@ -263,6 +283,7 @@ describe('fetchWorktrees', () => {
 
   it('replaces metadata rows once the authoritative SSH scan lands', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-ssh',
       path: '/home/orca/repo',
@@ -271,17 +292,20 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const live = makeWorktree({
       id: 'repo-ssh::/home/orca/live',
       repoId: 'repo-ssh',
       path: '/home/orca/live',
       hostId: 'ssh:ssh-1'
     })
+
     const stale = makeWorktree({
       id: 'repo-ssh::/home/orca/stale',
       repoId: 'repo-ssh',
       path: '/home/orca/stale'
     })
+
     listKnownForExecutionHostMock.mockResolvedValueOnce({
       status: 'complete',
       repoId: sshRepo.id,
@@ -308,6 +332,7 @@ describe('fetchWorktrees', () => {
 
   it('keeps the repo detection entry authoritative while appending metadata rows', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-shared',
       path: '/home/orca/repo',
@@ -316,17 +341,21 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const localRepo = { ...sshRepo, path: '/local/repo', connectionId: undefined }
+
     const scanned = makeWorktree({
       id: 'repo-shared::/local/scanned',
       repoId: sshRepo.id,
       path: '/local/scanned'
     })
+
     const fromMetadata = makeWorktree({
       id: 'repo-shared::/home/orca/queued',
       repoId: sshRepo.id,
       path: '/home/orca/queued'
     })
+
     const authoritative = makeDetectedResult(sshRepo.id, [scanned])
     listKnownForExecutionHostMock.mockResolvedValueOnce({
       status: 'complete',
@@ -357,6 +386,7 @@ describe('fetchWorktrees', () => {
 
   it('does not resurrect worktrees an authoritative SSH scan already removed', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-ssh',
       path: '/home/orca/repo',
@@ -365,17 +395,20 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const live = makeWorktree({
       id: 'repo-ssh::/home/orca/live',
       repoId: 'repo-ssh',
       path: '/home/orca/live',
       hostId: 'ssh:ssh-1'
     })
+
     const deletedOnRemote = makeWorktree({
       id: 'repo-ssh::/home/orca/deleted',
       repoId: 'repo-ssh',
       path: '/home/orca/deleted'
     })
+
     const metadataResult = () => ({
       status: 'complete' as const,
       repoId: sshRepo.id,
@@ -385,6 +418,7 @@ describe('fetchWorktrees', () => {
         source: 'metadata-fallback'
       })
     })
+
     const connectedStates = createTestStore().getState().sshConnectionStates
     listKnownForExecutionHostMock.mockResolvedValueOnce(metadataResult())
     store.setState({ repos: [sshRepo], sshConnectionStates: new Map() } as Partial<AppState>)
@@ -410,6 +444,7 @@ describe('fetchWorktrees', () => {
 
   it('retires persisted metadata for worktrees an authoritative SSH scan proved gone', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-ssh',
       path: '/home/orca/repo',
@@ -418,17 +453,20 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     const live = makeWorktree({
       id: 'repo-ssh::/home/orca/live',
       repoId: 'repo-ssh',
       path: '/home/orca/live',
       hostId: 'ssh:ssh-1'
     })
+
     const deletedOnRemote = makeWorktree({
       id: 'repo-ssh::/home/orca/deleted',
       repoId: 'repo-ssh',
       path: '/home/orca/deleted'
     })
+
     const connectedStates = createTestStore().getState().sshConnectionStates
     listKnownForExecutionHostMock.mockResolvedValueOnce({
       status: 'complete',
@@ -459,6 +497,7 @@ describe('fetchWorktrees', () => {
 
   it('leaves local metadata to the persistence GC after an authoritative local scan', async () => {
     const store = createTestStore()
+
     const localRepo = {
       id: 'repo-local',
       path: '/local/repo',
@@ -466,16 +505,19 @@ describe('fetchWorktrees', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     const removed = makeWorktree({
       id: 'repo-local::/local/removed',
       repoId: localRepo.id,
       path: '/local/removed'
     })
+
     const survivor = makeWorktree({
       id: 'repo-local::/local/survivor',
       repoId: localRepo.id,
       path: '/local/survivor'
     })
+
     store.setState({
       repos: [localRepo],
       worktreesByRepo: { [localRepo.id]: [removed, survivor] }
@@ -491,6 +533,7 @@ describe('fetchWorktrees', () => {
 
   it('skips the metadata fallback entirely for authoritative-only callers', async () => {
     const store = createTestStore()
+
     const sshRepo = {
       id: 'repo-ssh',
       path: '/home/orca/repo',
@@ -499,6 +542,7 @@ describe('fetchWorktrees', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     store.setState({ repos: [sshRepo], sshConnectionStates: new Map() } as Partial<AppState>)
     const worktreesByRepo = store.getState().worktreesByRepo
     const detectedWorktreesByRepo = store.getState().detectedWorktreesByRepo
@@ -516,12 +560,14 @@ describe('fetchWorktrees', () => {
 
   it('keeps worktree maps byte-identical for stale and malformed direct results', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo-ssh::/home/orca/existing',
       repoId: 'repo-ssh',
       path: '/home/orca/existing',
       hostId: 'ssh:ssh-1'
     })
+
     store.setState({
       repos: [
         {
@@ -546,21 +592,25 @@ describe('fetchWorktrees', () => {
     mockApi.worktrees.listDetected.mockImplementationOnce(
       async (args: ListDetectedWorktreesArgs) => {
         request = args
+
         return new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
           resolveProvider = resolve
         })
       }
     )
+
     const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
       repoId: 'repo-ssh',
       executionHostId: 'ssh:ssh-1',
       authority: TEST_SSH_AUTHORITY
     })
+
     const nextAuthority = {
       ...TEST_SSH_AUTHORITY,
       providerEpoch: 'provider-ssh-2' as SshProviderEpoch,
       connectionGeneration: 2
     }
+
     store.setState({
       sshConnectionStates: new Map([
         [
@@ -620,11 +670,13 @@ describe('fetchWorktrees', () => {
         repoId: 'wrong-repo'
       })
     )
+
     const malformed = acquireDirectSshDetectedWorktreeRefresh(store, {
       repoId: 'repo-ssh',
       executionHostId: 'ssh:ssh-1',
       authority: nextAuthority
     })
+
     const malformedResult = await malformed.result
 
     expect(malformed.merge(malformedResult)).toMatchObject({
@@ -636,26 +688,31 @@ describe('fetchWorktrees', () => {
 
   it('keeps duplicate repo IDs isolated across direct SSH hosts', async () => {
     const store = createTestStore()
+
     const authorityA = {
       targetId: 'ssh-a',
       providerEpoch: 'provider-a' as SshProviderEpoch,
       connectionGeneration: 1
     }
+
     const authorityB = {
       targetId: 'ssh-b',
       providerEpoch: 'provider-b' as SshProviderEpoch,
       connectionGeneration: 4
     }
+
     const worktreeA = makeWorktree({
       id: 'same-repo::/srv/a',
       repoId: 'same-repo',
       path: '/srv/a'
     })
+
     const worktreeB = makeWorktree({
       id: 'same-repo::/srv/b',
       repoId: 'same-repo',
       path: '/srv/b'
     })
+
     store.setState({
       repos: [
         {
@@ -713,11 +770,13 @@ describe('fetchWorktrees', () => {
       executionHostId: 'ssh:ssh-a',
       authority: authorityA
     })
+
     const refreshB = acquireDirectSshDetectedWorktreeRefresh(store, {
       repoId: 'same-repo',
       executionHostId: 'ssh:ssh-b',
       authority: authorityB
     })
+
     refreshA.merge(await refreshA.result)
     refreshB.merge(await refreshB.result)
 

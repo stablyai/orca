@@ -42,8 +42,10 @@ describe('scrcpyVideoRegistry', () => {
 
   it('replays the current GOP (keyframe + following deltas) to late subscribers', () => {
     scrcpyVideoRegistry.register('gop', () => {})
+
     const tag = (event: ScrcpyVideoEvent): string =>
       event.type === 'frame' ? `${event.frame.keyFrame ? 'K' : 'D'}${event.frame.pts}` : 'M'
+
     scrcpyVideoRegistry.pushFrame('gop', {
       config: false,
       keyFrame: true,

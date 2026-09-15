@@ -64,6 +64,7 @@ describe('OrcaRuntimeService', () => {
         listProcesses: async () => []
       })
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
       return { runtime, spawn }
     }
 
@@ -197,6 +198,7 @@ describe('OrcaRuntimeService', () => {
         state: 'done',
         restoreOnTabOpenOnly: true
       })
+
       const { runtime, spawn } = makeParkedRuntime(runtimeStore)
 
       const activated = await userActivate(runtime)
@@ -211,6 +213,7 @@ describe('OrcaRuntimeService', () => {
       const { runtimeStore, getSession, setSession } = makeParkedSessionStore('worktree-sleep', {
         state: 'working'
       })
+
       const { runtime, spawn } = makeParkedRuntime(runtimeStore)
       const woken = structuredClone(getSession())
       delete woken.sleepingAgentSessionsByPaneKey?.[`host-tab:${HEADLESS_LEAF_ID}`]
@@ -245,6 +248,7 @@ describe('OrcaRuntimeService', () => {
       const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal()
       )
+
       const { runtime, spawn } = makeParkedRuntime(runtimeStore)
 
       const activated = await automaticActivate(runtime)
@@ -283,6 +287,7 @@ describe('OrcaRuntimeService', () => {
       const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {
         worktreeId: 'other-repo::/other'
       })
+
       const { runtime, spawn } = makeParkedRuntime(runtimeStore)
 
       const activated = await automaticActivate(runtime)
@@ -296,6 +301,7 @@ describe('OrcaRuntimeService', () => {
     it('reads the park record from the worktree own execution-host partition', async () => {
       const sshRepo = { ...store.getRepos()[0]!, executionHostId: 'ssh:ssh-1' as const }
       const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {}, 'ssh:ssh-1')
+
       const { runtime, spawn } = makeParkedRuntime({
         ...runtimeStore,
         getRepos: () => [sshRepo],
@@ -334,12 +340,15 @@ describe('OrcaRuntimeService', () => {
       }),
       'ssh:ssh-1'
     )
+
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const remoteStore = {
       ...runtimeStore,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
     }
+
     const spawn = vi.fn().mockResolvedValue({ id: 'ssh:ssh-1@@relay-pty', isReattach: true })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
@@ -366,6 +375,7 @@ describe('OrcaRuntimeService', () => {
 
   it('spawns fresh after an expired hydrated SSH headless reattach clears persistence', async () => {
     const stalePtyId = 'ssh:ssh-1@@relay-pty'
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -388,16 +398,20 @@ describe('OrcaRuntimeService', () => {
       }),
       'ssh:ssh-1'
     )
+
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const remoteStore = {
       ...runtimeStore,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
     }
+
     const spawn = vi
       .fn()
       .mockImplementationOnce(async () => {
         const session = getSession()
+
         ;(runtimeStore.setWorkspaceSession as unknown as (next: WorkspaceSessionState) => void)({
           ...session,
           tabsByWorktree: {
@@ -417,6 +431,7 @@ describe('OrcaRuntimeService', () => {
         throw new Error('SSH session expired')
       })
       .mockResolvedValueOnce({ id: 'ssh:ssh-1@@fresh-pty' })
+
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
       spawn,
@@ -615,12 +630,15 @@ describe('OrcaRuntimeService', () => {
       }),
       'ssh:ssh-1'
     )
+
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const remoteStore = {
       ...runtimeStore,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
     }
+
     const spawn = vi.fn().mockResolvedValue({ id: 'ssh:ssh-1@@fresh-pty' })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
@@ -650,6 +668,7 @@ describe('OrcaRuntimeService', () => {
       [HEADLESS_LEAF_ID]: 'pty-a',
       [HEADLESS_SECOND_LEAF_ID]: 'pty-b'
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -669,6 +688,7 @@ describe('OrcaRuntimeService', () => {
         terminalLayoutsByTabId: { 'host-tab': layout }
       })
     )
+
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-b' })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({

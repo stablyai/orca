@@ -14,6 +14,7 @@ function readClipboardText(event: ClipboardEvent, type: string): string {
 function getWindowsPathBasename(filePath: string): string {
   const normalized = filePath.replaceAll('/', '\\')
   const separatorIndex = normalized.lastIndexOf('\\')
+
   return separatorIndex !== -1 ? normalized.slice(separatorIndex + 1) : normalized
 }
 
@@ -23,6 +24,7 @@ function extractClipboardAnchors(html: string): ClipboardAnchor[] {
   }
 
   const document = new DOMParser().parseFromString(html, 'text/html')
+
   return Array.from(document.querySelectorAll('a[href]'), (anchor) => ({
     href: anchor.getAttribute('href') ?? ''
   }))
@@ -35,6 +37,7 @@ function hrefPointsAtPathBasename(href: string, basename: string): boolean {
 
   try {
     const url = new URL(href)
+
     return url.protocol.startsWith('http') && url.hostname.toLowerCase() === basename.toLowerCase()
   } catch {
     return false
@@ -49,17 +52,20 @@ export function shouldPasteTerminalWindowsPathAsPlainText({
   htmlText: string
 }): boolean {
   const paths = Array.from(plainText.matchAll(WINDOWS_ABSOLUTE_PATH_PATTERN), (match) => match[0])
+
   if (paths.length === 0) {
     return false
   }
 
   const anchors = extractClipboardAnchors(htmlText)
+
   if (anchors.length === 0) {
     return false
   }
 
   return paths.some((filePath) => {
     const basename = getWindowsPathBasename(filePath)
+
     return anchors.some((anchor) => hrefPointsAtPathBasename(anchor.href, basename))
   })
 }
@@ -73,6 +79,7 @@ export function handleRichMarkdownTerminalPathPaste(
   }
 
   const plainText = readClipboardText(event, 'text/plain')
+
   if (!plainText) {
     return false
   }
@@ -90,5 +97,6 @@ export function handleRichMarkdownTerminalPathPaste(
   // Why: terminal link metadata can point at a synthetic basename URL; the
   // clipboard plain text is the only source that keeps the Windows path intact.
   editor.view.dispatch(editor.state.tr.insertText(plainText))
+
   return true
 }

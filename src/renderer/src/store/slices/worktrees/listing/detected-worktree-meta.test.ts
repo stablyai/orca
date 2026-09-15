@@ -11,6 +11,7 @@ describe('applyDetectedWorktreeUpdates display-name provenance', () => {
       repoId: 'repo-1',
       branch: 'refs/heads/feature'
     }
+
     const state = {
       'repo-1': {
         repoId: 'repo-1',
@@ -24,6 +25,7 @@ describe('applyDetectedWorktreeUpdates display-name provenance', () => {
       displayName: 'Agent workspace',
       displayNameIsPinned: true
     })
+
     expect(fixed['repo-1']?.worktrees[0]).toMatchObject({
       displayName: 'Agent workspace',
       displayNameMode: 'fixed'
@@ -33,6 +35,7 @@ describe('applyDetectedWorktreeUpdates display-name provenance', () => {
       displayName: '',
       displayNameIsPinned: false
     })
+
     expect(automatic['repo-1']?.worktrees[0]).toMatchObject({
       displayName: 'feature',
       displayNameMode: 'automatic'
@@ -47,6 +50,7 @@ describe('applyDetectedWorktreeUpdates display-name provenance', () => {
       repoId: 'repo-1',
       branch: ''
     }
+
     const detachedState = {
       'repo-1': {
         repoId: 'repo-1',

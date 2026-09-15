@@ -16,6 +16,7 @@ import type { HooksConfig } from './installer-utils'
 import { parseHooksJsonText } from './hooks-json-read'
 
 const DEFAULT_REMOTE_CONFIG_MODE = 0o600
+
 const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
 
 /** Read+JSON-parse a remote file. Returns `null` on parse failure (caller
@@ -29,14 +30,17 @@ export async function readHooksJsonRemote(
   remotePath: string
 ): Promise<HooksConfig | null> {
   let body: string
+
   try {
     body = await readFile(sftp, remotePath)
   } catch (err) {
     if (isNoEntryError(err)) {
       return {}
     }
+
     throw err
   }
+
   return parseHooksJsonText(body)
 }
 
@@ -55,19 +59,23 @@ export async function writeHooksJsonRemote(
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
   const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
+
   // Why: skip the write when on-disk content is identical so repeated
   // install() calls do not bump the file's mtime / inode unnecessarily.
   try {
     const existing = await readFile(sftp, remotePath)
+
     if (existing === serialized) {
       return
     }
   } catch {
     // ENOENT or read error — fall through to the write below.
   }
+
   // Why: tmp + rename so a partial network drop mid-write does not leave a
   // truncated settings.json that the agent CLI would refuse to load.
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
+
   try {
     const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
     await writeFile(sftp, tmp, serialized, mode)
@@ -93,10 +101,13 @@ export async function writeManagedScriptRemote(
 ): Promise<void> {
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
+
   try {
     const existing = await readFile(sftp, remotePath)
+
     if (existing === content) {
       await chmod(sftp, remotePath, 0o755)
+
       return
     }
   } catch {
@@ -107,6 +118,7 @@ export async function writeManagedScriptRemote(
   // file first, then rename it into place so interrupted reinstalls do not
   // leave the configured hook path truncated or non-executable.
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
+
   try {
     await writeFile(sftp, tmp, content, 0o755)
     await chmod(sftp, tmp, 0o755)
@@ -130,6 +142,7 @@ export async function readTextFileRemote(
     if (isNoEntryError(err)) {
       return null
     }
+
     throw err
   }
 }
@@ -141,8 +154,10 @@ export async function writeTextFileRemoteAtomic(
 ): Promise<void> {
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
+
   try {
     const existing = await readFile(sftp, remotePath)
+
     if (existing === content) {
       return
     }
@@ -151,6 +166,7 @@ export async function writeTextFileRemoteAtomic(
   }
 
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
+
   try {
     const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
     await writeFile(sftp, tmp, content, mode)
@@ -173,15 +189,18 @@ function sftpOperation<T>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false
+
     const timer = setTimeout(() => {
       if (settled) {
         return
       }
+
       settled = true
       // Why: remote hook installation must fail open; a wedged SFTP callback
       // should degrade hook status, not block SSH workspace startup forever.
       reject(new Error(`Timed out waiting for SFTP ${label}`))
     }, REMOTE_SFTP_OPERATION_TIMEOUT_MS)
+
     if (typeof timer === 'object' && 'unref' in timer) {
       timer.unref()
     }
@@ -190,12 +209,16 @@ function sftpOperation<T>(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
+
       if (err) {
         reject(err)
+
         return
       }
+
       resolve(value as T)
     }
 
@@ -211,6 +234,7 @@ async function readFile(sftp: SFTPWrapper, remotePath: string): Promise<string> 
   const data = await sftpOperation<string | Buffer>(`readFile ${remotePath}`, (callback) => {
     sftp.readFile(remotePath, 'utf8', callback)
   })
+
   return typeof data === 'string' ? data : data.toString('utf8')
 }
 
@@ -222,6 +246,7 @@ async function writeFile(
 ): Promise<void> {
   const options =
     mode === undefined ? { encoding: 'utf8' as const } : { encoding: 'utf8' as const, mode }
+
   await sftpOperation<void>(`writeFile ${remotePath}`, (callback) => {
     sftp.writeFile(remotePath, content, options, callback)
   })
@@ -231,6 +256,7 @@ async function statMode(sftp: SFTPWrapper, remotePath: string): Promise<number> 
   const stats = await sftpOperation<{ mode: number }>(`stat ${remotePath}`, (callback) => {
     sftp.stat(remotePath, callback)
   })
+
   return stats.mode & 0o7777
 }
 
@@ -245,6 +271,7 @@ async function getRemoteFileModeOrDefault(
     if (isNoEntryError(err)) {
       return defaultMode
     }
+
     throw err
   }
 }
@@ -253,6 +280,7 @@ async function rename(sftp: SFTPWrapper, src: string, dst: string): Promise<void
   if (typeof sftp.ext_openssh_rename === 'function') {
     try {
       await renameOpenSsh(sftp, src, dst)
+
       return
     } catch (err) {
       if (!isUnsupportedExtensionError(err)) {
@@ -308,13 +336,16 @@ async function mkdirpRemote(sftp: SFTPWrapper, remotePath: string): Promise<void
   if (remotePath === '/' || remotePath === '' || remotePath === '.') {
     return
   }
+
   // Why: walk the path top-down rather than bottom-up so an existing parent
   // chain doesn't cost a full readdir per segment. POSIX-only — Windows-
   // remote is out of scope for v1.
   const segments = remotePath.split('/').filter((s) => s.length > 0)
   let current = remotePath.startsWith('/') ? '' : '.'
+
   for (const seg of segments) {
     current = current === '' ? `/${seg}` : current === '.' ? seg : `${current}/${seg}`
+
     try {
       await readdir(sftp, current)
     } catch {
@@ -334,9 +365,11 @@ async function mkdirpRemote(sftp: SFTPWrapper, remotePath: string): Promise<void
 
 function dirnamePosix(p: string): string {
   const idx = p.lastIndexOf('/')
+
   if (idx <= 0) {
     return idx === 0 ? '/' : '.'
   }
+
   return p.slice(0, idx)
 }
 
@@ -344,6 +377,7 @@ function isNoEntryError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
     return false
   }
+
   // ssh2 surfaces SFTP errors with `code === 2` (SSH_FX_NO_SUCH_FILE).
   return (err as { code?: unknown }).code === 2
 }
@@ -352,6 +386,7 @@ function isAlreadyExistsError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
     return false
   }
+
   // SSH_FX_FAILURE (4) is OpenSSH's catch-all for "exists" alongside other
   // mkdir failures; we accept the ambiguity and let the next readdir prove
   // success.
@@ -362,7 +397,9 @@ function isUnsupportedExtensionError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
     return false
   }
+
   const code = (err as { code?: unknown }).code
   const message = (err as { message?: unknown }).message
+
   return code === 8 || (typeof message === 'string' && /unsupported/i.test(message))
 }

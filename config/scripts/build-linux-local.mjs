@@ -12,11 +12,13 @@ export function resolveLinuxBuildArch({
   requestedArch = process.env.ORCA_LINUX_BUILD_ARCH
 } = {}) {
   const arch = requestedArch ?? (platform === 'linux' ? hostArch : 'x64')
+
   if (!SUPPORTED_ARCHES.has(arch)) {
     throw new Error(
       `Unsupported Linux build architecture: ${arch}. Use ORCA_LINUX_BUILD_ARCH=x64|arm64.`
     )
   }
+
   return arch
 }
 
@@ -24,6 +26,7 @@ export function buildLinuxElectronBuilderArgs(arch, extraArgs = []) {
   if (!SUPPORTED_ARCHES.has(arch)) {
     throw new Error(`Unsupported Linux build architecture: ${arch}`)
   }
+
   return [
     'exec',
     'electron-builder',
@@ -47,11 +50,13 @@ export function runLocalLinuxBuild({
   cwd = resolve(import.meta.dirname, '../..')
 } = {}) {
   const env = { ...environment }
+
   if (arch === 'arm64') {
     env.ORCA_LINUX_ARM64_RELEASE = '1'
   } else {
     delete env.ORCA_LINUX_ARM64_RELEASE
   }
+
   const pnpm = platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   execFile(pnpm, buildLinuxElectronBuilderArgs(arch, extraArgs), {
     cwd,

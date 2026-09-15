@@ -22,14 +22,23 @@ import {
 } from './worktree-list-lineage-card-test-fixtures'
 
 vi.mock('@/store', () => createAppStoreModuleMock())
+
 vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
+
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => createVirtualizedScrollAnchorModuleMock())
+
 vi.mock('./project-header-drag', () => createProjectHeaderDragModuleMock())
+
 vi.mock('./WorktreeCard', () => createWorktreeCardModuleMock())
+
 vi.mock('./WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
+
 vi.mock('./WorktreeTitleInlineRename', () => createWorktreeTitleInlineRenameModuleMock())
+
 vi.mock('./WorktreeContextMenu', () => createWorktreeContextMenuModuleMock())
+
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
+
 vi.mock('@/components/ui/dropdown-menu', () => createDropdownMenuModuleMock())
 
 function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {

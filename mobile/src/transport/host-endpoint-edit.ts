@@ -15,20 +15,25 @@ export function resolveHostEndpointEdit(
   input: string
 ): HostEndpointEditResolution {
   const displayedEndpoint = displayHostEndpoint(storedEndpoint)
+
   if (input.trim() === displayedEndpoint) {
     return { kind: 'unchanged', endpoint: storedEndpoint }
   }
 
   const fallbackScheme = endpointScheme(storedEndpoint)
+
   const fallbackPort =
     endpointPort(storedEndpoint) ?? (fallbackScheme === 'wss' ? '443' : undefined)
+
   const options = { fallbackPort, fallbackScheme }
   const normalizedInput = normalizeHostEndpoint(input, options)
+
   if (!normalizedInput.ok) {
     return { kind: 'invalid', error: normalizedInput.error }
   }
 
   const normalizedDisplay = normalizeHostEndpoint(displayedEndpoint, options)
+
   if (
     sameEndpointAuthority(normalizedInput.endpoint, storedEndpoint) ||
     (normalizedDisplay.ok &&
@@ -53,5 +58,6 @@ function sameEndpointAuthority(left: string, right: string): boolean {
 
 function endpointRouteSuffix(endpoint: string): string {
   const match = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*(.*)$/.exec(endpoint)
+
   return match?.[1] ?? ''
 }

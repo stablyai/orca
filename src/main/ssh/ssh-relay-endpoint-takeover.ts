@@ -64,14 +64,17 @@ export function reapEmptyRelayHuskCommand(pid: number, sockPath: string): string
 
 export function interpretRelayHuskReapOutput(output: string): RelayHuskReapResult {
   const state = output.trim().split('\n').pop()?.trim()
+
   if (state === 'GONE') {
     return 'reaped'
   }
+
   // The host refused on its own re-check: what is there is not the empty relay we probed, so
   // nothing was signalled and nothing is claimed about it.
   if (state === 'MISMATCH' || state === 'BUSY') {
     return 'retained-live-work'
   }
+
   return 'reap-unconfirmed'
 }
 
@@ -81,20 +84,24 @@ export async function reapEmptyRelayHusk(
   options?: { signal?: AbortSignal }
 ): Promise<RelayHuskReapResult> {
   const holder = incumbent.holders[0]
+
   if (!holder) {
     return 'retained-live-work'
   }
+
   try {
     const output = await execCommand(
       conn,
       reapEmptyRelayHuskCommand(holder.pid, incumbent.sockPath),
       { wrapCommand: true, signal: options?.signal }
     )
+
     return interpretRelayHuskReapOutput(output)
   } catch (err) {
     if (isUnconfirmedSshCommandTermination(err)) {
       throw err
     }
+
     return 'reap-unconfirmed'
   }
 }
@@ -120,28 +127,35 @@ export async function resolveRelayEndpointBeforeRelaunch(
   options?: { signal?: AbortSignal }
 ): Promise<RelayEndpointIncumbent> {
   const probed = await probeRelayEndpointIncumbent(conn, hostPlatform, nodePath, sockPath, options)
+
   // A daemon that answered the handshake with its own version is live by positive host
   // evidence, even where nothing can enumerate socket holders.
   // A refused credential is the same positive evidence: the daemon answered.
   const refused =
     isRelayVersionMismatchError(reconnectError) || isRelayCredentialMismatchError(reconnectError)
+
   const incumbent = refused ? withHandshakeRefusalEvidence(probed) : probed
   console.warn(`[ssh-relay] Relay endpoint incumbent: ${describeRelayEndpointIncumbent(incumbent)}`)
 
   if (mayLaunchOverRelayEndpoint(incumbent)) {
     return incumbent
   }
+
   if (!isReapableRelayHusk(incumbent)) {
     throw refused
       ? new RelayEndpointHeldError(incumbent)
       : new RelayEndpointUnresponsiveError(incumbent)
   }
+
   const result = await reapEmptyRelayHusk(conn, incumbent, options)
+
   if (result !== 'reaped') {
     throw refused
       ? new RelayEndpointHeldError(incumbent)
       : new RelayEndpointUnresponsiveError(incumbent)
   }
+
   console.log(`[ssh-relay] Reaped empty relay husk holding ${sockPath}`)
+
   return incumbent
 }

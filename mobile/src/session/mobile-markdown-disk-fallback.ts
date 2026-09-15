@@ -19,6 +19,7 @@ export function buildMarkdownDiskFallbackDoc(args: {
     : args.tabIsDirty
       ? 'Desktop has unsaved changes. Showing disk content.'
       : 'Editing needs Orca desktop running.'
+
   return {
     status: 'ready' as const,
     content: args.content,

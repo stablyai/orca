@@ -14,6 +14,7 @@ import {
 } from './check-detail-field-mapping'
 import { rethrowCheckDetailsAbort, waitForCheckDetailsResolution } from './check-details-abort'
 import { attachFailedJobLogTails } from './check-job-log-tails'
+
 export async function getPRCheckDetails(
   repoPath: string,
   args: {
@@ -30,36 +31,45 @@ export async function getPRCheckDetails(
   const controller = new AbortController()
   let hostDeadlineExpired = false
   const forwardCallerAbort = (): void => controller.abort(callerSignal?.reason)
+
   if (callerSignal?.aborted) {
     forwardCallerAbort()
   } else {
     callerSignal?.addEventListener('abort', forwardCallerAbort, { once: true })
   }
+
   const hostDeadline = setTimeout(() => {
     hostDeadlineExpired = true
     controller.abort(new Error(GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE))
   }, GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS)
+
   let acquired = false
+
   try {
     const resolved = await waitForCheckDetailsResolution(
       resolveGitHubRepoExecution(repoPath, args.prRepo, connectionId, localGitOptions),
       controller.signal
     )
+
     if (!resolved.ownerRepo) {
       return null
     }
+
     const ownerRepo = resolved.ownerRepo
     const ghOptions: GhExecOptions = { ...resolved.ghOptions, signal: controller.signal }
     await acquire(controller.signal)
     acquired = true
     let checkRun: Record<string, unknown> | null = null
     let annotations: PRCheckRunDetails['annotations'] = []
+
     if (args.checkRunId) {
       const { stdout } = await ghExecFileAsync(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`],
         ghOptions
       )
+
       checkRun = JSON.parse(stdout) as Record<string, unknown>
+
       try {
         const annotationsResult = await ghExecFileAsync(
           [
@@ -68,6 +78,7 @@ export async function getPRCheckDetails(
           ],
           ghOptions
         )
+
         annotations = mapCheckAnnotations(JSON.parse(annotationsResult.stdout))
       } catch (err) {
         rethrowCheckDetailsAbort(controller.signal, err)
@@ -77,6 +88,7 @@ export async function getPRCheckDetails(
 
     const workflowRunId = args.workflowRunId ?? getWorkflowRunIdFromCheckRun(checkRun)
     let jobs: PRCheckRunDetails['jobs'] = []
+
     if (workflowRunId) {
       try {
         const { stdout } = await ghExecFileAsync(
@@ -86,6 +98,7 @@ export async function getPRCheckDetails(
           ],
           ghOptions
         )
+
         jobs = mapWorkflowJobs(JSON.parse(stdout), args.checkName)
         await attachFailedJobLogTails(jobs, ownerRepo, ghOptions)
       } catch (err) {
@@ -98,6 +111,7 @@ export async function getPRCheckDetails(
       checkRun?.output && typeof checkRun.output === 'object'
         ? (checkRun.output as Record<string, unknown>)
         : null
+
     return {
       name: nullableString(checkRun?.name) ?? args.checkName ?? 'Check',
       status: nullableString(checkRun?.status),
@@ -114,13 +128,16 @@ export async function getPRCheckDetails(
     }
   } catch (err) {
     console.warn('getPRCheckDetails failed:', err)
+
     if (hostDeadlineExpired && !callerSignal?.aborted) {
       throw new Error(GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE)
     }
+
     throw err
   } finally {
     clearTimeout(hostDeadline)
     callerSignal?.removeEventListener('abort', forwardCallerAbort)
+
     if (acquired) {
       release()
     }

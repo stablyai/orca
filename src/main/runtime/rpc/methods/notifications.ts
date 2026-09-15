@@ -51,6 +51,7 @@ export const NOTIFICATION_METHODS = [
     params: NotificationUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
+
       return { unsubscribed: true }
     }
   }),
@@ -62,6 +63,7 @@ export const NOTIFICATION_METHODS = [
     // client missed while its socket was reaped.
     handler: async (params, { runtime }) => {
       const missed = runtime.getMissedNotificationsSince(params.lastSeenSeq, params.epoch)
+
       return {
         notifications: missed.filter(
           createNotificationStreamFilter(params.includeDesktopSuppressed)
@@ -83,6 +85,7 @@ export const NOTIFICATION_METHODS = [
       if (clientKind !== 'mobile' || !pairedDeviceId) {
         return { registered: false, reason: 'not_mobile' }
       }
+
       // The paired identity is spread last so no parameter can ever override it.
       return await runtime.registerMobilePushDevice({ ...params, deviceId: pairedDeviceId })
     }
@@ -94,6 +97,7 @@ export const NOTIFICATION_METHODS = [
       if (clientKind !== 'mobile' || !pairedDeviceId) {
         return { accepted: false, reason: 'not_registered' }
       }
+
       return await runtime.testMobilePushDevice(pairedDeviceId)
     }
   }),
@@ -106,6 +110,7 @@ export const NOTIFICATION_METHODS = [
       if (clientKind !== 'mobile' || !pairedDeviceId) {
         return { unregistered: false }
       }
+
       return await runtime.unregisterMobilePushDevice(pairedDeviceId)
     }
   })

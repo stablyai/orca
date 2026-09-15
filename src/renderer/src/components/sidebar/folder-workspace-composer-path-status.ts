@@ -30,37 +30,47 @@ export function useFolderWorkspaceComposerPathStatus(
       getFreshFolderWorkspacePathStatus: s.getFreshFolderWorkspacePathStatus
     }))
   )
+
   const pathStatusRequest = useMemo(
     () =>
       projectGroup ? { scope: 'project-group' as const, projectGroupId: projectGroup.id } : null,
     [projectGroup]
   )
+
   const cacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(folderWorkspacePathStatuses)
   const activePathStatusRefreshIdRef = useRef(0)
+
   const [completedPathStatusRefreshKeys, setCompletedPathStatusRefreshKeys] = useState<
     ReadonlySet<string>
   >(() => new Set())
+
   const pathStatusRouteOptions = useMemo(
     () => ({ runtimeEnvironmentId: runtimeEnvironmentId ?? null }),
     [runtimeEnvironmentId]
   )
+
   const pathStatusCacheKey = pathStatusRequest
     ? getFolderWorkspacePathStatusCacheKey(pathStatusRequest, pathStatusRouteOptions)
     : null
+
   const pathStatusRefreshKey = pathStatusCacheKey
     ? `${pathStatusCacheKey}:${cacheExpiryTick}`
     : null
+
   const cachedPathStatusEntry = pathStatusCacheKey
     ? folderWorkspacePathStatuses[pathStatusCacheKey]
     : undefined
+
   const pathStatus = useMemo(() => {
     if (!pathStatusRequest || pathStatusCacheKey === null) {
       return null
     }
+
     // Why: subscribe to cache writes, but only let the TTL-aware accessor decide
     // whether a cached negative status is still authoritative.
     void cachedPathStatusEntry
     void cacheExpiryTick
+
     return getFreshFolderWorkspacePathStatus(pathStatusRequest, pathStatusRouteOptions)
   }, [
     cachedPathStatusEntry,
@@ -75,14 +85,17 @@ export function useFolderWorkspaceComposerPathStatus(
     if (!open || !pathStatusRequest || pathStatusRefreshKey === null) {
       return
     }
+
     const refreshId = activePathStatusRefreshIdRef.current + 1
     activePathStatusRefreshIdRef.current = refreshId
     setCompletedPathStatusRefreshKeys((current) => {
       if (!current.has(pathStatusRefreshKey)) {
         return current
       }
+
       const next = new Set(current)
       next.delete(pathStatusRefreshKey)
+
       return next
     })
     void Promise.resolve(
@@ -91,10 +104,12 @@ export function useFolderWorkspaceComposerPathStatus(
       if (activePathStatusRefreshIdRef.current !== refreshId) {
         return
       }
+
       setCompletedPathStatusRefreshKeys((current) => {
         if (current.has(pathStatusRefreshKey)) {
           return current
         }
+
         return new Set(current).add(pathStatusRefreshKey)
       })
     })
@@ -112,23 +127,28 @@ export function useFolderWorkspaceComposerPathStatus(
     pathStatusRefreshKey !== null &&
     pathStatus === null &&
     !completedPathStatusRefreshKeys.has(pathStatusRefreshKey)
+
   const cachedBlockingPathStatus =
     pathStatus === null &&
     cachedPathStatusEntry?.status.exists === false &&
     (isConfirmedStaleFolderPathStatus(cachedPathStatusEntry.status) ||
       cachedPathStatusEntry.status.reason === 'ambiguous-connection')
+
   const pathStatusBlocksCreate =
     pathStatusRefreshPending ||
     cachedBlockingPathStatus ||
     (pathStatus?.exists === false &&
       (isConfirmedStaleFolderPathStatus(pathStatus) ||
         pathStatus.reason === 'ambiguous-connection'))
+
   const displayPathStatus =
     pathStatus ?? (cachedBlockingPathStatus ? (cachedPathStatusEntry?.status ?? null) : null)
+
   const title =
     displayPathStatus?.exists === false
       ? getFolderWorkspacePathStatusTitle(displayPathStatus)
       : null
+
   const pathStatusProjectError =
     title && displayPathStatus
       ? `${title}. ${getFolderWorkspacePathStatusDescription(displayPathStatus)}`

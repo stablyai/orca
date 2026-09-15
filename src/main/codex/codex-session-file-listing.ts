@@ -10,6 +10,7 @@ export type CodexSessionBridgeIncrementalOptions = {
 }
 
 const INCREMENTAL_BRIDGE_BATCH_SIZE = 64
+
 const INCREMENTAL_BRIDGE_YIELD_MS = 10
 
 /**
@@ -20,13 +21,16 @@ const INCREMENTAL_BRIDGE_YIELD_MS = 10
  */
 export function listCodexSessionJsonlFiles(rootPath: string): string[] {
   const files: string[] = []
+
   try {
     for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
       const childPath = join(rootPath, entry.name)
+
       if (entry.isDirectory()) {
         appendSessionFilePaths(files, listCodexSessionJsonlFiles(childPath))
         continue
       }
+
       if (entry.isFile() && entry.name.endsWith('.jsonl')) {
         files.push(childPath)
       }
@@ -34,6 +38,7 @@ export function listCodexSessionJsonlFiles(rootPath: string): string[] {
   } catch (error) {
     console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
   }
+
   return files.sort()
 }
 
@@ -94,19 +99,25 @@ async function* listCodexSessionFilesIncrementally(
 
   while (pendingDirectories.length > 0) {
     const currentDirectory = pendingDirectories.pop()
+
     if (!currentDirectory) {
       continue
     }
+
     try {
       const directory = await opendir(currentDirectory)
+
       for await (const entry of directory) {
         const childPath = join(currentDirectory, entry.name)
+
         if (entry.isDirectory()) {
           pendingDirectories.push(childPath)
         } else if (entry.isFile() && isSessionFile(entry.name)) {
           yield childPath
         }
+
         entriesSinceYield += 1
+
         if (entriesSinceYield >= batchSize) {
           entriesSinceYield = 0
           await delayIncrementalBridge(yieldMs)

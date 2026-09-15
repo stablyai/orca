@@ -26,9 +26,11 @@ function createRecovery(
   const onReplacementReady = vi.fn()
   const onRecoveryFailed = vi.fn()
   const onRecoverySucceeded = vi.fn()
+
   const validateRegistration = vi.fn<() => Promise<boolean | null>>(() =>
     Promise.resolve(overrides.registered ?? true)
   )
+
   const recovery = createBrowserPageGuestRecovery({
     webview: { reload } as unknown as Electron.WebviewTag,
     browserPageExists: () => overrides.exists ?? true,
@@ -44,6 +46,7 @@ function createRecovery(
     onRecoveryFailed,
     onRecoverySucceeded
   })
+
   return {
     recovery,
     reload,
@@ -106,6 +109,7 @@ describe('browser page guest recovery', () => {
   it('surfaces guest replacement rejection without marking it ready', async () => {
     const replacementError = new Error('replacement failed')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const state = createRecovery({
       reload: () => {
         throw new Error('guest destroyed')
@@ -125,12 +129,14 @@ describe('browser page guest recovery', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     let replacementAttempt = 0
+
     const state = createRecovery({
       reload: () => {
         throw new Error('guest destroyed')
       },
       replaceGuest: () => {
         replacementAttempt += 1
+
         return replacementAttempt === 1 ? new Promise<void>(() => {}) : Promise.resolve()
       }
     })
@@ -183,6 +189,7 @@ describe('browser page guest recovery', () => {
 
     state.recovery.validateAfterResume()
     await vi.advanceTimersByTimeAsync(0)
+
     for (let attempt = 1; attempt < BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS; attempt += 1) {
       await vi.advanceTimersByTimeAsync(BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS)
     }
@@ -377,6 +384,7 @@ describe('browser page guest recovery', () => {
 
     state.recovery.validateAfterResume()
     await vi.advanceTimersByTimeAsync(0)
+
     for (let attempt = 1; attempt < BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS; attempt += 1) {
       await vi.advanceTimersByTimeAsync(BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS)
     }
@@ -393,8 +401,10 @@ describe('browser page guest recovery', () => {
     state.validateRegistration.mockImplementation(() => new Promise<boolean>(() => {}))
 
     state.recovery.validateAfterResume()
+
     for (let attempt = 0; attempt < BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS; attempt += 1) {
       await vi.advanceTimersByTimeAsync(BROWSER_GUEST_VALIDATION_TIMEOUT_MS)
+
       if (attempt < BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS - 1) {
         await vi.advanceTimersByTimeAsync(BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS)
       }
@@ -428,9 +438,11 @@ describe('browser page guest recovery', () => {
 
     state.recovery.validateAfterResume()
     await vi.advanceTimersByTimeAsync(0)
+
     for (let attempt = 1; attempt < BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS; attempt += 1) {
       await vi.advanceTimersByTimeAsync(BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS)
     }
+
     expect(state.onRecoveryFailed).toHaveBeenCalledOnce()
 
     state.validateRegistration.mockResolvedValue(true)

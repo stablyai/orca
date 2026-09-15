@@ -32,11 +32,13 @@ export function SshRoutedBrowserPageGate({
     worktreeId,
     sessionProfileId
   )
+
   const mountable = state.kind === 'unrouted' || state.kind === 'ready'
   useEffect(() => {
     if (mountable) {
       return
     }
+
     // Why (review P1-1): chrome unmount only PARKS guests to survive worktree
     // switches; a guest created before routing engaged would keep loading with
     // local egress behind the card unless it is destroyed outright.
@@ -48,9 +50,11 @@ export function SshRoutedBrowserPageGate({
   if (state.kind === 'unrouted') {
     return children(null)
   }
+
   if (state.kind === 'ready') {
     return children(state.partition)
   }
+
   return (
     <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-background px-6 text-center">
       <div className="flex max-w-sm flex-col items-center gap-2">
@@ -102,9 +106,11 @@ function errorTitle(kind: SshWorkspaceBrowserRouteErrorKind): string {
       'The SSH server blocks browser traffic'
     )
   }
+
   if (kind === 'ssh-unavailable') {
     return translate('browser.sshRoute.sshUnavailableTitle', 'SSH connection unavailable')
   }
+
   return translate('browser.sshRoute.errorTitle', 'SSH browser routing unavailable')
 }
 
@@ -115,12 +121,14 @@ function errorDescription(kind: SshWorkspaceBrowserRouteErrorKind): string {
       'This server refuses TCP forwarding (often “AllowTcpForwarding no” in its sshd config), which browsing through it requires. Ask its administrator to allow forwarding, or browse from this device instead.'
     )
   }
+
   if (kind === 'ssh-unavailable') {
     return translate(
       'browser.sshRoute.sshUnavailableDescription',
       "Pages in this workspace browse through its SSH host, and that connection isn't available right now. Reconnect the host, then retry."
     )
   }
+
   return translate(
     'browser.sshRoute.errorDescription',
     'Pages in this workspace browse through its SSH host, and routing could not be set up.'

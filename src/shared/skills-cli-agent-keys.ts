@@ -75,11 +75,14 @@ export function isSkillsCliAgentKeyShaped(value: string): boolean {
 /** Map detected Orca agents onto `skills --agent` keys, plus the universal target. */
 export function toSkillsCliAgentKeys(detectedAgents: readonly TuiAgent[]): string[] {
   const keys = new Set<string>([SKILLS_CLI_UNIVERSAL_AGENT_KEY])
+
   for (const agent of detectedAgents) {
     const key = SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT[agent]
+
     if (key) {
       keys.add(key)
     }
   }
+
   return [...keys].sort()
 }

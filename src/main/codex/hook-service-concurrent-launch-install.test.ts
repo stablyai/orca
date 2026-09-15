@@ -16,13 +16,17 @@ const { getPathMock, homedirMock, installExclusivelyMock, refreshExclusivelyMock
 )
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
+
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return { ...actual, homedir: homedirMock }
 })
+
 vi.mock('./codex-hook-local-install', () => ({
   installCodexHooksExclusively: installExclusivelyMock
 }))
+
 vi.mock('./codex-hook-local-maintenance', () => ({
   refreshCodexRuntimeUserHooksExclusively: refreshExclusivelyMock,
   removeCodexHooksExclusively: vi.fn()
@@ -31,7 +35,9 @@ vi.mock('./codex-hook-local-maintenance', () => ({
 import { CodexHookService } from './codex-hook-service-implementation'
 
 let tmpHome: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 /** Stands in for a real `codex app-server` grant session, measured at ~380ms locally. */
@@ -57,14 +63,17 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   installExclusivelyMock.mockImplementation(async (runtimeHomePath: string) => {
     await delay(INSTALL_MS)
+
     return installedStatus(join(runtimeHomePath, 'hooks.json'))
   })
   refreshExclusivelyMock.mockImplementation(async (runtimeHomePath: string) => {
     await delay(INSTALL_MS)
+
     return installedStatus(join(runtimeHomePath, 'hooks.json'))
   })
 })
@@ -72,11 +81,13 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 

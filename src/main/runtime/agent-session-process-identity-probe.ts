@@ -37,6 +37,7 @@ export type AgentSessionProcessProbeDeps = {
 function defaultIsPidPresent(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     // Why: only ESRCH proves absence; permission and transient host failures must fail closed.
@@ -50,13 +51,16 @@ async function readLinuxProcessStartTimeMs(pid: number): Promise<number | null> 
       readFile(`/proc/${pid}/stat`, 'utf-8'),
       readFile('/proc/stat', 'utf-8')
     ])
+
     // Field 22 is starttime in clock ticks; the comm field can contain spaces, so cut past ") ".
     const fields = stat.slice(stat.lastIndexOf(') ') + 2).split(' ')
     const ticks = Number(fields[19])
     const bootTimeSeconds = Number(/^btime\s+(\d+)$/m.exec(systemStat)?.[1])
+
     if (!Number.isFinite(ticks) || !Number.isFinite(bootTimeSeconds)) {
       return null
     }
+
     return Math.round(bootTimeSeconds * 1000 + (ticks / 100) * 1000)
   } catch {
     return null
@@ -70,10 +74,13 @@ async function readDarwinProcessStartTimeMs(pid: number): Promise<number | null>
       args: ['-o', 'lstart=', '-p', String(pid)],
       timeoutMs: PROCESS_START_TIME_TIMEOUT_MS
     })
+
     if (result.timedOut || result.code !== 0) {
       return null
     }
+
     const parsed = Date.parse(result.stdout.trim())
+
     return Number.isFinite(parsed) ? parsed : null
   } catch {
     return null
@@ -84,25 +91,32 @@ async function readDarwinProcessStartTimesMs(
   pids: readonly number[]
 ): Promise<Map<number, number | null>> {
   const observed = new Map<number, number | null>()
+
   if (pids.length === 0) {
     return observed
   }
+
   try {
     const result = await runProcess({
       program: 'ps',
       args: ['-o', 'pid=,lstart=', '-p', pids.join(',')],
       timeoutMs: PROCESS_START_TIME_TIMEOUT_MS
     })
+
     if (result.timedOut || result.code !== 0) {
       return observed
     }
+
     for (const line of result.stdout.split('\n')) {
       const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line)
+
       if (!match) {
         continue
       }
+
       const pid = Number(match[1])
       const parsed = Date.parse(match[2])
+
       if (Number.isSafeInteger(pid) && Number.isFinite(parsed)) {
         observed.set(pid, parsed)
       }
@@ -110,6 +124,7 @@ async function readDarwinProcessStartTimesMs(
   } catch {
     // A missing process table is unknown, never evidence that every owner exited.
   }
+
   return observed
 }
 
@@ -119,12 +134,14 @@ async function readWindowsProcessStartTimeMs(pid: number): Promise<number | null
   if (!isWindowsProcessStartTimeAvailable()) {
     return null
   }
+
   try {
     // Identity flag set: only the creation time is read, so no command line is
     // worth an `OpenProcess` per process here.
     const row = (await readWindowsProcessIdentityTableFresh()).find(
       (candidate) => candidate.pid === pid
     )
+
     return row?.creationTimeMs ?? null
   } catch {
     return null
@@ -135,18 +152,22 @@ async function readWindowsProcessStartTimesMs(
   pids: readonly number[]
 ): Promise<Map<number, number | null>> {
   const observed = new Map<number, number | null>(pids.map((pid) => [pid, null]))
+
   if (pids.length === 0 || !isWindowsProcessStartTimeAvailable()) {
     return observed
   }
+
   try {
     const table = await readWindowsProcessIdentityTableFresh()
     const startTimesByPid = new Map(table.map((row) => [row.pid, row.creationTimeMs ?? null]))
+
     for (const pid of pids) {
       observed.set(pid, startTimesByPid.get(pid) ?? null)
     }
   } catch {
     // A missing process table is unknown, never evidence that every owner exited.
   }
+
   return observed
 }
 
@@ -161,12 +182,15 @@ export async function readProcessStartTimeMs(
   if (platform === 'linux') {
     return readLinuxProcessStartTimeMs(pid)
   }
+
   if (platform === 'darwin') {
     return readDarwinProcessStartTimeMs(pid)
   }
+
   if (platform === 'win32') {
     return readWindowsProcessStartTimeMs(pid)
   }
+
   return null
 }
 
@@ -175,13 +199,17 @@ export async function readProcessStartTimesMs(
   platform: NodeJS.Platform = process.platform
 ): Promise<Map<number, number | null>> {
   const uniquePids = [...new Set(pids)]
+
   if (platform === 'darwin') {
     const table = await readDarwinProcessStartTimesMs(uniquePids)
+
     return new Map(uniquePids.map((pid) => [pid, table.get(pid) ?? null]))
   }
+
   if (platform === 'win32') {
     return readWindowsProcessStartTimesMs(uniquePids)
   }
+
   return new Map(
     await Promise.all(
       uniquePids.map(async (pid) => [pid, await readProcessStartTimeMs(pid, platform)] as const)
@@ -205,11 +233,14 @@ export async function probeAgentSessionProcessIdentities(args: {
 }): Promise<AgentSessionOwnerProbe[]> {
   const deps = args.deps ?? {}
   const platform = deps.platform ?? process.platform
+
   const pids = args.identities
     .filter((identity) => identity.processStartTimeMs !== null)
     .map((identity) => identity.pid)
+
   const readStartTimes = deps.readProcessStartTimesMs ?? readProcessStartTimesMs
   const startTimes = await readStartTimes(pids, platform).catch(() => new Map())
+
   return Promise.all(
     args.identities.map((identity) =>
       probeAgentSessionProcessIdentity({
@@ -235,37 +266,49 @@ export async function probeAgentSessionProcessIdentity(args: {
 }): Promise<AgentSessionOwnerProbe> {
   const { identity } = args
   const deps = args.deps ?? {}
+
   if (args.observedExit) {
     return { outcome: 'exit-observed' }
   }
+
   const isPidPresent = deps.isPidPresent ?? defaultIsPidPresent
+
   if (!isPidPresent(identity.pid)) {
     return { outcome: 'pid-absent' }
   }
+
   const matchedOn: AgentSessionIdentityMatchField[] = []
   const echoedToken = await deps.readEchoedSpawnToken?.(identity).catch(() => null)
+
   if (echoedToken !== null && echoedToken !== undefined) {
     if (echoedToken !== identity.spawnToken) {
       return { outcome: 'identity-mismatch', field: 'spawn-token' }
     }
+
     matchedOn.push('spawn-token')
   }
+
   if (identity.processStartTimeMs !== null) {
     const readStartTime = deps.readProcessStartTimeMs ?? readProcessStartTimeMs
+
     const observed = await readStartTime(identity.pid, deps.platform ?? process.platform).catch(
       () => null
     )
+
     if (observed !== null) {
       if (Math.abs(observed - identity.processStartTimeMs) > PROCESS_START_TIME_TOLERANCE_MS) {
         if (matchedOn.includes('spawn-token')) {
           // Why: contradictory evidence cannot prove that a token-authenticated child is dead.
           return { outcome: 'indeterminate', reason: 'process identity evidence contradicted' }
         }
+
         return { outcome: 'identity-mismatch', field: 'process-start-time' }
       }
+
       matchedOn.push('process-start-time')
     }
   }
+
   if (matchedOn.length === 0) {
     // Why: the pid exists and nothing PID-reuse-safe could be checked. Reporting a match here is
     // exactly the case that produces two writers on one provider session.
@@ -274,6 +317,7 @@ export async function probeAgentSessionProcessIdentity(args: {
       reason: 'pid present but neither spawn token nor start time could be verified'
     }
   }
+
   return { outcome: 'identity-matched', matchedOn }
 }
 
@@ -288,19 +332,24 @@ export async function probeAgentSessionReservation(args: {
   hasProviderActivitySinceReservation: () => Promise<boolean | null>
 }): Promise<AgentSessionOwnerProbe> {
   const pids = await args.findProcessesWithSpawnToken(args.spawnToken).catch(() => null)
+
   if (pids === null) {
     return { outcome: 'indeterminate', reason: 'host could not enumerate spawn tokens' }
   }
+
   if (pids.length > 0) {
     return {
       outcome: 'indeterminate',
       reason: `reservation spawn token is live on ${pids.length} process(es)`
     }
   }
+
   const providerActivity = await args.hasProviderActivitySinceReservation().catch(() => null)
+
   if (providerActivity === null) {
     return { outcome: 'indeterminate', reason: 'provider activity since reservation is unknown' }
   }
+
   return providerActivity
     ? { outcome: 'indeterminate', reason: 'provider saw activity after the reservation' }
     : { outcome: 'reservation-unused' }

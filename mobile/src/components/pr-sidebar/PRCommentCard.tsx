@@ -44,9 +44,11 @@ const REACTION_EMOJI: Record<GitHubReactionContent, string> = {
 
 function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
   const visible = (reactions ?? []).filter((r) => r.count > 0)
+
   if (visible.length === 0) {
     return null
   }
+
   return (
     <View style={styles.reactionsRow}>
       {visible.map((r) => (
@@ -77,12 +79,16 @@ export const PRCommentCard = memo(function PRCommentCard({
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
   const fileLabel = comment.path
     ? `${comment.path.split('/').pop()}${comment.line ? `:L${comment.line}` : ''}`
     : null
+
   const canResolve = actions ? isResolvableComment(comment) : false
+
   const resolveBusy =
     canResolve && actions ? actions.isResolveBusy(comment.threadId as string) : false
+
   const replyBusy = actions ? actions.isReplyBusy(comment.id) : false
   // Edit/delete are offered only on mutable root conversation comments with a repo
   // slug; GitHub enforces authorship server-side (no client viewer-identity field).
@@ -94,10 +100,13 @@ export const PRCommentCard = memo(function PRCommentCard({
     if (!actions) {
       return false
     }
+
     const ok = await actions.reply(comment, body)
+
     if (ok) {
       setReplyOpen(false)
     }
+
     return ok
   }
 
@@ -105,10 +114,13 @@ export const PRCommentCard = memo(function PRCommentCard({
     if (!actions) {
       return false
     }
+
     const ok = await actions.editComment(comment.id, body)
+
     if (ok) {
       setEditOpen(false)
     }
+
     return ok
   }
 

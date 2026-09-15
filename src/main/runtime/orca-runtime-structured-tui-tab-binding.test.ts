@@ -22,14 +22,17 @@ const {
 }))
 
 vi.mock('./structured-tui-process-identity', () => ({ readStructuredTuiProcessIdentity }))
+
 vi.mock('../codex/codex-tui-rollout-proof', () => ({
   proveCodexTuiRollout,
   resolvePinnedCodexRolloutProof
 }))
+
 vi.mock('../native-chat/session-file-resolver', () => ({
   readClaudeTranscriptLeafUuid,
   resolveSessionFilePath
 }))
+
 vi.mock('./agent-session-process-identity-probe', async (importOriginal) => ({
   ...(await importOriginal()),
   probeAgentSessionProcessIdentity
@@ -62,19 +65,24 @@ describe('structured TUI launch tab binding', () => {
       container: 'native',
       providerRoot: '/tmp/codex-home'
     }
+
     const signer = createEphemeralAgentSessionClaimSigner('profile-test')
+
     const claim = signer.createClaim({
       namespace,
       identity: { agent: 'codex', providerSession: { key: 'session_id', id: 'thread-1' } },
       canonicalWorktreeId: WORKTREE_ID
     })
+
     const terminalHandle = 'term_cold_owner'
     const leafId = '23013912-13f8-44e5-818f-d40a1ff4e8c5'
     resolvePinnedCodexRolloutProof.mockResolvedValue('/tmp/codex-home/sessions/thread-1.jsonl')
     const writeAgentSessionProof = vi.fn(() => false)
+
     const runtime = new OrcaRuntimeService(undefined, undefined, {
       agentSessionClaimSigner: signer
     })
+
     runtime.setPtyController({
       listProcesses: vi.fn(async () => [
         {
@@ -105,6 +113,7 @@ describe('structured TUI launch tab binding', () => {
       writeAgentSessionProof,
       getForegroundProcess: async () => null
     })
+
     const internal = runtime as unknown as {
       createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
@@ -128,6 +137,7 @@ describe('structured TUI launch tab binding', () => {
         }
       >
     }
+
     internal.listResolvedWorktrees = vi.fn(async () => [
       { id: WORKTREE_ID, repoId: 'repo-1', path: '/tmp/structured-handoff' }
     ])
@@ -151,7 +161,9 @@ describe('structured TUI launch tab binding', () => {
     const coldPty = internal.ptysById.get('pty-cold-owner')!
     expect(coldPty).toMatchObject({ launchToken: null, launchAgent: null })
     expect(coldPty.agentSessionOwners).toHaveLength(1)
+
     const runtimeId = (runtime as unknown as { runtimeId: string }).runtimeId
+
     ;(
       runtime as unknown as {
         handles: Map<
@@ -224,10 +236,12 @@ describe('structured TUI launch tab binding', () => {
     const spawnToken = 'claude-restart-token'
     const sessionId = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
     const transcriptPath = '/tmp/claude-home/projects/worktree/session.jsonl'
+
     const attestAgentHookCompatibilityAuthority = vi.fn(() => ({
       paneKey,
       source: 'hydrated_commitment' as const
     }))
+
     const runtime = new OrcaRuntimeService(null, undefined, {
       attestAgentHookCompatibilityAuthority,
       getAgentProviderSessionRowsForPane: () => [
@@ -243,11 +257,13 @@ describe('structured TUI launch tab binding', () => {
         }
       ]
     })
+
     const internal = runtime as unknown as {
       createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport
       ptysById: Map<string, unknown>
       restoredOrchestrationAuthorityByPtyId: Map<string, unknown>
     }
+
     internal.ptysById.set('pty-claude', {
       ptyId: 'pty-claude',
       worktreeId: WORKTREE_ID,
@@ -260,6 +276,7 @@ describe('structured TUI launch tab binding', () => {
     })
     resolveSessionFilePath.mockResolvedValue('/tmp/claude-home/projects/worktree/session.jsonl')
     readClaudeTranscriptLeafUuid.mockResolvedValue('leaf-before-resume')
+
     const record = {
       sessionId: 'session-1',
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/tmp/claude-home' },
@@ -283,6 +300,7 @@ describe('structured TUI launch tab binding', () => {
         provenHandleLinkId: null
       }
     } as never
+
     probeAgentSessionProcessIdentity.mockResolvedValue({
       outcome: 'identity-matched',
       matchedOn: ['process-start-time']
@@ -303,6 +321,7 @@ describe('structured TUI launch tab binding', () => {
     const pty = internal.ptysById.get('pty-claude') as {
       launchToken: string | null
     }
+
     pty.launchToken = null
     const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(recovered.terminal.handle)!
     internal.restoredOrchestrationAuthorityByPtyId.set('pty-claude', {
@@ -348,10 +367,12 @@ describe('structured TUI launch tab binding', () => {
     const spawnToken = 'restored-token'
     const sessionId = '019fd532-7c11-7a90-b6de-4e1a2c3d5f62'
     const transcriptPath = '/tmp/claude-home/projects/worktree/restored.jsonl'
+
     const attestAgentHookCompatibilityAuthority = vi.fn(() => ({
       paneKey,
       source: 'hydrated_commitment' as const
     }))
+
     const runtime = new OrcaRuntimeService(null, undefined, {
       attestAgentHookCompatibilityAuthority,
       getAgentProviderSessionRowsForPane: () => [
@@ -367,11 +388,13 @@ describe('structured TUI launch tab binding', () => {
         }
       ]
     })
+
     const internal = runtime as unknown as {
       createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport
       ptysById: Map<string, unknown>
       restoredOrchestrationAuthorityByPtyId: Map<string, unknown>
     }
+
     internal.ptysById.set('pty-restored', {
       ptyId: 'pty-restored',
       worktreeId: WORKTREE_ID,
@@ -384,6 +407,7 @@ describe('structured TUI launch tab binding', () => {
     })
     resolveSessionFilePath.mockResolvedValue('/tmp/claude-home/projects/worktree/restored.jsonl')
     readClaudeTranscriptLeafUuid.mockResolvedValue('leaf-restored')
+
     const record = {
       sessionId: 'session-restored',
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/tmp/claude-home' },
@@ -411,9 +435,11 @@ describe('structured TUI launch tab binding', () => {
     const recovered = await internal
       .createStructuredAgentSessionHandoffTransport()
       .recoverTuiOwner(record)
+
     const restoredPty = internal.ptysById.get('pty-restored') as {
       launchToken: string | null
     }
+
     restoredPty.launchToken = null
     const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(recovered.terminal.handle)!
     internal.restoredOrchestrationAuthorityByPtyId.set('pty-restored', {
@@ -462,10 +488,12 @@ describe('structured TUI launch tab binding', () => {
       paneKey: string
       terminalHandle: string
     } | null = null
+
     const revealTerminalSession = vi.fn(
       (_worktreeId: string, _options: { tabId?: string; leafId?: string; ptyId?: string }) =>
         Promise.resolve({ tabId: 'tab-renderer' })
     )
+
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
@@ -482,6 +510,7 @@ describe('structured TUI launch tab binding', () => {
         getAgentStatusSnapshot: () => (explicitStatus ? [explicitStatus as never] : [])
       }
     )
+
     runtime.setNotifier(notifier(revealTerminalSession) as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-structured', pid: 4242 })
     runtime.setPtyController({
@@ -515,6 +544,7 @@ describe('structured TUI launch tab binding', () => {
       >
       graphStatus: 'ready'
     }
+
     internal.resolveTerminalWorkspaceLaunchScope = vi.fn(async () => ({
       id: WORKTREE_ID,
       path: '/tmp/structured-handoff',
@@ -525,6 +555,7 @@ describe('structured TUI launch tab binding', () => {
     internal.markLocalWorkspaceTrustedForAgent = vi.fn()
     const waitForTerminal = vi.fn(async () => ({}))
     internal.waitForTerminal = waitForTerminal
+
     const waitForAdoptedStructuredTuiProof = vi.fn(async () => {
       const snapshot = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       expect(snapshot.tabs).toContainEqual(
@@ -537,8 +568,10 @@ describe('structured TUI launch tab binding', () => {
         })
       )
       expect(revealTerminalSession).not.toHaveBeenCalled()
+
       return { transcriptPath: '/tmp/rollout.jsonl' }
     })
+
     internal.waitForAdoptedStructuredTuiProof = waitForAdoptedStructuredTuiProof
     const waitForStructuredTuiPtyExit = vi.fn(async () => {})
     internal.waitForStructuredTuiPtyExit = waitForStructuredTuiPtyExit
@@ -557,6 +590,7 @@ describe('structured TUI launch tab binding', () => {
 
     const transport = internal.createStructuredAgentSessionHandoffTransport()
     const onSpawned = vi.fn(async () => {})
+
     const owner = await transport.launchTui({
       record: {
         sessionId: 'session-1',
@@ -577,6 +611,7 @@ describe('structured TUI launch tab binding', () => {
       tabId: string
       leafId: string
     }
+
     expect(owner.terminal).toMatchObject({
       tabId: 'tab-renderer',
       paneKey: `${reveal.tabId}:${reveal.leafId}`,
@@ -633,6 +668,7 @@ describe('structured TUI launch tab binding', () => {
     )
 
     explicitStatus = null
+
     const livePty = (
       runtime as unknown as {
         ptysById: Map<
@@ -647,6 +683,7 @@ describe('structured TUI launch tab binding', () => {
         >
       }
     ).ptysById.get('pty-structured')!
+
     Object.assign(livePty, {
       tailBuffer: [
         'OpenAI Codex (v0.147.0)',
@@ -668,7 +705,9 @@ describe('structured TUI launch tab binding', () => {
         ptysById: Map<string, { connected: boolean; launchToken: string | null }>
       }
     ).ptysById.get('pty-structured')!
+
     pty.launchToken = null
+
     const persistedRecord = {
       sessionId: 'session-1',
       providerHandleChain: [{ handle: { provider: 'codex', threadId: 'thread-1' }, observedAt: 1 }],
@@ -704,6 +743,7 @@ describe('structured TUI launch tab binding', () => {
     const publish = vi.spyOn(runtime, 'publishStructuredAgentSessionTab')
     const focusEditorTab = vi.fn()
     runtime.setNotifier({ focusEditorTab } as never)
+
     const internal = runtime as unknown as {
       createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport
     }

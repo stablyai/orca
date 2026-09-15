@@ -39,6 +39,7 @@ import {
 export { prepareHostScopedRemovalCompletion, preservesSameIdRendererState }
 
 type PreservedBranchWorktree = Parameters<typeof showPreservedBranchToast>[1]
+
 type RemoveWorktreeSliceResult = Awaited<ReturnType<WorktreeSlice['removeWorktree']>>
 
 /** Route at the confirmed host when there is one, else the ordinary active-host route. */
@@ -76,7 +77,9 @@ export function beginHostQualifiedRemoval(
 ): HostQualifiedRemovalStart {
   const resolveRemovalRoute = (): WorktreeOperationRoute | null =>
     resolveHostQualifiedRemovalRoute(get, worktreeId, requiredExecutionHostId)
+
   const removalRoute = resolveRemovalRoute()
+
   if (!removalRoute && (!forgetLocalOnly || !requiredExecutionHostId)) {
     // Why: callers mark rows deleting up front for immediate sidebar feedback
     // (worktree-delete-execution.ts), and a refusal returns before the try/catch that
@@ -84,8 +87,10 @@ export function beginHostQualifiedRemoval(
     // this the workspace sits on a "Deleting…" spinner forever with no explanation left
     // on screen.
     get().clearWorktreeDeleteState(worktreeId)
+
     return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
   }
+
   // Fail closed rather than delete on a host the caller never confirmed.
   if (
     requiredExecutionHostId &&
@@ -93,14 +98,17 @@ export function beginHostQualifiedRemoval(
     removalRoute.executionHostId !== requiredExecutionHostId
   ) {
     get().clearWorktreeDeleteState(worktreeId)
+
     return { ok: false, error: WORKTREE_REMOVAL_HOST_CHANGED_ERROR }
   }
+
   const sameIdSurvivingHostId = resolveSameIdSurvivingHostId(
     get(),
     worktreeId,
     requiredExecutionHostId,
     ignoreWorkspaceCleanupScanSurvivors
   )
+
   return {
     ok: true,
     removalRoute,
@@ -149,9 +157,11 @@ export function refuseUnprovableRemoteHostRouting(
   if (targetKind === 'local') {
     return null
   }
+
   if (getWorktreeOperationOwnerHostIds(get(), worktreeId).length <= 1) {
     return null
   }
+
   return translate(
     'auto.store.slices.workspace.cleanup.hostCollision',
     'Error: this workspace exists on multiple hosts at the same path'
@@ -165,6 +175,7 @@ export function findWorktreeOnConfirmedHost(
   requiredExecutionHostId: ExecutionHostId | null
 ): PreservedBranchWorktree {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
+
   return get()
     .allWorktrees()
     .find(
@@ -213,20 +224,27 @@ export async function completeSameIdHostScopedRemoval(args: {
     worktreeBeforeRemoval,
     suppressPreservedBranchToast
   } = args
+
   const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted({
     hostScopedWorkspaces: [{ workspaceId: worktreeId, executionHostId: requiredExecutionHostId }]
   })
+
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
+
   if (!args.rowAlreadyDropped) {
     dropConfirmedHostRow(set, worktreeId, requiredExecutionHostId)
   }
+
   const preservedBranch = removalResult?.preservedBranch
+
   if (!preservedBranch) {
     return { ok: true as const }
   }
+
   const runtimeEnvironment = removalRoute?.runtimeEnvironmentId
     ? { runtimeEnvironmentId: removalRoute.runtimeEnvironmentId }
     : {}
+
   const cleanup = {
     worktreeId,
     branchName: preservedBranch.branchName,
@@ -234,10 +252,12 @@ export async function completeSameIdHostScopedRemoval(args: {
     hostId: requiredExecutionHostId,
     ...runtimeEnvironment
   }
+
   preservedBranchRuntimeTargetByCleanupKey.set(preservedBranchCleanupKey(cleanup), {
     cleanup,
     target
   })
+
   if (!suppressPreservedBranchToast) {
     showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
       void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead, {
@@ -246,6 +266,7 @@ export async function completeSameIdHostScopedRemoval(args: {
       })
     })
   }
+
   return {
     ok: true as const,
     preservedBranch: { ...preservedBranch, hostId: requiredExecutionHostId, ...runtimeEnvironment }

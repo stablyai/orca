@@ -23,13 +23,16 @@ async function fixture() {
     join(source, 'SKILL.md'),
     '---\nname: request-skill\ndescription: Request test\n---\n\n# Request\n'
   )
+
   const archive = await createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, 'package.tar.gz'),
     packageId: 'package_1',
     versionId: 'version_1'
   })
+
   const archiveBytes = await readFile(archive.archivePath)
+
   return {
     root,
     home,
@@ -83,6 +86,7 @@ describe('executeSkillInstallRequest', () => {
 
   it('serializes download and trusted-local requests through one destination transaction', async () => {
     const { root, request, dependencies, archive } = await fixture()
+
     const [downloaded, local] = await Promise.all([
       executeSkillInstallRequest(request, dependencies),
       executeSkillInstallRequest(
@@ -118,6 +122,7 @@ describe('executeSkillInstallRequest', () => {
 
   it('rejects invalid shape, identity, scope, destination, and ingress policy before download', async () => {
     const { request, dependencies, archive, home } = await fixture()
+
     const cases: { input: unknown; error: string }[] = [
       { input: { ...request, unexpected: true }, error: 'Unrecognized key' },
       {

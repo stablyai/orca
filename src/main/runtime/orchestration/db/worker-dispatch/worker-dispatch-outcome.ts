@@ -10,12 +10,15 @@ export function markWorkerDispatchReady(
   effects?: unknown[]
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
+
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
       id: dispatchId,
@@ -33,6 +36,7 @@ export function markWorkerDispatchReady(
       }
     })
     this.db.exec('COMMIT')
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -51,12 +55,15 @@ export function failWorkerStart(
   options: { retainCapability?: boolean } = {}
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
+
     if (!dispatch || !worker || worker.state !== 'starting') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
     }
+
     const now = new Date().toISOString()
     transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
@@ -78,6 +85,7 @@ export function failWorkerStart(
       to: 'failed',
       projection: { stage, last_error: reason, updated_at: now }
     })
+
     const hasActiveDispatch = Boolean(
       this.db
         .prepare(
@@ -86,7 +94,9 @@ export function failWorkerStart(
         )
         .get(dispatch.task_id)
     )
+
     const task = this.getTask(dispatch.task_id)
+
     if (!hasActiveDispatch && task && task.status !== 'completed') {
       transitionLifecycleWithDb(this.db, {
         entity: 'task',
@@ -96,9 +106,11 @@ export function failWorkerStart(
         projection: { completed_at: now }
       })
     }
+
     this.closeQuestionsForDispatch(dispatchId)
     recordFailedStartDispatchIdentity(this, this.getWorkerDispatch(dispatchId) as WorkerDispatchRow)
     this.db.exec('COMMIT')
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -114,12 +126,15 @@ export function markWorkerStartUnknown(
   effects?: unknown[]
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
+
     if (!dispatch || !worker || worker.state !== 'starting') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
@@ -146,6 +161,7 @@ export function markWorkerStartUnknown(
     })
     // Authority survives uncertainty, so its outstanding questions must remain answerable.
     this.db.exec('COMMIT')
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')

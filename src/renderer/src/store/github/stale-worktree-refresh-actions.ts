@@ -20,17 +20,21 @@ export const createStaleWorktreeRefreshActions = (
   refreshGitHubForWorktreeIfStale: (worktreeId) => {
     const state = get()
     let worktree: Worktree | undefined
+
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       worktree = worktrees.find((w) => w.id === worktreeId)
+
       if (worktree) {
         break
       }
     }
+
     if (!worktree) {
       return
     }
 
     const repo = state.repos.find((r) => r.id === worktree.repoId)
+
     if (!repo) {
       return
     }
@@ -39,6 +43,7 @@ export const createStaleWorktreeRefreshActions = (
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
     const cardProps = state.worktreeCardProperties ?? []
     const rawCardProps = cardProps as readonly string[]
+
     const shouldRefreshPR =
       state.groupBy === 'pr-status' ||
       (state.settings?.experimentalNewWorktreeCardStyle === true
@@ -48,6 +53,7 @@ export const createStaleWorktreeRefreshActions = (
 
     if (shouldRefreshPR && !worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)
+
       if (candidate) {
         if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
@@ -67,6 +73,7 @@ export const createStaleWorktreeRefreshActions = (
 
     if ((state.worktreeCardProperties ?? []).includes('issue') && worktree.linkedIssue) {
       const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+
       const issueKey = issueCacheKey(
         repo.path,
         repo.id,
@@ -76,7 +83,9 @@ export const createStaleWorktreeRefreshActions = (
         repo.executionHostId,
         true
       )
+
       const issueEntry = state.issueCache[issueKey]
+
       if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
         void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
       }

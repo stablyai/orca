@@ -13,8 +13,10 @@ export class RelayPrimaryChannel {
       (data, onSettled) => {
         if (!this.stdoutAlive) {
           onSettled({ ok: false, error: new Error('Relay stdout is closed') })
+
           return false
         }
+
         try {
           return process.stdout.write(data, (error) => {
             onSettled(error ? { ok: false, error } : { ok: true })
@@ -26,6 +28,7 @@ export class RelayPrimaryChannel {
             ok: false,
             error: error instanceof Error ? error : new Error(String(error))
           })
+
           return false
         }
       },
@@ -36,9 +39,12 @@ export class RelayPrimaryChannel {
         waitWriteDrain: (callback) => {
           if (!this.stdoutAlive) {
             callback()
+
             return
           }
+
           this.stdoutDrainWaiters.add(callback)
+
           return () => this.stdoutDrainWaiters.delete(callback)
         },
         close: () => this.closePrimaryDescriptors()
@@ -104,6 +110,7 @@ export class RelayPrimaryChannel {
   private closePrimaryDescriptors(): void {
     this.stdoutAlive = false
     this.flushStdoutDrainWaiters()
+
     for (const fd of [process.stdin.fd, process.stdout.fd]) {
       try {
         closeSync(fd)
@@ -111,12 +118,15 @@ export class RelayPrimaryChannel {
         // Already closed by the peer.
       }
     }
+
     const devNull = process.platform === 'win32' ? 'NUL' : '/dev/null'
+
     try {
       openSync(devNull, 'r')
     } catch {
       // Best-effort pin of the lowest free descriptor.
     }
+
     try {
       openSync(devNull, 'w')
     } catch {

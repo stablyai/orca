@@ -104,6 +104,7 @@ describe('remote workspace snapshot cache', () => {
       'target-1',
       snapshot(emptyRemoteWorkspaceSession(), 7)
     )
+
     const second = rememberRemoteWorkspaceSnapshot(
       'target-1',
       snapshot(emptyRemoteWorkspaceSession(), 7)
@@ -118,6 +119,7 @@ describe('remote workspace snapshot cache', () => {
       'target-1',
       snapshot(emptyRemoteWorkspaceSession(), 7)
     )
+
     const second = rememberRemoteWorkspaceSnapshot(
       'target-1',
       snapshot(
@@ -137,6 +139,7 @@ describe('remote workspace snapshot cache', () => {
       'target-1',
       snapshot(emptyRemoteWorkspaceSession(), 7)
     )
+
     const locallyPatched = rememberLocallyPatchedRemoteWorkspaceSnapshot(
       'target-1',
       snapshot(
@@ -151,6 +154,7 @@ describe('remote workspace snapshot cache', () => {
         8
       )
     )
+
     const relayRead = rememberRemoteWorkspaceSnapshot(
       'target-1',
       snapshot(emptyRemoteWorkspaceSession(), 8)

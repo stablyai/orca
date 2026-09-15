@@ -85,15 +85,18 @@ describe('getStatus', () => {
         wslDistro: 'Ubuntu'
       })
     )
+
     const addOptions = gitExecFileAsyncMock.mock.calls.find(([args]) =>
       (args as string[]).includes('add')
     )?.[1] as { preferWslDirectGit?: boolean } | undefined
+
     expect(addOptions).toBeDefined()
     expect(addOptions?.preferWslDirectGit).toBeUndefined()
   })
 
   it('benchmarks concurrent status burst subprocess pressure', async () => {
     const benchPath = process.env.ORCA_GIT_STATUS_COALESCING_BENCH_JSON
+
     if (!benchPath) {
       return
     }
@@ -104,9 +107,11 @@ describe('getStatus', () => {
       if (args.includes('status')) {
         return Promise.resolve({ stdout: '' })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -117,6 +122,7 @@ describe('getStatus', () => {
           getStatus('/repo', withSignals ? { signal: new AbortController().signal } : {})
         )
       )
+
       return gitExecFileAsyncMock.mock.calls.filter(([args]) =>
         (args as string[]).includes('status')
       ).length
@@ -156,13 +162,16 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         statusCommandCalls += 1
+
         return new Promise<{ stdout: string }>((resolve) => {
           releaseStatusReads.push(() => resolve({ stdout: '' }))
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -187,10 +196,12 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         statusCommandCalls += 1
+
         return new Promise<{ stdout: string }>((resolve) => {
           releaseStatus = () => resolve({ stdout: '' })
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
     const firstController = new AbortController()
@@ -219,10 +230,13 @@ describe('getStatus', () => {
       if (!args.includes('status')) {
         return Promise.resolve({ stdout: '' })
       }
+
       statusCommandCalls += 1
+
       if (statusCommandCalls > 1) {
         return Promise.resolve({ stdout: '' })
       }
+
       return new Promise<{ stdout: string }>((_resolve, reject) => {
         rejectStatus = reject
       })
@@ -256,10 +270,12 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         statusCommandCalls += 1
+
         return new Promise<{ stdout: string }>((resolve) => {
           releaseStatus = () => resolve({ stdout: '' })
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
     const active = getStatus('/repo')
@@ -283,12 +299,15 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         statusCommandCalls += 1
+
         return new Promise<{ stdout: string }>((resolve) => {
           releases.push(() => resolve({ stdout: '' }))
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
+
     const reads = [
       getStatus('/repo'),
       getStatus('/other-repo'),
@@ -316,10 +335,12 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         statusCommandCalls += 1
+
         return new Promise<{ stdout: string }>((resolve) => {
           releaseStatusReads.push(() => resolve({ stdout: '' }))
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -347,15 +368,18 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         statusCommandCalls += 1
+
         return new Promise<{ stdout: string }>((resolve) => {
           releaseStatusReads.push(() => resolve({ stdout: '' }))
         })
       }
+
       if (args.includes('add')) {
         return new Promise<{ stdout: string }>((resolve) => {
           releaseMutation = () => resolve({ stdout: '' })
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 

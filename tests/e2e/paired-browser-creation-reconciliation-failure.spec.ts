@@ -44,6 +44,7 @@ async function readStableHostTabs(hostClient: RuntimeClient, repoPath: string) {
   const { publicationEpoch, snapshotVersion, ...state } = await readHostTabs(hostClient, repoPath)
   expect(publicationEpoch).not.toBe('')
   expect(snapshotVersion).toBeGreaterThan(0)
+
   return state
 }
 
@@ -58,10 +59,13 @@ type ClientTabState = {
 async function readClientTabs(page: Page, worktreeId: string): Promise<ClientTabState> {
   return page.evaluate((targetWorktreeId) => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('Paired client store unavailable')
     }
+
     const unifiedTabs = state.unifiedTabsByWorktree[targetWorktreeId] ?? []
+
     return {
       browserTabIds: unifiedTabs
         .filter((tab) => tab.contentType === 'browser')
@@ -86,6 +90,7 @@ async function runReconciliationFailureJourney(args: {
   topology: 'headed' | 'headless'
 }): Promise<void> {
   let client: PairedElectronClient | null = null
+
   try {
     client = await launchPairedElectronClient(
       args.offer,
@@ -94,11 +99,13 @@ async function runReconciliationFailureJourney(args: {
     )
     await client.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show())
     const page = client.page
+
     const worktreeId = await expect
       .poll(
         () =>
           page.evaluate((repoPath) => {
             const state = window.__store?.getState()
+
             return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
           }, args.repoPath),
         { timeout: 60_000, message: 'paired client never received the host worktree' }
@@ -107,12 +114,15 @@ async function runReconciliationFailureJourney(args: {
       .then(() =>
         page.evaluate((repoPath) => {
           const state = window.__store?.getState()
+
           return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
         }, args.repoPath)
       )
+
     if (!worktreeId) {
       throw new Error('Paired client worktree disappeared after discovery')
     }
+
     await page.evaluate(
       ({ environmentId, worktreeId }) => {
         window.__store?.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
@@ -132,9 +142,11 @@ async function runReconciliationFailureJourney(args: {
 
     await page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
       if (!fault) {
         throw new Error('Browser reconciliation E2E fault seam unavailable')
       }
+
       fault.arm()
     })
     await startBrowserCreate(page)
@@ -153,7 +165,9 @@ async function runReconciliationFailureJourney(args: {
           () => (window as FaultWindow).__webRuntimeBrowserCreationFault?.snapshot() ?? null
         )
       )
+
     const createdPageId = faultSnapshot?.createdPageId
+
     if (!createdPageId) {
       throw new Error('Held browser creation did not expose its exact host page id')
     }
@@ -162,10 +176,13 @@ async function runReconciliationFailureJourney(args: {
     // The managed-browser action stages one tab in the active group while the host create is held.
     // The rollback assertions prove that optimism is unwound rather than stranded.
     const heldClient = await readClientTabs(page, worktreeId)
+
     const addedSince = (baseline: string[], held: string[]): string[] => {
       expect(held).toEqual(expect.arrayContaining(baseline))
+
       return held.filter((id) => !baseline.includes(id))
     }
+
     expect(addedSince(baselineClient.browserTabIds, heldClient.browserTabIds)).toHaveLength(1)
     expect(
       addedSince(baselineClient.browserWorkspaceIds, heldClient.browserWorkspaceIds)
@@ -192,6 +209,7 @@ async function runReconciliationFailureJourney(args: {
         message: 'rollback did not close the exact host browser page'
       })
       .not.toContain(createdPageId)
+
     const settledClient = await expect
       .poll(() => readClientTabs(page, worktreeId), {
         timeout: 30_000,
@@ -205,6 +223,7 @@ async function runReconciliationFailureJourney(args: {
         terminalTabIds: baselineClient.terminalTabIds
       })
       .then(() => readClientTabs(page, worktreeId))
+
     expect(settledClient).toEqual(baselineClient)
     expect(await readHostBrowserPageIds(args.hostClient, args.repoPath)).toEqual(
       baselineHostBrowserIds
@@ -223,6 +242,7 @@ async function runCapabilityFailureJourney(args: {
   topology: 'headed' | 'headless'
 }): Promise<void> {
   let client: PairedElectronClient | null = null
+
   try {
     client = await launchPairedElectronClient(
       args.offer,
@@ -231,11 +251,13 @@ async function runCapabilityFailureJourney(args: {
     )
     await client.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show())
     const page = client.page
+
     const worktreeId = await expect
       .poll(
         () =>
           page.evaluate((repoPath) => {
             const state = window.__store?.getState()
+
             return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
           }, args.repoPath),
         { timeout: 60_000, message: 'paired client never received the host worktree' }
@@ -244,12 +266,15 @@ async function runCapabilityFailureJourney(args: {
       .then(() =>
         page.evaluate((repoPath) => {
           const state = window.__store?.getState()
+
           return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
         }, args.repoPath)
       )
+
     if (!worktreeId) {
       throw new Error('Paired client worktree disappeared after discovery')
     }
+
     await page.evaluate(
       ({ environmentId, worktreeId }) => {
         window.__store?.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
@@ -268,9 +293,11 @@ async function runCapabilityFailureJourney(args: {
 
     await page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
       if (!fault) {
         throw new Error('Browser capability E2E fault seam unavailable')
       }
+
       fault.armCapabilityRejection()
     })
     await startBrowserCreate(page)
@@ -351,6 +378,7 @@ test('cleans up a headed-host browser when capability rejects before create @hea
 test('keeps browser failure cleanup on a headless host', async ({ testRepoPath }, testInfo) => {
   test.setTimeout(300_000)
   const host: HeadlessPairedRuntimeHost = await launchHeadlessPairedRuntimeHost()
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     await host.client.call('terminal.create', {

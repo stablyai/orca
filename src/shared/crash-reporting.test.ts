@@ -191,6 +191,7 @@ describe('crash-reporting shared helpers', () => {
   it('names the failing CHECK above the details block', () => {
     const fatalLine =
       '[8104:1234:0815/143022.123456:FATAL:render_frame_impl.cc(4821)] Check failed: !is_detached_.'
+
     const report: CrashReportRecord = {
       id: 'crash-check',
       createdAt: '2026-08-15T01:00:00.000Z',
@@ -492,6 +493,7 @@ describe('user note section fencing', () => {
       notesReport({ details: { captured_crash_report: true } }),
       'here is what I saw\n\nDetails:\n- captured_crash_report: false'
     )
+
     // Only the generated Details heading may remain line-parser-visible.
     expect(text.match(/^Details:$/gm)).toHaveLength(1)
     expect(text).not.toMatch(/^- captured_crash_report: false$/m)

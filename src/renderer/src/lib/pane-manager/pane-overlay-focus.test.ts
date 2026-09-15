@@ -22,11 +22,13 @@ function fixture() {
   const container = document.createElement('div')
   const textarea = document.createElement('textarea')
   container.append(textarea)
+
   const pane = {
     id: 1,
     container,
     terminal: { focus: vi.fn(() => textarea.focus()) }
   } as unknown as ManagedPaneInternal
+
   const panes = new Map([[pane.id, pane]])
   const publishPaneCreated = vi.fn()
   const onActivePaneChange = vi.fn()
@@ -37,6 +39,7 @@ function fixture() {
     styleOptions: {},
     options: { onActivePaneChange }
   })
+
   const host = {
     options: {},
     root,
@@ -47,6 +50,7 @@ function fixture() {
     getStyleOptions: () => ({}),
     publishPaneCreated
   } as unknown as PaneManagerHost
+
   return { root, container, textarea, pane, host, manager, publishPaneCreated, onActivePaneChange }
 }
 
@@ -56,6 +60,7 @@ function overlay(role: string) {
   element.tabIndex = -1
   document.body.append(element)
   element.focus()
+
   return element
 }
 

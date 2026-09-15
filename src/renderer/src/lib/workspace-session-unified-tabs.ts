@@ -21,6 +21,7 @@ function prunePersistedLayoutForGroups(
   if (first === null) {
     return second
   }
+
   if (second === null) {
     return first
   }
@@ -31,6 +32,7 @@ function prunePersistedLayoutForGroups(
 function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGroup[] {
   const validTabIds = new Set(tabs.map((tab) => tab.id))
   const tabIdsByGroup = new Map<string, string[]>()
+
   for (const tab of tabs) {
     const groupTabs = tabIdsByGroup.get(tab.groupId) ?? []
     groupTabs.push(tab.id)
@@ -43,9 +45,12 @@ function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGr
         ...group.tabOrder.filter((tabId) => validTabIds.has(tabId)),
         ...(tabIdsByGroup.get(group.id) ?? [])
       ])
+
       const tabOrder = Array.from(orderedTabIds)
+
       const activeTabId =
         group.activeTabId && orderedTabIds.has(group.activeTabId) ? group.activeTabId : null
+
       return {
         ...group,
         activeTabId,
@@ -70,6 +75,7 @@ export function buildPersistedUnifiedTabSessionData(
   const sourceGroups = snapshot.groupsByWorktree ?? {}
   const sourceLayouts = snapshot.layoutByWorktree ?? {}
   const sourceActiveGroups = snapshot.activeGroupIdByWorktree ?? {}
+
   const worktreeIds = new Set([
     ...Object.keys(sourceTabs),
     ...Object.keys(sourceGroups),
@@ -78,17 +84,20 @@ export function buildPersistedUnifiedTabSessionData(
 
   for (const worktreeId of worktreeIds) {
     const tabs = sourceTabs[worktreeId] ?? []
+
     if (tabs.length === 0) {
       continue
     }
 
     const groups = buildPersistedGroupsForWorktree(tabs, sourceGroups[worktreeId] ?? [])
+
     if (groups.length === 0) {
       continue
     }
 
     const groupIds = new Set(groups.map((group) => group.id))
     const persistedTabs = tabs.filter((tab) => groupIds.has(tab.groupId))
+
     if (persistedTabs.length === 0) {
       continue
     }
@@ -98,9 +107,11 @@ export function buildPersistedUnifiedTabSessionData(
     const activeGroupId = sourceActiveGroups[worktreeId]
     activeGroupIdByWorktree[worktreeId] =
       activeGroupId && groupIds.has(activeGroupId) ? activeGroupId : groups[0].id
+
     const prunedLayout = sourceLayouts[worktreeId]
       ? prunePersistedLayoutForGroups(sourceLayouts[worktreeId], groupIds)
       : null
+
     tabGroupLayouts[worktreeId] = prunedLayout ?? { type: 'leaf', groupId: groups[0].id }
   }
 

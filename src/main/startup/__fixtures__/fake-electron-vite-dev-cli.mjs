@@ -3,8 +3,11 @@ import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 const __dirname = import.meta.dirname
+
 const grandchildPath = path.join(__dirname, 'electron-vite-dev-grandchild.mjs')
+
 const pidFile = process.env.ORCA_DEV_WRAPPER_TEST_PID_FILE
+
 const envFile = process.env.ORCA_DEV_WRAPPER_TEST_ENV_FILE
 
 const grandchild = spawn(process.execPath, [grandchildPath], {
@@ -17,10 +20,12 @@ function killGrandchild(signal) {
   if (!grandchild.pid) {
     return
   }
+
   try {
     process.kill(grandchild.pid, signal)
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
     if (code !== 'ESRCH') {
       throw error
     }
@@ -31,12 +36,15 @@ function exitAfterGrandchild(signal, code) {
   if (exiting) {
     return
   }
+
   exiting = true
   killGrandchild(signal)
+
   const forceTimer = setTimeout(() => {
     killGrandchild('SIGKILL')
     process.exit(code)
   }, 1000)
+
   grandchild.once('exit', () => {
     clearTimeout(forceTimer)
     process.exit(code)
@@ -58,6 +66,7 @@ if (!pidFile) {
 // Why: wrapper tests must clean up both the fake electron-vite CLI process and
 // the spawned Electron-like descendant if the assertion fails before SIGINT.
 writeFileSync(pidFile, `${process.pid}\n${grandchild.pid ?? ''}\n`, 'utf8')
+
 if (envFile) {
   writeFileSync(
     envFile,
@@ -79,4 +88,5 @@ if (envFile) {
     'utf8'
   )
 }
+
 setInterval(() => {}, 1000)

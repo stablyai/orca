@@ -6,12 +6,15 @@ import {
 } from './structured-agent-session-mutation'
 
 const SESSION_ID = 'codex_11111111_2222_3333_4444_555555555555'
+
 const RESUME = { providerSessionId: 'thread-abc' }
 
 /** Distinct per call so two envelopes never share an operation id by accident. */
 let uuidCounter = 0
+
 function nextUuid(): string {
   uuidCounter += 1
+
   return `00000000-0000-4000-8000-${String(uuidCounter).padStart(12, '0')}`
 }
 
@@ -48,6 +51,7 @@ describe('structured agent session create params', () => {
   it('separates an adopting create from a blank one and from another row', () => {
     const blank = createParams().envelope.payloadFingerprint
     const adopted = createParams({ resumeFrom: RESUME }).envelope.payloadFingerprint
+
     const otherRow = createParams({
       resumeFrom: { providerSessionId: 'thread-other' }
     }).envelope.payloadFingerprint

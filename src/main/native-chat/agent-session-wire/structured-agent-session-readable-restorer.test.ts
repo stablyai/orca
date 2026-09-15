@@ -18,6 +18,7 @@ describe('StructuredAgentSessionReadableRestorer', () => {
     const records = ['background-a', 'visible-b', 'visible-a', 'background-b'].map(
       (sessionId) => ({ sessionId }) as AgentSessionRecord
     )
+
     const restorer = new StructuredAgentSessionReadableRestorer({
       store: { listRecords: () => records } as never,
       journalRoot: '/tmp/journals',

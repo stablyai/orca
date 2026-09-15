@@ -17,6 +17,7 @@ export function createAgentStatusOrchestrationActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'setRuntimeAgentOrchestrationByPaneKey'> {
   const { get, set } = runtime
+
   return {
     setRuntimeAgentOrchestrationByPaneKey: (
       entries: Record<string, AgentStatusOrchestrationContext>
@@ -27,6 +28,7 @@ export function createAgentStatusOrchestrationActions(
           s.runtimeAgentOrchestrationByPaneKey,
           entries
         )
+
         let nextLive = s.agentStatusByPaneKey
         let liveChanged = false
         let nextRetained = s.retainedAgentsByPaneKey
@@ -34,18 +36,22 @@ export function createAgentStatusOrchestrationActions(
 
         for (const [paneKey, runtimeOrchestration] of Object.entries(entries)) {
           const liveEntry = nextLive[paneKey]
+
           if (liveEntry) {
             const merged = mergeCurrentOrchestrationContext(
               liveEntry.orchestration,
               runtimeOrchestration
             )
+
             if (merged !== liveEntry.orchestration) {
               if (!liveChanged) {
                 nextLive = { ...nextLive }
                 liveChanged = true
               }
+
               const nextEntry = { ...liveEntry, orchestration: merged }
               nextLive[paneKey] = nextEntry
+
               // Why: only replace titles when labels match the live dispatch taskId; sticky completed context must not rename a later turn.
               if (
                 (merged.displayName?.trim() || merged.taskTitle?.trim()) &&
@@ -60,16 +66,19 @@ export function createAgentStatusOrchestrationActions(
           }
 
           const retainedEntry = nextRetained[paneKey]
+
           if (retainedEntry) {
             const merged = mergeCurrentOrchestrationContext(
               retainedEntry.entry.orchestration,
               runtimeOrchestration
             )
+
             if (merged !== retainedEntry.entry.orchestration) {
               if (!retainedChanged) {
                 nextRetained = { ...nextRetained }
                 retainedChanged = true
               }
+
               nextRetained[paneKey] = {
                 ...retainedEntry,
                 entry: { ...retainedEntry.entry, orchestration: merged }
@@ -89,6 +98,7 @@ export function createAgentStatusOrchestrationActions(
           ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
         }
       })
+
       for (const entry of generatedTitleUpdates) {
         get().setGeneratedTabTitleFromAgentPrompt(
           entry.paneKey,

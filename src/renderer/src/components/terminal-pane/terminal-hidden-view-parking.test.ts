@@ -42,6 +42,7 @@ describe('selectPairedRuntimeParkingEnvironmentIds', () => {
         ['runtime-b', { status: { capabilities: ['terminal.multiplex.v1'] } }]
       ])
     )
+
     const statusOnlyUpdate = selectPairedRuntimeParkingEnvironmentIds(
       new Map([
         [
@@ -56,6 +57,7 @@ describe('selectPairedRuntimeParkingEnvironmentIds', () => {
         ['runtime-b', { status: { capabilities: ['terminal.multiplex.v1'], appVersion: '1.5.0' } }]
       ])
     )
+
     expect(statusOnlyUpdate).toBe(first)
 
     const capabilityUpdate = selectPairedRuntimeParkingEnvironmentIds(
@@ -64,6 +66,7 @@ describe('selectPairedRuntimeParkingEnvironmentIds', () => {
         ['runtime-b', { status: { capabilities: ['terminal.paired-parking.v1'] } }]
       ])
     )
+
     expect(capabilityUpdate).not.toBe(first)
     expect(capabilityUpdate).toEqual(new Set(['runtime-a', 'runtime-b']))
   })
@@ -79,6 +82,7 @@ describe('isSnapshotBackedTerminalPty', () => {
   it('allows folder-workspace sessions owned by the workspace', () => {
     const folderWorkspaceId =
       'repo-1::/Users/dev/proj::workspace:6f9619ff-8b86-4d01-b42d-00cf4fc964ff'
+
     expect(isSnapshotBackedTerminalPty(`${folderWorkspaceId}@@session-1`, folderWorkspaceId)).toBe(
       true
     )
@@ -155,6 +159,7 @@ describe('isParkRestorableTerminalPty', () => {
 describe('canParkTerminalWorktreeRenderers', () => {
   const hiddenSinceMs = 1_000
   const nowMs = hiddenSinceMs + TERMINAL_WORKTREE_PARK_DELAY_MS
+
   const base = {
     worktreeId: 'repo::/worktree',
     terminalTabs: [{ id: 'tab-1', ptyId: 'repo::/worktree@@session-1' }],
@@ -176,6 +181,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
       ...base,
       terminalTabs: [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-1' }]
     }
+
     expect(canParkTerminalWorktreeRenderers(sshArgs)).toBe(false)
     expect(
       canParkTerminalWorktreeRenderers({ ...sshArgs, restorePolicy: { sshParkingEnabled: true } })
@@ -303,6 +309,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
 
 describe('canParkTerminalTabRenderer', () => {
   const hiddenSinceMs = 1_000
+
   const base = {
     worktreeId: 'wt-1',
     terminalTab: {
@@ -584,6 +591,7 @@ describe('selectColdParkedTerminalTabs', () => {
       nowMs,
       hotRetainLimit: 2
     }
+
     expect(selectColdParkedTerminalTabs({ ...args, parkCooldownUntilMs: nowMs + 1 })).toEqual(
       new Set()
     )
@@ -626,6 +634,7 @@ describe('selectColdParkedTerminalTabs', () => {
   // Why: view switches stamp every tab together, so UUID order cannot express recency.
   it('resolves an identical-hiddenSinceMs tie by activation order, not by tab id', () => {
     const hiddenSinceMs = nowMs - TERMINAL_TAB_HOT_RETAIN_MS
+
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
       terminalTabs: [
@@ -644,6 +653,7 @@ describe('selectColdParkedTerminalTabs', () => {
   // Why: the cap and exemption must share one recency ranking.
   it('keeps the most recently activated tab warm when the cap evicts a tie', () => {
     const hiddenSinceMs = nowMs - TERMINAL_TAB_HOT_RETAIN_MS + 1
+
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
       terminalTabs: [

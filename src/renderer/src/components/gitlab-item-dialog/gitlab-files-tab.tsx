@@ -17,6 +17,7 @@ export function GitLabFilesTab({ item, state, reviewActions }: Props) {
   if (item.type !== 'mr') {
     return null
   }
+
   const {
     details,
     inlineCommentBody,
@@ -28,7 +29,9 @@ export function GitLabFilesTab({ item, state, reviewActions }: Props) {
     setInlineCommentFilePath,
     setInlineCommentLine
   } = state
+
   const canSubmitInlineComment = hasBoundedCommentBodyText(inlineCommentBody)
+
   return (
     <TabsContent value="files" className="mt-0 space-y-3">
       {loading && !details ? (

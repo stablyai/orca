@@ -13,15 +13,19 @@ export async function recoverLegacyWorkerTerminalsForRendererStartup(
     () => ({ ok: true as const }),
     (error: unknown) => ({ ok: false as const, error })
   )
+
   const [providerResult] = await Promise.all([
     providerStartupResult,
     options.firstWindowStartupServicesReady,
     options.managedWslCliStartupBarrierReady
   ])
+
   if (!providerResult.ok) {
     options.onDeferredRecoveryError(providerResult.error)
+
     return
   }
+
   try {
     await options.reconcile()
   } catch (error) {

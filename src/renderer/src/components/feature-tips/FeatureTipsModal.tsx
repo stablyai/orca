@@ -57,6 +57,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
+
   const currentTip = getFeatureTipForModal({
     cliInstalled: true,
     modalData,
@@ -127,6 +128,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     }
 
     markFeatureTipsSeen([currentTip.id])
+
     switch (currentTip.action) {
       case 'learn-cmd-j-palette': {
         // Why: passive education tip — acknowledging just dismisses; the rebind
@@ -137,6 +139,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
         closeModal()
         break
       }
+
       case 'enable-voice': {
         const voice = settings?.voice ?? getDefaultVoiceSettings()
         void updateSettings({
@@ -150,25 +153,32 @@ export default function FeatureTipsModal(): JSX.Element | null {
         openSettingsPage()
         break
       }
+
       case 'setup-cli': {
         const setupRequestId = setupRequestIdRef.current + 1
         setupRequestIdRef.current = setupRequestId
+
         // Why: this modal is lazily mounted; closing it does not unmount the
         // component, so async install results must not reopen UI after dismissal.
         const canApplySetupResult = (): boolean =>
           mountedRef.current &&
           activeModalRef.current === 'feature-tips' &&
           setupRequestIdRef.current === setupRequestId
+
         const telemetrySource = getOrcaCliFeatureTipTelemetrySource(modalData.source)
         trackOrcaCliFeatureTipSetupClicked(telemetrySource)
         setPrimaryBusy(true)
+
         try {
           const result = await installCliFromFeatureTip(() => window.api.cli.install())
+
           if (result.kind === 'installed') {
             trackOrcaCliFeatureTipSetupResult(telemetrySource, 'installed')
+
             if (!canApplySetupResult()) {
               return
             }
+
             enableOrchestrationSkillSetup()
             toast.success(
               translate(
@@ -177,13 +187,16 @@ export default function FeatureTipsModal(): JSX.Element | null {
               )
             )
             setSkillTerminalOpen(true)
+
             return
           }
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'needs_attention')
+
           if (!canApplySetupResult()) {
             return
           }
+
           toast.warning(
             translate(
               'auto.components.feature.tips.FeatureTipsModal.1da82af45b',
@@ -202,14 +215,17 @@ export default function FeatureTipsModal(): JSX.Element | null {
           openCliSettings()
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to install Orca CLI.'
+
           if (
             import.meta.env.DEV &&
             message.includes('Development mode uses a generated launcher for validation only')
           ) {
             trackOrcaCliFeatureTipSetupResult(telemetrySource, 'dev_preview')
+
             if (!canApplySetupResult()) {
               return
             }
+
             enableOrchestrationSkillSetup()
             toast.info(
               translate(
@@ -218,10 +234,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
               )
             )
             setSkillTerminalOpen(true)
+
             return
           }
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
+
           if (canApplySetupResult()) {
             toast.error(message)
           }
@@ -367,6 +385,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   if (currentTip.action !== 'enable-voice') {
     currentTip.action satisfies never
+
     return null
   }
 

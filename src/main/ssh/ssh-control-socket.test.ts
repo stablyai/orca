@@ -9,6 +9,7 @@ const { lstatSyncMock, mkdirSyncMock, tmpdirMock } = vi.hoisted(() => ({
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     lstatSync: lstatSyncMock,
@@ -18,6 +19,7 @@ vi.mock('node:fs', async (importOriginal) => {
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     tmpdir: tmpdirMock
@@ -93,6 +95,7 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
 
   it('changes the path when a config-backed target resolves to a different host', () => {
     const before = getControlSocketPath(createTarget({ host: '10.0.0.5' }), createResolved())
+
     const after = getControlSocketPath(
       createTarget({ host: '10.0.0.9' }),
       createResolved({ hostname: '10.0.0.9' })
@@ -106,6 +109,7 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
       createTarget(),
       createResolved({ proxyCommand: 'ssh -W %h:%p old-bastion' })
     )
+
     const after = getControlSocketPath(
       createTarget(),
       createResolved({ proxyCommand: 'ssh -W %h:%p new-bastion' })

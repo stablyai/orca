@@ -79,9 +79,11 @@ export function getContextualTourDisplayProgress(args: {
   if (!args.activeStep) {
     return null
   }
+
   if (args.tour.id === 'browser') {
     return { current: args.stepIndex + 1, total: args.tour.steps.length }
   }
+
   return getContextualTourStepProgress({
     visibleStepIndexes: args.visibleStepIndexes,
     stepIndex: args.stepIndex
@@ -96,11 +98,13 @@ export function getContextualTourMeasurementAction(args: {
   if (args.visibleStepIndexes.some((index) => index > args.activeStepIndex)) {
     return { kind: 'advance' }
   }
+
   // Why: browser step 3's Import Cookies row appears only after that step is
   // active and the toolbar menu opens; keep remeasuring instead of cancelling.
   if (args.activeStepIndex < args.tour.steps.length - 1 || args.tour.id === 'browser') {
     return { kind: 'wait' }
   }
+
   return { kind: 'cancel' }
 }
 
@@ -112,6 +116,7 @@ export function isContextualTourLastDisplayStep(args: {
   if (args.tour.id === 'browser') {
     return args.activeStepIndex === args.tour.steps.length - 1
   }
+
   return args.progress.current === args.progress.total
 }
 
@@ -124,20 +129,25 @@ export function measureContextualTourOverlayRenderState(args: {
 }): ContextualTourOverlayMeasurementResult {
   const targetExists = (selector: string): boolean =>
     getMeasurableContextualTourTarget(selector) !== null
+
   const visibleStepIndexes = getVisibleContextualTourStepIndexes(args.tour, targetExists)
+
   const telemetryTotalSteps = Math.max(
     args.previousTelemetryTotalSteps,
     getContextualTourOutcomeStepTotal(visibleStepIndexes)
   )
+
   const activeStep = args.tour.steps[args.activeStepIndex]
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
   const localizedCopy = activeStep?.id ? LOCALIZED_STEP_COPY[activeStep.id] : undefined
   const localizedTitle = localizedCopy ? localizedCopy.title() : activeStep?.title
+
   const localizedBody = localizedCopy
     ? localizedCopy.body()
     : activeStep
       ? getContextualTourStepCopy(activeStep)
       : undefined
+
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
@@ -155,17 +165,21 @@ export function measureContextualTourOverlayRenderState(args: {
       visibleStepIndexes,
       activeStepIndex: args.activeStepIndex
     })
+
     if (measurementAction.kind === 'advance') {
       return { kind: 'advance' }
     }
+
     if (measurementAction.kind === 'wait') {
       return { kind: 'wait' }
     }
+
     return { kind: 'cancel' }
   }
 
   const sidebarAlreadyVisible =
     activeStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
+
   const primaryAction = sidebarAlreadyVisible
     ? ({
         kind: 'next',
@@ -175,6 +189,7 @@ export function measureContextualTourOverlayRenderState(args: {
         )
       } as const)
     : activeStep.primaryAction
+
   const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
 
   return {
@@ -216,7 +231,9 @@ export function hasContextualTourTargetMoved(
   if (!measured) {
     return true
   }
+
   const rect = measured.element.getBoundingClientRect()
+
   return (
     rect.left !== measured.rect.left ||
     rect.top !== measured.rect.top ||
@@ -235,6 +252,7 @@ export function areContextualTourRenderStatesEqual(
   if (a === null || b === null) {
     return a === b
   }
+
   return (
     a.targetElement === b.targetElement &&
     a.panelHost === b.panelHost &&
@@ -264,6 +282,7 @@ function areStepActionsEqual(
   if (a === undefined || b === undefined) {
     return a === b
   }
+
   return a.kind === b.kind && a.label === b.label
 }
 

@@ -26,10 +26,12 @@ export function buildWorktreeSetHostedReviewLinkParams(
   options?: { baseRef?: string | null }
 ): RpcSendParams<'worktree.set'> {
   const trimmedBaseRef = options?.baseRef?.trim()
+
   const base = {
     worktree: `id:${worktreeId}`,
     ...(trimmedBaseRef ? { baseRef: trimmedBaseRef } : {})
   }
+
   switch (provider) {
     case 'github':
       return { ...base, linkedPR: number }
@@ -56,16 +58,19 @@ async function setWorktreeReviewLink(
   fallback: string
 ): Promise<MobilePrLinkOutcome> {
   let reply
+
   try {
     reply = await worktreeLinkSet.request(client, params)
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : fallback }
   }
+
   try {
     worktreeLinkSet.interpret(reply)
   } catch (error) {
     return { ok: false, error: refusedRpcMessageOrFallback(error, fallback) }
   }
+
   return { ok: true }
 }
 
@@ -89,9 +94,11 @@ export async function linkMobileHostedReview(
   options?: { baseRef?: string | null }
 ): Promise<MobilePrLinkOutcome> {
   const params = buildWorktreeSetHostedReviewLinkParams(worktreeId, provider, number, options)
+
   if (Object.keys(params).length === 1) {
     return { ok: true }
   }
+
   // Why a distinct fallback: the review already exists, so callers surface this as a non-fatal
   // refresh problem rather than losing the created URL.
   return setWorktreeReviewLink(client, params, 'Failed to update linked review')
@@ -117,6 +124,7 @@ export async function fetchWorktreeLinkedPR(
   try {
     const reply = await worktreeSummaryRead.request(client, { worktree: `id:${worktreeId}` })
     const summary = worktreeSummaryRead.interpret(reply)
+
     return summary.accepted ? (summary.value?.linkedPR ?? null) : null
   } catch {
     // Why: a fallback read — a transport drop is non-fatal, fall back to "no link".

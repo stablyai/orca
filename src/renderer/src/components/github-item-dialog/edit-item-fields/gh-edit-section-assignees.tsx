@@ -101,6 +101,7 @@ export function GHEditSectionAssigneesColumn({
         <ul className="flex flex-col gap-1.5">
           {localAssignees.map((login) => {
             const user = repoAssignees.data.find((u) => u.login === login)
+
             return (
               <li key={login} className="flex min-w-0 items-center gap-2">
                 {user?.avatarUrl ? (

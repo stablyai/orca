@@ -74,40 +74,53 @@ export async function acquireClaudeSession({
   if (isClaudeAuthSwitchInProgress()) {
     throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE))
   }
+
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
+
   const translator = createClaudeSessionJournalTranslator(
     input.events,
     prompts,
     String(input.fence)
   )
+
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
   let liveSession: ClaudeSession | null = null
+
   let observedLeafUuid: string | null = null,
     expectedProviderSessionId: string | null = null
+
   // Frames are admitted only after launch resolution proves the provider session
   // this acquisition owns. Keep the check ahead of every stateful consumer.
   const initTimeoutMs = deps.initTimeoutMs ?? CLAUDE_STRUCTURED_INIT_TIMEOUT_MS
   const initDeadline = createClaudeInitDeadline(sessionId, initTimeoutMs)
 
   const rewind = new ClaudeRewindAttempt(input.rewind, input.rewind?.onProved)
+
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
+
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
       // An init proof for another (or unnamed) provider must fail acquisition
       // promptly, while ordinary foreign frames stay quarantined silently.
       if (init || (message.type === 'system' && message.subtype === 'init')) {
         initDeadline.reject(new Error('claude provider session expected'))
       }
+
       return
     }
+
     const refusal = rewind.observe(message)
+
     if (refusal) {
       initDeadline.reject(refusal)
+
       return
     }
+
     if (init) {
       initDeadline.resolve(init)
+
       // Every turn opens with an init frame naming the model the CLI is actually
       // running; set_model answers success for a model it never resolves, so this
       // report is the session's only adoption evidence.
@@ -116,19 +129,24 @@ export async function acquireClaudeSession({
         liveSession.reportedModelMutation = liveSession.optionMutationSequence
       }
     }
+
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid
+
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
     }
+
     const startsTurn = liveSession
       ? resolveClaudeReplayWaiter(liveSession, message, (settlement) =>
           deps.onDispatchSettledLate?.({ sessionId, ...settlement })
         )
       : false
+
     // Turn endpoints are stamped on the host clock, never the frame's own timestamp.
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
+
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'message',
@@ -139,6 +157,7 @@ export async function acquireClaudeSession({
       })
     )
   }
+
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId,
     prompts,
@@ -154,29 +173,37 @@ export async function acquireClaudeSession({
         new Error(`claude acquisition for session ${sessionId} could not be stopped`)
       )
     }
+
     acquisitions.assertCurrent(sessionId, attempt)
     let resumeSession = sessions.get(sessionId)
+
     if (!(await closeClaudePublishedSessionForDeps(sessions, sessionId, deps))) {
       throw new AgentSessionAcquisitionExitUnprovenError(
         new Error(`claude session ${sessionId} could not be stopped`)
       )
     }
+
     // A first-hand exit that has not yet proved its full tree still owns a cleanup
     // obligation; never let a new acquisition hide that evidence by omission.
     const retainedExit = exits.get(sessionId)
+
     if (retainedExit) {
       const firstProof = retainedExit.closePromise ? await retainedExit.closePromise : false
       const proven = firstProof || (await retainedExit.connection.close().catch(() => false))
+
       if (!proven) {
         throw claudeAcquisitionCleanupError(retainedExit.connection, retainedExit.error)
       }
+
       // The old child is superseded by this acquisition. Settle its lifecycle
       // before discarding the retained proof so its cursor and callbacks are
       // cleaned up exactly once.
       await callbacks.settleExit(sessionId, retainedExit)
       resumeSession ??= retainedExit.session
     }
+
     acquisitions.assertCurrent(sessionId, attempt)
+
     // Both close paths persist their final leaf, so launch validates that durable head.
     const launchIdentity = resumeSession
       ? {
@@ -188,6 +215,7 @@ export async function acquireClaudeSession({
           }
         }
       : input.identity
+
     const launch = await deps
       .resolveLaunch({ identity: launchIdentity })
       .catch((error: unknown) => {
@@ -195,11 +223,13 @@ export async function acquireClaudeSession({
           ? error
           : new AgentSessionPreSpawnError(error)
       })
+
     rewind.applyLaunch(launch, deps)
     expectedProviderSessionId = launch.providerSessionId
     observedLeafUuid = launch.resumeLeafUuid
     acquisitions.assertCurrent(sessionId, attempt)
     const open = deps.openConnection ?? openClaudeStreamJsonConnection
+
     const connection = await open(
       {
         pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
@@ -227,35 +257,43 @@ export async function acquireClaudeSession({
           if (!attempt.published) {
             initDeadline.reject(error)
           }
+
           callbacks.handleExit(sessionId, attempt, error)
         }
       }
     )
+
     attempt.connection = connection
     acquisitions.assertCurrent(sessionId, attempt)
     initDeadline.start()
+
     const [initialization, init] = await Promise.all([
       requestClaudeInitialization(connection, sessionId, initTimeoutMs),
       initDeadline.promise
     ])
+
     const models = readClaudeModels(initialization)
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, { type: 'options', sessionId, models })
     )
     initDeadline.clear()
     acquisitions.assertCurrent(sessionId, attempt)
+
     if (init.providerSessionId !== launch.providerSessionId) {
       throw new Error(
         `claude proved session ${init.providerSessionId}, expected ${launch.providerSessionId}`
       )
     }
+
     const settings = await readClaudeStructuredSessionSettings(connection, deps.requestTimeoutMs)
+
     const acquisitionOptions = prepareClaudeStructuredSessionAcquisitionOptions({
       settings,
       initialization,
       inputOptions: input.options,
       resumed: launch.resumed
     })
+
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'auth-diagnostic',
@@ -266,14 +304,18 @@ export async function acquireClaudeSession({
     observedLeafUuid = (await rewind.prove(launch, deps)) ?? observedLeafUuid
     observedLeafUuid =
       (await proveClaudeRewindRecovery(input.rewindRecovery, launch, deps)) ?? observedLeafUuid
+
     const process = await claudeProcessIdentity(
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
     )
+
     acquisitions.assertCurrent(sessionId, attempt)
+
     if (connection.closed) {
       throw new Error(`claude stream-json for session ${sessionId} exited while being acquired`)
     }
+
     const publication = createClaudeSessionPublication({
       connection,
       init,
@@ -294,18 +336,22 @@ export async function acquireClaudeSession({
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
       observedAt: deps.now?.() ?? Date.now()
     })
+
     liveSession = publication.session
     await restoreClaudeStructuredSessionOptions(liveSession, deps.requestTimeoutMs)
     acquisitions.assertCurrent(sessionId, attempt)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     sessions.set(sessionId, liveSession)
     attempt.published = true
+
     for (const event of attempt.buffered.splice(0)) {
       event()
     }
+
     return publication.acquisition
   } catch (error) {
     initDeadline.clear()
+
     const acquisitionError = await resolveClaudeAcquisitionError({
       error,
       sessionId,
@@ -314,6 +360,7 @@ export async function acquireClaudeSession({
       translator,
       prompts
     })
+
     acquisitions.deleteIfCurrent(sessionId, attempt)
     throw acquisitionError
   } finally {

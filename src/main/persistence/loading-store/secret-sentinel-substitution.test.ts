@@ -19,12 +19,15 @@ function previousImplementation(
 ): { payload: Buffer; stateHash: string } {
   let payload = serialized
   let hashInput = serialized
+
   for (const { sentinel, blob, hashValue } of secretSubs) {
     const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
     payload = payload.replace(escapedSentinel, () => JSON.stringify(blob).slice(1, -1))
     hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
   }
+
   const stateHash = createHash('sha1').update(degradedPrefix).update(hashInput).digest('hex')
+
   // `handle.writeFile(payload, 'utf-8')` is what turned the string into bytes.
   return { payload: Buffer.from(payload, 'utf8'), stateHash }
 }
@@ -58,12 +61,14 @@ describe('applySecretSentinelSubstitutions', () => {
       },
       { sentinel: sentinel(), blob: '', hashValue: 'https://kagi.com/session?t=abc' }
     ]
+
     const state = {
       settings: { opencodeSessionCookie: subs[0].sentinel, httpProxyUrl: subs[1].sentinel },
       ui: { browserKagiSessionLink: subs[2].sentinel },
       // Adjacent content that must not shift: a near-miss prefix, and JSON escapes either side.
       noise: ['orca-secret-slot-', 'a\\b"c\n\t', subs[0].sentinel.slice(0, -1)]
     }
+
     expectIdenticalToPrevious(JSON.stringify(state), subs)
   })
 
@@ -72,6 +77,7 @@ describe('applySecretSentinelSubstitutions', () => {
       { sentinel: sentinel(), blob: 'blob-é', hashValue: 'plain-é' },
       { sentinel: sentinel(), blob: '😀', hashValue: '中文' }
     ]
+
     const state = {
       // Segment boundaries land next to these, so a wrong split would corrupt the encode.
       before: 'é中文😀',
@@ -80,6 +86,7 @@ describe('applySecretSentinelSubstitutions', () => {
       b: subs[1].sentinel,
       after: '😀'
     }
+
     expectIdenticalToPrevious(JSON.stringify(state), subs)
   })
 
@@ -123,12 +130,14 @@ describe('applySecretSentinelSubstitutions', () => {
       blob: 'CIPHERTEXT',
       hashValue: 'plaintext'
     }))
+
     const serialized = JSON.stringify({
       pad: 'x'.repeat(200_000),
       a: subs[0].sentinel,
       b: subs[1].sentinel,
       c: subs[2].sentinel
     })
+
     const FULL_STATE = 100_000
 
     // Both costs are observable at their sources: a `String.replace` whose receiver is the whole
@@ -137,29 +146,35 @@ describe('applySecretSentinelSubstitutions', () => {
     const counted = (run: () => unknown): { fullStateReplaces: number; encodedChars: number } => {
       const realReplace = String.prototype.replace
       const realBufferFrom = Buffer.from
+
       const hashProto = Object.getPrototypeOf(createHash('sha1')) as {
         update: (...args: unknown[]) => unknown
       }
+
       const realUpdate = hashProto.update
       const counts = { fullStateReplaces: 0, encodedChars: 0 }
       String.prototype.replace = function (this: string, ...args: unknown[]) {
         if (this.length >= FULL_STATE) {
           counts.fullStateReplaces++
         }
+
         return realReplace.apply(this, args as never)
       } as typeof String.prototype.replace
       Buffer.from = function (...args: unknown[]) {
         if (typeof args[0] === 'string') {
           counts.encodedChars += args[0].length
         }
+
         return (realBufferFrom as (...a: unknown[]) => Buffer).apply(Buffer, args)
       } as typeof Buffer.from
       hashProto.update = function (this: unknown, ...args: unknown[]) {
         if (typeof args[0] === 'string') {
           counts.encodedChars += args[0].length
         }
+
         return realUpdate.apply(this, args)
       }
+
       try {
         run()
       } finally {
@@ -167,6 +182,7 @@ describe('applySecretSentinelSubstitutions', () => {
         Buffer.from = realBufferFrom
         hashProto.update = realUpdate
       }
+
       return counts
     }
 

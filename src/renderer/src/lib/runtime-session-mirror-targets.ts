@@ -33,16 +33,22 @@ export function getReachableRuntimeSessionMirrorTargets(
   const environmentById = new Map(
     (state.runtimeEnvironments ?? []).map((environment) => [environment.id, environment])
   )
+
   const targets: RuntimeSessionMirrorTarget[] = []
+
   for (const environmentId of getRuntimeSessionMirrorEnvironmentIds(state)) {
     const status = state.runtimeStatusByEnvironmentId?.get(environmentId)
+
     if (!status?.status) {
       continue
     }
+
     const environment = environmentById.get(environmentId)
+
     if (!environment) {
       continue
     }
+
     targets.push({
       environmentId,
       runtimeId: status.status.runtimeId,
@@ -50,5 +56,6 @@ export function getReachableRuntimeSessionMirrorTargets(
       pairingRevision: environment.pairingRevision ?? environment.createdAt
     })
   }
+
   return targets
 }

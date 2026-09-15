@@ -16,6 +16,7 @@ afterEach(() => {
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   tempDirs = []
 })
 
@@ -28,6 +29,7 @@ function contendedDatabase(): { path: string; release: () => void } {
   writer.exec('CREATE TABLE session (id TEXT PRIMARY KEY)')
   writer.exec('BEGIN EXCLUSIVE')
   writer.exec("INSERT INTO session VALUES ('a')")
+
   return {
     path,
     release: () => {
@@ -41,6 +43,7 @@ describe('isTransientSqliteContention', () => {
   it('recognizes a real SQLITE_BUSY thrown by a read-only open', () => {
     const contended = contendedDatabase()
     let thrown: unknown
+
     try {
       new SyncDatabase(contended.path, { readonly: true, timeout: 0 })
         .prepare('SELECT id FROM session')

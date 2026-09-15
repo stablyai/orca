@@ -25,9 +25,11 @@ export class CdpPageNavigationCommands {
     msgSessionId?: string
   ): Promise<void> {
     await this.primePageLifecycle(this.sessions.resolveDebuggerSessionId(msgSessionId))
+
     if (!this.responder.isActiveClient(client)) {
       return
     }
+
     this.debuggerChannel.forwardCommand(client, clientId, 'Page.navigate', params, msgSessionId)
   }
 
@@ -39,32 +41,42 @@ export class CdpPageNavigationCommands {
   ): Promise<void> {
     const sessionId = this.sessions.resolveDebuggerSessionId(msgSessionId)
     const unsupportedParam = sessionId ? null : this.getUnsupportedRootReloadParam(params)
+
     if (unsupportedParam) {
       this.responder.sendError(
         clientId,
         `Page.reload parameter "${unsupportedParam}" is not supported for Orca tab reloads`,
         client
       )
+
       return
     }
+
     await this.primePageLifecycle(sessionId)
+
     if (!this.responder.isActiveClient(client)) {
       return
     }
+
     if (sessionId) {
       this.debuggerChannel.forwardCommand(client, clientId, 'Page.reload', params, msgSessionId)
+
       return
     }
+
     if (this.webContents.isDestroyed()) {
       this.responder.sendError(clientId, 'Browser tab is no longer available', client)
+
       return
     }
+
     try {
       if (params.ignoreCache === true) {
         this.webContents.reloadIgnoringCache()
       } else {
         this.webContents.reload()
       }
+
       this.responder.sendResult(clientId, {}, client)
     } catch (err) {
       this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
@@ -77,6 +89,7 @@ export class CdpPageNavigationCommands {
 
   private async primePageLifecycle(sessionId?: string): Promise<void> {
     let timeout: ReturnType<typeof setTimeout> | null = null
+
     const priming = (async (): Promise<void> => {
       // Why: without Network.enable, agent-browser never sees network idle → goto times out.
       await this.debuggerChannel.sendDebuggerCommand('Network.enable', {}, sessionId)

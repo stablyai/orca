@@ -20,6 +20,7 @@ import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
 
 const SESSION_ID = 'session-1'
+
 const EPOCH = 'epoch-1'
 
 function row(seq: number, ts: number): JournalRow {
@@ -54,12 +55,14 @@ describe('journal row writer', () => {
     } catch {
       // Already closed by the case.
     }
+
     await rm(root, { recursive: true, force: true })
   })
 
   function writerHarness() {
     const committedRows: JournalRow[] = []
     let sequence = 1
+
     const writer = new JournalRowWriter({
       sessionId: SESSION_ID,
       now: () => 1,
@@ -73,6 +76,7 @@ describe('journal row writer', () => {
         sequence = committed.seq + 1
       }
     })
+
     return { writer, committedRows }
   }
 

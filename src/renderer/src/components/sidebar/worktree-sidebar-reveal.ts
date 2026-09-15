@@ -1,6 +1,7 @@
 import { GROUP_HEADER_ROW_HEIGHT } from './worktree-list/viewport/virtual-rows'
 
 const WORKTREE_REVEAL_TOP_CLEARANCE = 6
+
 export const WORKTREE_SIDEBAR_REVEAL_TOP_INSET =
   GROUP_HEADER_ROW_HEIGHT + WORKTREE_REVEAL_TOP_CLEARANCE
 
@@ -12,6 +13,7 @@ type SidebarRevealBounds = {
 function getElementScrollBounds(container: HTMLElement, element: Element): SidebarRevealBounds {
   const containerRect = container.getBoundingClientRect()
   const elementRect = element.getBoundingClientRect()
+
   return {
     start: elementRect.top - containerRect.top + container.scrollTop,
     end: elementRect.bottom - containerRect.top + container.scrollTop
@@ -26,12 +28,15 @@ export function getScrollTopToRevealBounds(
   const viewportTopInset = Math.max(0, Math.min(container.clientHeight, topInset))
   const viewportTop = container.scrollTop + viewportTopInset
   const viewportBottom = container.scrollTop + container.clientHeight
+
   if (bounds.start < viewportTop) {
     return bounds.start - viewportTopInset
   }
+
   if (bounds.end > viewportBottom) {
     return bounds.end - container.clientHeight
   }
+
   return null
 }
 
@@ -46,24 +51,30 @@ export function revealElementInScrollContainer(
   if (!container.contains(element)) {
     return false
   }
+
   const nextScrollTop = getScrollTopToRevealBounds(
     container,
     getElementScrollBounds(container, element),
     WORKTREE_SIDEBAR_REVEAL_TOP_INSET
   )
+
   if (nextScrollTop === null) {
     return true
   }
+
   // Why: honor the user's reduced-motion preference by jumping instantly instead of
   // animating a smooth scroll (also makes the reveal deterministic in headless
   // environments that never tick the smooth-scroll animation).
   const prefersReducedMotion =
     typeof window !== 'undefined' &&
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+
   const resolvedBehavior: ScrollBehavior =
     behavior === 'smooth' && prefersReducedMotion ? 'auto' : behavior
+
   const targetTop = Math.max(0, nextScrollTop)
   onScrollIssued?.(targetTop)
   container.scrollTo({ top: targetTop, behavior: resolvedBehavior })
+
   return true
 }

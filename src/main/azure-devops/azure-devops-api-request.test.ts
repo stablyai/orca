@@ -7,6 +7,7 @@ import {
 import type { AzureDevOpsRepoRef } from './repository-ref'
 
 const OLD_ENV = process.env
+
 const OLD_FETCH = globalThis.fetch
 
 const SERVER_BASE = 'https://ado.example.com:8443/tfs/MyCollection'
@@ -50,9 +51,11 @@ describe('Azure DevOps API request (STA-3494)', () => {
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
       versions.push(url.searchParams.get('api-version'))
+
       if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
         return previewRejection()
       }
+
       return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
     }) as never
 
@@ -67,9 +70,11 @@ describe('Azure DevOps API request (STA-3494)', () => {
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
       versions.push(url.searchParams.get('api-version'))
+
       if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
         return previewRejection()
       }
+
       return Response.json({ ok: true })
     }) as never
 
@@ -84,6 +89,7 @@ describe('Azure DevOps API request (STA-3494)', () => {
     const fetchMock = vi.fn(async () =>
       Response.json({ message: 'A project name is required.' }, { status: 400 })
     )
+
     globalThis.fetch = fetchMock as never
 
     await expect(
@@ -100,6 +106,7 @@ describe('Azure DevOps API request (STA-3494)', () => {
     const paths: string[] = []
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       paths.push(new URL(String(input)).pathname)
+
       return Response.json({ id: 'repo-guid' })
     }) as never
 
@@ -113,6 +120,7 @@ describe('Azure DevOps API request (STA-3494)', () => {
     const origins: string[] = []
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       origins.push(new URL(String(input)).origin)
+
       return Response.json({ id: 'repo-guid' })
     }) as never
 
@@ -125,6 +133,7 @@ describe('Azure DevOps API request (STA-3494)', () => {
     const paths: string[] = []
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       paths.push(new URL(String(input)).pathname)
+
       return Response.json({ id: 'repo-guid' })
     }) as never
 

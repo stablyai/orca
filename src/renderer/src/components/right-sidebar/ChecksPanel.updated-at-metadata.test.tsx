@@ -12,6 +12,7 @@ function renderMetadataText(reviewShortLabel: string): string {
       updatedAt="2026-06-24T17:30:00.000Z"
     />
   )
+
   return container.textContent ?? ''
 }
 

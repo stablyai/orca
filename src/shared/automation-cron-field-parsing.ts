@@ -48,9 +48,11 @@ function parseCronNumber(
   const normalized = value.toUpperCase()
   const named = names?.[normalized]
   const parsed = named ?? Number(normalized)
+
   if (!Number.isInteger(parsed)) {
     throw new Error(`Invalid cron ${field}.`)
   }
+
   return parsed
 }
 
@@ -67,38 +69,51 @@ export function parseCronField(args: {
   rejectOversizedStep?: boolean
 }): Set<number> {
   const result = new Set<number>()
+
   for (const rawPart of args.value.split(',')) {
     const part = rawPart.trim()
+
     if (!part) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
+
     const stepParts = part.split('/')
+
     if (stepParts.length > 2) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
+
     const [rangePart, stepPart] = stepParts
+
     if (!rangePart) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
+
     const step = stepPart === undefined ? 1 : Number(stepPart)
+
     if (!Number.isInteger(step) || step < 1) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
+
     const domainSize = args.distinctValueCount ?? args.max - args.min + 1
+
     if (args.rejectOversizedStep && step > domainSize) {
       throw new Error(`Cron ${args.field} step must be between 1 and ${domainSize}.`)
     }
 
     let start: number
     let end: number
+
     if (rangePart === '*') {
       start = args.min
       end = args.max
     } else if (rangePart.includes('-')) {
       const rangeParts = rangePart.split('-')
+
       if (rangeParts.length !== 2 || !rangeParts[0] || !rangeParts[1]) {
         throw new Error(`Invalid cron ${args.field}.`)
       }
+
       const [startPart, endPart] = rangeParts
       start = parseCronNumber(startPart, args.names ?? null, args.field)
       end = parseCronNumber(endPart, args.names ?? null, args.field)
@@ -109,6 +124,7 @@ export function parseCronField(args: {
 
     const normalizedStart = args.normalize?.(start) ?? start
     const normalizedEnd = args.normalize?.(end) ?? end
+
     if (
       start < args.min ||
       start > args.max ||
@@ -122,12 +138,15 @@ export function parseCronField(args: {
     ) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
+
     for (let value = start; value <= end; value += step) {
       result.add(args.normalize?.(value) ?? value)
     }
   }
+
   if (result.size === 0) {
     throw new Error(`Invalid cron ${args.field}.`)
   }
+
   return result
 }

@@ -28,6 +28,7 @@ export async function ensureDevLauncher(args: {
     ...DEV_LAUNCHER_DIR,
     args.platform === 'win32' ? `${args.commandName}.cmd` : args.commandName
   )
+
   await mkdir(dirname(launcherPath), { recursive: true })
 
   // Why: dev builds lack the packaged resources/bin launcher, so generate one in userData to validate the flow.
@@ -35,10 +36,12 @@ export async function ensureDevLauncher(args: {
     args.platform === 'win32'
       ? buildWindowsDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
       : buildUnixDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
+
   await writeFile(launcherPath, content, {
     encoding: 'utf8',
     mode: args.platform === 'win32' ? undefined : 0o755
   })
+
   if (args.commandName === DEV_COMMAND_NAME && args.platform !== 'win32') {
     // Why: dev PTYs prepend this dir to PATH, so keep a local `orca` alias without claiming the global command.
     await writeFile(join(dirname(launcherPath), 'orca'), content, {
@@ -46,6 +49,7 @@ export async function ensureDevLauncher(args: {
       mode: 0o755
     })
   }
+
   return launcherPath
 }
 
@@ -112,6 +116,7 @@ export function extractManagedUnixLauncherTarget(content: string): string | null
   }
 
   const cliPath = extractShellAssignment(content, 'CLI')
+
   if (!cliPath) {
     return null
   }
@@ -124,8 +129,10 @@ export function extractManagedUnixLauncherTarget(content: string): string | null
 
 export function extractShellAssignment(content: string, name: string): string | null {
   const match = new RegExp(`^${name}=('([^']*)'|"([^"]*)"|([^\\n]+))$`, 'm').exec(content)
+
   if (!match) {
     return null
   }
+
   return (match[2] ?? match[3] ?? match[4] ?? '').trim()
 }

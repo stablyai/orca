@@ -90,6 +90,7 @@ describe('PtyHandler', () => {
     })
     const writeCallbacks: (() => void)[] = []
     let writableLength = 0
+
     const boundedDispatcher = new RelayDispatcher(
       (data, settle) => {
         writableLength += data.length
@@ -97,6 +98,7 @@ describe('PtyHandler', () => {
           writableLength -= data.length
           settle({ ok: true })
         })
+
         return true
       },
       {
@@ -105,7 +107,9 @@ describe('PtyHandler', () => {
         writableHighWaterMark: () => 4 * 1024 * 1024
       }
     )
+
     const boundedHandler = new PtyHandler(boundedDispatcher, undefined, 'bounded-test-mint-epoch')
+
     try {
       boundedDispatcher.feed(
         encodeJsonRpcFrame({ jsonrpc: '2.0', id: 1, method: 'pty.spawn', params: {} }, 1, 0)
@@ -119,9 +123,11 @@ describe('PtyHandler', () => {
 
       expect(writeCallbacks.length).toBeGreaterThan(50)
       expect(resume).not.toHaveBeenCalled()
+
       for (const settle of writeCallbacks.splice(0)) {
         settle()
       }
+
       await vi.advanceTimersByTimeAsync(0)
       expect(resume).toHaveBeenCalledTimes(1)
     } finally {
@@ -151,6 +157,7 @@ describe('PtyHandler', () => {
 
   it('consumes capable startup queries before relay replay and fanout', async () => {
     let dataCallback: ((data: string) => void) | undefined
+
     const term = {
       ...mockPtyInstance,
       onData: vi.fn((cb: (data: string) => void) => {
@@ -158,6 +165,7 @@ describe('PtyHandler', () => {
       }),
       onExit: vi.fn()
     }
+
     mockPtySpawn.mockReturnValue(term)
     await dispatcher.callRequest('pty.spawn', {
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
@@ -193,12 +201,15 @@ describe('PtyHandler', () => {
     await handler.dispose({ waitForPhysicalExit: false })
     const admitted: Record<string, unknown>[] = []
     let hasCapacity = false
+
     const tryNotifyPtyData = vi.fn((params: Record<string, unknown>) => {
       if (hasCapacity) {
         admitted.push(params)
       }
+
       return hasCapacity
     })
+
     Object.assign(dispatcher, {
       onLegacyPtyCapacity: vi.fn(() => vi.fn()),
       tryNotifyPtyData,
@@ -256,12 +267,14 @@ describe('PtyHandler', () => {
       Object.assign(dispatcher, {
         onLegacyPtyCapacity: vi.fn((listener: () => void) => {
           capacityListener = listener
+
           return vi.fn()
         }),
         tryNotifyPtyData: vi.fn((params: Record<string, unknown>) => {
           if (hasCapacity) {
             admitted.push(params)
           }
+
           return hasCapacity
         }),
         tryNotifyPtyExit: vi.fn(() => true),
@@ -361,8 +374,10 @@ describe('PtyHandler', () => {
   it('leaves startup queries untouched for an unsupported relay capability version', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
     try {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -370,6 +385,7 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       await dispatcher.callRequest('pty.spawn', {
         startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
@@ -395,8 +411,10 @@ describe('PtyHandler', () => {
   it('consumes a color query at a native Windows SSH relay owner', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -404,6 +422,7 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       await dispatcher.callRequest('pty.spawn', { shellOverride: 'powershell.exe' })
 
@@ -428,6 +447,7 @@ describe('PtyHandler', () => {
   it('forwards color queries from a POSIX SSH relay owner', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
     try {
       let dataCallback: ((data: string) => void) | undefined
       mockPtySpawn.mockReturnValue({
@@ -454,8 +474,10 @@ describe('PtyHandler', () => {
   it('keeps renderer color replies for a Windows SSH relay that owns WSL', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -463,6 +485,7 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       await dispatcher.callRequest('pty.spawn', {
         shellOverride: 'wsl.exe',
@@ -595,6 +618,7 @@ describe('PtyHandler', () => {
     } as unknown as RelayPtySourcePublication)
 
     const entryCount = 2_000
+
     for (let index = 0; index < entryCount; index += 1) {
       sourceDataCallback!('x')
     }

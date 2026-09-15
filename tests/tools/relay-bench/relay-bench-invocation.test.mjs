@@ -20,14 +20,18 @@ function captureRefusal(run) {
   const exit = vi.spyOn(process, 'exit').mockImplementation((code) => {
     throw new Error(`exit:${code}`)
   })
+
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
   try {
     run()
+
     return null
   } catch (err) {
     if (!err.message.startsWith('exit:')) {
       throw err
     }
+
     return { code: Number(err.message.slice('exit:'.length)), message: error.mock.calls[0]?.[0] }
   } finally {
     exit.mockRestore()
@@ -84,6 +88,7 @@ describe('requireBoundedInteger', () => {
     const refusal = captureRefusal(() =>
       requireBoundedInteger('Infinity', '--runs', 'usage', { min: 1, max: 10, fallback: 5 })
     )
+
     expect(refusal?.code).toBe(2)
     expect(refusal?.message).toContain('--runs must be a whole number 1-10')
   })
@@ -194,6 +199,7 @@ describe('resolvesToPublicAddress', () => {
       { address: '8.8.8.8', family: 4 },
       { address: '10.0.0.5', family: 4 }
     ])
+
     expect((await resolvesToPublicAddress('https://relay.example', { lookup })).ok).toBe(false)
   })
 
@@ -220,6 +226,7 @@ describe('requireOrigin and requireDirector', () => {
     const refusal = captureRefusal(() =>
       requireOrigin('http://relay.example', 'cell origin', 'usage')
     )
+
     expect(refusal?.code).toBe(2)
     expect(refusal?.message).toContain('must be an https origin')
   })
@@ -227,6 +234,7 @@ describe('requireOrigin and requireDirector', () => {
   it('exits 2 when the director origin is missing', () => {
     const previous = process.env.ORCA_RELAY_BENCH_DIRECTOR
     delete process.env.ORCA_RELAY_BENCH_DIRECTOR
+
     try {
       expect(captureRefusal(() => requireDirector(new Map(), 'usage'))?.code).toBe(2)
     } finally {

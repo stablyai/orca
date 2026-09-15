@@ -6,17 +6,25 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
+
 const piCli = process.argv[2] && resolve(process.argv[2])
+
 assert.ok(piCli, 'Pass the installed Pi CLI entrypoint')
+
 const scratch = await mkdtemp(join(tmpdir(), 'orca-pi-provider-'))
+
 const requests = []
+
 const server = createServer(async (req, res) => {
   let body = ''
+
   for await (const part of req) {
     body += part
   }
+
   requests.push(JSON.parse(body))
   res.writeHead(200, { 'content-type': 'text/event-stream' })
+
   for (const chunk of [
     {
       id: 'proof',
@@ -38,8 +46,10 @@ const server = createServer(async (req, res) => {
   ]) {
     res.write(`data: ${JSON.stringify(chunk)}\n\n`)
   }
+
   res.end('data: [DONE]\n\n')
 })
+
 try {
   const bundle = join(scratch, 'orca.cjs')
   await build({
@@ -67,20 +77,26 @@ try {
     join(dir, 'settings.json'),
     JSON.stringify({ defaultProvider: 'orca-proof', defaultModel: 'local' })
   )
+
   const planned = planCommitMessageGeneration(
     { agentId: 'pi', model: 'orca-proof/local' },
     'Generate one short commit message.'
   )
+
   assert.equal(planned.ok, true)
   const fixedArgs = planned.plan.args
   assert.ok(!fixedArgs.includes('--no-extensions'))
+
   const variants = [
     ['baseline', [...fixedArgs, '--no-extensions']],
     ['extensions-enabled', fixedArgs]
   ]
+
   const results = []
+
   for (const [variant, args] of variants) {
     const n = requests.length
+
     const result = await runProcess({
       program: process.execPath,
       args: [piCli, ...args],
@@ -97,6 +113,7 @@ try {
       input: planned.plan.stdinPayload,
       timeoutMs: 20000
     })
+
     results.push({
       variant,
       args,
@@ -106,6 +123,7 @@ try {
       requests: requests.length - n
     })
   }
+
   assert.equal(results[0].requests, 0)
   assert.notEqual(results[0].code, 0)
   assert.equal(results[1].code, 0, results[1].stderr)

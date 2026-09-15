@@ -173,6 +173,7 @@ describe('buildWorkspaceSessionPatch', () => {
 
   it('sanitizes terminal tabs and prunes local buffers when tab topology changes', () => {
     const localWorktreeId = 'repo-1::/local/worktree'
+
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({
         tabsByWorktree: {

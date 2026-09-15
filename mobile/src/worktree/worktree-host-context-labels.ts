@@ -6,10 +6,12 @@ import {
 } from '../../../src/shared/execution-host'
 import { getMixedHostContextLabels as getSharedMixedHostContextLabels } from '../../../src/shared/worktree/host-context-labels'
 import { composeWorktreeHostIdentity } from '../../../src/shared/worktree/host-qualified-identity'
+
 export {
   buildHostLabelById,
   getHostContextLabel
 } from '../../../src/shared/worktree/host-context-labels'
+
 import type { RepoSummary } from './host-worktree-rpc-types'
 import type { Worktree } from './workspace-list-types'
 
@@ -73,16 +75,20 @@ export function applyWorktreeHostContextLabels(
   sources: HostLabelSources
 ): Worktree[] {
   const labels = getWorktreeHostContextLabels(worktrees, sources)
+
   if (!labels) {
     return worktrees
   }
+
   return worktrees.map((worktree) => {
     const hostContextLabel = labels.get(
       getResolvedWorktreeRowIdentity(worktree, sources.repoHostIdByRepoId)
     )
+
     if (!hostContextLabel) {
       return worktree
     }
+
     return {
       ...worktree,
       hostContextLabel,

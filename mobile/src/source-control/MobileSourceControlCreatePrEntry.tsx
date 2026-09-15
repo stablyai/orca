@@ -12,8 +12,10 @@ export function MobileSourceControlCreatePrEntry({ action }: Props) {
   if (!action.visible) {
     return null
   }
+
   const enabled = !action.disabled
   const copy = action.hint ?? action.label
+
   return (
     <View style={styles.createPrBlock}>
       <Pressable

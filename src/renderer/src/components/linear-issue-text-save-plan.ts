@@ -22,6 +22,7 @@ export function getLinearIssueTextSavePlan({
 }): LinearIssueTextSavePlan {
   const nextTitle = titleDraft.trim()
   const nextDescription = descriptionDraft.trimEnd()
+
   if (field === 'title' && !nextTitle) {
     return { kind: 'empty-title' }
   }
@@ -30,6 +31,7 @@ export function getLinearIssueTextSavePlan({
   // Why: description saves strip trailing whitespace, so stored trailing
   // whitespace from Linear should not trigger a no-op PATCH on blur.
   const currentValue = field === 'title' ? issue.title : (issue.description ?? '').trimEnd()
+
   if (nextValue === currentValue) {
     return { kind: 'unchanged' }
   }

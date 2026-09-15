@@ -14,6 +14,7 @@ import type { TabEntryOption } from './tab-create-entry-action'
 // remembered page even when the match was fuzzy.
 function isFileOrUrlOption(option: TabEntryOption): boolean {
   const { kind } = option.classification
+
   return (
     kind === 'existing-file' ||
     kind === 'absolute-file' ||
@@ -29,17 +30,21 @@ export function insertHistoryRowsBelowFileMatches(
   const options = dropUrlEntriesCoveredByHistoryRows(entryOptions, historyRows)
     .filter(isActiveEntryOption)
     .map((option) => ({ kind: 'entry' as const, option }))
+
   if (historyRows.length === 0) {
     return options
   }
+
   // Scanning for the last one, not the leading run: the classifier promotes web
   // search above fuzzy files for phrase queries, and history belongs under both.
   let insertAt = 0
+
   for (const [index, option] of options.entries()) {
     if (isFileOrUrlOption(option.option)) {
       insertAt = index + 1
     }
   }
+
   return [
     ...options.slice(0, insertAt),
     ...historyRows.map((option) => ({ kind: 'history' as const, option })),

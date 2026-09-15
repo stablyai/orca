@@ -12,9 +12,11 @@ type ProjectCircle = {
 
 function placeUnlinkedProjects<T extends ProjectCircle>(projects: T[]): T[] {
   let cursorX = 0
+
   return projects.map((project) => {
     const positioned = { ...project, x: cursorX + project.radius, y: 0 }
     cursorX += project.radius * 2 + PROJECT_GAP
+
     return positioned
   })
 }
@@ -28,6 +30,7 @@ export function placeAgentMapProjects<T extends ProjectCircle>(
   const positioned = projects.some((project) => project.clusterParentId)
     ? layoutAgentMapWorktreeLineage(projects)
     : placeUnlinkedProjects(projects)
+
   const left = Math.min(...positioned.map((project) => project.x - project.radius))
   const right = Math.max(...positioned.map((project) => project.x + project.radius))
   const top = Math.min(...positioned.map((project) => project.y - project.radius))
@@ -38,6 +41,7 @@ export function placeAgentMapProjects<T extends ProjectCircle>(
   const height = Math.max(minimumHeight, naturalHeight)
   const offsetX = worldMargin - left + (width - naturalWidth) / 2
   const offsetY = worldMargin - top + (height - naturalHeight) / 2
+
   return {
     projects: positioned.map((project) => ({
       ...project,

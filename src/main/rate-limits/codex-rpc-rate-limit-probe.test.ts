@@ -12,6 +12,7 @@ function makeRpcChild(): CodexRpcRateLimitChild {
   child.stdin = Object.assign(new EventEmitter(), {
     write: vi.fn((line: string) => {
       const message = JSON.parse(line) as { id?: number; method?: string }
+
       if (message.method === 'initialize') {
         queueMicrotask(() => {
           ;(child.stdout as EventEmitter).emit(
@@ -20,6 +21,7 @@ function makeRpcChild(): CodexRpcRateLimitChild {
           )
         })
       }
+
       if (message.method === 'account/rateLimits/read') {
         queueMicrotask(() => {
           ;(child.stdout as EventEmitter).emit(
@@ -35,6 +37,7 @@ function makeRpcChild(): CodexRpcRateLimitChild {
       }
     })
   })
+
   return child
 }
 
@@ -42,12 +45,14 @@ describe('Codex RPC rate-limit probe cleanup boundary', () => {
   it('does not resolve a successful read until the injected child termination finishes', async () => {
     const child = makeRpcChild()
     let finishTermination!: () => void
+
     const terminate = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishTermination = resolve
         })
     )
+
     let settled = false
 
     const result = readCodexRateLimitsViaRpc({
@@ -58,6 +63,7 @@ describe('Codex RPC rate-limit probe cleanup boundary', () => {
       terminate
     }).then((value) => {
       settled = true
+
       return value
     })
 

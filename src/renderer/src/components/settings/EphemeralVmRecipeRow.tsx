@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
 >[number]
+
 type Recipe = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
 export function EphemeralVmRecipeRow({
@@ -26,6 +27,7 @@ export function EphemeralVmRecipeRow({
           'destroy configured'
         )
       : translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
+
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">

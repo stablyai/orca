@@ -19,8 +19,11 @@ import {
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 
 const WORKSPACE_ID = 'hosted-workspace'
+
 const PAGE_ID = 'hosted-page'
+
 const REMOTE_PAGE_ID = 'remote-page-1'
+
 const URL = 'https://example.com/hosted'
 
 const CLIENT_PLACEMENT = {
@@ -136,6 +139,7 @@ function applyToState(
     ENV,
     NOW
   ) as Partial<WebSessionTabsSyncState>
+
   return { ...state, ...patch }
 }
 
@@ -236,6 +240,7 @@ describe('scoping the carve-out to this environment', () => {
   /** A workspace holding a page of this environment plus one hosted for a different one. */
   function mixedEnvironmentState(): WebSessionTabsSyncState {
     const state = adoptedState(SERVER_PLACEMENT)
+
     return {
       ...state,
       browserTabsByWorktree: {

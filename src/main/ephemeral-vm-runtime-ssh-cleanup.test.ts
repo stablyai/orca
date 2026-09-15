@@ -60,6 +60,7 @@ it('retains the hidden target identity when removal fails', async () => {
 it('keeps provider cleanup retryable until target removal succeeds', async () => {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
+
   const failed = await removeEphemeralVmRuntimeSshTarget({
     userDataPath,
     runtime: createRuntime(userDataPath, 'cleaned'),
@@ -87,6 +88,7 @@ it('keeps provider cleanup retryable until target removal succeeds', async () =>
 it('preserves the provider destroy error after target removal', async () => {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
+
   const runtime = createRuntime(userDataPath, 'cleanup_failed', {
     cleanupStatus: 'failed',
     cleanupLastError: 'Destroy failed.'
@@ -111,6 +113,7 @@ it('does not let a stale concurrent failure regress completed cleanup', async ()
   tempDirs.push(userDataPath)
   const runtime = createRuntime(userDataPath, 'cleaned')
   let rejectStaleRemoval!: (error: Error) => void
+
   const staleRemoval = removeEphemeralVmRuntimeSshTarget({
     userDataPath,
     runtime,
@@ -121,6 +124,7 @@ it('does not let a stale concurrent failure regress completed cleanup', async ()
         })
     )
   })
+
   await Promise.resolve()
 
   await removeEphemeralVmRuntimeSshTarget({
@@ -141,6 +145,7 @@ it('does not let a stale concurrent failure regress completed cleanup', async ()
 it('repairs completed cleanup records that already lost their target id', async () => {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
+
   const runtime = createRuntime(userDataPath, 'cleanup_failed', {
     cleanupStatus: 'succeeded',
     sshTargetId: undefined

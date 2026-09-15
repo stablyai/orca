@@ -29,39 +29,51 @@ export function useTabBarQuickCommandSearchInput<TCommand>({
   onKeyUp: ReturnType<typeof useImeEnterGestureOwnership>['onKeyUp']
 } {
   const imeEnter = useImeEnterGestureOwnership()
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
       if (imeEnter.ownsKeyDown(event)) {
         return
       }
+
       if (isSelectAllShortcut(event)) {
         event.stopPropagation()
+
         return
       }
+
       if (event.key === 'Enter' && selectedCommand) {
         event.preventDefault()
         event.stopPropagation()
         onRun(selectedCommand)
+
         return
       }
+
       if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && filteredCommands.length > 0) {
         event.preventDefault()
         event.stopPropagation()
+
         const currentIndex = filteredCommands.findIndex(
           (command) => getCommandId(command) === commandValue
         )
+
         const startIndex = Math.max(currentIndex, 0)
         const direction = event.key === 'ArrowDown' ? 1 : -1
+
         const nextIndex =
           (startIndex + direction + filteredCommands.length) % filteredCommands.length
+
         onCommandValueChange(getCommandId(filteredCommands[nextIndex]))
         requestAnimationFrame(() => {
           commandListRef.current
             ?.querySelector('[cmdk-item][data-selected="true"]')
             ?.scrollIntoView({ block: 'nearest' })
         })
+
         return
       }
+
       if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.stopPropagation()
       }

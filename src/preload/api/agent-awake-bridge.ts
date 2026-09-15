@@ -7,7 +7,9 @@ export const agentAwakeApi = {
   onChanged: (callback: (status: ComputerAwakeStatus) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: ComputerAwakeStatus): void =>
       callback(status)
+
     ipcRenderer.on('agentAwake:changed', listener)
+
     return () => ipcRenderer.removeListener('agentAwake:changed', listener)
   }
 } satisfies PreloadApi['agentAwake']

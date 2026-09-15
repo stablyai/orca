@@ -23,11 +23,13 @@ export function remoteUnixSocketPathByteLimit(host: RemoteHostPlatform): number 
   if (isWindowsRemoteHost(host)) {
     return null
   }
+
   return SUN_PATH_SIZE[host.os === 'darwin' ? 'darwin' : 'linux'] - 1
 }
 
 export function remoteSocketPathFitsLimit(host: RemoteHostPlatform, sockPath: string): boolean {
   const limit = remoteUnixSocketPathByteLimit(host)
+
   return limit === null || Buffer.byteLength(sockPath, 'utf8') <= limit
 }
 
@@ -112,10 +114,13 @@ function adoptOwnedDirectoryCommand(target: string): string[] {
 export function parseShortRelaySocketDir(output: string, versionSegment: string): string | null {
   for (const line of output.split('\n')) {
     const trimmed = line.trim()
+
     if (!trimmed.startsWith(`${SHORT_DIR_MARKER} `)) {
       continue
     }
+
     const dir = trimmed.slice(SHORT_DIR_MARKER.length + 1).trim()
+
     if (
       dir.startsWith(`${SHORT_RELAY_SOCKET_DIR_PREFIX}`) &&
       dir.endsWith(`/${versionSegment}`) &&
@@ -124,5 +129,6 @@ export function parseShortRelaySocketDir(output: string, versionSegment: string)
       return dir
     }
   }
+
   return null
 }

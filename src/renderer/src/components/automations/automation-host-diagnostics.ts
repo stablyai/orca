@@ -156,20 +156,25 @@ export function createAutomationHostDiagnostics(
     key: string
   ): AutomationHostKeyCounters => {
     const existing = buckets.get(key)
+
     if (existing) {
       return existing
     }
+
     // Eviction is first-seen order, not least-recently-used: keeping it that way
     // costs no re-insert on the recording path, and at 512 keys against a 50-host
     // gate nothing under test is ever reached.
     if (buckets.size >= maxTrackedKeys) {
       const oldest = buckets.keys().next()
+
       if (!oldest.done) {
         buckets.delete(oldest.value)
       }
     }
+
     const created = emptyCounters()
     buckets.set(key, created)
+
     return created
   }
 
@@ -195,6 +200,7 @@ export function createAutomationHostDiagnostics(
     recordRequest: ({ authorityKey, stableKey, transport }) => {
       for (const counters of targets(authorityKey, stableKey)) {
         counters.requests += 1
+
         if (transport === 'legacy') {
           counters.legacyRequests += 1
         } else {
@@ -293,22 +299,28 @@ export function installAutomationHostDiagnostic(): void {
   if (typeof window === 'undefined') {
     return
   }
+
   const target = window as AutomationHostDiagnosticsWindow
+
   if (target.__orcaAutomationHostDiagnostic) {
     return
   }
+
   target.__orcaAutomationHostDiagnostic = {
     report: () => {
       const snapshot = automationHostDiagnostics.snapshot()
       console.log('[orca] automation host cache diagnostics', snapshot)
+
       return snapshot
     },
     measureSerializedChars: (enabled = true) => {
       automationHostDiagnostics.setMeasureSerializedChars(enabled)
+
       return `Automation host response sizing ${enabled ? 'on' : 'off'}.`
     },
     reset: () => {
       automationHostDiagnostics.reset()
+
       return 'Automation host cache diagnostics reset.'
     }
   }

@@ -49,6 +49,7 @@ describe('readBrowserClientHostId', () => {
       })
       .mockImplementationOnce(() => null)
       .mockImplementation(() => 'browser-host-a')
+
     vi.stubGlobal('api', { browser: { readClientHostId } })
 
     expect([

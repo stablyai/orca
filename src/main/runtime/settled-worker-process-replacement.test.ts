@@ -3,12 +3,19 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 
 const TAB = 'worker-tab'
+
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = `${TAB}:${LEAF}`
+
 const WORKSPACE = '/folder-workspace'
+
 const LOCAL_HOST = JSON.stringify({ kind: 'local', hostId: 'local' })
+
 const SSH_HOST = JSON.stringify({ kind: 'ssh', targetId: 'remote-host' })
+
 let db: OrchestrationDb
+
 let runtime: OrcaRuntimeService
 
 afterEach(() => {
@@ -19,6 +26,7 @@ function seedWorker(hostScope: string, settled = true) {
   db = new OrchestrationDb(':memory:')
   runtime = new OrcaRuntimeService(null)
   runtime.setOrchestrationDb(db)
+
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: Number.MAX_SAFE_INTEGER,
@@ -26,6 +34,7 @@ function seedWorker(hostScope: string, settled = true) {
     taskRunId: 'run_legacy_local',
     startOptions: {}
   })
+
   db.prepareStartingWorkerAuthority({
     dispatchId: started.dispatch.id,
     handle: 'term_original',
@@ -38,6 +47,7 @@ function seedWorker(hostScope: string, settled = true) {
     terminalOwnership: 'created'
   })
   db.markWorkerDispatchReady(started.dispatch.id)
+
   if (settled) {
     db.settleWorkerReport({
       taskId: started.task.id,
@@ -46,6 +56,7 @@ function seedWorker(hostScope: string, settled = true) {
       result: '{}'
     })
   }
+
   return {
     dispatchId: started.dispatch.id,
     task: db.getTask(started.task.id),

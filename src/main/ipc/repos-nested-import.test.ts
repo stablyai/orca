@@ -7,28 +7,38 @@ import type * as RepoModule from '../git/repo'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
+
   return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
 )
+
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
+
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+
 vi.mock('./registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
+
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
+
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+
 vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
@@ -75,6 +85,7 @@ describe('projectGroups IPC validation', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     mockStore.createProjectGroup.mockReturnValue(group)
     mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
       isRepo: path === '/srv/platform/api' || path === '/srv/platform/node_modules/hidden',
@@ -84,9 +95,11 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       if (path === '/srv/platform/node_modules/hidden/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
@@ -96,6 +109,7 @@ describe('projectGroups IPC validation', () => {
           { name: 'node_modules', isDirectory: true, isSymlink: false }
         ]
       }
+
       return []
     })
 
@@ -137,6 +151,7 @@ describe('projectGroups IPC validation', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     mockStore.createProjectGroup.mockReturnValue(group)
     mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
       isRepo: path === '/srv/platform/api' || path === '/srv/other/api',
@@ -146,12 +161,14 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git' || path === '/srv/other/api/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
       if (dirPath === '/srv/platform' || dirPath === '/srv/other') {
         return [{ name: 'api', isDirectory: true, isSymlink: false }]
       }
+
       return []
     })
 
@@ -192,6 +209,7 @@ describe('projectGroups IPC validation', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     mockStore.createProjectGroup.mockReturnValue(group)
     mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
       isRepo: path === '/srv/platform/api',
@@ -201,6 +219,7 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -244,6 +263,7 @@ describe('projectGroups IPC validation', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     mockStore.createProjectGroup.mockReturnValue(group)
     mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
       isRepo: path === '/srv/platform/api',
@@ -253,6 +273,7 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -315,6 +336,7 @@ describe('projectGroups IPC validation', () => {
       if (path === `${selectedPath}/.git` || path === `${secondSelectedPath}/.git`) {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -362,10 +384,12 @@ describe('projectGroups IPC validation', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const repoPaths = Array.from(
       { length: 87 },
       (_, index) => `/srv/platform/service-${String(index + 1).padStart(2, '0')}`
     )
+
     const selectedPaths = [repoPaths[2], repoPaths[41], repoPaths[86]]
     mockStore.addRepo.mockClear()
     mockStore.createProjectGroup.mockReturnValue(group)
@@ -375,9 +399,11 @@ describe('projectGroups IPC validation', () => {
     }))
     mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
       const repoPath = path.replace(/\/\.git$/, '')
+
       if (path.endsWith('/.git') && repoPaths.includes(repoPath)) {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
@@ -417,6 +443,7 @@ describe('projectGroups IPC validation', () => {
 
   it('imports selected local linked worktrees as one project rooted at the main worktree', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-nested-linked-worktrees-'))
+
     try {
       const parentPath = join(tempRoot, 'paseo-worktrees', 'demo-project')
       const mainPath = join(tempRoot, 'source', 'demo-project')
@@ -489,6 +516,7 @@ describe('projectGroups IPC validation', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     mockStore.createProjectGroup.mockReturnValue(group)
     mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
       isRepo: path === '/srv/platform/api',
@@ -498,6 +526,7 @@ describe('projectGroups IPC validation', () => {
       if (path === '/srv/platform/api/.git') {
         return { type: 'directory', size: 0, mtime: 0 }
       }
+
       throw new Error('not found')
     })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>

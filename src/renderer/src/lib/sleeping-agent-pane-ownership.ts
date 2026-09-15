@@ -12,6 +12,7 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
   const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
+
   return record.agent === 'pi' || record.agent === 'prime-agent'
     ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
     : base
@@ -30,9 +31,11 @@ export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessi
 
 function getLegacyPaneTabId(record: SleepingAgentSessionRecord): string | null {
   const legacy = parseLegacyNumericPaneKey(record.paneKey)
+
   if (!legacy || (record.tabId && record.tabId !== legacy.tabId)) {
     return null
   }
+
   return record.tabId ?? legacy.tabId
 }
 
@@ -42,11 +45,13 @@ function getLegacyProviderSessionKeysForTab(
   tabId: string
 ): Set<string> {
   const keys = new Set<string>()
+
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
     if (record.worktreeId === worktreeId && getLegacyPaneTabId(record) === tabId) {
       keys.add(getProviderSessionClaimKey(record))
     }
   }
+
   return keys
 }
 
@@ -101,13 +106,17 @@ function stablePaneHasLivePty(
   layout: TerminalLayoutSnapshot | undefined
 ): boolean {
   const livePtyIds = ptyIdsByTabId[tabId] ?? []
+
   if (livePtyIds.length === 0) {
     return false
   }
+
   const leafPtyId = layout?.ptyIdsByLeafId?.[leafId]
+
   if (leafPtyId) {
     return livePtyIds.includes(leafPtyId)
   }
+
   // Single-leaf tabs have no per-leaf binding; the tab's live PTY is this leaf's.
   return layout?.root?.type === 'leaf' && layout.root.leafId === leafId
 }
@@ -120,6 +129,7 @@ function paneWillConnectOnActivation(
   if (state.activeWorktreeId !== worktreeId) {
     return false
   }
+
   // Why: keep-alive mounts every terminal tab of the active worktree and pane
   // connect is not visibility-gated (cold-activation deferral delays a mount,
   // never cancels it), so any preserved restorable pane cold-restores in place.
@@ -135,18 +145,23 @@ export function recordPaneIsOwnedByPreservedPane(
 ): boolean {
   const worktreeTabs = state.tabsByWorktree[record.worktreeId] ?? []
   const stable = parsePaneKey(record.paneKey)
+
   if (stable) {
     if (record.tabId && record.tabId !== stable.tabId) {
       return false
     }
+
     const tabId = record.tabId ?? stable.tabId
     const tab = worktreeTabs.find((candidate) => candidate.id === tabId) ?? null
+
     if (!tab || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
       return false
     }
+
     if (isPassiveCompletedHibernationEvidence(record)) {
       return true
     }
+
     // Why: a pane with a live PTY owns its running session regardless of which
     // pane reconnects on activation; forking it would duplicate the session.
     if (
@@ -159,6 +174,7 @@ export function recordPaneIsOwnedByPreservedPane(
     ) {
       return true
     }
+
     // Why: active sessions rely on pane-level cold restore. A preserved leaf
     // without a PTY/session id can repaint scrollback but cannot resume.
     return (
@@ -173,11 +189,14 @@ export function recordPaneIsOwnedByPreservedPane(
   }
 
   const tabId = getLegacyPaneTabId(record)
+
   if (!tabId) {
     return false
   }
+
   const tab = worktreeTabs.find((candidate) => candidate.id === tabId) ?? null
   const providerKeys = getLegacyProviderSessionKeysForTab(state, record.worktreeId, tabId)
+
   // Why: legacy numeric pane keys lack leaf identity, so only a preserved
   // tab-level wake hint plus a single provider session is strong enough to
   // claim pane recovery without risking the wrong split-pane session.

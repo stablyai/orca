@@ -1,8 +1,11 @@
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
+
 export type IssueState = 'open' | 'closed'
+
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+
 export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
 
 export type PRConflictSummary = {

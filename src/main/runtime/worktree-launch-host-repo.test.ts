@@ -33,6 +33,7 @@ describe('resolveWorktreeLaunchHost', () => {
     expect(
       resolveWorktreeLaunchHost([clientOwnedRow], { repoId: 'r', hostId: 'runtime:env-a' })
     ).toEqual({ kind: 'resolved', repo: null, connectionId: null })
+
     // Even the runtime host's *own* row contributes no PTY route: its nested target lives in that
     // machine's namespace, so spawning against it here would dial the wrong box. The renderer
     // reads the same resolution and does want that id — see execution-host.test.ts.
@@ -42,6 +43,7 @@ describe('resolveWorktreeLaunchHost', () => {
       connectionId: 'ssh-nested',
       executionHostId: 'runtime:env-a' as const
     }
+
     expect(
       resolveWorktreeLaunchHost([nestedRow], { repoId: 'r', hostId: 'runtime:env-a' })
     ).toEqual({ kind: 'resolved', repo: nestedRow, connectionId: null })
@@ -119,6 +121,7 @@ describe('resolveWorktreeHostRouting', () => {
       { id: 'r', path: '/p', connectionId: 'openclaw' },
       { id: 'r', path: '/q', connectionId: 'm4air' }
     ]
+
     expect(resolveWorktreeHostRouting(rows, { repoId: 'r', hostId: 'ssh:m4air' })).toEqual({
       kind: 'resolved',
       hostId: 'ssh:m4air',

@@ -88,6 +88,7 @@ import {
 // Stdout of the relay-side pty-master cloexec patch, which runs on Linux hosts once a
 // freshly installed node-pty loads (#17915).
 const NPTY_CLOEXEC_PATCHED = 'ORCA-NPTY-CLOEXEC:patched\n'
+
 const LAUNCH_TAIL: ExecResponse[] = ['', 'DEAD', '', 'READY']
 
 describe('relay native-deps cache on the deploy path', () => {
@@ -99,12 +100,15 @@ describe('relay native-deps cache on the deploy path', () => {
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
+
     for (const k of Object.keys(sftpCapture.contents)) {
       delete sftpCapture.contents[k]
     }
+
     for (const k of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[k]
     }
+
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(false)
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -116,6 +120,7 @@ describe('relay native-deps cache on the deploy path', () => {
 
   function feed(responses: ExecResponse[]): void {
     const mockExec = vi.mocked(execCommand)
+
     for (const r of responses) {
       if (typeof r === 'string') {
         mockExec.mockResolvedValueOnce(r)
@@ -136,6 +141,7 @@ describe('relay native-deps cache on the deploy path', () => {
   function firstInstall(cacheAnswer: string, tail: ExecResponse[]): ExecResponse[] {
     const prefix = makeStagedFirstInstallExecPrefix()
     prefix[prefix.length - 1] = cacheAnswer
+
     return [...prefix, ...tail]
   }
 

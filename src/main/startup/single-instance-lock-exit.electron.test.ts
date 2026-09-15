@@ -16,9 +16,13 @@ import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-loc
 // only a real process can settle is what the loser does next, which is what this file pins.
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const GATE_ENTERED = 'GATE_ENTERED'
+
 const CONTINUED_INTO_STARTUP = 'CONTINUED_INTO_STARTUP'
+
 const REACHED_TAIL = 'REACHED_TAIL'
+
 const MARKER_ENV = 'ORCA_PRE_READY_EXIT_FIXTURE_MARKER'
 
 const fixtureRoots: string[] = []
@@ -35,6 +39,7 @@ function readPreReadyTermination(gate: string): string {
     join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
     'utf8'
   )
+
   const start = source.indexOf(gate)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf('\n  }', start)
@@ -85,6 +90,7 @@ function runPreReadyGate(termination: string): FixtureRun {
     timeout: 60_000,
     env: { ...process.env, [MARKER_ENV]: marker }
   })
+
   expect(result.error).toBeUndefined()
 
   return {

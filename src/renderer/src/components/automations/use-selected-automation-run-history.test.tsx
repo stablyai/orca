@@ -38,6 +38,7 @@ const DESKTOP_ROW: AutomationListRow = {
 
 function Harness(props: { input: SelectedAutomationRunHistoryInput }): null {
   useSelectedAutomationRunHistory(props.input)
+
   return null
 }
 
@@ -61,12 +62,15 @@ async function render(
   const container = document.createElement('div')
   const root = createRoot(container)
   roots.push(root)
+
   const rerender = async (next: SelectedAutomationRunHistoryInput): Promise<void> => {
     await act(async () => {
       root.render(<Harness input={next} />)
     })
   }
+
   await rerender(input)
+
   return rerender
 }
 
@@ -162,10 +166,12 @@ describe('useSelectedAutomationRunHistory', () => {
 
   it('names the owner the history was read under', async () => {
     mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+
     const owner: AutomationOwnerRef = {
       authority: { kind: 'runtime', environmentId: 'gpu', pairingRevision: 2 },
       selector: { kind: 'self' }
     }
+
     const input = makeInput({
       context: {
         capturedOwners: new Map([[DESKTOP_ROW.key, { owner, selector: { kind: 'self' } }]]),

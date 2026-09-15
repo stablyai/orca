@@ -7,7 +7,9 @@ import { useBufferedTerminalDrafts } from './use-buffered-terminal-drafts'
 type BufferedDraftHook = ReturnType<typeof useBufferedTerminalDrafts>
 
 let currentHook: BufferedDraftHook | null = null
+
 let renderer: ReactTestRenderer | null = null
+
 let probeRenderCount = 0
 
 function Probe({ activeHandle }: { readonly activeHandle: string | null }) {
@@ -15,6 +17,7 @@ function Probe({ activeHandle }: { readonly activeHandle: string | null }) {
   const activeHandleRef = useRef(activeHandle)
   activeHandleRef.current = activeHandle
   currentHook = useBufferedTerminalDrafts({ activeHandle, activeHandleRef })
+
   return null
 }
 
@@ -22,6 +25,7 @@ function hook(): BufferedDraftHook {
   if (!currentHook) {
     throw new Error('Hook probe is not mounted')
   }
+
   return currentHook
 }
 
@@ -198,6 +202,7 @@ describe('useBufferedTerminalDrafts', () => {
     act(() => {
       renderer = create(createElement(Probe, { activeHandle: 'terminal-a' }))
     })
+
     const callbacks = {
       begin: hook().beginBufferedTerminalDraftSend,
       prune: hook().pruneDrafts,
@@ -207,6 +212,7 @@ describe('useBufferedTerminalDrafts', () => {
       setInput: hook().setInput,
       settle: hook().settleBufferedTerminalDraftSend
     }
+
     act(() => hook().setInput('  echo exact–text  '))
     let send: ReturnType<BufferedDraftHook['beginBufferedTerminalDraftSend']>
     act(() => {
@@ -232,11 +238,13 @@ describe('useBufferedTerminalDrafts', () => {
   // retained set disagree exactly there, and only the retained set keeps the draft.
   it('keeps a chat-covered draft against the retained set and drops it against the raw list', () => {
     const listedHandles = new Set(['other-terminal'])
+
     const retainedHandles = resolveRetainedTerminalHandles({
       liveHandles: listedHandles,
       showNativeChat: true,
       activeHandle: 'covered-terminal'
     })
+
     act(() => {
       renderer = create(createElement(Probe, { activeHandle: 'covered-terminal' }))
     })
@@ -251,11 +259,13 @@ describe('useBufferedTerminalDrafts', () => {
 
   it('keeps a chat-covered pending restoration against the retained set only', () => {
     const listedHandles = new Set(['other-terminal'])
+
     const retainedHandles = resolveRetainedTerminalHandles({
       liveHandles: listedHandles,
       showNativeChat: true,
       activeHandle: 'covered-terminal'
     })
+
     act(() => {
       renderer = create(createElement(Probe, { activeHandle: 'covered-terminal' }))
     })

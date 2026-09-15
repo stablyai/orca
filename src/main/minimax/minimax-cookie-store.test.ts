@@ -14,10 +14,15 @@ const electronMock = vi.hoisted(() => ({
 vi.mock('electron', () => electronMock)
 
 const existsSyncMock = vi.fn()
+
 const readFileSyncMock = vi.fn()
+
 const rmSyncMock = vi.fn()
+
 const hardenExistingSecureFileMock = vi.fn()
+
 const writeSecureFileMock = vi.fn()
+
 const homedirMock = vi.fn(() => '/home/test')
 
 vi.mock('node:fs', () => ({
@@ -40,6 +45,7 @@ vi.mock('../../shared/secure-file', () => ({
 }))
 
 const storePath = '/home/test/.orca/minimax-session-cookie.enc'
+
 const envelope = (kind: 'encrypted' | 'plaintext', value: string): string =>
   `orca-minimax-cookie:v1:${kind}:${Buffer.from(value, 'utf8').toString('base64')}`
 

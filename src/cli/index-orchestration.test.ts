@@ -20,6 +20,7 @@ const {
 
 vi.mock('./runtime-client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
+
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -37,6 +38,7 @@ vi.mock('./runtime/environments', () => ({
 
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
+
   return createChildProcessModuleMock(spawnMock)
 })
 
@@ -142,6 +144,7 @@ describe('orca cli worktree awareness', () => {
       .flat()
       .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
       .join('\n')
+
     expect(output).toContain("invalid status 'complete'")
     expect(output).toContain('pending, ready, dispatched, completed, failed, blocked')
     expect(callMock).not.toHaveBeenCalled()

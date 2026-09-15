@@ -19,28 +19,35 @@ export function waitForSttWorkerStop(args: {
         clearTimeout(timeout)
         timeout = null
       }
+
       args.worker.off('message', onStopped)
       args.worker.off('error', onError)
       args.worker.off('exit', onExit)
     }
+
     const finish = (outcome: SttWorkerStopOutcome): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
+
       if (outcome !== 'stopped' && !receivedStopped) {
         args.capturedSink?.({ type: 'stopped' })
       }
+
       args.finish(outcome)
       resolve()
     }
+
     const onStopped = (message: { type: string }): void => {
       if (message.type === 'stopped') {
         receivedStopped = true
         finish('stopped')
       }
     }
+
     const onError = (): void => finish('error')
     const onExit = (): void => finish('exit')
 

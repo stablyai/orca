@@ -26,6 +26,7 @@ describe('reconcileFetchedRepos', () => {
       },
       importedExternalWorktreePaths: ['/a', '/b']
     })
+
     const previous = [makeRepo('a', nested())]
     const next = structuredClone([makeRepo('a', nested())]) as Repo[]
 
@@ -45,6 +46,7 @@ describe('reconcileFetchedRepos', () => {
     const previous = [
       makeRepo('a', { hookSettings: { mode: 'auto', scripts: { setup: '', archive: '' } } })
     ]
+
     const next = [
       makeRepo('a', {
         hookSettings: {
@@ -98,6 +100,7 @@ describe('reconcileFetchedRepos', () => {
       makeRepo('same', { executionHostId: 'local', displayName: 'Local' }),
       makeRepo('same', { executionHostId: 'runtime:env-1', displayName: 'Remote' })
     ]
+
     const next = [
       makeRepo('same', { executionHostId: 'runtime:env-1', displayName: 'Remote' }),
       makeRepo('same', { executionHostId: 'local', displayName: 'Local' })
@@ -113,6 +116,7 @@ describe('reconcileFetchedRepos', () => {
     const previous = Array.from({ length: 1000 }, (_, index) =>
       makeRepo(`repo-${index}`, { executionHostId: index % 2 === 0 ? 'local' : 'runtime:env-1' })
     )
+
     const next = previous.map((repo) => ({ ...repo }))
 
     const result = reconcileFetchedRepos(previous, next)

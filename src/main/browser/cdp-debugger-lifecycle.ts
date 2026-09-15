@@ -21,6 +21,7 @@ export class CdpDebuggerLifecycle {
         // guest may already be destroyed
       }
     }
+
     if (messageListener) {
       try {
         guest.debugger.removeListener('message', messageListener as never)
@@ -33,6 +34,7 @@ export class CdpDebuggerLifecycle {
   async ensureDebuggerAttached(guest: WebContents): Promise<void> {
     const tabId = this.bridgeState.resolveTabId(guest.id)
     const state = this.bridgeState.getOrCreateTabState(tabId)
+
     if (state.debuggerAttached && guest.debugger.isAttached()) {
       return
     }
@@ -86,6 +88,7 @@ export class CdpDebuggerLifecycle {
       const command = guest.debugger.sendCommand(method, params, sessionId) as Promise<unknown>
       // Why: Electron's CDP sendCommand can hang on a stale debugger session, so a 10s timeout bounds the RPC.
       let timer: ReturnType<typeof setTimeout>
+
       return Promise.race([
         command.finally(() => clearTimeout(timer)),
         new Promise<never>((_, reject) => {

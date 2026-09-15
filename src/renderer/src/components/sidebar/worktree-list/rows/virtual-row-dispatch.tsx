@@ -67,11 +67,13 @@ function renderHostHeaderVirtualRow(
 ): React.JSX.Element {
   // Why: the host card is the outer tier; it pins above group headers (z-30 vs z-20) and stays put as they hand off.
   const isActiveStickyHost = ctx.activeStickyHostIndexRef.current === vItem.index
+
   const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
     rows: ctx.renderRows,
     index: vItem.index,
     firstHeaderIndex: ctx.firstHeaderIndex
   })
+
   return (
     <div
       key={vItem.key}
@@ -110,9 +112,11 @@ function renderLineageGroupVirtualRow(
 ): React.JSX.Element {
   const [parent, ...children] = row.rows
   const childIsActive = children.some((child) => child.worktree.id === ctx.activeWorktreeId)
+
   const parentPreviewOffset = parent
     ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parent.worktree.id) ?? 0)
     : 0
+
   return (
     <div
       key={vItem.key}
@@ -219,6 +223,7 @@ export function renderWorktreeVirtualRow(
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatus(row.worktree, ctx.workspaceStatuses)
       : null
+
   const itemPreviewOffset =
     ctx.worktreeDragState.previewOffsetsByWorktreeId.get(row.worktree.id) ?? 0
 

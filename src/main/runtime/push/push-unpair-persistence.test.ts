@@ -24,20 +24,24 @@ describe('mobile revoke when the registry write fails', () => {
     server['e2eeKeypair'] = createPushHostKeypair()
 
     const deleted: string[] = []
+
     const client = {
       registerDevice: vi.fn(),
       deleteDevice: vi.fn(async (registrationId: string) => {
         deleted.push(registrationId)
+
         return true
       }),
       send: vi.fn(async () => ({ ok: true, results: [] }) as const)
     }
+
     const service = DesktopPushService.create({
       runtime,
       runtimeRpc: server,
       gatewayUrl: 'https://push.onorca.dev',
       client: client as never
     })!
+
     service.start()
     const save = registry['save'].bind(registry)
     registry['save'] = vi.fn(() => {

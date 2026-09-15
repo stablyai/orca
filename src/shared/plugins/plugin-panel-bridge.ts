@@ -13,13 +13,18 @@ import { isPluginPanelAction } from './plugin-host-api'
  */
 
 export const PANEL_ACTION_REQUEST_TYPE = 'orca-panel-action'
+
 export const PANEL_ACTION_RESULT_TYPE = 'orca-panel-action-result'
+
 export const PANEL_PING_TYPE = 'orca-panel-ping'
+
 export const PANEL_PONG_TYPE = 'orca-panel-pong'
+
 export const PLUGIN_PANEL_FRAME_NAME_PREFIX = 'orca-plugin-panel:'
 
 /** Per-plugin bridge budgets, enforced host-side. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
+
 export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 30, perMs: 10_000 }
 
 /** Size cap for the reserved liveness lane. Deliberately size-only: any
@@ -33,6 +38,7 @@ export const PANEL_CONTROL_MESSAGE_MAX_BYTES = 1024
  *  errored badge. Busy-loop detection is valid only while the runtime frame-
  *  process gate confirms the sandbox stays outside the host renderer. */
 export const PANEL_WATCHDOG_PING_INTERVAL_MS = 10_000
+
 export const PANEL_WATCHDOG_PONG_TIMEOUT_MS = 5_000
 
 export const panelActionRequestSchema = z.object({
@@ -105,18 +111,24 @@ export type PanelActionRequestParseResult =
  *  error instead of silently dropping the request. */
 export function parsePanelActionRequest(data: unknown): PanelActionRequestParseResult {
   const parsed = panelActionRequestSchema.safeParse(data)
+
   if (parsed.success) {
     return { ok: true, request: parsed.data }
   }
+
   let requestId: string | null = null
+
   if (typeof data === 'object' && data !== null && 'requestId' in data) {
     const raw = (data as { requestId?: unknown }).requestId
+
     if (typeof raw === 'string' && raw.length > 0 && raw.length <= 128) {
       requestId = raw
     }
   }
+
   const issue = parsed.error.issues[0]
   const path = issue?.path.join('.') || '(root)'
+
   return {
     ok: false,
     requestId,
@@ -142,10 +154,13 @@ export function readPanelPongId(data: unknown): number | null {
   if (typeof data !== 'object' || data === null) {
     return null
   }
+
   const frame = data as { type?: unknown; pingId?: unknown }
+
   if (frame.type !== PANEL_PONG_TYPE || typeof frame.pingId !== 'number') {
     return null
   }
+
   // isSafeInteger, not isInteger: zod's .int() rejects 2**53 and above, and a
   // wider reader would admit ids the watchdog can never have issued.
   return Number.isSafeInteger(frame.pingId) && frame.pingId >= 0 ? frame.pingId : null

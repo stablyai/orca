@@ -37,12 +37,15 @@ function normalizeStringRecord(value: unknown): Record<string, string> | undefin
   if (!isRecord(value)) {
     return undefined
   }
+
   const normalized: Record<string, string> = {}
+
   for (const [key, item] of Object.entries(value)) {
     if (isSafeRecordKey(key) && typeof item === 'string') {
       normalized[key] = item
     }
   }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -56,16 +59,21 @@ function normalizeHostAgentModelRecord(
   if (!isRecord(value)) {
     return undefined
   }
+
   const normalized: Partial<Record<string, Partial<Record<TuiAgent, string>>>> = {}
+
   for (const [hostKey, hostModels] of Object.entries(value)) {
     if (!isSafeRecordKey(hostKey)) {
       continue
     }
+
     const models = normalizeAgentModelRecord(hostModels)
+
     if (models) {
       normalized[hostKey] = models
     }
   }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -73,19 +81,24 @@ function normalizeModelChoice(value: unknown): SourceControlAiModelChoice | unde
   if (!isRecord(value)) {
     return undefined
   }
+
   const choice: SourceControlAiModelChoice = {}
   const selectedModelByAgent = normalizeAgentModelRecord(value.selectedModelByAgent)
   const selectedModelByAgentByHost = normalizeHostAgentModelRecord(value.selectedModelByAgentByHost)
   const selectedThinkingByModel = normalizeStringRecord(value.selectedThinkingByModel)
+
   if (selectedModelByAgent) {
     choice.selectedModelByAgent = selectedModelByAgent
   }
+
   if (selectedModelByAgentByHost) {
     choice.selectedModelByAgentByHost = selectedModelByAgentByHost
   }
+
   if (selectedThinkingByModel) {
     choice.selectedThinkingByModel = selectedThinkingByModel
   }
+
   return Object.keys(choice).length > 0 ? choice : undefined
 }
 
@@ -97,16 +110,21 @@ function normalizeKnownRecord<K extends string, T>(
   if (!isRecord(value)) {
     return undefined
   }
+
   const normalized: Partial<Record<K, T>> = {}
+
   for (const key of keys) {
     if (!Object.hasOwn(value, key)) {
       continue
     }
+
     const item = normalizeValue(value[key])
+
     if (item !== undefined) {
       normalized[key] = item
     }
   }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -116,12 +134,15 @@ function normalizePrCreationDefaults(
   if (!isRecord(value)) {
     return undefined
   }
+
   const normalized: NonNullable<RepoSourceControlAiOverrides['prCreationDefaults']> = {}
+
   for (const key of PR_CREATION_DEFAULT_KEYS) {
     if (typeof value[key] === 'boolean' || value[key] === null) {
       normalized[key] = value[key]
     }
   }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -131,30 +152,38 @@ export function normalizeRepoSourceControlAiOverrides(
   if (!isRecord(value)) {
     return undefined
   }
+
   const normalized: RepoSourceControlAiOverrides = {}
+
   if (typeof value.enabled === 'boolean') {
     normalized.enabled = value.enabled
   }
+
   if (typeof value.customAgentCommand === 'string' && value.customAgentCommand.trim()) {
     normalized.customAgentCommand = value.customAgentCommand.trim()
   }
+
   const modelOverridesByOperation = normalizeKnownRecord(
     value.modelOverridesByOperation,
     SOURCE_CONTROL_TEXT_ACTION_IDS,
     normalizeModelChoice
   )
+
   if (modelOverridesByOperation) {
     normalized.modelOverridesByOperation = modelOverridesByOperation
   }
+
   const instructionsByOperation = normalizeKnownRecord(
     value.instructionsByOperation,
     SOURCE_CONTROL_TEXT_ACTION_IDS,
     (item): string | null | undefined =>
       typeof item === 'string' || item === null ? item : undefined
   )
+
   if (instructionsByOperation) {
     normalized.instructionsByOperation = instructionsByOperation
   }
+
   const actionOverrides = normalizeKnownRecord<SourceControlActionId, RepoActionOverride>(
     value.actionOverrides,
     SOURCE_CONTROL_ACTION_IDS,
@@ -162,20 +191,27 @@ export function normalizeRepoSourceControlAiOverrides(
       if (!isRecord(item)) {
         return undefined
       }
+
       const recipe: RepoActionOverride = { ...normalizeSourceControlActionRecipe(item) }
+
       if (item.commandInputTemplate === null) {
         recipe.commandInputTemplate = null
       }
+
       if (item.agentArgs === null) {
         recipe.agentArgs = null
       }
+
       return Object.keys(recipe).length > 0 ? recipe : undefined
     }
   )
+
   const migratedActionOverrides = { ...actionOverrides }
+
   for (const operation of SOURCE_CONTROL_TEXT_ACTION_IDS) {
     const instruction = instructionsByOperation?.[operation]
     const existingTemplate = migratedActionOverrides[operation]?.commandInputTemplate
+
     if (
       typeof instruction === 'string' &&
       (existingTemplate === undefined ||
@@ -187,12 +223,16 @@ export function normalizeRepoSourceControlAiOverrides(
       }
     }
   }
+
   if (Object.keys(migratedActionOverrides).length > 0) {
     normalized.actionOverrides = migratedActionOverrides
   }
+
   const prCreationDefaults = normalizePrCreationDefaults(value.prCreationDefaults)
+
   if (prCreationDefaults) {
     normalized.prCreationDefaults = prCreationDefaults
   }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }

@@ -310,6 +310,7 @@ describe('AgentHookServer listener replay', () => {
   it('evicts a batch of persisted identities with one status-change notification', () => {
     const server = new AgentHookServer()
     const otherPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+
     for (const paneKey of [PANE, otherPane]) {
       server.ingestRemote(
         {
@@ -321,10 +322,12 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
     }
+
     const listener = vi.fn()
     server.subscribeStatusChanges(listener)
     const dropped: string[] = []
     server.subscribeStatusDrop((paneKey) => dropped.push(paneKey))
+
     const identities = server.getStatusSnapshot().map((entry) => ({
       paneKey: entry.paneKey,
       receivedAt: entry.receivedAt,
@@ -368,6 +371,7 @@ describe('AgentHookServer listener replay', () => {
     const server = new AgentHookServer()
     const siblingPane = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
     const otherTabPane = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
+
     for (const paneKey of [PANE, siblingPane, otherTabPane]) {
       server.ingestRemote(
         {
@@ -377,13 +381,16 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
     }
+
     const clearListener = vi.fn()
     const statusListener = vi.fn()
     server.subscribePaneStatusClear(clearListener)
     server.subscribeStatusChanges(statusListener)
+
     const evidenceObservedAtByPaneKey = (
       server as unknown as { evidenceObservedAtByPaneKey: Map<string, number> }
     ).evidenceObservedAtByPaneKey
+
     expect(evidenceObservedAtByPaneKey.size).toBe(3)
 
     server.dropStatusEntriesByTabPrefix('tab-1')
@@ -399,15 +406,19 @@ describe('AgentHookServer listener replay', () => {
 
   it('batches connection cleanup and retains sibling and local statuses', () => {
     const server = new AgentHookServer()
+
     const paneKeyAt = (prefix: string, index: number): string =>
       makePaneKey(
         `${prefix}-tab-${index}`,
         `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, '0')}`
       )
+
     const targetPaneKeys = Array.from({ length: 100 }, (_, index) => paneKeyAt('target', index))
+
     const siblingPaneKeys = Array.from({ length: 100 }, (_, index) =>
       paneKeyAt('sibling', index + 100)
     )
+
     const unstampedPaneKey = paneKeyAt('legacy', 250)
     const statusListener = vi.fn()
     const clearListener = vi.fn()
@@ -415,12 +426,15 @@ describe('AgentHookServer listener replay', () => {
     const persistSpy = vi.spyOn(internals, 'scheduleStatusPersist')
     server.subscribeStatusChanges(statusListener)
     server.setPaneStatusClearListener(clearListener)
+
     for (const paneKey of targetPaneKeys) {
       server.ingestRemote({ paneKey, payload: { state: 'working', agentType: 'claude' } }, 'ssh-a')
     }
+
     for (const paneKey of siblingPaneKeys) {
       server.ingestRemote({ paneKey, payload: { state: 'working', agentType: 'claude' } }, 'ssh-b')
     }
+
     server.ingestTerminalStatus({
       paneKey: unstampedPaneKey,
       payload: { state: 'working', prompt: '', agentType: 'codex' }
@@ -460,11 +474,13 @@ describe('AgentHookServer listener replay', () => {
     )
 
     server.clearStatusEntriesForConnection('ssh-a')
+
     const clear = clearListener.mock.calls[0]?.[0] as {
       transient: true
       connectionId: string
       clearedAt: number
     }
+
     server.ingestRemote(
       { paneKey: GOOD_PANE, payload: { state: 'working', agentType: 'claude' }, isReplay: true },
       'ssh-a'
@@ -486,6 +502,7 @@ describe('AgentHookServer listener replay', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
     const firstServer = new AgentHookServer()
     const secondServer = new AgentHookServer()
+
     try {
       await firstServer.start({ env: 'production', userDataPath: dir })
       firstServer.ingestRemote(
@@ -518,6 +535,7 @@ describe('AgentHookServer listener replay', () => {
   it('replays the latest retained pane status when a listener attaches after windowless events', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
@@ -536,6 +554,7 @@ describe('AgentHookServer listener replay', () => {
           })
         )
       })
+
       expect(response.status).toBe(204)
 
       const listener = vi.fn()

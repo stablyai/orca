@@ -28,6 +28,7 @@ export function applySourceControlTextGenerationDefaults(
       }
     }
   }
+
   return {
     ...current,
     actions: setSourceControlActionDefault(current.actions, actionId, {

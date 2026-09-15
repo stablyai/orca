@@ -16,11 +16,14 @@ export function useMobilePairingConnectionMode(): [
   React.Dispatch<React.SetStateAction<MobilePairingConnectionMode>>
 ] {
   const savedConnectionMode = useAppStore((s) => s.settings?.mobilePairingConnectionMode)
+
   const [connectionMode, setConnectionMode] = useState<MobilePairingConnectionMode>(() =>
     resolveMobilePairingConnectionMode(savedConnectionMode)
   )
+
   useEffect(() => {
     setConnectionMode(resolveMobilePairingConnectionMode(savedConnectionMode))
   }, [savedConnectionMode])
+
   return [connectionMode, setConnectionMode]
 }

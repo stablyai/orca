@@ -43,37 +43,46 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     }
   ): Promise<T> {
     const wc = this.getWebContents(target.webContentsId)
+
     if (!wc || wc.isDestroyed()) {
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${target.browserPageId} is no longer available`
       )
     }
+
     const state = cdpPointerStateFor(wc)
     // Why: build() mutates the tracked state before the event is on the wire; a rejected
     // dispatch changed nothing in the page, so the pre-dispatch state is what is real —
     // keeping the mutation would leave a phantom held button on every later event.
     const preDispatch = { ...state }
     let releaseDebugger = (): void => {}
+
     try {
       releaseDebugger = acquireElectronDebugger(wc).release
       const { params, focus, result } = build(state)
+
       if (focus) {
         wc.focus()
       }
+
       await wc.debugger.sendCommand('Input.dispatchMouseEvent', params)
+
       return result
     } catch (error) {
       Object.assign(state, preDispatch)
+
       // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
       // runtime_error — the helper path this replaced always produced a browser_* code, and
       // the pane only reclaims a dead page when it sees one.
       if (error instanceof BrowserError) {
         throw error
       }
+
       if (!this.getWebContents(target.webContentsId)) {
         throw this.createPageUnavailableError(sessionName)
       }
+
       throw new BrowserError(
         'browser_error',
         `Failed to ${describe} in browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
@@ -97,6 +106,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
           assertFinitePointerValues({ x, y })
           state.x = x
           state.y = y
+
           return {
             params: {
               type: 'mouseMoved',
@@ -120,6 +130,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
         this.dispatchPointerEvent(sessionName, target, 'press the pointer', (state) => {
           const cdpButton = normalizeCdpPointerButton(button)
           pressCdpPointerButton(state, cdpButton)
+
           return {
             // Why: mirrors mouseClick — a press that does not focus the guest leaves
             // keyboard input going to whatever held focus before.
@@ -148,7 +159,9 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
           const cdpButton = normalizeCdpPointerButton(
             button ?? resolveCdpPointerReleaseButton(state)
           )
+
           releaseCdpPointerButton(state, cdpButton)
+
           return {
             params: {
               type: 'mouseReleased',
@@ -178,6 +191,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
         this.dispatchPointerEvent(sessionName, target, 'scroll', (state) => {
           assertFinitePointerValues({ dy, ...(dx == null ? {} : { dx }) })
           const deltaX = dx ?? 0
+
           return {
             // Why: dispatch at the tracked position so the scrollable under the cursor
             // scrolls; the helper always dispatched wheel at (0,0).

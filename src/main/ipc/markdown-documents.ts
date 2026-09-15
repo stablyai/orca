@@ -8,11 +8,13 @@ function normalizeRelativePath(path: string): string {
 
 export function isMarkdownDocumentName(name: string): boolean {
   const extension = extname(name).toLowerCase()
+
   return extension === '.md' || extension === '.mdx' || extension === '.markdown'
 }
 
 function basenameFromRelativePath(relativePath: string): string {
   const normalizedPath = relativePath.replaceAll('\\', '/')
+
   return normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
 }
 
@@ -28,9 +30,11 @@ function rootRelativePath(rootPath: string, filePath: string): string | null {
   const resolvedRoot = resolve(rootPath)
   const resolvedFile = resolve(filePath)
   const relativePath = relative(resolvedRoot, resolvedFile)
+
   if (hasParentTraversalSegment(relativePath) || isAbsolute(relativePath)) {
     return null
   }
+
   return normalizeRelativePath(relativePath)
 }
 
@@ -41,11 +45,13 @@ export function markdownDocumentFromFilePath(
 ): MarkdownDocument {
   const basename = pathBasename(filePath)
   const extension = extname(basename)
+
   const relativePath =
     rootRelativePath(rootPath, filePath) ??
     (options.outsideRootRelativePath === 'basename'
       ? basename
       : normalizeRelativePath(relative(rootPath, filePath)))
+
   return {
     filePath,
     relativePath,
@@ -59,17 +65,22 @@ export function markdownDocumentFromRelativePath(
   relativePath: string
 ): MarkdownDocument | null {
   const normalizedRelativePath = normalizeRelativePath(relativePath)
+
   // Why: SSH providers should return root-relative paths; reject escape
   // segments before building a synthetic absolute path for renderer use.
   if (!isSafeRelativePath(normalizedRelativePath)) {
     return null
   }
+
   const basename = basenameFromRelativePath(normalizedRelativePath)
+
   if (!isMarkdownDocumentName(basename)) {
     return null
   }
+
   const extension = extname(basename)
   const normalizedRoot = rootPath.replace(/[\\/]+$/, '')
+
   return {
     filePath: `${normalizedRoot}/${normalizedRelativePath}`,
     relativePath: normalizedRelativePath,
@@ -93,19 +104,23 @@ export async function listMarkdownDocuments(rootPath: string): Promise<MarkdownD
 
   async function visitDirectory(dirPath: string): Promise<void> {
     const entries = await readdir(dirPath, { withFileTypes: true })
+
     for (const entry of entries) {
       if (entry.isSymbolicLink()) {
         continue
       }
 
       const entryPath = join(dirPath, entry.name)
+
       if (entry.isDirectory()) {
         if (entry.name === '.git' || entry.name === 'node_modules') {
           continue
         }
+
         if (entry.name.startsWith('.') && entry.name !== '.github') {
           continue
         }
+
         await visitDirectory(entryPath)
         continue
       }
@@ -117,5 +132,6 @@ export async function listMarkdownDocuments(rootPath: string): Promise<MarkdownD
   }
 
   await visitDirectory(rootPath)
+
   return documents.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 }

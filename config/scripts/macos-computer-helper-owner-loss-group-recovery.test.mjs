@@ -8,19 +8,23 @@ describe('macOS helper owner-loss benchmark group recovery', () => {
     const groupState = { stopped: false }
     let scanCount = 0
     let continueAttempts = 0
+
     const operations = {
       processIdentities: () => {
         scanCount += 1
+
         if (scanCount >= 3) {
           throw new Error(
             scanCount === 3 ? 'post-stop inspection failed' : 'final inspection failed'
           )
         }
+
         return members
       },
       signalProcess: (pid, signal) => {
         if (pid === -41 && signal === 'SIGCONT') {
           continueAttempts += 1
+
           if (continueAttempts === 1) {
             throw new Error('first compensation failed')
           }
@@ -45,19 +49,23 @@ describe('macOS helper owner-loss benchmark group recovery', () => {
     const groupState = { stopped: false, anchorPid: null }
     let scanCount = 0
     let continueAttempts = 0
+
     const operations = {
       processIdentities: () => {
         scanCount += 1
+
         if (scanCount >= 2) {
           throw new Error(
             scanCount === 2 ? 'post-anchor inspection failed' : 'final inspection failed'
           )
         }
+
         return members
       },
       signalProcess: (pid, signal) => {
         if (pid === 41 && signal === 'SIGCONT') {
           continueAttempts += 1
+
           if (continueAttempts === 1) {
             throw new Error('first anchor compensation failed')
           }
@@ -83,17 +91,21 @@ describe('macOS helper owner-loss benchmark group recovery', () => {
     const groupState = { stopped: false, anchorPid: null }
     let scanCount = 0
     let firstAnchorContinues = 0
+
     const operations = {
       processIdentities: () => {
         scanCount += 1
+
         if (scanCount === 2) {
           throw new Error('post-anchor inspection failed')
         }
+
         return scanCount === 1 ? [firstAnchor] : [finalAnchor]
       },
       signalProcess: (pid, signal) => {
         if (pid === 41 && signal === 'SIGCONT') {
           firstAnchorContinues += 1
+
           if (firstAnchorContinues === 1) {
             throw new Error('first anchor compensation failed')
           }
@@ -130,6 +142,7 @@ describe('macOS helper owner-loss benchmark group recovery', () => {
     } catch (error) {
       thrown = error
     }
+
     expect(thrown).toBeInstanceOf(AggregateError)
     expect(thrown.errors.map((error) => error.message)).toEqual([ownershipError, 'resume denied'])
   })

@@ -25,7 +25,9 @@ import {
 } from './helpers/store'
 
 const execFileAsync = promisify(execFile)
+
 const PARKING_DELAY_MS = 500
+
 const HISTORICAL_SPLIT_TIMEOUT_MS = 10_000
 
 test.use({
@@ -63,17 +65,21 @@ async function resolveTerminal(
           limit: 20,
           requireFreshPtyLiveness: true
         })
+
         resolved = listed.result.terminals.find(
           (terminal) => terminal.tabId === tabId && terminal.leafId === leafId
         )
+
         return resolved ? { connected: resolved.connected, writable: resolved.writable } : null
       },
       { timeout: 60_000, message: 'Renderer-owned split target never became runtime-visible' }
     )
     .toEqual({ connected: true, writable: true })
+
   if (!resolved) {
     throw new Error('Runtime terminal disappeared after becoming visible')
   }
+
   return resolved
 }
 
@@ -82,10 +88,13 @@ async function readActiveUiContext(page: Page): Promise<ActiveUiContext> {
     const state = window.__store?.getState()
     const activeWorktreeId = state?.activeWorktreeId ?? null
     const activeTabId = state?.activeTabId ?? null
+
     const activePane = activeTabId
       ? window.__paneManagers?.get(activeTabId)?.getActivePane?.()
       : null
+
     const focused = document.activeElement
+
     return {
       activeGroupId: activeWorktreeId
         ? (state?.activeGroupIdByWorktree?.[activeWorktreeId] ?? null)
@@ -116,6 +125,7 @@ async function runParkedSplitCli(
 ): Promise<{ elapsedMs: number; response: CliSplitResponse }> {
   const repoRoot = process.cwd()
   const startedAt = performance.now()
+
   try {
     const result = await execFileAsync(
       process.execPath,
@@ -133,6 +143,7 @@ async function runParkedSplitCli(
         timeout: HISTORICAL_SPLIT_TIMEOUT_MS + 5_000
       }
     )
+
     return {
       elapsedMs: performance.now() - startedAt,
       response: JSON.parse(result.stdout) as CliSplitResponse
@@ -147,9 +158,11 @@ async function activateTerminalTab(page: Page, worktreeId: string, tabId: string
   await page.evaluate(
     ({ tabId, worktreeId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Renderer store is unavailable')
       }
+
       state.setActiveView('terminal')
       state.setActiveWorktree(worktreeId)
       state.setActiveTabForWorktree(worktreeId, tabId)
@@ -169,6 +182,7 @@ async function activateTerminalTab(page: Page, worktreeId: string, tabId: string
 async function enablePaneAccessibility(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const panes = window.__paneManagers?.get(id)?.getPanes?.() ?? []
+
     for (const pane of panes) {
       pane.terminal.options.screenReaderMode = true
       pane.terminal.refresh(0, pane.terminal.rows - 1)
@@ -185,9 +199,11 @@ async function expectPaneKeyboardRoundTrip(
   const nonce = randomUUID().replaceAll('-', '')
   const marker = `ORCA_PARKED_SPLIT_${label}_${nonce}`
   const command = `node -e "console.log('ORCA_PARKED_' + 'SPLIT_${label}_${nonce}')"`
+
   const pane = page.locator(
     `[data-terminal-tab-id=${JSON.stringify(tabId)}][data-terminal-layout-leaf-ids] .pane[data-leaf-id=${JSON.stringify(leafId)}]`
   )
+
   await pane.locator('.xterm').click({ force: true })
   await page.keyboard.type(command)
   await page.keyboard.press('Enter')
@@ -211,6 +227,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   const initial = await waitForPaneIdentitySnapshot(orcaPage, 1)
   const targetTabId = initial.tabId
   const sourcePane = initial.panes[0]
+
   if (!sourcePane?.ptyId) {
     throw new Error('Initial terminal pane has no PTY identity')
   }
@@ -223,9 +240,11 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
     parkDelayMs: PARKING_DELAY_MS
   })
   const decoyTabId = await getActiveTabId(orcaPage)
+
   if (!decoyTabId || decoyTabId === targetTabId) {
     throw new Error('Parking did not leave a distinct decoy tab active')
   }
+
   await orcaPage
     .locator(`[data-terminal-tab-id=${JSON.stringify(decoyTabId)}] .xterm:visible`)
     .click({ force: true })
@@ -238,9 +257,11 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
     domActiveTabId: decoyTabId,
     focusedTerminalTabId: decoyTabId
   })
+
   const mountedBefore = await orcaPage.evaluate(() =>
     Array.from(window.__paneManagers?.keys() ?? []).sort()
   )
+
   expect(mountedBefore).not.toContain(targetTabId)
 
   const splitPromise = runParkedSplitCli(userDataDir, sourceTerminal.handle)
@@ -251,6 +272,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
         mountedDuringSplit = await orcaPage.evaluate(() =>
           Array.from(window.__paneManagers?.keys() ?? []).sort()
         )
+
         return mountedDuringSplit.includes(targetTabId)
       },
       { timeout: HISTORICAL_SPLIT_TIMEOUT_MS, message: 'CLI did not remount its parked target' }
@@ -284,6 +306,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   const restoredSource = revealed.panes.find((pane) => pane.leafId === sourcePane.leafId)
   const createdPane = revealed.panes.find((pane) => pane.leafId !== sourcePane.leafId)
   expect(restoredSource).toMatchObject({ ptyId: sourcePane.ptyId })
+
   if (!createdPane?.ptyId) {
     throw new Error('Revealed split has no second PTY identity')
   }
@@ -296,9 +319,11 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
         limit: 20,
         requireFreshPtyLiveness: true
       })
+
       listedAfterReveal = listed.result.terminals.filter(
         (terminal) => terminal.tabId === targetTabId
       )
+
       return listedAfterReveal.map((terminal) => terminal.handle).sort()
     })
     .toEqual([sourceTerminal.handle, splitRun.response.result.split.handle].sort())
@@ -315,6 +340,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   const targetSurface = orcaPage.locator(
     `[data-terminal-tab-id=${JSON.stringify(targetTabId)}][data-terminal-layout-leaf-ids]`
   )
+
   await expect(targetSurface).toBeVisible()
   await expect(targetSurface.locator('.pane[data-leaf-id]')).toHaveCount(2)
   await expect(targetSurface.locator('.xterm:visible')).toHaveCount(2)

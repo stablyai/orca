@@ -51,14 +51,17 @@ test.describe('SSH Agent Session History', () => {
             executionHostScope: 'local',
             force: true
           })
+
           const ssh = await window.api.aiVault.listSessions({
             executionHostScope: sshScope,
             force: true
           })
+
           const all = await window.api.aiVault.listSessions({
             executionHostScope: 'all',
             force: true
           })
+
           return {
             localHasRemote: local.sessions.some((session) => session.title === defaultTitle),
             sshTitles: ssh.sessions.map((session) => session.title),
@@ -76,6 +79,7 @@ test.describe('SSH Agent Session History', () => {
         },
         { sshScope, defaultTitle, runtimeTitle, claudeTitle }
       )
+
       expect(scan.localHasRemote).toBe(false)
       expect(scan.sshTitles).toEqual(
         expect.arrayContaining([defaultTitle, runtimeTitle, claudeTitle])
@@ -232,9 +236,11 @@ function claudeTranscript(args: { sessionId: string; title: string; timestamp: s
 async function openAiVaultSidebar(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     store.getState().setRightSidebarOpen(true)
     store.getState().setRightSidebarTab('vault')
   })
@@ -243,12 +249,15 @@ async function openAiVaultSidebar(page: Page): Promise<void> {
 async function installStartupQueueProbe(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const holder = window as unknown as {
       __aiVaultQueuedStartups?: { tabId: string; startup: { command: string } }[]
     }
+
     holder.__aiVaultQueuedStartups = []
     const current = store.getState()
     const original = current.queueTabStartupCommand
@@ -266,6 +275,7 @@ async function readLastQueuedStartupCommand(page: Page): Promise<string | null> 
     const holder = window as unknown as {
       __aiVaultQueuedStartups?: { startup: { command: string } }[]
     }
+
     return holder.__aiVaultQueuedStartups?.at(-1)?.startup.command ?? null
   })
 }
@@ -275,19 +285,25 @@ async function readLastQueuedStartupWorktreeId(page: Page): Promise<string | nul
     const holder = window as unknown as {
       __aiVaultQueuedStartups?: { tabId: string }[]
     }
+
     const tabId = holder.__aiVaultQueuedStartups?.at(-1)?.tabId
+
     if (!tabId) {
       return null
     }
+
     const state = window.__store?.getState()
+
     if (!state) {
       return null
     }
+
     for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
       if (tabs.some((tab) => tab.id === tabId)) {
         return worktreeId
       }
     }
+
     return null
   })
 }

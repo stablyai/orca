@@ -73,6 +73,7 @@ describe('orchestration.send to a settled Dispatch mailbox', () => {
     const stranded = db.db
       .prepare('SELECT COUNT(*) AS count FROM messages WHERE to_handle = ?')
       .get(`dispatch:${dispatch.id}`) as { count: number }
+
     expect(stranded.count).toBe(0)
   })
 

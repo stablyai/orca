@@ -45,6 +45,7 @@ describe('codex goal lifecycle admission', () => {
       const rows = new Map<string, AgentJournalItemBody>()
       const identities: string[] = []
       const lifecycleOptions: boolean[] = []
+
       const sink = {
         appendItem: () => {},
         appendTombstone: () => {},
@@ -53,22 +54,28 @@ describe('codex goal lifecycle admission', () => {
           if (stage === 'append' && reject) {
             return { accepted: false, reason: 'backpressure' } as const
           }
+
           const key = agentJournalItemKey(identity)
           identities.push(key)
           rows.set(key, body)
           lifecycleOptions.push(options?.lifecycle === true)
+
           return { accepted: true } as const
         },
         tryPublish: (options) => {
           if (stage === 'publish' && reject) {
             return { accepted: false, reason: 'backpressure' } as const
           }
+
           successfulPublishes += 1
           lifecycleOptions.push(options?.lifecycle === true)
+
           return { accepted: true } as const
         }
       } satisfies StructuredAgentSessionEventSink
+
       const translator = createCodexJournalTranslator({ sink })
+
       const event = {
         type: 'notification' as const,
         sessionId: 'session',
@@ -91,13 +98,16 @@ describe('codex goal lifecycle admission', () => {
 
   it('does not let the generic-row cap permanently hide the first goal evidence', () => {
     const rows: AgentJournalItemBody[] = []
+
     const sink = {
       appendItem: (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) =>
         rows.push(body),
       appendTombstone: () => {},
       publish: () => {}
     } satisfies StructuredAgentSessionEventSink
+
     const translator = createCodexJournalTranslator({ sink })
+
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
       translator.handle({
         type: 'notification',
@@ -131,15 +141,19 @@ describe('codex goal lifecycle admission', () => {
 
   it('keeps repeated lifecycle states distinct across status cycles and goal recreation', () => {
     const rows = new Map<string, AgentJournalItemBody>()
+
     const sink = {
       appendItem: (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) =>
         rows.set(agentJournalItemKey(identity), body),
       appendTombstone: () => {},
       publish: () => {}
     } satisfies StructuredAgentSessionEventSink
+
     const goals = new CodexJournalGoals(sink)
+
     const update = (goal: Record<string, unknown> = {}) =>
       goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame(goal) })
+
     const clear = () =>
       goals.handle({
         threadId: THREAD,
@@ -169,6 +183,7 @@ describe('codex goal lifecycle admission', () => {
   it('bounds thread state with LRU eviction while stable identities keep one history row', () => {
     const writes: string[] = []
     const rows = new Map<string, AgentJournalItemBody>()
+
     const sink = {
       appendItem: (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         const key = agentJournalItemKey(identity)
@@ -178,13 +193,16 @@ describe('codex goal lifecycle admission', () => {
       appendTombstone: () => {},
       publish: () => {}
     } satisfies StructuredAgentSessionEventSink
+
     const goals = new CodexJournalGoals(sink)
+
     const send = (threadId: string) =>
       goals.handle({ threadId, method: 'thread/goal/updated', params: goalFrame() })
 
     for (let index = 0; index < MAX_CODEX_GOAL_THREADS; index += 1) {
       send(`thread-${index}`)
     }
+
     const threadZeroIdentity = writes[0]
     const threadOneIdentity = writes[1]
     send('thread-0')
@@ -204,6 +222,7 @@ describe('codex goal lifecycle admission', () => {
 
   it('releases duplicate-suppression state on session clear and dispose', () => {
     const identities: string[] = []
+
     const sink = {
       appendItem: (identity: AgentJournalItemIdentity) => {
         identities.push(agentJournalItemKey(identity))
@@ -211,6 +230,7 @@ describe('codex goal lifecycle admission', () => {
       appendTombstone: () => {},
       publish: () => {}
     } satisfies StructuredAgentSessionEventSink
+
     const goals = new CodexJournalGoals(sink)
     const event = { threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() }
 

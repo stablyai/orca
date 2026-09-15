@@ -8,7 +8,9 @@
 // Per-branch Dock names come from the .app directory name, which is not part of the signature.
 
 export const DEV_BUNDLE_ID = 'com.stablyai.orca.dev'
+
 export const DEV_HELPER_BUNDLE_ID = `${DEV_BUNDLE_ID}.helper`
+
 // Why a constant display name rather than none: leaving the stock value makes every dev
 // notification and System Settings > Notifications row read "Electron", indistinguishable from any
 // other Electron app. A fixed name keeps that legible without reintroducing per-branch drift.

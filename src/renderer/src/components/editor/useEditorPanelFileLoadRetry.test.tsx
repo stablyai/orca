@@ -25,6 +25,7 @@ function replaceFileContents(
   for (const key of Object.keys(target)) {
     delete target[key]
   }
+
   Object.assign(target, next)
 }
 
@@ -68,6 +69,7 @@ function Harness({
     openFilesRef: { current: [file] },
     setFileContents: setFileContents as never
   })
+
   return null
 }
 
@@ -82,6 +84,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     // waiting ~2 minutes of real time.
     setTimeoutSpy = vi.spyOn(window, 'setTimeout').mockImplementation(((fn: () => void) => {
       fn()
+
       return 0 as unknown as ReturnType<typeof setTimeout>
     }) as typeof window.setTimeout)
   })
@@ -90,6 +93,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     container = null
     root = null
@@ -108,9 +112,11 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     setTimeoutSpy = vi.spyOn(window, 'setTimeout')
     const file = makeFile()
     const attemptsRef = { current: {} as Record<string, number> }
+
     const fileContents: Record<string, FileContent> = {
       [file.id]: { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
     }
+
     const loadFileContent = vi.fn(async () => undefined)
     const setFileContents = vi.fn((updater) => updater(fileContents))
 
@@ -167,15 +173,18 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
   it('stops after the budget and shows a truthful terminal message, then Retry re-arms', () => {
     const file = makeFile()
     const attemptsRef = { current: {} as Record<string, number> }
+
     // The owner never hydrates: every retry re-fails with owner-not-ready.
     const fileContents: Record<string, FileContent> = {
       [file.id]: { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
     }
+
     const setFileContents = (
       updater: (prev: Record<string, FileContent>) => Record<string, FileContent>
     ): void => {
       replaceFileContents(fileContents, updater(fileContents))
     }
+
     // loadFileContent (the retry callback) clears then re-fails as owner-not-ready.
     const loadFileContent = vi.fn(async (_filePath: string, id: string) => {
       fileContents[id] = { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
@@ -199,6 +208,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
           />
         )
       })
+
       if (fileContents[file.id]?.loadError === WORKTREE_OWNER_UNREACHABLE_ERROR) {
         break
       }
@@ -231,14 +241,17 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
   it('stops immediately once the read succeeds (no terminal message)', () => {
     const file = makeFile()
     const attemptsRef = { current: {} as Record<string, number> }
+
     const fileContents: Record<string, FileContent> = {
       [file.id]: { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
     }
+
     const setFileContents = (
       updater: (prev: Record<string, FileContent>) => Record<string, FileContent>
     ): void => {
       replaceFileContents(fileContents, updater(fileContents))
     }
+
     // The repo hydrates on the first retry: the read now succeeds.
     const loadFileContent = vi.fn(async (_filePath: string, id: string) => {
       fileContents[id] = { content: 'remote', isBinary: false }

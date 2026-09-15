@@ -12,7 +12,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const { candidateCount, tokenCount } = PALETTE_MATCH_BUDGET
+
 const QUERY_TOKENS = Array.from({ length: tokenCount }, (_, index) => `token${index}`)
+
 const QUERY_TEXT = QUERY_TOKENS.join(' ')
 
 const LONG_COMMENT =
@@ -75,9 +77,11 @@ function makeWorktree(index: number): Worktree {
 }
 
 const worktrees = Array.from({ length: candidateCount }, (_, index) => makeWorktree(index))
+
 const ports = new Map(
   worktrees.map((worktree, index) => [worktree.id, [{ port: 3000 + index, processName: 'node' }]])
 )
+
 const issueCache = Object.fromEntries(
   worktrees.map((worktree, index) => [
     `/repos/orca::${worktree.id}`,
@@ -96,9 +100,11 @@ const WORST_QUERY = QUERY_TEXT
 
 function prepareWorstQuery(): { tokens: readonly PaletteQueryToken[]; normalized: string } {
   const prepared = preparePaletteQuery(WORST_QUERY)
+
   if (prepared.state !== 'ready') {
     throw new Error(`Expected a ready query, got ${prepared.state}`)
   }
+
   return { tokens: prepared.tokens, normalized: prepared.normalized }
 }
 
@@ -109,6 +115,7 @@ function matchEveryDocument(
   diagnostics?: PaletteMatchDiagnostics
 ): ReturnType<typeof matchPaletteDocument>[] {
   const matches: ReturnType<typeof matchPaletteDocument>[] = []
+
   for (const document of documents.values()) {
     matches.push(
       matchPaletteDocument({
@@ -119,27 +126,33 @@ function matchEveryDocument(
       })
     )
   }
+
   return matches
 }
 
 function retainedMatchPayloadBytes(matches: ReturnType<typeof matchPaletteDocument>[]): number {
   let bytes = 0
+
   for (const match of matches) {
     if (!match) {
       continue
     }
+
     for (const assignment of match.assignments) {
       bytes += assignment.fieldId.length * 2 + 16
       bytes += assignment.ranges.length * 16
     }
+
     for (const [fieldId, ranges] of match.rangesByField) {
       bytes += fieldId.length * 2 + ranges.length * 16
     }
+
     for (const evidence of match.supportingEvidence) {
       bytes += (evidence.id.length + evidence.kind.length + evidence.text.length) * 2
       bytes += evidence.ranges.length * 16
     }
   }
+
   return bytes
 }
 
@@ -156,11 +169,13 @@ function fastestSample(samples: readonly number[]): number {
 
 function timeRepeatedly(work: () => void, rounds: number): number[] {
   const samples: number[] = []
+
   for (let round = 0; round < rounds; round += 1) {
     const start = performance.now()
     work()
     samples.push(performance.now() - start)
   }
+
   return samples
 }
 
@@ -183,6 +198,7 @@ describe('palette matcher performance budget', () => {
   it('bounds field-match fan-out per candidate', () => {
     const documents = buildWorktreePaletteDocuments(worktrees, sources)
     const fieldMatch = vi.spyOn(matchFieldModule, 'matchPaletteField')
+
     try {
       matchEveryDocument(documents)
       const perCandidate = fieldMatch.mock.calls.length / documents.size
@@ -234,10 +250,13 @@ describe('palette matcher performance budget', () => {
           ]
         }))
       })
+
     const query = preparePaletteQuery('atlas')
+
     if (query.state !== 'ready') {
       throw new Error('Expected ready query')
     }
+
     const selectionVisits = (document: PaletteDocument): number => {
       const diagnostics: PaletteMatchDiagnostics = { selectionCandidateVisits: 0 }
       matchPaletteDocument({
@@ -246,6 +265,7 @@ describe('palette matcher performance budget', () => {
         normalizedQuery: query.normalized,
         diagnostics
       })
+
       return diagnostics.selectionCandidateVisits
     }
 
@@ -283,19 +303,25 @@ describe('palette matcher performance budget', () => {
           ]
         }))
       })
+
     const query = preparePaletteQuery('atlas')
+
     if (query.state !== 'ready') {
       throw new Error('Expected ready query')
     }
+
     const selectionVisits = (document: PaletteDocument): number => {
       const diagnostics: PaletteMatchDiagnostics = { selectionCandidateVisits: 0 }
+
       const match = matchPaletteDocument({
         document,
         tokens: query.tokens,
         normalizedQuery: query.normalized,
         diagnostics
       })
+
       expect(match?.supportingEvidence).toEqual([])
+
       return diagnostics.selectionCandidateVisits
     }
 
@@ -313,6 +339,7 @@ describe('palette matcher performance budget', () => {
   it('searches and sorts the accepted corpus within budget', () => {
     const documents = buildWorktreePaletteDocuments(worktrees, sources)
     const context = createPaletteSearchContext(Date.UTC(2026, 8, 5))
+
     const searchAndSort = (): void => {
       searchWorktreeDocuments({
         worktrees,
@@ -337,6 +364,7 @@ describe('palette matcher performance budget', () => {
         )
       )
     }
+
     searchAndSort()
     const samples = timeRepeatedly(searchAndSort, 10)
     expect(fastestSample(samples)).toBeLessThan(PALETTE_MATCH_BUDGET.fullSearchSortMs)
@@ -347,15 +375,18 @@ describe('palette matcher performance budget', () => {
     expect(documents.size).toBe(candidateCount)
 
     let bytes = 0
+
     for (const document of documents.values()) {
       for (const field of document.fields) {
         bytes += (field.text.original.length + field.text.normalized.length) * 2
         bytes += (field.text.starts?.byteLength ?? 0) + (field.text.ends?.byteLength ?? 0)
+
         for (const atom of field.atoms) {
           bytes += atom.compact.length * 2 + atom.compactOffsets.byteLength
         }
       }
     }
+
     expect(bytes / (1024 * 1024)).toBeLessThan(PALETTE_MATCH_BUDGET.documentPayloadMb)
   })
 })

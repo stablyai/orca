@@ -5,6 +5,7 @@ import { NotificationDeliverySection } from './NotificationDeliverySection'
 import { DEFAULT_NOTIFICATION_DELIVERY } from './notification-delivery-preferences'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
+
 vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value },
   View: 'View',

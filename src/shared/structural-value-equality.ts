@@ -23,7 +23,9 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const prototype = Object.getPrototypeOf(value)
+
   return prototype === Object.prototype || prototype === null
 }
 
@@ -31,6 +33,7 @@ function valuesEqual(a: unknown, b: unknown, policy: ValueEqualityPolicy): boole
   if (policy.sameValueLeaves ? Object.is(a, b) : a === b) {
     return true
   }
+
   if (Array.isArray(a) || Array.isArray(b)) {
     return (
       Array.isArray(a) &&
@@ -39,21 +42,27 @@ function valuesEqual(a: unknown, b: unknown, policy: ValueEqualityPolicy): boole
       a.every((item, index) => valuesEqual(item, b[index], policy))
     )
   }
+
   if (!isPlainRecord(a) || !isPlainRecord(b)) {
     return false
   }
+
   if (policy.absentKeyEqualsUndefined) {
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
       if (!valuesEqual(a[key], b[key], policy)) {
         return false
       }
     }
+
     return true
   }
+
   const keys = Object.keys(a)
+
   if (keys.length !== Object.keys(b).length) {
     return false
   }
+
   return keys.every((key) => Object.hasOwn(b, key) && valuesEqual(a[key], b[key], policy))
 }
 

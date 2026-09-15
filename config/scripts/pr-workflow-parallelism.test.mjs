@@ -3,13 +3,19 @@ import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
+
 const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
+
 const nodeNextWorkflow = parse(readFileSync('.github/workflows/node-next-compat.yml', 'utf8'))
+
 const dependencyAction = parse(
   readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8')
 )
+
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+
 const pnpmWorkspace = parse(readFileSync('pnpm-workspace.yaml', 'utf8'))
+
 const shellContractFiles = [
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
@@ -23,17 +29,21 @@ const shellContractFiles = [
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
+
 const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
   'src/shared/fish-query-reply-child-stdin.node-pty.test.ts'
 ]
+
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
+
 const testFilePatterns = [
   'config/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'src/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
 ]
+
 // Why the harness import counts: the zsh startup hook runs from a `precmd`, so
 // its tests drive a real zsh through a PTY in zsh-startup-hook-pty-harness
 // rather than calling spawnSync('zsh') themselves. Without this branch the rule
@@ -54,12 +64,15 @@ describe('PR workflow parallelism', () => {
   it('runs Node 24 on PRs and the same eight-shard suite on Node 26 daily', () => {
     const sharedTest = unitTestWorkflow.jobs.test
     const testStep = sharedTest.steps.find((step) => step.name === 'Test shard')
+
     const installStep = sharedTest.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+
     const primerInstall = workflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+
     const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
@@ -78,9 +91,11 @@ describe('PR workflow parallelism', () => {
     expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
     expect(installStep.with['cache-electron-package']).toBe('true')
     expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
+
     for (const testFile of nativeShellContractFiles) {
       expect(testStep.run).toContain(`--exclude=${testFile}`)
     }
+
     expect(primerInstall.with['native-runtime']).toBe('node')
     expect(primerInstall.with['node-version']).toBe('24')
     expect(workflow.jobs.test.needs).toContain('test_native_cache')
@@ -93,9 +108,11 @@ describe('PR workflow parallelism', () => {
     const shellStep = workflow.jobs.shell_contracts.steps.find(
       (step) => step.name === 'Test real shell contracts'
     )
+
     const shellInstall = workflow.jobs.shell_contracts.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+
     // Why parsed rather than substring-matched: the step name changes as shells are
     // added, and `includes('fish')` would also match a comment or a longer package.
     const aptPackages = (step) =>
@@ -103,7 +120,9 @@ describe('PR workflow parallelism', () => {
         .split(/\s+/)
         .filter((token) => !['apt-get', 'install', 'sudo', ''].includes(token))
         .filter((token) => !token.startsWith('-'))
+
     const requiredShells = ['zsh', 'fish']
+
     const jobsInstallingShells = Object.entries(workflow.jobs)
       .filter(([, job]) =>
         (job.steps ?? []).some((step) =>
@@ -121,10 +140,13 @@ describe('PR workflow parallelism', () => {
     // Why each shell is asserted: the live tests skip themselves when the binary is
     // missing, so a dropped package silently empties this lane instead of failing it.
     const shellPackages = workflow.jobs.shell_contracts.steps.flatMap(aptPackages)
+
     for (const shell of requiredShells) {
       expect(shellPackages).toContain(shell)
     }
+
     expect(shellInstall.with['native-runtime']).toBe('node')
+
     for (const testFile of nativeShellContractFiles) {
       expect(shellStep.run).toContain(testFile)
     }
@@ -134,12 +156,15 @@ describe('PR workflow parallelism', () => {
     const installStep = workflow.jobs.shell_contracts.steps.find(
       (step) => step.name === 'Install zsh and fish'
     )
+
     // Comment lines mention both commands by name, so count the executed ones only.
     const commands = installStep.run
       .split('\n')
       .filter((line) => !line.trim().startsWith('#'))
       .join('\n')
+
     const updates = commands.match(/apt-get update/g) ?? []
+
     // Anchored to the start of a line so the retry message that names the command in
     // prose is not mistaken for an invocation of it.
     const addRepoCalls = commands
@@ -151,9 +176,11 @@ describe('PR workflow parallelism', () => {
     // update on each side of it made this step pay for three full passes.
     expect(updates).toHaveLength(1)
     expect(addRepoCalls.length).toBeGreaterThan(0)
+
     for (const call of addRepoCalls) {
       expect(call.split(/\s+/)).toContain('-n')
     }
+
     // The one remaining update has to come after the PPA is on the list, or the fish
     // index it exists to fetch would not be there yet.
     expect(commands.lastIndexOf('add-apt-repository')).toBeLessThan(
@@ -222,13 +249,17 @@ describe('PR workflow parallelism', () => {
 
   it('smokes managed-hook companions under their supported Node 18 runtime', () => {
     const steps = workflow.jobs.managed_hook_node18.steps
+
     const installIndex = steps.findIndex(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+
     const buildIndex = steps.findIndex((step) => step.run === 'pnpm run build:relay')
+
     const node18Index = steps.findIndex(
       (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '18'
     )
+
     const smokeIndex = steps.findIndex(
       (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
     )
@@ -261,6 +292,7 @@ describe('PR workflow parallelism', () => {
   it('uses the repository package-manager version for every direct pnpm setup', () => {
     const directSetups = globSync('.github/workflows/*.yml').flatMap((workflowPath) => {
       const parsed = parse(readFileSync(workflowPath, 'utf8'))
+
       return Object.values(parsed.jobs ?? {}).flatMap((job) =>
         (job.steps ?? [])
           .filter((step) => step.uses === 'pnpm/setup@v2')
@@ -269,6 +301,7 @@ describe('PR workflow parallelism', () => {
     })
 
     expect(directSetups.length).toBeGreaterThan(0)
+
     for (const { workflowPath, step } of directSetups) {
       expect(step.with?.version, workflowPath).toBeUndefined()
       expect(step.with?.install, workflowPath).toBe(false)
@@ -278,6 +311,7 @@ describe('PR workflow parallelism', () => {
   it('restores Electron downloads before preparing the package runtime', () => {
     const steps = workflow.jobs.package.steps
     const cacheIndex = steps.findIndex((step) => step.name === 'Cache electron-builder downloads')
+
     const installIndex = steps.findIndex(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
@@ -292,6 +326,7 @@ describe('PR workflow parallelism', () => {
       workflow.jobs[jobName].steps.find(
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
+
     const sharedTestInstall = unitTestWorkflow.jobs.test.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
@@ -299,6 +334,7 @@ describe('PR workflow parallelism', () => {
     for (const jobName of ['typecheck', 'git_compatibility', 'xterm_patch_sync']) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
+
     expect(installFor('static_analysis').with['native-runtime']).toBe('node')
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
     expect(sharedTestInstall.with['native-runtime']).toBe('node')
@@ -315,9 +351,11 @@ describe('PR workflow parallelism', () => {
     expect(
       dependencyAction.runs.steps.find((step) => step.name === 'Use external node-gyp').if
     ).toBe("runner.os == 'Linux' && inputs.native-runtime != 'none'")
+
     const dependencyInstall = dependencyAction.runs.steps.find(
       (step) => step.name === 'Install dependencies'
     )
+
     // Why frozen: re-resolving the graph costs a minute per job and the `git diff`
     // guard below already fails the run when the lockfile is stale, so the slow
     // resolution can never legitimately change anything.
@@ -331,9 +369,11 @@ describe('PR workflow parallelism', () => {
     expect(dependencyInstall.run).not.toContain('--cpu=')
     expect(pnpmWorkspace.supportedArchitectures.os).toEqual(['current'])
     expect(pnpmWorkspace.supportedArchitectures.cpu).toEqual(['current'])
+
     const prepareRuntime = dependencyAction.runs.steps.find(
       (step) => step.name === 'Prepare native runtime'
     )
+
     expect(prepareRuntime.if).toBe("inputs.native-runtime != 'none'")
     expect(prepareRuntime.run).toContain('ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"')
   })
@@ -342,6 +382,7 @@ describe('PR workflow parallelism', () => {
     const buildStep = workflow.jobs.package.steps.find(
       (step) => step.name === 'Build package inputs'
     )
+
     const packageStep = workflow.jobs.package.steps.find(
       (step) => step.name === 'Package unpacked app'
     )
@@ -363,13 +404,16 @@ describe('PR workflow parallelism', () => {
     expect(steps[cacheIndex].if).toBe(
       "inputs.native-runtime != 'none' && inputs.persist-native-cache != 'false'"
     )
+
     const restoreOnly = steps.find(
       (step) => step.name === 'Restore compiled native modules without saving'
     )
+
     expect(restoreOnly.if).toBe(
       "inputs.native-runtime != 'none' && inputs.persist-native-cache == 'false'"
     )
     expect(restoreOnly.uses).toBe('actions/cache/restore@v5')
+
     // Native artifacts are ABI-bound: a key missing either dimension serves a build
     // that cannot load, and ensure-native-runtime would recompile it anyway.
     for (const cacheStep of [steps[cacheIndex], restoreOnly]) {
@@ -392,6 +436,7 @@ describe('PR workflow parallelism', () => {
       expect(cacheStep.with.path).toContain('@vscode+windows-process-tre*')
       expect(cacheStep.with['restore-keys']).toBeUndefined()
     }
+
     expect(steps[cacheIndex].id).toBe('native-cache-restore')
     expect(restoreOnly.id).toBe('native-cache-restore-only')
     const cacheScope = steps.find((step) => step.name === 'Resolve native cache scope')
@@ -407,9 +452,11 @@ describe('PR workflow parallelism', () => {
       'steps.native-cache-restore-only.outputs.cache-hit'
     )
     const electronCache = steps.find((step) => step.name === 'Cache Electron package archive')
+
     const electronCacheResolution = steps.find(
       (step) => step.name === 'Resolve Electron package cache'
     )
+
     expect(electronCacheResolution.if).toBe(
       "inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'"
     )
@@ -446,6 +493,7 @@ describe('PR workflow parallelism', () => {
       )
 
     expect(fullHistoryCheckouts.length).toBeGreaterThan(0)
+
     for (const checkout of fullHistoryCheckouts) {
       expect(checkout.with.filter).toBe('blob:none')
     }
@@ -468,9 +516,11 @@ describe('PR workflow parallelism', () => {
       'package',
       'package_windows'
     ])
+
     const verifyStep = workflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
+
     expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
     expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
     // Why assert this one too: the browser provider test skips itself without

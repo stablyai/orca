@@ -34,6 +34,7 @@ const storeState = vi.hoisted(
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useCallback<T>(callback: T) {
@@ -47,16 +48,19 @@ vi.mock('react', async () => {
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
+
       if (!(stateIndex in reactHookRuntime.states)) {
         reactHookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         reactHookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(reactHookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [reactHookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -205,6 +209,7 @@ vi.mock('./middle-button-default-guard', () => ({
 }))
 
 const useAppStoreExport = (selector: (state: typeof storeState) => unknown) => selector(storeState)
+
 useAppStoreExport.getState = () => ({
   unifiedTabsByWorktree: {
     'wt-1': [{ id: 'terminal-tab-1', groupId: 'group-1' }]
@@ -241,6 +246,7 @@ async function renderSortableTab({
 } = {}): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./SortableTab')
+
   return module.default({
     tab: makeTerminalTab() as never,
     unifiedTabId: 'terminal-tab-1',
@@ -276,13 +282,17 @@ function expandNode(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map(expandNode)
   }
+
   const el = node as ReactElementLike
+
   if (typeof el.type === 'function') {
     return expandNode(el.type(el.props))
   }
+
   return {
     ...el,
     props: {
@@ -294,23 +304,31 @@ function expandNode(node: unknown): unknown {
 
 function findElementsByType(node: unknown, typeName: string): ReactElementLike[] {
   const results: ReactElementLike[] = []
+
   const visit = (current: unknown): void => {
     if (current == null || typeof current === 'string' || typeof current === 'number') {
       return
     }
+
     if (Array.isArray(current)) {
       for (const child of current) {
         visit(child)
       }
+
       return
     }
+
     const el = current as ReactElementLike
+
     if (el.type === typeName) {
       results.push(el)
     }
+
     visit(el.props?.children)
   }
+
   visit(node)
+
   return results
 }
 
@@ -329,7 +347,9 @@ function pressInputKey(
     },
     preventDefault: vi.fn()
   }
+
   ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+
   return event
 }
 
@@ -353,11 +373,13 @@ describe('SortableTab rename shortcut signal', () => {
         for (const listener of windowListeners.get(event.type) ?? []) {
           listener(event)
         }
+
         return true
       })
     })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -388,7 +410,9 @@ describe('SortableTab rename shortcut signal', () => {
     await renderSortableTab({ onSetCustomTitle })
     requestTerminalTabRename('terminal-tab-1')
     let rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
+
     let input = findElementsByType(rerender, 'input')[0]
+
     ;(input.props.onChange as (event: { target: { value: string } }) => void)({
       target: { value: '日本語 terminal' }
     })

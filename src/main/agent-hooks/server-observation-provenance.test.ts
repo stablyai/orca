@@ -12,10 +12,13 @@ const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = makePaneKey('tab-1', LEAF)
+
 const CONNECTION = 'ssh-provenance'
 
 type Observed = { paneKey: string; observation?: AgentStatusObservation }
@@ -25,14 +28,17 @@ function collectObservations(server: AgentHookServer): Observed[] {
   server.setListener((payload) => {
     seen.push({ paneKey: payload.paneKey, observation: payload.observation })
   })
+
   return seen
 }
 
 function lastObservation(seen: Observed[]): AgentStatusObservation {
   const observation = seen.at(-1)?.observation
+
   if (!observation) {
     throw new Error('expected the last emitted status to carry an observation')
   }
+
   return observation
 }
 
@@ -48,6 +54,7 @@ describe('agent status observation provenance', () => {
     for (const server of servers) {
       server.stop()
     }
+
     servers.length = 0
     vi.restoreAllMocks()
   })
@@ -55,6 +62,7 @@ describe('agent status observation provenance', () => {
   function newServer(): AgentHookServer {
     const server = new AgentHookServer()
     servers.push(server)
+
     return server
   }
 
@@ -237,6 +245,7 @@ describe('agent status observation provenance', () => {
 
   it('never persists the observation to last-status.json', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-observation-'))
+
     try {
       const server = newServer()
       await server.start({ env: 'production', userDataPath })

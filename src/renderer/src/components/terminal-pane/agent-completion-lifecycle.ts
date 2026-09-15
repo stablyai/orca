@@ -65,6 +65,7 @@ export function createAgentCompletionLifecycle({
     if (processState.disposed) {
       return
     }
+
     processState.disposed = true
     clearPollTimer()
     clearPendingHookDone()

@@ -17,11 +17,14 @@ export function normalizeAmpEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const ampCacheKey = getAmpCacheKey(paneKey, hookPayload)
+
   if (eventName === 'session.start') {
     clearPaneTurnCacheState(state, ampCacheKey)
+
     if (ampCacheKey !== paneKey) {
       clearPaneTurnCacheState(state, paneKey)
     }
+
     return null
   }
 
@@ -35,6 +38,7 @@ export function normalizeAmpEvent(
   if (!stateName) {
     return null
   }
+
   if (eventName === 'agent.start') {
     state.ampCompletedCacheKeys.delete(ampCacheKey)
   } else if (
@@ -54,6 +58,7 @@ export function normalizeAmpEvent(
 
   const interrupted =
     eventName === 'agent.end' && hookPayload.status === 'cancelled' ? true : undefined
+
   const explicitPrompt = readFirstString(hookPayload, [
     'prompt',
     'user_prompt',
@@ -62,9 +67,11 @@ export function normalizeAmpEvent(
     'initialPrompt',
     'user_message'
   ])
+
   const canUseMessageAsPrompt =
     eventName === 'agent.start' ||
     (eventName === 'agent.end' && !state.lastPromptByPaneKey.has(ampCacheKey))
+
   const ampPromptText = explicitPrompt ?? (canUseMessageAsPrompt ? promptText : '')
 
   const normalized = normalizeAgentStatusPayload({
@@ -81,12 +88,15 @@ export function normalizeAmpEvent(
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted
   })
+
   if (normalized && eventName === 'agent.end') {
     state.ampCompletedCacheKeys.add(ampCacheKey)
   }
+
   if (normalized) {
     pruneAmpThreadCacheKeys(state, paneKey, ampCacheKey)
   }
+
   return normalized
 }
 
@@ -96,6 +106,7 @@ export function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unkn
     ['threadId', 'threadID', 'thread_id'],
     AMP_THREAD_ID_MAX_LENGTH
   )
+
   // Why: Amp emits events for multiple threads per pane; cache by thread internally while keeping the visible paneKey stable.
   return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
 }
@@ -106,21 +117,25 @@ export function pruneAmpThreadCacheKeys(
   currentCacheKey: string
 ): void {
   const scopedPrefix = `${paneKey}\0amp:`
+
   if (!currentCacheKey.startsWith(scopedPrefix)) {
     return
   }
 
   const scopedKeys = new Set<string>()
+
   for (const key of state.lastPromptByPaneKey.keys()) {
     if (key.startsWith(scopedPrefix)) {
       scopedKeys.add(key)
     }
   }
+
   for (const key of state.lastToolByPaneKey.keys()) {
     if (key.startsWith(scopedPrefix)) {
       scopedKeys.add(key)
     }
   }
+
   for (const key of state.ampCompletedCacheKeys) {
     if (key.startsWith(scopedPrefix)) {
       scopedKeys.add(key)
@@ -128,6 +143,7 @@ export function pruneAmpThreadCacheKeys(
   }
 
   let overflow = scopedKeys.size - AMP_MAX_SCOPED_THREAD_CACHE_KEYS
+
   if (overflow <= 0) {
     return
   }
@@ -137,9 +153,11 @@ export function pruneAmpThreadCacheKeys(
     if (overflow <= 0) {
       break
     }
+
     if (key === currentCacheKey) {
       continue
     }
+
     state.lastPromptByPaneKey.delete(key)
     state.lastToolByPaneKey.delete(key)
     state.ampCompletedCacheKeys.delete(key)
@@ -164,6 +182,7 @@ export function hasExplicitAmpPrompt(
   ) {
     return true
   }
+
   // Amp tool/result `message` is output text, not a user prompt.
   return eventName === 'agent.start' && promptText.length > 0
 }

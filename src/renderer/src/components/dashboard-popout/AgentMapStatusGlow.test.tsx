@@ -24,14 +24,17 @@ describe('AgentMap status glow', () => {
 
       if (glows) {
         expect(glow).toHaveAttribute('data-agent-active-status', state.dotState)
+
         return
       }
+
       expect(glow).not.toBeInTheDocument()
     }
   )
 
   it('caps a 200-status burst at four flares without dropping static emphasis', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+
     const { container } = renderMap(
       Array.from({ length: 200 }, (_, index) =>
         card({
@@ -45,6 +48,7 @@ describe('AgentMap status glow', () => {
         })
       )
     )
+
     clock.mockRestore()
 
     expect(container.querySelectorAll('[data-agent-map-agent-status-flare]')).toHaveLength(4)
@@ -74,8 +78,10 @@ describe('AgentMap status glow', () => {
 
     if (!state.marked) {
       expect(marker).not.toBeInTheDocument()
+
       return
     }
+
     expect(marker).toBeInTheDocument()
     // Same glyph the sidebar and tabs use, not a map-local invention.
     expect(container.querySelector('svg.agent-map-agent-question-icon')).toBeInTheDocument()
@@ -86,6 +92,7 @@ describe('AgentMap status glow', () => {
     const { container } = renderMap([
       card({ bucket: 'attention', dotState: 'waiting', unseen: true })
     ])
+
     const question = container.querySelector('[data-agent-question-marker]')!.parentElement!
     const unread = container.querySelector('[data-agent-unread-marker]')!
 

@@ -17,11 +17,15 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) }
 }))
+
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
+
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon' }))
+
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))
 
 let renderer: ReactTestRenderer
@@ -33,6 +37,7 @@ afterEach(() => {
 describe('voice settings poller integration', () => {
   it('reaches the real poller refresh after a rejected save', async () => {
     let rejectConfigure: (error: Error) => void = () => {}
+
     const operations = {
       load: vi.fn().mockResolvedValue({
         enabled: true,
@@ -49,6 +54,7 @@ describe('voice settings poller integration', () => {
       download: vi.fn(),
       delete: vi.fn()
     } as VoiceSettingsOperations
+
     await act(async () => {
       renderer = create(
         createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
@@ -77,6 +83,7 @@ describe('voice settings poller integration', () => {
       download: vi.fn(),
       delete: vi.fn()
     } as VoiceSettingsOperations
+
     await act(async () => {
       renderer = create(
         createElement(VoiceSettingsScreen, { operations, focused: false, onBack: vi.fn() })
@@ -99,6 +106,7 @@ describe('voice settings poller integration', () => {
       download: vi.fn(),
       delete: vi.fn()
     } as VoiceSettingsOperations
+
     const onBack = vi.fn()
     await act(async () => {
       renderer = create(createElement(VoiceSettingsScreen, { operations, focused: true, onBack }))
@@ -121,6 +129,7 @@ describe('voice settings poller integration', () => {
 
   it('drops the recovery read once the screen is no longer focused', async () => {
     let rejectConfigure: (error: Error) => void = () => {}
+
     const operations = {
       load: vi.fn().mockResolvedValue({
         enabled: true,
@@ -137,6 +146,7 @@ describe('voice settings poller integration', () => {
       download: vi.fn(),
       delete: vi.fn()
     } as VoiceSettingsOperations
+
     const onBack = vi.fn()
     await act(async () => {
       renderer = create(createElement(VoiceSettingsScreen, { operations, focused: true, onBack }))

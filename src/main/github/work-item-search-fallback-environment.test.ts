@@ -30,13 +30,16 @@ it('keeps REST fallback on the credential captured for the failed preferred sear
     if (args.includes('graphql')) {
       vi.stubEnv('GH_TOKEN', 'fixture-later-credential')
     }
+
     return api.capture(binary, args, options)
   })
   expect((await listWorkItems('fixture/repo', 24, 'is:issue')).items).toHaveLength(24)
+
   const queries = api.calls.filter(
     (call) =>
       call.args.includes('graphql') || call.args.some((arg) => arg.startsWith('search/issues?'))
   )
+
   expect(queries.map((call) => call.fixtureCredential)).toEqual([
     'fixture-original-credential',
     'fixture-original-credential'
@@ -50,13 +53,16 @@ it('keeps count fallback on its captured credential', async () => {
     if (args.includes('graphql')) {
       vi.stubEnv('GH_TOKEN', 'fixture-later-credential')
     }
+
     return api.capture(binary, args, options)
   })
   expect(await countWorkItems('fixture/repo', 'is:issue')).toBe(120)
+
   const queries = api.calls.filter(
     (call) =>
       call.args.includes('graphql') || call.args.some((arg) => arg.startsWith('search/issues?'))
   )
+
   expect(queries.map((call) => call.fixtureCredential)).toEqual([
     'fixture-original-credential',
     'fixture-original-credential'
@@ -71,14 +77,17 @@ it('hydrates oversized associations with the preferred page credential', async (
     if (args.includes('graphql')) {
       vi.stubEnv('GH_TOKEN', 'fixture-later-credential')
     }
+
     return api.capture(binary, args, options)
   })
   const result = await listWorkItems('fixture/repo', 24, 'is:issue')
   expect(result.items[0].labels).toHaveLength(125)
+
   const queries = api.calls.filter(
     (call) =>
       call.args.includes('graphql') || call.args.some((arg) => /^repos\/.+\/issues\/\d+$/.test(arg))
   )
+
   expect(queries.map((call) => call.fixtureCredential)).toEqual([
     'fixture-original-credential',
     'fixture-original-credential'

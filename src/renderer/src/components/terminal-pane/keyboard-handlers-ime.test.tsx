@@ -21,11 +21,13 @@ function keyboardEvent(
     cancelable: true,
     ...overrides
   })
+
   Object.defineProperties(event, {
     isComposing: { value: overrides.isComposing ?? false },
     keyCode: { value: overrides.keyCode },
     timeStamp: { value: overrides.timeStamp }
   })
+
   return event
 }
 
@@ -49,10 +51,12 @@ function createHarness(bindings?: Map<number, ShortcutBinding>): {
   document.body.append(scope)
 
   const sendInput = vi.fn(() => true)
+
   const transport = {
     getPtyId: () => 'pty-1',
     sendInput
   } as unknown as PtyTransport
+
   const pane = {
     id: 1,
     leafId: '00000000-0000-4000-8000-000000000001',
@@ -62,16 +66,19 @@ function createHarness(bindings?: Map<number, ShortcutBinding>): {
       getSelection: vi.fn(() => '')
     }
   }
+
   const manager = {
     getActivePane: () => pane,
     getPanes: () => [pane]
   } as unknown as PaneManager
+
   const route = installTerminalImeCompositionRoute({
     terminalElement,
     terminal: { input: vi.fn() },
     capturedTransport: transport,
     getCurrentTransport: () => transport
   })
+
   const deps: KeyboardHandlersDeps = {
     tabId: 'tab-1',
     worktreeId: 'worktree-1',
@@ -98,6 +105,7 @@ function createHarness(bindings?: Map<number, ShortcutBinding>): {
     searchStateRef: { current: { query: '', caseSensitive: false, regex: false } },
     macOptionAsAltRef: { current: 'false' }
   }
+
   return {
     deps,
     editable,
@@ -163,6 +171,7 @@ describe('Windows IME keyboard ownership', () => {
       keyCode: 13,
       timeStamp: 20
     })
+
     harness.terminalInput.dispatchEvent(redispatch)
 
     expect(redispatch.defaultPrevented).toBe(true)
@@ -224,6 +233,7 @@ describe('Windows IME keyboard ownership', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
     harness.startComposition()
+
     const keyup = keyboardEvent('keyup', {
       key: 'Enter',
       code: 'Enter',
@@ -262,6 +272,7 @@ describe('Windows IME keyboard ownership', () => {
         ctrlKey: true
       })
     )
+
     const redispatch = keyboardEvent('keydown', {
       key: 'Enter',
       code: 'Enter',
@@ -279,6 +290,7 @@ describe('Windows IME keyboard ownership', () => {
   it('retains Ctrl ownership when a later-held Shift is released first', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
     for (const event of [
       keyboardEvent('keydown', {
         key: 'Control',
@@ -305,6 +317,7 @@ describe('Windows IME keyboard ownership', () => {
     ]) {
       harness.terminalInput.dispatchEvent(event)
     }
+
     harness.startComposition()
     harness.terminalInput.dispatchEvent(
       keyboardEvent('keydown', {
@@ -316,6 +329,7 @@ describe('Windows IME keyboard ownership', () => {
         ctrlKey: true
       })
     )
+
     const redispatch = keyboardEvent('keydown', {
       key: 'Enter',
       code: 'Enter',
@@ -351,6 +365,7 @@ describe('Windows IME keyboard ownership', () => {
         isComposing: true
       })
     )
+
     const enter = keyboardEvent('keydown', {
       key: 'Enter',
       code: 'Enter',
@@ -375,6 +390,7 @@ describe('Windows IME keyboard ownership', () => {
     const laterWindowHandler = vi.fn()
     window.addEventListener('keydown', laterWindowHandler)
     harness.startComposition()
+
     const consumed = keyboardEvent('keydown', {
       key: 'Process',
       keyCode: 229,
@@ -424,6 +440,7 @@ describe('Windows IME keyboard ownership', () => {
   // newlines. Wiring mirrors TerminalPane: dep objects rebuilt every render.
   it('absorbs the bare Enter redispatch when re-renders land mid-composition', () => {
     const harness = createHarness()
+
     const factoryFields = {
       expandedPaneIdRef: { current: null },
       expandedStyleSnapshotRef: { current: new Map() },
@@ -434,6 +451,7 @@ describe('Windows IME keyboard ownership', () => {
       pendingPaneSizeRefreshFrameIdsRef: { current: [] },
       persistLayoutSnapshot: vi.fn()
     }
+
     const hook = renderHook(() => {
       const actions = useExpandCollapseActions({ ...factoryFields, tabId: 'tab-1' })
       useTerminalKeyboardShortcuts({
@@ -457,6 +475,7 @@ describe('Windows IME keyboard ownership', () => {
     hook.rerender()
     harness.startComposition()
     hook.rerender()
+
     for (let repeat = 0; repeat < 5; repeat++) {
       harness.terminalInput.dispatchEvent(
         keyboardEvent('keydown', {
@@ -478,12 +497,15 @@ describe('Windows IME keyboard ownership', () => {
       keyCode: 13,
       timeStamp: 40
     })
+
     harness.terminalInput.dispatchEvent(redispatch)
 
     expect(redispatch.defaultPrevented).toBe(true)
+
     const newlineSends = harness.sendInput.mock.calls.filter(
       ([data]) => typeof data === 'string' && data.includes('\r')
     )
+
     expect(newlineSends).toHaveLength(0)
     hook.unmount()
     harness.dispose()

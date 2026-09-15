@@ -30,8 +30,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible when another subagent reports tool activity', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -74,8 +76,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible when matching tool activity has no execution id', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -114,8 +118,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible when approved tool execution has no identity', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -155,8 +161,10 @@ describe('AgentHookServer listener replay', () => {
   it('lets Claude permission clear when approved PostToolUse matches the preceding tool use id', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -202,8 +210,10 @@ describe('AgentHookServer listener replay', () => {
   it('lets Claude permission clear by tool use id when tool input is not previewable', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -248,8 +258,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible for unpreviewable tool input with another tool use id', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -294,8 +306,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible when another tool use completes after permission', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -341,8 +355,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible when an explicit agent type reports another tool use id', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -391,8 +407,10 @@ describe('AgentHookServer listener replay', () => {
   it('lets Claude permission clear when same explicit agent type starts the approved tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -434,8 +452,10 @@ describe('AgentHookServer listener replay', () => {
   it('lets Claude subagent permission clear when the same agent starts the approved tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -479,8 +499,10 @@ describe('AgentHookServer listener replay', () => {
   it('lets same Claude subagent clear an unknown approved tool without an input preview', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -524,8 +546,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible when another same-type subagent reports the same tool execution', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -569,8 +593,10 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Claude permission visible when unknown tool previews collide', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -609,8 +635,10 @@ describe('AgentHookServer listener replay', () => {
   it('lets Claude permission clear when a new explicit prompt starts', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -649,6 +677,7 @@ describe('AgentHookServer listener replay', () => {
   it('does not replay cleared pane state to a newly attached listener', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {

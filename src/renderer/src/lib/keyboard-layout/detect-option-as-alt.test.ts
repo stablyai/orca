@@ -8,6 +8,7 @@ import {
 
 function mapOf(entries: Record<string, string>): LayoutMapLike {
   const m = new Map(Object.entries(entries))
+
   return { get: (code) => m.get(code), size: m.size }
 }
 
