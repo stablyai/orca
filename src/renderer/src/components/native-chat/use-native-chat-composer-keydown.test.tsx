@@ -112,7 +112,7 @@ describe('useNativeChatComposerKeyDown', () => {
       expect(callbacks.completePickerItem).toHaveBeenCalledOnce()
       const [item] = callbacks.completePickerItem.mock.calls[0]
       expect(applyPickerSuggestion(draft, caret, item)).toEqual({
-        draft: 'Explain /clear  before continuing',
+        draft: 'Explain /clear before continuing',
         caret: 'Explain /clear '.length,
         insertedToken: '/clear'
       })
