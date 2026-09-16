@@ -34,6 +34,7 @@ import {
 import { runRecording } from './run-recording'
 import { valueHash, type InternedObservation } from './golden-value-pool'
 import type { Observation, RecordingScenario } from './recording-scenario'
+import type { RpcClient } from '../../transport/rpc-client'
 import type { RecordedValue } from './recording-values'
 
 describe('recording boundaries', () => {
@@ -528,6 +529,48 @@ describe('recording boundaries', () => {
       await clock.flush()
       clock.stop()
     }
+  })
+
+  it('separates a stream listener that dies from a registry that dies before it', async () => {
+    const listened: unknown[] = []
+    const mount = (client: RpcClient) => {
+      const dispose = client.subscribe(CLIENT_EVENTS, null, (result) => {
+        listened.push(result)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the assertion is the behaviour under test — a product listener asserts the frame shape and dies when a reply partition breaks it.
+        void (result as { type: string }).type
+      })
+      return { action: () => {}, state: () => ({}), dispose }
+    }
+    const scenario = (reply: unknown): RecordingScenario => ({
+      id: 'stream-crash',
+      operation: 'op',
+      version: 1,
+      family: 'op',
+      sites: [],
+      schedules: [],
+      steps: [{ frame: `${CLIENT_EVENTS}#1`, params: null, reply }, { checkpoint: 'delivered' }]
+    })
+    const recording = await runRecording(
+      scenario({ ok: true, streaming: true, result: null }),
+      ({ client }) => mount(client),
+      vitestRecordingScheduler()
+    )
+    expect(recording.checkpoints[0]!.observation.effects).toMatchObject([
+      { name: 'stream-listener-crash', value: { frame: `${CLIENT_EVENTS}#1` } }
+    ])
+    expect(listened).toEqual([null])
+
+    // A reply the registry cannot read at all: it throws reaching for `error.message` on its way to
+    // the listener, so nothing was delivered and there is no recording to keep.
+    listened.length = 0
+    await expect(
+      runRecording(
+        scenario({ ok: false }),
+        ({ client }) => mount(client),
+        vitestRecordingScheduler()
+      )
+    ).rejects.toThrow("Cannot read properties of undefined (reading 'message')")
+    expect(listened).toEqual([])
   })
 
   it('files only a subscribe as an open stream, not the unsubscribe it publishes later', async () => {

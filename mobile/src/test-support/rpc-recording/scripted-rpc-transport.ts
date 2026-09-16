@@ -13,7 +13,7 @@ import {
 import type { Rejection } from './recording-scenario'
 
 /** What a product stream listener threw on one delivered frame. */
-export type FrameListenerCrash = { readonly error: unknown }
+type FrameListenerCrash = { readonly error: unknown }
 
 /** The one device identity every recorded frame carries; nothing here reads a keychain. */
 const DEVICE_TOKEN = 'recording-device'
@@ -36,6 +36,7 @@ export class ScriptedRpcTransport {
   >()
   private activeName = ''
   private opening = false
+  private listenerCrash: FrameListenerCrash | null = null
   private frameCount = 0
   private state: ConnectionState = 'connected'
   private listeners = new Set<(state: ConnectionState) => void>()
@@ -127,7 +128,12 @@ export class ScriptedRpcTransport {
       subscribe: (method, params, onData, options) => {
         this.opening = true
         try {
-          return streams.subscribe(method, params, onData, options)
+          return streams.subscribe(
+            method,
+            params,
+            (result) => this.deliverToListener(onData, result),
+            options
+          )
         } finally {
           this.opening = false
         }
@@ -152,6 +158,20 @@ export class ScriptedRpcTransport {
 
   private nextFrameId(): string {
     return `frame-${++this.frameCount}`
+  }
+
+  /**
+   * The product's stream listener, wrapped so `frame` can tell a dead listener from a dead registry.
+   * The throw is stashed and rethrown unchanged: the registry has to see it the way a device's
+   * message handler does, so what it skips after a listener dies is recorded rather than invented.
+   */
+  private deliverToListener(onData: (result: unknown) => void, result: unknown): void {
+    try {
+      onData(result)
+    } catch (error) {
+      this.listenerCrash = { error }
+      throw error
+    }
   }
 
   /** One occurrence counter per method, so a subscribe payload is named the way a request is. */
@@ -188,12 +208,22 @@ export class ScriptedRpcTransport {
     if (JSON.stringify(captureValue(stream.params)) !== JSON.stringify(captureValue(params))) {
       throw new Error(`Subscribe params mismatch: ${name}`)
     }
-    let routed: boolean
+    this.listenerCrash = null
+    let routed = false
     try {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the response as JSON; the wire id is the transport’s.
       routed = stream.deliver({ ...(reply as object), id: stream.id } as RpcResponse)
     } catch (error) {
-      return { error }
+      // Only the product listener's own throw is a recording; anything the registry raised on its
+      // way to the listener is the scenario no longer matching, and stays loud.
+      if (this.listenerCrash?.error !== error) {
+        throw error
+      }
+    }
+    const crash = this.listenerCrash
+    this.listenerCrash = null
+    if (crash) {
+      return crash
     }
     if (!routed) {
       // Only a non-streaming reply lands here: the registry routes every streaming response to the
