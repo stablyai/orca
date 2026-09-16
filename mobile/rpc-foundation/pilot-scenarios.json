@@ -18774,6 +18774,43 @@
           "checkpoint": "refreshed"
         },
         {
+          "action": "cutover",
+          "id": "cutover"
+        },
+        {
+          "checkpoint": "re-subscribed"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#2",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-2"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#3",
+          "params": {
+            "worktree": "id:repo-1::/work/feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "worktreeId": "repo-1::/work/feature",
+                "displayName": "Feature Work Replayed"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "replayed"
+        },
+        {
           "action": "unmount",
           "id": "unmount"
         },

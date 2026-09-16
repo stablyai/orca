@@ -344,8 +344,8 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 330 manifest scenarios against frozen goldens and fails on any divergence: 651 goldens
-over 758 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
+It replays 330 manifest scenarios against frozen goldens and fails on any divergence: 653 goldens
+over 760 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
 the change they describe and are not restatements of this one. For a migration it answers one
 question — does the rewritten call site produce the same sender calls, settlements, state and
 effects as main did?
