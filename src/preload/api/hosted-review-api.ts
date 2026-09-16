@@ -2,6 +2,8 @@ import type {
   BitbucketConnectArgs,
   BitbucketConnectionStatus
 } from '../../shared/bitbucket-credentials'
+import type { BitbucketPRMergeMethod } from '../../shared/bitbucket-merge-methods'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   CreateHostedReviewArgs,
   CreateHostedReviewResult,
@@ -28,4 +30,16 @@ export type BitbucketApi = {
   ) => Promise<{ ok: true; account: string | null } | { ok: false; error: string }>
   disconnect: () => Promise<void>
   status: () => Promise<BitbucketConnectionStatus>
+  mergePR: (args: {
+    repoPath: string
+    prNumber: number
+    method?: BitbucketPRMergeMethod
+    closeSourceBranch?: boolean
+    executionHostId?: ExecutionHostId
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
+  closePR: (args: {
+    repoPath: string
+    prNumber: number
+    executionHostId?: ExecutionHostId
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
 }
