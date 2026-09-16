@@ -585,6 +585,7 @@ function sampleGolden(id: string): GoldenRecording {
     baseline: 'a'.repeat(40),
     lockfileSha256: 'b'.repeat(64),
     recorderSha256: 'c'.repeat(64),
+    adapterSha256: 'f'.repeat(64),
     scenarioSha256: 'd'.repeat(64),
     platform: process.platform,
     scenarioVersion: 1,

@@ -5,6 +5,7 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import { driveReplyMatrix, replyMatrixGoldenId, replyMatrixSites } from './reply-matrix'
 import { replyMatrixNormalResult } from './reply-matrix-normal-result'
 import { runRecording } from './run-recording'
+import type { RpcClient } from '../../transport/rpc-client'
 import type { RecordingScenario } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 

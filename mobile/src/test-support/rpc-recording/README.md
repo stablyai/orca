@@ -629,4 +629,6 @@ well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServe
 the record cancelled and keeps it until the id arrives — the retention the per-session registry
 paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
 a product cleanup that never ran records `cancelled: false`, and because the drain precedes the
-read, a cleanup that merely deferred its close records nothing at all.
+read, a cleanup that deferred its close to a timer already due records nothing at all. `flush()`
+only runs work due at the current virtual time, so a close parked on a later timer is still
+registered at the read and records `cancelled: false` like any other.
