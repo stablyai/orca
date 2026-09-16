@@ -349,6 +349,41 @@ describe('closed arm sets drop rather than default', () => {
   })
 })
 
+// A third answer, distinct from both: `null` on these two flags is GitHub saying it knows the
+// answer and the answer is no, where `undefined` is the host not carrying the member. Coalescing
+// the null away would read a well-formed reply differently from main, which preserved it.
+describe('tri-state flags keep an explicit null', () => {
+  const review = { provider: 'github', number: 7 }
+  const pr = { number: 7, state: 'open' }
+
+  it('keeps a null autoMergeAllowed on the branch review and drops a non-boolean', () => {
+    expect(
+      reads(hostedReviewForBranchSchema, { ...review, autoMergeAllowed: null })?.autoMergeAllowed
+    ).toBeNull()
+    expect(
+      reads(hostedReviewForBranchSchema, { ...review, autoMergeAllowed: false })?.autoMergeAllowed
+    ).toBe(false)
+    expect(
+      reads(hostedReviewForBranchSchema, { ...review, autoMergeAllowed: 'no' })?.autoMergeAllowed
+    ).toBeUndefined()
+    expect(reads(hostedReviewForBranchSchema, review)?.autoMergeAllowed).toBeUndefined()
+  })
+
+  it('keeps a null autoMergeAllowed and mergeQueueRequired on the PR and drops a non-boolean', () => {
+    const readsPr = (value: unknown) => {
+      const found = reads(githubPrForBranchSchema, { kind: 'found', pr: value })
+      return found.kind === 'found' ? found.pr : null
+    }
+    const nulled = readsPr({ ...pr, autoMergeAllowed: null, mergeQueueRequired: null })
+    expect(nulled?.autoMergeAllowed).toBeNull()
+    expect(nulled?.mergeQueueRequired).toBeNull()
+    const bad = readsPr({ ...pr, autoMergeAllowed: 'no', mergeQueueRequired: 1 })
+    expect(bad?.autoMergeAllowed).toBeUndefined()
+    expect(bad?.mergeQueueRequired).toBeUndefined()
+    expect(readsPr(pr)?.mergeQueueRequired).toBeUndefined()
+  })
+})
+
 describe('declared variants', () => {
   const [envelopeSchema, voidSchema] = githubPrMutationStatusSchemas
 

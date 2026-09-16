@@ -99,7 +99,7 @@ export const hostedReviewForBranchSchema = z
           mergeable: review.mergeable ?? 'UNKNOWN',
           reviewDecision: review.reviewDecision,
           autoMergeEnabled: review.autoMergeEnabled,
-          autoMergeAllowed: review.autoMergeAllowed ?? undefined,
+          autoMergeAllowed: review.autoMergeAllowed,
           mergeStateStatus: review.mergeStateStatus,
           headSha: review.headSha
         }
@@ -145,8 +145,8 @@ const pullRequestSchema = z
           mergeable: pr.mergeable ?? 'UNKNOWN',
           reviewDecision: pr.reviewDecision,
           autoMergeEnabled: pr.autoMergeEnabled,
-          autoMergeAllowed: pr.autoMergeAllowed ?? undefined,
-          mergeQueueRequired: pr.mergeQueueRequired ?? undefined,
+          autoMergeAllowed: pr.autoMergeAllowed,
+          mergeQueueRequired: pr.mergeQueueRequired,
           mergeStateStatus: pr.mergeStateStatus,
           headSha: pr.headSha,
           prRepo: pr.prRepo,
