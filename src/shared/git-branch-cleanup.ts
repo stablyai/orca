@@ -62,6 +62,8 @@ export async function getBranchCleanupTargetRefs(
   return candidates
 }
 
+const REFRESH_FETCH_TIMEOUT_MS = 5_000
+
 export async function refreshBranchCleanupTargetRefs(
   runGit: GitBranchCleanupExec,
   targetRefs: readonly string[]
@@ -82,8 +84,21 @@ export async function refreshBranchCleanupTargetRefs(
     fetchedRemotes.add(remote)
     // Why: deleting a worktree often follows a PR merge. Refresh the saved base
     // before deciding a local branch is unpublished, but keep network failures
-    // non-fatal so offline cleanup preserves today's safe behavior.
-    await readOptionalGitStdout(runGit, ['fetch', '--prune', remote])
+    // non-fatal so offline cleanup preserves today's safe behavior. Race the
+    // fetch against a short timeout so an unreachable remote (offline, dead
+    // VPN, broken SSH route) cannot stall the surrounding worktree-removal
+    // RPC for git's default network timeout.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      readOptionalGitStdout(runGit, ['fetch', '--prune', remote]),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), REFRESH_FETCH_TIMEOUT_MS)
+      })
+    ]).finally(() => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+    })
   }
 }
 
