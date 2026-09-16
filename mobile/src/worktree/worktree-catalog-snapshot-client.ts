@@ -3,6 +3,8 @@ import type { RpcFailure } from '../transport/types'
 import type { Worktree } from './workspace-list-sections'
 import { worktreeCatalogRead } from './worktree-catalog-operations'
 
+type WorktreeCatalogRpcClient = Pick<RpcClient, 'sendRequest'>
+
 // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
 export const WORKTREE_PS_FULL_LIMIT = 10_000
 
@@ -13,7 +15,7 @@ export type WorktreeCatalogAdmission<T> =
 
 export type PendingWorktreeCatalog = {
   admission: WorktreeCatalogAdmission<Worktree>
-  client: RpcClient
+  client: WorktreeCatalogRpcClient
   hostId: string
 }
 
@@ -59,12 +61,15 @@ export function admitWorktreeCatalogResponse<T>(
 }
 
 export class WorktreeCatalogSnapshotClient {
-  private client: RpcClient | null = null
+  private client: WorktreeCatalogRpcClient | null = null
   private hostId: string | null = null
   private snapshotId: string | null = null
   private confirmedWorktrees: Worktree[] | null = null
 
-  async fetch(client: RpcClient, hostId: string): Promise<WorktreeCatalogFetchResult> {
+  async fetch(
+    client: WorktreeCatalogRpcClient,
+    hostId: string
+  ): Promise<WorktreeCatalogFetchResult> {
     if (this.client !== client || this.hostId !== hostId) {
       this.client = client
       this.hostId = hostId

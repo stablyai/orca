@@ -1,3 +1,5 @@
+import { usePathname } from 'expo-router'
+import { shouldShowHostSidebarAgentSummaries } from '../worktree/host-sidebar-agent-summaries'
 import { Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
@@ -16,6 +18,7 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
+  const pathname = usePathname()
   const {
     actions,
     activeWorktreeScroll,
@@ -166,6 +169,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           }
           renderItem={({ item }) => (
             <WorktreeListRow
+              showAgents={shouldShowHostSidebarAgentSummaries({ embedded, hostId, pathname })}
               item={item}
               isReadOnly={isReadOnly}
               now={now}
