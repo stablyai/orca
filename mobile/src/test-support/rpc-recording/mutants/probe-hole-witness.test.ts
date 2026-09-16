@@ -18,6 +18,11 @@ const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-
  * Each probe exists because a real mutation survived the whole pre-probe suite. Hole and closure
  * are asserted together: if a pre-probe scenario of the same operation also caught the mutation,
  * the probe is redundant and this test says so instead of letting it accumulate.
+ *
+ * The three session entries are the same shape one step later: each names a guard whose false arm
+ * no session recording reached, because every scenario of its family declared the cell filled. The
+ * closing scenario declares it empty, so the member the guard drops is absent from the wire and the
+ * mutant that always sends it has somewhere to diverge.
  */
 const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonly string[] }[] = [
   {
@@ -34,23 +39,56 @@ const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonl
     mutation: 'workspace-context-refusal-blanks',
     operation: 'settings.workspace-context',
     closedBy: ['settings-workspace-context-refuse-after-data']
+  },
+  {
+    mutation: 'display-mode-unconditional-client',
+    operation: 'session.terminal-display-mode',
+    closedBy: ['session-terminal-display-mode-auto-without-device-token']
+  },
+  {
+    mutation: 'display-mode-unmeasured-viewport',
+    operation: 'session.terminal-display-mode',
+    closedBy: ['session-terminal-display-mode-auto-without-viewport']
+  },
+  {
+    mutation: 'startup-tab-load-rejects-sequence',
+    operation: 'session.startup',
+    closedBy: ['session-startup-refused-tab-load-still-loads-terminals']
   }
 ]
 
+/** What the scripted transport raises when a send no longer carries the params the step asserts. */
+const PARAMS_MISMATCH = 'Request params mismatch:'
+
+/**
+ * A mutation that changes a param the scenario completes is caught before a recording exists to
+ * compare: the transport asserts the sender's params at every `complete`, so the sequence aborts
+ * where a state or effect mutation would have diverged. The scenario detected it, which is what
+ * `killed` means here — narrowed to that one message, and only once the anchor is proved applied,
+ * so a mutant that failed to apply or a scenario that broke some other way still fails loudly.
+ */
 async function verdict(id: string, mutation: Mutation): Promise<string> {
   const scenario = input.scenarios.find((candidate) => candidate.id === id)!
   const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
     device: scenario,
     mutation: operationMutation(mutation)
   })
-  const result = await runRecordingMutant(
-    scenario,
-    adapters[scenario.operation],
-    vitestRecordingScheduler(),
-    readGolden(goldens, id).recording
-  )
-  assertMutationApplied()
-  return result.verdict
+  try {
+    const result = await runRecordingMutant(
+      scenario,
+      adapters[scenario.operation],
+      vitestRecordingScheduler(),
+      readGolden(goldens, id).recording
+    )
+    assertMutationApplied()
+    return result.verdict
+  } catch (error) {
+    assertMutationApplied()
+    if (error instanceof Error && error.message.startsWith(PARAMS_MISMATCH)) {
+      return 'killed'
+    }
+    throw error
+  }
 }
 
 describe('probe scenarios close holes the pre-probe recordings left open', () => {

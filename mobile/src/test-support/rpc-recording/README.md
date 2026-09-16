@@ -361,13 +361,13 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 347 manifest scenarios against frozen goldens and fails on any divergence: 694 goldens
-over 811 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
+It replays 364 manifest scenarios against frozen goldens and fails on any divergence: 723 goldens
+over 853 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
 the change they describe and are not restatements of this one. For a migration it answers one
 question — does the rewritten call site produce the same sender calls, settlements, state and
 effects as main did?
 
-It is not a substitute for reading the diff. Four facts bound it, all learned the hard way:
+It is not a substitute for reading the diff. Five facts bound it, all learned the hard way:
 
 - **It was blind to refusal ordering.** Reordering the settings and sibling refusal checks in
   `mobile-new-tab-agent-loader.ts` survives every golden except `probe-new-tab-both-refused` —
@@ -397,7 +397,18 @@ It is not a substitute for reading the diff. Four facts bound it, all learned th
   unsubscribe (`nativeChat.subscribe`, `runtime.clientEvents.subscribe`) is pinned by that payload
   at unmount and needs no such scenario.
 
-`mutants/probe-hole-witness.test.ts` closes the first two and keeps them closed. It asserts the
+- **It was blind to a guard whose empty arm no scenario declared.** Every session recording filled
+  the cell its send is gated on — a measured viewport, a device token, a tab load that resolves — so
+  dropping `viewportRef.current &&`, dropping the device-token conditional beside it in
+  `use-mobile-session-terminal-stream-display.ts`, and dropping the `.catch(() => null)` on
+  `ensureSessionTabs()` in `use-mobile-session-startup.ts` each survived the whole suite. The fix is
+  three scenarios that declare those cells empty, and the lesson generalises past them: a value an
+  adapter holds as a constant is a cell no scenario can empty, so the arm that reads it empty is
+  unreachable until the constant becomes a scenario argument. A stub may also reject where the
+  product awaits it, on the scenario's instruction — that is declaration, not shaping, and it is the
+  only way a refused scope callback is reachable at all.
+
+`mutants/probe-hole-witness.test.ts` closes the first two and the last, and keeps them closed. It asserts the
 hole and the closure together: each probe must kill its mutation _and_ every pre-probe scenario of
 the same operation must still survive it. A probe that stops being load-bearing fails instead of
 lingering.

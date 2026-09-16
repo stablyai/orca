@@ -189,6 +189,29 @@ export const OPERATION_MUTATIONS = {
     before: 'return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null',
     after: 'return repos[0]?.connectionId?.trim() || null'
   },
+  // Sends the presence-lock `client` member whether or not this phone holds a device token, so a
+  // tokenless phone claims the floor under an empty id instead of asking for the mode alone.
+  'display-mode-unconditional-client': {
+    file: 'use-mobile-session-terminal-stream-display.ts',
+    before: `          ...(deviceTokenRef.current
+            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+            : {}),`,
+    after: `          client: { id: deviceTokenRef.current, type: 'mobile' as const },`
+  },
+  // Forwards the viewport cell on every `auto` toggle, including before any surface has measured
+  // one, so the host is told to drive at a null size rather than at the dims it already stored.
+  'display-mode-unmeasured-viewport': {
+    file: 'use-mobile-session-terminal-stream-display.ts',
+    before: `          ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})`,
+    after: `          ...(next === 'auto' ? { viewport: viewportRef.current } : {})`
+  },
+  // Lets a refused tab load reject the startup sequence, so the terminal loads and the activation
+  // timer behind it never run and the route sits on "Loading terminals" with no second chance.
+  'startup-tab-load-rejects-sequence': {
+    file: 'use-mobile-session-startup.ts',
+    before: '      await ensureSessionTabs().catch(() => null)',
+    after: '      await ensureSessionTabs()'
+  },
   // Publishes the settings envelope as the refreshed task runtime settings.
   'task-workspace-envelope': {
     file: 'use-mobile-tasks-workspace-create-actions.tsx',
