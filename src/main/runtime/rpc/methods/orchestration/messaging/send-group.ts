@@ -1,7 +1,7 @@
 import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { resolveGroupAddress } from '../../../../orchestration/groups'
+import { isRecognisedGroupAddress, resolveGroupAddress } from '../../../../orchestration/groups'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import {
@@ -135,6 +135,17 @@ export async function sendGroupMessage(args: {
       )
     }
     return runId
+  }
+
+  // Why a distinct code, and why before anything reads the sender's binding: a misspelled
+  // group resolves to zero handles exactly like a live group with no members, so `@antigravty`
+  // read the same as a correctly addressed pane -- and from a sender bound to no Run it read as
+  // a Run-binding problem, pointing at binding instead of at the typo.
+  if (!isRecognisedGroupAddress(groupAddress)) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Unknown group address: ${groupAddress}. Group addresses are @all, @idle, @worktree:<id>, or @<agent>.`
+    )
   }
 
   // `@worktree:<id>` names one workspace explicitly; every other group means the sender's Run.

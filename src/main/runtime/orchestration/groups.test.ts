@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { isGroupAddress, resolveGroupAddress } from './groups'
+import { isGroupAddress, isRecognisedGroupAddress, resolveGroupAddress } from './groups'
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
+import { ALL_TUI_AGENTS } from '../../../shared/tui-agent-display-names'
 
 function makeSummary(
   handle: string,
@@ -211,5 +212,66 @@ describe('resolveGroupAddress', () => {
       const result = resolveGroupAddress('@unknown', 'term_a', terminals, noStatus)
       expect(result).toEqual([])
     })
+  })
+})
+
+describe('addressable agent coverage', () => {
+  // Ratchet: the addressable set is derived from the canonical agent list, so a new agent
+  // becomes addressable the day it lands instead of waiting for someone to notice a literal.
+  it('routes every canonical agent id to a pane the host resolved as that agent', () => {
+    const unaddressable = ALL_TUI_AGENTS.filter((agent) => {
+      const terminals = [makeSummary('sender'), makeSummary('target', { agentIdentity: agent })]
+      return resolveGroupAddress(`@${agent}`, 'sender', terminals, noStatus).length === 0
+    })
+    expect(unaddressable).toEqual([])
+  })
+
+  it('routes @antigravity to a live Antigravity pane', () => {
+    const terminals = [
+      makeSummary('sender'),
+      makeSummary('ag_pane', { agentIdentity: 'antigravity' })
+    ]
+    expect(resolveGroupAddress('@antigravity', 'sender', terminals, noStatus)).toEqual(['ag_pane'])
+  })
+
+  it('keeps the legacy @mimo alias pointing at the mimo-code identity', () => {
+    const terminals = [
+      makeSummary('sender'),
+      makeSummary('mimo_pane', { agentIdentity: 'mimo-code' })
+    ]
+    expect(resolveGroupAddress('@mimo', 'sender', terminals, noStatus)).toEqual(['mimo_pane'])
+  })
+
+  it('still refuses a title-only match for a newly addressable agent', () => {
+    const terminals = [
+      makeSummary('sender'),
+      makeSummary('codex_pane', { agentIdentity: 'codex', title: 'port the antigravity launcher' })
+    ]
+    expect(resolveGroupAddress('@antigravity', 'sender', terminals, noStatus)).toEqual([])
+  })
+})
+
+describe('isRecognisedGroupAddress', () => {
+  it('separates a misspelled agent group from a recognised one', () => {
+    expect(isRecognisedGroupAddress('@antigravity')).toBe(true)
+    expect(isRecognisedGroupAddress('@antigravty')).toBe(false)
+  })
+
+  it('recognises every canonical agent id and the legacy alias', () => {
+    const unrecognised = ALL_TUI_AGENTS.filter((agent) => !isRecognisedGroupAddress(`@${agent}`))
+    expect(unrecognised).toEqual([])
+    expect(isRecognisedGroupAddress('@mimo')).toBe(true)
+  })
+
+  it('recognises the identity-free group forms', () => {
+    expect(isRecognisedGroupAddress('@all')).toBe(true)
+    expect(isRecognisedGroupAddress('@IDLE')).toBe(true)
+    expect(isRecognisedGroupAddress('@worktree:wt_1')).toBe(true)
+  })
+
+  // Why: `unknown` is the AgentType sentinel for "no agent identified yet", never a pane identity.
+  it('does not recognise the unknown-agent sentinel or a bare handle', () => {
+    expect(isRecognisedGroupAddress('@unknown')).toBe(false)
+    expect(isRecognisedGroupAddress('term_abc')).toBe(false)
   })
 })

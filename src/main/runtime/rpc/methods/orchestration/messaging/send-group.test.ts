@@ -253,6 +253,22 @@ describe('orchestration.send group addresses', () => {
     }
   )
 
+  // Sibling of the case above: when the group itself is misspelled the binding error is the
+  // wrong diagnosis, and it sent the author looking at Run binding instead of at the typo.
+  it('reports an unrecognised group as a typo even from a sender in no Run', async () => {
+    setup(false)
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_loner' ? 'tab_loner:leaf_loner' : null
+    )
+
+    await expect(
+      call('orchestration.send', { from: 'term_loner', to: '@antigravty', subject: 'typo' })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Unknown group address')
+    })
+  })
+
   it('rejects @all from a bound coordinator whose Run has no live Dispatch', async () => {
     setupWithTerminals([makeSummary('term_coord'), makeSummary('term_bystander')])
 
@@ -628,4 +644,45 @@ describe('orchestration.send group addresses', () => {
       expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${dispatch.id}`])
     }
   )
+  it('delivers @antigravity to the live Antigravity worker of the sender Run', async () => {
+    setupWithTerminals([
+      makeSummary('term_coord', { agentIdentity: 'claude' }),
+      makeSummary('term_ag', { agentIdentity: 'antigravity' })
+    ])
+    const dispatch = dispatchWorker('term_ag')
+
+    const result = await call('orchestration.send', {
+      from: 'term_coord',
+      to: '@antigravity',
+      subject: 'status please'
+    })
+
+    expect(result).toMatchObject({
+      recipients: 1,
+      messages: [{ to_handle: `dispatch:${dispatch}` }]
+    })
+  })
+
+  // The defect: a typo and a correctly addressed live pane both resolved to zero handles and
+  // produced the same sentence, so the sender could not tell a misspelling from an empty group.
+  it('separates an unrecognised group name from a recognised group with no members', async () => {
+    setupWithTerminals([
+      makeSummary('term_coord', { agentIdentity: 'claude' }),
+      makeSummary('term_ag', { agentIdentity: 'antigravity' })
+    ])
+    dispatchWorker('term_ag')
+
+    await expect(
+      call('orchestration.send', { from: 'term_coord', to: '@antigravty', subject: 'typo' })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Unknown group address')
+    })
+    await expect(
+      call('orchestration.send', { from: 'term_coord', to: '@droid', subject: 'nobody home' })
+    ).rejects.toMatchObject({
+      code: 'terminal_not_found',
+      message: 'No recipients resolved for group address: @droid'
+    })
+  })
 })
