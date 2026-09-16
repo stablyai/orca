@@ -10,7 +10,7 @@ export type SshRawTransferOptions = {
   writeBuffer?: (
     remotePath: string,
     contents: Buffer,
-    options: { append: boolean; exclusive: boolean }
+    options: { append: boolean; exclusive: boolean; mode?: number }
   ) => Promise<void>
 }
 

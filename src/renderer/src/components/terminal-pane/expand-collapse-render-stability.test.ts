@@ -87,6 +87,7 @@ describe('terminal keyboard effect registration stability', () => {
       fallbackCwd: '',
       expandedPaneIdRef: { current: null },
       setSearchOpen: vi.fn(),
+      onToggleRichInput: vi.fn(),
       onSearchSelectedText: vi.fn(),
       onRequestClosePane: vi.fn(),
       onClearPaneScrollback: vi.fn(),

@@ -93,7 +93,9 @@ export const uiClipboardAndWindowControlsApi = {
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
-  }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+    includeLocalPreview?: boolean
+  }): Promise<string | { path: string; previewSrc?: string } | null> =>
+    ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
   readClipboardImageThumbnail: (): Promise<ClipboardImageThumbnail | null> =>
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
   writeClipboardText: (text: string): Promise<void> =>

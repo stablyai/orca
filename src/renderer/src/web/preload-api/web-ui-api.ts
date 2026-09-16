@@ -9,6 +9,7 @@ import {
   readClipboardImagePngBase64,
   readClipboardImageThumbnail,
   saveClipboardImageAsTempFileInRuntime,
+  createClipboardImageObjectUrl,
   writeWebClipboardText
 } from './web-clipboard-api'
 import {
@@ -122,6 +123,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     saveClipboardImageAsTempFile: async (args?: {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
+      includeLocalPreview?: boolean
     }) => {
       if (!requireActiveEnvironmentOrNull()) {
         return null
@@ -130,7 +132,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       if (!contentBase64) {
         return null
       }
-      return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
+      const path = await saveClipboardImageAsTempFileInRuntime(contentBase64, args)
+      return args?.includeLocalPreview
+        ? { path, previewSrc: createClipboardImageObjectUrl(contentBase64) }
+        : path
     },
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
