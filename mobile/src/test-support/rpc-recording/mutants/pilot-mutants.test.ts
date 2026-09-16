@@ -19,8 +19,11 @@ const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-
 // One mutant per adapter family, so every family's state projection is shown to be load-bearing.
 // `aiVault.history-screen` carries none: every change to what `worktree.ps` publishes also moves
 // the `scopePaths` the next scripted completion asserts, so a mutant aborts the sequence instead of
-// diverging from it — which is why that family's evidence is the reply matrix at `worktree.ps#1`,
-// where all eleven partitions are recorded with their sender args.
+// diverging from it. Do not read that family's reply matrix as an accepted-vs-refused oracle
+// either: the screen paints the same spinner, labels and zero rows either way, so `normal`'s
+// projected state is identical to all seven non-crashing partitions. What holds the family is the
+// next request's `scopePaths` (`["/repo/feature"]` when the rows are read, `[]` when they are not)
+// and the crash channel the three `inner-*` partitions land in.
 const mutants: Record<string, Mutation> = {
   b1: 'race',
   b2: 'acceptance',

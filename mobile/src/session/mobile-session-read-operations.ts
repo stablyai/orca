@@ -28,10 +28,13 @@ export type MobileRuntimeRepoSummary = { id: string; connectionId?: string | nul
 const repoListReader = rpcUncheckedMemberReader('runtime-repo-list', 'repos')
 
 /**
- * The repo list, read for one workspace's connection id. Two call sites want it and disagree about
- * a refusal, so each declares its own operation over the same reader rather than sharing a policy:
- * the new-tab agent loader has nothing to show without it and raises the host's message, while the
- * native-chat readability probe answers "not readable" and lets the screen render.
+ * The repo list. Two call sites share this operation and want different parts of it: the new-tab
+ * agent loader resolves one workspace's connection id, and the tasks route keeps the whole list for
+ * its repo pickers. Neither has anything to show without it, so a refusal raises the host's
+ * message.
+ *
+ * Separate from `nativeChatRepoListRead` over the same method and reader because the readability
+ * probe disagrees about a refusal: it answers "not readable" and lets the screen render.
  */
 export const newTabRepoListRead = bindDeferredRpcOperation(
   defineRpcOperation({
