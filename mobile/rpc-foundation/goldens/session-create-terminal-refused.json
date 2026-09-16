@@ -6,8 +6,8 @@
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "c53d83776f0c166b0fb542c79791d45d5b5e86fd8d751c9b26705973b73fd4f3",
-  "scenarioSha256": "3ff209bfdafb27a88a04dbb50bba86d14105d2e594ed828f4de138d0989e0e5c",
+  "adapterSha256": "d0220444947210a7ee1b1212595303cab5b3137c35723e1ef3d081c2ae3e0f61",
+  "scenarioSha256": "163bc5c1fb41eb5a462015ba6d16406a46e9fbe94c9cf5d7883b3a92bfb8b9e6",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -27,6 +27,14 @@
       },
       "sessionTabs": [],
       "terminals": []
+    },
+    "28112ec44d7c": {
+      "name": "toast",
+      "value": {
+        "durationMs": 1800,
+        "message": "Couldn't run Notes"
+      },
+      "sent": 1
     },
     "4c528a84c114": {
       "activeHandle": "terminal-0",
@@ -154,7 +162,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "11bf871f5dfc",
-          "effects": []
+          "effects": ["28112ec44d7c"]
         }
       }
     ]

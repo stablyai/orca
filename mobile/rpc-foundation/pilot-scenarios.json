@@ -20952,6 +20952,8 @@
           "action": "create",
           "id": "create",
           "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
             "initialPrompt": "review these notes",
             "successToast": "Notes sent",
             "errorToast": "Couldn't run Notes",
@@ -21028,7 +21030,11 @@
       "steps": [
         {
           "action": "create",
-          "id": "create"
+          "id": "create",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
         },
         {
           "checkpoint": "creating"
@@ -21079,6 +21085,8 @@
           "action": "create",
           "id": "create",
           "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
             "errorToast": "Couldn't run Notes"
           }
         },
@@ -21118,7 +21126,11 @@
       "steps": [
         {
           "action": "create",
-          "id": "create"
+          "id": "create",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
         },
         {
           "checkpoint": "creating"
@@ -21141,6 +21153,249 @@
                 "id": "tab-1",
                 "title": "zsh",
                 "terminal": null,
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-without-active-tab",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "worktreeId": "wt-1"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": {
+              "$undefined": true
+            },
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-runs-a-quick-command",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "startupCommand": "pnpm test",
+            "startupCommandDelivery": "shell-ready",
+            "errorToast": "Couldn't run Tests"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "command": "pnpm test",
+            "startupCommandDelivery": "shell-ready",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-launches-an-agent-quick-command",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "agent": "claude",
+            "agentPrompt": "summarize the diff",
+            "errorToast": "Couldn't run Review"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "agentPrompt": "summarize the diff",
+            "agent": "claude",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-ignores-a-second-create-in-flight",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create-again",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "bind": "first-create",
+          "request": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          }
+        },
+        {
+          "checkpoint": "second-create-ignored"
+        },
+        {
+          "complete": "first-create",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
                 "isActive": true
               }
             }

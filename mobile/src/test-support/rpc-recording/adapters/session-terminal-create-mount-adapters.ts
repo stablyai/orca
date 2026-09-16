@@ -7,10 +7,27 @@ import type {
   MobileSessionTabType,
   Terminal
 } from '../../../session/mobile-session-route-types'
+import type { TuiAgent } from '../../../../../src/shared/tui-agent'
 
 const PREVIOUS_HANDLE = 'terminal-0'
-const WORKTREE_ID = 'wt-1'
-const ACTIVE_TAB_ID = 'tab-0'
+
+/**
+ * The agents a scenario may name. `satisfies` keeps the list a subset of the real union, so a
+ * scenario naming an agent the product does not have fails here instead of reaching the wire as an
+ * unchecked string.
+ */
+const DECLARABLE_AGENTS = ['claude', 'codex'] as const satisfies readonly TuiAgent[]
+
+function declaredAgent(value: unknown): TuiAgent | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  const agent = DECLARABLE_AGENTS.find((candidate) => candidate === value)
+  if (!agent) {
+    throw new Error(`Unknown agent: ${String(value)}`)
+  }
+  return agent
+}
 
 /**
  * The New Tab terminal create, and the optional prompt it drops into the terminal it made.
@@ -21,9 +38,15 @@ const ACTIVE_TAB_ID = 'tab-0'
  * the host never restores its desktop dimensions — and an effect is exactly the observation that the
  * hook chose it.
  *
+ * Every member this family puts on the wire comes from the scenario: the worktree, the tab the new
+ * one is inserted after, the four launch options a quick command fills, and the device token the
+ * prompt send carries. An argument the scenario leaves out is a cell the hook sees empty, which is
+ * what lets a golden hold an omission — `afterTabId` is absent on a fresh session and after the
+ * last tab closes, and no adapter constant may decide that.
+ *
  * `clientMutationId` mixes `Date.now()` and `Math.random()`, both pinned by the `Math.random` spy
  * `start()` installs in `vitest-recording-scheduler.ts` — but pinning the sequence is not the whole of determinism here,
- * which is why the mount happens in the factory rather than as a scripted step. React draws one
+ * which is why this family mounts from its first action rather than from a scripted mount step. React draws one
  * `Math.random()` of its own before it ever schedules: `enqueueTask` in `react.development.js`
  * evaluates `("require" + Math.random()).slice(0, 7)` to hide its `require` call from bundlers, once
  * per process and lazily, on the first task it enqueues. `runRecording` flushes through `await act`
@@ -31,8 +54,8 @@ const ACTIVE_TAB_ID = 'tab-0'
  * the create. The create's own draw would then be the second of the seeded sequence on the first
  * recording in a process and the first on every later one, and the two determinism runs would
  * disagree on the recorded key: `Request params mismatch: session.tabs.createTerminal#1`, on
- * `clientMutationId` alone. Mounting in the factory keeps the create ahead of any flush, so its draw
- * is the first of the sequence whether React is warm or cold.
+ * `clientMutationId` alone. Mounting inside the first action keeps the create ahead of any flush, so
+ * its draw is the first of the sequence whether React is warm or cold.
  *
  * That is a workaround for an engine defect, not a property of this family. #21088 pays React's
  * lazy draw when the seed is installed, which makes the position of the mount irrelevant; once it
@@ -55,12 +78,13 @@ export function sessionTerminalCreateMountAdapters(
       let terminals: Terminal[] = []
       let sessionTabs: MobileSessionTab[] = []
       let activeHandle: string | null = PREVIOUS_HANDLE
-      let activeSessionTabId: string | null = ACTIVE_TAB_ID
+      let worktreeId = ''
+      let activeSessionTabId: string | null = null
       let creating = false
       let createError = ''
       const terminalsRef = { current: terminals }
       const activeHandleRef = { current: activeHandle }
-      const activeSessionTabIdRef = { current: activeSessionTabId }
+      const activeSessionTabIdRef: { current: string | null } = { current: null }
       const activeSessionTabTypeRef: { current: MobileSessionTabType | null } = {
         current: 'terminal'
       }
@@ -74,7 +98,7 @@ export function sessionTerminalCreateMountAdapters(
       const hook = hookMount(() => {
         actions = useCreateActions(
           mountFixture<Parameters<typeof useCreateActions>[0]>({
-            worktreeId: WORKTREE_ID,
+            worktreeId,
             client,
             connState: 'connected',
             setTerminals: (update) => {
@@ -125,27 +149,50 @@ export function sessionTerminalCreateMountAdapters(
         )
       })
 
-      hook.mount()
+      let mounted = false
 
       return {
         action(name, args) {
-          if (name === 'create') {
-            // Declared by the scenario, never by this stub: the prompt send carries it as a param.
-            deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
-            const prompt = args.initialPrompt
-            return actions!.handleCreateTerminal(
-              undefined,
-              prompt === undefined
-                ? undefined
-                : {
-                    initialPrompt: String(prompt),
-                    successToast:
-                      args.successToast === undefined ? undefined : String(args.successToast),
-                    errorToast: args.errorToast === undefined ? undefined : String(args.errorToast)
-                  }
-            )
+          if (name !== 'create') {
+            throw new Error(`Unknown terminal create action: ${name}`)
           }
-          throw new Error(`Unknown terminal create action: ${name}`)
+          // Declared by the scenario, never by this stub, because each of these reaches the wire.
+          worktreeId = String(args.worktreeId)
+          activeSessionTabId =
+            typeof args.activeSessionTabId === 'string' ? args.activeSessionTabId : null
+          activeSessionTabIdRef.current = activeSessionTabId
+          deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
+          const agent = declaredAgent(args.agent)
+          if (
+            args.startupCommandDelivery !== undefined &&
+            args.startupCommandDelivery !== 'shell-ready'
+          ) {
+            throw new Error(`Unknown startup delivery: ${String(args.startupCommandDelivery)}`)
+          }
+          // A launch the scenario left empty is no launch at all: the bare New Tab create passes no
+          // options, and that is the arm the structured-provider branch reads.
+          const options = {
+            ...(args.initialPrompt === undefined
+              ? {}
+              : { initialPrompt: String(args.initialPrompt) }),
+            ...(args.successToast === undefined ? {} : { successToast: String(args.successToast) }),
+            ...(args.errorToast === undefined ? {} : { errorToast: String(args.errorToast) }),
+            ...(args.startupCommand === undefined
+              ? {}
+              : { startupCommand: String(args.startupCommand) }),
+            ...(args.startupCommandDelivery === undefined
+              ? {}
+              : { startupCommandDelivery: 'shell-ready' as const }),
+            ...(args.agentPrompt === undefined ? {} : { agentPrompt: String(args.agentPrompt) })
+          }
+          if (!mounted) {
+            mounted = true
+            hook.mount()
+          }
+          return actions!.handleCreateTerminal(
+            agent,
+            Object.keys(options).length === 0 ? undefined : options
+          )
         },
         state: () => ({
           activeHandle,

@@ -7,7 +7,7 @@
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "d0220444947210a7ee1b1212595303cab5b3137c35723e1ef3d081c2ae3e0f61",
-  "scenarioSha256": "fb6fd075206cdaf743bd3a269fc81b1f18e4d5afc06c101aa71fe21db5106195",
+  "scenarioSha256": "f949559b7da5067db91010e40aacf17f3c800dfdee72d31770a848e5ad12e599",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -27,29 +27,7 @@
       },
       "sent": 1
     },
-    "37024426b62f": {
-      "name": "subscribe-terminal",
-      "value": {
-        "handle": "terminal-1"
-      },
-      "sent": 1
-    },
-    "4c528a84c114": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "",
-      "creating": true,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "4cdbced3c669": {
+    "27543c6d25f0": {
       "name": "session.tabs.createTerminal#1",
       "args": [
         {
@@ -61,36 +39,8 @@
           "value": {
             "activate": false,
             "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "4d65bc43b196": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
+            "agent": "claude",
+            "agentPrompt": "summarize the diff",
             "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
             "navigation": "caller",
             "select": true,
@@ -123,6 +73,65 @@
         }
       }
     },
+    "33d71126048e": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "agent": "claude",
+            "agentPrompt": "summarize the diff",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "37024426b62f": {
+      "name": "subscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
+    "39d3cd738a65": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:wt-1\",\"afterTabId\":\"tab-0\",\"clientMutationId\":\"mobile-create:mjuohs00-8ig2hens\",\"agentPrompt\":\"summarize the diff\",\"agent\":\"claude\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
+      "sent": 1
+    },
+    "4c528a84c114": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
     "7b00a14ea8c6": {
       "name": "unsubscribe-terminal",
       "value": {
@@ -133,11 +142,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "d39dd99e13fd": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:wt-1\",\"afterTabId\":\"tab-0\",\"clientMutationId\":\"mobile-create:mjuohs00-8ig2hens\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
     },
     "ea918e983453": {
       "name": "fetch-session-tabs",
@@ -165,13 +169,13 @@
     }
   },
   "recording": {
-    "scenario": "session-create-terminal-replaces-active",
+    "scenario": "session-create-terminal-launches-an-agent-quick-command",
     "checkpoints": [
       {
         "id": "creating",
         "observation": {
-          "sender": ["4cdbced3c669"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["33d71126048e"],
+          "payloads": ["39d3cd738a65"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -182,8 +186,8 @@
       {
         "id": "created",
         "observation": {
-          "sender": ["4d65bc43b196"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["27543c6d25f0"],
+          "payloads": ["39d3cd738a65"],
           "settlements": {
             "create": "eb79a9b3682a"
           },
@@ -194,8 +198,8 @@
       {
         "id": "tabs-refreshed",
         "observation": {
-          "sender": ["4d65bc43b196"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["27543c6d25f0"],
+          "payloads": ["39d3cd738a65"],
           "settlements": {
             "create": "eb79a9b3682a"
           },
