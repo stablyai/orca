@@ -19066,7 +19066,7 @@
         }
       ]
     },
-{
+    {
       "id": "home-host-accounts",
       "operation": "home.host-accounts",
       "version": 1,
@@ -19117,7 +19117,7 @@
         }
       ]
     },
-{
+    {
       "id": "notifications-display-test-accepted",
       "operation": "notifications.display-test-screen",
       "version": 1,
@@ -19157,7 +19157,7 @@
         }
       ]
     },
-{
+    {
       "id": "aivault-history-screen-worktrees",
       "operation": "aiVault.history-screen",
       "version": 1,
@@ -19232,7 +19232,7 @@
         }
       ]
     },
-{
+    {
       "id": "aivault-history-screen-listed",
       "operation": "aiVault.history-screen",
       "version": 1,
@@ -19350,7 +19350,7 @@
         }
       ]
     },
-{
+    {
       "id": "tasks-route-repo-list",
       "operation": "tasks.route-repo-list",
       "version": 1,
@@ -19398,7 +19398,7 @@
         }
       ]
     },
-{
+    {
       "id": "linear-select-workspace",
       "operation": "linear.select-workspace-picker",
       "version": 1,
