@@ -552,7 +552,7 @@ describe('NativeChatToolRun', () => {
     const blocks: NativeChatBlock[] = [
       {
         type: 'tool-call',
-        name: 'AskUserQuestion',
+        name: 'CreateWidget',
         input: { prompt: 'which?' },
         state: 'completed'
       }
@@ -569,7 +569,7 @@ describe('NativeChatToolRun', () => {
     const blocks: NativeChatBlock[] = [
       {
         type: 'tool-call',
-        name: 'AskUserQuestion',
+        name: 'CreateWidget',
         input: { prompt: 'which?' },
         state: 'completed'
       }

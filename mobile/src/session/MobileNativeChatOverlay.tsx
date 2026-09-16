@@ -73,6 +73,9 @@ export function MobileNativeChatOverlay({
         agentWorking={controller.nativeChatAgentWorking}
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}
+        turnIndicator={controller.nativeChatTurnIndicator}
+        workingStartedAt={controller.nativeChatWorkingStartedAt}
+        settledTurns={controller.nativeChatSettledTurns}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}
@@ -80,6 +83,7 @@ export function MobileNativeChatOverlay({
         onDismissAsk={controller.dismissNativeChatAsk}
         onAnswerAsk={controller.handleNativeChatAnswerAsk}
         onCancelAsk={controller.handleNativeChatCancelAsk}
+        onCancelPrompt={controller.handleNativeChatCancelPrompt}
         question={controller.nativeChatQuestion}
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}

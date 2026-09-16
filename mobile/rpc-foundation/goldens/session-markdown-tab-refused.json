@@ -1,0 +1,91 @@
+{
+  "operation": "session.tab-documents",
+  "family": "session.tab-documents",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "63227f28110e90acac78058baa875b1bc7f8895b5033e47016a2ffa9f42f66ce",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "287a8e550afb": {
+      "name": "markdown.readTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "tab_not_found",
+            "message": "No such tab"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "877720375363": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "message": "Couldn't load markdown",
+          "status": "error"
+        }
+      }
+    },
+    "af5666510c34": {
+      "name": "markdown.readTab#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}",
+      "sent": 1
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-markdown-tab-refused",
+    "checkpoints": [
+      {
+        "id": "errored",
+        "observation": {
+          "sender": ["287a8e550afb"],
+          "payloads": ["af5666510c34"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

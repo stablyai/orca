@@ -1,5 +1,4 @@
-import { z } from 'zod'
-import { defineMethod, type RpcAnyMethod } from '../../core'
+import { defineMethod } from '../../core'
 import { TerminalHandle } from './unary-schemas'
 import {
   TerminalSetAutoRestoreFit,
@@ -8,8 +7,9 @@ import {
   TerminalUpdateViewport
 } from './viewport-schemas'
 import { updateViewportForClient } from './terminal-viewport-update'
+import { TerminalGetAutoRestoreFitParams } from '../../../../../shared/rpc-contract/terminal-viewport-methods-params'
 
-export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS: RpcAnyMethod[] = [
+export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
     name: 'terminal.setDisplayMode',
     params: TerminalSetDisplayMode,
@@ -78,7 +78,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS: RpcAnyMethod[] = [
   })
 ]
 
-export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS: RpcAnyMethod[] = [
+export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
@@ -105,7 +105,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.getAutoRestoreFit',
-    params: z.object({}),
+    params: TerminalGetAutoRestoreFitParams,
     handler: async (_params, { runtime }) => ({
       ms: runtime.getMobileAutoRestoreFitMs()
     })

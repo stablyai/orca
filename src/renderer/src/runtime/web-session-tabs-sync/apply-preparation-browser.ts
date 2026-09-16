@@ -16,6 +16,7 @@ import {
   sameOpenFiles,
   webSessionOpenFilesForWorktree
 } from './state-equality-files'
+import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -35,6 +36,9 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const publishedAgentSessionIds = new Set(
+    snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
+  )
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const readyBrowserTabs = reconcilesNonAgentTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
   const nextRemoteBrowserPageIds = new Set(readyBrowserTabs.map((tab) => tab.browserPageId))
@@ -170,7 +174,12 @@ export function prepareWebSessionTabsSnapshotBrowser(
   advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
-      return false
+      // A matching host row is authoritative; retaining the provisional tab beside its mirror
+      // would briefly render two panes before lifecycle publication is recorded.
+      return (
+        !publishedAgentSessionIds.has(tab.entityId) &&
+        shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId)
+      )
     }
     if (tab.contentType === 'browser') {
       return (

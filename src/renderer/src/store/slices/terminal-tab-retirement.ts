@@ -9,6 +9,7 @@ import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { locateTerminalTab } from '../terminals/terminal-tab-location'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
 
@@ -131,7 +132,7 @@ export function isTerminalTabPresent(
   state: Pick<AppState, 'tabsByWorktree'>,
   tabId: string
 ): boolean {
-  return Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
+  return locateTerminalTab(state.tabsByWorktree, tabId) !== null
 }
 
 export function buildTerminalTabRetirementPlan(

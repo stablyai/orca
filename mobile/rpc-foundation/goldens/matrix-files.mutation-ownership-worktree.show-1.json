@@ -1,0 +1,749 @@
+{
+  "operation": "files.mutation-ownership",
+  "family": "files.mutation-ownership",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "0bf3b17048bceb0bc8592405facd99cb8086274509206d9e55cd589a05d7415f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "06cbb9a1b167": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "0b4d42954d52": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "2588fd63a157": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of undefined (reading 'worktree')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "29bfbe94cca9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
+      }
+    },
+    "2f24cdd633b5": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"target-1\"}}",
+      "sent": 3
+    },
+    "2fa02ab5402f": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "39a0b3c0e319": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "518ec57c381a": {
+      "ownership": "uncaptured"
+    },
+    "533d020d6123": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "6116946241ca": {
+      "name": "ssh.getState#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "target-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "state": {
+              "connectionGeneration": 3,
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "target-1"
+            }
+          }
+        }
+      }
+    },
+    "6178f3695366": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Couldn't verify the SSH connection. Reconnect the host and try again.",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "6ef43f81f7e3": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "hostId": "ssh:target-1"
+            }
+          }
+        }
+      }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "8845bcbdc51b": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a56852d6836b": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["files.mutation-ownership.v1"]
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b5447f4dd931": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of null (reading 'worktree')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "bc119660f0c1": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "bd84dadd27c7": {
+      "ownership": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
+      }
+    },
+    "c6aa5c0a7bd1": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "cff8b7a5e7ce": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "e7e6fb5e264b": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 2
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "fc05e7103b6c": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "fd50303f30ce": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-files.mutation-ownership-worktree.show-1",
+    "checkpoints": [
+      {
+        "id": "files-ownership-ssh.prelude:status-pending",
+        "observation": {
+          "sender": ["bc119660f0c1"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "capture": "9270aeb7d9c6"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.normal:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "6ef43f81f7e3", "6116946241ca"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b", "2f24cdd633b5"],
+          "settlements": {
+            "capture": "29bfbe94cca9"
+          },
+          "state": "bd84dadd27c7",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.result-absent:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "533d020d6123"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "2588fd63a157"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.result-null:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "39a0b3c0e319"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "b5447f4dd931"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "06cbb9a1b167"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "6178f3695366"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "8845bcbdc51b"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "6178f3695366"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "2fa02ab5402f"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "6178f3695366"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.outer-refused:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "cff8b7a5e7ce"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "32a7c0ae7918"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "0b4d42954d52"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "f3b516f62081"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.method-not-found:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "c6aa5c0a7bd1"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "b948e8307e81"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.transport-rejection:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "fd50303f30ce"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "a947768bc0ed"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "fc05e7103b6c"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "settlements": {
+            "capture": "c7584e82c72f"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

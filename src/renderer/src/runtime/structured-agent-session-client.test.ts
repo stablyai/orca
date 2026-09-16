@@ -1,12 +1,17 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
   call: vi.fn(),
-  supportsCapability: vi.fn()
+  supportsCapability: vi.fn(),
+  readLocalCapabilities: vi.fn(),
+  ensureLocalCapabilities: vi.fn()
 }))
 
 vi.mock('./runtime-environment-revision', () => ({
@@ -17,11 +22,49 @@ vi.mock('./runtime-rpc-client', () => ({
   callRuntimeRpc: mocks.call,
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
+vi.mock('./local-runtime-capabilities', () => ({
+  readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalCapabilities,
+  ensureLocalRuntimeCapabilities: mocks.ensureLocalCapabilities
+}))
 
 import {
   callStructuredAgentSession,
-  subscribeStructuredAgentSession
+  subscribeStructuredAgentSession,
+  supportsStructuredAgentSessionPromptCancel
 } from './structured-agent-session-client'
+
+describe('structured prompt cancellation capability', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.readLocalCapabilities.mockReturnValue(null)
+    mocks.ensureLocalCapabilities.mockResolvedValue(null)
+  })
+
+  it('uses the local status cache and fails closed until the host answers', async () => {
+    const target = { kind: 'local' } as const
+    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(false)
+    mocks.ensureLocalCapabilities.mockResolvedValue([
+      AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY
+    ])
+    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(true)
+    mocks.readLocalCapabilities.mockReturnValue([AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY])
+    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(true)
+    expect(mocks.ensureLocalCapabilities).toHaveBeenCalledTimes(2)
+  })
+
+  it('checks the selected remote runtime and downgrades on absent or failed capability', async () => {
+    const target = { kind: 'environment', environmentId: 'ssh-env-1' } as const
+    mocks.supportsCapability.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(true)
+    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(false)
+    mocks.supportsCapability.mockRejectedValue(new Error('Disconnected'))
+    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(false)
+    expect(mocks.supportsCapability).toHaveBeenCalledWith(
+      'ssh-env-1',
+      AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY
+    )
+  })
+})
 
 describe('callStructuredAgentSession rewind capability', () => {
   const target = { kind: 'environment', environmentId: 'env-1' } as const

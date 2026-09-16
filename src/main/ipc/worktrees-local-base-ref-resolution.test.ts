@@ -1,3 +1,4 @@
+import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import {
@@ -112,7 +113,10 @@ describe('registerWorktreeHandlers', () => {
     })
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
-    runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockReturnValue(pendingFetch)
+    runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockImplementation(() => {
+      expect(resolveGitAdmissionTier()).toBe('interactive')
+      return pendingFetch
+    })
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -270,7 +274,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'improve-dashboard',
       'develop',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -331,7 +337,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/slash-local-base',
       'slash-local-base',
       'team/feature',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -383,7 +391,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/offline-local-main',
       'offline-local-main',
       'main',
-      false
+      false,
+      false,
+      {}
     )
   })
 

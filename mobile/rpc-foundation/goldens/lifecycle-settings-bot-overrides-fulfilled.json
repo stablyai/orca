@@ -1,0 +1,327 @@
+{
+  "operation": "settings.bot-overrides",
+  "family": "settings.bot-overrides",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "eb80283956c93849778f23cbabf1dbf83b72744197af4f6f50335b2fc1590d87",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "090c88478661": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "271aee91b48d": {
+      "name": "settings.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 2
+    },
+    "4f53cda18c2b": [],
+    "5c52bc3f9e55": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 1
+    },
+    "7ad8a0996352": {
+      "name": "settings.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "7ca23c4c946b": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    },
+    "d52c8e96e222": ["bot-user"],
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "lifecycle-settings-bot-overrides-fulfilled",
+    "checkpoints": [
+      {
+        "id": "settings-bot-overrides-fulfilled.prelude:settings-pending",
+        "observation": {
+          "sender": ["090c88478661"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.reset-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["090c88478661", "7ad8a0996352"],
+          "payloads": ["5c52bc3f9e55", "271aee91b48d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-reset": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.reset-before-1:settled",
+        "observation": {
+          "sender": ["7ca23c4c946b", "7ad8a0996352"],
+          "payloads": ["5c52bc3f9e55", "271aee91b48d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-reset": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.reset-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["7ca23c4c946b", "7ad8a0996352"],
+          "payloads": ["5c52bc3f9e55", "271aee91b48d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-reset": "eb79a9b3682a"
+          },
+          "state": "d52c8e96e222",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.reset-after-1:settled",
+        "observation": {
+          "sender": ["7ca23c4c946b", "7ad8a0996352"],
+          "payloads": ["5c52bc3f9e55", "271aee91b48d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-reset": "eb79a9b3682a"
+          },
+          "state": "d52c8e96e222",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.unmount-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["090c88478661"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.unmount-before-1:settled",
+        "observation": {
+          "sender": ["7ca23c4c946b"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.unmount-before-1:remounted",
+        "observation": {
+          "sender": ["7ca23c4c946b", "7ad8a0996352"],
+          "payloads": ["5c52bc3f9e55", "271aee91b48d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.unmount-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["7ca23c4c946b"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "d52c8e96e222",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.unmount-after-1:settled",
+        "observation": {
+          "sender": ["7ca23c4c946b"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "d52c8e96e222",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.unmount-after-1:remounted",
+        "observation": {
+          "sender": ["7ca23c4c946b", "7ad8a0996352"],
+          "payloads": ["5c52bc3f9e55", "271aee91b48d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.blur-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["090c88478661"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.blur-before-1:settled",
+        "observation": {
+          "sender": ["7ca23c4c946b"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "d52c8e96e222",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.blur-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["7ca23c4c946b"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "d52c8e96e222",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-bot-overrides-fulfilled.blur-after-1:settled",
+        "observation": {
+          "sender": ["7ca23c4c946b"],
+          "payloads": ["5c52bc3f9e55"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "d52c8e96e222",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

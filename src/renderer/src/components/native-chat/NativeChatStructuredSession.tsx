@@ -1,34 +1,28 @@
 import { useMemo, useRef, useState } from 'react'
-import { RotateCcw } from 'lucide-react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { Button } from '@/components/ui/button'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
+import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useStructuredAgentSession } from './use-structured-agent-session'
-import { translate } from '@/i18n/i18n'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
-
-type StoppingBackgroundTasks = {
-  sessionId: string
-  taskIds: ReadonlySet<string>
-  all: boolean
-}
-
-const NO_STOPPING_TASKS: ReadonlySet<string> = new Set()
+import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
+import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
+import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
+import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
+import { NativeChatDeliveryRetry } from './NativeChatDeliveryRetry'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -37,10 +31,24 @@ function encodeQuestionAnswer(questionId: string, answer: string): string {
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
-  const controller = useStructuredAgentSession(props)
+  const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
+  const provisionalLaunch = useNativeChatProvisionalLaunch(
+    fileLinkContext?.worktreeId,
+    props.sessionId
+  )
+  const controller = useStructuredAgentSession({
+    ...props,
+    transportEnabled: provisionalLaunch.transportEnabled
+  })
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({
+    terminalTabId: props.tabId,
+    agent: props.agent,
+    messages: controller.messages,
+    // Why: the controller starts at `idle`, before any read; like the legacy view's unsettled
+    // phases, that empty list must not become the draft's turn baseline.
+    transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
+  })
   const [composerError, setComposerError] = useState<string | null>(null)
-  const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
-    useState<StoppingBackgroundTasks | null>(null)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -89,16 +97,28 @@ export function NativeChatStructuredSession(
   )
   const viewState = selectNativeChatViewState(session)
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
-  const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const activeStoppingBackgroundTasks =
-    stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
+  const cancelPrompt = () => {
+    if (controller.turnId && prompt) {
+      void controller.cancel(controller.turnId, {
+        itemId: prompt.itemId,
+        expectedRevision: prompt.revision
+      })
+    }
+  }
+  useNativeChatComposerRevealFocus({
+    rootRef,
+    composerRef,
+    isVisible: props.isVisible,
+    isFocusedGroup: props.isFocusedGroup,
+    composerReady: prompt === null
+  })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const questions =
     questionBody?.questions ??
@@ -115,12 +135,6 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
-  const retryableOutboxEntry =
-    controller.outbox.find((entry) => entry.state === 'unconfirmed') ??
-    controller.outbox.find(
-      (entry) => entry.clientMessageId === controller.blockedClientMessageId
-    ) ??
-    null
   const structuredTransport = useMemo(
     () => ({
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
@@ -193,11 +207,14 @@ export function NativeChatStructuredSession(
           <NativeChatMessageList
             session={session}
             journalItems={controller.journalItems}
+            isVisible={props.isVisible}
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
-            workingStartedAt={null}
+            workingStartedAt={controller.workingStartedAt}
+            settledTurns={controller.settledTurns}
             showTurnStatus
+            showLiveTurnActivity={prompt === null}
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}
             allowFileUriLinks={onLinkClick !== undefined}
@@ -216,6 +233,7 @@ export function NativeChatStructuredSession(
             }))
           }}
           onChoose={(optionId) => void controller.respond(prompt, optionId)}
+          onCancel={cancelPrompt}
         />
       ) : null}
       {prompt && questionBody ? (
@@ -265,88 +283,26 @@ export function NativeChatStructuredSession(
               void controller.respond(prompt, optionId)
             }
           }}
-          onCancel={() => {
-            if (controller.turnId) {
-              void controller.cancel(controller.turnId)
-            }
-          }}
+          onCancel={cancelPrompt}
         />
       ) : null}
-      {retryableOutboxEntry ? (
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-1 text-xs text-muted-foreground">
-          <span>
-            {retryableOutboxEntry.state === 'unconfirmed'
-              ? translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
-                  'Message delivery is unconfirmed.'
-                )
-              : translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
-                  'Message was not sent.'
-                )}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => controller.retry(retryableOutboxEntry.clientMessageId)}
-          >
-            <RotateCcw className="size-3" />
-            {translate(
-              'auto.components.native.chat.NativeChatStructuredSession.a5e7f14068',
-              'Retry'
-            )}
-          </Button>
-        </div>
-      ) : null}
-      {controller.error || composerError ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
-          {controller.error ?? composerError}
-        </p>
-      ) : null}
-      {controller.backgroundTasks.show ? (
-        <NativeChatBackgroundTasksStatus
-          isVisible={props.isVisible}
-          tasks={controller.backgroundTasks.tasks}
-          settledTasks={controller.backgroundTasks.settledTasks}
-          indicatorActive={controller.backgroundTasks.isMonitoring}
-          supportsTaskStop={controller.backgroundTasks.supportsStop}
-          supportsStopAll={controller.backgroundTasks.supportsStopAll}
-          stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
-          stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
-          onStop={(taskId) => {
-            const targetSessionId = props.sessionId
-            setStoppingBackgroundTasks((current) => {
-              const taskIds = new Set(
-                current?.sessionId === targetSessionId ? current.taskIds : NO_STOPPING_TASKS
-              )
-              if (taskId) {
-                taskIds.add(taskId)
-              }
-              return {
-                sessionId: targetSessionId,
-                taskIds,
-                all: taskId ? current?.sessionId === targetSessionId && current.all : true
-              }
-            })
-            void controller.stopBackgroundTask(taskId).finally(() => {
-              setStoppingBackgroundTasks((current) => {
-                if (current?.sessionId !== targetSessionId) {
-                  return current
-                }
-                const taskIds = new Set(current.taskIds)
-                if (taskId) {
-                  taskIds.delete(taskId)
-                }
-                const all = taskId ? current.all : false
-                return taskIds.size === 0 && !all
-                  ? null
-                  : { sessionId: targetSessionId, taskIds, all }
-              })
-            })
-          }}
-        />
-      ) : null}
+      <NativeChatDeliveryRetry
+        outbox={controller.outbox}
+        blockedClientMessageId={controller.blockedClientMessageId}
+        retry={controller.retry}
+      />
+      <NativeChatLaunchRetry
+        lifecycle={provisionalLaunch.lifecycle}
+        onRetry={provisionalLaunch.retry}
+      />
+      <NativeChatStructuredSessionStatus
+        sessionId={props.sessionId}
+        error={controller.error}
+        composerError={composerError}
+        isVisible={props.isVisible}
+        backgroundTasks={controller.backgroundTasks}
+        stopBackgroundTask={controller.stopBackgroundTask}
+      />
       {prompt ? null : (
         <NativeChatComposer
           ref={composerRef}
@@ -364,6 +320,7 @@ export function NativeChatStructuredSession(
             }
           }}
           structuredTransport={structuredTransport}
+          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
         />
       )}
       {paneCommands.menu}

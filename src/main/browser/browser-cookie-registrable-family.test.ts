@@ -21,9 +21,10 @@ describe('registrableFamily', () => {
     expect(registrableFamily(host)).toBe(expected)
   })
 
-  // Why: psl treats an IPv4 literal as a dotted DNS name — psl.parse('127.0.0.1').domain is '0.1'.
-  // These pass only because the IP check runs on normalizeCookieDomain's canonicalised output.
-  // Moving the check before normalisation reintroduces a wrong, destructive family.
+  // Why: the suffix parser reads a non-dotted-quad IPv4 spelling as a DNS name —
+  // tldts.parse('127.1').domain is '127.1' and tldts.parse('2130706433').domain is null. These pass
+  // only because the IP check runs on normalizeCookieDomain's canonicalised output. Moving the check
+  // before normalisation reintroduces a wrong, destructive family.
   it.each([
     ['127.0.0.1', '127.0.0.1'],
     ['192.168.1.1', '192.168.1.1'],
@@ -32,15 +33,15 @@ describe('registrableFamily', () => {
     ['2130706433', '127.0.0.1'],
     ['0x7f.1', '127.0.0.1'],
     ['127.0.0.1.', '127.0.0.1'],
-    // Octal, and 8.0.0.1 is the correct reading — psl would have produced '0.1'.
+    // Octal, and 8.0.0.1 is the correct reading — unnormalised, this parses as a DNS name.
     ['010.0.0.1', '8.0.0.1']
   ])('recognises the IPv4 literal %s as %s', (host, expected) => {
     expect(registrableFamily(host)).toBe(expected)
   })
 
   // Why: isIP('[::1]') is 0, so the bracketed form needs its own branch. Without it these fall
-  // through to psl, which throws, which happens to return the host — right answer, wrong reason,
-  // and it stops being right the moment the error branch is touched.
+  // through to the parser, which strips the brackets and reports no suffix — the unlisted path then
+  // happens to return the host. Right answer, wrong reason, and only while that path is untouched.
   it.each([
     ['[::1]', '[::1]'],
     ['[2001:db8::1]', '[2001:db8::1]']

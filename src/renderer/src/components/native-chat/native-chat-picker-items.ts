@@ -21,6 +21,8 @@ export type NativeChatPickerItem =
       /** Exactly what a pick inserts — the form the agent invokes. */
       token: string
       description?: string
+      /** How the provider says the command is invoked, e.g. `<objective>`. */
+      argumentHint?: string
       skillCollision: boolean
     }
   | {
@@ -80,6 +82,9 @@ export function buildNativeChatPickerItems(
         name: command.name,
         token: `/${command.name}`,
         description: command.description ? sanitizePickerText(command.description, 240) : undefined,
+        argumentHint: command.argumentHint
+          ? sanitizePickerText(command.argumentHint, 80)
+          : undefined,
         skillCollision: sharedSigil && skillNames.has(command.name)
       },
       stableOrder: index

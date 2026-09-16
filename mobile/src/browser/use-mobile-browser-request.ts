@@ -1,7 +1,18 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import { browserErrorMessage, shouldSurfaceBrowserError } from './mobile-browser-frame-state'
+
+export type BrowserPageParams = { worktree: string; page: string }
+/**
+ * One command against the current page. It receives the client, the page params and the send
+ * options rather than choosing them, so the page guard, the busy flag and the 15 s default live
+ * here for every command instead of once per call site.
+ */
+export type BrowserPageCommandSend = (
+  client: RpcClient,
+  base: BrowserPageParams,
+  options: SendRequestOptions
+) => Promise<unknown>
 
 type BrowserRequestArgs = {
   busyRef: { current: boolean }
@@ -13,7 +24,7 @@ type BrowserRequestArgs = {
 }
 export function useMobileBrowserRequest(args: BrowserRequestArgs) {
   const { busyRef, client, pageId, setBusy, setError, worktreeId } = args
-  const pageParams = useCallback(() => {
+  const pageParams = useCallback((): BrowserPageParams | null => {
     if (!pageId) {
       return null
     }
@@ -25,8 +36,7 @@ export function useMobileBrowserRequest(args: BrowserRequestArgs) {
 
   const sendBrowserRequest = useCallback(
     async (
-      method: string,
-      params: Record<string, unknown> = {},
+      send: BrowserPageCommandSend,
       opts: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number } = {}
     ): Promise<unknown | null> => {
       const base = pageParams()
@@ -38,16 +48,9 @@ export function useMobileBrowserRequest(args: BrowserRequestArgs) {
         setBusy(true)
       }
       try {
-        const response = await client.sendRequest(
-          method,
-          { ...base, ...params },
-          { timeoutMs: opts.timeoutMs ?? 15_000 }
-        )
-        if (!response.ok) {
-          throw new Error((response as RpcFailure).error.message)
-        }
+        const result = await send(client, base, { timeoutMs: opts.timeoutMs ?? 15_000 })
         setError(null)
-        return (response as RpcSuccess).result
+        return result
       } catch (err) {
         const message = browserErrorMessage(err, 'Browser command failed')
         if (!opts.suppressError && shouldSurfaceBrowserError(message)) {

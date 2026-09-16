@@ -1,0 +1,263 @@
+{
+  "operation": "notifications.desktop-stream",
+  "family": "notifications.desktop-stream",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "eacf859143588ae6bee2804975d642b6c1088d57ae77ffe298620250d9a9f0e4",
+  "scenarioSha256": "0495c25d6e5d8a84fe4192d7aa0e2901fe86ede19ac9c4d72dee27da6694878b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ac95f8a19be": {
+      "name": "device-store.setItem",
+      "value": {
+        "key": "orca:pushDismissalWatermarks:v1",
+        "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-2\\\"]\",\"seq\":8,\"expiresAt\":1767312000000}]"
+      },
+      "sent": 2
+    },
+    "45cd4d574823": {
+      "name": "notifications.getMissedSince#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.getMissedSince\",\"params\":{\"lastSeenSeq\":9007199254740991,\"deliveredPushes\":[{\"notificationId\":\"note-1\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":7},{\"notificationId\":\"note-2\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":8}]}}",
+      "sent": 2
+    },
+    "5359579cc62d": {
+      "running": true
+    },
+    "58767661be83": {
+      "name": "notifications.subscribe#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.subscribe\",\"params\":{\"includeDesktopSuppressed\":true}}",
+      "sent": 1
+    },
+    "5c8c44134852": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-2",
+                "notificationSeq": 8
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "dismissedPushes": []
+          }
+        }
+      }
+    },
+    "736ecc4aaa66": {
+      "name": "notifications.subscribe#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.subscribe\",\"params\":{\"includeDesktopSuppressed\":true}}",
+      "sent": 0
+    },
+    "8e41aa274dd7": {
+      "name": "notifications.unsubscribe#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}",
+      "sent": 3
+    },
+    "a0b2bcfcde77": {
+      "running": false
+    },
+    "b00f677bd438": {
+      "name": "notifications.unsubscribe#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unsubscribe"
+        },
+        {
+          "name": "params",
+          "value": {
+            "subscriptionId": "sub-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "unsubscribed": true
+          }
+        }
+      }
+    },
+    "d6ca3d9d05d8": {
+      "name": "notifications.getMissedSince#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.getMissedSince\",\"params\":{\"lastSeenSeq\":9007199254740991,\"deliveredPushes\":[{\"notificationId\":\"note-1\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":7},{\"notificationId\":\"note-2\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":8}]}}",
+      "sent": 1
+    },
+    "eadd531c1068": {
+      "name": "notification-tray.dismiss",
+      "value": {
+        "identifier": "tray-2"
+      },
+      "sent": 2
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f3ce12403bbb": {
+      "name": "notifications.getMissedSince#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-2",
+                "notificationSeq": 8
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "dismissedPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-2",
+                "notificationSeq": 8
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "notifications-desktop-stream-replayed",
+    "checkpoints": [
+      {
+        "id": "ready",
+        "observation": {
+          "sender": ["5c8c44134852"],
+          "payloads": ["736ecc4aaa66", "d6ca3d9d05d8"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": []
+        }
+      },
+      {
+        "id": "re-subscribed",
+        "observation": {
+          "sender": ["5c8c44134852"],
+          "payloads": ["736ecc4aaa66", "d6ca3d9d05d8", "58767661be83"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": []
+        }
+      },
+      {
+        "id": "replayed",
+        "observation": {
+          "sender": ["5c8c44134852", "f3ce12403bbb"],
+          "payloads": ["736ecc4aaa66", "d6ca3d9d05d8", "58767661be83", "45cd4d574823"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["0ac95f8a19be", "eadd531c1068"]
+        }
+      },
+      {
+        "id": "stopped",
+        "observation": {
+          "sender": ["5c8c44134852", "f3ce12403bbb", "b00f677bd438"],
+          "payloads": [
+            "736ecc4aaa66",
+            "d6ca3d9d05d8",
+            "58767661be83",
+            "45cd4d574823",
+            "8e41aa274dd7"
+          ],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["0ac95f8a19be", "eadd531c1068"]
+        }
+      }
+    ]
+  }
+}

@@ -427,6 +427,27 @@ describe('structured agent session status projection', () => {
       { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
     ])
   })
+
+  it('projects a turn record to no message', () => {
+    const turn = item('turn', 1, {
+      kind: 'turn',
+      turnId: 't1',
+      state: 'completed',
+      startedAt: 1_000,
+      completedAt: 4_000
+    })
+
+    expect(projectStructuredItemToNativeChat(turn)).toBeNull()
+  })
+
+  it('projects an item kind this build does not know to no message, never a text bubble', () => {
+    const unknown = item('future', 1, {
+      kind: 'future-kind',
+      text: 'a newer host wrote this'
+    } as unknown as AgentJournalRenderItem['body'])
+
+    expect(projectStructuredItemToNativeChat(unknown)).toBeNull()
+  })
 })
 
 describe('notice projection for desktop and mobile consumers', () => {
@@ -454,6 +475,7 @@ describe('notice projection for desktop and mobile consumers', () => {
 
 it('preserves optional tool annotations for desktop and mobile projection', () => {
   const metadata = {
+    callId: 'call-1',
     exitCode: 127,
     durationMs: 400,
     webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]

@@ -3,13 +3,19 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 function frame(id: number, status: string, overrides: { kind?: string; truncated?: boolean } = {}) {

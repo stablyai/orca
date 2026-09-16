@@ -35,6 +35,7 @@ it('validates large restored MRU lists with linear tab-order reads', () => {
       if (typeof key === 'string' && /^\d+$/.test(key)) {
         reads += 1
       }
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
       return Reflect.get(target, key, receiver)
     }
   })

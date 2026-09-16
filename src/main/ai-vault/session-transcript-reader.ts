@@ -3,7 +3,10 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseAgentSessionFile, parserPublishesMessages } from './session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
-import type { SessionParseResumePoint } from './session-parse-cache-store'
+import {
+  invalidateSessionParseCacheEntry,
+  type SessionParseResumePoint
+} from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
 
 const NEWLINE_BYTE = 0x0a
@@ -30,6 +33,24 @@ export type ResumableTranscriptRead = {
 }
 
 /**
+ * Ask for the next read of `path` to be a whole-file `replace`.
+ *
+ * Why this lives here: a consumer never chooses its own mode. The reader picks
+ * `append` or `replace` from the resume point the session list left behind, so a
+ * consumer that declined an append has no way to get the span it missed — with
+ * an empty index and a warm parse cache, every read arrives as `append`, every
+ * one is declined, and nothing is ever indexed. Dropping the resume point is the
+ * one lever that changes the next read's mode, and only the reader's own cache
+ * owns it.
+ *
+ * The cost is a re-parse for the session list too. That is the honest price of a
+ * second consumer being behind, and it is paid once per file rather than per scan.
+ */
+export function requestWholeTranscriptRead(path: string): void {
+  invalidateSessionParseCacheEntry(path)
+}
+
+/**
  * Read an append-only transcript, resuming from `resume` when the file only
  * grew and the recorded offset still sits on a line boundary. Anything else
  * (a rewrite, a truncation, a platform change) re-reads the whole file.
@@ -47,6 +68,9 @@ export async function readResumableTranscript(args: {
     resume !== null &&
     typeof file.sizeBytes === 'number' &&
     file.sizeBytes >= resume.byteOffset &&
+    file.mtimeMs >= resume.mtimeMs &&
+    // A changed timestamp without growth signals a rewrite, even at a valid line boundary.
+    (file.mtimeMs === resume.mtimeMs || file.sizeBytes > (resume.sizeBytes ?? resume.byteOffset)) &&
     (resume.byteOffset === 0 || (await endsWithNewlineAt(file.path, resume.byteOffset)))
 
   // Clone before consuming: a failed read must not corrupt the cached state,
@@ -70,7 +94,10 @@ export async function readResumableTranscript(args: {
   channel.beginRead({
     candidate: args.candidate,
     mode: canResume ? 'append' : 'replace',
-    previousByteOffset: startOffset
+    previousByteOffset: startOffset,
+    // Read by a consumer during the read, not here: the fold has decoded
+    // nothing yet at this point of a whole-file read.
+    identity: () => state.identity?.() ?? null
   })
   try {
     const readResult = await consumeCompleteJsonlLines({
@@ -103,7 +130,13 @@ export async function readResumableTranscript(args: {
     channel.finishRead({ session, byteOffset: readResult.consumedThrough, incomplete: false })
     return {
       session,
-      resume: { state, byteOffset: readResult.consumedThrough, channel }
+      resume: {
+        state,
+        byteOffset: readResult.consumedThrough,
+        mtimeMs: file.mtimeMs,
+        sizeBytes: file.sizeBytes,
+        channel
+      }
     }
   } catch (error) {
     channel.finishRead({ session: null, byteOffset: startOffset, incomplete: true })

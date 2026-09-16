@@ -59,9 +59,14 @@ type CacheEntry = {
   startedAt: number
 }
 
+declare const inflightTokenBrand: unique symbol
+
+/** Identity token for one lookup; only ever compared by reference. */
+type InflightToken = { readonly [inflightTokenBrand]?: never }
+
 type InflightRecord = {
   /** Identity, so a detached lookup can only ever clear its own entry. */
-  token: object
+  token: InflightToken
   startedAt: number
   promise: Promise<HostedReviewInfo | null>
   /** Releases the callers and unpins the branch; idempotent. */
@@ -154,7 +159,7 @@ function storeEntry(key: string, entry: CacheEntry): void {
 }
 
 /** Clears the key's in-flight record only if it is still this lookup's. */
-function releaseInflight(key: string, token: object): boolean {
+function releaseInflight(key: string, token: InflightToken): boolean {
   if (inflight.get(key)?.token !== token) {
     return false
   }
@@ -271,7 +276,7 @@ function startLookup(
 ): Promise<HostedReviewInfo | null> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
-  const token = {}
+  const token: InflightToken = {}
   /** The deadline released the callers; the lookup itself runs on, detached. */
   let timedOut = false
   let completed = false

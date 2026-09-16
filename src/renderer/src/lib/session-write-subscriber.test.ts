@@ -389,6 +389,43 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('ignores recovery-ledger-only changes', () => {
+    // Why: the ledger is stripped from the persisted session, so churning it
+    // must not rebuild and rewrite the durable payload on every remount.
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('bash')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
+            recovery: {
+              attemptedAt: [1],
+              generation: 1,
+              outcome: 'pending',
+              startedAt: 1,
+              reason: 'reattach-unverifiable',
+              tabGeneration: 0
+            }
+          }
+        ]
+      }
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
   it('ignores decorative unified terminal label churn', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

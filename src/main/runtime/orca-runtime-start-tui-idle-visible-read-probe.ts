@@ -96,7 +96,10 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
       : buildTerminalWaitResult(handle, 'tui-idle', leaf)
   }
 
-  async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
+  async waitForSetupTerminalCompletion(
+    handle: string,
+    signal?: AbortSignal
+  ): Promise<{ exitCode: number | null }> {
     const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
@@ -106,9 +109,13 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     return await new Promise<{ exitCode: number | null }>((resolve, reject) => {
       let settled = false
       let unsubscribe: (() => void) | null = null
+      const onAbort = (): void => {
+        fail(signal?.reason ?? new Error('request_aborted'))
+      }
       const cleanup = (): void => {
         unsubscribe?.()
         exitAbort.abort()
+        signal?.removeEventListener('abort', onAbort)
       }
       const finish = (exitCode: number | null): void => {
         if (settled) {
@@ -127,6 +134,11 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         cleanup()
         reject(error)
       }
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
       const scanner = completionToken ? createSetupCompletionScanner(completionToken, finish) : null
 
       if (scanner) {

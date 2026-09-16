@@ -716,7 +716,6 @@
       "useComposerState": {
         "7eb3f44ff7": "선택한 agent가 비활성화되었습니다. 생성하기 전에 활성화된 agent를 선택하세요.",
         "b2ead86962": "PR 기반을 해결하지 못했습니다.",
-        "a9ff236145": "일부 첨부파일을 업로드할 수 없습니다.",
         "3db83fc58a": "이 호스트에 첨부 파일에 사용할 수 있는 프로젝트 경로가 없습니다.",
         "ba6cb77082": "프로젝트에 연결하지 못했습니다.",
         "chooseOrAddProjectBeforeWorkspace": "워크스페이스를 만들기 전에 프로젝트를 선택하거나 추가하세요.",
@@ -2223,6 +2222,10 @@
                 "7c302f8174": "제목 없음"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "이 보기에는 아직 항목이 없습니다.",
+            "7e4a2f80c6": "최근에 추가한 항목은 표시되기까지 시간이 걸릴 수 있습니다."
           }
         },
         "GitHubMarkdownComposer": {
@@ -14728,7 +14731,8 @@
         "chooseInAgentPicker": "에이전트 선택기에서 선택…",
         "toggleOption": "{{value0}} 전환",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "현재 값을 알 수 없음 — 켜짐 또는 꺼짐을 선택하세요",
+        "valueIsDefault": "기본값",
+        "valueNotReported": "미보고",
         "sentNotConfirmed": "에이전트에 전송됨 — 확인되지 않음",
         "setWhenSessionStarts": "세션을 시작할 때 설정하세요.",
         "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
@@ -14741,9 +14745,7 @@
           "high": "높음",
           "xhigh": "매우 높음",
           "max": "최대",
-          "ultra": "울트라",
-          "on": "켜짐",
-          "off": "꺼짐"
+          "ultra": "울트라"
         },
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",
@@ -14941,27 +14943,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "대시보드 보기",
-      "board": "대시보드",
-      "map": "에이전트 맵"
-    },
-    "map": {
-      "host": {
-        "local": "로컬",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "원격"
-      },
-      "liveContainmentMap": "실시간 포함 관계 맵",
-      "empty": "현재 필터와 일치하는 에이전트가 없습니다.",
-      "canvasLabel": "프로젝트, 작업 공간, 에이전트의 중첩 맵",
-      "zoomOut": "축소",
-      "zoomIn": "확대",
-      "fit": "맞춤",
-      "projectCount": "에이전트 {{agents}}개 · 작업 공간 {{workspaces}}개",
-      "agentCount": "에이전트 {{count}}개"
-    },
     "placeholder": {
       "title": "에이전트 대시보드",
       "description": "모든 에이전트를 한눈에 볼 수 있는 곳입니다. 보드는 곧 제공됩니다."
@@ -15095,6 +15076,14 @@
       "hide": "에이전트 숨기기",
       "action": "에이전트 사용해 보기",
       "hiddenToast": "에이전트 탭이 숨겨졌습니다. 설정 → 실험 기능에서 다시 활성화하세요."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "입력 필요",
+      "working": "작업 중",
+      "stopped": "중지됨",
+      "finished": "완료됨"
     }
   }
 }

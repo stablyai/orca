@@ -56,22 +56,20 @@ describe('per-launch structured feasibility', () => {
     expect(support({ agent })).toEqual({ supported: true })
   })
 
-  it.each([
+  const blockerCases: [string, Partial<StructuredNativeChatSupportInput>, string][] = [
     ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
     ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
-    ['a draft prompt', { isDraftPrompt: true }, 'draft-prompt'],
     ['a floating workspace', { workspaceKind: 'floating' }, 'floating-workspace'],
-    ['a custom TUI launch', { requiresTuiLaunchCustomization: true }, 'tui-launch-customization'],
+    ['a custom TUI launch command', { requiresTuiLaunchCommand: true }, 'tui-launch-command'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],
     ['a missing capability', { hostCapabilities: [] }, 'runtime-capability'],
     ['an unanswered host', { hostCapabilities: null }, 'runtime-capability-unknown']
-  ] as [string, Partial<StructuredNativeChatSupportInput>, string][])(
-    'names %s as the blocker',
-    (_name, overrides, blocker) => {
-      expect(support(overrides)).toEqual({ supported: false, blocker })
-    }
-  )
+  ]
+
+  it.each(blockerCases)('names %s as the blocker', (_name, overrides, blocker) => {
+    expect(support(overrides)).toEqual({ supported: false, blocker })
+  })
 
   // The client cannot see whether the host can read a provider child's start time, so neither
   // provider is refused here on platform; agentSession.createSupport answers that at create time.

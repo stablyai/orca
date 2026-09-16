@@ -192,7 +192,15 @@ export function NativeChatComposerField({
               // no focus/click border flash. The box is a container, not a
               // focus target.
               'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40'
+              'bg-muted/50 dark:bg-input/40',
+              // Why (#10481): the native caret blink invalidates paint up to the
+              // nearest containment boundary; without this the whole transcript
+              // re-rasterizes twice a second. Pickers are siblings and every menu
+              // and tooltip in here is a Radix portal, so nothing floating clips.
+              // Tightest descendant is the attachment remove button, which
+              // overhangs its thumbnail by 6px and clears this box's padding by
+              // 4px — keep that slack if the padding below ever shrinks.
+              '[contain:paint]'
             )}
           >
             {imageAttachments.length > 0 ? (

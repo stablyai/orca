@@ -1,33 +1,12 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { requiredString } from '../schemas'
-import { IssueUpdate } from './github-issue-update-schema'
-import { RepoSelector, SlugRepo } from './github-repo-target-schemas'
+import { defineMethod } from '../core'
+import {
+  CreateIssue,
+  Issue,
+  IssueComment,
+  UpdateIssue
+} from '../../../../shared/rpc-contract/github-issue-params'
 
-const Issue = RepoSelector.extend({
-  number: z.number().int().positive()
-})
-
-const CreateIssue = RepoSelector.extend({
-  title: requiredString('Missing title'),
-  body: z.string(),
-  labels: z.array(z.string()).optional(),
-  assignees: z.array(z.string()).optional()
-})
-
-const UpdateIssue = RepoSelector.extend({
-  number: z.number().int().positive(),
-  updates: IssueUpdate
-})
-
-const IssueComment = RepoSelector.extend({
-  number: z.number().int().positive(),
-  body: requiredString('Comment body required'),
-  type: z.enum(['issue', 'pr']).optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-export const GITHUB_ISSUE_METHODS: RpcMethod[] = [
+export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.issue',
     params: Issue,

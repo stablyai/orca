@@ -7,7 +7,8 @@ import {
   classifyPrJobs,
   isDocsOnlyPath,
   PR_CHECK_JOBS,
-  shouldRunPrChecks
+  shouldRunPrChecks,
+  STATIC_ANALYSIS_SCAN_ROOTS
 } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -327,11 +328,41 @@ describe('per-job path classification', () => {
     expect(
       classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
     ).toBe(true)
-    // Why false: a mobile-only diff skips every desktop job, so the install step's own
-    // job never runs and claiming the install is needed contradicts should_run.
-    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(false)
+    // Why true: a mobile-only diff still skips the desktop suite, but the repo-wide audits lint
+    // mobile/, so static analysis runs and its changed-code pass needs the mobile types.
+    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(true)
     expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
-    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(true)
+  })
+
+  // Why: `mobile/` is desktop-irrelevant for every other job, so a mobile-only diff used to skip
+  // the audits that do lint it. That is how #20702 landed two duplicate imports which then failed
+  // this gate on every later PR's merge ref until #20895 swept them.
+  it('runs static analysis for a mobile-only diff without dragging in the desktop suite', () => {
+    const result = classifyPrJobs([
+      'mobile/src/test-support/rpc-recording/adapters/push-registration-mount-adapters.ts'
+    ])
+    expect(result.static_analysis).toBe(true)
+    expect(result.mobile_dependencies).toBe(true)
+    expect(result.should_run).toBe(false)
+    for (const job of ['typecheck', 'test', 'package', 'package_windows', 'git_compatibility']) {
+      expect(result[job], job).toBe(false)
+    }
+  })
+
+  // The ratchet: adding a tree to an audit command has to widen this trigger on its own.
+  it('runs static analysis for every tree the audit commands scan', () => {
+    expect(STATIC_ANALYSIS_SCAN_ROOTS).toEqual(
+      expect.arrayContaining(['src', 'config', 'tests', 'mobile'])
+    )
+    for (const root of STATIC_ANALYSIS_SCAN_ROOTS) {
+      expect(classifyPrJobs([`${root}/changed-file.ts`]).static_analysis, root).toBe(true)
+    }
+  })
+
+  it('leaves diffs the audits never read out of static analysis', () => {
+    expect(classifyPrJobs(['README.md']).static_analysis).toBe(false)
+    expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
   })
 
   it('keeps unit-test-only diffs out of packaging', () => {

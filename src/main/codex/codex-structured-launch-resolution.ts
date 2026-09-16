@@ -27,6 +27,9 @@ export type CodexStructuredLaunchResolverDeps = {
   resolveRollout?: typeof resolvePinnedCodexRolloutProof
   /** Test seam for the host capability; production uses the native process table. */
   isWindowsProcessStartTimeAvailable?: () => boolean
+  /** The user's Agent Permissions setting as app-server argv, re-read per acquisition.
+   *  Absent means the CLI's own approval prompts stay on. */
+  resolvePermissionArgs?: () => string[]
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -66,7 +69,9 @@ export function createCodexStructuredLaunchResolver(
       pathEnv,
       ...(homePath ? { homePath } : {})
     })
-    const args = [...(record.launchArgs ?? []), 'app-server']
+    // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
+    // concern, and the permission posture they used to smuggle in is derived per acquisition.
+    const args = [...(deps.resolvePermissionArgs?.() ?? []), 'app-server']
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
     return {

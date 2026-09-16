@@ -3,6 +3,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
+import { codexStructuredPermissionArgsForSettings } from './codex-structured-permission-mode'
 
 const SESSION_ID = 'session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -38,14 +39,16 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
-  resolveRollout: () => Promise<string | null> = async () => null
+  resolveRollout: () => Promise<string | null> = async () => null,
+  agentDefaultArgs: Record<string, string> = { codex: '' }
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
-    isWindowsProcessStartTimeAvailable: () => true
+    isWindowsProcessStartTimeAvailable: () => true,
+    resolvePermissionArgs: () => codexStructuredPermissionArgsForSettings({ agentDefaultArgs })
   })
 }
 
@@ -109,18 +112,36 @@ describe('codex structured launch resolution', () => {
     expect(launch.resumeThreadId).toBe('thread-current')
   })
 
-  it('places the durable user configuration before the app-server subcommand', async () => {
+  // Agent Permissions is the only thing from the arguments field that reaches app-server, and it
+  // keeps the position the durable arguments used to hold: before the subcommand.
+  it('places the permission flag before the app-server subcommand', async () => {
+    const launch = await resolverFor(record(), undefined, undefined, {
+      codex: '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'
+    })({ identity: IDENTITY })
+
+    expect(launch.args).toEqual(['--dangerously-bypass-approvals-and-sandbox', 'app-server'])
+  })
+
+  it('bypasses approvals for a profile that never opened Agent settings', async () => {
+    const launch = await resolverFor(record(), undefined, undefined, {})({ identity: IDENTITY })
+
+    expect(launch.args).toEqual(['--dangerously-bypass-approvals-and-sandbox', 'app-server'])
+  })
+
+  it('leaves the approval prompts on under Manual', async () => {
+    const launch = await resolverFor(record())({ identity: IDENTITY })
+
+    expect(launch.args).toEqual(['app-server'])
+  })
+
+  // The configured CLI arguments are a terminal concern: a durable record written before they
+  // stopped being read must not smuggle one back into app-server's argv.
+  it("ignores the record's durable launch arguments", async () => {
     const launch = await resolverFor(
       record({ launchArgs: ['--profile', 'review', '-c', 'model_reasoning_effort=high'] })
     )({ identity: IDENTITY })
 
-    expect(launch.args).toEqual([
-      '--profile',
-      'review',
-      '-c',
-      'model_reasoning_effort=high',
-      'app-server'
-    ])
+    expect(launch.args).toEqual(['app-server'])
   })
 
   it('pins resume to the rollout file that proved the durable thread', async () => {

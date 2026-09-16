@@ -12,6 +12,7 @@ import { createClaudeJournalTranslator } from '../../claude/claude-structured-jo
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { indexedStatusFeedSession as indexed } from './structured-agent-session-status-feed-test-session'
 import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedDeps,
@@ -56,21 +57,6 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
     now,
     journalDir: join(root, sessionId)
   })
-}
-
-function indexed(session: {
-  journal: Awaited<ReturnType<typeof openJournal>>
-  hasProviderChild?: boolean
-  fence?: number
-}) {
-  return {
-    journal: session.journal,
-    fence: session.fence ?? 1,
-    ...(session.hasProviderChild !== undefined
-      ? { hasProviderChild: session.hasProviderChild }
-      : {}),
-    params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
-  }
 }
 
 function feedFor(
@@ -782,7 +768,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
 describe('the status sink sees the roster the broadcast cache deliberately lacks', () => {
   function sinkFor() {
     const published: AgentSessionStatusSummary[] = []
-    const forgotten: string[] = []
+    const forgotten: Parameters<StructuredAgentSessionStatusSink['forget']>[0][] = []
     const sink: StructuredAgentSessionStatusSink = {
       publish: (summary) => published.push(summary),
       forget: (sessionId) => forgotten.push(sessionId)
@@ -818,7 +804,16 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     // Exactly what `close` does after eviction: the cache keeps the projection, the sink does not.
     sessions.delete(SESSION)
     feed.forget(SESSION)
-    expect(forgotten).toEqual([SESSION])
+    expect(forgotten).toEqual([
+      {
+        kind: 'structured-session',
+        sessionId: SESSION,
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'git-worktree'
+      }
+    ])
     const late: AgentSessionStatusEvent[] = []
     feed.subscribe({ id: 'list-2', emit: (event) => late.push(event) })
     expect(late).toEqual([

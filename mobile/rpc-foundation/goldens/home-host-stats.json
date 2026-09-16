@@ -1,0 +1,135 @@
+{
+  "operation": "home.host-stats",
+  "family": "home.host-stats",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
+  "scenarioSha256": "bd5f4e5f24a29d96c4c98950691c6571918332f71ebb1f29ee97a9abc857ac29",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ebcc6f6a4cb": {
+      "name": "stats.summary#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "activeWorktrees": 1,
+            "totalWorktrees": 3
+          }
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "7836888bb6c0": {
+      "name": "stats",
+      "value": {
+        "host-1": {
+          "activeWorktrees": 1,
+          "totalWorktrees": 3
+        }
+      },
+      "sent": 1
+    },
+    "9a84a7559023": {
+      "host-1": {
+        "activeWorktrees": 1,
+        "totalWorktrees": 3
+      }
+    },
+    "a392ac528c2b": {
+      "name": "stats.summary#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "dcf607ac617e": {
+      "name": "stats.summary#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"stats.summary\"}",
+      "sent": 1
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "home-host-stats",
+    "checkpoints": [
+      {
+        "id": "stats-pending",
+        "observation": {
+          "sender": ["a392ac528c2b"],
+          "payloads": ["dcf607ac617e"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["0ebcc6f6a4cb"],
+          "payloads": ["dcf607ac617e"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "9a84a7559023",
+          "effects": ["7836888bb6c0"]
+        }
+      }
+    ]
+  }
+}

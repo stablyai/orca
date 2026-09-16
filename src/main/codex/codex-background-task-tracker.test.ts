@@ -22,7 +22,8 @@ function turn(
 function activity(
   kind = 'started',
   parentTurn = PARENT_TURN,
-  child = CHILD
+  child = CHILD,
+  name = 'count_a'
 ): CodexBackgroundTaskEvent {
   return {
     method: 'item/started',
@@ -35,7 +36,7 @@ function activity(
         id: `activity-${kind}`,
         kind,
         agentThreadId: child,
-        agentPath: '/root/count_a'
+        agentPath: `/root/${name}`
       }
     }
   }
@@ -49,7 +50,11 @@ function runningChild(): CodexBackgroundTaskTracker {
   return tracker
 }
 
-function command(threadId = PRIMARY, method = 'item/started'): CodexBackgroundTaskEvent {
+function command(
+  threadId = PRIMARY,
+  method = 'item/started',
+  commandText = 'sleep 90'
+): CodexBackgroundTaskEvent {
   return {
     method,
     threadId,
@@ -61,7 +66,7 @@ function command(threadId = PRIMARY, method = 'item/started'): CodexBackgroundTa
         id: 'exec-1',
         processId: '71831',
         source: 'unifiedExecStartup',
-        command: 'sleep 90',
+        command: commandText,
         status: method === 'item/started' ? 'inProgress' : 'completed'
       }
     }
@@ -103,15 +108,19 @@ describe('CodexBackgroundTaskTracker child execution ownership', () => {
     expect(tracker.state).toBeNull()
   })
 
-  it('reports an executing child only after the foreground turn ends', () => {
+  it('reports an executing child while the spawning turn is still open', () => {
     const tracker = runningChild()
-    expect(tracker.state).toBeNull()
-    expect(tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))).toBe(true)
-    expect(tracker.state).toEqual({
+    const running = {
       state: 'monitoring',
       supportsStopAll: false,
       tasks: [{ id: `codex-agent:${CHILD}`, kind: 'agent', description: 'count_a' }]
-    })
+    }
+    // The strip is a live view: a fan-out is reported while it runs, not once
+    // the parent turn happens to end.
+    expect(tracker.state).toEqual(running)
+    // Turn end reveals children, it never settles them; the child is unchanged.
+    expect(tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))).toBe(false)
+    expect(tracker.state).toEqual(running)
   })
 
   it('never settles a child when a primary turn ends', () => {
@@ -220,15 +229,16 @@ describe('CodexBackgroundTaskTracker child execution ownership', () => {
 })
 
 describe('CodexBackgroundTaskTracker command integration', () => {
-  it('keeps a primary shell visible after the turn until its own completion', () => {
+  it('keeps a primary shell visible from launch until its own completion', () => {
     const tracker = new CodexBackgroundTaskTracker(PRIMARY)
+    const shell = [{ id: 'codex-command:primary:exec-1', kind: 'command', description: 'sleep 90' }]
     tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
     tracker.observe(command())
-    expect(tracker.state).toBeNull()
+    // Visible while the turn that launched it is still running.
+    expect(tracker.state?.tasks).toEqual(shell)
     tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))
-    expect(tracker.state?.tasks).toEqual([
-      { id: 'codex-command:primary:exec-1', kind: 'command', description: 'sleep 90' }
-    ])
+    expect(tracker.state?.tasks).toEqual(shell)
+    // Only the shell's own completion retires the row.
     tracker.observe(command(PRIMARY, 'item/completed'))
     expect(tracker.state).toBeNull()
   })
@@ -259,6 +269,63 @@ describe('CodexBackgroundTaskTracker command integration', () => {
       kind: 'command',
       description: 'sleep 90'
     })
+  })
+
+  it('keeps the command visible under a label that would otherwise fill the row', () => {
+    const tracker = new CodexBackgroundTaskTracker(PRIMARY)
+    tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
+    tracker.observe(turn('turn/started', CHILD, CHILD_TURN))
+    tracker.observe(activity('started', PARENT_TURN, CHILD, 'L'.repeat(600)))
+    tracker.observe(command(CHILD))
+    tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))
+    tracker.observe(turn('turn/completed', CHILD, CHILD_TURN))
+    const description = tracker.state?.tasks?.[0]?.description
+    expect(description).toContain('sleep 90')
+    expect(description).toBe(`${'L'.repeat(95)}… — sleep 90`)
+  })
+
+  it('never cuts a label mid surrogate pair', () => {
+    const tracker = new CodexBackgroundTaskTracker(PRIMARY)
+    tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
+    tracker.observe(turn('turn/started', CHILD, CHILD_TURN))
+    tracker.observe(activity('started', PARENT_TURN, CHILD, `${'L'.repeat(94)}\u{1F600}bad`))
+    tracker.observe(command(CHILD))
+    tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))
+    tracker.observe(turn('turn/completed', CHILD, CHILD_TURN))
+    const description = tracker.state?.tasks?.[0]?.description ?? ''
+    expect(description.isWellFormed()).toBe(true)
+    expect(description).toBe(`${'L'.repeat(94)}… — sleep 90`)
+  })
+
+  it('never cuts a qualified command mid surrogate pair', () => {
+    // The label is bounded, then the COMPOSED row is bounded again. That second
+    // cut lands inside the description, so clipping only the label side leaves a
+    // lone surrogate — lossy through any non-JSON UTF-8 hop.
+    const tracker = new CodexBackgroundTaskTracker(PRIMARY)
+    tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
+    tracker.observe(turn('turn/started', CHILD, CHILD_TURN))
+    tracker.observe(activity('started', PARENT_TURN, CHILD, 'L'.repeat(96)))
+    // Places the pair exactly where a raw slice of the composed row splits it.
+    tracker.observe(command(CHILD, 'item/started', `${'C'.repeat(412)}\u{1F600}${'D'.repeat(200)}`))
+    tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))
+    tracker.observe(turn('turn/completed', CHILD, CHILD_TURN))
+    const description = tracker.state?.tasks?.[0]?.description ?? ''
+    expect(description.length).toBeLessThanOrEqual(512)
+    expect(description.startsWith(`${'L'.repeat(96)} — `)).toBe(true)
+    expect(description.isWellFormed()).toBe(true)
+  })
+
+  it('never cuts an unqualified primary command mid surrogate pair', () => {
+    const tracker = new CodexBackgroundTaskTracker(PRIMARY)
+    tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
+    // The pair straddles the raw description bound itself.
+    tracker.observe(
+      command(PRIMARY, 'item/started', `${'C'.repeat(511)}\u{1F600}${'D'.repeat(50)}`)
+    )
+    tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))
+    const description = tracker.state?.tasks?.[0]?.description ?? ''
+    expect(description.length).toBeLessThanOrEqual(512)
+    expect(description.isWellFormed()).toBe(true)
   })
 
   it('names a child shell whose label only arrives after the command', () => {

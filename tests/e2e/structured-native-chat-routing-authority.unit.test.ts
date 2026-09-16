@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import type * as SharedLaunchRoute from '../../src/shared/structured-native-chat-launch-route'
 import { decideWorkerStartMode } from '../../src/main/runtime/rpc/methods/orchestration-worker-start-mode'
 import {
@@ -42,9 +43,8 @@ const placements = [
 const blockers: StructuredNativeChatBlocker[] = [
   'reused-terminal',
   'agent-without-structured-session',
-  'draft-prompt',
   'floating-workspace',
-  'tui-launch-customization',
+  'tui-launch-command',
   'remote-execution-host',
   'project-runtime',
   'runtime-capability',
@@ -55,13 +55,15 @@ describe('shared feasibility owns every caller decision', () => {
   it.each(placements)('orchestration cannot override the shared verdict for %j', (placement) => {
     for (const agent of ['claude', 'codex', 'grok', 'openclaude'] as const) {
       for (const customized of [false, true]) {
-        const input = {
-          params: { agent, ...placement },
-          settings: {
-            ...settings,
-            ...(customized ? { agentDefaultArgs: { [agent]: '--custom' } } : {})
-          }
+        // Arguments and environment are customized on BOTH passes, so the flag below tracks the
+        // launch command alone. A caller that resumed reading either one fails here.
+        const launchSettings: Partial<GlobalSettings> & typeof settings = {
+          ...settings,
+          agentDefaultArgs: { [agent]: '--custom' },
+          agentDefaultEnv: { [agent]: { ORCA_ROUTING_AUTHORITY: '1' } },
+          ...(customized ? { agentCmdOverrides: { [agent]: `${agent}-wrapper` } } : {})
         }
+        const input = { params: { agent, ...placement }, settings: launchSettings }
         predicate.mockReturnValue({ supported: true })
         expect(decideWorkerStartMode(input).mode).toBe('structured')
         expect(predicate).toHaveBeenLastCalledWith(
@@ -69,7 +71,7 @@ describe('shared feasibility owns every caller decision', () => {
             agent,
             executionHostId: placement.on ? `runtime:${placement.on}` : 'local',
             reusesTerminal: Boolean(placement.terminal),
-            requiresTuiLaunchCustomization: customized
+            requiresTuiLaunchCommand: customized
           })
         )
         for (const blocker of blockers) {
@@ -97,7 +99,7 @@ describe('shared feasibility owns every caller decision', () => {
             executionHostId,
             promptDelivery,
             hostCapabilities: RUNTIME_CAPABILITIES,
-            requiresTuiLaunchCustomization: true,
+            requiresTuiLaunchCommand: true,
             workspaceKind: 'folder',
             initialSessionOptions: { model: 'model-1', effort: 'high' }
           }
@@ -108,10 +110,13 @@ describe('shared feasibility owns every caller decision', () => {
             expect.objectContaining({
               agent,
               executionHostId,
-              isDraftPrompt: promptDelivery === 'draft',
-              requiresTuiLaunchCustomization: true,
+              requiresTuiLaunchCommand: true,
               workspaceKind: 'folder'
             })
+          )
+          // Why: delivery mode is prompt metadata, never a feasibility input.
+          expect(predicate).toHaveBeenLastCalledWith(
+            expect.not.objectContaining({ isDraftPrompt: expect.anything() })
           )
           for (const blocker of blockers) {
             predicate.mockReturnValue({ supported: false, blocker })

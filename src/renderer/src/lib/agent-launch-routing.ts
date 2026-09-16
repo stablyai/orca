@@ -10,11 +10,7 @@ import {
   type NativeChatLaunchPromptDelivery
 } from '@/lib/native-chat-initial-view-mode'
 
-export {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
-  hasSemanticallyNonEmptyAgentArgs
-} from '../../../shared/tui-agent-launch-customization'
+export { hasExplicitTuiLaunchCommand } from '../../../shared/tui-agent-launch-command-override'
 
 export type AgentLaunchRoute = 'structured-native-chat' | 'legacy-native-chat' | 'terminal-tui'
 
@@ -37,11 +33,17 @@ export type AgentLaunchRoutingInput = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
-  requiresTuiLaunchCustomization?: boolean
+  requiresTuiLaunchCommand?: boolean
   initialSessionOptions?: Readonly<Record<string, unknown>>
 }
 
 export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLaunchRoute {
+  // Why: structured eligibility is decided before the view-mode decider. That decider applies the
+  // terminal mirror gate (a TUI cannot clear more than forty lines of prefilled draft), which has
+  // no meaning for a session that seeds the composer store directly. Its other gates are already
+  // implied here: the structured resolver admits only claude/codex, both native-chat agents, and
+  // refuses every non-local host, and a structured session reads its journal over RPC rather than
+  // the transcript file, so local transcript readability does not apply either.
   if (
     prefersStructuredNativeChatByDefault(input.settings) &&
     structuredAgentLaunchSupported(input)
@@ -56,10 +58,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     launchDraftText: input.launchText,
     nativeChatTranscriptIsLocalReadable: input.nativeChatTranscriptIsLocalReadable
   })
-  if (initialViewMode !== 'chat') {
-    return 'terminal-tui'
-  }
-  return 'legacy-native-chat'
+  return initialViewMode === 'chat' ? 'legacy-native-chat' : 'terminal-tui'
 }
 
 // Explicit chat requests do not depend on the default view mode for new tabs.
@@ -74,8 +73,7 @@ export function structuredAgentLaunchSupported(
       hostCapabilities: input.hostCapabilities,
       workspaceKind: input.workspaceKind,
       projectRuntime: input.projectRuntime,
-      isDraftPrompt: input.promptDelivery === 'draft',
-      requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization
+      requiresTuiLaunchCommand: input.requiresTuiLaunchCommand
     }).supported
   )
 }

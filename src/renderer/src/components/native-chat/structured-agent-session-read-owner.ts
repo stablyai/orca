@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
 } from '../../../../shared/agent-session-wire'
+import { isUnattachedAgentSessionReadRefusal } from '../../../../shared/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
@@ -28,7 +29,6 @@ export type StructuredAgentSessionReadOwner = {
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
   loadOlder: () => Promise<void>
-  refresh: () => void
   subscribe: (listener: () => void) => () => void
 }
 
@@ -56,7 +56,6 @@ function createReadOwner(
     loadingOlder: false
   }
   let stopActiveRun: (() => void) | null = null
-  let refreshActiveRun = (): void => {}
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
   const activations = new Set<symbol>()
@@ -75,7 +74,7 @@ function createReadOwner(
     emit()
   }
   const apply = (action: StructuredAgentSessionAction): void => {
-    const state = reduceStructuredAgentSession(snapshot.state, action)
+    const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
     if (state !== snapshot.state) {
       setSnapshot({ ...snapshot, state })
     }
@@ -90,7 +89,7 @@ function createReadOwner(
       setSnapshot({ ...snapshot, loadingOlder: false })
     }
   }
-  const refreshTail = async (shouldStop: () => boolean): Promise<void> => {
+  const hydrate = async (shouldStop: () => boolean): Promise<void> => {
     const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
       target,
       'agentSession.history',
@@ -119,7 +118,7 @@ function createReadOwner(
     if (shouldStop()) {
       return
     }
-    apply({ type: 'tail-page', page: result.page })
+    apply({ type: 'history-page', page: result.page })
     if (shouldStop()) {
       return
     }
@@ -176,15 +175,13 @@ function createReadOwner(
       applyError: (message) => apply({ type: 'error', message }),
       getCursor: () => snapshot.state.cursor,
       onHistoryReadInvalidated: clearLoadingOlder,
-      refreshTail,
+      hydrate: snapshot.state.epoch === null ? hydrate : undefined,
       sessionId,
       target
     })
     captureActiveHistoryReadGuard = transport.captureHistoryReadGuard
-    refreshActiveRun = transport.refresh
     stopActiveRun = () => {
       captureActiveHistoryReadGuard = () => retiredHistoryRead
-      refreshActiveRun = (): void => {}
       transport.dispose()
       stopActiveRun = null
     }
@@ -253,7 +250,10 @@ function createReadOwner(
           }
         }
       } catch (error) {
-        if (!shouldStop()) {
+        // An unattached session is the live transport's subject, not this page's: it re-asks and
+        // decides. A page that refused that way must not put the pane in an error state the
+        // transport is about to clear.
+        if (!shouldStop() && !isUnattachedAgentSessionReadRefusal(error)) {
           apply({ type: 'error', message: String(error) })
         }
       } finally {
@@ -262,7 +262,6 @@ function createReadOwner(
         }
       }
     },
-    refresh: () => refreshActiveRun(),
     subscribe: (listener) => {
       listeners.add(listener)
       return () => {

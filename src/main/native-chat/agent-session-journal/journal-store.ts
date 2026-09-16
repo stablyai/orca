@@ -11,6 +11,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { activeStructuredAgentSessionTurnIdBySequence } from '../../../shared/structured-agent-session-live-turn'
 import { agentSessionJournalCloseRetries } from './journal-close-retry'
 import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
@@ -162,6 +163,18 @@ export class AgentSessionJournal {
 
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
 
+  /** Visits reduced items without allocating and sorting a full snapshot. */
+  visitItems = (visit: (itemId: string, sequence: number) => void): void => {
+    for (const item of this.state.items.values()) {
+      visit(item.itemId, item.sequence)
+    }
+  }
+
+  /** The turn this journal has published as running — the same read a client's snapshot gives,
+   *  without materialising one. */
+  activeTurnId = (): string | null =>
+    activeStructuredAgentSessionTurnIdBySequence(this.state.items.values())
+
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt
 
@@ -232,7 +245,7 @@ export class AgentSessionJournal {
   }
 
   /**
-   * Advance a submission to exactly one of accepted / rejected / unknown.
+   * Record a dispatch transition, including a proven retry returning to pending.
    *
    * Accepting REQUIRES the provider identity rather than a free-form id: the
    * adopted key is what the provider's echo will upsert into, so a mismatched

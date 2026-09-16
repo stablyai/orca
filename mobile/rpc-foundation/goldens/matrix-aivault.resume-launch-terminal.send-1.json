@@ -1,0 +1,688 @@
+{
+  "operation": "aiVault.resume-launch",
+  "family": "aiVault.resume-launch",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
+  "scenarioSha256": "aa812132ede83e4aced73a644e996df82a38bfc70ead70a5db2e9af8a8b1bfff",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "049bcc141657": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "0f7c8cc35709": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "17ee408f637d": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "3253374e68e6": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "335573146591": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "39cabd8258a3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}",
+      "sent": 2
+    },
+    "400d946a183d": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "launched": {
+        "id": "tab-9",
+        "terminal": "terminal-9",
+        "title": "codex"
+      }
+    },
+    "495d8519301e": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
+      "sent": 1
+    },
+    "54558214b507": {
+      "failure": "Unknown method",
+      "launched": "unlaunched"
+    },
+    "6b1e36abce6b": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "clientMutationId": "resume-mutation-1",
+            "env": {
+              "ORCA_RESUME": "1"
+            },
+            "envToDelete": ["CODEX_HOME"],
+            "launchAgent": "codex",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tab": {
+              "id": "tab-9",
+              "terminal": "terminal-9",
+              "title": "codex",
+              "type": "terminal"
+            }
+          }
+        }
+      }
+    },
+    "6e79da536ca9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "tab-9",
+        "terminal": "terminal-9",
+        "title": "codex"
+      }
+    },
+    "71b34bf921d6": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "8511f0debfc0": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to send resume command",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "96f24b3825b5": {
+      "failure": "Failed to send resume command",
+      "launched": "unlaunched"
+    },
+    "9b68cd60047e": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "a84f5d45a48b": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c27cefd487fc": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "dac3aef412ff": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "e105057c5765": {
+      "failure": "transport failure",
+      "launched": "unlaunched"
+    },
+    "efa7e20c5a6f": {
+      "failure": "outer refused",
+      "launched": "unlaunched"
+    },
+    "f1f50b49b8de": {
+      "failure": "",
+      "launched": "unlaunched"
+    },
+    "fa85a657c342": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-aivault.resume-launch-terminal.send-1",
+    "checkpoints": [
+      {
+        "id": "aivault-resume-launch-sent.normal:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "a84f5d45a48b"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "6e79da536ca9"
+          },
+          "state": "400d946a183d",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.result-absent:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "17ee408f637d"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "6e79da536ca9"
+          },
+          "state": "400d946a183d",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.result-null:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "335573146591"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "6e79da536ca9"
+          },
+          "state": "400d946a183d",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.inner-ok-missing:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "3253374e68e6"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "6e79da536ca9"
+          },
+          "state": "400d946a183d",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.inner-false-string-error:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "9b68cd60047e"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "6e79da536ca9"
+          },
+          "state": "400d946a183d",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.inner-false-object-error:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "dac3aef412ff"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "6e79da536ca9"
+          },
+          "state": "400d946a183d",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.outer-refused:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "049bcc141657"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "32a7c0ae7918"
+          },
+          "state": "efa7e20c5a6f",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.outer-refused-no-message:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "fa85a657c342"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "8511f0debfc0"
+          },
+          "state": "96f24b3825b5",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.method-not-found:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "0f7c8cc35709"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "b948e8307e81"
+          },
+          "state": "54558214b507",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.transport-rejection:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "c27cefd487fc"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "a947768bc0ed"
+          },
+          "state": "e105057c5765",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-launch-sent.transport-rejection-no-message:resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "71b34bf921d6"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
+          "settlements": {
+            "full": "c7584e82c72f"
+          },
+          "state": "f1f50b49b8de",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

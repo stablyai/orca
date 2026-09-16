@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   applyBrowserPageViewportLayout,
+  BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME,
   ensureBrowserPageViewport,
   getBrowserPageViewportScrollState,
   getBrowserOverlaySlotViewport,
@@ -14,6 +17,15 @@ import {
   subscribeBrowserOverlaySlotViewport,
   syncBrowserPageChromeInset
 } from './browser-page-viewport'
+
+function readPresetViewportCssRule(): string {
+  const css = readFileSync(resolve(import.meta.dirname, '../../../assets/main.css'), 'utf8')
+  const body =
+    css.match(new RegExp(`\\.${BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME}\\s*\\{(?<body>[^}]*)\\}`))
+      ?.groups?.body ?? ''
+
+  return body.replace(/\s+/g, ' ').trim()
+}
 
 function mountSlotViewport(workspaceTabId: string): HTMLDivElement {
   const root = document.createElement('div')
@@ -55,8 +67,9 @@ describe('ensureBrowserPageViewport', () => {
     expect(viewport.scroller.style.overflow).toBe('')
 
     setBrowserPageViewportPresetSize('page-1', { width: 1440, height: 900 })
-    expect(viewport.content.style.width).toBe('1440px')
-    expect(viewport.content.style.height).toBe('900px')
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-width')).toBe('1440px')
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-height')).toBe('900px')
+    expect(viewport.content.classList.contains(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)).toBe(true)
     expect(viewport.scroller.style.overflow).toBe('auto')
 
     setBrowserPageViewportPresetSize('page-1', null)
@@ -71,9 +84,49 @@ describe('ensureBrowserPageViewport', () => {
     removeBrowserPageViewport('page-1')
 
     const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
-    expect(rebuilt.content.style.width).toBe('1024px')
-    expect(rebuilt.content.style.height).toBe('768px')
+    expect(rebuilt.content.style.getPropertyValue('--browser-page-viewport-width')).toBe('1024px')
+    expect(rebuilt.content.style.getPropertyValue('--browser-page-viewport-height')).toBe('768px')
     expect(rebuilt.scroller.style.overflow).toBe('auto')
+  })
+
+  // STA-7568: the CSS variable keeps the host box in window DIP while the stylesheet
+  // divides by the live UI zoom factor.
+  it('stores preset host dimensions as window-DIP CSS variables', () => {
+    mountSlotViewport('workspace-1')
+
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    setBrowserPageViewportPresetSize('page-1', { width: 390, height: 844 })
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-width')).toBe('390px')
+    expect(viewport.content.style.getPropertyValue('--browser-page-viewport-height')).toBe('844px')
+  })
+
+  it('leaves the host box sized by the zoom-compensating rule, not an inline size', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    setBrowserPageViewportPresetSize('page-1', { width: 390, height: 844 })
+
+    expect(viewport.content.classList.contains(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)).toBe(true)
+    // An inline width/height would outrank the rule and reinstate the unscaled DIP box.
+    expect(viewport.content.style.width).toBe('')
+    expect(viewport.content.style.height).toBe('')
+  })
+
+  it('divides the preset DIP size by the live UI zoom factor', () => {
+    expect(readPresetViewportCssRule()).toBe(
+      'width: calc(var(--browser-page-viewport-width) / var(--ui-zoom-factor, 1)); ' +
+        'height: calc(var(--browser-page-viewport-height) / var(--ui-zoom-factor, 1));'
+    )
+  })
+
+  it('clears preset dimensions when no preset is active', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    setBrowserPageViewportPresetSize('page-1', { width: 390, height: 844 })
+    setBrowserPageViewportPresetSize('page-1', null)
+
+    expect(viewport.content.classList.contains(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)).toBe(false)
+    expect(viewport.content.style.width).toBe('100%')
   })
 
   it('routes host wheel deltas to the preset scroller', () => {

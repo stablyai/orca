@@ -1,3 +1,4 @@
+import { readStreamedSessionDocument } from './session-document-stream'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
@@ -135,7 +136,7 @@ export function createGeminiJsonlSessionResumeState(
   )
 }
 
-async function parseGeminiJsonlSessionLines(args: {
+export async function parseGeminiJsonlSessionLines(args: {
   file: FileWithMtime
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
@@ -172,4 +173,30 @@ export function consumeGeminiMessage(
     }
     accumulator.totalTokens += tokenTotal(record.tokens)
   }
+}
+
+export async function parseGeminiSessionDocument(
+  file: FileWithMtime,
+  bytes: AsyncIterable<Buffer>,
+  platform: NodeJS.Platform,
+  options: ResumableParseFinalizeOptions,
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  const parsed = await readStreamedSessionDocument({
+    bytes,
+    arrayKey: 'messages',
+    fields: ['sessionId', 'startTime', 'lastUpdated'],
+    create: () =>
+      createAccumulator({ agent: 'gemini', file, sessionId: sessionIdFromFileName(file.path) }),
+    consume: (state, value) => consumeGeminiMessage(state, asRecord(value)),
+    signal
+  })
+  if (!parsed) {
+    return null
+  }
+  const { record, state: accumulator } = parsed
+  accumulator.sessionId = extractString(record.sessionId) ?? sessionIdFromFileName(file.path)
+  updateTimeline(accumulator, extractString(record.startTime))
+  updateTimeline(accumulator, extractString(record.lastUpdated))
+  return finalizeSession(accumulator, platform, options)
 }

@@ -2,7 +2,10 @@ export const LIVENESS_IDLE_MS = 20_000
 export const LIVENESS_PROBE_TIMEOUT_MS = 8_000
 export const MISSED_PROBE_LIMIT = 3
 
-export type RpcSessionIdentity = object
+declare const rpcSessionIdentityBrand: unique symbol
+
+/** Opaque per-session token; only ever compared by reference. */
+export type RpcSessionIdentity = object & { readonly [rpcSessionIdentityBrand]?: never }
 
 type WatchdogOptions = {
   transport: 'direct' | 'relay'

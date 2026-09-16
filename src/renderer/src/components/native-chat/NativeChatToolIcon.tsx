@@ -4,6 +4,7 @@ import {
   Folder,
   Globe,
   ListChecks,
+  MessageSquareMore,
   Pencil,
   Plug,
   Search,
@@ -29,7 +30,8 @@ const NATIVE_CHAT_TOOL_GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   plug: Plug,
   bot: Bot,
   'list-checks': ListChecks,
-  wrench: Wrench
+  wrench: Wrench,
+  'message-square-more': MessageSquareMore
 }
 
 /** The fixed 16px slot with a 14px glyph, which keeps every row left-aligned

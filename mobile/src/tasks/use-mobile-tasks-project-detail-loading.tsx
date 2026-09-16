@@ -7,11 +7,11 @@ import {
   type GitHubDetailFile,
   type GitHubPRReviewSummary,
   editableProjectFields,
-  isSuccess,
   projectFieldDraftValue,
   projectRowType,
   splitRepositorySlug
 } from './mobile-tasks-legacy-foundation'
+import { githubProjectRowDetailRead } from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel) {
   const {
@@ -86,9 +86,9 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     let stale = false
     setProjectRowDetailLoading(true)
 
-    void client
-      .sendRequest(
-        'github.project.workItemDetailsBySlug',
+    void githubProjectRowDetailRead
+      .request(
+        client,
         {
           owner: slug.owner,
           repo: slug.repo,
@@ -102,10 +102,8 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectRowDetailRead.interpret(response) as
           | {
               ok: true
               details: {

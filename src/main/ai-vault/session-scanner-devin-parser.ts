@@ -1,7 +1,8 @@
+import { readStreamedSessionDocument } from './session-document-stream'
 import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FileWithMtime } from './session-scanner-types'
+import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addPreviewContent,
@@ -70,38 +71,8 @@ function parseDevinSessionRecord(
     extractString(agentRecord?.model) ??
     extractString(record.generation_model)
   accumulator.cwd = extractString(record.working_directory)
-  const steps = arrayValue(record.steps)
-  for (const step of steps) {
-    const stepRecord = asRecord(step)
-    if (!stepRecord) {
-      continue
-    }
-    const metadata = asRecord(stepRecord.metadata)
-    updateTimeline(accumulator, extractString(metadata?.created_at))
-    const metrics = asRecord(metadata?.metrics)
-    accumulator.model ??=
-      extractString(metadata?.generation_model) ?? extractString(metrics?.generation_model)
-    accumulator.totalTokens += devinStepTokenTotal(metadata, metrics)
-    const isUser = metadata?.is_user_input === true
-    if (isUser) {
-      accumulator.messageCount++
-      const text =
-        extractDevinStepText(stepRecord) ??
-        extractContentText(stepRecord.content) ??
-        extractString(stepRecord.text)
-      const titleCandidate = normalizeTitleText(text ?? '')
-      if (titleCandidate) {
-        accumulator.title ??= titleCandidate
-      }
-      addPreviewContent(accumulator, 'user', text ?? stepRecord.content)
-    } else if (extractString(stepRecord.role) === 'assistant' || stepRecord.tool_calls) {
-      accumulator.messageCount++
-      addPreviewContent(
-        accumulator,
-        'assistant',
-        extractDevinStepText(stepRecord) ?? stepRecord.content
-      )
-    }
+  for (const step of arrayValue(record.steps)) {
+    consumeDevinSessionStep(accumulator, step)
   }
   return finalizeSession(accumulator, platform, options)
 }
@@ -146,4 +117,72 @@ function numberFromDevinMetadata(
     }
   }
   return 0
+}
+
+export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: unknown): void {
+  const stepRecord = asRecord(step)
+  if (!stepRecord) {
+    return
+  }
+  const metadata = asRecord(stepRecord.metadata)
+  updateTimeline(accumulator, extractString(metadata?.created_at))
+  const metrics = asRecord(metadata?.metrics)
+  accumulator.model ??=
+    extractString(metadata?.generation_model) ?? extractString(metrics?.generation_model)
+  accumulator.totalTokens += devinStepTokenTotal(metadata, metrics)
+  const isUser = metadata?.is_user_input === true
+  if (isUser) {
+    accumulator.messageCount++
+    const text =
+      extractDevinStepText(stepRecord) ??
+      extractContentText(stepRecord.content) ??
+      extractString(stepRecord.text)
+    const titleCandidate = normalizeTitleText(text ?? '')
+    if (titleCandidate) {
+      accumulator.title ??= titleCandidate
+    }
+    addPreviewContent(accumulator, 'user', text ?? stepRecord.content)
+  } else if (extractString(stepRecord.role) === 'assistant' || stepRecord.tool_calls) {
+    accumulator.messageCount++
+    addPreviewContent(
+      accumulator,
+      'assistant',
+      extractDevinStepText(stepRecord) ?? stepRecord.content
+    )
+  }
+}
+
+export async function parseDevinSessionDocument(
+  file: FileWithMtime,
+  bytes: AsyncIterable<Buffer>,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions,
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  const parsed = await readStreamedSessionDocument({
+    bytes,
+    arrayKey: 'steps',
+    fields: ['session_id', 'sessionId', 'generation_model', 'working_directory'],
+    objectFields: { agent: ['model_name', 'model'] },
+    create: () =>
+      createAccumulator({ agent: 'devin', file, sessionId: sessionIdFromFileName(file.path) }),
+    consume: consumeDevinSessionStep,
+    signal
+  })
+  if (!parsed) {
+    return null
+  }
+  const { record, state: accumulator } = parsed
+  accumulator.sessionId =
+    extractString(record.session_id) ??
+    extractString(record.sessionId) ??
+    sessionIdFromFileName(file.path)
+  const agentRecord = asRecord(record.agent)
+  accumulator.model =
+    extractString(agentRecord?.model_name) ??
+    extractString(agentRecord?.model) ??
+    extractString(record.generation_model) ??
+    accumulator.model
+  accumulator.cwd = extractString(record.working_directory)
+  return finalizeSession(accumulator, platform, options)
 }

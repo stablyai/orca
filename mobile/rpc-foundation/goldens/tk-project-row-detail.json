@@ -1,0 +1,241 @@
+{
+  "operation": "tasks.project-row-detail",
+  "family": "tasks.project-row-detail",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
+  "scenarioSha256": "f572b37cfd15f41f283e5f96b772a1055670f80e68064ac81477d9b768fc971a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "049372f27933": {
+      "name": "prFileContents",
+      "value": {},
+      "sent": 0
+    },
+    "0e6d17a72b48": {
+      "name": "projectEditingCommentDraft",
+      "value": "",
+      "sent": 0
+    },
+    "1948869d1aab": {
+      "name": "projectTitleDraft",
+      "value": {
+        "$rpc": "undefined"
+      },
+      "sent": 0
+    },
+    "1ab0db6f980d": {
+      "name": "projectCommentDraft",
+      "value": "",
+      "sent": 0
+    },
+    "1e04ae13b692": {
+      "name": "expandedPrFilePath",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "228957b08ee5": {
+      "name": "projectReviewersDraft",
+      "value": "",
+      "sent": 0
+    },
+    "3690e3603bc7": {
+      "name": "projectEditingCommentId",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "3a8d8b837c22": {
+      "name": "projectRowDetailLoading",
+      "value": false,
+      "sent": 1
+    },
+    "4331036690d4": {
+      "name": "prFileLoadingPath",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "62fee54ba0b2": {
+      "name": "projectBodyDraft",
+      "value": "",
+      "sent": 0
+    },
+    "73fd5eb0550e": {
+      "name": "projectRowDetailLoading",
+      "value": true,
+      "sent": 0
+    },
+    "80d38ca65a5d": {
+      "name": "projectRowDetailError",
+      "value": "",
+      "sent": 0
+    },
+    "8441059da147": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}",
+      "sent": 1
+    },
+    "8e5298b22c5f": {
+      "name": "projectRowDetail",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "9b91f921fbb2": {
+      "name": "projectFieldDrafts",
+      "value": {},
+      "sent": 0
+    },
+    "b2a01ad6d4fe": {
+      "detail": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "loading": false
+    },
+    "c3e75b813157": {
+      "name": "projectRowDetail",
+      "value": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      },
+      "sent": 1
+    },
+    "ce991ff5560d": {
+      "name": "prFileCommentDrafts",
+      "value": {},
+      "sent": 0
+    },
+    "d1f95449bb04": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.workItemDetailsBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "type": "issue"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "details": {
+              "assignees": [],
+              "baseSha": "base-sha",
+              "body": "body",
+              "checks": [],
+              "comments": [],
+              "files": [],
+              "headSha": "head-sha",
+              "item": {
+                "labels": []
+              },
+              "pullRequestId": "PR_kwDO"
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tk-project-row-detail",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": ["d1f95449bb04"],
+          "payloads": ["8441059da147"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "b2a01ad6d4fe",
+          "effects": [
+            "1948869d1aab",
+            "62fee54ba0b2",
+            "1ab0db6f980d",
+            "3690e3603bc7",
+            "0e6d17a72b48",
+            "228957b08ee5",
+            "1e04ae13b692",
+            "049372f27933",
+            "4331036690d4",
+            "ce991ff5560d",
+            "9b91f921fbb2",
+            "8e5298b22c5f",
+            "80d38ca65a5d",
+            "73fd5eb0550e",
+            "c3e75b813157",
+            "3a8d8b837c22"
+          ]
+        }
+      }
+    ]
+  }
+}

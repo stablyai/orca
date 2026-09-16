@@ -1,0 +1,137 @@
+{
+  "operation": "transport.capability-probe",
+  "family": "transport.capability-probe",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
+  "scenarioSha256": "2ba1e1d70c98e2fd0d2d2dce6f68c11a186756f05207747e156375fc613940d7",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2a265b3002f3": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 1000,
+        "settledAt": 1000,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": ["push.v1"]
+          }
+        }
+      }
+    },
+    "2c76473bef66": {
+      "published": []
+    },
+    "3b0e75cbba89": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "status_unavailable",
+            "message": "no status"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "9d1bfe4d6810": {
+      "published": [["push.v1"]]
+    },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "transport-capability-probe-refused-backs-off",
+    "checkpoints": [
+      {
+        "id": "backing-off",
+        "observation": {
+          "sender": ["3b0e75cbba89"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "2c76473bef66",
+          "effects": []
+        }
+      },
+      {
+        "id": "published-after-backoff",
+        "observation": {
+          "sender": ["3b0e75cbba89", "2a265b3002f3"],
+          "payloads": ["852980e2efc0", "b33a14df0df6"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "9d1bfe4d6810",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

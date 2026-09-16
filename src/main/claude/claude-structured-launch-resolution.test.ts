@@ -11,10 +11,10 @@ import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-str
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   CLAUDE_STRUCTURED_BASE_OPTIONS,
-  claudeSdkOptionsForLaunchArgs,
   claudeSessionIdForOrcaSession,
   createClaudeStructuredLaunchResolver
 } from './claude-structured-launch-resolution'
+import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
 
 const SESSION_ID = 'orca-session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -55,13 +55,16 @@ function makeExecutable(path: string): void {
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveEnv?: () => Record<string, string>,
-  stripAuthEnv = false
+  stripAuthEnv = false,
+  // Manual by default so a test that is not about permissions is not silently about them.
+  agentDefaultArgs: Record<string, string> = { claude: '' }
 ) {
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv }),
+    resolvePermissionMode: () => claudeStructuredPermissionModeForSettings({ agentDefaultArgs }),
     ...(resolveEnv ? { resolveEnv } : {})
   })
 }
@@ -119,6 +122,7 @@ describe('claude structured launch resolution', () => {
       supportedDialogKinds: [],
       extraArgs: { 'replay-user-messages': null },
       systemPrompt: { type: 'preset', preset: 'claude_code' },
+      permissionMode: 'default',
       sessionId: first.providerSessionId
     })
     expect(first.options.resume).toBeUndefined()
@@ -190,42 +194,55 @@ describe('claude structured launch resolution', () => {
     expect(launch.options.resumeSessionAt).toBeUndefined()
   })
 
-  it('preserves durable Claude launch arguments as typed options and extraArgs', async () => {
+  // Agent Permissions is stored as the bypass flag inside the launch arguments, so presence of
+  // that flag — not the whole string — is what Yolo means, exactly as a terminal launch reads it.
+  it.each([
+    ['--dangerously-skip-permissions'],
+    ['--dangerously-skip-permissions --model Opus'],
+    ['--model Opus --dangerously-skip-permissions']
+  ])('starts a Yolo session in bypassPermissions for args %s', async (claude) => {
+    const launch = await resolverFor(record(), undefined, false, { claude })({ identity: IDENTITY })
+
+    expect(launch.options.permissionMode).toBe('bypassPermissions')
+    // The SDK refuses bypassPermissions unless the allow flag rides with it.
+    expect(launch.options.allowDangerouslySkipPermissions).toBe(true)
+  })
+
+  // The common profile: the toggle has never been used, so it has written nothing, and the
+  // default for the key it did not write is the bypass flag — the posture the terminal has
+  // always given these users.
+  it('starts a session that never opened Agent settings in bypassPermissions', async () => {
+    const launch = await resolverFor(record(), undefined, false, {})({ identity: IDENTITY })
+
+    expect(launch.options.permissionMode).toBe('bypassPermissions')
+    expect(launch.options.allowDangerouslySkipPermissions).toBe(true)
+  })
+
+  // Manual is stored as an empty string, which owns the key and so beats the shipped default.
+  it.each([[''], ['--model Opus']])(
+    'leaves a Manual session prompting for args %s',
+    async (claude) => {
+      const launch = await resolverFor(record(), undefined, false, { claude })({
+        identity: IDENTITY
+      })
+
+      expect(launch.options.permissionMode).toBe('default')
+      expect(launch.options.allowDangerouslySkipPermissions).toBeUndefined()
+    }
+  )
+
+  // The configured CLI arguments are a terminal concern: a durable record written before they
+  // stopped being read must not smuggle one back into the child.
+  it("ignores the record's durable launch arguments", async () => {
     const launch = await resolverFor(
       record({
-        launchArgs: [
-          '--model',
-          'claude-sonnet-4-5',
-          '--effort',
-          'high',
-          '--dangerously-skip-permissions'
-        ]
+        launchArgs: ['--model', 'claude-sonnet-4-5', '--dangerously-skip-permissions']
       })
     )({ identity: IDENTITY })
 
-    expect(launch.options.model).toBe('claude-sonnet-4-5')
-    expect(launch.options.effort).toBe('high')
-    expect(launch.options.extraArgs).toEqual({
-      'dangerously-skip-permissions': null,
-      'replay-user-messages': null
-    })
-  })
-
-  it('routes durable launch arguments to a typed option first and refuses what neither can carry', () => {
-    // The catalog's own output: each flag lands in exactly one place, so the SDK
-    // cannot emit it twice with two different values.
-    expect(claudeSdkOptionsForLaunchArgs(['--model', 'opus', '--effort', 'xhigh'])).toEqual({
-      model: 'opus',
-      effort: 'xhigh'
-    })
-    // An effort the SDK's union does not name still reaches the CLI, unchanged.
-    expect(claudeSdkOptionsForLaunchArgs(['--effort', 'ultra'])).toEqual({
-      extraArgs: { effort: 'ultra' }
-    })
-    expect(claudeSdkOptionsForLaunchArgs(['--settings=/tmp/s.json'])).toEqual({
-      extraArgs: { settings: '/tmp/s.json' }
-    })
-    expect(() => claudeSdkOptionsForLaunchArgs(['-m', 'opus'])).toThrow(/no SDK option/)
+    expect(launch.options.model).toBeUndefined()
+    expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
+    expect(launch.options.permissionMode).toBe('default')
   })
 
   it('keeps the session launch environment pinned after account settings change', async () => {

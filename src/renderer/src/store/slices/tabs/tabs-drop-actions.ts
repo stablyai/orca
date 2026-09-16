@@ -25,19 +25,19 @@ export function createTabsDropActions(
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         const foundTarget = findGroupAndWorktree(state.groupsByWorktree, target.groupId)
         if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
-          return {}
+          return state
         }
 
         const { tab, worktreeId } = foundTab
         const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
         const targetGroup = foundTarget.group
         if (!sourceGroup) {
-          return {}
+          return state
         }
 
         const isSplitDrop = Boolean(target.splitDirection)
         if (!isSplitDrop && tab.groupId === target.groupId) {
-          return {}
+          return state
         }
         const layout = state.layoutByWorktree[worktreeId]
         if (
@@ -51,7 +51,7 @@ export function createTabsDropActions(
           })
         ) {
           // Why: dropping a group's last tab on its own/sibling matching edge only makes a transient column that immediately collapses.
-          return {}
+          return state
         }
 
         moved = true

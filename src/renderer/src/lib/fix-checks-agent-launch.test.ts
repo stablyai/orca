@@ -144,7 +144,12 @@ describe('startFixChecksAgent', () => {
     mocks.activateAndRevealWorktree.mockReturnValue(true)
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(null)
     mocks.getConnectionId.mockReturnValue(null)
-    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-1' })
+    mocks.launchAgentInNewTab.mockImplementation(
+      (args: { beforeSurfaceOpen?: (surface: { kind: 'local-terminal' }) => boolean | void }) => {
+        args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
+        return { surface: { kind: 'local-terminal', tabId: 'tab-1' } }
+      }
+    )
     mocks.launchWorkItemDirect.mockResolvedValue(true)
     mocks.pickSourceControlLaunchAgent.mockImplementation(({ detectedAgents }) => {
       return detectedAgents.includes('codex') ? 'codex' : null

@@ -293,6 +293,17 @@ describe('agentStatus:drop IPC', () => {
     expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
   })
 
+  it('forwards a runtime-owned legacy numeric row dismissal', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:drop')!
+    handler!({}, 'tab-1:0')
+
+    expect(dropStatusEntry).toHaveBeenCalledWith('tab-1:0')
+    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith('tab-1:0')
+  })
+
   it('rejects non-string paneKey (defensive against a malformed renderer message)', async () => {
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers()
@@ -305,7 +316,6 @@ describe('agentStatus:drop IPC', () => {
       null,
       {},
       [],
-      'tab-1:0', // legacy numeric pane-key suffix
       'no-colon', // missing colon — rejected by isValidPaneKey
       ':leading', // empty tabId half
       'trailing:', // empty leafId half

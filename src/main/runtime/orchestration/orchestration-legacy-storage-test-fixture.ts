@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from '../../sqlite/sync-database'
 import { LEGACY_RUN_ID, OrchestrationDb } from './db'
+import { dropDerivedDeliverySchema } from './db/schema/derived-delivery-test-fixture'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 export type LegacyStorageCutoverFixture = {
@@ -175,6 +176,7 @@ export function createLegacyStorageCutoverFixture(): {
   first.close()
 
   const raw = new Database(dbPath)
+  dropDerivedDeliverySchema(raw)
   const legacyDeliveryId = 'delivery_legacy_outstanding'
   raw
     .prepare(

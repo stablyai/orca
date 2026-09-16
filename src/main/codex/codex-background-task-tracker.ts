@@ -12,7 +12,6 @@ import { boundSubagentField } from './codex-subagent-group-body'
 
 /** Projects the same child execution facts the durable roster consumes. */
 export class CodexBackgroundTaskTracker {
-  private primaryTurnId: string | null = null
   private publishedFingerprint = '[]'
   private publishedState: AgentSessionBackgroundTaskState | null = null
   private readonly commands: CodexBackgroundCommandTracker
@@ -44,29 +43,22 @@ export class CodexBackgroundTaskTracker {
     }
     if (frame.kind === 'subagent') {
       this.executions.register(frame.agentThreadId, frame.label, frame.parentTurnId)
-    } else if (frame.threadId === this.primaryThreadId) {
-      if (frame.state === 'working') {
-        this.primaryTurnId = frame.turnId
-      } else if (frame.turnId === this.primaryTurnId) {
-        this.primaryTurnId = null
-      }
-    } else {
+    } else if (frame.threadId !== this.primaryThreadId) {
       this.executions.observeTurn(frame.threadId, frame.turnId, frame.state)
     }
+    // A primary-turn frame only prompts a republish: turn end reveals children,
+    // it never settles them. Codex `spawn_agent` children keep reporting well
+    // past their parent turn, so nothing here may sweep the roster.
     return this.refresh()
   }
 
   clear(): boolean {
     this.executions.clear()
     this.commands.clear()
-    this.primaryTurnId = null
     return this.refresh()
   }
 
   private tasks(): AgentSessionBackgroundTask[] {
-    if (this.primaryTurnId !== null) {
-      return []
-    }
     const children = this.executions.workingChildren()
     const agents: AgentSessionBackgroundTask[] = children.map((child, index) => ({
       id: `codex-agent:${child.agentThreadId}`,

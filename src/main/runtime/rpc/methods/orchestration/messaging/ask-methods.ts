@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import { isGroupAddress } from '../../../../orchestration/groups'
@@ -6,7 +6,7 @@ import { AskParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
 
-export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
     name: 'orchestration.ask',
     params: AskParams,

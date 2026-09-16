@@ -12,9 +12,14 @@ import {
   type GitHubPRReviewSummary,
   type LinearIssue,
   type TaskItem,
-  createLinearTask,
-  isSuccess
+  createLinearTask
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubItemDetailRead,
+  gitlabItemDetailRead,
+  linearIssueCommentsRead,
+  linearIssueRead
+} from './mobile-task-item-detail-operations'
 
 export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffectsModel) {
   const {
@@ -43,8 +48,8 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
 
     const loadDetails = async (): Promise<void> => {
       if (actionItem.provider === 'github') {
-        const response = await client.sendRequest(
-          'github.workItemDetails',
+        const reply = await githubItemDetailRead.request(
+          client,
           {
             repo: `id:${actionItem.source.repoId}`,
             number: actionItem.source.number,
@@ -52,10 +57,8 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const details = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const details = githubItemDetailRead.interpret(reply) as {
           body?: string
           comments?: DetailComment[]
           item?: {
@@ -103,8 +106,8 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
       }
 
       if (actionItem.provider === 'gitlab') {
-        const response = await client.sendRequest(
-          'gitlab.workItemDetails',
+        const reply = await gitlabItemDetailRead.request(
+          client,
           {
             repo: `id:${actionItem.source.repoId}`,
             iid: actionItem.source.number,
@@ -113,10 +116,8 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const details = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const details = gitlabItemDetailRead.interpret(reply) as {
           body?: string
           comments?: DetailComment[]
           item?: { labels?: string[]; mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' }
@@ -186,17 +187,20 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
         return
       }
 
-      const [issueResponse, commentsResponse] = await Promise.all([
-        client.sendRequest(
-          'linear.getIssue',
+      // Interpretation is deferred past the group on purpose: this Promise.all rejects as soon as
+      // one leg's transport does, and interpreting only after both settled is what makes the issue
+      // error win over the comments error. startRpcOperation would wait for the slower peer.
+      const [issueReply, commentsReply] = await Promise.all([
+        linearIssueRead.request(
+          client,
           {
             id: actionItem.source.id,
             workspaceId: actionItem.source.workspaceId
           },
           { timeoutMs: 30_000 }
         ),
-        client.sendRequest(
-          'linear.issueComments',
+        linearIssueCommentsRead.request(
+          client,
           {
             issueId: actionItem.source.id,
             workspaceId: actionItem.source.workspaceId
@@ -204,13 +208,11 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           { timeoutMs: 30_000 }
         )
       ])
-      if (!isSuccess(issueResponse)) {
-        throw new Error(issueResponse.error.message)
-      }
-      const issue = issueResponse.result as LinearIssue | null
-      const comments = isSuccess(commentsResponse)
-        ? ((commentsResponse.result as DetailComment[]) ?? [])
-        : []
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      const issue = linearIssueRead.interpret(issueReply) as LinearIssue | null
+      const accepted = linearIssueCommentsRead.interpret(commentsReply)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      const comments = accepted.accepted ? ((accepted.value as DetailComment[]) ?? []) : []
       if (!issue) {
         throw new Error('Details not found')
       }

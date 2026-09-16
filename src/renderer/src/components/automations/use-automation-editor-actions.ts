@@ -76,6 +76,7 @@ export function useAutomationEditorActions({
       dayOfWeek: '1',
       customSchedule: '',
       missedRunGraceMinutes: '720',
+      savedSchedule: null,
       scheduleWarning: null
     }
     const nextDraft = template

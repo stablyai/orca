@@ -4,11 +4,16 @@ import {
   type DetailComment,
   type GitHubProjectRow,
   type GitHubWorkItem,
-  isSuccess,
   projectRowStatusLabel,
   projectRowType,
   splitRepositorySlug
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubProjectCommentUpdate,
+  githubProjectCommentWrite,
+  githubProjectIssueUpdate,
+  githubProjectPullRequestUpdate
+} from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCreateActionsModel) {
   const {
@@ -101,23 +106,40 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
       }
       setProjectMutating(true)
       try {
-        const response = await client.sendRequest(
+        // An issue and a pull request are different methods, so each arm sends its own operation
+        // rather than one call picking a method string.
+        // Params repeated rather than hoisted so each send textually carries its own host, which
+        // is what github-project-host-routing-source.test.ts pins.
+        const updated =
           type === 'issue'
-            ? 'github.project.updateIssueBySlug'
-            : 'github.project.updatePullRequestBySlug',
-          {
-            owner: slug.owner,
-            repo: slug.repo,
-            host: activeGitHubProjectHost,
-            number: row.content.number,
-            updates
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: { message?: string } }
+            ? githubProjectIssueUpdate.interpret(
+                await githubProjectIssueUpdate.request(
+                  client,
+                  {
+                    owner: slug.owner,
+                    repo: slug.repo,
+                    host: activeGitHubProjectHost,
+                    number: row.content.number,
+                    updates
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+            : githubProjectPullRequestUpdate.interpret(
+                await githubProjectPullRequestUpdate.request(
+                  client,
+                  {
+                    owner: slug.owner,
+                    repo: slug.repo,
+                    host: activeGitHubProjectHost,
+                    number: row.content.number,
+                    updates
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = updated as { ok?: boolean; error?: { message?: string } }
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update GitHub item')
         }
@@ -185,8 +207,8 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
       }
       setProjectMutating(true)
       try {
-        const response = await client.sendRequest(
-          'github.project.addIssueCommentBySlug',
+        const reply = await githubProjectCommentWrite.request(
+          client,
           {
             owner: slug.owner,
             repo: slug.repo,
@@ -196,10 +218,8 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectCommentWrite.interpret(reply) as
           | { ok: true; comment?: DetailComment }
           | { ok: false; error?: { message?: string } }
         if (!result.ok) {
@@ -237,8 +257,8 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.project.updateIssueCommentBySlug',
+        const reply = await githubProjectCommentUpdate.request(
+          client,
           {
             owner: slug.owner,
             repo: slug.repo,
@@ -248,10 +268,8 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectCommentUpdate.interpret(reply) as {
           ok?: boolean
           error?: string | { message?: string }
         }

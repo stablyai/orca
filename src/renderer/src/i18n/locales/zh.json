@@ -716,7 +716,6 @@
       "useComposerState": {
         "7eb3f44ff7": "所选智能体已禁用。创建之前选择启用的智能体。",
         "b2ead86962": "无法解析 PR 基础引用。",
-        "a9ff236145": "部分附件无法上传。",
         "3db83fc58a": "没有可用于附件的远程项目路径。",
         "ba6cb77082": "无法连接到项目。",
         "chooseOrAddProjectBeforeWorkspace": "创建工作区前，请选择或添加项目。",
@@ -2221,6 +2220,10 @@
                 "7c302f8174": "无标题"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "此视图暂无任何项目。",
+            "7e4a2f80c6": "最近添加的项目可能需要一段时间才会显示。"
           }
         },
         "GitHubMarkdownComposer": {
@@ -10266,7 +10269,8 @@
           "noteKeysBody": "API 密钥和工作区存储在当前运行环境中。",
           "noteVisibilityTitle": "隐藏不等于断开连接",
           "noteVisibilityBody": "在任务来源中隐藏 Linear 只会将其从选择器中移除，不会删除密钥或技能。",
-          "setupChecking": "检查中…"
+          "setupChecking": "检查中…",
+          "setupUnverified": "无法验证"
         },
         "TaskSourceLinearSetup": {
           "connectTitle": "连接 Linear",
@@ -10288,6 +10292,7 @@
           "statusReady": "已就绪",
           "statusConnectRequired": "需要连接",
           "statusSkillRequired": "需要技能",
+          "statusUnverified": "无法验证",
           "statusUnavailable": "状态不可用",
           "statusHidden": "已从任务中隐藏",
           "statusIncomplete": "需要设置",
@@ -14693,7 +14698,8 @@
         "chooseInAgentPicker": "在智能体选择器中选择…",
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "当前值未知 — 请选择开或关",
+        "valueIsDefault": "默认",
+        "valueNotReported": "未报告",
         "sentNotConfirmed": "已发送给智能体 — 尚未确认",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
@@ -14706,9 +14712,7 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
-          "ultra": "极致",
-          "on": "开",
-          "off": "关"
+          "ultra": "极致"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
@@ -14906,27 +14910,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "仪表盘视图",
-      "board": "仪表盘",
-      "map": "智能体地图"
-    },
-    "map": {
-      "host": {
-        "local": "本地",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "远程"
-      },
-      "liveContainmentMap": "实时包含关系图",
-      "empty": "没有智能体符合当前筛选条件。",
-      "canvasLabel": "项目、工作区和智能体的嵌套关系图",
-      "zoomOut": "缩小",
-      "zoomIn": "放大",
-      "fit": "适配屏幕",
-      "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
-      "agentCount": "{{count}} 个智能体"
-    },
     "placeholder": {
       "title": "智能体仪表盘",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
@@ -15060,6 +15043,14 @@
       "hide": "隐藏智能体",
       "action": "试用智能体",
       "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "需要输入",
+      "working": "处理中",
+      "stopped": "已停止",
+      "finished": "已完成"
     }
   }
 }

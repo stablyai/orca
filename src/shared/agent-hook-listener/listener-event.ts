@@ -21,8 +21,10 @@ export type AgentHookEventPayload = {
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
-  /** Claude's provider-owned user-prompt UUID. */
+  /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
+  /** This row belongs to an observed Grok prompt boundary even when its opaque id is absent. */
+  grokPromptBoundary?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
@@ -44,6 +46,10 @@ export type AgentHookEventPayload = {
   /** Row projected from a structured session the host holds: `owned` while its provider child
    *  runs here, `held` once the child is gone but the session is still open. Never persisted. */
   structuredHost?: StructuredHostStatus
+  /** Runtime terminal handle the pane resolved to when main parsed this status off the PTY.
+   *  Lets a reader rejoin the row to its terminal after the pane key moved. Never persisted:
+   *  a handle belongs to the runtime that issued it. */
+  terminalHandle?: string
   payload: ParsedAgentStatusPayload
 }
 
