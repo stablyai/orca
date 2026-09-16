@@ -19652,6 +19652,597 @@
           "checkpoint": "stopped"
         }
       ]
+    },
+    {
+      "id": "notifications-desktop-stream",
+      "operation": "notifications.desktop-stream",
+      "version": 1,
+      "family": "notifications.desktop-stream",
+      "sites": ["mobile/src/notifications/mobile-notifications.ts"],
+      "schedules": [],
+      "deviceStore": {
+        "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationTray": [
+          {
+            "request": {
+              "identifier": "tray-1",
+              "content": {
+                "data": {
+                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
+                  "kind": "alert",
+                  "notificationId": "note-1",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 7
+                }
+              }
+            }
+          },
+          {
+            "request": {
+              "identifier": "tray-2",
+              "content": {
+                "data": {
+                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
+                  "kind": "alert",
+                  "notificationId": "note-2",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 8
+                }
+              }
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "action": "start",
+          "id": "start"
+        },
+        {
+          "checkpoint": "subscribed"
+        },
+        {
+          "frame": "notifications.subscribe#1",
+          "params": {
+            "includeDesktopSuppressed": true
+          },
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-1"
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "complete": "notifications.getMissedSince#1",
+          "params": {
+            "lastSeenSeq": 9007199254740991,
+            "deliveredPushes": [
+              {
+                "notificationId": "note-1",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationId": "note-2",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 8
+              }
+            ]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "dismissedPushes": [
+                {
+                  "notificationId": "note-1",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 7
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "caught-up"
+        },
+        {
+          "frame": "notifications.subscribe#1",
+          "params": {
+            "includeDesktopSuppressed": true
+          },
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "dismiss",
+              "notificationId": "note-2",
+              "notificationEpoch": "epoch-1",
+              "notificationSeq": 8
+            }
+          }
+        },
+        {
+          "checkpoint": "dismissed"
+        },
+        {
+          "action": "stop",
+          "id": "stop"
+        },
+        {
+          "checkpoint": "unsubscribing"
+        },
+        {
+          "complete": "notifications.unsubscribe#1",
+          "params": {
+            "subscriptionId": "sub-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "unsubscribed": true
+            }
+          }
+        },
+        {
+          "checkpoint": "stopped"
+        }
+      ]
+    },
+    {
+      "id": "notifications-desktop-stream-replayed",
+      "operation": "notifications.desktop-stream",
+      "version": 1,
+      "family": "notifications.desktop-stream",
+      "sites": ["mobile/src/notifications/mobile-notifications.ts"],
+      "schedules": [],
+      "deviceStore": {
+        "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationTray": [
+          {
+            "request": {
+              "identifier": "tray-1",
+              "content": {
+                "data": {
+                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
+                  "kind": "alert",
+                  "notificationId": "note-1",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 7
+                }
+              }
+            }
+          },
+          {
+            "request": {
+              "identifier": "tray-2",
+              "content": {
+                "data": {
+                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
+                  "kind": "alert",
+                  "notificationId": "note-2",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 8
+                }
+              }
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "action": "start",
+          "id": "start"
+        },
+        {
+          "frame": "notifications.subscribe#1",
+          "params": {
+            "includeDesktopSuppressed": true
+          },
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-1"
+            }
+          }
+        },
+        {
+          "complete": "notifications.getMissedSince#1",
+          "params": {
+            "lastSeenSeq": 9007199254740991,
+            "deliveredPushes": [
+              {
+                "notificationId": "note-1",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationId": "note-2",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 8
+              }
+            ]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "dismissedPushes": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "cutover",
+          "id": "cutover"
+        },
+        {
+          "checkpoint": "re-subscribed"
+        },
+        {
+          "frame": "notifications.subscribe#2",
+          "params": {
+            "includeDesktopSuppressed": true
+          },
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-2"
+            }
+          }
+        },
+        {
+          "complete": "notifications.getMissedSince#2",
+          "params": {
+            "lastSeenSeq": 9007199254740991,
+            "deliveredPushes": [
+              {
+                "notificationId": "note-1",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationId": "note-2",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 8
+              }
+            ]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "dismissedPushes": [
+                {
+                  "notificationId": "note-2",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 8
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "replayed"
+        },
+        {
+          "action": "stop",
+          "id": "stop"
+        },
+        {
+          "complete": "notifications.unsubscribe#1",
+          "params": {
+            "subscriptionId": "sub-2"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "unsubscribed": true
+            }
+          }
+        },
+        {
+          "checkpoint": "stopped"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-page-earlier",
+      "operation": "session.native-chat-page",
+      "version": 1,
+      "family": "session.native-chat-page",
+      "sites": ["mobile/src/session/use-mobile-native-chat-session.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "subscribed"
+        },
+        {
+          "frame": "nativeChat.subscribe#1",
+          "params": {
+            "agent": "claude",
+            "sessionId": "session-1",
+            "limit": 40,
+            "subscriptionId": "claude:session-1",
+            "capabilities": {
+              "transcriptPending": 1
+            },
+            "transcriptPath": "/work/feature/.claude/session-1.jsonl"
+          },
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "snapshot",
+              "messages": [
+                {
+                  "id": "m-3",
+                  "role": "assistant",
+                  "source": "transcript",
+                  "timestamp": 3000,
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "third"
+                    }
+                  ]
+                },
+                {
+                  "id": "m-4",
+                  "role": "assistant",
+                  "source": "transcript",
+                  "timestamp": 4000,
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "fourth"
+                    }
+                  ]
+                }
+              ],
+              "hasMore": true,
+              "beforeOffset": 1200
+            }
+          }
+        },
+        {
+          "checkpoint": "snapshot"
+        },
+        {
+          "action": "load-earlier",
+          "id": "page"
+        },
+        {
+          "checkpoint": "paging"
+        },
+        {
+          "complete": "nativeChat.readSession#1",
+          "params": {
+            "agent": "claude",
+            "sessionId": "session-1",
+            "limit": 60,
+            "beforeOffset": 1200,
+            "transcriptPath": "/work/feature/.claude/session-1.jsonl"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "messages": [
+                {
+                  "id": "m-1",
+                  "role": "assistant",
+                  "source": "transcript",
+                  "timestamp": 1000,
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "first"
+                    }
+                  ]
+                },
+                {
+                  "id": "m-2",
+                  "role": "assistant",
+                  "source": "transcript",
+                  "timestamp": 2000,
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "second"
+                    }
+                  ]
+                }
+              ],
+              "hasMore": false,
+              "beforeOffset": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "paged"
+        },
+        {
+          "action": "cutover",
+          "id": "cutover"
+        },
+        {
+          "checkpoint": "re-subscribed"
+        },
+        {
+          "frame": "nativeChat.subscribe#2",
+          "params": {
+            "agent": "claude",
+            "sessionId": "session-1",
+            "limit": 40,
+            "subscriptionId": "claude:session-1",
+            "capabilities": {
+              "transcriptPending": 1
+            },
+            "transcriptPath": "/work/feature/.claude/session-1.jsonl"
+          },
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "snapshot",
+              "messages": [
+                {
+                  "id": "m-3",
+                  "role": "assistant",
+                  "source": "transcript",
+                  "timestamp": 3000,
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "third"
+                    }
+                  ]
+                },
+                {
+                  "id": "m-4",
+                  "role": "assistant",
+                  "source": "transcript",
+                  "timestamp": 4000,
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "fourth"
+                    }
+                  ]
+                },
+                {
+                  "id": "m-5",
+                  "role": "assistant",
+                  "source": "transcript",
+                  "timestamp": 5000,
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "fifth"
+                    }
+                  ]
+                }
+              ],
+              "hasMore": true,
+              "beforeOffset": 1200
+            }
+          }
+        },
+        {
+          "checkpoint": "replayed"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
+        },
+        {
+          "checkpoint": "unmounted"
+        }
+      ]
+    },
+    {
+      "id": "terminal-gesture-flush-and-clear",
+      "operation": "session.terminal-gesture-input",
+      "version": 1,
+      "family": "session.terminal-gesture-input",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-input.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "gesture",
+          "id": "gesture"
+        },
+        {
+          "checkpoint": "queued"
+        },
+        {
+          "advance": 16
+        },
+        {
+          "checkpoint": "flushing"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "sent"
+        },
+        {
+          "complete": "orchestration.workerTerminalUserInput#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "reported": true
+            }
+          }
+        },
+        {
+          "checkpoint": "reported"
+        },
+        {
+          "action": "clear",
+          "id": "clear"
+        },
+        {
+          "checkpoint": "clearing"
+        },
+        {
+          "complete": "terminal.clearBuffer#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "cleared": true
+            }
+          }
+        },
+        {
+          "checkpoint": "cleared"
+        }
+      ]
     }
   ]
 }

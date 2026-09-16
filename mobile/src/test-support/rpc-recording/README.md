@@ -97,6 +97,15 @@ and which the registry reports to the listener as an error. A streaming frame ar
 is accepted and observes nothing, because the opener path answers for an id it no longer holds; a
 non-streaming one names the scenario that has stopped matching.
 
+A listener that throws on a frame is recorded as a `stream-listener-crash` effect rather than
+failing the suite, the same rule the crash boundary holds for a screen and the unhandled-rejection
+window holds for a detached effect. Only the two `runtime.clientEvents` listeners check the payload
+is an object before reading its `type`, so without this every other subscribing family died on the
+matrix's `result-absent` and `result-null` partitions — the two shapes a stream listener is most
+likely to be wrong about were the only ones the oracle could not record. The scenario's own faults
+stay loud: a missing subscribe payload, a params mismatch and a closed stream are all raised before
+or after the listener runs, and none of them is caught.
+
 ### Recorded time
 
 Every settlement carries `startedAt` and `settledAt` in virtual milliseconds since the pinned epoch,

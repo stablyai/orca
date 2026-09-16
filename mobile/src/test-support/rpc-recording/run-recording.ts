@@ -1,5 +1,6 @@
 import { recordUnhandledRejections } from './unhandled-recording'
 import {
+  captureError,
   captureValue,
   observeSettlement,
   rejectedSettlement,
@@ -68,7 +69,16 @@ export async function runRecording(
           transport.complete(step.complete, step.params, step.reply, step.reject)
         }
       } else if ('frame' in step) {
-        transport.frame(step.frame, step.params, step.reply)
+        const crash = transport.frame(step.frame, step.params, step.reply)
+        if (crash) {
+          // The listener died on this frame. Recorded rather than raised, the way a screen crash and
+          // a detached rejection are: what a malformed frame does to a subscription is an
+          // observation, and the transport still raises a scenario that stopped matching.
+          effect('stream-listener-crash', {
+            frame: step.frame,
+            error: captureError(crash.error)
+          })
+        }
       } else if ('bind' in step) {
         if (!step.optional || transport.outstanding(step.request)) {
           transport.bind(step.bind, step.request, step.params)

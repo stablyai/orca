@@ -12,6 +12,9 @@ import {
 } from './recording-values'
 import type { Rejection } from './recording-scenario'
 
+/** What a product stream listener threw on one delivered frame. */
+export type FrameListenerCrash = { readonly error: unknown }
+
 /** The one device identity every recorded frame carries; nothing here reads a keychain. */
 const DEVICE_TOKEN = 'recording-device'
 
@@ -168,8 +171,16 @@ export class ScriptedRpcTransport {
   /**
    * A whole host response delivered at a subscribe payload's wire id, through the real registry, so
    * `ready`, a data event, `end` and a refusal are one step kind rather than four.
+   *
+   * What the product listener threw is returned rather than thrown on, because the two failures a
+   * frame can produce have to stay apart. A missing payload, a params mismatch and a closed stream
+   * are the scenario no longer matching and stay loud. A listener that dies on a frame is the
+   * recording — the same rule the crash boundary holds for a screen, and without it the reply
+   * shapes that break a subscription are the only ones this oracle cannot see: only the two
+   * `runtime.clientEvents` listeners check the payload is an object before reading its `type`, so
+   * the absent-result and null-result partitions take every other listener down.
    */
-  frame(name: string, params: unknown, reply: unknown): void {
+  frame(name: string, params: unknown, reply: unknown): FrameListenerCrash | null {
     const stream = this.openStreams.get(name)
     if (!stream) {
       throw new Error(`Missing subscription payload: ${name}`)
@@ -177,14 +188,20 @@ export class ScriptedRpcTransport {
     if (JSON.stringify(captureValue(stream.params)) !== JSON.stringify(captureValue(params))) {
       throw new Error(`Subscribe params mismatch: ${name}`)
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the response as JSON; the wire id is the transport’s.
-    const routed = stream.deliver({ ...(reply as object), id: stream.id } as RpcResponse)
+    let routed: boolean
+    try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the response as JSON; the wire id is the transport’s.
+      routed = stream.deliver({ ...(reply as object), id: stream.id } as RpcResponse)
+    } catch (error) {
+      return { error }
+    }
     if (!routed) {
       // Only a non-streaming reply lands here: the registry routes every streaming response to the
       // id that opened the stream, retired or not. A scenario that has stopped matching, not a
       // stream that closed early.
       throw new Error(`No open stream for frame: ${name}`)
     }
+    return null
   }
 
   /** Whether a scripted name names a request that was sent and is still waiting for its reply. */
