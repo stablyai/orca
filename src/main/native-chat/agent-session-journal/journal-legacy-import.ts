@@ -114,7 +114,10 @@ export async function prepareLegacyTranscriptImport(input: {
   const options = input.options ?? {}
   const limits = options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
   const transcriptAgent = resolveNativeChatTranscriptAgent(input.agent)
-  if (!transcriptAgent) {
+  // Why: opencode's transcript is a SQLite DB with no JSONL line decoder, so
+  // the legacy JSONL import below can never serve it — reject it here like an
+  // unsupported agent instead of falling through to a file search.
+  if (!transcriptAgent || transcriptAgent === 'opencode') {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
   const filePath =

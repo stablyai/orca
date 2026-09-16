@@ -2,12 +2,22 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import type {
+  OpenCodeTranscriptForwardPage,
+  OpenCodeTranscriptPage,
+  OpenCodeTranscriptSignal
+} from '../native-chat/transcript-opencode-sqlite-query'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
+import {
+  dispatchOpenCodeNativeChatPage,
+  dispatchOpenCodeNativeChatPageAfter,
+  dispatchOpenCodeNativeChatSignal
+} from './session-scanner-opencode-sqlite-native-chat-dispatch'
 
 // Why: resolve the built worker entry + own the process-wide shared client so
 // the client class stays free of Electron (require'd lazily here) and the
-// scanner call sites depend only on the two routing functions below.
+// scanner / native-chat call sites depend only on the routing functions below.
 
 const WORKER_ENTRY_FILENAME = 'session-scanner-opencode-sqlite-worker-entry.js'
 
@@ -69,4 +79,43 @@ export function parseOpenCodeSqliteSessionViaWorker(args: {
   platform: NodeJS.Platform
 }): Promise<AiVaultSession | null> {
   return getSharedClient().parse(args)
+}
+
+/**
+ * Read one native-chat transcript page through the shared worker client.
+ * @returns The page, or `null` when the session row does not exist.
+ */
+export function readOpenCodeTranscriptPageViaWorker(args: {
+  dbPath: string
+  sessionId: string
+  limit: number
+  beforeMessageRowId?: number
+}): Promise<OpenCodeTranscriptPage | null> {
+  return dispatchOpenCodeNativeChatPage(getSharedClient(), args)
+}
+
+/**
+ * Read the cheap change signal for one session through the shared worker client.
+ * @returns The signal, or `null` when the session row does not exist.
+ */
+export function readOpenCodeTranscriptSignalViaWorker(args: {
+  dbPath: string
+  sessionId: string
+}): Promise<OpenCodeTranscriptSignal | null> {
+  return dispatchOpenCodeNativeChatSignal(getSharedClient(), args)
+}
+
+/**
+ * Read the oldest-first messages strictly NEWER than a rowid cursor through the
+ * shared worker client — the orchestration worker-read's forward continuation.
+ * @returns The page, or `null` when the session row does not exist.
+ */
+export function readOpenCodeTranscriptPageAfterViaWorker(args: {
+  dbPath: string
+  sessionId: string
+  afterMessageRowId: number
+  limit: number
+  upToMessageRowId?: number
+}): Promise<OpenCodeTranscriptForwardPage | null> {
+  return dispatchOpenCodeNativeChatPageAfter(getSharedClient(), args)
 }

@@ -5,6 +5,10 @@ import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { nativeChatLineDecoderForAgent } from '../../native-chat/transcript-tail-reader'
 import type { IFilesystemProvider } from '../../providers/types'
 import {
+  readOpenCodeWorkerTranscript,
+  type OpenCodeWorkerTranscriptDeps
+} from './worker-transcript-read-opencode'
+import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
@@ -34,24 +38,47 @@ type WorkerTranscriptReadSuccess = {
 
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
 
-export async function readWorkerTranscript(args: {
-  agent: AgentType
-  sessionId: string
-  transcriptPath?: string
-  /** Attested local WSL distro. Keeps host path translation on the selected guest. */
-  wslDistro?: string
-  offset?: number
-  limit?: number
-  /** Prior file identity from the cursor owner, when it retains that evidence. */
-  expectedSourceFingerprint?: string
-  /** Hash of the bounded content immediately before a cursor offset. */
-  expectedBoundaryCheckpoint?: string
-  /** Remote execution-host provider. When present no local filesystem lookup occurs. */
-  filesystemProvider?: IFilesystemProvider
-}): Promise<WorkerTranscriptReadResult> {
+/** Per-agent reader injection for tests. Namespaced so the agent-generic
+ *  signature never grows an agent-specific param — a future storage-format
+ *  agent adds its own key here, not a new positional leak. */
+export type WorkerTranscriptReadDeps = {
+  opencode?: OpenCodeWorkerTranscriptDeps
+}
+
+export async function readWorkerTranscript(
+  args: {
+    agent: AgentType
+    sessionId: string
+    transcriptPath?: string
+    /** Attested local WSL distro. Keeps host path translation on the selected guest. */
+    wslDistro?: string
+    offset?: number
+    limit?: number
+    /** Prior file identity from the cursor owner, when it retains that evidence. */
+    expectedSourceFingerprint?: string
+    /** Hash of the bounded content immediately before a cursor offset. */
+    expectedBoundaryCheckpoint?: string
+    /** Remote execution-host provider. When present no local filesystem lookup occurs. */
+    filesystemProvider?: IFilesystemProvider
+  },
+  deps?: WorkerTranscriptReadDeps
+): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
+  }
+  // Why: OpenCode's transcript is a SQLite DB, not a JSONL file — its own
+  // rowid-cursored reader owns the whole path (see worker-transcript-read-opencode).
+  // A remote provider or a WSL guest session can never serve the local SQLite
+  // worker (it holds the desktop's disks, not the execution host's or guest's),
+  // so those workers fall back to the terminal instead of failing the read.
+  // Local callers pass the deps-injected reader owned by
+  // worker-transcript-read-opencode.
+  if (transcriptAgent === 'opencode') {
+    if (args.filesystemProvider || args.wslDistro) {
+      return { ok: false, reason: 'remote_capability_unavailable', warnings: [] }
+    }
+    return readOpenCodeWorkerTranscript(args, deps?.opencode)
   }
   const decode = nativeChatLineDecoderForAgent(args.agent)
   if (!decode) {

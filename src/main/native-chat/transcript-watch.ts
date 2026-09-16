@@ -1,15 +1,18 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
   type WslTranscriptResolutionSnapshot
 } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
+import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode'
 import { installTranscriptWatcher } from './transcript-watch-engine'
-import type {
-  NativeChatTranscriptSubscription,
-  SubscribeNativeChatTranscriptArgs
+import {
+  UNFLUSHED_SETTLE_MS,
+  type NativeChatTranscriptSubscription,
+  type SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
@@ -54,8 +57,8 @@ const FALLBACK_RESOLVE_POLL_MS = 5_000
 // Why: with no frame at all a client shows a bare spinner for the whole flush
 // delay — a fresh session that has yet to be prompted never flushes, so the
 // spinner is permanent. Long enough that a merely slow resolve still wins the
-// race and paints history directly.
-const UNFLUSHED_SETTLE_MS = 1_500
+// race and paints history directly. (Constant: UNFLUSHED_SETTLE_MS in
+// transcript-watch-contract.ts.)
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
@@ -264,15 +267,25 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
-  const decode = nativeChatLineDecoderForAgent(args.agent)
-  if (!decode) {
-    // Nothing watchable — return a no-op teardown so callers can unconditionally
-    // unsubscribe without null-checks.
-    return { unsubscribe: () => {}, watching: false }
+  // Why: OpenCode's transcript is a SQLite DB, not a JSONL file — its own
+  // signal-poll subscription replaces the line-decoder watch below. filePath
+  // can never resolve a DB session, so only the session id gate applies: a
+  // blank id must bail, not resolve-poll an unresolvable target forever.
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    if (!args.sessionId.trim()) {
+      return { unsubscribe: () => {}, watching: false }
+    }
+    return subscribeOpenCodeNativeChatTranscript(args, setupSignal)
   }
   // Why: a blank session id (and no explicit file) can never resolve — bail out
   // instead of resolve-polling an unresolvable target forever.
   if (!args.filePath && !args.sessionId.trim()) {
+    return { unsubscribe: () => {}, watching: false }
+  }
+  const decode = nativeChatLineDecoderForAgent(args.agent)
+  if (!decode) {
+    // Nothing watchable — return a no-op teardown so callers can unconditionally
+    // unsubscribe without null-checks.
     return { unsubscribe: () => {}, watching: false }
   }
 
