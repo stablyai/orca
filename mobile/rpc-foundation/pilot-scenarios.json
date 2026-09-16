@@ -20949,15 +20949,21 @@
       "schedules": [],
       "steps": [
         {
-          "action": "create",
-          "id": "create",
+          "action": "mount",
+          "id": "mount",
           "args": {
             "worktreeId": "wt-1",
             "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
             "initialPrompt": "review these notes",
             "successToast": "Notes sent",
-            "errorToast": "Couldn't run Notes",
-            "deviceToken": "device-token-1"
+            "errorToast": "Couldn't run Notes"
           }
         },
         {
@@ -21029,12 +21035,16 @@
       "schedules": [],
       "steps": [
         {
-          "action": "create",
-          "id": "create",
+          "action": "mount",
+          "id": "mount",
           "args": {
             "worktreeId": "wt-1",
             "activeSessionTabId": "tab-0"
           }
+        },
+        {
+          "action": "create",
+          "id": "create"
         },
         {
           "checkpoint": "creating"
@@ -21082,11 +21092,17 @@
       "schedules": [],
       "steps": [
         {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
           "action": "create",
           "id": "create",
           "args": {
-            "worktreeId": "wt-1",
-            "activeSessionTabId": "tab-0",
             "errorToast": "Couldn't run Notes"
           }
         },
@@ -21125,12 +21141,16 @@
       "schedules": [],
       "steps": [
         {
-          "action": "create",
-          "id": "create",
+          "action": "mount",
+          "id": "mount",
           "args": {
             "worktreeId": "wt-1",
             "activeSessionTabId": "tab-0"
           }
+        },
+        {
+          "action": "create",
+          "id": "create"
         },
         {
           "checkpoint": "creating"
@@ -21178,11 +21198,15 @@
       "schedules": [],
       "steps": [
         {
-          "action": "create",
-          "id": "create",
+          "action": "mount",
+          "id": "mount",
           "args": {
             "worktreeId": "wt-1"
           }
+        },
+        {
+          "action": "create",
+          "id": "create"
         },
         {
           "checkpoint": "creating"
@@ -21232,11 +21256,17 @@
       "schedules": [],
       "steps": [
         {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
           "action": "create",
           "id": "create",
           "args": {
-            "worktreeId": "wt-1",
-            "activeSessionTabId": "tab-0",
             "startupCommand": "pnpm test",
             "startupCommandDelivery": "shell-ready",
             "errorToast": "Couldn't run Tests"
@@ -21290,11 +21320,17 @@
       "schedules": [],
       "steps": [
         {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
           "action": "create",
           "id": "create",
           "args": {
-            "worktreeId": "wt-1",
-            "activeSessionTabId": "tab-0",
             "agent": "claude",
             "agentPrompt": "summarize the diff",
             "errorToast": "Couldn't run Review"
@@ -21348,8 +21384,8 @@
       "schedules": [],
       "steps": [
         {
-          "action": "create",
-          "id": "create",
+          "action": "mount",
+          "id": "mount",
           "args": {
             "worktreeId": "wt-1",
             "activeSessionTabId": "tab-0"
@@ -21357,11 +21393,11 @@
         },
         {
           "action": "create",
-          "id": "create-again",
-          "args": {
-            "worktreeId": "wt-1",
-            "activeSessionTabId": "tab-0"
-          }
+          "id": "create"
+        },
+        {
+          "action": "create",
+          "id": "create-again"
         },
         {
           "bind": "first-create",

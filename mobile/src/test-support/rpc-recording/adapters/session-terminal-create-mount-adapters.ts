@@ -44,22 +44,13 @@ function declaredAgent(value: unknown): TuiAgent | undefined {
  * what lets a golden hold an omission — `afterTabId` is absent on a fresh session and after the
  * last tab closes, and no adapter constant may decide that.
  *
- * `clientMutationId` mixes `Date.now()` and `Math.random()`, both pinned by the `Math.random` spy
- * `start()` installs in `vitest-recording-scheduler.ts` — but pinning the sequence is not the whole of determinism here,
- * which is why this family mounts from its first action rather than from a scripted mount step. React draws one
- * `Math.random()` of its own before it ever schedules: `enqueueTask` in `react.development.js`
- * evaluates `("require" + Math.random()).slice(0, 7)` to hide its `require` call from bundlers, once
- * per process and lazily, on the first task it enqueues. `runRecording` flushes through `await act`
- * after every step, so a scripted mount would put that flush — and therefore React's draw — before
- * the create. The create's own draw would then be the second of the seeded sequence on the first
- * recording in a process and the first on every later one, and the two determinism runs would
- * disagree on the recorded key: `Request params mismatch: session.tabs.createTerminal#1`, on
- * `clientMutationId` alone. Mounting inside the first action keeps the create ahead of any flush, so
- * its draw is the first of the sequence whether React is warm or cold.
+ * The worktree and the active tab are read as the hook renders, so the scenario declares them on
+ * the `mount` step rather than on the create that sends them; the launch options are call
+ * arguments and are declared where they are passed.
  *
- * That is a workaround for an engine defect, not a property of this family. #21088 pays React's
- * lazy draw when the seed is installed, which makes the position of the mount irrelevant; once it
- * lands this mount moves back to a scripted step and no golden moves with it.
+ * `clientMutationId` mixes `Date.now()` and `Math.random()`, both pinned by `start()` in
+ * `vitest-recording-scheduler.ts`, which also pays React's one lazy `Math.random()` draw before it
+ * installs the seed, so this create reads the same seeded value cold or warm.
  *
  * State is the tab and terminal lists the hook publishes, the active handle and tab, and the create
  * error, because those are what a refused or unreadable create leaves on the screen.
@@ -149,19 +140,20 @@ export function sessionTerminalCreateMountAdapters(
         )
       })
 
-      let mounted = false
-
       return {
         action(name, args) {
+          if (name === 'mount') {
+            // Declared by the scenario, never by this stub, because each of these reaches the wire.
+            worktreeId = String(args.worktreeId)
+            activeSessionTabId =
+              typeof args.activeSessionTabId === 'string' ? args.activeSessionTabId : null
+            activeSessionTabIdRef.current = activeSessionTabId
+            deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
+            return hook.mount()
+          }
           if (name !== 'create') {
             throw new Error(`Unknown terminal create action: ${name}`)
           }
-          // Declared by the scenario, never by this stub, because each of these reaches the wire.
-          worktreeId = String(args.worktreeId)
-          activeSessionTabId =
-            typeof args.activeSessionTabId === 'string' ? args.activeSessionTabId : null
-          activeSessionTabIdRef.current = activeSessionTabId
-          deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
           const agent = declaredAgent(args.agent)
           if (
             args.startupCommandDelivery !== undefined &&
@@ -184,10 +176,6 @@ export function sessionTerminalCreateMountAdapters(
               ? {}
               : { startupCommandDelivery: 'shell-ready' as const }),
             ...(args.agentPrompt === undefined ? {} : { agentPrompt: String(args.agentPrompt) })
-          }
-          if (!mounted) {
-            mounted = true
-            hook.mount()
           }
           return actions!.handleCreateTerminal(
             agent,
