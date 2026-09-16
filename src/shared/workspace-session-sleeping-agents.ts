@@ -98,6 +98,7 @@ const sleepingAgentSessionRecordSchema = z
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
+    viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
     restoreOnTabOpenOnly: z.boolean().optional()
   })
