@@ -107,9 +107,9 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // through terminal.input-send in terminal/mobile-terminal-operations.ts, the menu's clear goes
   // through terminal.clear-buffer-or-skip beside it, and the accessory's connection lookup reads
   // the repo list through the new-tab operation. Step 6 also took the two requests that share an
-  // effect with a subscribe: the header's live title (worktree.show-record-or-skip in
-  // mobile-session-read-operations.ts) and native chat's older-history page
-  // (mobile-native-chat-read-operations.ts). Every holdout below opens or rides a subscription the
+  // effect with a subscribe: the header's live title (worktree.show-record-or-skip) and native
+  // chat's older-history page (nativeChat.read-session-page-or-skip), both in
+  // mobile-session-read-operations.ts. Every holdout below opens or rides a subscription the
   // recorder has no substitute for, or takes its method as a parameter.
   // Holdout: the method is a parameter. `callAgentSession` takes a method string and a generic
   // result type, and five call sites across two hooks pass their own, plus one inside this module's

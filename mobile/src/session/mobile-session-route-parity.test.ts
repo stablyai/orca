@@ -69,8 +69,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
-// whose accepted-check became that operation's own verdict.
-const HEAD_CALLBACK_BODY_SHA256 = 'a9524686efb42fc229c1b25b446b8466ae723a4c7cdf8e4573fcf761abd26557'
+// whose accepted-check became that operation's own verdict, then again when that check was spelled
+// `=== true` to match the other four sites reading the same verdict.
+const HEAD_CALLBACK_BODY_SHA256 = 'fe10d09cf10c6ddbc01dbcc611fcb37bd2acc4774db44ced772b66d1e8dbd970'
 const HEAD_EFFECT_SHA256 = '73d80845e0a4b6363cfb4bb55551af97965b1f676b97adf0b2a8504219b9a501'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same

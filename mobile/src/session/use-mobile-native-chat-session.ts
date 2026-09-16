@@ -7,7 +7,7 @@ import { createNativeChatMerger, replaceList } from '../../../src/shared/native-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
-import { nativeChatSessionPageRead } from './mobile-native-chat-read-operations'
+import { nativeChatSessionPageRead } from './mobile-session-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame

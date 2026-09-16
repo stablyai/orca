@@ -99,10 +99,12 @@ non-streaming one names the scenario that has stopped matching.
 
 A listener that throws on a frame is recorded as a `stream-listener-crash` effect rather than
 failing the suite, the same rule the crash boundary holds for a screen and the unhandled-rejection
-window holds for a detached effect. Only the two `runtime.clientEvents` listeners check the payload
-is an object before reading its `type`, so without this every other subscribing family died on the
-matrix's `result-absent` and `result-null` partitions — the two shapes a stream listener is most
-likely to be wrong about were the only ones the oracle could not record. The scenario's own faults
+window holds for a detached effect. Only three listeners check the payload is an object before
+reading its `type` — the two `runtime.clientEvents` ones and the structured agent session's, which
+guards with `isSubscribeEvent` in `use-mobile-structured-agent-state.ts` — so without this every
+other subscribing family died on the matrix's `result-absent` and `result-null` partitions — the
+two shapes a stream listener is most likely to be wrong about were the only ones the oracle could
+not record. The scenario's own faults
 stay loud: a missing subscribe payload, a params mismatch and a closed stream are all raised before
 or after the listener runs, and none of them is caught.
 
@@ -414,11 +416,10 @@ sites when there were ten — the count was taken over `mobile/src`, and the hos
 recorded, two are unwritten scenarios and four are walled, and the list is what says so.
 
 The frame plumbing is method-agnostic, so what stops a site is its consumer rather than the runner.
-Blur is
-unrecorded across all of them: `useFocusEffect` is substituted as `useEffect`, so a route's focus
-cleanup is recorded at unmount and an unsubscribe only a blur would reach is not — driving focus
-needs a substitute, and no recording reads one yet. Four of the nine
-probes pin behaviour with no demonstrated mutation — the two mixed reject/refusal new-tab orders
+Blur is unrecorded across all ten subscribing sites: `useFocusEffect` is substituted as `useEffect`,
+so a route's focus cleanup is recorded at unmount and an unsubscribe only a blur would reach is not
+— driving focus needs a substitute, and no recording reads one yet. Four of the nine probes pin
+behaviour with no demonstrated mutation — the two mixed reject/refusal new-tab orders
 and the home-providers and resume-metadata refresh refusals; they are frozen observations, not
 proven defect detectors. `settings.resume-metadata` projects `{}` as its state, so its probe
 observes only sender calls and settlements.

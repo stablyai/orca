@@ -5,8 +5,9 @@ import {
 } from '../transport/rpc-reader-payload'
 
 // What the session screen reads: the terminal inventory, the repo list two screens resolve a
-// workspace's connection through, the session tab snapshot, the quick-command list, the
-// worktree-stored review notes and a markdown tab's document.
+// workspace's connection through, the session tab snapshot, native chat's workspace paths and
+// older-history page, the quick-command list, the whole `worktree.show` record and a markdown
+// tab's document.
 
 /**
  * The terminal inventory. A refused list leaves the strip exactly as it was — the screen treats it
@@ -124,6 +125,27 @@ export const nativeChatFileInventoryRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcUncheckedMemberReader('workspace-files', 'files')
+  })
+)
+
+/**
+ * The older-history page native chat asks for when the transcript is scrolled back.
+ *
+ * A skip rather than a throw: a refused page leaves the window the subscription already delivered
+ * and the scroll simply does not grow, which is what the call site's `if (!response.ok) return`
+ * did. There is no screen to raise a host message on — the pane is already showing history.
+ *
+ * The payload stays whole rather than being narrowed to `messages`, because the reply is a union:
+ * an older runtime answers `{ error }` in place of a window, and the caller discriminates on that
+ * before it reads a message list. A member reader would have to pick one arm.
+ */
+export const nativeChatSessionPageRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'nativeChat.read-session-page-or-skip',
+    method: 'nativeChat.readSession',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('native-chat-session-page')
   })
 )
 

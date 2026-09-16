@@ -203,9 +203,10 @@ export class ScriptedRpcTransport {
    * frame can produce have to stay apart. A missing payload, a params mismatch and a closed stream
    * are the scenario no longer matching and stay loud. A listener that dies on a frame is the
    * recording — the same rule the crash boundary holds for a screen, and without it the reply
-   * shapes that break a subscription are the only ones this oracle cannot see: only the two
-   * `runtime.clientEvents` listeners check the payload is an object before reading its `type`, so
-   * the absent-result and null-result partitions take every other listener down.
+   * shapes that break a subscription are the only ones this oracle cannot see: only three
+   * listeners check the payload is an object before reading its `type` — the two
+   * `runtime.clientEvents` ones and the structured agent session's, which guards with
+   * `isSubscribeEvent` — so the absent-result and null-result partitions take every other one down.
    */
   frame(name: string, params: unknown, reply: unknown): FrameListenerCrash | null {
     const stream = this.openStreams.get(name)
@@ -224,7 +225,7 @@ export class ScriptedRpcTransport {
       // Only the product listener's own throw is a recording; anything the registry raised on its
       // way to the listener is the scenario no longer matching, and stays loud.
       const crashed = this.takeListenerCrash()
-      if (crashed?.error !== error) {
+      if (!crashed || crashed.error !== error) {
         throw error
       }
       return crashed

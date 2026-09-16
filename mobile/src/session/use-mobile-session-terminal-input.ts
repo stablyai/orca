@@ -122,7 +122,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
-      if (terminalInputSend.interpret(response)) {
+      if (terminalInputSend.interpret(response) === true) {
         reportWorkerTerminalUserInput(rpc, handle)
       }
     } catch {

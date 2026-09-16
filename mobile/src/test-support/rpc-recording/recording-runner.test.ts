@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest'
 import { captureArguments, captureError, captureValue } from './recording-values'
 import { RECORDER_DIRECTORY, recorderSha256 } from './recorder-digest'
 import { RECORDING_DRIVERS } from './recording-drivers'
+import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import {
@@ -571,6 +572,42 @@ describe('recording boundaries', () => {
       )
     ).rejects.toThrow("Cannot read properties of undefined (reading 'message')")
     expect(listened).toEqual([])
+  })
+
+  it('aborts when the registry throws with nothing stashed, including a thrown undefined', async () => {
+    // `throw undefined` is the one registry failure that cannot be told from an empty stash by
+    // value alone, so the compare has to ask whether a listener crashed at all.
+    const handleResponse = RpcClientStreamRegistry.prototype.handleResponse
+    RpcClientStreamRegistry.prototype.handleResponse = () => {
+      // oxlint-disable-next-line no-throw-literal -- SAFETY: the thrown value is the case under test.
+      throw undefined
+    }
+    try {
+      await expect(
+        runRecording(
+          {
+            id: 'registry-throws-undefined',
+            operation: 'op',
+            version: 1,
+            family: 'op',
+            sites: [],
+            schedules: [],
+            steps: [
+              { frame: `${CLIENT_EVENTS}#1`, params: null, reply: { ok: true, streaming: true } },
+              { checkpoint: 'delivered' }
+            ]
+          },
+          ({ client }) => ({
+            action: () => {},
+            state: () => ({}),
+            dispose: client.subscribe(CLIENT_EVENTS, null, () => {})
+          }),
+          vitestRecordingScheduler()
+        )
+      ).rejects.toBeUndefined()
+    } finally {
+      RpcClientStreamRegistry.prototype.handleResponse = handleResponse
+    }
   })
 
   it('files only a subscribe as an open stream, not the unsubscribe it publishes later', async () => {
