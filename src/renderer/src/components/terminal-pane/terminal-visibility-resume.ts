@@ -125,10 +125,9 @@ export function resumeTerminalVisibility({
       resetAndRefreshAllTerminalWebglAtlases('visibility-resume-dpr')
       manager.scheduleRevealRepaint()
     } else {
-      // Why: a hidden pane's parsed output updated the cell model without
-      // presenting, so the reveal diff reports those cells unchanged. Force one
-      // present now; the settled rebuild is two frames out and would otherwise
-      // leave pre-hide pixels composited until then.
+      // Why: this path just re-attached WebGL and its canvas starts empty, so
+      // present now rather than leave the pane blank until the settled rebuild
+      // two frames later.
       for (const pane of manager.getPanes()) {
         presentPaneViewportPreservingSynchronizedOutput(pane)
       }
