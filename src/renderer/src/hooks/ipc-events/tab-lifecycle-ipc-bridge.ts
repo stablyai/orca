@@ -5,6 +5,7 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { queueBlankTerminalStartupCommand } from '@/lib/blank-terminal-startup-command'
 import {
   createFloatingWorkspaceTerminalTab,
   isFloatingWorkspacePanelFocused,
@@ -43,6 +44,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
           return
         }
         const newTab = store.createTab(worktreeId)
+        queueBlankTerminalStartupCommand(store, newTab.id)
         store.setActiveTabType('terminal', worktreeId)
         // Why: mirror Terminal.tsx handleNewTab so a new tab appends at the end, not index 0, when tabBarOrder is unset.
         const freshStore = useAppStore.getState()

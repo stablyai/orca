@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/worktree/launch-types'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
+import { queueBlankTerminalStartupCommand } from './blank-terminal-startup-command'
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
@@ -79,6 +80,9 @@ export function applyDefaultTerminalTabs(
     const templateCommand = template.command?.trim()
     if (templateCommand && defaultTabs.runCommands && !(index === 0 && startup)) {
       store.queueTabStartupCommand(tab.id, { command: templateCommand })
+    } else if (!templateCommand && !isStartupTab) {
+      // Why: a command-less template tab is a plain shell, so it takes the global blank-terminal startup command.
+      queueBlankTerminalStartupCommand(store, tab.id)
     }
   }
 

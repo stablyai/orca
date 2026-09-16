@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
+import { BlankTerminalStartupCommandSetting } from './BlankTerminalStartupCommandSetting'
 import { CodexTerminalServerIsolationSetting } from './CodexTerminalServerIsolationSetting'
 import { buildCodexSessionSourceHomeControl } from './codex-session-source-home-control'
 import {
@@ -249,6 +250,12 @@ export function AgentsPane({
         catalog={catalog}
         description={getSettingOwnershipSummary('agentLaunchDefaults').description}
         onSetDefault={(agent) => updateSettings({ defaultTuiAgent: agent })}
+      />
+      {/* Why: lives next to the default-agent choice because it is the
+          agent-less counterpart — what a fresh shell runs when no agent does. */}
+      <BlankTerminalStartupCommandSetting
+        value={settings.blankTerminalStartupCommand ?? ''}
+        onSave={(value) => updateSettings({ blankTerminalStartupCommand: value })}
       />
       <AgentRuntimeSetting
         settings={settings}

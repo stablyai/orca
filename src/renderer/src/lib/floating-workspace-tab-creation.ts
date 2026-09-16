@@ -6,10 +6,14 @@ import { getConnectionId } from './connection-context'
 import { detectLanguage } from './language-detect'
 import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { queueBlankTerminalStartupCommand } from './blank-terminal-startup-command'
 import { translate } from '@/i18n/i18n'
 import { assertClientCreationActionAvailable } from './client-creation-action-policy'
 
-type FloatingWorkspaceTerminalStore = Pick<AppState, 'activeGroupIdByWorktree' | 'createTab'>
+type FloatingWorkspaceTerminalStore = Pick<
+  AppState,
+  'activeGroupIdByWorktree' | 'createTab' | 'queueTabStartupCommand' | 'settings'
+>
 
 type FloatingWorkspaceBrowserStore = Pick<
   AppState,
@@ -27,6 +31,7 @@ export async function createFloatingWorkspaceTerminalTab(
   // Why: the floating workspace is a local scratchpad; a focused remote runtime
   // must not own its SSH/tmux terminals or prune them via session snapshots.
   const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride)
+  queueBlankTerminalStartupCommand(store, tab.id)
   focusTerminalTabSurface(tab.id)
   return tab
 }
