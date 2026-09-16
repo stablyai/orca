@@ -5,7 +5,6 @@ import type { MountAdapter } from '../recording-scenario'
 import type { MobileDisplayMode } from '../../../session/mobile-session-route-types'
 
 const HANDLE = 'terminal-1'
-const DEVICE_TOKEN = 'device-token-1'
 
 /**
  * The terminal menu's display-mode toggle.
@@ -13,8 +12,12 @@ const DEVICE_TOKEN = 'device-token-1'
  * No WebView ref reaches this hook. It reads a `{cols, rows}` cell some other surface measured and
  * a device-token cell, and both ride `terminal.setDisplayMode`; the send is gated on `client` and
  * the hook's own in-flight set, not on an open subscription. So the mount needs no terminal handle
- * and no substitute for one — the viewport pair and the stored modes are scenario-declared values,
- * visible in the golden as the params they become.
+ * and no substitute for one — the viewport pair, the device token and the stored modes are
+ * scenario-declared values, visible in the golden as the params they become.
+ *
+ * Both cells start empty and an undeclared cell stays empty, because each one is a member the send
+ * only carries when it is filled: a scenario that declares neither records the shape a phone sends
+ * before it has measured itself or been given a token, which is the arm those two guards exist for.
  *
  * The native-chat stream reconciliation the same hook owns runs on mount and its subscribe and
  * unsubscribe are recorded as effects, for the reason `terminal.viewport-refit` records its own:
@@ -37,6 +40,7 @@ export function sessionTerminalDisplayModeMountAdapters(
 
       const terminalModes = new Map<string, MobileDisplayMode>()
       const viewportRef: { current: { cols: number; rows: number } | null } = { current: null }
+      const deviceTokenRef: { current: string | null } = { current: null }
       let display: ReturnType<typeof useStreamDisplay> | undefined
       const screen = hookScreenMount(() => {
         display = useStreamDisplay(
@@ -45,7 +49,7 @@ export function sessionTerminalDisplayModeMountAdapters(
             activeHandle: HANDLE,
             coveredStreamRevision: 0,
             terminalModes,
-            deviceTokenRef: { current: DEVICE_TOKEN },
+            deviceTokenRef,
             viewportRef,
             terminalUnsubsRef: { current: new Map() },
             subscribingHandlesRef: { current: new Set() },
@@ -65,6 +69,7 @@ export function sessionTerminalDisplayModeMountAdapters(
         action(name, args) {
           if (name === 'mount') {
             // Declared by the scenario, never by this stub: both are recorded params.
+            deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
             const viewport = args.viewport
             if (viewport !== undefined) {
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario declares this argument as the `{cols, rows}` pair the hook forwards.

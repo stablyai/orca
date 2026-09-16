@@ -20903,6 +20903,44 @@
       ]
     },
     {
+      "id": "session-startup-refused-tab-load-still-loads-terminals",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "tabLoadRejects": true
+          }
+        },
+        {
+          "checkpoint": "tab-load-refused"
+        },
+        {
+          "complete": "worktree.activate#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {}
+          }
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "refreshed"
+        }
+      ]
+    },
+    {
       "id": "session-create-terminal-with-prompt",
       "operation": "session.create-terminal",
       "version": 1,
@@ -20916,7 +20954,8 @@
           "args": {
             "initialPrompt": "review these notes",
             "successToast": "Notes sent",
-            "errorToast": "Couldn't run Notes"
+            "errorToast": "Couldn't run Notes",
+            "deviceToken": "device-token-1"
           }
         },
         {
@@ -21130,6 +21169,7 @@
           "action": "mount",
           "id": "mount",
           "args": {
+            "deviceToken": "device-token-1",
             "viewport": {
               "cols": 100,
               "rows": 30
@@ -21187,6 +21227,7 @@
           "action": "mount",
           "id": "mount",
           "args": {
+            "deviceToken": "device-token-1",
             "viewport": {
               "cols": 100,
               "rows": 30
@@ -21237,6 +21278,7 @@
           "action": "mount",
           "id": "mount",
           "args": {
+            "deviceToken": "device-token-1",
             "viewport": {
               "cols": 100,
               "rows": 30
@@ -21292,6 +21334,109 @@
         },
         {
           "checkpoint": "retoggled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-without-viewport",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-without-device-token",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            },
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
         }
       ]
     },

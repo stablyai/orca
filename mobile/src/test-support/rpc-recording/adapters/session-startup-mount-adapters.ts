@@ -15,6 +15,12 @@ const HOST_ID = 'host-1'
  * `allowEmptyLoaded` flag each pass was given, which is what makes the delayed passes distinguishable
  * from the awaited one and from each other.
  *
+ * A scenario may also declare that the tab load fails. The stub still records the call it was asked
+ * for and then rejects, which is the one thing a scope callback can do that a resolving stub cannot
+ * express: the sequence awaits that promise, so whether the terminal loads behind it survive a
+ * refused tab load is a product decision no scenario could otherwise reach. Declared, not shaped —
+ * the rejection is the scenario's, and the stub neither builds a param nor swallows a throw.
+ *
  * Both `worktree.activate` sends live in this one effect and neither is awaited by the sequence: the
  * plain one races the tab load deliberately, and the newly-created one is a timer the effect arms
  * only while the route still carries `created=1`. `created` and the floating-route flag are
@@ -40,6 +46,7 @@ export function sessionStartupMountAdapters(
 
       let created: string | undefined
       let isFloatingWorkspaceRoute = false
+      let tabLoadRejects = false
       let terminalsLoaded = true
       let activeHandle: string | null = 'terminal-0'
       const activeHandleRef: { current: string | null } = { current: 'terminal-0' }
@@ -104,6 +111,9 @@ export function sessionStartupMountAdapters(
             },
             ensureSessionTabs: async () => {
               effect('ensure-session-tabs', {})
+              if (tabLoadRejects) {
+                throw new Error('Could not load session tabs')
+              }
             }
           })
         )
@@ -115,6 +125,7 @@ export function sessionStartupMountAdapters(
             // Which of the two activation sites exists is the scenario's declaration, not this stub's.
             created = args.created === undefined ? undefined : String(args.created)
             isFloatingWorkspaceRoute = args.floating === true
+            tabLoadRejects = args.tabLoadRejects === true
             for (const handle of Array.isArray(args.initialized) ? args.initialized : []) {
               initializedHandlesRef.current.add(String(handle))
             }

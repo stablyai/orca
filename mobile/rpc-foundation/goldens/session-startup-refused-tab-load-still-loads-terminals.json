@@ -7,7 +7,7 @@
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "6b08c394e37fd572cf63a4c11934247d379008f11117aa5af33b2926fbd32d1e",
-  "scenarioSha256": "f540e4a06380a6a5d82d670230c76b7afc2c60302bc27dda13156b620095c5cc",
+  "scenarioSha256": "18d0bbda11a394a13d0eaea12b8748dbeede1ae7212907b0ca70a9bafa037424",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -38,7 +38,12 @@
       "value": {},
       "sent": 0
     },
-    "83ed906e3d41": {
+    "8df3790f6752": {
+      "name": "reset-drafts",
+      "value": {},
+      "sent": 0
+    },
+    "acf0370bfacc": {
       "actionSheetRequestSeq": 1,
       "activeHandle": {
         "$rpc": "null"
@@ -51,20 +56,7 @@
       },
       "closedTabTombstones": 0,
       "initializedHandles": [],
-      "terminalsLoaded": true
-    },
-    "8df3790f6752": {
-      "name": "reset-drafts",
-      "value": {},
-      "sent": 0
-    },
-    "aa6511b23729": {
-      "status": "fulfilled",
-      "startedAt": 1500,
-      "settledAt": 1500,
-      "value": {
-        "$rpc": "undefined"
-      }
+      "terminalsLoaded": false
     },
     "c3086bdcf337": {
       "name": "fetch-terminals",
@@ -77,21 +69,6 @@
       "name": "worktree.activate#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}",
       "sent": 1
-    },
-    "c7e9a0eef4ce": {
-      "actionSheetRequestSeq": 2,
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "appliedSnapshotMarker": {
-        "epoch": {
-          "$rpc": "null"
-        },
-        "version": -1
-      },
-      "closedTabTombstones": 0,
-      "initializedHandles": [],
-      "terminalsLoaded": true
     },
     "cc2919113064": {
       "name": "fetch-terminals",
@@ -185,17 +162,17 @@
     }
   },
   "recording": {
-    "scenario": "session-startup-keeps-terminals-visible-on-reconnect",
+    "scenario": "session-startup-refused-tab-load-still-loads-terminals",
     "checkpoints": [
       {
-        "id": "loading",
+        "id": "tab-load-refused",
         "observation": {
           "sender": ["ec0b7647964f"],
           "payloads": ["c7629ea302b3"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "83ed906e3d41",
+          "state": "acf0370bfacc",
           "effects": [
             "d064b45517da",
             "7fb9bbe379fd",
@@ -215,7 +192,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "83ed906e3d41",
+          "state": "acf0370bfacc",
           "effects": [
             "d064b45517da",
             "7fb9bbe379fd",
@@ -230,15 +207,14 @@
         }
       },
       {
-        "id": "unmounted",
+        "id": "cleanup",
         "observation": {
           "sender": ["dd31dd4ce7ef"],
           "payloads": ["c7629ea302b3"],
           "settlements": {
-            "mount": "eb79a9b3682a",
-            "unmount": "aa6511b23729"
+            "mount": "eb79a9b3682a"
           },
-          "state": "c7e9a0eef4ce",
+          "state": "acf0370bfacc",
           "effects": [
             "d064b45517da",
             "7fb9bbe379fd",
