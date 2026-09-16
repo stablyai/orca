@@ -31,11 +31,13 @@ export function createNewTerminalTab(
       command: shellOverride,
       ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
-    }).then((outcome) => {
-      if (outcome.status === 'failed') {
-        showClientCreationActionError(outcome.message)
-      }
     })
+      .then((outcome) => {
+        if (outcome.status === 'failed') {
+          showClientCreationActionError(outcome.message)
+        }
+      })
+      .catch(showClientCreationActionError)
     return
   }
   const newTab = state.createTab(

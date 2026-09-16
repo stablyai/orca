@@ -145,7 +145,7 @@ export function useTabGroupCreationCommands({
       await openNewMarkdownInActiveWorkspace(groupId)
     },
     newTerminalTab: () => {
-      void openNewTerminalTabInActiveWorkspace(groupId)
+      void openNewTerminalTabInActiveWorkspace(groupId).catch(showClientCreationActionError)
     },
     newTerminalWithShell: (shellOverride: string) => {
       void (async () => {
@@ -168,7 +168,7 @@ export function useTabGroupCreationCommands({
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
         focusTerminalTabSurface(terminal.id)
-      })()
+      })().catch(showClientCreationActionError)
     }
   }
 }

@@ -200,6 +200,20 @@ describe('createNewTerminalTab', () => {
     )
     expect(createTab).not.toHaveBeenCalled()
   })
+
+  it('reports rejected shortcut terminal creation', async () => {
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    createWebRuntimeSessionTerminalMock.mockRejectedValue(new Error('runtime disconnected'))
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      createTab: vi.fn(),
+      setActiveTabType: vi.fn()
+    })
+
+    createNewTerminalTab('wt-1')
+
+    await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('runtime disconnected'))
+  })
 })
 
 describe('closeTerminalTab', () => {

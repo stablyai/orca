@@ -1,9 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
+type LifecycleMocks = {
+  createTab: Mock<() => void>
+  createWebRuntimeSessionTerminal: Mock<(...args: unknown[]) => unknown>
+  newTerminalTabListener: null | (() => void)
+  showClientCreationActionError: Mock<(...args: unknown[]) => unknown>
+}
+
+const mocks = vi.hoisted((): LifecycleMocks => ({
   createTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
-  newTerminalTabListener: null as null | (() => void),
+  newTerminalTabListener: null,
   showClientCreationActionError: vi.fn()
 }))
 
@@ -71,6 +78,20 @@ describe('tab lifecycle IPC terminal creation', () => {
     await vi.waitFor(() =>
       expect(mocks.showClientCreationActionError).toHaveBeenCalledWith(
         'host could not start the shell'
+      )
+    )
+    expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it('reports rejected terminal creation without an unhandled promise', async () => {
+    mocks.createWebRuntimeSessionTerminal.mockRejectedValue(new Error('runtime disconnected'))
+    registerTabLifecycleIpcBridge([])
+
+    mocks.newTerminalTabListener?.()
+
+    await vi.waitFor(() =>
+      expect(mocks.showClientCreationActionError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'runtime disconnected' })
       )
     )
     expect(mocks.createTab).not.toHaveBeenCalled()

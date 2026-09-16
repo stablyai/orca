@@ -1,10 +1,12 @@
-import { createServer, type AddressInfo, type Server, type Socket } from 'node:net'
+import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   connectThroughSocks5,
   encodeSocks5ConnectRequest,
   parseSocks5ConnectReply,
-  SOCKS5_GREETING
+  SOCKS5_GREETING,
+  Socks5NegotiationAbortedError,
+  Socks5NegotiationError
 } from './socks5-connect'
 
 const servers: Server[] = []
@@ -19,7 +21,13 @@ function listen(onConnection: (socket: Socket) => void): Promise<number> {
   const server = createServer(onConnection)
   servers.push(server)
   return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve((server.address() as AddressInfo).port))
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('Expected the fake SOCKS server to listen on a TCP port')
+      }
+      resolve(address.port)
+    })
   })
 }
 
@@ -86,16 +94,16 @@ describe('parseSocks5ConnectReply', () => {
 
 describe('connectThroughSocks5', () => {
   it('returns a socket that relays after the handshake', async () => {
-    let request: Buffer | null = null
+    const requestReceived = Promise.withResolvers<Buffer>()
     const proxyPort = await fakeSocksServer({
       reply: OK_REPLY_IPV4,
       onRequest: (chunk) => {
-        request = chunk
+        requestReceived.resolve(chunk)
       }
     })
     const socket = await connectThroughSocks5({ proxyPort, host: 'tcTOKEN', port: 6768 })
-    expect(request).not.toBeNull()
-    expect(request!.equals(encodeSocks5ConnectRequest('tcTOKEN', 6768))).toBe(true)
+    const request = await requestReceived.promise
+    expect(request.equals(encodeSocks5ConnectRequest('tcTOKEN', 6768))).toBe(true)
     const received = await new Promise<string>((resolve) => {
       let collected = ''
       socket.on('data', (chunk) => {
@@ -131,9 +139,29 @@ describe('connectThroughSocks5', () => {
 
   it('rejects when the proxy closes mid-handshake', async () => {
     const proxyPort = await listen((socket) => socket.destroy())
-    await expect(connectThroughSocks5({ proxyPort, host: 'tcTOKEN', port: 1 })).rejects.toThrow(
-      /closed the connection|ECONNRESET/
-    )
+    await expect(
+      connectThroughSocks5({ proxyPort, host: 'tcTOKEN', port: 1 })
+    ).rejects.toBeInstanceOf(Socks5NegotiationError)
+  })
+
+  it('rejects when negotiation is aborted', async () => {
+    let accepted: Socket | undefined
+    const proxyPort = await listen((socket) => {
+      accepted = socket
+    })
+    const controller = new AbortController()
+    const pending = connectThroughSocks5({
+      proxyPort,
+      host: 'tcTOKEN',
+      port: 1,
+      signal: controller.signal
+    })
+    await expect.poll(() => accepted !== undefined).toBe(true)
+
+    controller.abort()
+
+    await expect(pending).rejects.toBeInstanceOf(Socks5NegotiationAbortedError)
+    accepted?.destroy()
   })
 
   it('applies an absolute deadline to a drip-fed negotiation', async () => {

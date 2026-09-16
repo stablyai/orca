@@ -37,9 +37,21 @@ const baseOffer: PairingOffer = {
   endpoint: 'ws://127.0.0.1:6768',
   deviceToken: 'device-token',
   publicKeyB64: `${'a'.repeat(43)}=`,
-  scope: 'runtime' as const
+  scope: 'runtime'
 }
 const LegacyStoreSchema = z.object({ version: z.literal(1), environments: z.array(z.unknown()) })
+const VersionedStoreSchema = z.object({ version: z.number() }).passthrough()
+const MutableStoreSchema = z
+  .object({
+    environments: z.array(
+      z
+        .object({
+          endpoints: z.array(z.record(z.string(), z.unknown()))
+        })
+        .passthrough()
+    )
+  })
+  .passthrough()
 function decodePairingCodeBase64(url: string): string {
   return new URL(url).searchParams.get('code')!.replace(/-/g, '+').replace(/_/g, '/')
 }
@@ -71,7 +83,7 @@ describe('pairing offer tunnel block', () => {
       Buffer.from(decodePairingCodeBase64(encodePairingOffer(tunnelOffer)), 'base64').toString(
         'utf8'
       )
-    ) as unknown
+    )
     expect(LegacyPairingOfferSchema.safeParse(encoded).success).toBe(false)
     expect(LegacyPairingOfferSchema.safeParse(baseOffer).success).toBe(true)
   })
@@ -133,7 +145,7 @@ describe('runtime environments with a tunnel', () => {
       name: 'Tunnel host',
       pairingCode: encodePairingOffer(tunnelOffer)
     })
-    const raw = JSON.parse(readFileSync(storePath, 'utf8')) as { version: number }
+    const raw = VersionedStoreSchema.parse(JSON.parse(readFileSync(storePath, 'utf8')))
     expect(raw.version).toBe(2)
     // Why: a pre-tunnel build parses version 1 only; it must fail closed instead of stripping and rewriting.
     expect(LegacyStoreSchema.safeParse(raw).success).toBe(false)
@@ -148,15 +160,13 @@ describe('runtime environments with a tunnel', () => {
       name: 'Future host',
       pairingCode: encodePairingOffer({ ...baseOffer, endpoint: 'ws://100.64.1.20:6768' })
     })
-    const raw = JSON.parse(readFileSync(storePath, 'utf8')) as {
-      environments: { endpoints: Record<string, unknown>[] }[]
-    }
+    const raw = MutableStoreSchema.parse(JSON.parse(readFileSync(storePath, 'utf8')))
     raw.environments[0]!.endpoints[0]!.futureTransport = { v: 9 }
     writeFileSync(storePath, JSON.stringify(raw))
     updateEnvironmentFromPairingCode(userDataPath, environment.id, {
       pairingCode: encodePairingOffer({ ...baseOffer, endpoint: 'ws://100.64.1.21:6768' })
     })
-    const rewritten = JSON.parse(readFileSync(storePath, 'utf8')) as typeof raw
+    const rewritten = MutableStoreSchema.parse(JSON.parse(readFileSync(storePath, 'utf8')))
     expect(rewritten.environments[0]!.endpoints[0]!.endpoint).toBe('ws://100.64.1.21:6768')
     expect(listEnvironments(userDataPath)[0]?.endpoints[0]).toMatchObject({
       endpoint: 'ws://100.64.1.21:6768'

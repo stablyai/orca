@@ -26,6 +26,7 @@ export type Socks5ConnectOptions = {
   host: string
   port: number
   timeoutMs?: number
+  signal?: AbortSignal
 }
 
 export const SOCKS5_GREETING = Buffer.from([SOCKS_VERSION, 1, NO_AUTHENTICATION])
@@ -52,10 +53,24 @@ export class Socks5RefusalError extends Error {
   }
 }
 
-export class Socks5NegotiationTimeoutError extends Error {
+export class Socks5NegotiationError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'Socks5NegotiationError'
+  }
+}
+
+export class Socks5NegotiationTimeoutError extends Socks5NegotiationError {
   constructor() {
     super('Timed out negotiating with the SOCKS proxy')
     this.name = 'Socks5NegotiationTimeoutError'
+  }
+}
+
+export class Socks5NegotiationAbortedError extends Socks5NegotiationError {
+  constructor() {
+    super('SOCKS negotiation was aborted')
+    this.name = 'Socks5NegotiationAbortedError'
   }
 }
 
@@ -101,6 +116,9 @@ export function parseSocks5ConnectReply(buffer: Buffer): Socks5ConnectReply {
 /** Opens a TCP stream to `host:port` through a local SOCKS5 proxy (no authentication). */
 export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Socket> {
   const request = encodeSocks5ConnectRequest(options.host, options.port)
+  if (options.signal?.aborted) {
+    return Promise.reject(new Socks5NegotiationAbortedError())
+  }
   return new Promise((resolve, reject) => {
     const socket = connect({ host: options.proxyHost ?? '127.0.0.1', port: options.proxyPort })
     let stage: 'greeting' | 'connect' | 'done' = 'greeting'
@@ -116,8 +134,15 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
       socket.destroy()
       reject(error)
     }
+    const onAbort = (): void => fail(new Socks5NegotiationAbortedError())
+    const onError = (error: Error): void =>
+      fail(
+        new Socks5NegotiationError(`SOCKS proxy connection failed: ${error.message}`, {
+          cause: error
+        })
+      )
     const onClose = (): void =>
-      fail(new Error('SOCKS proxy closed the connection during negotiation'))
+      fail(new Socks5NegotiationError('SOCKS proxy closed the connection during negotiation'))
     const onData = (chunk: Buffer): void => {
       buffered = Buffer.concat([buffered, chunk])
       if (stage === 'greeting') {
@@ -125,7 +150,7 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
           return
         }
         if (buffered[0] !== SOCKS_VERSION || buffered[1] !== NO_AUTHENTICATION) {
-          fail(new Error('SOCKS proxy rejected the no-authentication method'))
+          fail(new Socks5NegotiationError('SOCKS proxy rejected the no-authentication method'))
           return
         }
         buffered = buffered.subarray(2)
@@ -140,7 +165,7 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
         if (reply.kind === 'error') {
           fail(
             reply.replyCode === undefined
-              ? new Error(reply.message)
+              ? new Socks5NegotiationError(reply.message)
               : new Socks5RefusalError(reply.replyCode, reply.message)
           )
           return
@@ -148,7 +173,9 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
         // Why: the WebSocket server never speaks first, so bytes after the reply mean a broken proxy;
         // rejecting beats re-queuing them into a stream whose next reader is still unknown.
         if (buffered.length > reply.consumed) {
-          fail(new Error('SOCKS proxy sent data before the tunnel was established'))
+          fail(
+            new Socks5NegotiationError('SOCKS proxy sent data before the tunnel was established')
+          )
           return
         }
         stage = 'done'
@@ -158,8 +185,9 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
     }
     const cleanup = (): void => {
       socket.off('data', onData)
-      socket.off('error', fail)
+      socket.off('error', onError)
       socket.off('close', onClose)
+      options.signal?.removeEventListener('abort', onAbort)
       if (deadline) {
         clearTimeout(deadline)
         deadline = null
@@ -171,9 +199,14 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
       () => fail(new Socks5NegotiationTimeoutError()),
       options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     )
-    socket.on('error', fail)
+    socket.on('error', onError)
     socket.on('close', onClose)
     socket.on('data', onData)
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    if (options.signal?.aborted) {
+      onAbort()
+      return
+    }
     socket.once('connect', () => {
       socket.write(SOCKS5_GREETING)
     })

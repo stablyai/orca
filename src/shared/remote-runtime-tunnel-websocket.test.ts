@@ -1,7 +1,11 @@
-import { connect, type AddressInfo } from 'node:net'
+import { connect } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocketServer } from 'ws'
-import { PAIRING_OFFER_VERSION, type PairingOffer } from './mobile-relay-pairing-offer'
+import {
+  PAIRING_OFFER_VERSION,
+  type PairingOffer,
+  type PairingTunnel
+} from './mobile-relay-pairing-offer'
 import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
 import {
   openRemoteRuntimeWebSocket,
@@ -9,14 +13,21 @@ import {
 } from './remote-runtime-request-websocket'
 import {
   createRemoteRuntimeWebSocket,
-  RemoteRuntimeTunnelAgent,
   setRemoteRuntimeTunnelDialer
 } from './remote-runtime-tunnel-dialer'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { sendRemoteRuntimeRequest } from './remote-runtime-client'
 import { subscribeRemoteRuntimeTransport } from './remote-runtime-subscription-transport'
 
-const tunnel = { v: 1 as const, kind: 'tailcat' as const, token: 'tcTOKEN', port: 6768 }
+const tunnel: PairingTunnel = { v: 1, kind: 'tailcat', token: 'tcTOKEN', port: 6768 }
+
+function listeningPort(server: WebSocketServer): number {
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected WebSocket server to listen on a TCP port')
+  }
+  return address.port
+}
 
 function pairingOffer(endpoint: string): PairingOffer {
   return {
@@ -44,7 +55,7 @@ describe('openRemoteRuntimeWebSocket with a tunnel offer', () => {
     const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     cleanups.push(() => new Promise<void>((resolve) => server.close(() => resolve())))
     await new Promise<void>((resolve) => server.once('listening', () => resolve()))
-    const serverPort = (server.address() as AddressInfo).port
+    const serverPort = listeningPort(server)
     const firstFrame = new Promise<string>((resolve) => {
       server.once('connection', (socket) => {
         socket.once('message', (data) => resolve(data.toString()))
@@ -70,8 +81,7 @@ describe('openRemoteRuntimeWebSocket with a tunnel offer', () => {
       opened.socket.cleanup()
       opened.socket.ws.terminate()
     })
-    const hello = JSON.parse(await firstFrame) as { type?: string }
-    expect(hello.type).toBe('e2ee_hello')
+    expect(JSON.parse(await firstFrame)).toMatchObject({ type: 'e2ee_hello' })
     expect(dialed).toEqual([tunnel])
   })
 
@@ -110,19 +120,37 @@ describe('createRemoteRuntimeWebSocket', () => {
   it('attaches the tunnel agent for every caller, keeping their own socket options', async () => {
     const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     await new Promise<void>((resolve) => server.once('listening', () => resolve()))
-    const serverPort = (server.address() as AddressInfo).port
+    const serverPort = listeningPort(server)
     server.on('connection', (socket) => socket.send('x'.repeat(20)))
     setRemoteRuntimeTunnelDialer(async () => connect({ host: '127.0.0.1', port: serverPort }))
     try {
       const ws = createRemoteRuntimeWebSocket(pairingOffer('ws://192.0.2.1:1'), { maxPayload: 7 })
-      const request = (ws as unknown as { _req?: { agent?: unknown } })._req
-      expect(request?.agent).toBeInstanceOf(RemoteRuntimeTunnelAgent)
       // Why: a 20-byte frame against maxPayload 7 must be refused, proving the option survived.
       const failure = await new Promise<string>((resolve) => {
         ws.once('error', (error) => resolve(error.message))
         ws.once('close', (code) => resolve(`closed ${code}`))
       })
       expect(failure).toBe('Max payload size exceeded')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('uses plaintext WebSocket framing over the tunnel when the fallback endpoint is wss', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()))
+    const serverPort = listeningPort(server)
+    setRemoteRuntimeTunnelDialer(async () => connect({ host: '127.0.0.1', port: serverPort }))
+    try {
+      const ws = createRemoteRuntimeWebSocket(pairingOffer('wss://remote.example:443'))
+      await new Promise<void>((resolve, reject) => {
+        ws.once('open', () => resolve())
+        ws.once('error', reject)
+      })
+      await new Promise<void>((resolve) => {
+        ws.once('close', () => resolve())
+        ws.close()
+      })
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
@@ -136,15 +164,18 @@ describe('createRemoteRuntimeWebSocket', () => {
       thrown = error
     }
     expect(thrown).toBeInstanceOf(RemoteRuntimeClientError)
-    expect((thrown as RemoteRuntimeClientError).code).toBe('remote_runtime_unavailable')
-    expect((thrown as RemoteRuntimeClientError).message).toBe(TUNNEL_DIALER_UNAVAILABLE_MESSAGE)
+    if (!(thrown instanceof RemoteRuntimeClientError)) {
+      throw new Error('Expected a RemoteRuntimeClientError')
+    }
+    expect(thrown.code).toBe('remote_runtime_unavailable')
+    expect(thrown.message).toBe(TUNNEL_DIALER_UNAVAILABLE_MESSAGE)
   })
 
   // Why: these two paths once built their own sockets and dialed a tunnel-only host directly.
   it('is what one-shot requests and subscriptions dial through', async () => {
     const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     await new Promise<void>((resolve) => server.once('listening', () => resolve()))
-    const serverPort = (server.address() as AddressInfo).port
+    const serverPort = listeningPort(server)
     server.on('connection', (socket) => socket.close())
     const dialed: string[] = []
     setRemoteRuntimeTunnelDialer(async (requested) => {

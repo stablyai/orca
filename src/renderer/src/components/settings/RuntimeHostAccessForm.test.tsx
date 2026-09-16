@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../../shared/pairing'
+import { PAIRING_OFFER_TUNNEL_VERSION } from '../../../../shared/mobile-relay-pairing-offer'
 import { RuntimeHostAccessForm } from './RuntimeHostAccessForm'
 
 function accessLink(endpoint: string): string {
@@ -42,6 +43,34 @@ describe('RuntimeHostAccessForm', () => {
     expect(markup).toContain('This link points back to this device')
     expect(markup).toContain('I am using an SSH tunnel')
     expect(markup).toContain('disabled')
+  })
+
+  it('identifies a loopback-backed Tailcat link as remote without SSH guidance', () => {
+    const markup = renderToStaticMarkup(
+      <RuntimeHostAccessForm
+        name="Remote workstation"
+        accessLink={encodePairingOffer({
+          v: PAIRING_OFFER_TUNNEL_VERSION,
+          endpoint: 'ws://127.0.0.1:6768',
+          deviceToken: 'secret-device-token',
+          publicKeyB64: 'secret-public-key',
+          scope: 'runtime',
+          tunnel: { v: 1, kind: 'tailcat', token: 'tcRemoteHost', port: 6768 }
+        })}
+        busy={false}
+        failure={null}
+        onNameChange={vi.fn()}
+        onAccessLinkChange={vi.fn()}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('Tailcat tunnel')
+    expect(markup).toContain('Tailcat remote host')
+    expect(markup).not.toContain('127.0.0.1')
+    expect(markup).not.toContain('SSH tunnel')
+    expect(markup).not.toContain('This link points back to this device')
   })
 
   it('shows actionable validation for malformed access links', () => {

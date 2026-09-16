@@ -263,10 +263,12 @@ export class TailcatTunnelServer {
 
 export function parseListenAddress(line: string): string | null {
   try {
-    const parsed = JSON.parse(line) as { listenAddr?: unknown }
-    return typeof parsed.listenAddr === 'string' && parsed.listenAddr.startsWith('tc')
-      ? parsed.listenAddr
-      : null
+    const parsed: unknown = JSON.parse(line)
+    if (typeof parsed !== 'object' || parsed === null || !('listenAddr' in parsed)) {
+      return null
+    }
+    const listenAddr = parsed.listenAddr
+    return typeof listenAddr === 'string' && listenAddr.startsWith('tc') ? listenAddr : null
   } catch {
     return null
   }

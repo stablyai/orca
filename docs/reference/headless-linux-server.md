@@ -202,6 +202,16 @@ and only the tunnel reaches it. `--tailcat` cannot be combined with
 `--mobile-pairing`, because Orca Mobile cannot dial a tunnel yet. Orca probes the
 installed `tailcat` before using it and requires release 0.4 or newer.
 
+On clients, Orca starts the Tailcat SOCKS proxy on demand and reuses it while
+connections remain healthy. A negotiation timeout, local socket failure, or
+malformed SOCKS response marks an idle proxy stale and starts a replacement.
+Generic SOCKS failures require three consecutive `0x01` replies before
+replacement, so an ordinary refusal does not consume that stale-proxy budget.
+Orca never replaces a proxy while it has an active stream or a pending dial,
+and applies a short cooldown after replacement to avoid restart loops. Shutting
+down the tunnel cancels pending negotiations and rejects sockets that arrive
+after shutdown.
+
 ## Systemd Service
 
 Create a dedicated service user and install directory. Run the service as this

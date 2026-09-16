@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -8,7 +9,6 @@ import type { ProcessSpec } from '../../shared/child-process/run-process'
 import { resolveTailcatBinary, tailcatKeyPathArgument } from './tailcat-binary'
 import { TailcatSocksProxy, type TailcatProcessSpawner } from './tailcat-socks-proxy'
 import { Socks5RefusalError } from './socks5-connect'
-import type { Socket } from 'node:net'
 import { parseListenAddress, TailcatTunnelServer } from './tailcat-tunnel-server'
 
 class FakeChild extends EventEmitter {
@@ -52,6 +52,7 @@ function fakeSpawner(): {
     specs.push(spec)
     const child = new FakeChild()
     children.push(child)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The production code only consumes the child lifecycle and stdio members implemented by FakeChild.
     return child as unknown as ReturnType<TailcatProcessSpawner>
   }
   return { spawn, children, specs }
@@ -377,8 +378,16 @@ describe('TailcatSocksProxy', () => {
   it('starts one proxy, reads its port from stderr, and reuses it', async () => {
     const { spawn, children, specs } = fakeSpawner()
     const keyPath = existingKeyPath()
-    const proxy = new TailcatSocksProxy({ binary: 'tailcat', keyPath, spawn, run: runOk })
-    const started = (proxy as unknown as { ensureStarted: () => Promise<number> }).ensureStarted()
+    const connect = vi.fn(async () => new Socket())
+    const proxy = new TailcatSocksProxy({
+      binary: 'tailcat',
+      keyPath,
+      spawn,
+      run: runOk,
+      connect
+    })
+    const tunnel = { v: 1 as const, kind: 'tailcat' as const, token: 'tcTOKEN', port: 6768 }
+    const started = proxy.dial(tunnel)
     const child = await spawned(children, 1)
     expect(specs[0]?.args).toEqual([
       `--key=${tailcatKeyPathArgument(keyPath)}`,
@@ -386,15 +395,9 @@ describe('TailcatSocksProxy', () => {
       '--listen=127.0.0.1:0'
     ])
     child.stderr.write('2026/09/02 21:31:59 SOCKS running at socks5h://127.0.0.1:60809\n')
-    await expect(started).resolves.toEqual({ generation: 1, port: 60809 })
+    await expect(started).resolves.toBeInstanceOf(Socket)
     expect(proxy.getPort()).toBe(60809)
-    await expect(
-      (
-        proxy as unknown as {
-          ensureStarted: () => Promise<{ generation: number; port: number }>
-        }
-      ).ensureStarted()
-    ).resolves.toEqual({ generation: 1, port: 60809 })
+    await expect(proxy.dial(tunnel)).resolves.toBeInstanceOf(Socket)
     expect(children).toHaveLength(1)
 
     child.exit(0)
@@ -444,8 +447,15 @@ describe('TailcatSocksProxy', () => {
       mkdtempSync(join(tmpdir(), 'orca-tailcat-key-')),
       'orca-client.private.json'
     )
-    const proxy = new TailcatSocksProxy({ binary: 'tailcat', keyPath, spawn, run })
-    const started = (proxy as unknown as { ensureStarted: () => Promise<number> }).ensureStarted()
+    const proxy = new TailcatSocksProxy({
+      binary: 'tailcat',
+      keyPath,
+      spawn,
+      run,
+      connect: vi.fn(async () => new Socket())
+    })
+    const tunnel = { v: 1 as const, kind: 'tailcat' as const, token: 'tcTOKEN', port: 6768 }
+    const started = proxy.dial(tunnel)
     await vi.waitFor(() => expect(children).toHaveLength(1))
     expect(run.mock.calls[0]![0].args).toEqual([
       'genkey',
@@ -453,13 +463,14 @@ describe('TailcatSocksProxy', () => {
       `--key=${tailcatKeyPathArgument(keyPath)}`
     ])
     children[0]!.stderr.write('SOCKS running at socks5h://127.0.0.1:5\n')
-    await expect(started).resolves.toEqual({ generation: 1, port: 5 })
+    await expect(started).resolves.toBeInstanceOf(Socket)
+    expect(proxy.getPort()).toBe(5)
     await proxy.stop()
   })
 
   it('retries a dial the proxy refused, but not a proxy that is unreachable', async () => {
     const { spawn, children } = fakeSpawner()
-    const socket = new EventEmitter() as Socket
+    const socket = new Socket()
     const connect = vi
       .fn<() => Promise<Socket>>()
       .mockRejectedValueOnce(new Socks5RefusalError(0x01, 'general SOCKS server failure'))
@@ -479,7 +490,14 @@ describe('TailcatSocksProxy', () => {
     child.stderr.write('SOCKS running at socks5h://127.0.0.1:7\n')
     await expect(dialed).resolves.toBe(socket)
     expect(connect).toHaveBeenCalledTimes(2)
-    expect(connect.mock.calls[0]).toEqual([{ proxyPort: 7, host: 'tcTOKEN', port: 6768 }])
+    expect(connect.mock.calls[0]).toEqual([
+      {
+        proxyPort: 7,
+        host: 'tcTOKEN',
+        port: 6768,
+        signal: expect.any(AbortSignal)
+      }
+    ])
 
     await expect(proxy.dial(tunnel)).rejects.toThrow(/ECONNREFUSED/)
     expect(connect).toHaveBeenCalledTimes(3)

@@ -52,6 +52,7 @@ function fakeTailcat(overrides: Partial<Record<string, FakeResult>> = {}) {
     calls.push([...(spec.args ?? [])])
     const child = new FakeChild()
     children.push(child)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake implements the child members exercised by the compatibility probe.
     return child as unknown as ReturnType<TailcatProcessSpawner>
   }
   return { run, spawn, calls, children }

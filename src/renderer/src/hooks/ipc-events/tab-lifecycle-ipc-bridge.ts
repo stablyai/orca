@@ -71,7 +71,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
         order.push(newTab.id)
         freshStore.setTabBarOrder(worktreeId, order)
         focusTerminalTabSurface(newTab.id)
-      })()
+      })().catch(showClientCreationActionError)
     })
   )
 

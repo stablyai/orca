@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { WebSocketServer, WebSocket } from 'ws'
-import type { AddressInfo } from 'node:net'
 import { RemoteRuntimeTunnelAgent } from '../../shared/remote-runtime-tunnel-dialer'
 import { resolveTailcatBinary } from './tailcat-binary'
 import { TailcatTunnelService } from './tailcat-tunnel-service'
@@ -27,7 +26,11 @@ describe.skipIf(!binary)('TailcatTunnelService with the real tailcat CLI', () =>
     const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     cleanups.push(() => new Promise<void>((resolve) => wss.close(() => resolve())))
     await new Promise<void>((resolve) => wss.once('listening', () => resolve()))
-    const port = (wss.address() as AddressInfo).port
+    const address = wss.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected the Tailcat test server to listen on a TCP port')
+    }
+    const port = address.port
     wss.on('connection', (socket) => {
       socket.on('message', (data) => socket.send(`echo:${data.toString()}`))
     })

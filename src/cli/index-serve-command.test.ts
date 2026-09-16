@@ -68,6 +68,7 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: '100.64.1.20',
       noPairing: true,
       mobilePairing: false,
+      tailcat: false,
       recipeJson: false,
       projectRoot: null
     })
@@ -87,6 +88,7 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: '100.64.1.20',
       noPairing: false,
       mobilePairing: true,
+      tailcat: false,
       recipeJson: false,
       projectRoot: null
     })
@@ -113,9 +115,43 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: 'wss://sandbox.example.com',
       noPairing: false,
       mobilePairing: false,
+      tailcat: false,
       recipeJson: true,
       projectRoot: '/workspace/repo'
     })
+  })
+
+  it('starts a foreground headless server with Tailcat enabled', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--port', '6768', '--tailcat', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+      json: true,
+      port: '6768',
+      pairingAddress: null,
+      noPairing: false,
+      mobilePairing: false,
+      tailcat: true,
+      recipeJson: false,
+      projectRoot: null
+    })
+  })
+
+  it('rejects an ephemeral port for a Tailcat server before launch', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--port', '0', '--tailcat'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'A Tailcat tunnel needs a stable port'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('rejects recipe JSON output without a project root', async () => {

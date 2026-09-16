@@ -15,11 +15,20 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('./RuntimeAccessGrantList', () => ({ RuntimeAccessGrantList: () => null }))
 vi.mock('./RuntimePairingGeneratorForm', () => ({
-  RuntimePairingGeneratorForm: (props: { selectedAddress: string; onGenerate: () => void }) => (
+  RuntimePairingGeneratorForm: (props: {
+    selectedAddress: string
+    runtimePairingUrl: string | null
+    onGenerate: () => void
+    onIntentChange: (intent: 'another' | 'local' | 'custom' | 'tunnel') => void
+  }) => (
     <div>
       <div data-testid="selected-address">{props.selectedAddress}</div>
+      <div data-testid="pairing-url">{props.runtimePairingUrl}</div>
       <button type="button" onClick={props.onGenerate}>
         Generate
+      </button>
+      <button type="button" onClick={() => props.onIntentChange('tunnel')}>
+        Use Tailcat
       </button>
     </div>
   )
@@ -104,5 +113,50 @@ describe('RuntimePairingUrlGenerator', () => {
     await waitFor(() =>
       expect(mocks.getRuntimePairingUrl).toHaveBeenCalledWith({ address, rotate: true, reach })
     )
+  })
+
+  it('ignores a pending result after switching to a different transport intent', async () => {
+    let resolvePairing!: (value: {
+      available: true
+      pairingUrl: string
+      webClientUrl: string | null
+      endpoint: string
+      deviceId: string
+    }) => void
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'tailscale0', address: '100.76.32.125' }]
+    })
+    mocks.getRuntimePairingUrl.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePairing = resolve
+      })
+    )
+
+    render(<RuntimePairingUrlGenerator />)
+    await waitFor(() => expect(mocks.listNetworkInterfaces).toHaveBeenCalledOnce())
+    screen.getByRole('button', { name: 'Generate' }).click()
+    await waitFor(() => expect(mocks.getRuntimePairingUrl).toHaveBeenCalledOnce())
+
+    screen.getByRole('button', { name: 'Use Tailcat' }).click()
+    resolvePairing({
+      available: true,
+      pairingUrl: 'orca://pair?code=stale',
+      webClientUrl: null,
+      endpoint: 'ws://100.76.32.125:6768',
+      deviceId: 'stale-runtime'
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('selected-address')).toHaveTextContent('127.0.0.1')
+    )
+    expect(screen.getByTestId('pairing-url')).toBeEmptyDOMElement()
+    expect(runtimePairingLinkCache.runtimePairingUrl).toBeNull()
+    expect(runtimePairingLinkCache.runtimePairingDeviceId).toBeNull()
+    expect(mocks.getRuntimePairingUrl).toHaveBeenCalledWith({
+      address: '100.76.32.125',
+      rotate: true,
+      reach: 'network',
+      transport: undefined
+    })
   })
 })

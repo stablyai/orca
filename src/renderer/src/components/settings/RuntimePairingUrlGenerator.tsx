@@ -49,6 +49,8 @@ export function RuntimePairingUrlGenerator({
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
+  const pairingRequestIdRef = useRef(0)
+  const intentRef = useRef(intent)
   const mountedRef = useMountedRef()
   const { copiedTarget, copyGeneratedUrl, setContainerNode } = useGeneratedUrlCopy()
   // Why: a generate attempt starts the tunnel, so its result is worth re-reading once it settles.
@@ -164,6 +166,15 @@ export function RuntimePairingUrlGenerator({
 
   const generateRuntimePairingUrl = async (): Promise<void> => {
     const address = selectedAddress.trim()
+    const requestId = pairingRequestIdRef.current + 1
+    pairingRequestIdRef.current = requestId
+    const requestIntent = intentRef.current
+    const requestTransport = runtimePairingTransportForIntent(requestIntent)
+    const requestIsCurrent = (): boolean =>
+      mountedRef.current &&
+      requestId === pairingRequestIdRef.current &&
+      intentRef.current === requestIntent &&
+      runtimePairingTransportForIntent(intentRef.current) === requestTransport
     runtimePairingLinkCache.selectedAddress = address
     setSelectedAddress(address)
     if (intent === 'custom') {
@@ -176,9 +187,12 @@ export function RuntimePairingUrlGenerator({
         rotate: true,
         // Why: main gates the one-way network widen on this, so the declared choice must travel with the
         // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
-        reach: runtimePairingReachForIntent(intent),
-        transport: runtimePairingTransportForIntent(intent)
+        reach: runtimePairingReachForIntent(requestIntent),
+        transport: requestTransport
       })
+      if (!requestIsCurrent()) {
+        return
+      }
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
@@ -200,14 +214,14 @@ export function RuntimePairingUrlGenerator({
         webClientUrl: result.webClientUrl,
         deviceId: result.deviceId
       })
-      if (mountedRef.current) {
+      if (requestIsCurrent()) {
         setRuntimePairingUrl(result.pairingUrl)
         setWebClientUrl(result.webClientUrl)
         setRuntimePairingDeviceId(result.deviceId)
         setGeneratedAddress(address)
       }
       await loadRuntimeAccessGrants()
-      if (mountedRef.current) {
+      if (requestIsCurrent()) {
         toast.success(
           result.webClientUrl
             ? translate(
@@ -221,7 +235,7 @@ export function RuntimePairingUrlGenerator({
         )
       }
     } catch (error) {
-      if (mountedRef.current) {
+      if (requestIsCurrent()) {
         toast.error(
           error instanceof Error
             ? error.message
@@ -232,7 +246,7 @@ export function RuntimePairingUrlGenerator({
         )
       }
     } finally {
-      if (mountedRef.current) {
+      if (requestIsCurrent()) {
         setIsGeneratingPairing(false)
       }
     }
@@ -300,6 +314,9 @@ export function RuntimePairingUrlGenerator({
       intent === 'another' &&
       !networkInterfaces.some((networkInterface) => networkInterface.address === address)
     ) {
+      pairingRequestIdRef.current += 1
+      intentRef.current = 'custom'
+      setIsGeneratingPairing(false)
       runtimePairingLinkCache.customAddress = address
       runtimePairingLinkCache.intent = 'custom'
       setIntent('custom')
@@ -311,7 +328,10 @@ export function RuntimePairingUrlGenerator({
   const updateIntent = (nextIntent: RuntimePairingIntent): void => {
     // Why: "This computer only" and Tailcat both advertise loopback, so the address alone cannot tell a
     // stale link from a current one; a link is only current for the intent that generated it.
-    if (nextIntent !== intent) {
+    if (nextIntent !== intentRef.current) {
+      pairingRequestIdRef.current += 1
+      intentRef.current = nextIntent
+      setIsGeneratingPairing(false)
       clearGeneratedUrls()
     }
     setIntent(nextIntent)

@@ -1,4 +1,5 @@
 import type { OrcadOptions } from './orcad-entry'
+import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 
 /**
  * orcad's flags. A value-taking flag consumes the next token whatever it looks
@@ -21,6 +22,8 @@ export function parseArgs(argv: string[]): OrcadOptions {
       options.json = true
     } else if (arg === '--no-pairing') {
       options.noPairing = true
+    } else if (arg === '--tailcat') {
+      options.tailcat = true
     } else if (arg === '--bind') {
       const value = argv[i + 1]
       if (value === undefined) {
@@ -38,6 +41,17 @@ export function parseArgs(argv: string[]): OrcadOptions {
     } else {
       throw new Error(`Unknown argument: ${arg}`)
     }
+  }
+  const validationError = getServeOptionValidationError({
+    noPairing: options.noPairing ?? false,
+    mobilePairing: false,
+    recipeJson: false,
+    projectRoot: null,
+    tailcat: options.tailcat,
+    wsPort: options.port
+  })
+  if (validationError) {
+    throw new Error(validationError)
   }
   return options
 }

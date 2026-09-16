@@ -5,12 +5,17 @@ import { getTailcatTunnelService } from './tailcat-tunnel-dialer-registration'
 
 export { disposeTailcatTunnel, getTailcatTunnelService } from './tailcat-tunnel-dialer-registration'
 
+type TailcatTunnelRpc = Pick<
+  OrcaRuntimeRpcServer,
+  'getWebSocketEndpoint' | 'hasTunnelGrants' | 'setTunnelAdvertiser'
+>
+
 /**
  * Hooks the tunnel into a started RPC server: offers can embed the token, remote dials go through
  * tailcat, and a host that already handed out tunnel links brings the tunnel back up on launch.
  */
 export async function attachTailcatTunnel(
-  rpc: OrcaRuntimeRpcServer,
+  rpc: TailcatTunnelRpc,
   userDataPath: string,
   options: { startServer?: boolean } = {}
 ): Promise<TailcatTunnelService> {
@@ -22,14 +27,19 @@ export async function attachTailcatTunnel(
     try {
       await tunnel.ensureServer(port)
     } catch (error) {
-      // Why: a missing or failing tailcat must not block the runtime; the offer reports it when asked.
+      if (options.startServer) {
+        throw error
+      }
+      // Persisted grants are restored best-effort; explicit tunnel launches must fail above.
       console.error('[tunnel] Tailcat tunnel did not start:', error)
     }
   }
   return tunnel
 }
 
-export function boundWebSocketPort(rpc: OrcaRuntimeRpcServer): number | null {
+export function boundWebSocketPort(
+  rpc: Pick<OrcaRuntimeRpcServer, 'getWebSocketEndpoint'>
+): number | null {
   const endpoint = rpc.getWebSocketEndpoint()
   if (!endpoint) {
     return null

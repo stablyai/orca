@@ -196,7 +196,7 @@ function installWillQuitHandler(): void {
     // active SSH lease detached in memory synchronously, and that flush is what persists it.
     const sshShutdown = beginSshShutdown()
     // Why: tailcat children outlive the runtime otherwise, serving a tunnel into a dead port.
-    void disposeTailcatTunnel().catch(() => {})
+    const tailcatShutdown = disposeTailcatTunnel()
     killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
     const storeFlush = state.store?.flushAsync() ?? Promise.resolve()
@@ -242,6 +242,7 @@ function installWillQuitHandler(): void {
       { name: 'browser-client-hosts', promise: browserClientHostShutdown },
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
+      { name: 'tailcat', promise: tailcatShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },

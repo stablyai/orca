@@ -21,6 +21,17 @@ vi.mock('../persistence/loading-store/user-data-path', () => ({
 }))
 
 import { registerMobileHandlers } from './mobile'
+import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+
+type TailcatPairingRpcServer = Pick<
+  OrcaRuntimeRpcServer,
+  'createPairingOffer' | 'ensureNetworkExposure'
+>
+
+function registerTailcatPairingHandlers(rpcServer: TailcatPairingRpcServer): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These tests exercise only the two supplied RPC methods through the runtime-pairing handler.
+  registerMobileHandlers(rpcServer as OrcaRuntimeRpcServer)
+}
 
 describe('mobile:getRuntimePairingUrl with a Tailcat transport', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -35,7 +46,7 @@ describe('mobile:getRuntimePairingUrl with a Tailcat transport', () => {
   })
 
   it('keeps the offer on loopback whatever reach the renderer sent', async () => {
-    const createPairingOffer = vi.fn().mockReturnValue({
+    const createPairingOffer = vi.fn<OrcaRuntimeRpcServer['createPairingOffer']>().mockReturnValue({
       available: true,
       pairingUrl: 'orca://pair#tunnel',
       // Why: createPairingOffer itself withholds the web URL for tunnel links.
@@ -43,8 +54,10 @@ describe('mobile:getRuntimePairingUrl with a Tailcat transport', () => {
       endpoint: 'ws://127.0.0.1:6768',
       deviceId: 'runtime-2'
     })
-    const ensureNetworkExposure = vi.fn().mockResolvedValue(undefined)
-    registerMobileHandlers({ createPairingOffer, ensureNetworkExposure } as never)
+    const ensureNetworkExposure = vi
+      .fn<OrcaRuntimeRpcServer['ensureNetworkExposure']>()
+      .mockResolvedValue(undefined)
+    registerTailcatPairingHandlers({ createPairingOffer, ensureNetworkExposure })
 
     await expect(
       handlers.get('mobile:getRuntimePairingUrl')?.(null, {
@@ -74,8 +87,9 @@ describe('mobile:getRuntimePairingUrl with a Tailcat transport', () => {
 
   it('reports the tunnel unavailable when tailcat cannot start', async () => {
     tunnelEnsureServer.mockRejectedValueOnce(new Error('Install the tailcat CLI.'))
-    const createPairingOffer = vi.fn()
-    registerMobileHandlers({ createPairingOffer, ensureNetworkExposure: vi.fn() } as never)
+    const createPairingOffer = vi.fn<OrcaRuntimeRpcServer['createPairingOffer']>()
+    const ensureNetworkExposure = vi.fn<OrcaRuntimeRpcServer['ensureNetworkExposure']>()
+    registerTailcatPairingHandlers({ createPairingOffer, ensureNetworkExposure })
 
     await expect(
       handlers.get('mobile:getRuntimePairingUrl')?.(null, { transport: 'tailcat' })

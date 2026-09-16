@@ -29,6 +29,21 @@ Rule 1 is stated at `src/main/source-control/repo-default-branch.ts:76-78`, `src
 | `gh` / GitHub API, `glab` / GitLab                             | **client**         | inconsistent with the rule; PRs carry the client's identity          |
 | the `orca` CLI inside a remote terminal                        | **client runtime** | control plane only — your files and processes stay remote; see below |
 
+## UI action boundary
+
+The client owns the gesture and its presentation, but the execution host owns
+the operation. A terminal button, shortcut, or IPC menu event must route the
+request to the workspace's resolved execution host. It must not create a local
+terminal when the remote request fails or the transport disappears.
+
+The client is also responsible for completing the UI interaction. Every
+user-triggered remote action must handle both a structured failure response and
+a rejected transport promise, then show the reason in the client UI. A fire and
+forget promise without a rejection handler crosses this boundary incorrectly:
+the host failure becomes an unhandled client promise, and the user sees no
+result. Automatic reconciliation may log or retry by its own policy, but it
+must not silently convert a failed user action into local execution.
+
 ## Survival: what a disconnect does _not_ do
 
 By default, remote work survives your machine going away. The relay is a detached daemon (`nohup … </dev/null &`), its handler in `src/relay/relay.ts` ignores `SIGHUP`, the PTY is its child rather than the ssh channel's, and quitting Orca is a **detach, not a dispose** (`src/main/ssh/ssh-relay-session.ts:901-915`). Sleep additionally pushes `graceTimeSeconds: 0` to un-bound any running grace window.

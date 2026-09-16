@@ -1,12 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { mkdtempSync, writeFileSync } from 'node:fs'
-import type { Socket } from 'node:net'
+import { Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { ProcessSpec } from '../../shared/child-process/run-process'
 import {
+  Socks5NegotiationError,
   Socks5NegotiationTimeoutError,
   Socks5RefusalError,
   type Socks5ConnectOptions
@@ -41,6 +42,7 @@ function harness(
   const spawn: TailcatProcessSpawner = (_spec: ProcessSpec) => {
     const child = new FakeChild()
     children.push(child)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The proxy only consumes the child lifecycle and stdio members implemented by FakeChild.
     return child as unknown as ReturnType<TailcatProcessSpawner>
   }
   const directory = mkdtempSync(join(tmpdir(), 'orca-tailcat-recovery-'))
@@ -63,7 +65,15 @@ function harness(
 const tunnel = { v: 1 as const, kind: 'tailcat' as const, token: 'tcTOKEN', port: 6768 }
 const genericFailure = (): Socks5RefusalError =>
   new Socks5RefusalError(0x01, 'SOCKS proxy refused the connection: general SOCKS server failure')
-const socket = (): Socket => new EventEmitter() as Socket
+const socket = (): Socket => new Socket()
+
+function recoverIdleProxy(proxy: TailcatSocksProxy, generation: number): Promise<boolean> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This focused concurrency test must trigger recovery while another public dial is in backoff.
+  const recoveryTarget = proxy as unknown as {
+    recoverIdleProxy: (currentGeneration: number) => Promise<boolean>
+  }
+  return recoveryTarget.recoverIdleProxy(generation)
+}
 
 async function ready(children: FakeChild[], index: number, port: number): Promise<void> {
   await vi.waitFor(() => expect(children).toHaveLength(index + 1))
@@ -71,6 +81,31 @@ async function ready(children: FakeChild[], index: number, port: number): Promis
 }
 
 describe('TailcatSocksProxy stale-child recovery', () => {
+  it('aborts an in-flight negotiation and destroys a late socket on stop', async () => {
+    let finish: ((stream: Socket) => void) | undefined
+    let receivedSignal: AbortSignal | undefined
+    const lateSocket = new Socket()
+    const connect = vi.fn(
+      (options: Socks5ConnectOptions) =>
+        new Promise<Socket>((resolve) => {
+          receivedSignal = options.signal
+          finish = resolve
+        })
+    )
+    const { proxy, children } = harness(connect)
+    const dialed = proxy.dial(tunnel)
+    await ready(children, 0, 7)
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+
+    const stopped = proxy.stop()
+    expect(receivedSignal?.aborted).toBe(true)
+    finish!(lateSocket)
+
+    await expect(dialed).rejects.toThrow(/has been stopped/)
+    expect(lateSocket.destroyed).toBe(true)
+    await stopped
+  })
+
   it('replaces an idle generation after three generic failures and retries only through SOCKS', async () => {
     const established = socket()
     const connect = vi.fn(async ({ proxyPort }: { proxyPort: number }) => {
@@ -141,9 +176,7 @@ describe('TailcatSocksProxy stale-child recovery', () => {
     await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(1))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    const recovery = (
-      proxy as unknown as { recoverIdleProxy: (generation: number) => Promise<boolean> }
-    ).recoverIdleProxy(1)
+    const recovery = recoverIdleProxy(proxy, 1)
     await ready(children, 1, 8)
     await expect(recovery).resolves.toBe(true)
 
@@ -256,6 +289,39 @@ describe('TailcatSocksProxy stale-child recovery', () => {
     await ready(children, 1, 8)
     const stream = await recovered
     stream.emit('close')
+    await proxy.stop()
+  })
+
+  it('does not count policy refusals toward the generic-failure replacement threshold', async () => {
+    const connect = vi
+      .fn<({ proxyPort }: { proxyPort: number }) => Promise<Socket>>()
+      .mockRejectedValueOnce(new Socks5RefusalError(0x02, 'policy denied'))
+      .mockRejectedValueOnce(genericFailure())
+      .mockRejectedValueOnce(genericFailure())
+    const { proxy, children } = harness(connect)
+    const dialed = proxy.dial(tunnel)
+    await ready(children, 0, 7)
+
+    await expect(dialed).rejects.toThrow(/general SOCKS server failure/)
+    expect(children).toHaveLength(1)
+    expect(children[0]!.killed).toBe(false)
+    await proxy.stop()
+  })
+
+  it('replaces an idle proxy after a local negotiation failure', async () => {
+    const established = socket()
+    const connect = vi
+      .fn<({ proxyPort }: { proxyPort: number }) => Promise<Socket>>()
+      .mockRejectedValueOnce(new Socks5NegotiationError('SOCKS proxy connection failed'))
+      .mockResolvedValueOnce(established)
+    const { proxy, children } = harness(connect)
+    const dialed = proxy.dial(tunnel)
+    await ready(children, 0, 7)
+    await ready(children, 1, 8)
+
+    await expect(dialed).resolves.toBe(established)
+    expect(children[0]!.killed).toBe(true)
+    established.emit('close')
     await proxy.stop()
   })
 })

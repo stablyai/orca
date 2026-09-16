@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   webRuntimeSessionActive: false,
   createWebRuntimeSessionTerminal: vi.fn(),
   createBrowserTab: vi.fn(),
+  openNewTerminalTabInActiveWorkspace: vi.fn(),
   openNewBrowserTabInActiveWorkspace: vi.fn(),
   openMobileEmulatorTab: vi.fn()
 }))
@@ -61,13 +62,14 @@ const WORKTREE_ID = 'repo-1::/repo/worktree'
 
 function renderActions() {
   return renderHook(() =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only the controller fields supplied by this focused test.
     useTerminalCreateActions({
       activeWorktreeId: WORKTREE_ID,
       createBrowserTab: mocks.createBrowserTab,
       createTab: vi.fn(),
       openNewBrowserTabInActiveWorkspace: mocks.openNewBrowserTabInActiveWorkspace,
       openNewMarkdownInActiveWorkspace: vi.fn(),
-      openNewTerminalTabInActiveWorkspace: vi.fn(),
+      openNewTerminalTabInActiveWorkspace: mocks.openNewTerminalTabInActiveWorkspace,
       setActiveTabType: vi.fn(),
       setTabBarOrder: vi.fn()
     } as unknown as TerminalColdActivationController)
@@ -81,6 +83,7 @@ describe('useTerminalCreateActions creation gates', () => {
     mocks.simulatorAvailability = { state: 'enabled', provider: 'local-client' }
     mocks.webRuntimeSessionActive = false
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
+    mocks.openNewTerminalTabInActiveWorkspace.mockResolvedValue(undefined)
     mocks.state = {
       activeGroupIdByWorktree: {},
       groupsByWorktree: {},
@@ -134,6 +137,28 @@ describe('useTerminalCreateActions creation gates', () => {
 
     await vi.waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('host refused the terminal')
+    )
+  })
+
+  it('reports rejected toolbar terminal creation', async () => {
+    mocks.webRuntimeSessionActive = true
+    mocks.createWebRuntimeSessionTerminal.mockRejectedValue(new Error('runtime disconnected'))
+
+    renderActions().handleNewTab()
+
+    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('runtime disconnected'))
+  })
+
+  it('reports rejected local-owner terminal creation', async () => {
+    mocks.state.activeGroupIdByWorktree = { [WORKTREE_ID]: 'group-1' }
+    mocks.openNewTerminalTabInActiveWorkspace.mockRejectedValue(
+      new Error('terminal owner disconnected')
+    )
+
+    renderActions().handleNewTab()
+
+    await vi.waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith('terminal owner disconnected')
     )
   })
 })

@@ -4,7 +4,8 @@ import type { PairingTunnel } from '../../shared/mobile-relay-pairing-offer'
 import { runProcess, spawnProcess, type ProcessSpec } from '../../shared/child-process/run-process'
 import {
   connectThroughSocks5,
-  Socks5NegotiationTimeoutError,
+  Socks5NegotiationAbortedError,
+  Socks5NegotiationError,
   Socks5RefusalError
 } from './socks5-connect'
 import { tailcatKeyPathArgument } from './tailcat-binary'
@@ -52,6 +53,7 @@ export class TailcatSocksProxy {
   private recovery: { generation: number; promise: Promise<boolean> } | null = null
   private readonly pendingDials = new Map<number, number>()
   private readonly activeStreams = new Map<number, number>()
+  private readonly pendingNegotiations = new Set<AbortController>()
   private lastRecoveryAt = Number.NEGATIVE_INFINITY
   private stopped = false
 
@@ -61,6 +63,7 @@ export class TailcatSocksProxy {
     const connect = this.options.connect ?? connectThroughSocks5
     let recoveryAttempted = false
     let attempt = 0
+    let consecutiveGenericFailures = 0
     let attemptGeneration: number | null = null
     for (;;) {
       if (this.recovery) {
@@ -70,26 +73,40 @@ export class TailcatSocksProxy {
       if (proxy.generation !== attemptGeneration) {
         attemptGeneration = proxy.generation
         attempt = 0
+        consecutiveGenericFailures = 0
       }
       attempt += 1
       this.increment(this.pendingDials, proxy.generation)
+      const controller = new AbortController()
+      this.pendingNegotiations.add(controller)
       let failure: unknown
       try {
         const socket = await connect({
           proxyPort: proxy.port,
           host: tunnel.token,
-          port: tunnel.port
+          port: tunnel.port,
+          signal: controller.signal
         })
+        if (this.stopped || proxy.generation !== this.generation || proxy.port !== this.port) {
+          socket.destroy()
+          throw new Error(
+            this.stopped ? 'Tailcat proxy has been stopped' : 'Tailcat proxy generation changed'
+          )
+        }
         this.trackStream(socket, proxy.generation)
         return socket
       } catch (error) {
-        failure = error
+        failure = this.stopped ? new Error('Tailcat proxy has been stopped') : error
       } finally {
+        this.pendingNegotiations.delete(controller)
         this.decrement(this.pendingDials, proxy.generation)
       }
 
-      const refused = failure instanceof Socks5RefusalError
-      if (attempt < DIAL_ATTEMPTS && refused) {
+      consecutiveGenericFailures =
+        failure instanceof Socks5RefusalError && failure.replyCode === 0x01
+          ? consecutiveGenericFailures + 1
+          : 0
+      if (attempt < DIAL_ATTEMPTS && failure instanceof Socks5RefusalError) {
         this.options.logf?.(`[tailcat socks] dial attempt ${attempt} failed: ${String(failure)}`)
         await new Promise((resolve) =>
           setTimeout(resolve, this.options.dialRetryDelayMs ?? DEFAULT_DIAL_RETRY_DELAY_MS)
@@ -97,8 +114,9 @@ export class TailcatSocksProxy {
         continue
       }
       const recoverable =
-        failure instanceof Socks5NegotiationTimeoutError ||
-        (failure instanceof Socks5RefusalError && failure.replyCode === 0x01)
+        (failure instanceof Socks5NegotiationError &&
+          !(failure instanceof Socks5NegotiationAbortedError)) ||
+        consecutiveGenericFailures >= DIAL_ATTEMPTS
       if (!recoveryAttempted && recoverable) {
         recoveryAttempted = true
         if (await this.recoverIdleProxy(proxy.generation)) {
@@ -116,6 +134,9 @@ export class TailcatSocksProxy {
   async stop(): Promise<void> {
     this.stopped = true
     this.generation += 1
+    for (const controller of this.pendingNegotiations) {
+      controller.abort()
+    }
     const child = this.child
     const recovery = this.recovery?.promise
     this.child = null

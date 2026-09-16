@@ -28,6 +28,12 @@ export function getRemoteRuntimeTunnelDialer(): RemoteRuntimeTunnelDialer | null
 
 type CreateConnectionCallback = (error: Error | null, stream: Duplex) => void
 
+function rejectConnection(callback: CreateConnectionCallback, error: unknown): void {
+  const normalized = error instanceof Error ? error : new Error(String(error))
+  // Node documents the error path as callback(error), though its declaration requires a stream.
+  Reflect.apply(callback, undefined, [normalized])
+}
+
 /**
  * `http.Agent` whose sockets come from the tunnel instead of `net.connect`.
  *
@@ -54,12 +60,7 @@ export class RemoteRuntimeTunnelAgent extends Agent {
     }
     this.dial(this.tunnel).then(
       (socket) => callback(null, socket),
-      // Why: Node reads only the error argument on failure; the typing still demands a stream slot.
-      (error: unknown) =>
-        callback(
-          error instanceof Error ? error : new Error(String(error)),
-          null as unknown as Duplex
-        )
+      (error: unknown) => rejectConnection(callback, error)
     )
     return undefined
   }
@@ -81,11 +82,20 @@ export function createRemoteRuntimeWebSocket(
     throw remoteRuntimeUnavailableError(TUNNEL_DIALER_UNAVAILABLE_MESSAGE)
   }
   return new WebSocket(
-    pairing.endpoint,
+    pairing.tunnel && dialer ? tunneledWebSocketEndpoint(pairing.endpoint) : pairing.endpoint,
     pairing.tunnel && dialer
       ? { ...options, agent: new RemoteRuntimeTunnelAgent(pairing.tunnel, dialer) }
       : options
   )
+}
+
+function tunneledWebSocketEndpoint(endpoint: string): string {
+  const url = new URL(endpoint)
+  // Tailcat supplies the transport socket. TLS belongs to a direct fallback endpoint, not this stream.
+  if (url.protocol === 'wss:') {
+    url.protocol = 'ws:'
+  }
+  return url.toString()
 }
 
 /** Adds the socket's own failure reason for tunnel dials, where the endpoint explains nothing. */

@@ -1,6 +1,14 @@
-import { createServer, type AddressInfo } from 'node:net'
+import { createServer, type Server } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocketTransport } from './ws-transport'
+
+function listeningPort(server: Server): number {
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected the test server to listen on a TCP port')
+  }
+  return address.port
+}
 
 describe('WebSocketTransport requirePinnedPort', () => {
   const cleanups: (() => Promise<void>)[] = []
@@ -15,7 +23,7 @@ describe('WebSocketTransport requirePinnedPort', () => {
     const occupant = createServer()
     await new Promise<void>((resolve) => occupant.listen(0, '127.0.0.1', () => resolve()))
     cleanups.push(() => new Promise<void>((resolve) => occupant.close(() => resolve())))
-    const port = (occupant.address() as AddressInfo).port
+    const port = listeningPort(occupant)
 
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
@@ -31,7 +39,7 @@ describe('WebSocketTransport requirePinnedPort', () => {
   it('binds the pinned port normally when it is free', async () => {
     const probe = createServer()
     await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', () => resolve()))
-    const port = (probe.address() as AddressInfo).port
+    const port = listeningPort(probe)
     await new Promise<void>((resolve) => probe.close(() => resolve()))
 
     const transport = new WebSocketTransport({ host: '127.0.0.1', port, requirePinnedPort: true })
