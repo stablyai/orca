@@ -361,8 +361,8 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 364 manifest scenarios against frozen goldens and fails on any divergence: 723 goldens
-over 853 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
+It replays 368 manifest scenarios against frozen goldens and fails on any divergence: 727 goldens
+over 882 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
 the change they describe and are not restatements of this one. For a migration it answers one
 question — does the rewritten call site produce the same sender calls, settlements, state and
 effects as main did?
@@ -402,11 +402,19 @@ It is not a substitute for reading the diff. Five facts bound it, all learned th
   dropping `viewportRef.current &&`, dropping the device-token conditional beside it in
   `use-mobile-session-terminal-stream-display.ts`, and dropping the `.catch(() => null)` on
   `ensureSessionTabs()` in `use-mobile-session-startup.ts` each survived the whole suite. The fix is
-  three scenarios that declare those cells empty, and the lesson generalises past them: a value an
+  scenarios that declare those cells empty, and the lesson generalises past them: a value an
   adapter holds as a constant is a cell no scenario can empty, so the arm that reads it empty is
   unreachable until the constant becomes a scenario argument. A stub may also reject where the
   product awaits it, on the scenario's instruction — that is declaration, not shaping, and it is the
   only way a refused scope callback is reachable at all.
+
+  The terminal-create family is the same lesson read the other way round, and it cost three more
+  holes. Its adapter pinned the active tab as a fixture, so the arm that omits `afterTabId` was one
+  nothing could reach and sending `null` in its place survived; it dropped every launch option but
+  the prompt and its two toasts, so swapping the `command` and `agentPrompt` members the host reads
+  survived with those members never on the wire; and no scenario tapped twice, so dropping the
+  in-flight guard survived. An argument the adapter supplies itself is not an
+  argument. What the adapter forwards is the whole of what the goldens can hold.
 
 `mutants/probe-hole-witness.test.ts` closes the first two and the last, and keeps them closed. It asserts the
 hole and the closure together: each probe must kill its mutation _and_ every pre-probe scenario of
@@ -414,7 +422,7 @@ the same operation must still survive it. A probe that stops being load-bearing 
 lingering.
 
 What is still not covered: what the count-based raw-port inventory covers instead (which files
-reach `sendRequest`, and how often), native storage, transport skew, and the two mutations under
+reach `sendRequest`, and how often), native storage, transport skew, and the mutations listed under
 _Known-open holes_ below.
 
 Which subscriptions are covered is no longer stated here. It is held as data in
@@ -535,10 +543,11 @@ product-tree edit.
 
 ## Known-open holes
 
-Two behavioural mutations are not caught by any golden. Both were confirmed by mutating product
-source and re-deriving the whole suite; neither is reachable through the adapters as they stand,
-so closing them needs new adapter capability rather than another scenario. Anyone migrating these
-call sites should not assume the recordings will notice a change here:
+Each entry below is a mutation no golden catches, confirmed by applying it to product source and
+re-deriving the whole suite. None is reachable through the adapters as they stand, so closing one
+needs new adapter capability or a call site that reads what it decides — not another scenario.
+Anyone migrating these call sites should not assume the recordings will notice a change here. The
+list is the count; a number in this paragraph would be one more thing that cannot fail.
 
 - **`use-host-repo-metadata.ts` cross-module cache write.** Deleting `setCachedRepos(...)` survives.
   `workspace.repositories` now mounts `useNewWorkspaceRepositories`, which is the consumer that
@@ -549,6 +558,19 @@ call sites should not assume the recordings will notice a change here:
   `sourceClientRef.current !== client` to `false` survives. The adapter closes over one client
   object: `reset` changes only the refresh key, `cutover` migrates the same stable logical client,
   and remounting discards the old hook state. Closing it needs a same-mount client replacement.
+- **`mobile-session-write-operations.ts` display-mode acceptance.** Swapping
+  `terminalDisplayModeSet`'s `success-result-or-skip` for `require-result-or-throw-message` moves
+  none of the fifteen goldens that reach it. This one is not an adapter limit but a call-site
+  property: the toggle reads no verdict and its own `catch` swallows a throw either way, so no
+  acceptance is observable there. The first caller that reads a verdict closes it. What the goldens
+  do hold at that site is the method, the params and the viewport pair.
+- **`use-mobile-session-startup.ts` attached-terminal guard.** Deleting
+  `if (activeHandleRef.current) { return }` from the 1800 ms created-session timer survives. The
+  startup adapter owns that ref and nothing a scenario can drive writes it between the mount and the
+  timer, so the arm the guard exists for — a terminal that attached while the timer was pending —
+  has no way to occur. In the product it does, and the mutant then sends a second `worktree.activate`
+  for a session that is already live. Closing it needs an adapter that can attach a terminal
+  mid-scenario.
 
 The original settings slice coverage maps nine host-RPC callers in
 `settings-recording-coverage.json`; device-preference entries are excluded by coordinator

@@ -19,10 +19,12 @@ const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-
  * are asserted together: if a pre-probe scenario of the same operation also caught the mutation,
  * the probe is redundant and this test says so instead of letting it accumulate.
  *
- * The three session entries are the same shape one step later: each names a guard whose false arm
+ * The six session entries are the same shape one step later: each names a guard whose false arm
  * no session recording reached, because every scenario of its family declared the cell filled. The
  * closing scenario declares it empty, so the member the guard drops is absent from the wire and the
- * mutant that always sends it has somewhere to diverge.
+ * mutant that always sends it has somewhere to diverge. Two of them close a cell an adapter
+ * constant used to fill: while the worktree and the active tab were fixtures rather than
+ * arguments, no scenario could describe a session that has neither.
  */
 const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonly string[] }[] = [
   {
@@ -54,6 +56,24 @@ const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonl
     mutation: 'startup-tab-load-rejects-sequence',
     operation: 'session.startup',
     closedBy: ['session-startup-refused-tab-load-still-loads-terminals']
+  },
+  {
+    mutation: 'create-after-tab-id-null',
+    operation: 'session.create-terminal',
+    closedBy: ['session-create-terminal-without-active-tab']
+  },
+  {
+    mutation: 'create-quick-command-keys',
+    operation: 'session.create-terminal',
+    closedBy: [
+      'session-create-terminal-runs-a-quick-command',
+      'session-create-terminal-launches-an-agent-quick-command'
+    ]
+  },
+  {
+    mutation: 'create-second-tap-in-flight',
+    operation: 'session.create-terminal',
+    closedBy: ['session-create-terminal-ignores-a-second-create-in-flight']
   }
 ]
 
@@ -92,6 +112,31 @@ async function verdict(id: string, mutation: Mutation): Promise<string> {
 }
 
 describe('probe scenarios close holes the pre-probe recordings left open', () => {
+  // What makes the classification above sound, held over the whole manifest rather than argued
+  // about: every `complete` is followed by a checkpoint, so a send whose params stopped matching
+  // always suppressed an observation the golden holds. A scenario that completed a request after
+  // its last checkpoint could abort with nothing left to record, and a params-only mutant would
+  // read as killed by a recording that never looked.
+  it('never completes a request after the last checkpoint of a scenario', () => {
+    const trailing = input.scenarios
+      .filter((scenario) => {
+        let lastComplete = -1
+        let lastCheckpoint = -1
+        scenario.steps.forEach((step, index) => {
+          if ('complete' in step) {
+            lastComplete = index
+          }
+          // A step may carry both, and then the checkpoint records what the completion produced.
+          if ('checkpoint' in step) {
+            lastCheckpoint = index
+          }
+        })
+        return lastComplete > lastCheckpoint
+      })
+      .map((scenario) => scenario.id)
+    expect(trailing).toEqual([])
+  })
+
   for (const hole of HOLES) {
     const family = input.scenarios.filter((scenario) => scenario.operation === hole.operation)
     for (const id of hole.closedBy) {
