@@ -3916,9 +3916,7 @@
           "searchLinks": "링크 검색",
           "deleteSkills": "스킬 삭제…"
         },
-        "SkillShareSelectionControls": {
-          "01c5a15e02": "스킬 공유"
-        },
+        "SkillShareSelectionControls": { "01c5a15e02": "스킬 공유" },
         "SkillRow": {
           "updatedUnknown": "날짜 없음",
           "pathCopied": "경로 복사됨",
@@ -3928,17 +3926,13 @@
           "viewDetails": "세부 정보 보기",
           "deleteSkill": "삭제…"
         },
-        "SkillsList": {
-          "listLabel": "스킬"
-        },
+        "SkillsList": { "listLabel": "스킬" },
         "sourceStatus": {
           "missing": "폴더를 찾을 수 없음",
           "remoteRepo": "원격 리포지토리 — 검색 안 됨",
           "unavailable": "검색 안 됨"
         },
-        "sources": {
-          "heading": "스킬 폴더"
-        },
+        "sources": { "heading": "스킬 폴더" },
         "sourceKind": {
           "home": "홈",
           "workspace": "워크스페이스",
@@ -3960,10 +3954,7 @@
           "linkOne": "링크 {{count}}개",
           "linkOther": "링크 {{count}}개"
         },
-        "filter": {
-          "allAgents": "모든 에이전트",
-          "sharedAgent": "공유됨 (.agents)"
-        },
+        "filter": { "allAgents": "모든 에이전트", "sharedAgent": "공유됨 (.agents)" },
         "SkillsSelectionHeader": {
           "exit": "선택 나가기",
           "exitTooltip": "선택 나가기 · Esc",
@@ -3972,11 +3963,7 @@
           "clear": "지우기",
           "deleteTitle": "삭제할 스킬 선택"
         },
-        "SkillDetailDialog": {
-          "agents": "에이전트",
-          "updated": "업데이트됨",
-          "copy": "복사"
-        },
+        "SkillDetailDialog": { "agents": "에이전트", "updated": "업데이트됨", "copy": "복사" },
         "SkillFreshnessNudge": {
           "titleOne": "설치된 Orca 스킬이 오래되었습니다",
           "titleMany": "설치된 Orca 스킬 {{value0}}개가 오래되었습니다",

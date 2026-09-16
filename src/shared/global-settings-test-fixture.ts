@@ -13,6 +13,7 @@ export function createGlobalSettingsFixture(
       workspaceDir: overrides.workspaceDir ?? '',
       appFontFamily: 'Geist',
       editorAutoSaveDelayMs: 1000,
+      editorColorTheme: overrides.editorColorTheme ?? 'auto',
       primarySelectionMiddleClickPaste: false,
       primarySelectionDefaultedForLinux: false,
       terminalFontFamily: 'JetBrains Mono',

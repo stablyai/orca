@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
+import { resolveMonacoThemeName } from '@/lib/editor-theme'
 import { useAppStore } from '@/store'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { getIpynbCodeCellEditorHeight, getIpynbCodeCellPreviewLines } from './ipynb-code-cell-lines'
@@ -108,8 +109,8 @@ function IpynbCodeCellEditor({
   }, [])
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(resolveMonacoThemeName(settings?.editorColorTheme, isDark))
+  }, [isDark, settings?.editorColorTheme])
 
   if (!active) {
     return (
@@ -141,7 +142,7 @@ function IpynbCodeCellEditor({
         height={editorHeight}
         defaultLanguage={cell.language}
         language={cell.language}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={resolveMonacoThemeName(settings?.editorColorTheme, isDark)}
         value={source}
         onMount={handleMount}
         onChange={(value) => onChange(value ?? '')}

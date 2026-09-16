@@ -13,10 +13,13 @@ import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
+import { registerThemePreviewLanguage } from './monaco-languages/register-theme-preview-language'
+import { registerFunctionCallHighlighting } from './monaco-languages/register-function-call-highlighting'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+import { registerEditorThemeCatalog } from './editor-themes'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -80,6 +83,8 @@ registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
 registerNimLanguage(monaco)
 registerJsonlLanguage(monaco)
+registerThemePreviewLanguage(monaco)
+registerFunctionCallHighlighting(monaco)
 registerShellMarkdownAliases(monaco)
 installMonacoDelayerCancellationGuard()
 installMonacoDiffEditorDisposalGuard(monaco)
@@ -88,6 +93,7 @@ installMonacoPeekReferencesPreviewOptions()
 // blocked in Orca's sandboxed renderer. Route it through the trusted IPC bridge
 // so right-click Paste works like Cmd+V (which already works via native events).
 installMonacoContextMenuPaste(monaco)
+registerEditorThemeCatalog(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })

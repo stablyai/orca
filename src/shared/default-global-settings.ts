@@ -21,6 +21,7 @@ export function buildDefaultSettings(args: {
   workspaceDir: string
   appFontFamily: string
   editorAutoSaveDelayMs: number
+  editorColorTheme: GlobalSettings['editorColorTheme']
   primarySelectionMiddleClickPaste: boolean
   primarySelectionDefaultedForLinux: boolean
   terminalFontFamily: string
@@ -53,6 +54,7 @@ export function buildDefaultSettings(args: {
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
+    editorColorTheme: args.editorColorTheme,
     richMarkdownSpellcheckEnabled: true,
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,

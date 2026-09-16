@@ -1,5 +1,6 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type { TerminalThemeOption } from '@/lib/terminal-theme'
+import type { EditorColorThemeOption } from '@/lib/editor-theme'
 
 export const SETTINGS_FORM_OPTION_QUERY_MAX_BYTES = 2 * 1024
 export const FONT_SUGGESTION_RENDER_LIMIT = 320
@@ -38,6 +39,20 @@ export function filterTerminalThemeOptions(
   return themeOptions.filter((theme) =>
     `${theme.label} ${theme.sourceLabel ?? ''} `.toLowerCase().includes(normalizedQuery)
   )
+}
+
+export function filterEditorColorThemeOptions(
+  themeOptions: readonly EditorColorThemeOption[],
+  query: string
+): EditorColorThemeOption[] {
+  const normalizedQuery = normalizeSettingsFormOptionQuery(query)
+  if (normalizedQuery === null) {
+    return []
+  }
+  if (!normalizedQuery) {
+    return [...themeOptions]
+  }
+  return themeOptions.filter((theme) => theme.label.toLowerCase().includes(normalizedQuery))
 }
 
 export function filterFontSuggestions(suggestions: readonly string[], query: string): string[] {

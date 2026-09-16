@@ -1,12 +1,13 @@
 import type React from 'react'
 import { useLayoutEffect, useState } from 'react'
-import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
+import { AppWindow, Code2, PanelLeft, TerminalSquare } from 'lucide-react'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
+import { CodeEditorAppearanceSection } from './CodeEditorAppearanceSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { useAppStore } from '../../store'
@@ -14,6 +15,7 @@ import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percenta
 import {
   getAppIconEntries,
   getAppearancePaneSearchEntries,
+  getCodeEditorAppearanceSearchEntries,
   getLanguageEntries,
   getLayoutEntries,
   getMenuBarIconEntries,
@@ -26,6 +28,7 @@ import {
   getZoomEntries
 } from './appearance-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
+import { getAvailableEditorColorThemeOptions } from '@/lib/editor-theme'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
@@ -54,11 +57,12 @@ type AppearancePaneProps = {
   warpThemes: UseWarpThemeImportReturn
 }
 
-type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
+type AppearanceSectionKey = 'interface' | 'terminal' | 'codeEditor' | 'window'
 
 const ALL_APPEARANCE_SECTIONS = [
   'interface',
   'terminal',
+  'codeEditor',
   'window'
 ] as const satisfies readonly AppearanceSectionKey[]
 
@@ -125,6 +129,10 @@ export function AppearancePane({
     'auto.components.settings.AppearancePane.terminalTitle',
     'Terminal'
   )
+  const codeEditorTitle = translate(
+    'auto.components.settings.AppearancePane.codeEditorTitle',
+    'Code Editor'
+  )
   const windowSidebarTitle = translate(
     'auto.components.settings.AppearancePane.windowSidebarTitle',
     'Window & Sidebar'
@@ -151,6 +159,10 @@ export function AppearancePane({
       showDesktopThemeImports: !isWebClient
     })
   ]
+  const codeEditorSearchEntries = [
+    { title: codeEditorTitle },
+    ...getCodeEditorAppearanceSearchEntries()
+  ]
   const windowSearchEntries = [
     {
       title: windowSidebarTitle,
@@ -165,9 +177,11 @@ export function AppearancePane({
 
   const interfaceMatches = matchesSettingsSearch(searchQuery, interfaceSearchEntries)
   const terminalMatches = matchesSettingsSearch(searchQuery, terminalSearchEntries)
+  const codeEditorMatches = matchesSettingsSearch(searchQuery, codeEditorSearchEntries)
   const windowMatches = matchesSettingsSearch(searchQuery, windowSearchEntries)
   const interfaceLabelMatches = matchesSettingsSearch(searchQuery, { title: interfaceTitle })
   const terminalLabelMatches = matchesSettingsSearch(searchQuery, { title: terminalTitle })
+  const codeEditorLabelMatches = matchesSettingsSearch(searchQuery, { title: codeEditorTitle })
   const windowLabelMatches = matchesSettingsSearch(searchQuery, {
     title: windowSidebarTitle,
     description: windowSidebarSummary
@@ -183,7 +197,9 @@ export function AppearancePane({
         ? interfaceMatches
         : key === 'terminal'
           ? terminalMatches
-          : windowMatches
+          : key === 'codeEditor'
+            ? codeEditorMatches
+            : windowMatches
     }
     return openSections.has(key)
   }
@@ -205,6 +221,10 @@ export function AppearancePane({
     settings.terminalFontFamily ||
     translate('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')
   } · ${settings.terminalFontSize}px`
+  const codeEditorSummary =
+    getAvailableEditorColorThemeOptions().find(
+      (option) => option.value === (settings.editorColorTheme ?? 'auto')
+    )?.label ?? translate('auto.components.settings.AppearancePane.codeEditorDefault', 'Default')
 
   return (
     <div className="space-y-2.5">
@@ -256,6 +276,25 @@ export function AppearancePane({
             ghostty={ghostty}
             warpThemes={warpThemes}
             forceVisiblePrimary={terminalLabelMatches}
+          />
+        </AppearanceSection>
+      ) : null}
+
+      {codeEditorMatches ? (
+        <AppearanceSection
+          id="codeEditor"
+          icon={<Code2 aria-hidden="true" />}
+          title={codeEditorTitle}
+          summary={codeEditorSummary}
+          open={isSectionOpen('codeEditor')}
+          onToggle={() => toggleSection('codeEditor')}
+          toggleDisabled={isSearching}
+        >
+          <CodeEditorAppearanceSection
+            settings={settings}
+            updateSettings={updateSettings}
+            systemPrefersDark={systemPrefersDark}
+            forceVisiblePrimary={codeEditorLabelMatches}
           />
         </AppearanceSection>
       ) : null}

@@ -3926,9 +3926,7 @@
           "searchLinks": "搜索链接",
           "deleteSkills": "删除技能…"
         },
-        "SkillShareSelectionControls": {
-          "01c5a15e02": "共享技能"
-        },
+        "SkillShareSelectionControls": { "01c5a15e02": "共享技能" },
         "SkillRow": {
           "updatedUnknown": "无日期",
           "pathCopied": "路径已复制",
@@ -3938,17 +3936,13 @@
           "viewDetails": "查看详情",
           "deleteSkill": "删除…"
         },
-        "SkillsList": {
-          "listLabel": "技能"
-        },
+        "SkillsList": { "listLabel": "技能" },
         "sourceStatus": {
           "missing": "未找到文件夹",
           "remoteRepo": "远程仓库 — 未扫描",
           "unavailable": "未扫描"
         },
-        "sources": {
-          "heading": "技能文件夹"
-        },
+        "sources": { "heading": "技能文件夹" },
         "sourceKind": {
           "home": "主目录",
           "workspace": "工作区",
@@ -3978,10 +3972,7 @@
           "deleteLinkOne": "{{count}} 个链接",
           "deleteLinkOther": "{{count}} 个链接"
         },
-        "filter": {
-          "allAgents": "所有 Agent",
-          "sharedAgent": "共享 (.agents)"
-        },
+        "filter": { "allAgents": "所有 Agent", "sharedAgent": "共享 (.agents)" },
         "SkillsSelectionHeader": {
           "exit": "退出选择",
           "exitTooltip": "退出选择 · Esc",
@@ -3990,11 +3981,7 @@
           "clear": "清除",
           "deleteTitle": "选择要删除的技能"
         },
-        "SkillDetailDialog": {
-          "agents": "Agent",
-          "updated": "已更新",
-          "copy": "复制"
-        },
+        "SkillDetailDialog": { "agents": "Agent", "updated": "已更新", "copy": "复制" },
         "SkillFreshnessNudge": {
           "titleOne": "已安装的 Orca 技能已过期",
           "titleMany": "{{value0}} 个已安装的 Orca 技能已过期",

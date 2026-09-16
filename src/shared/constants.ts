@@ -166,6 +166,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     workspaceDir: getDefaultWorkspaceDir(homedir),
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
+    editorColorTheme: 'auto',
     primarySelectionMiddleClickPaste: getDefaultPrimarySelectionMiddleClickPaste(),
     primarySelectionDefaultedForLinux:
       typeof process !== 'undefined' && process.platform === 'linux',
