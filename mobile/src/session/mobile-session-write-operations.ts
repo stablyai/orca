@@ -70,6 +70,12 @@ export const sessionTabCreateTerminal = bindDeferredRpcOperation(
  * on the terminal's existing subscription: main awaited the envelope and looked at nothing in it, so
  * only a transport rejection was ever a failure here. Declared rather than omitted so the next
  * caller inherits a policy instead of choosing one.
+ *
+ * Nothing holds this policy, and that is a property of the call site rather than of the recordings:
+ * with no verdict read, and the toggle's own `catch` swallowing a throw either way, swapping it for
+ * `require-result-or-throw-message` moves no golden — measured. The first caller that reads a
+ * verdict is what makes it observable. What the goldens do hold at this site is the method, the
+ * params and the viewport pair.
  */
 export const terminalDisplayModeSet = bindDeferredRpcOperation(
   defineRpcOperation({
