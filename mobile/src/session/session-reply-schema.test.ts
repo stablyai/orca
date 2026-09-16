@@ -41,7 +41,10 @@ import {
   terminalQuickCommandsSchema,
   workspaceFilePathsSchema
 } from './session-read-reply-schema'
-import { terminalSendAcceptedSchema } from './session-write-reply-schema'
+import {
+  sessionCreatedTerminalTabSchema,
+  terminalSendAcceptedSchema
+} from './session-write-reply-schema'
 
 // One suite per claim the session schemas make. The three kinds of case here are the three kinds of
 // decision the schemas encode: a member a consumer reads unguarded is required, an arm set a reader
@@ -86,6 +89,33 @@ describe('required members', () => {
     expect(refuses(reviewCreatedTerminalSchema, {})).toBe(true)
     expect(refuses(reviewCreatedTerminalSchema, { tab: { ...tab, terminal: '' } })).toBe(true)
     expect(refuses(reviewCreatedTerminalSchema, { tab: { ...tab, id: '' } })).toBe(true)
+  })
+
+  it('requires the strip to be able to address the tab a New Tab create seated', () => {
+    const tab = { id: 'tab-9', type: 'terminal', title: 'codex', terminal: 'terminal-9' }
+    const created = reads(sessionCreatedTerminalTabSchema, { tab })
+    expect(created.id).toBe('tab-9')
+    expect(created.terminal).toBe('terminal-9')
+    expect(refuses(sessionCreatedTerminalTabSchema, {})).toBe(true)
+    expect(refuses(sessionCreatedTerminalTabSchema, { tab: { ...tab, id: '' } })).toBe(true)
+    // A create that answered some other tab kind would be spread into the strip as a terminal.
+    expect(refuses(sessionCreatedTerminalTabSchema, { tab: { ...tab, type: 'markdown' } })).toBe(
+      true
+    )
+  })
+
+  it('keeps a created tab whose handle has not been assigned yet, and passes newer members through', () => {
+    const tab = { id: 'tab-9', type: 'terminal', terminal: null, status: 'pending-handle' }
+    const created = reads(sessionCreatedTerminalTabSchema, { tab })
+    expect(created.terminal).toBeNull()
+    expect(created.title).toBeUndefined()
+    expect(created.status).toBe('pending-handle')
+    // Main guarded each of these, so an unreadable one drops to the guard rather than refusing.
+    const salvaged = reads(sessionCreatedTerminalTabSchema, {
+      tab: { ...tab, title: 7, terminal: 3 }
+    })
+    expect(salvaged.title).toBeUndefined()
+    expect(salvaged.terminal).toBeUndefined()
   })
 
   it('requires the tab list the send sheet renders, and drops the rows it cannot address', () => {
