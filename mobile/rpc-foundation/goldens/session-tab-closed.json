@@ -1,0 +1,109 @@
+{
+  "operation": "session.tab-close",
+  "family": "session.tab-close-session",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "334b50e135103db21b93e60acff31047823371049171b57388df050179a6dcbc",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "375042b2eaa9": {
+      "name": "session.tabs.close#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.close"
+        },
+        {
+          "name": "params",
+          "value": {
+            "reason": "user",
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "closed": true
+          }
+        }
+      }
+    },
+    "567d11711027": {
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "Terminal"
+        }
+      ]
+    },
+    "6b12924233e1": {
+      "name": "session.tabs.close#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.close\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"reason\":\"user\"}}",
+      "sent": 1
+    },
+    "a1c0c7168922": {
+      "name": "unsubscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
+    "c965e2e20176": {
+      "name": "clear-live-input",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-tab-closed",
+    "checkpoints": [
+      {
+        "id": "closed",
+        "observation": {
+          "sender": ["375042b2eaa9"],
+          "payloads": ["6b12924233e1"],
+          "settlements": {
+            "close-tab": "eb79a9b3682a"
+          },
+          "state": "567d11711027",
+          "effects": ["a1c0c7168922", "c965e2e20176"]
+        }
+      }
+    ]
+  }
+}

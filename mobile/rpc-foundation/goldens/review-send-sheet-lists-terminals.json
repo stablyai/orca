@@ -1,0 +1,134 @@
+{
+  "operation": "session.diff-review-actions",
+  "family": "session.review-send-sheet",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
+  "scenarioSha256": "8b4a06c1b2918d5ed5f40102c1c7cb411e02aba5e7601e98658d673634784bb0",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1ee5cdadc74e": {
+      "name": "session.tabs.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 1
+    },
+    "697177595a0a": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "ready",
+        "terminals": [
+          {
+            "id": "tab-1",
+            "terminal": "terminal-1",
+            "title": "codex"
+          }
+        ]
+      }
+    },
+    "c723becec2d4": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tabs": [
+              {
+                "id": "tab-1",
+                "terminal": "terminal-1",
+                "title": "codex",
+                "type": "terminal"
+              },
+              {
+                "id": "tab-2",
+                "title": "notes.md",
+                "type": "markdown"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "review-send-sheet-lists-terminals",
+    "checkpoints": [
+      {
+        "id": "listed",
+        "observation": {
+          "sender": ["c723becec2d4"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "697177595a0a",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

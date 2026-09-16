@@ -1,0 +1,119 @@
+{
+  "operation": "session.diff-review-load",
+  "family": "session.review-branch-diff",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
+  "scenarioSha256": "36dbf57e82d87819b403839c22044209f0f399057f62efa7004bb8b899fdbe81",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "365c17523d76": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "itemKey": "branch:src/app.ts",
+        "kind": "binary"
+      }
+    },
+    "38fb361f406c": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Committed diff is unavailable",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "534cf7badcbc": {
+      "branchCompare": "unloaded",
+      "diff": {
+        "itemKey": "branch:src/app.ts",
+        "kind": "binary"
+      },
+      "snapshot": "unloaded"
+    },
+    "67cae2e16a3b": {
+      "name": "git.branchDiff#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}",
+      "sent": 1
+    },
+    "ce89618d90b4": {
+      "name": "git.branchDiff#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "compare": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base"
+            },
+            "filePath": "src/app.ts",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "kind": "binary"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "review-branch-diff-shapes",
+    "checkpoints": [
+      {
+        "id": "branch",
+        "observation": {
+          "sender": ["ce89618d90b4"],
+          "payloads": ["67cae2e16a3b"],
+          "settlements": {
+            "branch": "365c17523d76"
+          },
+          "state": "534cf7badcbc",
+          "effects": []
+        }
+      },
+      {
+        "id": "no-compare",
+        "observation": {
+          "sender": ["ce89618d90b4"],
+          "payloads": ["67cae2e16a3b"],
+          "settlements": {
+            "branch": "365c17523d76",
+            "no-compare": "38fb361f406c"
+          },
+          "state": "534cf7badcbc",
+          "effects": []
+        }
+      }
+    ]
+  }
+}
