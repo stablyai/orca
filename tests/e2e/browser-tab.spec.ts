@@ -285,7 +285,8 @@ async function waitForTabIdByExactTitle(
       const tab = tabs.find((candidate) => candidate.textContent?.trim() === exactTitle)
       return tab?.getAttribute('data-tab-id') ?? null
     }, title)
-  await expect.poll(resolveTabId, { timeout: 10_000 }).not.toBeNull()
+  // Background tabs may commit their document title after the guest load settles.
+  await expect.poll(resolveTabId, { timeout: 30_000 }).not.toBeNull()
   return (await resolveTabId()) as string
 }
 
