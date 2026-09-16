@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "451e74a430d2549976fa360a0e43e76a8d855b1470b8e313797019770ceca4cb",
   "platform": "darwin",
@@ -13,50 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "65f985665d42": {
+    "92df85b51d0c": {
       "name": "worktree.resolveMrBase#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}",
-      "sent": 2
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}"
     },
-    "723a115a3810": {
-      "name": "worktree.resolveMrBase#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.resolveMrBase"
-        },
-        {
-          "name": "params",
-          "value": {
-            "mrIid": 7,
-            "repo": "id:repo-1",
-            "sourceBranch": "feature"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": ""
-          }
-        }
-      }
-    },
-    "95d2391d09f2": {
+    "aafcb4cd89c9": {
       "name": "worktree.resolvePrBase#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
     },
     "ae0c82b12f2a": {
       "status": "rejected",
@@ -68,12 +33,9 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "c57e06c96492": {
-      "mrBase": "unresolved",
-      "prBase": "unresolved"
-    },
-    "eb01c2306db5": {
+    "bdd030fee656": {
       "name": "worktree.resolvePrBase#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -107,6 +69,46 @@
         }
       }
     },
+    "c57e06c96492": {
+      "mrBase": "unresolved",
+      "prBase": "unresolved"
+    },
+    "d4632615f5ae": {
+      "name": "worktree.resolveMrBase#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.resolveMrBase"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mrIid": 7,
+            "repo": "id:repo-1",
+            "sourceBranch": "feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": ""
+          }
+        }
+      }
+    },
     "f3b516f62081": {
       "status": "rejected",
       "startedAt": 0,
@@ -124,8 +126,8 @@
       {
         "id": "in-band-error",
         "observation": {
-          "sender": ["eb01c2306db5"],
-          "payloads": ["95d2391d09f2"],
+          "sender": ["bdd030fee656"],
+          "payloads": ["aafcb4cd89c9"],
           "settlements": {
             "pr": "ae0c82b12f2a"
           },
@@ -136,8 +138,8 @@
       {
         "id": "in-band-empty-error",
         "observation": {
-          "sender": ["eb01c2306db5", "723a115a3810"],
-          "payloads": ["95d2391d09f2", "65f985665d42"],
+          "sender": ["bdd030fee656", "d4632615f5ae"],
+          "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
             "pr": "ae0c82b12f2a",
             "mr": "f3b516f62081"

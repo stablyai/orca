@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "4f0ddbea3c08ea3e90f6e707215a4831f06aed408065b45d0771028d256d6b12",
   "platform": "darwin",
@@ -13,40 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "001216175103": {
-      "name": "status.get#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "unauthorized",
-            "message": "relay refused"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
     "1329c4d27ca9": {
       "status": "rejected",
       "startedAt": 0,
@@ -57,8 +23,9 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "4b5a09699ceb": {
+    "d00f14d72061": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -91,18 +58,53 @@
         }
       }
     },
-    "63ab1563ba51": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
-    },
-    "b33a14df0df6": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
-    },
     "d25369399414": {
       "outcome": "failed: direct and relay pairing paths both failed"
+    },
+    "e7b5d7d57a61": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "ef9375cc97a1": {
+      "name": "status.get#2",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "unauthorized",
+            "message": "relay refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -111,8 +113,8 @@
       {
         "id": "both-paths-failed",
         "observation": {
-          "sender": ["4b5a09699ceb", "001216175103"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6"],
+          "sender": ["d00f14d72061", "ef9375cc97a1"],
+          "payloads": ["e7b5d7d57a61", "f1834177e593"],
           "settlements": {
             "race": "1329c4d27ca9"
           },

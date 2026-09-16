@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "2235d05e0d2c6f1a9518cfdd76870e303cccd35289d6a44334147b6a5b6b675e",
   "platform": "darwin",
@@ -33,8 +33,9 @@
         "ok": true
       }
     },
-    "074760f7a997": {
+    "0a07c3153c89": {
       "name": "github.mergePR#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -60,45 +61,14 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
           "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "0b9c507e7144": {
-      "name": "github.mergePR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.mergePR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "method": "squash",
-            "prNumber": 12,
-            "repo": "id:repo-9"
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
           }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
         }
       }
     },
@@ -131,38 +101,6 @@
         "ok": false
       }
     },
-    "14322a66ab67": {
-      "name": "github.mergePR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.mergePR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "method": "squash",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
     "195633478e1f": {
       "auto-merge": {
         "ok": true
@@ -185,6 +123,40 @@
       "value": {
         "error": "outer refused",
         "ok": false
+      }
+    },
+    "20a201c8ffc6": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
       }
     },
     "217757a427ce": {
@@ -219,6 +191,42 @@
       "merge": {
         "error": "inner refused",
         "ok": false
+      }
+    },
+    "2b56dde57d4f": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
       }
     },
     "2d3d93cf30ff": {
@@ -269,18 +277,45 @@
         "ok": true
       }
     },
-    "4270aa7d997f": {
-      "auto-merge": {
-        "ok": true
-      },
-      "merge": {
-        "error": "outer refused",
-        "ok": false
+    "3e98a51bf209": {
+      "name": "github.setPRAutoMerge#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.setPRAutoMerge"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
       }
     },
-    "44136fa355b3": {},
-    "4479a15344d2": {
+    "3f87fe320551": {
       "name": "github.mergePR#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -306,14 +341,30 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
           "id": "frame-1",
-          "ok": false
+          "ok": true
         }
       }
+    },
+    "4270aa7d997f": {
+      "auto-merge": {
+        "ok": true
+      },
+      "merge": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "44136fa355b3": {},
+    "5145e99589f6": {
+      "name": "github.requestPRReviewers#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
+    },
+    "5a3a15468816": {
+      "name": "github.removePRReviewers#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.removePRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
     },
     "5c4f3e6537bc": {
       "auto-merge": {
@@ -336,19 +387,20 @@
         "ok": false
       }
     },
-    "63c7b86ce0f8": {
-      "name": "github.requestPRReviewers#1",
+    "63e1f1f535bd": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "github.requestPRReviewers"
+          "value": "github.mergePR"
         },
         {
           "name": "params",
           "value": {
+            "method": "squash",
             "prNumber": 12,
-            "repo": "id:repo-9",
-            "reviewers": ["octocat"]
+            "repo": "id:repo-9"
           }
         },
         {
@@ -363,10 +415,10 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-4",
+          "id": "frame-1",
           "ok": true,
           "result": {
-            "ok": true
+            "error": "refused"
           }
         }
       }
@@ -425,40 +477,9 @@
         "ok": false
       }
     },
-    "71b2f2be4837": {
-      "auto-merge": {
-        "ok": true
-      },
-      "merge": {
-        "error": "Unknown method",
-        "ok": false
-      }
-    },
-    "7ac1c9a0499c": {
-      "name": "github.removePRReviewers#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.removePRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}",
-      "sent": 5
-    },
-    "81f9a572f5bd": {
-      "auto-merge": {
-        "ok": true
-      },
-      "close": {
-        "ok": true
-      },
-      "merge": {
-        "error": "",
-        "ok": false
-      },
-      "remove-reviewers": {
-        "ok": true
-      },
-      "request-reviewers": {
-        "ok": true
-      }
-    },
-    "84790920ad91": {
+    "6e912bd10baa": {
       "name": "github.updatePRState#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -494,10 +515,32 @@
         }
       }
     },
-    "84e87c0ff2a1": {
-      "name": "github.rerunPRChecks#1",
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}",
-      "sent": 6
+    "71b2f2be4837": {
+      "auto-merge": {
+        "ok": true
+      },
+      "merge": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "81f9a572f5bd": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "error": "",
+        "ok": false
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      }
     },
     "85e381ca8727": {
       "auto-merge": {
@@ -511,40 +554,10 @@
         "ok": false
       }
     },
-    "8703c2befb8c": {
-      "name": "github.mergePR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.mergePR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "method": "squash",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
+    "89a20acf05d3": {
+      "name": "github.updatePRState#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
     },
     "8d35383c6800": {
       "merge": {
@@ -573,22 +586,19 @@
         "ok": true
       }
     },
-    "904c5b458065": {
-      "name": "github.updatePRState#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}",
-      "sent": 3
-    },
-    "9305632adf32": {
-      "name": "github.setPRAutoMerge#1",
+    "91638fa7c927": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
-          "value": "github.setPRAutoMerge"
+          "value": "github.rerunPRChecks"
         },
         {
           "name": "params",
           "value": {
-            "enabled": true,
+            "failedOnly": true,
+            "headSha": "head-sha-1",
             "prNumber": 12,
             "repo": "id:repo-9"
           }
@@ -605,7 +615,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-6",
           "ok": true,
           "result": {
             "ok": true
@@ -613,27 +623,13 @@
         }
       }
     },
-    "95b9ec32d195": {
-      "auto-merge": {
-        "ok": true
-      },
-      "close": {
-        "ok": true
-      },
-      "merge": {
-        "error": "Request failed: github.mergePR",
-        "ok": false
-      },
-      "request-reviewers": {
-        "ok": true
-      }
-    },
-    "97b08057c152": {
-      "name": "github.removePRReviewers#1",
+    "948fde384959": {
+      "name": "github.requestPRReviewers#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
-          "value": "github.removePRReviewers"
+          "value": "github.requestPRReviewers"
         },
         {
           "name": "params",
@@ -655,12 +651,27 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-5",
+          "id": "frame-4",
           "ok": true,
           "result": {
             "ok": true
           }
         }
+      }
+    },
+    "95b9ec32d195": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "error": "Request failed: github.mergePR",
+        "ok": false
+      },
+      "request-reviewers": {
+        "ok": true
       }
     },
     "98a9268b04e2": {
@@ -734,6 +745,40 @@
         "ok": true
       }
     },
+    "a3521c4ae6b2": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "a63eb4f9dc60": {
       "auto-merge": {
         "ok": true
@@ -746,6 +791,80 @@
         "ok": false
       }
     },
+    "a86e3e9d7c2d": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a8f9fcff9ad0": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
     "aa25b877ab14": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -754,11 +873,6 @@
         "error": "Request failed: github.mergePR",
         "ok": false
       }
-    },
-    "ad425b477607": {
-      "name": "github.requestPRReviewers#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}",
-      "sent": 4
     },
     "afb5c5cc70a0": {
       "merge": {
@@ -772,8 +886,45 @@
         "ok": false
       }
     },
-    "b7e39f4a5cb6": {
+    "b6c1dbc0e0d9": {
       "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "ba8617a193f1": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -808,44 +959,6 @@
         }
       }
     },
-    "ba8452129ec1": {
-      "name": "github.mergePR#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}",
-      "sent": 1
-    },
-    "bf7ea23375ff": {
-      "name": "github.mergePR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.mergePR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "method": "squash",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
     "c247c08d1506": {
       "auto-merge": {
         "ok": true
@@ -870,6 +983,43 @@
         "ok": false
       }
     },
+    "c6370f1f6fd1": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
     "c69c2c6cd163": {
       "auto-merge": {
         "ok": true
@@ -887,6 +1037,11 @@
       "request-reviewers": {
         "ok": true
       }
+    },
+    "c6cd1f9aeefc": {
+      "name": "github.mergePR#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}"
     },
     "c7c48ac3f8d0": {
       "auto-merge": {
@@ -935,46 +1090,6 @@
       "request-reviewers": {
         "ok": true
       }
-    },
-    "ccf2be5c9d44": {
-      "name": "github.mergePR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.mergePR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "method": "squash",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "cf156f33a1f2": {
-      "name": "github.setPRAutoMerge#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}",
-      "sent": 2
     },
     "d026cfa35ea0": {
       "auto-merge": {
@@ -1026,41 +1141,15 @@
         "ok": true
       }
     },
-    "e53c2e2f9a43": {
+    "e5820e16ca2c": {
       "name": "github.rerunPRChecks#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.rerunPRChecks"
-        },
-        {
-          "name": "params",
-          "value": {
-            "failedOnly": true,
-            "headSha": "head-sha-1",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-6",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}"
+    },
+    "e70f88fb717a": {
+      "name": "github.setPRAutoMerge#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}"
     },
     "ee0fb6c4d945": {
       "auto-merge": {
@@ -1095,79 +1184,6 @@
         "ok": true
       }
     },
-    "f62245202919": {
-      "name": "github.mergePR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.mergePR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "method": "squash",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "f6348bae9167": {
-      "name": "github.mergePR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.mergePR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "method": "squash",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
     "fa93ca01f266": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -1194,19 +1210,20 @@
         "ok": true
       }
     },
-    "fd07dabe4f38": {
-      "name": "github.mergePR#1",
+    "ff463b2bc96b": {
+      "name": "github.removePRReviewers#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
-          "value": "github.mergePR"
+          "value": "github.removePRReviewers"
         },
         {
           "name": "params",
           "value": {
-            "method": "squash",
             "prNumber": 12,
-            "repo": "id:repo-9"
+            "repo": "id:repo-9",
+            "reviewers": ["octocat"]
           }
         },
         {
@@ -1221,12 +1238,11 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
         }
       }
     }
@@ -1247,8 +1263,8 @@
       {
         "id": "pr-mutation-status.normal:merge",
         "observation": {
-          "sender": ["ccf2be5c9d44"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["2b56dde57d4f"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "fbc958e4d46e"
           },
@@ -1259,8 +1275,8 @@
       {
         "id": "pr-mutation-status.normal:auto-merge",
         "observation": {
-          "sender": ["ccf2be5c9d44", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["2b56dde57d4f", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e"
@@ -1272,8 +1288,8 @@
       {
         "id": "pr-mutation-status.normal:close",
         "observation": {
-          "sender": ["ccf2be5c9d44", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["2b56dde57d4f", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1286,8 +1302,8 @@
       {
         "id": "pr-mutation-status.normal:request-reviewers",
         "observation": {
-          "sender": ["ccf2be5c9d44", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["2b56dde57d4f", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1302,18 +1318,18 @@
         "id": "pr-mutation-status.normal:remove-reviewers",
         "observation": {
           "sender": [
-            "ccf2be5c9d44",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1330,20 +1346,20 @@
         "id": "pr-mutation-status.normal:rerun-checks",
         "observation": {
           "sender": [
-            "ccf2be5c9d44",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1360,8 +1376,8 @@
       {
         "id": "pr-mutation-status.result-absent:merge",
         "observation": {
-          "sender": ["14322a66ab67"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["3f87fe320551"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "fbc958e4d46e"
           },
@@ -1372,8 +1388,8 @@
       {
         "id": "pr-mutation-status.result-absent:auto-merge",
         "observation": {
-          "sender": ["14322a66ab67", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["3f87fe320551", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e"
@@ -1385,8 +1401,8 @@
       {
         "id": "pr-mutation-status.result-absent:close",
         "observation": {
-          "sender": ["14322a66ab67", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["3f87fe320551", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1399,8 +1415,8 @@
       {
         "id": "pr-mutation-status.result-absent:request-reviewers",
         "observation": {
-          "sender": ["14322a66ab67", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["3f87fe320551", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1415,18 +1431,18 @@
         "id": "pr-mutation-status.result-absent:remove-reviewers",
         "observation": {
           "sender": [
-            "14322a66ab67",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "3f87fe320551",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1443,20 +1459,20 @@
         "id": "pr-mutation-status.result-absent:rerun-checks",
         "observation": {
           "sender": [
-            "14322a66ab67",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "3f87fe320551",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1473,8 +1489,8 @@
       {
         "id": "pr-mutation-status.result-null:merge",
         "observation": {
-          "sender": ["f6348bae9167"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["b6c1dbc0e0d9"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "fbc958e4d46e"
           },
@@ -1485,8 +1501,8 @@
       {
         "id": "pr-mutation-status.result-null:auto-merge",
         "observation": {
-          "sender": ["f6348bae9167", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["b6c1dbc0e0d9", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e"
@@ -1498,8 +1514,8 @@
       {
         "id": "pr-mutation-status.result-null:close",
         "observation": {
-          "sender": ["f6348bae9167", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["b6c1dbc0e0d9", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1512,8 +1528,8 @@
       {
         "id": "pr-mutation-status.result-null:request-reviewers",
         "observation": {
-          "sender": ["f6348bae9167", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["b6c1dbc0e0d9", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1528,18 +1544,18 @@
         "id": "pr-mutation-status.result-null:remove-reviewers",
         "observation": {
           "sender": [
-            "f6348bae9167",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "b6c1dbc0e0d9",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1556,20 +1572,20 @@
         "id": "pr-mutation-status.result-null:rerun-checks",
         "observation": {
           "sender": [
-            "f6348bae9167",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "b6c1dbc0e0d9",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1586,8 +1602,8 @@
       {
         "id": "pr-mutation-status.inner-ok-missing:merge",
         "observation": {
-          "sender": ["8703c2befb8c"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["63e1f1f535bd"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "fbc958e4d46e"
           },
@@ -1598,8 +1614,8 @@
       {
         "id": "pr-mutation-status.inner-ok-missing:auto-merge",
         "observation": {
-          "sender": ["8703c2befb8c", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["63e1f1f535bd", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e"
@@ -1611,8 +1627,8 @@
       {
         "id": "pr-mutation-status.inner-ok-missing:close",
         "observation": {
-          "sender": ["8703c2befb8c", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["63e1f1f535bd", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1625,8 +1641,8 @@
       {
         "id": "pr-mutation-status.inner-ok-missing:request-reviewers",
         "observation": {
-          "sender": ["8703c2befb8c", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["63e1f1f535bd", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1641,18 +1657,18 @@
         "id": "pr-mutation-status.inner-ok-missing:remove-reviewers",
         "observation": {
           "sender": [
-            "8703c2befb8c",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "63e1f1f535bd",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1669,20 +1685,20 @@
         "id": "pr-mutation-status.inner-ok-missing:rerun-checks",
         "observation": {
           "sender": [
-            "8703c2befb8c",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "63e1f1f535bd",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1699,8 +1715,8 @@
       {
         "id": "pr-mutation-status.inner-false-string-error:merge",
         "observation": {
-          "sender": ["b7e39f4a5cb6"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["ba8617a193f1"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "9f00dd54ba64"
           },
@@ -1711,8 +1727,8 @@
       {
         "id": "pr-mutation-status.inner-false-string-error:auto-merge",
         "observation": {
-          "sender": ["b7e39f4a5cb6", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["ba8617a193f1", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "9f00dd54ba64",
             "auto-merge": "fbc958e4d46e"
@@ -1724,8 +1740,8 @@
       {
         "id": "pr-mutation-status.inner-false-string-error:close",
         "observation": {
-          "sender": ["b7e39f4a5cb6", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["ba8617a193f1", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "9f00dd54ba64",
             "auto-merge": "fbc958e4d46e",
@@ -1738,8 +1754,8 @@
       {
         "id": "pr-mutation-status.inner-false-string-error:request-reviewers",
         "observation": {
-          "sender": ["b7e39f4a5cb6", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["ba8617a193f1", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "9f00dd54ba64",
             "auto-merge": "fbc958e4d46e",
@@ -1754,18 +1770,18 @@
         "id": "pr-mutation-status.inner-false-string-error:remove-reviewers",
         "observation": {
           "sender": [
-            "b7e39f4a5cb6",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "ba8617a193f1",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "9f00dd54ba64",
@@ -1782,20 +1798,20 @@
         "id": "pr-mutation-status.inner-false-string-error:rerun-checks",
         "observation": {
           "sender": [
-            "b7e39f4a5cb6",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "ba8617a193f1",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "9f00dd54ba64",
@@ -1812,8 +1828,8 @@
       {
         "id": "pr-mutation-status.inner-false-object-error:merge",
         "observation": {
-          "sender": ["f62245202919"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["0a07c3153c89"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "9f00dd54ba64"
           },
@@ -1824,8 +1840,8 @@
       {
         "id": "pr-mutation-status.inner-false-object-error:auto-merge",
         "observation": {
-          "sender": ["f62245202919", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["0a07c3153c89", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "9f00dd54ba64",
             "auto-merge": "fbc958e4d46e"
@@ -1837,8 +1853,8 @@
       {
         "id": "pr-mutation-status.inner-false-object-error:close",
         "observation": {
-          "sender": ["f62245202919", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["0a07c3153c89", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "9f00dd54ba64",
             "auto-merge": "fbc958e4d46e",
@@ -1851,8 +1867,8 @@
       {
         "id": "pr-mutation-status.inner-false-object-error:request-reviewers",
         "observation": {
-          "sender": ["f62245202919", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["0a07c3153c89", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "9f00dd54ba64",
             "auto-merge": "fbc958e4d46e",
@@ -1867,18 +1883,18 @@
         "id": "pr-mutation-status.inner-false-object-error:remove-reviewers",
         "observation": {
           "sender": [
-            "f62245202919",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "0a07c3153c89",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "9f00dd54ba64",
@@ -1895,20 +1911,20 @@
         "id": "pr-mutation-status.inner-false-object-error:rerun-checks",
         "observation": {
           "sender": [
-            "f62245202919",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "0a07c3153c89",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "9f00dd54ba64",
@@ -1925,8 +1941,8 @@
       {
         "id": "pr-mutation-status.outer-refused:merge",
         "observation": {
-          "sender": ["4479a15344d2"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["a86e3e9d7c2d"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "1b2778bf67a2"
           },
@@ -1937,8 +1953,8 @@
       {
         "id": "pr-mutation-status.outer-refused:auto-merge",
         "observation": {
-          "sender": ["4479a15344d2", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["a86e3e9d7c2d", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "1b2778bf67a2",
             "auto-merge": "fbc958e4d46e"
@@ -1950,8 +1966,8 @@
       {
         "id": "pr-mutation-status.outer-refused:close",
         "observation": {
-          "sender": ["4479a15344d2", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["a86e3e9d7c2d", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "1b2778bf67a2",
             "auto-merge": "fbc958e4d46e",
@@ -1964,8 +1980,8 @@
       {
         "id": "pr-mutation-status.outer-refused:request-reviewers",
         "observation": {
-          "sender": ["4479a15344d2", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["a86e3e9d7c2d", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "1b2778bf67a2",
             "auto-merge": "fbc958e4d46e",
@@ -1980,18 +1996,18 @@
         "id": "pr-mutation-status.outer-refused:remove-reviewers",
         "observation": {
           "sender": [
-            "4479a15344d2",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "a86e3e9d7c2d",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "1b2778bf67a2",
@@ -2008,20 +2024,20 @@
         "id": "pr-mutation-status.outer-refused:rerun-checks",
         "observation": {
           "sender": [
-            "4479a15344d2",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "a86e3e9d7c2d",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "1b2778bf67a2",
@@ -2038,8 +2054,8 @@
       {
         "id": "pr-mutation-status.outer-refused-no-message:merge",
         "observation": {
-          "sender": ["074760f7a997"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["a8f9fcff9ad0"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "aa25b877ab14"
           },
@@ -2050,8 +2066,8 @@
       {
         "id": "pr-mutation-status.outer-refused-no-message:auto-merge",
         "observation": {
-          "sender": ["074760f7a997", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["a8f9fcff9ad0", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "aa25b877ab14",
             "auto-merge": "fbc958e4d46e"
@@ -2063,8 +2079,8 @@
       {
         "id": "pr-mutation-status.outer-refused-no-message:close",
         "observation": {
-          "sender": ["074760f7a997", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["a8f9fcff9ad0", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "aa25b877ab14",
             "auto-merge": "fbc958e4d46e",
@@ -2077,8 +2093,8 @@
       {
         "id": "pr-mutation-status.outer-refused-no-message:request-reviewers",
         "observation": {
-          "sender": ["074760f7a997", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["a8f9fcff9ad0", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "aa25b877ab14",
             "auto-merge": "fbc958e4d46e",
@@ -2093,18 +2109,18 @@
         "id": "pr-mutation-status.outer-refused-no-message:remove-reviewers",
         "observation": {
           "sender": [
-            "074760f7a997",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "a8f9fcff9ad0",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "aa25b877ab14",
@@ -2121,20 +2137,20 @@
         "id": "pr-mutation-status.outer-refused-no-message:rerun-checks",
         "observation": {
           "sender": [
-            "074760f7a997",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "a8f9fcff9ad0",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "aa25b877ab14",
@@ -2151,8 +2167,8 @@
       {
         "id": "pr-mutation-status.method-not-found:merge",
         "observation": {
-          "sender": ["fd07dabe4f38"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["c6370f1f6fd1"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "fa93ca01f266"
           },
@@ -2163,8 +2179,8 @@
       {
         "id": "pr-mutation-status.method-not-found:auto-merge",
         "observation": {
-          "sender": ["fd07dabe4f38", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["c6370f1f6fd1", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "fa93ca01f266",
             "auto-merge": "fbc958e4d46e"
@@ -2176,8 +2192,8 @@
       {
         "id": "pr-mutation-status.method-not-found:close",
         "observation": {
-          "sender": ["fd07dabe4f38", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["c6370f1f6fd1", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "fa93ca01f266",
             "auto-merge": "fbc958e4d46e",
@@ -2190,8 +2206,8 @@
       {
         "id": "pr-mutation-status.method-not-found:request-reviewers",
         "observation": {
-          "sender": ["fd07dabe4f38", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["c6370f1f6fd1", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "fa93ca01f266",
             "auto-merge": "fbc958e4d46e",
@@ -2206,18 +2222,18 @@
         "id": "pr-mutation-status.method-not-found:remove-reviewers",
         "observation": {
           "sender": [
-            "fd07dabe4f38",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "c6370f1f6fd1",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "fa93ca01f266",
@@ -2234,20 +2250,20 @@
         "id": "pr-mutation-status.method-not-found:rerun-checks",
         "observation": {
           "sender": [
-            "fd07dabe4f38",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "c6370f1f6fd1",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "fa93ca01f266",
@@ -2264,8 +2280,8 @@
       {
         "id": "pr-mutation-status.transport-rejection:merge",
         "observation": {
-          "sender": ["bf7ea23375ff"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["20a201c8ffc6"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "a197c20578aa"
           },
@@ -2276,8 +2292,8 @@
       {
         "id": "pr-mutation-status.transport-rejection:auto-merge",
         "observation": {
-          "sender": ["bf7ea23375ff", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["20a201c8ffc6", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "a197c20578aa",
             "auto-merge": "fbc958e4d46e"
@@ -2289,8 +2305,8 @@
       {
         "id": "pr-mutation-status.transport-rejection:close",
         "observation": {
-          "sender": ["bf7ea23375ff", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["20a201c8ffc6", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "a197c20578aa",
             "auto-merge": "fbc958e4d46e",
@@ -2303,8 +2319,8 @@
       {
         "id": "pr-mutation-status.transport-rejection:request-reviewers",
         "observation": {
-          "sender": ["bf7ea23375ff", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["20a201c8ffc6", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "a197c20578aa",
             "auto-merge": "fbc958e4d46e",
@@ -2319,18 +2335,18 @@
         "id": "pr-mutation-status.transport-rejection:remove-reviewers",
         "observation": {
           "sender": [
-            "bf7ea23375ff",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "20a201c8ffc6",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "a197c20578aa",
@@ -2347,20 +2363,20 @@
         "id": "pr-mutation-status.transport-rejection:rerun-checks",
         "observation": {
           "sender": [
-            "bf7ea23375ff",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "20a201c8ffc6",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "a197c20578aa",
@@ -2377,8 +2393,8 @@
       {
         "id": "pr-mutation-status.transport-rejection-no-message:merge",
         "observation": {
-          "sender": ["0b9c507e7144"],
-          "payloads": ["ba8452129ec1"],
+          "sender": ["a3521c4ae6b2"],
+          "payloads": ["c6cd1f9aeefc"],
           "settlements": {
             "merge": "fb4429083480"
           },
@@ -2389,8 +2405,8 @@
       {
         "id": "pr-mutation-status.transport-rejection-no-message:auto-merge",
         "observation": {
-          "sender": ["0b9c507e7144", "9305632adf32"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
+          "sender": ["a3521c4ae6b2", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
           "settlements": {
             "merge": "fb4429083480",
             "auto-merge": "fbc958e4d46e"
@@ -2402,8 +2418,8 @@
       {
         "id": "pr-mutation-status.transport-rejection-no-message:close",
         "observation": {
-          "sender": ["0b9c507e7144", "9305632adf32", "84790920ad91"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
+          "sender": ["a3521c4ae6b2", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
           "settlements": {
             "merge": "fb4429083480",
             "auto-merge": "fbc958e4d46e",
@@ -2416,8 +2432,8 @@
       {
         "id": "pr-mutation-status.transport-rejection-no-message:request-reviewers",
         "observation": {
-          "sender": ["0b9c507e7144", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
+          "sender": ["a3521c4ae6b2", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
           "settlements": {
             "merge": "fb4429083480",
             "auto-merge": "fbc958e4d46e",
@@ -2432,18 +2448,18 @@
         "id": "pr-mutation-status.transport-rejection-no-message:remove-reviewers",
         "observation": {
           "sender": [
-            "0b9c507e7144",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152"
+            "a3521c4ae6b2",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
           ],
           "settlements": {
             "merge": "fb4429083480",
@@ -2460,20 +2476,20 @@
         "id": "pr-mutation-status.transport-rejection-no-message:rerun-checks",
         "observation": {
           "sender": [
-            "0b9c507e7144",
-            "9305632adf32",
-            "84790920ad91",
-            "63c7b86ce0f8",
-            "97b08057c152",
-            "e53c2e2f9a43"
+            "a3521c4ae6b2",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
           ],
           "payloads": [
-            "ba8452129ec1",
-            "cf156f33a1f2",
-            "904c5b458065",
-            "ad425b477607",
-            "7ac1c9a0499c",
-            "84e87c0ff2a1"
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
           ],
           "settlements": {
             "merge": "fb4429083480",

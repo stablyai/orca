@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "83f61085a91458bad529905ecc6fe240c598cddfe44a56dd497b8aed9fb8a7e5",
   "platform": "darwin",
@@ -13,8 +13,36 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "17bc1e177fe1": {
+    "0e92a08f8380": {
       "name": "git.history#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
+    },
+    "437d7f38d098": {
+      "rows": [
+        {
+          "author": "dev",
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "parentId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "relativeTime": "1h",
+          "shortId": "aaaaaaa",
+          "subject": "first"
+        },
+        {
+          "author": "",
+          "id": "cccccccccccccccccccccccccccccccccccccccc",
+          "parentId": {
+            "$rpc": "null"
+          },
+          "relativeTime": "",
+          "shortId": "ccccccc",
+          "subject": "(no commit message)"
+        }
+      ]
+    },
+    "5d7a655deafc": {
+      "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -39,8 +67,11 @@
         "startedAt": 0
       }
     },
-    "437d7f38d098": {
-      "rows": [
+    "7d520ecb92ad": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
         {
           "author": "dev",
           "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -61,8 +92,13 @@
         }
       ]
     },
-    "6b280ce22422": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9631f908d769": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -112,40 +148,6 @@
         }
       }
     },
-    "7d520ecb92ad": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": [
-        {
-          "author": "dev",
-          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "parentId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "relativeTime": "1h",
-          "shortId": "aaaaaaa",
-          "subject": "first"
-        },
-        {
-          "author": "",
-          "id": "cccccccccccccccccccccccccccccccccccccccc",
-          "parentId": {
-            "$rpc": "null"
-          },
-          "relativeTime": "",
-          "shortId": "ccccccc",
-          "subject": "(no commit message)"
-        }
-      ]
-    },
-    "7e2ddc2aee54": {
-      "name": "git.history#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}",
-      "sent": 1
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
     "ef169a494b41": {
       "rows": "unloaded"
     }
@@ -156,8 +158,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["17bc1e177fe1"],
-          "payloads": ["7e2ddc2aee54"],
+          "sender": ["5d7a655deafc"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -168,8 +170,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["6b280ce22422"],
-          "payloads": ["7e2ddc2aee54"],
+          "sender": ["9631f908d769"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "7d520ecb92ad"
           },

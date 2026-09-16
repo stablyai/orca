@@ -633,7 +633,7 @@ describe('recording boundaries', () => {
     }
   })
 
-  it('stamps each payload with the request count, which is all a reordered subscribe moves', async () => {
+  it('stamps a write ordinal that moves when a subscribe is reordered against a send', async () => {
     const subscribeFirst = await payloadsFrom((client) => {
       client.subscribe(CLIENT_EVENTS, null, () => {})
       void client.sendRequest('worktree.show', {}).catch(() => {})
@@ -643,12 +643,48 @@ describe('recording boundaries', () => {
       client.subscribe(CLIENT_EVENTS, null, () => {})
     })
     // The published order is identical either way, because a subscribe publishes synchronously
-    // while a request first waits for connected. Without `sent` the swap moves no recorded byte.
+    // while a request first waits for connected. Without the ordinal the swap moves no recorded
+    // byte; the send takes its ordinal at the logical call, before the payload it publishes later.
     expect(sendFirst.map((payload) => payload.name)).toEqual(
       subscribeFirst.map((payload) => payload.name)
     )
-    expect(subscribeFirst.map((payload) => payload.sent)).toEqual([0, 1])
-    expect(sendFirst.map((payload) => payload.sent)).toEqual([1, 1])
+    expect(subscribeFirst.map((payload) => payload.ordinal)).toEqual([1, 3])
+    expect(sendFirst.map((payload) => payload.ordinal)).toEqual([2, 3])
+  })
+
+  it('orders a subscribe against an effect in an operation that sends no requests', async () => {
+    // The gap the request count left: with no request to count, every stamp was `0`, so the two
+    // independent lists had nothing ordering them against each other.
+    const drive = async (subscribeFirst: boolean): Promise<RecordedValue> => {
+      const recording = await runRecording(
+        {
+          id: 'request-free',
+          operation: 'op',
+          version: 1,
+          family: 'op',
+          sites: [],
+          schedules: [],
+          steps: [{ action: 'mount', id: 'mount' }, { checkpoint: 'settled' }]
+        },
+        ({ client, effect }) => ({
+          action: () => {
+            if (subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+            effect('device.write', { key: 'seen' })
+            if (!subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+          },
+          state: () => ({}),
+          dispose: () => {}
+        }),
+        vitestRecordingScheduler()
+      )
+      const observed = recording.checkpoints[0]!.observation
+      return { payloads: observed.payloads, effects: observed.effects }
+    }
+    expect(await drive(true)).not.toEqual(await drive(false))
   })
 
   it('drives the reply matrix over frames, and matrixes a family that only subscribes', () => {

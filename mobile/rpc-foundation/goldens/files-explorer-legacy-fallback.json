@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "160421b989563424531fc893a115b95b399d1524ebaf1c91caa8b2862b52eb07",
   "scenarioSha256": "ec02d3f76085619fad35231e12654ec6e926e423c6799fd0df53708743000612",
   "platform": "darwin",
@@ -13,34 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "195987bc4ef2": {
+    "33bb136847f8": {
       "name": "files.readDir#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "30859af566b0": {
-      "name": "files.readDir#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -74,8 +49,9 @@
         }
       }
     },
-    "80bd28a48dda": {
+    "4366cea5194d": {
       "name": "files.list#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -120,10 +96,42 @@
         }
       }
     },
-    "87ae27687a19": {
+    "59851eb4cbf7": {
       "name": "files.readDir#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}",
-      "sent": 1
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "75aaf142eb3b": {
+      "name": "files.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}"
+    },
+    "858aa6e98236": {
+      "name": "files.readDir#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
     },
     "b85511fb8929": {
       "crash": {
@@ -140,11 +148,6 @@
       "labels": ["Back to session"],
       "rows": ["dir:src", "file:README.md"],
       "text": ["Files", "orca-files", " - Showing first 5000"]
-    },
-    "c3a91710450a": {
-      "name": "files.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}",
-      "sent": 2
     },
     "e91880eefe86": {
       "crash": {
@@ -177,8 +180,8 @@
       {
         "id": "loading",
         "observation": {
-          "sender": ["195987bc4ef2"],
-          "payloads": ["87ae27687a19"],
+          "sender": ["59851eb4cbf7"],
+          "payloads": ["858aa6e98236"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -189,8 +192,8 @@
       {
         "id": "legacy-listed",
         "observation": {
-          "sender": ["30859af566b0", "80bd28a48dda"],
-          "payloads": ["87ae27687a19", "c3a91710450a"],
+          "sender": ["33bb136847f8", "4366cea5194d"],
+          "payloads": ["858aa6e98236", "75aaf142eb3b"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

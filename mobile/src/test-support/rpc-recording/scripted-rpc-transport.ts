@@ -10,6 +10,7 @@ import {
   observeSettlement,
   type Settlement
 } from './recording-values'
+import { createWriteOrdinal, type WriteOrdinal } from './write-ordinal'
 import type { Rejection } from './recording-scenario'
 
 /** What a product stream listener threw on one delivered frame. */
@@ -21,10 +22,11 @@ const DEVICE_TOKEN = 'recording-device'
 export class ScriptedRpcTransport {
   readonly requests: {
     name: string
+    ordinal: number
     args: ReturnType<typeof captureArguments>
     settlement: Settlement
   }[] = []
-  readonly payloads: { name: string; json: string; sent: number }[] = []
+  readonly payloads: { name: string; ordinal: number; json: string }[] = []
   readonly client: RpcClient
   readonly logical
   private counts = new Map<string, number>()
@@ -64,8 +66,14 @@ export class ScriptedRpcTransport {
   })
   private wireNames: string[] = []
 
-  /** `now` is the recording scheduler's virtual clock; every settlement is stamped from it. */
-  constructor(private readonly now: () => number = () => 0) {
+  /**
+   * `now` is the recording scheduler's virtual clock; every settlement is stamped from it.
+   * `nextWriteOrdinal` is the recording's one write counter, shared with its effects.
+   */
+  constructor(
+    private readonly now: () => number = () => 0,
+    private readonly nextWriteOrdinal: WriteOrdinal = createWriteOrdinal()
+  ) {
     const session = this.session()
     this.logical = createStableLogicalRpcClient(session, 'lan')
     this.client = {
@@ -75,6 +83,7 @@ export class ScriptedRpcTransport {
         this.activeName = name
         const request = {
           name,
+          ordinal: this.nextWriteOrdinal(),
           args: captureArguments(args),
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a pending settlement has no settledAt yet.
           settlement: { status: 'pending', startedAt: this.now() } as Settlement
@@ -189,10 +198,7 @@ export class ScriptedRpcTransport {
   }
 
   private publish(name: string, value: unknown): void {
-    // Why the send count: `payloads` and `requests` are independent lists, and a subscribe publishes
-    // synchronously while a request first waits for connected — so swapping the two in product
-    // source moves neither list. Stamping the count at write time makes that swap a golden diff.
-    this.payloads.push({ name, json: JSON.stringify(value), sent: this.requests.length })
+    this.payloads.push({ name, ordinal: this.nextWriteOrdinal(), json: JSON.stringify(value) })
   }
 
   /**

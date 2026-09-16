@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "977ee5602e3a612d537686d17d15312f8b0e775df8800b27bb0d42b8642b4675",
   "platform": "darwin",
@@ -13,21 +13,22 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1ce75e48864f": {
+    "5cd1d4a9aed5": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "60fbbfd9bd11": {
+    "75263c07c807": {
       "name": "cancel-pending",
-      "value": {},
-      "sent": 0
+      "ordinal": 1,
+      "value": {}
     },
     "9fe5713ca2d1": {
       "errors": ["Stop unconfirmed — check chat before retrying"]
     },
-    "a60dea16497c": {
+    "a9ec80c50d30": {
       "name": "terminal.send#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -63,8 +64,14 @@
         }
       }
     },
-    "c7ad8e4bd48f": {
+    "d5972c43f562": {
       "name": "terminal.send#2",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "dc4d354f7e02": {
+      "name": "terminal.send#2",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -107,11 +114,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f6d9dea0749b": {
-      "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 2
     }
   },
   "recording": {
@@ -120,13 +122,13 @@
       {
         "id": "unconfirmed",
         "observation": {
-          "sender": ["a60dea16497c", "c7ad8e4bd48f"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b"],
+          "sender": ["a9ec80c50d30", "dc4d354f7e02"],
+          "payloads": ["5cd1d4a9aed5", "d5972c43f562"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
           "state": "9fe5713ca2d1",
-          "effects": ["60fbbfd9bd11"]
+          "effects": ["75263c07c807"]
         }
       }
     ]

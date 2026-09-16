@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "adbdfcc3895cc04d830900de518e689c9e63f6f75569127e1fde24488658e8a0",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "349d5045a996": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}",
-      "sent": 1
-    },
     "478df34536dc": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -36,8 +31,14 @@
         "title": "Recorded title"
       }
     },
-    "7fb1231fd64d": {
+    "8bbf03da5e8d": {
       "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
+    },
+    "a0eed8835645": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -101,8 +102,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["7fb1231fd64d"],
-          "payloads": ["349d5045a996"],
+          "sender": ["a0eed8835645"],
+          "payloads": ["8bbf03da5e8d"],
           "settlements": {
             "prefill": "478df34536dc"
           },

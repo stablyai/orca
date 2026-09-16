@@ -194,25 +194,29 @@ file rather than of a restatement of it; `golden-header-digest.test.ts` pins wha
 buy.
 
 Checkpoints contain ordered sender calls and serialized physical application payloads, action and
-request settlements, projected state, and ordered external effects. Each effect and each payload
-also carries `sent`, the number of requests sent when it was recorded: sender, payloads and effects
-are independent lists, so without it a send reordered ahead of a device write, or ahead of a
-subscribe, moves no list and no golden notices. A subscribe is the sharper case of the two, because
-it publishes synchronously while a request first waits for connected: swapping `client.subscribe`
-and the first `sendRequest` in `use-live-worktree-name.ts` leaves the payload order byte-identical
-and moves only `sent`, from 0 to 1.
+request settlements, projected state, and ordered external effects. Each sender call, each payload
+and each effect carries `ordinal`, its position in one monotonic counter the recording shares
+across all three lists (`write-ordinal.ts`), stamped at the moment that entry is written: the three
+are independent append-only lists, so without a shared ordinal a send reordered ahead of a device
+write, or ahead of a subscribe, moves no list and no golden notices. A subscribe is the sharper case
+of the two, because it publishes synchronously while a request first waits for connected: swapping
+`client.subscribe` and the first `sendRequest` in `use-live-worktree-name.ts` leaves the payload
+order byte-identical and moves only the ordinals.
 Scheduling the journal write in `codex-reset-attempt-journal.ts` on a timer instead of awaiting it
-moved none of the 520 goldens before `sent` existed and moves two now, `codex-reset-credit-consumed`
-and its reply matrix, where the write's `sent` goes from 0 to 1. What `sent` cannot see is a defer
-shorter than the product's own await chain: dropping that `await`, or deferring the write by one
-microtask, still lands it before the send, because resolving the journal's promise chain costs more
-microtask ticks than the defer saved. Nor can it see anything in a family that sends no requests:
-`host-worktree-refresh` sends none, so every `sent` in its goldens is `0` across all eight
-checkpoints, and moving that file's two initial snapshot reads from after `client.subscribe` to
-before it moves no golden. A request count orders payloads and effects against sends, not against
-each other, so subscribe-vs-effect order in a request-free family is unpinned. The fix is one
-monotonic write ordinal shared by requests, payloads and effects, which forces a full refresh and is
-not done here. Sender args have three
+moved none of the 520 goldens before the ordinal existed and moves two now,
+`codex-reset-credit-consumed` and its reply matrix. A request takes its ordinal at the logical
+`sendRequest` call, not when the physical payload is published, so the two stamps differ whenever
+the send waited for connected. What the ordinal cannot see is a defer shorter than the product's own
+await chain: dropping that `await`, or deferring the write by one microtask, still lands it before
+the send, because resolving the journal's promise chain costs more microtask ticks than the defer
+saved.
+
+`ordinal` replaced `sent`, a count of the requests sent at write time. A request count orders
+payloads and effects against sends, never against each other, so it saw nothing at all in a family
+that sends no requests: `host-worktree-refresh` sends none, every `sent` in its goldens was `0`
+across all eight checkpoints, and moving that file's two initial snapshot reads from after
+`client.subscribe` to before it moved no golden. Under the shared ordinal the same reorder fails
+five — the family's own golden and its four matrix variants. Sender args have three
 positional slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing
 `$rpc` are escaped. Only object keys are sorted; array/effect order, options, budgets, settlement
 times and errors stay observable. Errors contain category, message and `isRpcDeliveryUnknown`, never

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "ba21f7fc3966cb1e3c1e59d6e8a8b184fa0559bf3037365391ce23e364befd7f",
   "platform": "darwin",
@@ -13,10 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1628217f6c86": {
+    "08e5cc0c504e": {
       "name": "github.prChecks#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha-1\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha-1\"}}"
     },
     "1c88fe396b45": {
       "status": "fulfilled",
@@ -53,100 +53,6 @@
           }
         }
       }
-    },
-    "41d8d2be435b": {
-      "name": "github.prChecks#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prChecks"
-        },
-        {
-          "name": "params",
-          "value": {
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": [
-            {
-              "checkRunId": 7,
-              "conclusion": "success",
-              "name": "build",
-              "status": "completed"
-            }
-          ]
-        }
-      }
-    },
-    "41ffb0b7ab72": {
-      "name": "github.prChecks#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12}}",
-      "sent": 3
-    },
-    "4b1b59229060": {
-      "name": "github.prChecks#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prChecks"
-        },
-        {
-          "name": "params",
-          "value": {
-            "headSha": "head-sha-1",
-            "prNumber": 12,
-            "prRepo": {
-              "host": "github.enterprise.test",
-              "owner": "fork-owner",
-              "repo": "fork-repo"
-            },
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": [
-            {
-              "checkRunId": 7,
-              "conclusion": "success",
-              "name": "build",
-              "status": "completed"
-            }
-          ]
-        }
-      }
-    },
-    "4d9630d13e9a": {
-      "name": "github.prCheckDetails#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"}}}",
-      "sent": 2
     },
     "79b747202f2f": {
       "check-details": {
@@ -198,8 +104,49 @@
         ]
       }
     },
-    "aa5e45571cbb": {
+    "88a456608739": {
+      "name": "github.prChecks#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": [
+            {
+              "checkRunId": 7,
+              "conclusion": "success",
+              "name": "build",
+              "status": "completed"
+            }
+          ]
+        }
+      }
+    },
+    "997e2aac6183": {
       "name": "github.prCheckDetails#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -245,6 +192,57 @@
         }
       }
     },
+    "c0db062cb341": {
+      "name": "github.prChecks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "fork-owner",
+              "repo": "fork-repo"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": [
+            {
+              "checkRunId": 7,
+              "conclusion": "success",
+              "name": "build",
+              "status": "completed"
+            }
+          ]
+        }
+      }
+    },
+    "d982d58879cb": {
+      "name": "github.prCheckDetails#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"}}}"
+    },
     "daf4d0570339": {
       "checks": {
         "ok": true,
@@ -263,6 +261,11 @@
           }
         ]
       }
+    },
+    "dd2205e9f2fb": {
+      "name": "github.prChecks#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12}}"
     },
     "e23eb2e4b033": {
       "status": "fulfilled",
@@ -293,8 +296,8 @@
       {
         "id": "fork-checks",
         "observation": {
-          "sender": ["4b1b59229060"],
-          "payloads": ["1628217f6c86"],
+          "sender": ["c0db062cb341"],
+          "payloads": ["08e5cc0c504e"],
           "settlements": {
             "fork-checks": "e23eb2e4b033"
           },
@@ -305,8 +308,8 @@
       {
         "id": "fork-check-details",
         "observation": {
-          "sender": ["4b1b59229060", "aa5e45571cbb"],
-          "payloads": ["1628217f6c86", "4d9630d13e9a"],
+          "sender": ["c0db062cb341", "997e2aac6183"],
+          "payloads": ["08e5cc0c504e", "d982d58879cb"],
           "settlements": {
             "fork-checks": "e23eb2e4b033",
             "fork-check-details": "1c88fe396b45"
@@ -318,8 +321,8 @@
       {
         "id": "no-head-sha",
         "observation": {
-          "sender": ["4b1b59229060", "aa5e45571cbb", "41d8d2be435b"],
-          "payloads": ["1628217f6c86", "4d9630d13e9a", "41ffb0b7ab72"],
+          "sender": ["c0db062cb341", "997e2aac6183", "88a456608739"],
+          "payloads": ["08e5cc0c504e", "d982d58879cb", "dd2205e9f2fb"],
           "settlements": {
             "fork-checks": "e23eb2e4b033",
             "fork-check-details": "1c88fe396b45",

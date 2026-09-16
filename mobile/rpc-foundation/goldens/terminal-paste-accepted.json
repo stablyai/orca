@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "e7e3718f685e3713cf1b8209d59d618741f892bd286853b79bb456c59cec8d86",
   "scenarioSha256": "48bb495de3b54f2b2edc0543f0f232ff4fd6068d5aca34d005766ebacbb078c9",
   "platform": "darwin",
@@ -13,13 +13,50 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "23812b44df37": {
-      "name": "refresh-can-paste",
-      "value": {},
-      "sent": 3
+    "26d0fe750677": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~echo hi\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "4e9a0397c220": {
+    "3fb0e93ab6cb": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "terminalCopyTrimsGutter": true
+            }
+          }
+        }
+      }
+    },
+    "4238f455dad0": {
       "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -53,54 +90,9 @@
         }
       }
     },
-    "51eb315f9426": {
-      "name": "flush-live-input",
-      "value": {
-        "handle": "terminal-1"
-      },
-      "sent": 1
-    },
-    "528166d1face": {
-      "connectionId": "unresolved",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "sent"
-    },
-    "56f3ab2e0d0b": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 3
-    },
-    "5c52bc3f9e55": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 1
-    },
-    "7107540f16ca": {
-      "name": "toast",
-      "value": {
-        "durationMs": {
-          "$rpc": "null"
-        },
-        "message": "Copied"
-      },
-      "sent": 1
-    },
-    "84990d8de7e9": {
-      "connectionId": "unresolved",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "unpasted"
-    },
-    "d582f882a68d": {
+    "50a1efe07486": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~echo hi\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 2
-    },
-    "e142ca57bc1f": {
-      "name": "terminal.send#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -140,47 +132,58 @@
         }
       }
     },
+    "528166d1face": {
+      "connectionId": "unresolved",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "sent"
+    },
+    "7186df090c19": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "7b316ba101c4": {
+      "name": "refresh-can-paste",
+      "ordinal": 8,
+      "value": {}
+    },
+    "84990d8de7e9": {
+      "connectionId": "unresolved",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "unpasted"
+    },
+    "8e065efdacec": {
+      "name": "flush-live-input",
+      "ordinal": 4,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "a4fb8cfbcc58": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Copied"
+      }
+    },
+    "c8c77ac17e0a": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "f3df5e006d8e": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "settings": {
-              "terminalCopyTrimsGutter": true
-            }
-          }
-        }
       }
     }
   },
@@ -190,28 +193,28 @@
       {
         "id": "copied",
         "observation": {
-          "sender": ["f3df5e006d8e"],
-          "payloads": ["5c52bc3f9e55"],
+          "sender": ["3fb0e93ab6cb"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "copy": "eb79a9b3682a"
           },
           "state": "84990d8de7e9",
-          "effects": ["7107540f16ca"]
+          "effects": ["a4fb8cfbcc58"]
         }
       },
       {
         "id": "pasted",
         "observation": {
-          "sender": ["f3df5e006d8e", "e142ca57bc1f", "4e9a0397c220"],
-          "payloads": ["5c52bc3f9e55", "d582f882a68d", "56f3ab2e0d0b"],
+          "sender": ["3fb0e93ab6cb", "50a1efe07486", "4238f455dad0"],
+          "payloads": ["c8c77ac17e0a", "26d0fe750677", "7186df090c19"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
           "state": "528166d1face",
-          "effects": ["7107540f16ca", "51eb315f9426", "23812b44df37"]
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "7b316ba101c4"]
         }
       }
     ]

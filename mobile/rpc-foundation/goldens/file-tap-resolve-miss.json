@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
   "scenarioSha256": "0f76b96408081737b3d630ee837dbb80bcce6670b6acc4f1f7c033a69bd40533",
   "platform": "darwin",
@@ -13,13 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "9120b59f16ec": {
+    "3445711170ff": {
       "name": "files.resolveTerminalPath#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}",
-      "sent": 1
-    },
-    "b03e10f6707b": {
-      "name": "files.resolveTerminalPath#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -56,6 +52,11 @@
         }
       }
     },
+    "561f3fedeb78": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+    },
     "c7ce9c8dc60e": {
       "activeSessionTabId": "tab-source",
       "failed": 1,
@@ -78,8 +79,8 @@
       {
         "id": "missed",
         "observation": {
-          "sender": ["b03e10f6707b"],
-          "payloads": ["9120b59f16ec"],
+          "sender": ["3445711170ff"],
+          "payloads": ["561f3fedeb78"],
           "settlements": {
             "tap": "eb79a9b3682a"
           },

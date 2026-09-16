@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "06c2ad6d4b464f889a640be7a238f6d0ff7c54b0e93fb5ea22aaa856dadb0336",
   "platform": "darwin",
@@ -13,8 +13,75 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "16cd464bf664": {
+    "0474a1603b70": {
       "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "0ccee4def5e0": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "16a71e555cb2": {
+      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -47,8 +114,9 @@
         }
       }
     },
-    "2698c9770ad3": {
+    "2b8c44a85130": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -73,162 +141,14 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "",
+          "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "4451bb95a76e": {
+    "41e8e39cc47e": {
       "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "578b9d38ecc7": {
-      "supported": true
-    },
-    "6a0093a8288b": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": ["accounts.codex-reset-credit.v1"]
-          }
-        }
-      }
-    },
-    "7d3dd7f9381b": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "7ed3d39f0607": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": false
-    },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
-    "88200d49083c": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "89236e432861": {
-      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -263,8 +183,12 @@
         }
       }
     },
-    "944bf432f199": {
+    "578b9d38ecc7": {
+      "supported": true
+    },
+    "73bcd4456e97": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -291,14 +215,54 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "$rpc": "null"
           }
         }
       }
     },
-    "9cdf3c107e7b": {
+    "7b0d9b0d2428": {
       "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "82f760e2c99f": {
+      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -331,8 +295,86 @@
         }
       }
     },
-    "c71b2f8a6993": {
+    "83aeff886309": {
       "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["accounts.codex-reset-credit.v1"]
+          }
+        }
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "b799ba7b0c33": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "e90520ab92af": {
+      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -365,37 +407,6 @@
         }
       }
     },
-    "de87f6266897": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
     "ece4ea3ed179": {
       "supported": false
     }
@@ -406,8 +417,8 @@
       {
         "id": "components-codex-capability.normal:settled",
         "observation": {
-          "sender": ["6a0093a8288b"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["83aeff886309"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "84e5ca07cb7a"
           },
@@ -418,8 +429,8 @@
       {
         "id": "components-codex-capability.result-absent:settled",
         "observation": {
-          "sender": ["7d3dd7f9381b"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["0ccee4def5e0"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -430,8 +441,8 @@
       {
         "id": "components-codex-capability.result-null:settled",
         "observation": {
-          "sender": ["88200d49083c"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["73bcd4456e97"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -442,8 +453,8 @@
       {
         "id": "components-codex-capability.inner-ok-missing:settled",
         "observation": {
-          "sender": ["4451bb95a76e"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["7b0d9b0d2428"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -454,8 +465,8 @@
       {
         "id": "components-codex-capability.inner-false-string-error:settled",
         "observation": {
-          "sender": ["944bf432f199"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["0474a1603b70"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -466,8 +477,8 @@
       {
         "id": "components-codex-capability.inner-false-object-error:settled",
         "observation": {
-          "sender": ["89236e432861"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["41e8e39cc47e"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -478,8 +489,8 @@
       {
         "id": "components-codex-capability.outer-refused:settled",
         "observation": {
-          "sender": ["16cd464bf664"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["16a71e555cb2"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -490,8 +501,8 @@
       {
         "id": "components-codex-capability.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["9cdf3c107e7b"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["82f760e2c99f"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -502,8 +513,8 @@
       {
         "id": "components-codex-capability.method-not-found:settled",
         "observation": {
-          "sender": ["c71b2f8a6993"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["e90520ab92af"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -514,8 +525,8 @@
       {
         "id": "components-codex-capability.transport-rejection:settled",
         "observation": {
-          "sender": ["de87f6266897"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["2b8c44a85130"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -526,8 +537,8 @@
       {
         "id": "components-codex-capability.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["2698c9770ad3"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["b799ba7b0c33"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },

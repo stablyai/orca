@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "bfa1d5f83b4112d3cce6a19e9dc27daf9281ed99745bc01bd19226dd7b268c71",
   "platform": "darwin",
@@ -16,8 +16,20 @@
     "11a49f853eb8": {
       "accepted": true
     },
-    "4ed60727a7ff": {
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "ccb884e12d95": {
       "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "cd7cf7b1f566": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -57,17 +69,6 @@
           }
         }
       }
-    },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "a766e4175d1c": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -76,8 +77,8 @@
       {
         "id": "accepted",
         "observation": {
-          "sender": ["4ed60727a7ff"],
-          "payloads": ["a766e4175d1c"],
+          "sender": ["cd7cf7b1f566"],
+          "payloads": ["ccb884e12d95"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "595a3eb2994d0596b9fcd0707b175b4e978625053dfbc5c541b0350c0cbfb524",
   "scenarioSha256": "318fab8c1efb1786bbdaea7f13b769952c1ce463bc5504dca6a9f545e905b7c9",
   "platform": "darwin",
@@ -13,17 +13,25 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "8bc1cd9d9993": {
+    "4d602d4523e5": {
       "name": "notifications.getMissedSince#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.getMissedSince\",\"params\":{\"lastSeenSeq\":9007199254740991,\"deliveredPushes\":[{\"notificationId\":\"note-1\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":7}]}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.getMissedSince\",\"params\":{\"lastSeenSeq\":9007199254740991,\"deliveredPushes\":[{\"notificationId\":\"note-1\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":7}]}}"
+    },
+    "6cfa895b17c4": {
+      "name": "notification-tray.dismiss",
+      "ordinal": 4,
+      "value": {
+        "identifier": "tray-1"
+      }
     },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "9aba86eb07e4": {
+    "aaf972690a35": {
       "name": "notifications.getMissedSince#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -54,8 +62,9 @@
         "startedAt": 0
       }
     },
-    "ac56c3fc846f": {
+    "c44044f16dbc": {
       "name": "notifications.getMissedSince#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -100,21 +109,6 @@
         }
       }
     },
-    "bcdd9c902f5e": {
-      "name": "device-store.setItem",
-      "value": {
-        "key": "orca:pushDismissalWatermarks:v1",
-        "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-1\\\"]\",\"seq\":7,\"expiresAt\":1767312000000}]"
-      },
-      "sent": 1
-    },
-    "c83340909a1e": {
-      "name": "notification-tray.dismiss",
-      "value": {
-        "identifier": "tray-1"
-      },
-      "sent": 1
-    },
     "cf9c28129225": {
       "disposed": false
     },
@@ -125,6 +119,14 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "fa03fdca3d1d": {
+      "name": "device-store.setItem",
+      "ordinal": 3,
+      "value": {
+        "key": "orca:pushDismissalWatermarks:v1",
+        "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-1\\\"]\",\"seq\":7,\"expiresAt\":1767312000000}]"
+      }
     }
   },
   "recording": {
@@ -133,8 +135,8 @@
       {
         "id": "requested",
         "observation": {
-          "sender": ["9aba86eb07e4"],
-          "payloads": ["8bc1cd9d9993"],
+          "sender": ["aaf972690a35"],
+          "payloads": ["4d602d4523e5"],
           "settlements": {
             "catchup": "9270aeb7d9c6"
           },
@@ -145,13 +147,13 @@
       {
         "id": "reconciled",
         "observation": {
-          "sender": ["ac56c3fc846f"],
-          "payloads": ["8bc1cd9d9993"],
+          "sender": ["c44044f16dbc"],
+          "payloads": ["4d602d4523e5"],
           "settlements": {
             "catchup": "eb79a9b3682a"
           },
           "state": "cf9c28129225",
-          "effects": ["bcdd9c902f5e", "c83340909a1e"]
+          "effects": ["fa03fdca3d1d", "6cfa895b17c4"]
         }
       }
     ]

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "b9ca49e401df8710924f200f92a071bac2e120ed43df7be2cfb8a325ab1cd9cb",
   "platform": "darwin",
@@ -13,15 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "04daff40433c": {
-      "name": "toast",
-      "value": {
-        "message": "Cannot read properties of undefined (reading 'worktree')"
-      },
-      "sent": 2
-    },
-    "06cbb9a1b167": {
+    "0d389bb9bac8": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -53,45 +47,6 @@
         }
       }
     },
-    "085ee12ac483": {
-      "name": "fetch-session-tabs",
-      "value": {},
-      "sent": 4
-    },
-    "0b4d42954d52": {
-      "name": "worktree.show#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
     "0f19e340663d": {
       "createError": "Couldn't verify the SSH connection. Reconnect the host and try again.",
       "creatingBrowser": false,
@@ -108,15 +63,9 @@
         "$rpc": "null"
       }
     },
-    "18c7d85a52ed": {
-      "name": "toast",
-      "value": {
-        "message": "outer refused"
-      },
-      "sent": 2
-    },
-    "2fa02ab5402f": {
+    "1d9a5cd13503": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -151,88 +100,9 @@
         }
       }
     },
-    "39a0b3c0e319": {
+    "2edf2dc7f524": {
       "name": "worktree.show#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "4267c22fd1f9": {
-      "name": "files.createFile#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.createFile"
-        },
-        {
-          "name": "params",
-          "value": {
-            "expectedExecutionHostId": "local",
-            "relativePath": "untitled.md",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "created": true
-          }
-        }
-      }
-    },
-    "478f94a2bcc8": {
-      "name": "toast",
-      "value": {
-        "message": ""
-      },
-      "sent": 2
-    },
-    "4c5f889d4eb7": {
-      "name": "files.createFile#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}",
-      "sent": 3
-    },
-    "533d020d6123": {
-      "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -261,36 +131,9 @@
         }
       }
     },
-    "5ba3f7c5f6d9": {
-      "name": "toast",
-      "value": {
-        "message": "transport failure"
-      },
-      "sent": 2
-    },
-    "6371ca02b18e": {
-      "createError": "outer refused",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "7822fc8c989d": {
-      "createError": "Cannot read properties of undefined (reading 'worktree')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
-    "8845bcbdc51b": {
+    "329c07f39178": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -314,17 +157,60 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
           "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "3e7bfd4c59c3": {
+      "name": "files.open#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.open"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "opened": true
           }
         }
       }
     },
-    "8bdc2aec524d": {
+    "4601d0f6dc60": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": "Unknown method"
+      }
+    },
+    "4e53935c13ac": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -358,31 +244,23 @@
         }
       }
     },
-    "a139e9a165cd": {
-      "name": "toast",
-      "value": {
-        "message": "Cannot read properties of null (reading 'worktree')"
-      },
-      "sent": 2
+    "4e9c5ab0de1c": {
+      "name": "files.open#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}"
     },
-    "a232b2091bac": {
-      "name": "toast",
-      "value": {
-        "message": "Couldn't verify the SSH connection. Reconnect the host and try again."
-      },
-      "sent": 2
-    },
-    "a56852d6836b": {
-      "name": "status.get#1",
+    "5b0942040fc9": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "status.get"
+          "value": "worktree.show"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "undefined"
+            "worktree": "id:workspace-1"
           }
         },
         {
@@ -397,23 +275,26 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
-            "capabilities": ["files.mutation-ownership.v1"]
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "abce4dddd0aa": {
-      "name": "toast",
-      "value": {
-        "message": "Unknown method"
-      },
-      "sent": 2
+    "6371ca02b18e": {
+      "createError": "outer refused",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
     },
-    "c6aa5c0a7bd1": {
+    "67c0d38a9b95": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -438,21 +319,39 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
+            "code": "refused",
+            "message": ""
           },
           "id": "frame-2",
           "ok": false
         }
       }
     },
-    "ca3214963232": {
-      "name": "files.open#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}",
-      "sent": 4
+    "7362b9ea7108": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": "outer refused"
+      }
     },
-    "cff8b7a5e7ce": {
+    "75da1447b7ab": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": "Couldn't verify the SSH connection. Reconnect the host and try again."
+      }
+    },
+    "7822fc8c989d": {
+      "createError": "Cannot read properties of undefined (reading 'worktree')",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "84c6d4a53548": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -485,17 +384,24 @@
         }
       }
     },
-    "d38c135a5752": {
-      "name": "files.open#1",
+    "8bebb9b2b076": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": "Cannot read properties of undefined (reading 'worktree')"
+      }
+    },
+    "9dc70bb3c6c3": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "files.open"
+          "value": "worktree.show"
         },
         {
           "name": "params",
           "value": {
-            "relativePath": "untitled.md",
             "worktree": "id:workspace-1"
           }
         },
@@ -507,57 +413,19 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "opened": true
-          }
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "d574cdcd4bef": {
-      "createError": "",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "d7217a17cb5c": {
-      "createError": "Cannot read properties of null (reading 'worktree')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "e6b6cf30c6ee": {
-      "createError": "Unknown method",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "e7e6fb5e264b": {
+    "9e604bd17e60": {
       "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
-      "sent": 2
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "fc05e7103b6c": {
-      "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -587,8 +455,57 @@
         }
       }
     },
-    "fd50303f30ce": {
+    "a4f53f7fb1d7": {
+      "name": "fetch-session-tabs",
+      "ordinal": 9,
+      "value": {}
+    },
+    "a9cd52aa49ff": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": "transport failure"
+      }
+    },
+    "b5ae4bb70d31": {
+      "name": "files.createFile#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.createFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedExecutionHostId": "local",
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "created": true
+          }
+        }
+      }
+    },
+    "c8d8aec2ecbb": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -608,15 +525,112 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
+    },
+    "c924e7a5a7da": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "d574cdcd4bef": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "d7217a17cb5c": {
+      "createError": "Cannot read properties of null (reading 'worktree')",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "e2ba4604deae": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": ""
+      }
+    },
+    "e6b6cf30c6ee": {
+      "createError": "Unknown method",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "e81d3a627ac2": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["files.mutation-ownership.v1"]
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f02973af22c4": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": "Cannot read properties of null (reading 'worktree')"
+      }
+    },
+    "f1279bf9f173": {
+      "name": "files.createFile#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}"
     }
   },
   "recording": {
@@ -625,133 +639,133 @@
       {
         "id": "session-create-markdown-note.normal:created",
         "observation": {
-          "sender": ["a56852d6836b", "8bdc2aec524d", "4267c22fd1f9", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "sender": ["e81d3a627ac2", "4e53935c13ac", "b5ae4bb70d31", "3e7bfd4c59c3"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da", "f1279bf9f173", "4e9c5ab0de1c"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "d574cdcd4bef",
-          "effects": ["085ee12ac483"]
+          "effects": ["a4f53f7fb1d7"]
         }
       },
       {
         "id": "session-create-markdown-note.result-absent:created",
         "observation": {
-          "sender": ["a56852d6836b", "533d020d6123"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "2edf2dc7f524"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "7822fc8c989d",
-          "effects": ["04daff40433c"]
+          "effects": ["8bebb9b2b076"]
         }
       },
       {
         "id": "session-create-markdown-note.result-null:created",
         "observation": {
-          "sender": ["a56852d6836b", "39a0b3c0e319"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "c8d8aec2ecbb"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "d7217a17cb5c",
-          "effects": ["a139e9a165cd"]
+          "effects": ["f02973af22c4"]
         }
       },
       {
         "id": "session-create-markdown-note.inner-ok-missing:created",
         "observation": {
-          "sender": ["a56852d6836b", "06cbb9a1b167"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "0d389bb9bac8"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "0f19e340663d",
-          "effects": ["a232b2091bac"]
+          "effects": ["75da1447b7ab"]
         }
       },
       {
         "id": "session-create-markdown-note.inner-false-string-error:created",
         "observation": {
-          "sender": ["a56852d6836b", "8845bcbdc51b"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "5b0942040fc9"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "0f19e340663d",
-          "effects": ["a232b2091bac"]
+          "effects": ["75da1447b7ab"]
         }
       },
       {
         "id": "session-create-markdown-note.inner-false-object-error:created",
         "observation": {
-          "sender": ["a56852d6836b", "2fa02ab5402f"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "1d9a5cd13503"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "0f19e340663d",
-          "effects": ["a232b2091bac"]
+          "effects": ["75da1447b7ab"]
         }
       },
       {
         "id": "session-create-markdown-note.outer-refused:created",
         "observation": {
-          "sender": ["a56852d6836b", "cff8b7a5e7ce"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "84c6d4a53548"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "6371ca02b18e",
-          "effects": ["18c7d85a52ed"]
+          "effects": ["7362b9ea7108"]
         }
       },
       {
         "id": "session-create-markdown-note.outer-refused-no-message:created",
         "observation": {
-          "sender": ["a56852d6836b", "0b4d42954d52"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "67c0d38a9b95"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "d574cdcd4bef",
-          "effects": ["478f94a2bcc8"]
+          "effects": ["e2ba4604deae"]
         }
       },
       {
         "id": "session-create-markdown-note.method-not-found:created",
         "observation": {
-          "sender": ["a56852d6836b", "c6aa5c0a7bd1"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "329c07f39178"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "e6b6cf30c6ee",
-          "effects": ["abce4dddd0aa"]
+          "effects": ["4601d0f6dc60"]
         }
       },
       {
         "id": "session-create-markdown-note.transport-rejection:created",
         "observation": {
-          "sender": ["a56852d6836b", "fd50303f30ce"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "9dc70bb3c6c3"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "134e6545bfe5",
-          "effects": ["5ba3f7c5f6d9"]
+          "effects": ["a9cd52aa49ff"]
         }
       },
       {
         "id": "session-create-markdown-note.transport-rejection-no-message:created",
         "observation": {
-          "sender": ["a56852d6836b", "fc05e7103b6c"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
+          "sender": ["e81d3a627ac2", "9e604bd17e60"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "d574cdcd4bef",
-          "effects": ["478f94a2bcc8"]
+          "effects": ["e2ba4604deae"]
         }
       }
     ]

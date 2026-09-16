@@ -15,6 +15,7 @@ import type {
   MountedOperation
 } from './recording-scenario'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
+import { createWriteOrdinal } from './write-ordinal'
 
 export async function runRecording(
   scenario: RecordingScenario,
@@ -22,15 +23,18 @@ export async function runRecording(
   scheduler: RecordingScheduler
 ): Promise<Recording> {
   scheduler.start()
-  const transport = new ScriptedRpcTransport(scheduler.elapsed)
-  const effects: { name: string; value: RecordedValue; sent: number }[] = []
+  // One counter per recording, shared by requests, payloads and effects. Each list is append-only
+  // and independent of the other two, so without a shared ordinal a send reordered ahead of a
+  // device write, or ahead of a subscribe, moves no list and no golden notices. The request count
+  // this replaced ordered payloads and effects against sends only, never against each other, so in
+  // a family that sends no requests every stamp was `0` and subscribe-vs-effect order was unpinned.
+  const nextWriteOrdinal = createWriteOrdinal()
+  const transport = new ScriptedRpcTransport(scheduler.elapsed, nextWriteOrdinal)
+  const effects: { name: string; ordinal: number; value: RecordedValue }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
   const effect = (name: string, value: unknown) => {
-    // Why the send count: sender and effects are two independent lists, so a send reordered ahead of
-    // a device write moves neither of them. Stamping the count at push time orders them against
-    // each other, and that reordering becomes a golden diff.
-    effects.push({ name, value: captureValue(value), sent: transport.requests.length })
+    effects.push({ name, ordinal: nextWriteOrdinal(), value: captureValue(value) })
   }
   const stopUnhandled = recordUnhandledRejections(effect)
   let mounted: MountedOperation | undefined

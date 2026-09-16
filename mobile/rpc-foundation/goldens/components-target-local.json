@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "2e0d3021621698b63117e250dd5e9762b5bfb3dc1911e27c510e9539bd2ee6c9",
   "platform": "darwin",
@@ -28,8 +28,27 @@
         }
       }
     },
-    "3579737ce1a6": {
+    "986a776213e8": {
+      "detected": ["claude"],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "9b8ae0c8eec5": {
       "name": "preflight.detectAgents#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    },
+    "a4fe12488bc4": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -53,8 +72,17 @@
         "startedAt": 0
       }
     },
-    "6806cee7c59f": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f15d8f54be02": {
       "name": "preflight.detectAgents#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -83,32 +111,6 @@
           "result": ["claude"]
         }
       }
-    },
-    "986a776213e8": {
-      "detected": ["claude"],
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "c56f76942e16": {
-      "name": "preflight.detectAgents#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}",
-      "sent": 1
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     }
   },
   "recording": {
@@ -117,8 +119,8 @@
       {
         "id": "detect-pending",
         "observation": {
-          "sender": ["3579737ce1a6"],
-          "payloads": ["c56f76942e16"],
+          "sender": ["a4fe12488bc4"],
+          "payloads": ["9b8ae0c8eec5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -129,8 +131,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["6806cee7c59f"],
-          "payloads": ["c56f76942e16"],
+          "sender": ["f15d8f54be02"],
+          "payloads": ["9b8ae0c8eec5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

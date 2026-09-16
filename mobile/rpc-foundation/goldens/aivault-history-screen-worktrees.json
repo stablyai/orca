@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
   "adapterSha256": "694e6a331a7b0a742059ac6575ee8fd5cdeb3ba80abe58cbd216f6bc4a24e400",
   "scenarioSha256": "f50f63c4e2a69793b3d322ed16089c4241ff6169d8f9549106480230fb8dd5e7",
   "platform": "darwin",
@@ -13,13 +13,133 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "017d690f964b": {
-      "name": "aiVault.listSessions#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
-      "sent": 4
+    "03106dceb986": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "074d2293c010": {
+    "3a91d2093c6e": {
       "name": "worktree.ps#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
+    "3aaa7e04cda5": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "4cebf6258ec1": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "4d676e55076c": {
+      "name": "status.get#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "4d68bff46cff": {
+      "name": "status.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "8d930b47bf2f": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -62,68 +182,9 @@
         }
       }
     },
-    "29ba09534e96": {
-      "name": "status.get#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
-      }
-    },
-    "522b745543f1": {
-      "name": "aiVault.listSessions#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "6ae619d3108a": {
+    "acf501fa9958": {
       "name": "status.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -155,55 +216,10 @@
         }
       }
     },
-    "ba9fd57319d3": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "bc1a8e138f82": {
-      "name": "worktree.ps#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+    "cee4e3edb0a1": {
+      "name": "status.get#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "d22bb2f62cea": {
       "crash": {
@@ -221,15 +237,10 @@
       "labels": ["Back", "Refresh agent sessions"],
       "text": ["Agent Session History", "orca-history"]
     },
-    "d4ef0569dbbc": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 3
-    },
-    "de79fb948454": {
-      "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}",
-      "sent": 2
+    "d3c3ce66625d": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -238,11 +249,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ff0ffaddbbf7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
     }
   },
   "recording": {
@@ -251,8 +257,8 @@
       {
         "id": "worktrees-pending",
         "observation": {
-          "sender": ["bc1a8e138f82", "ba9fd57319d3"],
-          "payloads": ["de79fb948454", "ff0ffaddbbf7"],
+          "sender": ["4cebf6258ec1", "03106dceb986"],
+          "payloads": ["3a91d2093c6e", "4d68bff46cff"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -263,8 +269,8 @@
       {
         "id": "worktrees-listed",
         "observation": {
-          "sender": ["074d2293c010", "6ae619d3108a", "29ba09534e96", "522b745543f1"],
-          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc", "017d690f964b"],
+          "sender": ["8d930b47bf2f", "acf501fa9958", "4d676e55076c", "3aaa7e04cda5"],
+          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
