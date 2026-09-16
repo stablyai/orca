@@ -216,11 +216,6 @@ async function launchServeMode(
   // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
   scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
-  // Why here and not in a window path: serve never opens a window, so setupAutoUpdater would
-  // otherwise never run and `updater.getStatus` would report updater-unavailable forever.
-  // Post-whenReady is required by electron-updater; ahead of printServeReady so clients pairing
-  // at first contact already see the real update verdict.
-  initializeServeAutoUpdater(runtime.getRuntimeId(), () => state.store!, runtime)
   await printServeReady(serveOptions)
 }
 
