@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
+import type { z } from 'zod'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import {
   buildGithubPrParams,
   fetchAssignableUsers,
@@ -8,14 +10,39 @@ import {
   fetchHostedReviewForBranch,
   fetchPRCheckDetails,
   fetchPRChecks,
-  fetchPRForBranch,
-  readAssignableUsers,
-  readForBranch,
-  readPRCheckDetails,
-  readPRChecks,
-  readPRForBranch,
-  readWorkItemDetails
+  fetchPRForBranch
 } from './github-pr-rpc'
+import {
+  githubPrAssignableUsersSchema,
+  githubPrCheckDetailsSchema,
+  githubPrChecksSchema,
+  githubPrForBranchSchema,
+  githubWorkItemDetailsSchema,
+  hostedReviewForBranchSchema
+} from './github-pr-read-reply-schema'
+
+// The parser suites below are the parity record for the schemas that replaced them: every
+// expectation is the one the hand parser carried, read through the schema instead. Where a case
+// now *refuses* rather than degrading, it says so — those four are the disclosed behaviour change.
+function parsed<T>(schema: z.ZodType<T, unknown>, value: unknown): T | null {
+  const result = schema.safeParse(value)
+  return result.success ? result.data : null
+}
+
+function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
+  return !schema.safeParse(value).success
+}
+
+const readForBranch = (value: unknown) => parsed(hostedReviewForBranchSchema, value)
+const readWorkItemDetails = (value: unknown) => parsed(githubWorkItemDetailsSchema, value)
+const readPRChecks = (value: unknown) => parsed(githubPrChecksSchema, value) ?? []
+const readPRCheckDetails = (value: unknown) => parsed(githubPrCheckDetailsSchema, value)
+const readAssignableUsers = (value: unknown) => parsed(githubPrAssignableUsersSchema, value) ?? []
+
+function readPRForBranch(value: unknown): PRInfo | null {
+  const outcome = parsed(githubPrForBranchSchema, value)
+  return outcome && outcome.kind === 'found' ? outcome.pr : null
+}
 
 function okResponse(result: unknown): RpcResponse {
   return { id: 'x', ok: true, result, _meta: { runtimeId: 'r' } }
@@ -49,9 +76,9 @@ describe('readForBranch', () => {
     expect(parsed?.state).toBe('open')
   })
 
-  it('returns null for null/non-record input', () => {
+  it('reads the host null as no review, and refuses a non-record', () => {
     expect(readForBranch(null)).toBeNull()
-    expect(readForBranch('nope')).toBeNull()
+    expect(refuses(hostedReviewForBranchSchema, 'nope')).toBe(true)
   })
 
   it('returns null when provider or number is unparseable', () => {
@@ -195,7 +222,12 @@ describe('readWorkItemDetails', () => {
 
   it('returns null when item is unparseable', () => {
     expect(readWorkItemDetails({ item: { number: 1 } })).toBeNull()
+    // `null` stays a value: the host sends it when the work item is gone.
     expect(readWorkItemDetails(null)).toBeNull()
+  })
+
+  it('refuses a details payload that is not a record at all', () => {
+    expect(refuses(githubWorkItemDetailsSchema, 'nope')).toBe(true)
   })
 })
 
@@ -210,9 +242,9 @@ describe('readPRChecks', () => {
     expect(parsed[1]).toMatchObject({ name: 'test', status: 'in_progress', conclusion: null })
   })
 
-  it('returns [] for non-array input', () => {
-    expect(readPRChecks(null)).toEqual([])
-    expect(readPRChecks({})).toEqual([])
+  it('refuses a non-array where main answered an empty check list', () => {
+    expect(refuses(githubPrChecksSchema, null)).toBe(true)
+    expect(refuses(githubPrChecksSchema, {})).toBe(true)
   })
 
   it('skips bad entries instead of throwing', () => {
@@ -247,9 +279,11 @@ describe('readPRCheckDetails', () => {
     expect(parsed?.jobs[0]?.steps).toHaveLength(1)
   })
 
-  it('returns null for null/garbage', () => {
-    expect(readPRCheckDetails(null)).toBeNull()
+  it('answers null for a run with no name, and refuses a non-record', () => {
     expect(readPRCheckDetails({ status: 'x' })).toBeNull()
+    expect(refuses(githubPrCheckDetailsSchema, 7)).toBe(true)
+    // `null` stays a value: the host sends it for a check run it has no details for.
+    expect(readPRCheckDetails(null)).toBeNull()
   })
 })
 
@@ -263,9 +297,9 @@ describe('readAssignableUsers', () => {
     expect(parsed).toEqual([{ login: 'a', name: 'A', avatarUrl: 'av' }])
   })
 
-  it('returns [] for non-array (empty list edge)', () => {
-    expect(readAssignableUsers(undefined)).toEqual([])
+  it('reads an empty list, and refuses the absent one main read as empty', () => {
     expect(readAssignableUsers([])).toEqual([])
+    expect(refuses(githubPrAssignableUsersSchema, undefined)).toBe(true)
   })
 })
 

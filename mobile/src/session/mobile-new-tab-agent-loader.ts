@@ -34,15 +34,14 @@ export async function loadMobileNewTabAgentOptions(args: {
   return buildMobileNewTabAgentOptions(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
     readSettings() as MobileNewTabAgentSettings | undefined,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    detected as unknown[]
+    detected
   )
 }
 
 /** The reply and the operation that reads it: two methods detect agents and each reads its own. */
 type DetectedAgentsReply = {
   reply: RpcResponse
-  interpret: (reply: RpcResponse) => unknown
+  interpret: (reply: RpcResponse) => unknown[]
 }
 
 async function loadDetectedAgents(

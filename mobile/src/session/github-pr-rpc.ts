@@ -1,6 +1,7 @@
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
 import type { GitHubAssignableUser, PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
+import type { PRRefreshOutcome } from '../../../src/shared/github/pull-request-refresh-types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
@@ -18,16 +19,9 @@ import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
-// Re-export the defensive parsers and the PR-scoped param builder so consumers (and tests) have a
-// single entry point for the github.* PR RPC surface.
-export {
-  readAssignableUsers,
-  readForBranch,
-  readPRCheckDetails,
-  readPRChecks,
-  readPRForBranch,
-  readWorkItemDetails
-} from './github-pr-parsers'
+// Re-export the PR-scoped param builder so consumers (and tests) have a single entry point for the
+// github.* PR RPC surface. The reply parsers it used to re-export are schemas now, and the schema
+// module is the entry point for those.
 export {
   buildGithubPrParams,
   githubPrRepoSlugParam,
@@ -102,20 +96,43 @@ export function fetchHostedReviewForBranch(
   )
 }
 
+/**
+ * The branch lookup, whose reader answers an outcome rather than a PR.
+ *
+ * `upstream-error` is the host reporting that it could not reach GitHub, which is not a reply this
+ * app could not read: it throws here, outside the reader, so the host's own text reaches the
+ * sidebar through the same catch a decode failure does. That is the one place this read differs
+ * from the other six.
+ */
 export function fetchPRForBranch(
   client: RpcOperationSender,
   worktreeId: string,
   args: { branch: string; linkedPRNumber?: number | null }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
-  return settleGithubPrRead(githubPrForBranchRead, () =>
-    githubPrForBranchRead.request(
-      client,
-      githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
-        branch: args.branch,
-        linkedPRNumber: args.linkedPRNumber ?? null
-      })
-    )
+  return settleGithubPrRead(
+    {
+      operation: githubPrForBranchRead.operation,
+      interpret: (reply) => resolveGithubPrForBranchOutcome(githubPrForBranchRead.interpret(reply))
+    },
+    () =>
+      githubPrForBranchRead.request(
+        client,
+        githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
+          branch: args.branch,
+          linkedPRNumber: args.linkedPRNumber ?? null
+        })
+      )
   )
+}
+
+function resolveGithubPrForBranchOutcome(outcome: PRRefreshOutcome | null): PRInfo | null {
+  if (outcome === null) {
+    return null
+  }
+  if (outcome.kind === 'upstream-error') {
+    throw new Error(outcome.message)
+  }
+  return outcome.kind === 'found' ? outcome.pr : null
 }
 
 export function fetchWorkItemDetails(

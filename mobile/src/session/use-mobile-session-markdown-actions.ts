@@ -144,12 +144,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
           baseVersion: current.baseVersion,
           content: current.localContent
         })
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = markdownTabSave.interpret(response) as {
-          content: string
-          version: string
-          isDirty: false
-        }
+        const result = markdownTabSave.interpret(response)
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }

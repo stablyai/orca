@@ -119,8 +119,7 @@ export function useLiveWorktreeName({
           if (!accepted.accepted) {
             return
           }
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this member unread; the reader hands back the same `worktree` value.
-          const worktree = accepted.value as WorktreeDisplayNameSource | undefined
+          const worktree = accepted.value
           const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
             setWorktreeName((current) =>

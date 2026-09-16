@@ -1,6 +1,10 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
-import { isTerminalSendResultAccepted } from '../terminal/terminal-send-rpc-response'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { markdownTabDocumentSchema } from './session-read-reply-schema'
+import {
+  sessionWriteUnreadReplySchema,
+  terminalSendAcceptedSchema
+} from './session-write-reply-schema'
 import { quickCommandsReader } from './mobile-session-read-operations'
 
 // The session screen's writes: terminal input from native chat and the image surfaces, the tab
@@ -25,7 +29,7 @@ export const nativeChatTerminalWrite = bindDeferredRpcOperation(
     method: 'terminal.send',
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: (raw) => rpcReadUnchecked('terminal-send-accepted', isTerminalSendResultAccepted(raw))
+    read: rpcResultVariant('terminal-send-accepted', terminalSendAcceptedSchema)
   })
 )
 
@@ -37,7 +41,7 @@ export const sessionTerminalRename = bindDeferredRpcOperation(
     method: 'terminal.rename',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('terminal-renamed')
+    read: rpcResultVariant('terminal-renamed', sessionWriteUnreadReplySchema)
   })
 )
 
@@ -49,7 +53,7 @@ export const sessionTerminalClose = bindDeferredRpcOperation(
     method: 'terminal.close',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('terminal-closed')
+    read: rpcResultVariant('terminal-closed', sessionWriteUnreadReplySchema)
   })
 )
 
@@ -60,7 +64,7 @@ export const sessionTabClose = bindDeferredRpcOperation(
     method: 'session.tabs.close',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('session-tab-closed')
+    read: rpcResultVariant('session-tab-closed', sessionWriteUnreadReplySchema)
   })
 )
 
@@ -76,7 +80,7 @@ export const sessionTerminalFocus = bindDeferredRpcOperation(
     method: 'terminal.focus',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('terminal-focused')
+    read: rpcResultVariant('terminal-focused', sessionWriteUnreadReplySchema)
   })
 )
 
@@ -86,7 +90,7 @@ export const sessionTabActivate = bindDeferredRpcOperation(
     method: 'session.tabs.activate',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('session-tab-activated')
+    read: rpcResultVariant('session-tab-activated', sessionWriteUnreadReplySchema)
   })
 )
 
@@ -106,7 +110,7 @@ export const sessionWorktreeNotesWrite = bindDeferredRpcOperation(
     method: 'worktree.set',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('worktree-notes-written')
+    read: rpcResultVariant('worktree-notes-written', sessionWriteUnreadReplySchema)
   })
 )
 
@@ -117,7 +121,7 @@ export const markdownTabSave = bindDeferredRpcOperation(
     method: 'markdown.saveTab',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('markdown-tab-doc')
+    read: rpcResultVariant('markdown-tab-doc', markdownTabDocumentSchema)
   })
 )
 

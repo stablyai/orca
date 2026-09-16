@@ -18,6 +18,10 @@
  * reader can tell an import from a regression. #20954 brought three
  * (`notification-stream-closed`, `native-chat-session-page`, `terminal-buffer-cleared`).
  *
+ * The source-control domain came off this list in #20950 and the session domain in step 7; the
+ * nine session files it names are gone rather than lowered, because every reader in them is a
+ * schema now.
+ *
  * Two holes this list does not close, both deliberate:
  *   - A hand-written reader that returns `{ compatible: true, ... }` without going through those
  *     three helpers is not counted. It is the same hole with different bytes; the AST cannot tell
@@ -63,16 +67,6 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   { file: 'src/notifications/mobile-push-delivery-test-operations.ts', readers: 1 },
   { file: 'src/notifications/mobile-push-registration-operations.ts', readers: 2 },
   { file: 'src/notifications/push-dismissal-operations.ts', readers: 1 },
-  // session
-  { file: 'src/session/github-pr-mutation-operations.ts', readers: 4 },
-  { file: 'src/session/github-pr-read-operations.ts', readers: 8 },
-  { file: 'src/session/mobile-clipboard-image-operations.ts', readers: 5 },
-  { file: 'src/session/mobile-diff-review-git-operations.ts', readers: 2 },
-  { file: 'src/session/mobile-diff-review-operations.ts', readers: 3 },
-  { file: 'src/session/mobile-review-terminal-operations.ts', readers: 3 },
-  { file: 'src/session/mobile-session-launch-operations.ts', readers: 7 },
-  { file: 'src/session/mobile-session-read-operations.ts', readers: 11 },
-  { file: 'src/session/mobile-session-write-operations.ts', readers: 8 },
   // tasks
   { file: 'src/tasks/mobile-task-item-comment-operations.ts', readers: 7 },
   { file: 'src/tasks/mobile-task-item-detail-operations.ts', readers: 8 },

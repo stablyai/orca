@@ -26,9 +26,6 @@ export async function createTerminalAndSendPrompt(
   } catch (error) {
     throw new Error(refusedRpcMessageOrFallback(error, 'Failed to create terminal'))
   }
-  if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
-  }
   const sentReply = await reviewTerminalSendRun.request(client, {
     terminal: terminalTab.terminal,
     text: prompt,

@@ -118,9 +118,6 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         () => reviewTerminalCreateRun.interpret(response),
         'Failed to create terminal'
       )
-      if (!created) {
-        throw new Error('Created terminal response was invalid')
-      }
       await sendPromptToTerminal(created.terminal, comments)
     },
     [client, connState, sendPromptToTerminal, worktreeId]

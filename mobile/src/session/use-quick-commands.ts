@@ -15,9 +15,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../terminal/quick-commands'
 
-function readQuickCommands(result: unknown): TerminalQuickCommand[] | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const list = (result as { terminalQuickCommands?: unknown } | null)?.terminalQuickCommands
+function readQuickCommands(list: unknown): TerminalQuickCommand[] | null {
   return parseNormalizedTerminalQuickCommands(list)
 }
 

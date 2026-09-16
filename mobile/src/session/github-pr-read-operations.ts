@@ -1,44 +1,24 @@
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
-import type { GitHubAssignableUser, PRInfo } from '../../../src/shared/github/pull-request-types'
-import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcPayloadMember, rpcReadUnchecked } from '../transport/rpc-reader-payload'
-import type { GitHubPrRepoSlug } from './github-pr-repo-slug'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
-  readAssignableUsers,
-  readForBranch,
-  readPRCheckDetails,
-  readPRChecks,
-  readPRForBranchOutcome,
-  readWorkItemDetails
-} from './github-pr-parsers'
+  githubPrAssignableUsersSchema,
+  githubPrCheckDetailsSchema,
+  githubPrChecksSchema,
+  githubPrForBranchSchema,
+  githubPrRepoSlugSchema,
+  githubWorkItemDetailsSchema,
+  hostedReviewForBranchSchema
+} from './github-pr-read-reply-schema'
 
 // The PR sidebar's reads. Every one of these replies was re-typed and hand-parsed at the wrapper;
-// the readers below are now the only place that says what each payload is. They keep the defensive
-// parsers unchanged, so a payload that used to degrade to null still degrades to null.
+// the schemas in github-pr-read-reply-schema.ts are now the only place that says what each payload
+// is. They keep every identity requirement the parsers had, so a payload that used to degrade to
+// null still degrades to null — what changes is a payload that is not the declared container at
+// all, which is an incompatible reply rather than a silent "nothing found".
 //
 // All seven share one acceptance: a refused read is an error the sidebar shows, never a skip. The
 // wrapper turns the throw back into its `{ ok: false, error }` outcome, which is the contract the
 // sidebar's loaders route on.
-
-const repoSlugReader: RpcCompatibleReader<unknown, 'pr-repo-slug', GitHubPrRepoSlug | null> = (
-  raw
-) => {
-  if (!raw || typeof raw !== 'object') {
-    return rpcReadUnchecked('pr-repo-slug', null)
-  }
-  const owner = rpcPayloadMember(raw, 'owner')
-  const repo = rpcPayloadMember(raw, 'repo')
-  const host = rpcPayloadMember(raw, 'host')
-  return rpcReadUnchecked(
-    'pr-repo-slug',
-    typeof owner === 'string' && typeof repo === 'string'
-      ? { owner, repo, ...(typeof host === 'string' && host ? { host } : {}) }
-      : null
-  )
-}
 
 /** Whether the worktree's repo has a GitHub remote, which gates the dedicated PR-view icon. */
 export const githubPrRepoSlugRead = bindDeferredRpcOperation(
@@ -47,15 +27,9 @@ export const githubPrRepoSlugRead = bindDeferredRpcOperation(
     method: 'github.repoSlug',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: repoSlugReader
+    read: rpcResultVariant('pr-repo-slug', githubPrRepoSlugSchema)
   })
 )
-
-const hostedReviewInfoReader: RpcCompatibleReader<
-  unknown,
-  'hosted-review-for-branch',
-  HostedReviewInfo | null
-> = (raw) => rpcReadUnchecked('hosted-review-for-branch', readForBranch(raw))
 
 export const hostedReviewBranchLookupRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -63,29 +37,26 @@ export const hostedReviewBranchLookupRead = bindDeferredRpcOperation(
     method: 'hostedReview.forBranch',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: hostedReviewInfoReader
+    read: rpcResultVariant('hosted-review-for-branch', hostedReviewForBranchSchema)
   })
 )
 
-/** The one reader here that throws rather than degrading, because main's parse did. */
-const prForBranchReader: RpcCompatibleReader<unknown, 'pr-for-branch', PRInfo | null> = (raw) =>
-  rpcReadUnchecked('pr-for-branch', readPRForBranchOutcome(raw))
-
+/**
+ * The one read whose value is an outcome rather than an entity: a host that could not reach GitHub
+ * answers in-band with `kind: 'upstream-error'` and its own message, which the sidebar has always
+ * surfaced. The reader decodes that arm instead of throwing it, so the message survives a decode
+ * that cannot carry one; `resolveGithubPrForBranchOutcome` at the call site is what turns it into
+ * the error.
+ */
 export const githubPrForBranchRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.pr-for-branch',
     method: 'github.prForBranch',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: prForBranchReader
+    read: rpcResultVariant('pr-for-branch', githubPrForBranchSchema)
   })
 )
-
-const workItemDetailsReader: RpcCompatibleReader<
-  unknown,
-  'pr-work-item-details',
-  GitHubWorkItemDetails | null
-> = (raw) => rpcReadUnchecked('pr-work-item-details', readWorkItemDetails(raw))
 
 export const githubPrWorkItemDetailsRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -93,12 +64,9 @@ export const githubPrWorkItemDetailsRead = bindDeferredRpcOperation(
     method: 'github.workItemDetails',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: workItemDetailsReader
+    read: rpcResultVariant('pr-work-item-details', githubWorkItemDetailsSchema)
   })
 )
-
-const prChecksReader: RpcCompatibleReader<unknown, 'pr-checks', PRCheckDetail[]> = (raw) =>
-  rpcReadUnchecked('pr-checks', readPRChecks(raw))
 
 export const githubPrChecksRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -106,15 +74,9 @@ export const githubPrChecksRead = bindDeferredRpcOperation(
     method: 'github.prChecks',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: prChecksReader
+    read: rpcResultVariant('pr-checks', githubPrChecksSchema)
   })
 )
-
-const prCheckDetailsReader: RpcCompatibleReader<
-  unknown,
-  'pr-check-run-details',
-  PRCheckRunDetails | null
-> = (raw) => rpcReadUnchecked('pr-check-run-details', readPRCheckDetails(raw))
 
 export const githubPrCheckDetailsRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -122,15 +84,9 @@ export const githubPrCheckDetailsRead = bindDeferredRpcOperation(
     method: 'github.prCheckDetails',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: prCheckDetailsReader
+    read: rpcResultVariant('pr-check-run-details', githubPrCheckDetailsSchema)
   })
 )
-
-const assignableUsersReader: RpcCompatibleReader<
-  unknown,
-  'pr-assignable-users',
-  GitHubAssignableUser[]
-> = (raw) => rpcReadUnchecked('pr-assignable-users', readAssignableUsers(raw))
 
 export const githubPrAssignableUsersRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -138,6 +94,6 @@ export const githubPrAssignableUsersRead = bindDeferredRpcOperation(
     method: 'github.listAssignableUsers',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: assignableUsersReader
+    read: rpcResultVariant('pr-assignable-users', githubPrAssignableUsersSchema)
   })
 )
