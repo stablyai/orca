@@ -289,6 +289,42 @@ describe('Bitbucket client', () => {
     )
   })
 
+  it('presents a complete stopped build-status page as cancelled', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/statuses/build')
+          ? Response.json({ values: [{ state: 'STOPPED' }] })
+          : Response.json({ values: [bitbucketPr()] })
+      )
+    )
+
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/bitbucket')
+    ).resolves.toMatchObject({
+      status: 'failure',
+      checkPresentationStatus: 'cancelled'
+    })
+  })
+
+  it('does not infer cancellation from a stopped first page with a next page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/statuses/build')
+          ? Response.json({
+              values: [{ state: 'STOPPED' }],
+              next: 'https://api.test.local/2.0/statuses/build?page=2'
+            })
+          : Response.json({ values: [bitbucketPr()] })
+      )
+    )
+
+    const result = await getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/bitbucket')
+    expect(result?.status).toBe('failure')
+    expect(result?.checkPresentationStatus).toBeUndefined()
+  })
+
   it('getBitbucketPullRequestForBranchOrThrow surfaces a failure instead of null (finding 4)', async () => {
     const fetchMock = vi.fn(async () => Response.json({ error: 'forbidden' }, { status: 403 }))
     vi.stubGlobal('fetch', fetchMock)

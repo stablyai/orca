@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { deriveTaskPagePRCheckSummary } from './task-page-pr-check-summary'
 import { getCheckCountChips, getCheckCounts } from './pr-check-counts'
-import { derivePipelineStatus } from '../../../main/gitlab/mappers'
+import { derivePipelineStatus, derivePipelineStatuses } from '../../../main/gitlab/mappers'
 import { gitLabPipelineJobsToPRChecks } from '../../../shared/gitlab-pipeline-checks'
-import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from '../../../shared/pr-check-status'
 import {
+  derivePRCheckStatus,
+  derivePRCheckStatuses,
+  derivePRCheckStatusFromRollup,
+  derivePRCheckStatusesFromRollup
+} from '../../../shared/pr-check-status'
+import {
+  getProviderCheckPresentationState,
   getProviderChecksLabel,
   summarizeProviderChecks
 } from '../../../shared/provider-check-summary'
@@ -54,7 +60,7 @@ type ParityCase = {
    * The `head_pipeline.status` GitLab reports for this same job set. This is the only GitLab path
    * with production callers (client.ts passes pipeline objects, never job arrays), so it is the
    * surface that decides the MR card's tone. Left unset for the shapes where the pipeline string
-   * knowingly disagrees with the job rollup — a `manual`/`skipped`/`canceled` pipeline is grey on
+   * knowingly disagrees with the job rollup — a `manual`/`skipped` pipeline is grey on
    * the card but its jobs roll up green/red in the Checks tab. Those are the deferred tone changes
    * documented in `classifyPipelineString`; pinning them here would just freeze the disagreement.
    */
@@ -148,6 +154,7 @@ const PARITY_CASES: ParityCase[] = [
     state: 'failure',
     passed: 1,
     failed: 1,
+    cancelled: 1,
     pending: 0,
     neutral: 0
   }),
@@ -174,15 +181,18 @@ describe('provider check classification parity', () => {
       // Why: the PR page and the work-item dialog share these counts; their absence here is how
       // their neutral chip kept saying "skipped" for what the sidebar calls "unresolved".
       const paneCounts = getCheckCounts(checks)
+      const cancelled = expected.cancelled ?? 0
       expect({
         passed: paneCounts.passing,
         // Both panes split action_required into its own amber chip; it is still the failed bucket.
         failed: paneCounts.failing + paneCounts.needsAction,
+        cancelled: paneCounts.cancelled,
         pending: paneCounts.pending,
         neutral: paneCounts.neutral
       }).toEqual({
         passed: expected.passed,
-        failed: expected.failed,
+        failed: expected.failed - cancelled,
+        cancelled,
         pending: expected.pending,
         neutral: expected.neutral
       })
@@ -191,6 +201,15 @@ describe('provider check classification parity', () => {
       )
       expect(derivePRCheckStatus(checks)).toBe(expected.state)
       expect(derivePRCheckStatusFromRollup(checks.map(toGraphQLRollup))).toBe(expected.state)
+      const presentation =
+        expected.state === 'failure' && cancelled > 0 && expected.failed === cancelled
+          ? 'cancelled'
+          : expected.state
+      const derived = derivePRCheckStatuses(checks)
+      const derivedRollup = derivePRCheckStatusesFromRollup(checks.map(toGraphQLRollup))
+      expect(derived.presentationStatus ?? derived.status).toBe(presentation)
+      expect(derivedRollup.presentationStatus ?? derivedRollup.status).toBe(presentation)
+      expect(getProviderCheckPresentationState(summary)).toBe(presentation)
       if (gitLabJobStatuses) {
         // Why: the job-array rollup has no production caller today (client.ts only ever passes
         // pipeline objects) — it is pinned so a future caller cannot inherit a drifted copy.
@@ -215,5 +234,23 @@ describe('provider check classification parity', () => {
   it('labels a green PR carrying one neutral check as passing', () => {
     const checks = [...Array.from({ length: 19 }, () => completed('success')), completed('neutral')]
     expect(getProviderChecksLabel(summarizeProviderChecks(checks))).toBe('19/20 passed')
+  })
+
+  it('preserves GitLab pipeline gating while presenting a terminal cancellation', () => {
+    expect(derivePipelineStatuses('canceled')).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
+    expect(derivePipelineStatuses({ status: 'canceled' })).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
+    expect(derivePipelineStatuses([{ status: 'canceled' }])).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
+    expect(derivePipelineStatuses([{ status: 'canceled' }, { status: 'failed' }])).toEqual({
+      status: 'failure'
+    })
   })
 })

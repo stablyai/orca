@@ -49,6 +49,9 @@ function mergedReviewMatchesHead(review: HostedReviewInfo, worktree: Worktree): 
       state: review.state,
       url: review.url,
       checksStatus: review.status,
+      ...(review.checkPresentationStatus
+        ? { checksPresentationStatus: review.checkPresentationStatus }
+        : {}),
       updatedAt: review.updatedAt,
       mergeable: review.mergeable,
       ...(review.headSha ? { headSha: review.headSha } : {}),

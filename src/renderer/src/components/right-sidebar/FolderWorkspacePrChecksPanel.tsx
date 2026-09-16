@@ -278,6 +278,7 @@ export default function FolderWorkspacePrChecksPanel({
 function formatReviewChecksHeaderSummary(summary: {
   attached: number
   failing: number
+  cancelled: number
   pending: number
   passing: number
 }): string | null {
@@ -287,6 +288,7 @@ function formatReviewChecksHeaderSummary(summary: {
   const worktreeCount = formatWorktreeCount(summary.attached)
   const attentionParts = [
     summary.failing > 0 ? formatFailingCount(summary.failing) : null,
+    summary.cancelled > 0 ? formatCancelledCount(summary.cancelled) : null,
     summary.pending > 0 ? formatPendingCount(summary.pending) : null
   ].filter((part): part is string => part !== null)
 
@@ -334,6 +336,19 @@ function formatPendingCount(count: number): string {
     : translate(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCount',
         '{{value0}} pending',
+        { value0: count }
+      )
+}
+
+function formatCancelledCount(count: number): string {
+  return count === 1
+    ? translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneCancelled',
+        '1 cancelled'
+      )
+    : translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.cancelledCount',
+        '{{value0}} cancelled',
         { value0: count }
       )
 }

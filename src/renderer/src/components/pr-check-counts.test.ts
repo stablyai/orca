@@ -25,6 +25,7 @@ describe('getCheckCounts', () => {
     expect(getCheckCounts(checks)).toEqual({
       passing: 5,
       failing: 0,
+      cancelled: 0,
       needsAction: 0,
       pending: 0,
       neutral: 0
@@ -40,6 +41,7 @@ describe('getCheckCounts', () => {
     expect(getCheckCounts([check('action_required'), check('failure')])).toEqual({
       passing: 0,
       failing: 1,
+      cancelled: 0,
       needsAction: 1,
       pending: 0,
       neutral: 0
@@ -56,6 +58,7 @@ describe('getCheckCounts', () => {
     expect(getCheckCounts(checks)).toEqual({
       passing: 0,
       failing: 0,
+      cancelled: 0,
       needsAction: 0,
       pending: 1,
       neutral: 1
@@ -71,6 +74,7 @@ describe('getCheckCounts', () => {
     expect(getCheckCounts(checks)).toEqual({
       passing: 0,
       failing: 0,
+      cancelled: 0,
       needsAction: 0,
       pending: 0,
       neutral: 1
@@ -80,5 +84,18 @@ describe('getCheckCounts', () => {
 
   it('reports no checks for an empty list', () => {
     expect(getChecksSummaryLabel([])).toBe('No checks found')
+  })
+
+  it('counts cancellation separately from failures', () => {
+    const checks = [check('success'), check('cancelled')]
+    expect(getCheckCounts(checks)).toEqual({
+      passing: 1,
+      failing: 0,
+      cancelled: 1,
+      needsAction: 0,
+      pending: 0,
+      neutral: 0
+    })
+    expect(getChecksSummaryLabel(checks)).toBe('1 check cancelled')
   })
 })

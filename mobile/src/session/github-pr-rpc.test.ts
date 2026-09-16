@@ -133,6 +133,30 @@ describe('readPRForBranch', () => {
 })
 
 describe('readWorkItemDetails', () => {
+  it('preserves optional cancelled check counts without inventing zero for old hosts', () => {
+    const item = {
+      id: 'n1',
+      type: 'pr',
+      number: 9,
+      state: 'open',
+      checksSummary: {
+        state: 'failure',
+        total: 1,
+        passed: 0,
+        failed: 1,
+        cancelled: 1,
+        pending: 0,
+        neutral: 0
+      }
+    }
+    expect(readWorkItemDetails({ item })?.item.checksSummary?.cancelled).toBe(1)
+
+    const legacy = readWorkItemDetails({
+      item: { ...item, checksSummary: { ...item.checksSummary, cancelled: undefined } }
+    })?.item.checksSummary
+    expect(legacy).not.toHaveProperty('cancelled')
+  })
+
   it('parses state/title/author/base+head/reviewRequests/latestReviews', () => {
     const parsed = readWorkItemDetails({
       item: {

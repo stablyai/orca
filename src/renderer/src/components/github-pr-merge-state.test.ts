@@ -190,6 +190,27 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
+  it('shows cancelled aggregates as muted while preserving legacy failure fallback', () => {
+    expect(
+      presentGitHubPRMergeState(
+        pr({
+          checksSummary: {
+            state: 'failure',
+            total: 1,
+            passed: 0,
+            failed: 1,
+            cancelled: 1,
+            pending: 0,
+            neutral: 0
+          }
+        })
+      )
+    ).toMatchObject({ label: 'Checks cancelled', directMergeAvailable: true })
+    expect(
+      presentGitHubPRMergeState(pr({ checksSummary: undefined, checksStatus: 'failure' }))
+    ).toMatchObject({ label: 'Checks failed', directMergeAvailable: true })
+  })
+
   it('labels unresolved GitHub mergeability as checking', () => {
     expect(
       presentGitHubPRMergeState(

@@ -16,7 +16,12 @@ import {
 import { DetailHeader, MetadataActionIcon } from './WorktreeCardMetadataControls'
 import { ReviewChecksBadge, ReviewStateBadge } from './WorktreeCardMetadataStatusBadges'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getProviderName, getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import {
+  getProviderName,
+  getReviewCheckStatus,
+  getReviewLabel,
+  ReviewIcon
+} from './worktree-review-helpers'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
 
 type WorktreeCardReviewDetailSectionProps = {
@@ -45,6 +50,7 @@ export function WorktreeCardReviewDetailSection({
   }
 
   const reviewLabel = getReviewLabel(review)
+  const checkStatus = getReviewCheckStatus(review)
   const reviewProvider = getProviderName(review)
   const moreActionsLabel = translate(
     'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
@@ -170,10 +176,10 @@ export function WorktreeCardReviewDetailSection({
         <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
           {review.title}
         </div>
-        {(review.state || (review.status && review.status !== 'neutral')) && (
+        {(review.state || (checkStatus && checkStatus !== 'neutral')) && (
           <div className="flex flex-wrap gap-1">
             <ReviewStateBadge state={review.state} label={reviewLabel} />
-            <ReviewChecksBadge status={review.status} />
+            <ReviewChecksBadge review={review} />
           </div>
         )}
       </WorktreeCardDetailSectionContent>

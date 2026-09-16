@@ -1,5 +1,5 @@
 import {
-  deriveAzureDevOpsStatus,
+  deriveAzureDevOpsStatuses,
   mapAzureDevOpsPullRequest,
   mapAzureDevOpsPullRequestState,
   type AzureDevOpsPullRequestInfo,
@@ -108,7 +108,13 @@ async function normalizePullRequest(
   raw: RawAzureDevOpsPullRequest
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const statuses = await getPullRequestStatuses(repo, repoIdOrName, raw)
-  return mapAzureDevOpsPullRequest(raw, deriveAzureDevOpsStatus(statuses), webBaseUrl)
+  const checkStatuses = deriveAzureDevOpsStatuses(statuses)
+  return mapAzureDevOpsPullRequest(
+    raw,
+    checkStatuses.status,
+    webBaseUrl,
+    checkStatuses.presentationStatus
+  )
 }
 
 function sortPullRequestsForBranch(

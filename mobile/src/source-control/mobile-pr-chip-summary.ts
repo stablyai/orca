@@ -1,6 +1,9 @@
 import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
-import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
+import {
+  getProviderCheckFailureCount,
+  summarizeProviderChecks
+} from '../../../src/shared/provider-check-summary'
 import {
   prStateBadge,
   type MobileStatusToken
@@ -12,11 +15,12 @@ import {
 // check rollup can never disagree with the checks list it links to.
 
 // The single check-rollup token the chip shows. Exactly one wins, by precedence:
-// merge conflict > failing > running > passed > no checks. Worst-actionable-first
+// merge conflict > failing > cancelled > running > passed > no checks. Worst-actionable-first
 // so a red/amber signal is never hidden behind a green count.
 export type MobilePrChipRollup =
   | { kind: 'conflict'; text: string; token: MobileStatusToken }
   | { kind: 'failing'; text: string; token: MobileStatusToken }
+  | { kind: 'cancelled'; text: string; token: MobileStatusToken }
   | { kind: 'running'; text: string; token: MobileStatusToken }
   | { kind: 'passed'; text: string; token: MobileStatusToken }
   | { kind: 'none'; text: string; token: MobileStatusToken }
@@ -92,8 +96,16 @@ function buildChipRollup(state: Extract<PrSidebarState, { kind: 'ready' }>): Mob
   }
   // Shared classifier so the chip, the Checks list and the tasks grid never disagree about the same PR.
   const checks = summarizeProviderChecks(state.data.checks)
-  if (checks.failed > 0) {
-    return { kind: 'failing', text: `${checks.failed} failing`, token: 'statusRed' }
+  const failed = getProviderCheckFailureCount(checks)
+  if (failed > 0) {
+    return { kind: 'failing', text: `${failed} failing`, token: 'statusRed' }
+  }
+  if ((checks.cancelled ?? 0) > 0) {
+    return {
+      kind: 'cancelled',
+      text: `${checks.cancelled} cancelled`,
+      token: 'textSecondary'
+    }
   }
   if (checks.pending > 0) {
     return { kind: 'running', text: `${checks.pending} running`, token: 'statusAmber' }

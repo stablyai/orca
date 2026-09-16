@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveBitbucketBuildStatus,
+  deriveBitbucketBuildStatuses,
   mapBitbucketPullRequest,
   mapBitbucketPullRequestState
 } from './pull-request-mappers'
@@ -18,6 +19,16 @@ describe('Bitbucket pull request mappers', () => {
     expect(deriveBitbucketBuildStatus([{ state: 'SUCCESSFUL' }])).toBe('success')
     expect(deriveBitbucketBuildStatus([{ state: 'INPROGRESS' }])).toBe('pending')
     expect(deriveBitbucketBuildStatus([{ state: 'FAILED' }])).toBe('failure')
+    expect(deriveBitbucketBuildStatus([{ state: 'SUCCESSFUL' }, { state: 'UNKNOWN' }])).toBe(
+      'neutral'
+    )
+    expect(deriveBitbucketBuildStatuses([{ state: 'STOPPED' }])).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
+    expect(deriveBitbucketBuildStatuses([{ state: 'STOPPED' }, { state: 'FAILED' }])).toEqual({
+      status: 'failure'
+    })
   })
 
   it('maps raw pull request JSON into the shared PR-like shape', () => {

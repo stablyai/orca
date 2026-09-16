@@ -25,6 +25,9 @@ export function mapGitLabReview(mr: MRInfo): HostedReviewInfo {
     state: mapGitLabReviewState(mr.state),
     url: mr.url,
     status: mr.pipelineStatus,
+    ...(mr.pipelinePresentationStatus
+      ? { checkPresentationStatus: mr.pipelinePresentationStatus }
+      : {}),
     updatedAt: mr.updatedAt,
     mergeable: mr.mergeable,
     ...(mr.mergeStateStatus !== undefined ? { mergeStateStatus: mr.mergeStateStatus } : {}),
@@ -41,6 +44,7 @@ export function mapBitbucketReview(pr: BitbucketPullRequestInfo): HostedReviewIn
     state: pr.state,
     url: pr.url,
     status: pr.status,
+    ...(pr.checkPresentationStatus ? { checkPresentationStatus: pr.checkPresentationStatus } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
     ...(pr.headSha ? { headSha: pr.headSha } : {})
@@ -55,6 +59,7 @@ export function mapAzureDevOpsReview(pr: AzureDevOpsPullRequestInfo): HostedRevi
     state: pr.state,
     url: pr.url,
     status: pr.status,
+    ...(pr.checkPresentationStatus ? { checkPresentationStatus: pr.checkPresentationStatus } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
     ...(pr.headSha ? { headSha: pr.headSha } : {})

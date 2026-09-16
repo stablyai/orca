@@ -51,4 +51,38 @@ describe('task page checks pill', () => {
       })
     ).toBe('No checks')
   })
+
+  it('renders cancellation as muted without calling it failing', () => {
+    const item = {
+      checksSummary: {
+        state: 'failure' as const,
+        total: 1,
+        passed: 0,
+        failed: 1,
+        cancelled: 1,
+        pending: 0,
+        neutral: 0
+      }
+    }
+
+    expect(getChecksLabel(item)).toBe('1 cancelled')
+    expect(getChecksPillTone(item)).toContain('text-muted-foreground')
+    expect(getChecksPillTone(item)).not.toContain('rose')
+  })
+
+  it('keeps the failure fallback for summaries from older runtimes', () => {
+    const item = {
+      checksSummary: {
+        state: 'failure' as const,
+        total: 1,
+        passed: 0,
+        failed: 1,
+        pending: 0,
+        neutral: 0
+      }
+    }
+
+    expect(getChecksLabel(item)).toBe('1 failing')
+    expect(getChecksPillTone(item)).toContain('rose')
+  })
 })

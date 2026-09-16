@@ -1,6 +1,6 @@
-import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type { ProviderCheckStatuses } from '../../shared/provider-check-summary'
 import {
-  deriveBitbucketBuildStatus,
+  deriveBitbucketBuildStatuses,
   mapBitbucketPullRequest,
   mapBitbucketPullRequestState,
   type BitbucketPullRequestInfo,
@@ -127,15 +127,16 @@ function allStateFilter(): string {
 async function getBuildStatus(
   repo: BitbucketRepoRef,
   headSha: string | undefined
-): Promise<CheckStatus> {
+): Promise<ProviderCheckStatuses> {
   if (!headSha) {
-    return 'neutral'
+    return { status: 'neutral' }
   }
-  const data = await requestJson<{ values?: RawBitbucketBuildStatus[] }>(
+  const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: unknown }>(
     `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
     { searchParams: { pagelen: '100' } }
   )
-  return deriveBitbucketBuildStatus(data?.values ?? [])
+  const statuses = deriveBitbucketBuildStatuses(data?.values ?? [])
+  return data?.next === undefined || data.next === null ? statuses : { status: statuses.status }
 }
 
 async function normalizePullRequest(
@@ -143,8 +144,8 @@ async function normalizePullRequest(
   raw: RawBitbucketPullRequest
 ): Promise<BitbucketPullRequestInfo | null> {
   const headSha = raw.source?.commit?.hash?.trim()
-  const status = await getBuildStatus(repo, headSha)
-  return mapBitbucketPullRequest(raw, status)
+  const checkStatuses = await getBuildStatus(repo, headSha)
+  return mapBitbucketPullRequest(raw, checkStatuses.status, checkStatuses.presentationStatus)
 }
 
 // Never decrypts. Env credentials are checked live; a stored credential is

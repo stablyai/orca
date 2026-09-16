@@ -25,6 +25,7 @@ import {
 } from './parent-pr-checks-row-types'
 import {
   classifyParentPrChecksRowStatus,
+  getRowCheckDetailNames,
   getRowCheckTone,
   getRowSummary,
   groupForRowStatus
@@ -68,7 +69,9 @@ export function summarizeParentPrChecksRows(
   return {
     attached: rows.length,
     knownReview: rows.filter((row) => row.reviewLabel !== null && row.status !== 'noReview').length,
-    failing: rows.filter((row) => row.group === 'needsAttention').length,
+    failing: rows.filter((row) => row.group === 'needsAttention' && row.status !== 'cancelled')
+      .length,
+    cancelled: rows.filter((row) => row.status === 'cancelled').length,
     pending: rows.filter((row) => row.group === 'pending').length,
     passing: rows.filter((row) => row.group === 'passing').length,
     noPr: rows.filter((row) => row.status === 'noReview').length,
@@ -124,7 +127,7 @@ function buildParentPrChecksRow(
     hasFallbackReview: fallbackDisplay !== null
   })
   const checkDetails = getCheckDetails(args, review, branch)
-  const detailNames = getCheckDetailNames(checkDetails)
+  const detailNames = getRowCheckDetailNames(checkDetails, status)
 
   return {
     id: args.worktree.id,
@@ -140,7 +143,8 @@ function buildParentPrChecksRow(
     reviewLabel: getReviewLabel(review, fallbackDisplay),
     reviewUrl: review?.url ?? fallbackDisplay?.url ?? null,
     reviewState: review?.state ?? fallbackDisplay?.state ?? null,
-    reviewStatus: review?.status ?? fallbackDisplay?.status ?? null,
+    reviewStatus:
+      review?.checkPresentationStatus ?? review?.status ?? fallbackDisplay?.status ?? null,
     provider: review?.provider ?? fallbackDisplay?.provider ?? null,
     githubRepository: review?.provider === 'github' ? (review.githubRepository ?? null) : null,
     summary: getRowSummary(status, review, detailNames),
@@ -217,25 +221,6 @@ function getCheckDetails(
     return []
   }
   return getGitHubChecksEntry({ ...args, repo: args.repo }, review)?.data ?? []
-}
-
-function getCheckDetailNames(checks: readonly PRCheckDetail[]): string[] {
-  const interesting = checks.filter(
-    (check) =>
-      check.conclusion === 'failure' ||
-      check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled' ||
-      check.conclusion === 'action_required' ||
-      check.conclusion === 'pending' ||
-      check.conclusion === null ||
-      check.status === 'queued' ||
-      check.status === 'in_progress'
-  )
-  const ordered = [
-    ...interesting.filter((check) => check.conclusion === 'action_required'),
-    ...interesting.filter((check) => check.conclusion !== 'action_required')
-  ]
-  return ordered.slice(0, 2).map((check) => check.name)
 }
 
 function getGitHubChecksEntry(

@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 
 export function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
   return review.provider === 'gitlab' ? 'MR' : 'PR'
@@ -25,6 +26,12 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
   return 'GitHub'
 }
 
+export function getReviewCheckStatus(
+  review: WorktreeCardPrDisplay
+): CheckPresentationStatus | undefined {
+  return review.checkPresentationStatus ?? review.status
+}
+
 // Why: checks only gate a review that is actually open; draft/closed/merged keep
 // their state tone so the glyph agrees with its tooltip. A stateless row (folder
 // cards render one while a linked review is loading or its details failed) has no
@@ -34,13 +41,17 @@ function getCheckTone(review: WorktreeCardPrDisplay): string | null {
   if (review.state && review.state !== 'open') {
     return null
   }
-  if (review.status === 'failure') {
+  const status = getReviewCheckStatus(review)
+  if (status === 'failure') {
     return 'text-rose-500/85'
   }
-  if (review.status === 'pending') {
+  if (status === 'cancelled') {
+    return 'text-muted-foreground/60'
+  }
+  if (status === 'pending') {
     return 'text-amber-500/85'
   }
-  if (review.state === 'open' && review.status === 'success') {
+  if (review.state === 'open' && status === 'success') {
     return 'text-emerald-500/80'
   }
   return null

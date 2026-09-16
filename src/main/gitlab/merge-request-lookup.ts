@@ -1,5 +1,5 @@
 import type { MRInfo } from '../../shared/gitlab-types'
-import { derivePipelineStatus, mapMRInfo } from './mappers'
+import { derivePipelineStatuses, mapMRInfo } from './mappers'
 import {
   acquire,
   getGlabKnownHosts,
@@ -68,8 +68,8 @@ export async function getMergeRequest(
       pipeline?: { status?: string } | null
     }
     // Why: older GitLab instances expose `pipeline` instead of `head_pipeline`; try both.
-    const pipelineStatus = derivePipelineStatus(data.head_pipeline ?? data.pipeline ?? null)
-    return mapMRInfo(data, pipelineStatus)
+    const pipeline = derivePipelineStatuses(data.head_pipeline ?? data.pipeline ?? null)
+    return mapMRInfo(data, pipeline.status, pipeline.presentationStatus)
   } catch {
     return null
   } finally {
@@ -116,8 +116,8 @@ export async function getMergeRequestForBranch(
         head_pipeline?: { status?: string } | null
         pipeline?: { status?: string } | null
       }
-      const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-      return mapMRInfo(raw, pipelineStatus)
+      const pipeline = derivePipelineStatuses(raw.head_pipeline ?? raw.pipeline ?? null)
+      return mapMRInfo(raw, pipeline.status, pipeline.presentationStatus)
     }
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
@@ -139,8 +139,8 @@ export async function getMergeRequestForBranch(
       if (Array.isArray(data) && data.length > 0) {
         const raw = data[0]
         // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
-        const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-        const info = mapMRInfo(raw, pipelineStatus)
+        const pipeline = derivePipelineStatuses(raw.head_pipeline ?? raw.pipeline ?? null)
+        const info = mapMRInfo(raw, pipeline.status, pipeline.presentationStatus)
         // Why (#9171): discard a non-open implicit branch match on the repo default branch.
         const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
           state: info.state,

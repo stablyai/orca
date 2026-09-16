@@ -1,6 +1,6 @@
 import type { AppState } from '../../store/types'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import { getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
@@ -37,7 +37,7 @@ function branchDisplayName(branch: string): string {
 // cache-key strings each time. Same single-entry, reference-keyed shape as selectFloatingVisibleTabCount.
 let activeChecksStatusCache: {
   inputs: ActiveChecksStatusInputs
-  status: CheckStatus | null
+  status: CheckPresentationStatus | null
 } | null = null
 
 /** @internal */
@@ -54,7 +54,9 @@ function hasSameInputs(inputs: ActiveChecksStatusInputs, state: ActiveChecksStat
   return true
 }
 
-export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus | null {
+export function getActiveChecksStatus(
+  state: ActiveChecksStatusState
+): CheckPresentationStatus | null {
   const cached = activeChecksStatusCache
   if (cached && hasSameInputs(cached.inputs, state)) {
     return cached.status
@@ -67,7 +69,9 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
   return status
 }
 
-function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus | null {
+function computeActiveChecksStatus(
+  state: ActiveChecksStatusState
+): CheckPresentationStatus | null {
   const activeWorktree = state.activeWorktreeId
     ? (getWorktreeMapFromState(state).get(state.activeWorktreeId) ?? null)
     : null
@@ -107,7 +111,7 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
   )
   const hostedReview = state.hostedReviewCache?.[hostedReviewCacheKey]?.data ?? null
   if (hostedReview && hostedReview.provider !== 'github') {
-    return hostedReview.status
+    return hostedReview.checkPresentationStatus ?? hostedReview.status
   }
   if (
     (activeWorktree.linkedGitLabMR ?? null) !== null ||
@@ -119,10 +123,10 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
   }
   const branchPR = state.prCache[prCacheKey]?.data ?? null
   if (branchPR && !isGitHubPRSuppressed(activeWorktree, branchPR.number)) {
-    return branchPR.checksStatus
+    return branchPR.checksPresentationStatus ?? branchPR.checksStatus
   }
   return hostedReview?.provider === 'github' &&
     !isGitHubPRSuppressed(activeWorktree, hostedReview.number)
-    ? hostedReview.status
+    ? (hostedReview.checkPresentationStatus ?? hostedReview.status)
     : null
 }

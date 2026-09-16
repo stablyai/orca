@@ -97,6 +97,26 @@ describe('buildMobilePrChipSummary', () => {
     expect(summary.rollup).toEqual({ kind: 'failing', text: '1 failing', token: 'statusRed' })
   })
 
+  it('renders cancellation-only checks as a muted cancelled rollup', () => {
+    const summary = buildMobilePrChipSummary(ready(pr(), [check('cancelled'), check('cancelled')]))
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup).toEqual({
+      kind: 'cancelled',
+      text: '2 cancelled',
+      token: 'textSecondary'
+    })
+  })
+
+  it('lets a genuine failure win over cancellation', () => {
+    const summary = buildMobilePrChipSummary(ready(pr(), [check('cancelled'), check('failure')]))
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup).toEqual({ kind: 'failing', text: '1 failing', token: 'statusRed' })
+  })
+
   it('shows running when nothing has failed yet', () => {
     const summary = buildMobilePrChipSummary(ready(pr(), [check('success'), check(null, 'queued')]))
     if (summary.kind !== 'ready') {

@@ -136,6 +136,25 @@ describe('gitlab client — MR operations', () => {
       const mr = await getMergeRequest('/repo', 1)
       expect(mr?.pipelineStatus).toBe('neutral')
     })
+
+    it('keeps a cancelled pipeline non-passing while preserving its presentation', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 2,
+          title: 'Cancelled pipeline',
+          state: 'opened',
+          head_pipeline: { status: 'canceled' }
+        })
+      })
+
+      const mr = await getMergeRequest('/repo', 2)
+
+      expect(mr).toMatchObject({
+        pipelineStatus: 'failure',
+        pipelinePresentationStatus: 'cancelled'
+      })
+    })
   })
 
   describe('getMergeRequestForBranch', () => {

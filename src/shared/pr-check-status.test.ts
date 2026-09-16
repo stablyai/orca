@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from './pr-check-status'
+import {
+  derivePRCheckStatus,
+  derivePRCheckStatuses,
+  derivePRCheckStatusFromRollup,
+  derivePRCheckStatusesFromRollup
+} from './pr-check-status'
 import type { PRCheckDetail } from './github/check-types'
 
 const check = (
@@ -36,5 +41,23 @@ describe('provider-neutral check status', () => {
 
   it.each(['ERROR', 'STARTUP_FAILURE'])('treats raw %s conclusions as failures', (conclusion) => {
     expect(derivePRCheckStatusFromRollup([{ status: 'COMPLETED', conclusion }])).toBe('failure')
+  })
+
+  it('keeps cancelled-only checks nonpassing while exposing a distinct presentation state', () => {
+    expect(derivePRCheckStatuses([check('completed', 'cancelled')])).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
+    expect(
+      derivePRCheckStatusesFromRollup([{ status: 'COMPLETED', conclusion: 'CANCELLED' }])
+    ).toEqual({ status: 'failure', presentationStatus: 'cancelled' })
+  })
+
+  it('lets a genuine failure win over cancellation', () => {
+    const checks = [check('completed', 'cancelled'), check('completed', 'failure')]
+    expect(derivePRCheckStatuses(checks)).toEqual({ status: 'failure' })
+    expect(derivePRCheckStatusesFromRollup(checks.map((item) => ({ ...item })))).toEqual({
+      status: 'failure'
+    })
   })
 })

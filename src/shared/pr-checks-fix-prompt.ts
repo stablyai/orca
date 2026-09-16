@@ -37,9 +37,7 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
 }
 
 export function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
-  return checks.filter((check) =>
-    ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
-  )
+  return checks.filter((check) => ['failure', 'timed_out'].includes(getCheckConclusion(check)))
 }
 
 export function truncateLogTailForPrompt(logTail: string): string {

@@ -22,6 +22,7 @@ export type HostedReviewActionInfo = Pick<
     Pick<
       HostedReviewInfo,
       | 'reviewDecision'
+      | 'checkPresentationStatus'
       | 'autoMergeEnabled'
       | 'autoMergeAllowed'
       | 'mergeQueueRequired'
