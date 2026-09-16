@@ -12,6 +12,25 @@ import { buildAutomationRunContextForRepo } from './automation-run-context'
 import type { AutomationSaveContext } from './automation-save-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
 
+export type AutomationCreateTargets = {
+  extraProjectIds: string[]
+  workspaceMode: AutomationWorkspaceMode
+}
+
+/**
+ * The save-boundary view of a create draft: extras never repeat the primary, and
+ * once any extra exists every record runs in a fresh workspace.
+ */
+export function normalizeAutomationCreateTargets(
+  draft: Pick<AutomationDraft, 'projectId' | 'extraProjectIds' | 'workspaceMode'>
+): AutomationCreateTargets {
+  const extraProjectIds = [...new Set(draft.extraProjectIds)].filter((id) => id !== draft.projectId)
+  return {
+    extraProjectIds,
+    workspaceMode: extraProjectIds.length > 0 ? 'new_per_run' : draft.workspaceMode
+  }
+}
+
 export type AutomationProjectRunPlan = {
   setupDecision: AutomationDraft['setupDecision']
   runContext: WorkspaceRunContext
@@ -76,13 +95,14 @@ export type AutomationExtraProjectCopies = {
 /** Creates one copy of a just-saved automation per extra project, each in a fresh workspace. */
 export async function createAutomationCopiesForExtraProjects(
   context: AutomationSaveContext,
+  extraProjectIds: readonly string[],
   createInput: AutomationCreateInput
 ): Promise<AutomationExtraProjectCopies> {
   const { repos } = context.store
   const { draft } = context.local
   const { createDestination, invalidateWrittenHost } = context.destination
   const copies: AutomationExtraProjectCopies = { created: [], failed: [] }
-  for (const projectId of draft.extraProjectIds) {
+  for (const projectId of extraProjectIds) {
     const name = repos.find((repo) => repo.id === projectId)?.displayName ?? projectId
     const checked = createDestination.check(projectId)
     if (!checked.ok) {

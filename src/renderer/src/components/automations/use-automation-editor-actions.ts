@@ -197,6 +197,7 @@ export function useAutomationEditorActions({
       setDraft((current) => ({
         ...current,
         projectId,
+        extraProjectIds: current.extraProjectIds.filter((id) => id !== projectId),
         workspaceId: currentDefaultWorktree?.id ?? '',
         baseBranch: ''
       }))

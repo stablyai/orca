@@ -15,6 +15,7 @@ import {
 import { buildDraftPrecheck } from './automation-draft-model'
 import {
   createAutomationCopiesForExtraProjects,
+  normalizeAutomationCreateTargets,
   planAutomationProjectRun
 } from './automation-project-run-plan'
 import {
@@ -80,6 +81,11 @@ export async function saveOrcaAutomation(
   const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
   const precheck = buildDraftPrecheck(draft)
   const reposForDraft = editingAutomationId !== null ? dialogRepos : repos
+  const { extraProjectIds, workspaceMode } =
+    editingAutomationId === null
+      ? normalizeAutomationCreateTargets(draft)
+      : { extraProjectIds: [], workspaceMode: draft.workspaceMode }
+  const reuseSession = workspaceMode === 'existing' && draft.reuseSession
   const setupResolution =
     editingAutomationId !== null
       ? editHostResolution
@@ -90,7 +96,7 @@ export async function saveOrcaAutomation(
     projectId: draft.projectId,
     repos: reposForDraft,
     authority: setupResolution?.status === 'ready' ? setupResolution.authority : null,
-    workspaceMode: draft.workspaceMode,
+    workspaceMode,
     draftSetupDecision: draft.setupDecision
   })
   if (!plan) {
@@ -130,11 +136,11 @@ export async function saveOrcaAutomation(
     agentId: draft.agentId,
     runContext,
     projectId: draft.projectId,
-    workspaceMode: draft.workspaceMode,
+    workspaceMode,
     workspaceId: draft.workspaceId,
     baseBranch: draft.baseBranch.trim() || null,
     setupDecision,
-    reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
+    reuseSession,
     timezone,
     missedRunGraceMinutes
   }
@@ -149,11 +155,11 @@ export async function saveOrcaAutomation(
     agentId: draft.agentId,
     runContext,
     projectId: draft.projectId,
-    workspaceMode: draft.workspaceMode,
+    workspaceMode,
     workspaceId: draft.workspaceId,
     baseBranch: draft.baseBranch.trim() || null,
     setupDecision,
-    reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
+    reuseSession,
     timezone,
     rrule,
     dtstart: updates.dtstart ?? time.now,
@@ -223,8 +229,8 @@ export async function saveOrcaAutomation(
   }
   const automation = saved.value
   const copies =
-    editingAutomationId === null && draft.extraProjectIds.length > 0
-      ? await createAutomationCopiesForExtraProjects(context, createInput)
+    extraProjectIds.length > 0
+      ? await createAutomationCopiesForExtraProjects(context, extraProjectIds, createInput)
       : null
   if (editingAutomationId !== null) {
     invalidateRowHost(editingRowKey, 'definition')
@@ -255,16 +261,18 @@ export async function saveOrcaAutomation(
     toast.error(
       translate(
         'auto.components.automations.AutomationsPage.copiesFailed',
-        'Saved, but no copy was created in: {projects}'
-      ).replace('{projects}', () => copies.failed.join(', '))
+        'Saved, but no copy was created in: {{projects}}',
+        { projects: copies.failed.join(', ') }
+      )
     )
   }
   if (copies && copies.created.length > 0) {
     toast.success(
       translate(
         'auto.components.automations.AutomationsPage.savedInProjects',
-        'Automation saved in {count} projects.'
-      ).replace('{count}', () => String(copies.created.length + 1))
+        'Automation saved in {{count}} projects.',
+        { count: copies.created.length + 1 }
+      )
     )
     return
   }

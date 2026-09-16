@@ -478,6 +478,37 @@ describe('AutomationsPage mutations', () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Automation saved in 2 projects.')
   })
 
+  it('writes a project once when it is both the primary and an extra', async () => {
+    api.automations.list.mockResolvedValue([])
+    api.automations.create.mockResolvedValue(makeAutomation({ id: 'a-1' }))
+
+    await renderPage()
+    await act(async () => {
+      mocks.listPanel?.openCreateDialog()
+    })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        name: 'Sweep',
+        prompt: 'Do the sweep',
+        projectId: REPO_ID,
+        extraProjectIds: [REPO_ID],
+        // Reuse can flip the mode back to existing after extras were added.
+        workspaceMode: 'existing',
+        workspaceId: WORKSPACE_ID,
+        reuseSession: true
+      }))
+    })
+    await act(async () => {
+      mocks.editorDialog?.onSave()
+    })
+
+    expect(api.automations.create).toHaveBeenCalledTimes(1)
+    expect(api.automations.create).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: `id:${REPO_ID}`, workspaceMode: 'existing' })
+    )
+  })
+
   it('refreshes after a mutation so the list reflects the write', async () => {
     const automation = makeAutomation({ id: 'a-1' })
     api.automations.list.mockResolvedValue([automation])

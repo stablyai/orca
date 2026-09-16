@@ -152,6 +152,7 @@ export function makeScopedExternalManager(
   return { scope, manager: makeExternalManager(overrides) }
 }
 
+/** The one local project every page test starts with. */
 export function makeRepo(): Repo {
   return {
     id: REPO_ID,

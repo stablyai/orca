@@ -53,8 +53,9 @@ export function AutomationExtraProjectsField({
                 type="button"
                 aria-label={translate(
                   'auto.components.automations.AutomationExtraProjectsField.remove',
-                  'Remove {project}'
-                ).replace('{project}', () => repo.displayName)}
+                  'Remove {{project}}',
+                  { project: repo.displayName }
+                )}
                 className="rounded-full text-muted-foreground hover:text-foreground"
                 onClick={() =>
                   onDraftChange((current) => ({
