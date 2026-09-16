@@ -5,7 +5,7 @@ describe('parseQuickOpenInstallRgGuidance', () => {
   it('parses the local message and reports the local location', () => {
     expect(
       parseQuickOpenInstallRgGuidance(
-        'Quick Open scan too large (File listing timed out). Install ripgrep on the host running the Quick Open scan to enable fast, gitignore-aware listing: brew install ripgrep'
+        'Quick Open scan too large (File listing timed out). Install ripgrep on this machine to enable fast, gitignore-aware listing: brew install ripgrep'
       )
     ).toEqual({
       reason: 'File listing timed out',
@@ -31,13 +31,26 @@ describe('parseQuickOpenInstallRgGuidance', () => {
   it('renders generic install prose through the guidance path', () => {
     expect(
       parseQuickOpenInstallRgGuidance(
-        'Quick Open scan too large (File listing timed out). Install ripgrep on the host running the Quick Open scan to enable fast, gitignore-aware listing: install ripgrep via your package manager (e.g. apt/dnf/pacman)'
+        'Quick Open scan too large (File listing timed out). Install ripgrep on this machine to enable fast, gitignore-aware listing: install ripgrep via your package manager (e.g. apt/dnf/pacman)'
       )
     ).toEqual({
       reason: 'File listing timed out',
       location: 'local',
       command: null,
       guidance: 'install ripgrep via your package manager (e.g. apt/dnf/pacman)'
+    })
+  })
+
+  it('keeps parsing the previous local phrase and parenthesized reasons', () => {
+    expect(
+      parseQuickOpenInstallRgGuidance(
+        "Quick Open scan too large (EACCES: scandir '/foo (bar)'). Install ripgrep on the host running the Quick Open scan to enable fast, gitignore-aware listing: sudo apt install ripgrep"
+      )
+    ).toEqual({
+      reason: "EACCES: scandir '/foo (bar)'",
+      location: 'local',
+      command: 'sudo apt install ripgrep',
+      guidance: null
     })
   })
 
