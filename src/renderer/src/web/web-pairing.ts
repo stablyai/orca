@@ -1,4 +1,6 @@
 import type { DeviceScope } from '../../../shared/runtime-types'
+import { normalizePairingBase64 } from '../../../shared/mobile-pairing-base64'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/mobile-pairing-protocol-limits'
 
 const PAIRING_OFFER_VERSION = 2
 
@@ -17,6 +19,9 @@ export type WebPairingStartupDecision =
   | { kind: 'use-stored-environment' }
 
 export function parseWebPairingInput(input: string): WebPairingOffer | null {
+  if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = input.trim()
   if (!trimmed) {
     return null
@@ -34,6 +39,9 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
 }
 
 export function readPairingInputFromLocation(location: Location): string | null {
+  if (location.search.length + location.hash.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const search = new URLSearchParams(location.search)
   for (const key of ['pairing', 'pair', 'code', 'token']) {
     const value = search.get(key)
@@ -119,6 +127,9 @@ function parseWebPairingScope(value: unknown): DeviceScope | null {
 }
 
 function extractPairingCodeFromUrl(url: string): string | null {
+  if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -141,9 +152,7 @@ function extractPairingCodeFromUrl(url: string): string | null {
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = globalThis.atob(padded)
+  const binary = globalThis.atob(normalizePairingBase64(value))
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index)
