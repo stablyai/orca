@@ -5,7 +5,7 @@ import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
-import { getLiveWorktreeDisplayName, type WorktreeDisplayNameSource } from './worktree-display-name'
+import { getLiveWorktreeDisplayName } from './worktree-display-name'
 import { FLOATING_WORKSPACE_TITLE, isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import {
   classifyWorktreeShowResponse,
