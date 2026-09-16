@@ -40,7 +40,9 @@ const mutants: Record<string, Mutation> = {
   'home-host-accounts': 'home-accounts-envelope',
   'notifications-display-test-accepted': 'push-test-envelope',
   'tasks-route-repo-list': 'task-screen-repo-envelope',
-  'linear-select-workspace': 'linear-workspace-context-reload'
+  'linear-select-workspace': 'linear-workspace-context-reload',
+  'terminal-input-send-refused': 'terminal-send-refusal-restores-draft',
+  'terminal-worktree-connection-resolved': 'worktree-connection-first-repo'
 }
 /**
  * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2

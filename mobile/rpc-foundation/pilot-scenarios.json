@@ -18696,6 +18696,377 @@
       ]
     },
     {
+      "id": "terminal-paste-accepted",
+      "operation": "session.terminal-clipboard",
+      "version": 1,
+      "family": "session.terminal-paste",
+      "sites": [
+        "mobile/src/session/use-mobile-terminal-paste.ts",
+        "mobile/src/session/use-mobile-session-accessory-selection.ts",
+        "mobile/src/terminal/worker-terminal-takeover-report.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "terminalCopyTrimsGutter": true
+              }
+            }
+          }
+        },
+        {
+          "action": "copy",
+          "id": "copy",
+          "args": {
+            "text": "echo hi"
+          }
+        },
+        {
+          "checkpoint": "copied"
+        },
+        {
+          "action": "paste",
+          "id": "paste"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~echo hi\u001b[201~",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "orchestration.workerTerminalUserInput#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "changed": 1
+            }
+          }
+        },
+        {
+          "checkpoint": "pasted"
+        }
+      ]
+    },
+    {
+      "id": "terminal-paste-refused",
+      "operation": "session.terminal-clipboard",
+      "version": 1,
+      "family": "session.terminal-paste",
+      "sites": ["mobile/src/session/use-mobile-terminal-paste.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "terminalCopyTrimsGutter": true
+              }
+            }
+          }
+        },
+        {
+          "action": "copy",
+          "id": "copy",
+          "args": {
+            "text": "echo hi"
+          }
+        },
+        {
+          "action": "paste",
+          "id": "paste"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~echo hi\u001b[201~",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "not-reported"
+        }
+      ]
+    },
+    {
+      "id": "terminal-worktree-connection-resolved",
+      "operation": "session.terminal-clipboard",
+      "version": 1,
+      "family": "session.worktree-connection",
+      "sites": ["mobile/src/session/use-mobile-session-accessory-selection.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "terminalCopyTrimsGutter": true
+              }
+            }
+          }
+        },
+        {
+          "action": "connection",
+          "id": "connection"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-z",
+                  "displayName": "zeta",
+                  "connectionId": "ssh-zeta"
+                },
+                {
+                  "id": "repo-a",
+                  "displayName": "alpha",
+                  "connectionId": "ssh-alpha"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "resolved"
+        }
+      ]
+    },
+    {
+      "id": "terminal-input-send-accepted",
+      "operation": "session.terminal-input-send",
+      "version": 1,
+      "family": "session.terminal-input-send",
+      "sites": [
+        "mobile/src/session/use-mobile-session-terminal-send-actions.ts",
+        "mobile/src/terminal/worker-terminal-takeover-report.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "type",
+          "id": "type",
+          "args": {
+            "text": "ls -la"
+          }
+        },
+        {
+          "checkpoint": "composed"
+        },
+        {
+          "action": "send",
+          "id": "send"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "ls -la",
+            "enter": true,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "orchestration.workerTerminalUserInput#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "changed": 1
+            }
+          }
+        },
+        {
+          "checkpoint": "sent"
+        }
+      ]
+    },
+    {
+      "id": "terminal-input-send-refused",
+      "operation": "session.terminal-input-send",
+      "version": 1,
+      "family": "session.terminal-input-send",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "type",
+          "id": "type",
+          "args": {
+            "text": "ls -la"
+          }
+        },
+        {
+          "action": "send",
+          "id": "send"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "ls -la",
+            "enter": true,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "restored"
+        }
+      ]
+    },
+    {
+      "id": "terminal-live-input-accepted",
+      "operation": "session.terminal-input-send",
+      "version": 1,
+      "family": "session.terminal-input-send",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "live",
+          "id": "live",
+          "args": {
+            "bytes": "ls"
+          }
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "ls",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "orchestration.workerTerminalUserInput#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "changed": 1
+            }
+          }
+        },
+        {
+          "checkpoint": "live-sent"
+        }
+      ]
+    },
+{
       "id": "home-host-accounts",
       "operation": "home.host-accounts",
       "version": 1,
@@ -18746,7 +19117,7 @@
         }
       ]
     },
-    {
+{
       "id": "notifications-display-test-accepted",
       "operation": "notifications.display-test-screen",
       "version": 1,
@@ -18786,7 +19157,7 @@
         }
       ]
     },
-    {
+{
       "id": "aivault-history-screen-worktrees",
       "operation": "aiVault.history-screen",
       "version": 1,
@@ -18861,7 +19232,7 @@
         }
       ]
     },
-    {
+{
       "id": "aivault-history-screen-listed",
       "operation": "aiVault.history-screen",
       "version": 1,
@@ -18979,7 +19350,7 @@
         }
       ]
     },
-    {
+{
       "id": "tasks-route-repo-list",
       "operation": "tasks.route-repo-list",
       "version": 1,
@@ -19027,7 +19398,7 @@
         }
       ]
     },
-    {
+{
       "id": "linear-select-workspace",
       "operation": "linear.select-workspace-picker",
       "version": 1,

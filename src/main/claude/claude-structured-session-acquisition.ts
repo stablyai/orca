@@ -138,7 +138,7 @@ export async function acquireClaudeSession({
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId,
     prompts,
-    currentTurnId: () => liveSession?.activeTurnId ?? null,
+    currentTurnId: () => translator?.currentTurnId ?? null,
     emit: (event) =>
       callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
   })

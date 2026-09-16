@@ -70,16 +70,13 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // defect with its own fix and re-record, not something this migration may quietly repair.
   { file: 'app/terminal-settings.tsx', references: 3 },
 
-  // src/components/ — shared widgets that fetch their own data. The New Workspace drawer's
-  // execution target, setup hook, runtime context and Codex capability probe migrated in step 4:
-  // see new-workspace-operations.ts, codex-reset-credit-capability-operations.ts, and the SSH and
-  // agent-detection operations in tasks/mobile-workspace-source-operations.ts. Two remain, neither
-  // recordable. codex-reset-credit.ts loads under the module loader; its attempt-journal access
-  // throws on async-storage at call time, before the send, and nothing guards it away. The repo
-  // list fails one module further out: it renders use-last-visited-worktree-repo.ts, whose default
-  // import of async-storage is a property read the loader's proxy refuses.
-  { file: 'src/components/codex-reset-credit.ts', references: 3 },
-  { file: 'src/components/use-new-workspace-repositories.ts', references: 1 },
+  // src/components/ — shared widgets that fetch their own data. Nothing is left here: the New
+  // Workspace drawer's execution target, setup hook, runtime context and Codex capability probe
+  // migrated in step 4, and the last two followed once a scenario could declare the device store
+  // both of them read. See new-workspace-operations.ts,
+  // codex-reset-credit-{capability,consume}-operations.ts, the SSH and agent-detection operations
+  // in tasks/mobile-workspace-source-operations.ts, and the repo.list readers the dialog now shares
+  // in session/mobile-session-read-operations.ts.
 
   // src/host-screen/ — host screen catalog and actions. The repo and label metadata reads, the
   // desktop view-settings mirror and the list's pin, remove and activate mutations migrated in
@@ -92,18 +89,21 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/host-screen/host-screen-overlays.tsx', references: 1 },
 
   // src/notifications/ — push registration and delivery. Registration and unregistration migrated
-  // in step 4; see mobile-push-registration-operations.ts.
+  // in step 4; see mobile-push-registration-operations.ts. Tray reconciliation followed once a
+  // scenario could declare the notification tray and the stored host list it resolves against;
+  // see push-dismissal-operations.ts.
   // Holdout: the unsubscribe is a closure inside a `subscribe` callback, and subscriptions are a
   // later step; the request-only recording runner refuses to open one.
   { file: 'src/notifications/mobile-notifications.ts', references: 1 },
-  // Holdout: the send is gated behind the OS notification tray and the keychain host catalog, and
-  // faking either would record a fiction of device state rather than of the wire.
-  { file: 'src/notifications/push-dismissal-reconciliation.ts', references: 2 },
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
   // the diff-review loaders and the rest of the screen migrated in step 4; see
   // mobile-session-{read,write,launch}-operations.ts, mobile-clipboard-image-operations.ts and
-  // mobile-diff-review-git-operations.ts.
+  // mobile-diff-review-git-operations.ts. The terminal input surface followed: the composed send,
+  // the live keystroke send and the clipboard paste all send through terminal.input-send in
+  // terminal/mobile-terminal-operations.ts, and the accessory's connection lookup reads the repo
+  // list through the new-tab operation. Every holdout below opens or rides a subscription or takes its
+  // method as a parameter, except the gesture-input file, which this PR simply did not cover.
   // Holdout: the method is a parameter. `callAgentSession` takes a method string and a generic
   // result type, and five call sites across two hooks pass their own, plus one inside this module's
   // own mutation wrapper; an operation fixes the method at definition time, so migrating it is a
@@ -117,27 +117,20 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // paging callback, not in an effect, but only the mount effect's `nativeChat.subscribe` arms the
   // offset and generation it pages against — and the request-only runner refuses to open one.
   { file: 'src/session/use-mobile-native-chat-session.ts', references: 1 },
-  // Holdout: unrecorded site, record-first rule. The hook reads the pasteboard and the PTY mode
-  // registry before the send, so a recording would pin device state rather than the wire.
-  { file: 'src/session/use-mobile-session-accessory-selection.ts', references: 1 },
   // Holdout: unrecorded site, record-first rule. The startup effect drives 36 members of the
   // session model including the terminal subscription lifecycle, which is a later step.
   { file: 'src/session/use-mobile-session-startup.ts', references: 2 },
   // Holdout: unrecorded site, record-first rule. The create path subscribes to the terminal it
   // makes, and the request-only runner refuses the subscription.
   { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 2 },
-  // Holdout: unrecorded site, record-first rule. Gesture input is queued against a live PTY mode
-  // and a webview handle; neither exists in the runner.
+  // Holdout: scope only, no recorder gap. The gesture flush reads refs (client, connection state,
+  // PTY modes, the gesture buckets, active handle and tab type), and the clear-buffer ref optional-
+  // chains the webview, so a mount with a null terminal ref records both sends. These 2 refs are
+  // migratable as they stand; they were out of this PR's bucket.
   { file: 'src/session/use-mobile-session-terminal-input.ts', references: 2 },
-  // Holdout: unrecorded site, record-first rule. The send reads the buffered draft store and the
-  // keyboard, both native state a recording would have to invent.
-  { file: 'src/session/use-mobile-session-terminal-send-actions.ts', references: 2 },
   // Holdout: unrecorded site, record-first rule. The display-mode write is gated on an open
   // terminal subscription, which is a later step.
   { file: 'src/session/use-mobile-session-terminal-stream-display.ts', references: 1 },
-  // Holdout: unrecorded site, record-first rule. The paste reads a clipboard image through
-  // expo-image-manipulator and expo-file-system before any send.
-  { file: 'src/session/use-mobile-terminal-paste.ts', references: 1 },
 
   // src/source-control/ — one dynamic dispatcher left; the other 13 files migrated in step 4.
   // Its single reference multiplexes git.commit, git.status, git.upstreamStatus, git.fetch,

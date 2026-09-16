@@ -130,6 +130,11 @@ export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentia
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
+// Why: an older host strips terminal.create's unknown `shell` and answers with a terminal running
+// the host default shell. That reply is indistinguishable from success, so a client asking for a
+// shell must refuse rather than create the wrong one.
+export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
+  'terminal.create-shell-selection.v1' as const
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
@@ -230,6 +235,22 @@ export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
+/**
+ * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
+ * surface, instead of each client routing for itself.
+ *
+ * Negotiated rather than assumed because a client that cannot see it must keep using
+ * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
+ * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
+ * requested, so a host that quietly routed that call to a structured session would hand an old
+ * client a response with no handle and no error.
+ *
+ * Advertising it is a statement that the client understands EITHER outcome, since the host is what
+ * picks: a structured session it can open, or a terminal agent. A client that renders only one of
+ * the two keeps using the surface-specific methods.
+ */
+export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v1' as const
+
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
 export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
@@ -239,7 +260,8 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
 // Electron clients can decode client-hosted page placement; becoming a page
@@ -296,6 +318,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
@@ -333,7 +356,8 @@ export const RUNTIME_CAPABILITIES = [
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
+  NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

@@ -20,8 +20,12 @@ const terminalSendAcceptanceReader: RpcCompatibleReader<
 > = (raw) => rpcReadUnchecked('terminal-send-accepted', isTerminalSendResultAccepted(raw))
 
 /**
- * Two call sites send terminal input this way — the query-reply responder and the live accessory's
- * raw send — and they agree on acceptance, differing only in the params they build.
+ * Five call sites send terminal input this way and all agree on acceptance, differing only in the
+ * params they build: the query-reply responder (`mobile-terminal-query-reply.ts`), the live
+ * accessory's raw send (`terminal-live-accessory-raw-send.ts`), and — in the session screen — the
+ * composed draft send and the live keystroke send (`use-mobile-session-terminal-send-actions.ts`)
+ * plus the clipboard paste (`use-mobile-terminal-paste.ts`). Narrowing `object-result-or-null` here
+ * changes what a lost ack means for all five.
  */
 export const terminalInputSend = bindDeferredRpcOperation(
   defineRpcOperation({

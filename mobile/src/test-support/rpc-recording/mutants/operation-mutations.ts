@@ -166,6 +166,25 @@ export const OPERATION_MUTATIONS = {
       }`,
     after: '      setRuntimeSettings(settingsValue)'
   },
+  // Keeps the composed draft cleared after a send the runtime refused, so the text the user typed
+  // is gone and only a retype recovers it. Anchored on the branch that reads the send verdict, not
+  // on the send, so the step-4 migration of this file does not move it.
+  'terminal-send-refusal-restores-draft': {
+    file: 'use-mobile-session-terminal-send-actions.ts',
+    before: `      if (!accepted) {
+        restoreRejectedDraft()
+      }`,
+    after: `      if (accepted) {
+        restoreRejectedDraft()
+      }`
+  },
+  // Resolves the connection of whichever repo the host listed first instead of the workspace's own,
+  // so a terminal opens against a different machine than the one the workspace lives on.
+  'worktree-connection-first-repo': {
+    file: 'use-mobile-session-accessory-selection.ts',
+    before: 'return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null',
+    after: 'return repos[0]?.connectionId?.trim() || null'
+  },
   // Publishes the settings envelope as the refreshed task runtime settings.
   'task-workspace-envelope': {
     file: 'use-mobile-tasks-workspace-create-actions.tsx',

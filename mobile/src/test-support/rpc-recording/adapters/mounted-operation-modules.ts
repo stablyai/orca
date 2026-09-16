@@ -44,6 +44,7 @@ import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
 import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
 import { sessionScreenTabMountAdapters } from './session-screen-tab-mount-adapters'
 import { sessionTabMountAdapters } from './session-tab-mount-adapters'
+import { sessionTerminalInputMountAdapters } from './session-terminal-input-mount-adapters'
 import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
 import { sourceControlMountAdapters } from './source-control-mount-adapters'
 import { structuredAgentLaunchMountAdapters } from './structured-agent-launch-mount-adapters'
@@ -138,6 +139,10 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   },
   { source: 'session-screen-tab-mount-adapters.ts', mounts: sessionScreenTabMountAdapters },
   { source: 'session-tab-mount-adapters.ts', mounts: sessionTabMountAdapters },
+  {
+    source: 'session-terminal-input-mount-adapters.ts',
+    mounts: sessionTerminalInputMountAdapters
+  },
   {
     source: 'settings-mount-adapters.ts',
     mounts: settingsMountAdapters,

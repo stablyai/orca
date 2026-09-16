@@ -48,7 +48,7 @@ describe('Claude structured dispatch admission', () => {
         clientMessageId: 'client-2',
         providerIdentity: { provider: 'claude', sessionId: 'provider-session', uuid: queuedUuid }
       })
-      expect(session.activeTurnId).toBe(queuedUuid)
+      expect(session.dispatchWaiters).toHaveLength(0)
     } finally {
       vi.useRealTimers()
     }
