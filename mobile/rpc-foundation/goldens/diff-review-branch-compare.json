@@ -3,7 +3,7 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
@@ -18,16 +18,15 @@
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
       "sent": 2
     },
-    "229fc359ecb7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "Committed changes response was invalid",
+    "347ad3543d28": {
+      "branchCompare": {
+        "error": "The host sent a reply this app could not read (git.branchCompare)",
         "result": {
           "$rpc": "null"
         }
-      }
+      },
+      "diff": "unloaded",
+      "snapshot": "unloaded"
     },
     "632a4405f3fe": {
       "name": "repo.list#2",
@@ -143,6 +142,17 @@
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
       "sent": 3
     },
+    "75328af2b182": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "The host sent a reply this app could not read (git.branchCompare)",
+        "result": {
+          "$rpc": "null"
+        }
+      }
+    },
     "768c9c0dbef7": {
       "name": "repo.list#2",
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
@@ -226,16 +236,6 @@
     },
     "9f5d0ac26269": {
       "branchCompare": {
-        "result": {
-          "$rpc": "null"
-        }
-      },
-      "diff": "unloaded",
-      "snapshot": "unloaded"
-    },
-    "a3e1aa9bf7e3": {
-      "branchCompare": {
-        "error": "Committed changes response was invalid",
         "result": {
           "$rpc": "null"
         }
@@ -338,9 +338,9 @@
           ],
           "settlements": {
             "unavailable": "ef9013648cfb",
-            "invalid": "229fc359ecb7"
+            "invalid": "75328af2b182"
           },
-          "state": "a3e1aa9bf7e3",
+          "state": "347ad3543d28",
           "effects": []
         }
       }

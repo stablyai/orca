@@ -3,7 +3,7 @@
   "family": "session.review-branch-diff",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
@@ -169,16 +169,6 @@
       },
       "snapshot": "unloaded"
     },
-    "55227363ca22": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Diff response was invalid",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "67cae2e16a3b": {
       "name": "git.branchDiff#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}",
@@ -284,6 +274,16 @@
         "category": "Error",
         "message": "transport failure",
         "isRpcDeliveryUnknown": true
+      }
+    },
+    "ac85149368b6": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (git.branchDiff)",
+        "isRpcDeliveryUnknown": false
       }
     },
     "b948e8307e81": {
@@ -585,7 +585,7 @@
           "sender": ["fa38c3c55a35"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22"
+            "branch": "ac85149368b6"
           },
           "state": "e39817462870",
           "effects": []
@@ -597,7 +597,7 @@
           "sender": ["fa38c3c55a35"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22",
+            "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
           },
           "state": "e39817462870",
@@ -610,7 +610,7 @@
           "sender": ["cdde2fa29d08"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22"
+            "branch": "ac85149368b6"
           },
           "state": "e39817462870",
           "effects": []
@@ -622,7 +622,7 @@
           "sender": ["cdde2fa29d08"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22",
+            "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
           },
           "state": "e39817462870",
@@ -635,7 +635,7 @@
           "sender": ["3ff39593f995"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22"
+            "branch": "ac85149368b6"
           },
           "state": "e39817462870",
           "effects": []
@@ -647,7 +647,7 @@
           "sender": ["3ff39593f995"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22",
+            "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
           },
           "state": "e39817462870",
@@ -660,7 +660,7 @@
           "sender": ["9650a1849626"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22"
+            "branch": "ac85149368b6"
           },
           "state": "e39817462870",
           "effects": []
@@ -672,7 +672,7 @@
           "sender": ["9650a1849626"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22",
+            "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
           },
           "state": "e39817462870",
@@ -685,7 +685,7 @@
           "sender": ["d0c1438ea96a"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22"
+            "branch": "ac85149368b6"
           },
           "state": "e39817462870",
           "effects": []
@@ -697,7 +697,7 @@
           "sender": ["d0c1438ea96a"],
           "payloads": ["67cae2e16a3b"],
           "settlements": {
-            "branch": "55227363ca22",
+            "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
           },
           "state": "e39817462870",

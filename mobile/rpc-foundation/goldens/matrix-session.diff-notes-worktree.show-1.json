@@ -3,7 +3,7 @@
   "family": "session.diff-notes",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
@@ -45,15 +45,6 @@
           }
         }
       }
-    },
-    "2aee81f6fe31": {
-      "name": "unhandled-rejection",
-      "value": {
-        "category": "TypeError",
-        "isRpcDeliveryUnknown": false,
-        "message": "Cannot read properties of undefined (reading 'worktree')"
-      },
-      "sent": 1
     },
     "39356bf6300e": {
       "name": "worktree.show#1",
@@ -327,15 +318,6 @@
         }
       }
     },
-    "ccfb4b1d3cd2": {
-      "name": "unhandled-rejection",
-      "value": {
-        "category": "TypeError",
-        "isRpcDeliveryUnknown": false,
-        "message": "Cannot read properties of null (reading 'worktree')"
-      },
-      "sent": 1
-    },
     "d122d6f393f0": {
       "name": "worktree.show#1",
       "args": [
@@ -481,6 +463,16 @@
           }
         }
       }
+    },
+    "fd464946dc8c": {
+      "name": "unhandled-rejection",
+      "value": {
+        "category": "RpcIncompatibleReplyError",
+        "code": "incompatible_reply",
+        "isRpcDeliveryUnknown": false,
+        "message": "The host sent a reply this app could not read (worktree.show)"
+      },
+      "sent": 1
     }
   },
   "recording": {
@@ -507,7 +499,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "432aeb4f1709",
-          "effects": ["2aee81f6fe31"]
+          "effects": ["fd464946dc8c"]
         }
       },
       {
@@ -519,7 +511,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "432aeb4f1709",
-          "effects": ["ccfb4b1d3cd2"]
+          "effects": ["fd464946dc8c"]
         }
       },
       {

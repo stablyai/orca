@@ -3,7 +3,7 @@
   "family": "aiVault.resume-launch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
@@ -115,6 +115,16 @@
           "id": "frame-2",
           "ok": true
         }
+      }
+    },
+    "1953443d1eef": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (terminal.send)",
+        "isRpcDeliveryUnknown": false
       }
     },
     "3253374e68e6": {
@@ -408,6 +418,10 @@
         "isRpcDeliveryUnknown": true
       }
     },
+    "aae8857ab586": {
+      "failure": "The host sent a reply this app could not read (terminal.send)",
+      "launched": "unlaunched"
+    },
     "b948e8307e81": {
       "status": "rejected",
       "startedAt": 0,
@@ -569,9 +583,9 @@
           "sender": ["6b1e36abce6b", "17ee408f637d"],
           "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
-            "full": "6e79da536ca9"
+            "full": "1953443d1eef"
           },
-          "state": "400d946a183d",
+          "state": "aae8857ab586",
           "effects": []
         }
       },
@@ -581,9 +595,9 @@
           "sender": ["6b1e36abce6b", "335573146591"],
           "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
-            "full": "6e79da536ca9"
+            "full": "1953443d1eef"
           },
-          "state": "400d946a183d",
+          "state": "aae8857ab586",
           "effects": []
         }
       },

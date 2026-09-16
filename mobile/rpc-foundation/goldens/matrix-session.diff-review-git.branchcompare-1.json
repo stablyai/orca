@@ -3,7 +3,7 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
@@ -13,6 +13,88 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "00375023b67b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "branchError": "The host sent a reply this app could not read (git.branchCompare)",
+        "comments": [],
+        "kind": "ready",
+        "reviewState": {
+          "completedAt": {
+            "$rpc": "undefined"
+          },
+          "files": {
+            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
+              "filePath": "src/app.ts",
+              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "unstaged"
+            }
+          },
+          "updatedAt": 1767225600000,
+          "version": 1
+        },
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
     "16a366990dce": {
       "branchCompare": "unloaded",
       "diff": "unloaded",
@@ -823,87 +905,6 @@
         }
       }
     },
-    "99f54eca3041": {
-      "branchCompare": "unloaded",
-      "diff": "unloaded",
-      "snapshot": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "branchError": "Committed changes response was invalid",
-        "comments": [],
-        "kind": "ready",
-        "reviewState": {
-          "completedAt": {
-            "$rpc": "undefined"
-          },
-          "files": {
-            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
-              "filePath": "src/app.ts",
-              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
-              "lastOpenedAt": {
-                "$rpc": "undefined"
-              },
-              "lastSeenDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "reviewDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "reviewedAt": {
-                "$rpc": "undefined"
-              },
-              "scope": "unstaged"
-            }
-          },
-          "updatedAt": 1767225600000,
-          "version": 1
-        },
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": 3,
-              "area": "unstaged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            }
-          ],
-          "head": "head-sha-1",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
-    },
     "a2897d26f26b": {
       "name": "git.branchCompare#1",
       "args": [
@@ -1002,88 +1003,6 @@
           "ok": true,
           "result": {
             "error": "refused"
-          }
-        }
-      }
-    },
-    "b639d96487b8": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "branchError": "Committed changes response was invalid",
-        "comments": [],
-        "kind": "ready",
-        "reviewState": {
-          "completedAt": {
-            "$rpc": "undefined"
-          },
-          "files": {
-            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
-              "filePath": "src/app.ts",
-              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
-              "lastOpenedAt": {
-                "$rpc": "undefined"
-              },
-              "lastSeenDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "reviewDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "reviewedAt": {
-                "$rpc": "undefined"
-              },
-              "scope": "unstaged"
-            }
-          },
-          "updatedAt": 1767225600000,
-          "version": 1
-        },
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": 3,
-              "area": "unstaged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            }
-          ],
-          "head": "head-sha-1",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
           }
         }
       }
@@ -1569,6 +1488,87 @@
         }
       }
     },
+    "f6189707f45d": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "branchError": "The host sent a reply this app could not read (git.branchCompare)",
+        "comments": [],
+        "kind": "ready",
+        "reviewState": {
+          "completedAt": {
+            "$rpc": "undefined"
+          },
+          "files": {
+            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
+              "filePath": "src/app.ts",
+              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "unstaged"
+            }
+          },
+          "updatedAt": 1767225600000,
+          "version": 1
+        },
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
     "f880a1519497": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -1919,9 +1919,9 @@
             "231aaf164318"
           ],
           "settlements": {
-            "snapshot": "b639d96487b8"
+            "snapshot": "00375023b67b"
           },
-          "state": "99f54eca3041",
+          "state": "f6189707f45d",
           "effects": []
         }
       },
@@ -1943,9 +1943,9 @@
             "231aaf164318"
           ],
           "settlements": {
-            "snapshot": "b639d96487b8"
+            "snapshot": "00375023b67b"
           },
-          "state": "99f54eca3041",
+          "state": "f6189707f45d",
           "effects": []
         }
       },
@@ -1967,9 +1967,9 @@
             "231aaf164318"
           ],
           "settlements": {
-            "snapshot": "b639d96487b8"
+            "snapshot": "00375023b67b"
           },
-          "state": "99f54eca3041",
+          "state": "f6189707f45d",
           "effects": []
         }
       },
@@ -1991,9 +1991,9 @@
             "231aaf164318"
           ],
           "settlements": {
-            "snapshot": "b639d96487b8"
+            "snapshot": "00375023b67b"
           },
-          "state": "99f54eca3041",
+          "state": "f6189707f45d",
           "effects": []
         }
       },
@@ -2015,9 +2015,9 @@
             "231aaf164318"
           ],
           "settlements": {
-            "snapshot": "b639d96487b8"
+            "snapshot": "00375023b67b"
           },
-          "state": "99f54eca3041",
+          "state": "f6189707f45d",
           "effects": []
         }
       },

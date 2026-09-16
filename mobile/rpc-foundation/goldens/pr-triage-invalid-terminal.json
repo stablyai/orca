@@ -3,7 +3,7 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
@@ -18,13 +18,13 @@
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
       "sent": 1
     },
-    "681fc4d59b92": {
+    "478ad4afe83e": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
         "category": "Error",
-        "message": "Created terminal response was invalid",
+        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)",
         "isRpcDeliveryUnknown": false
       }
     },
@@ -79,7 +79,7 @@
           "sender": ["80e637504768"],
           "payloads": ["39a17efe1de6"],
           "settlements": {
-            "launch": "681fc4d59b92"
+            "launch": "478ad4afe83e"
           },
           "state": "a4273b38df83",
           "effects": []

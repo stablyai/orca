@@ -3,7 +3,7 @@
   "family": "settings-agent-read",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",
@@ -105,16 +105,6 @@
         "startedAt": 0
       }
     },
-    "2381a3fe154e": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'repos')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "26accd69bc48": {
       "name": "repo.list#1",
       "args": [
@@ -177,16 +167,6 @@
       "error": {
         "category": "Error",
         "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "37a374f87be0": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "worktree_repo_not_found",
         "isRpcDeliveryUnknown": false
       }
     },
@@ -258,16 +238,6 @@
             }
           }
         }
-      }
-    },
-    "63dfbb6942f2": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'repos')",
-        "isRpcDeliveryUnknown": false
       }
     },
     "6e5c6593dad8": {
@@ -530,6 +500,17 @@
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
       "sent": 2
     },
+    "d8654a93cec4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (repo.list)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
     "e341bd05e614": {
       "name": "repo.list#1",
       "args": [
@@ -647,7 +628,7 @@
           "sender": ["2ebe4d776f9b", "554718767f5a"],
           "payloads": ["fd387fe4211d", "d0694611a403"],
           "settlements": {
-            "load": "2381a3fe154e"
+            "load": "d8654a93cec4"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -659,7 +640,7 @@
           "sender": ["38e790fd9e9c", "554718767f5a"],
           "payloads": ["fd387fe4211d", "d0694611a403"],
           "settlements": {
-            "load": "63dfbb6942f2"
+            "load": "d8654a93cec4"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -671,7 +652,7 @@
           "sender": ["06b63e0d9986", "554718767f5a"],
           "payloads": ["fd387fe4211d", "d0694611a403"],
           "settlements": {
-            "load": "37a374f87be0"
+            "load": "d8654a93cec4"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -683,7 +664,7 @@
           "sender": ["f96e83d33565", "554718767f5a"],
           "payloads": ["fd387fe4211d", "d0694611a403"],
           "settlements": {
-            "load": "37a374f87be0"
+            "load": "d8654a93cec4"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -695,7 +676,7 @@
           "sender": ["9d3fa0db2665", "554718767f5a"],
           "payloads": ["fd387fe4211d", "d0694611a403"],
           "settlements": {
-            "load": "37a374f87be0"
+            "load": "d8654a93cec4"
           },
           "state": "44136fa355b3",
           "effects": []

@@ -3,7 +3,7 @@
   "family": "session.markdown-save",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
@@ -22,38 +22,6 @@
           "isDirty": true,
           "localContent": "# b",
           "saveError": "outer refused",
-          "saving": false,
-          "status": "ready"
-        }
-      }
-    },
-    "20d209219e76": {
-      "markdown": {
-        "tab-md": {
-          "baseVersion": {
-            "$rpc": "undefined"
-          },
-          "content": {
-            "$rpc": "undefined"
-          },
-          "editable": true,
-          "isDirty": false,
-          "localContent": {
-            "$rpc": "undefined"
-          },
-          "status": "ready"
-        }
-      }
-    },
-    "2853dae4d5f0": {
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "v1",
-          "content": "# a",
-          "editable": true,
-          "isDirty": true,
-          "localContent": "# b",
-          "saveError": "Cannot read properties of undefined (reading 'content')",
           "saving": false,
           "status": "ready"
         }
@@ -144,20 +112,6 @@
             },
             "ok": false
           }
-        }
-      }
-    },
-    "6808229bc6b9": {
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "v1",
-          "content": "# a",
-          "editable": true,
-          "isDirty": true,
-          "localContent": "# b",
-          "saveError": "Cannot read properties of null (reading 'content')",
-          "saving": false,
-          "status": "ready"
         }
       }
     },
@@ -463,6 +417,20 @@
         }
       }
     },
+    "dd571f3b0f9c": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "The host sent a reply this app could not read (markdown.saveTab)",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
     "dec169f24f21": {
       "name": "markdown.saveTab#1",
       "args": [
@@ -569,7 +537,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "2853dae4d5f0",
+          "state": "dd571f3b0f9c",
           "effects": []
         }
       },
@@ -581,7 +549,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "6808229bc6b9",
+          "state": "dd571f3b0f9c",
           "effects": []
         }
       },
@@ -593,8 +561,8 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "20d209219e76",
-          "effects": ["976e04874a1e"]
+          "state": "dd571f3b0f9c",
+          "effects": []
         }
       },
       {
@@ -605,8 +573,8 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "20d209219e76",
-          "effects": ["976e04874a1e"]
+          "state": "dd571f3b0f9c",
+          "effects": []
         }
       },
       {
@@ -617,8 +585,8 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "20d209219e76",
-          "effects": ["976e04874a1e"]
+          "state": "dd571f3b0f9c",
+          "effects": []
         }
       },
       {

@@ -3,7 +3,7 @@
   "family": "aiVault.resume-launch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
@@ -137,9 +137,15 @@
         "title": "codex"
       }
     },
-    "432332c9740e": {
-      "failure": "Created terminal response was invalid",
-      "launched": "unlaunched"
+    "478ad4afe83e": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)",
+        "isRpcDeliveryUnknown": false
+      }
     },
     "495d8519301e": {
       "name": "session.tabs.createTerminal#1",
@@ -277,16 +283,6 @@
         }
       }
     },
-    "681fc4d59b92": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Created terminal response was invalid",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "6b1e36abce6b": {
       "name": "session.tabs.createTerminal#1",
       "args": [
@@ -383,6 +379,10 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "84a5c9365ee8": {
+      "failure": "The host sent a reply this app could not read (session.tabs.createTerminal)",
+      "launched": "unlaunched"
     },
     "92613ac6d4fa": {
       "name": "session.tabs.createTerminal#1",
@@ -653,9 +653,9 @@
           "sender": ["671d748c842b"],
           "payloads": ["495d8519301e"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -665,9 +665,9 @@
           "sender": ["d34341547b51"],
           "payloads": ["495d8519301e"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -677,9 +677,9 @@
           "sender": ["3ad18553135a"],
           "payloads": ["495d8519301e"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -689,9 +689,9 @@
           "sender": ["92613ac6d4fa"],
           "payloads": ["495d8519301e"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -701,9 +701,9 @@
           "sender": ["4ee71a589941"],
           "payloads": ["495d8519301e"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },

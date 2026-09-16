@@ -3,7 +3,7 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
@@ -83,6 +83,16 @@
           "id": "frame-2",
           "ok": false
         }
+      }
+    },
+    "1953443d1eef": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (terminal.send)",
+        "isRpcDeliveryUnknown": false
       }
     },
     "301d6e3945b3": {
@@ -581,9 +591,9 @@
           "sender": ["d0f04fba35ce", "320e153a96c9"],
           "payloads": ["39a17efe1de6", "c286eacee37b"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "1953443d1eef"
           },
-          "state": "fe1fe746e77a",
+          "state": "a4273b38df83",
           "effects": []
         }
       },
@@ -593,9 +603,9 @@
           "sender": ["d0f04fba35ce", "fa878dff5c9f"],
           "payloads": ["39a17efe1de6", "c286eacee37b"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "1953443d1eef"
           },
-          "state": "fe1fe746e77a",
+          "state": "a4273b38df83",
           "effects": []
         }
       },

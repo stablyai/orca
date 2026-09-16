@@ -3,7 +3,7 @@
   "family": "session.tab-documents",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
@@ -298,31 +298,6 @@
         }
       }
     },
-    "999d7e43d33c": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": {
-            "$rpc": "undefined"
-          },
-          "content": {
-            "$rpc": "undefined"
-          },
-          "editable": false,
-          "isDirty": false,
-          "localContent": {
-            "$rpc": "undefined"
-          },
-          "readOnlyReason": {
-            "$rpc": "undefined"
-          },
-          "stale": {
-            "$rpc": "undefined"
-          },
-          "status": "ready"
-        }
-      }
-    },
     "af5666510c34": {
       "name": "markdown.readTab#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}",
@@ -502,7 +477,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "999d7e43d33c",
+          "state": "877720375363",
           "effects": []
         }
       },
@@ -514,7 +489,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "999d7e43d33c",
+          "state": "877720375363",
           "effects": []
         }
       },
@@ -526,7 +501,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "999d7e43d33c",
+          "state": "877720375363",
           "effects": []
         }
       },

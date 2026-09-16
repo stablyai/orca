@@ -3,7 +3,7 @@
   "family": "session.review-file-diff",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
@@ -315,16 +315,6 @@
         }
       }
     },
-    "55227363ca22": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Diff response was invalid",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "57953e07a4d3": {
       "name": "git.diff#1",
       "args": [
@@ -414,6 +404,16 @@
         "kind": "too-large"
       },
       "snapshot": "unloaded"
+    },
+    "7753343578da": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (git.diff)",
+        "isRpcDeliveryUnknown": false
+      }
     },
     "84090dfad90d": {
       "status": "fulfilled",
@@ -622,7 +622,7 @@
           "settlements": {
             "binary": "84090dfad90d",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -634,7 +634,7 @@
           "sender": ["2805813860a5"],
           "payloads": ["414ef6b1967c"],
           "settlements": {
-            "binary": "55227363ca22"
+            "binary": "7753343578da"
           },
           "state": "e39817462870",
           "effects": []
@@ -646,7 +646,7 @@
           "sender": ["2805813860a5", "411c5ed8537e"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158"
           },
           "state": "717bd1fbc163",
@@ -659,9 +659,9 @@
           "sender": ["2805813860a5", "411c5ed8537e", "66c8c0206a53"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9", "2eee9b17f40e"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -673,7 +673,7 @@
           "sender": ["a1c727f614c5"],
           "payloads": ["414ef6b1967c"],
           "settlements": {
-            "binary": "55227363ca22"
+            "binary": "7753343578da"
           },
           "state": "e39817462870",
           "effects": []
@@ -685,7 +685,7 @@
           "sender": ["a1c727f614c5", "411c5ed8537e"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158"
           },
           "state": "717bd1fbc163",
@@ -698,9 +698,9 @@
           "sender": ["a1c727f614c5", "411c5ed8537e", "66c8c0206a53"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9", "2eee9b17f40e"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -712,7 +712,7 @@
           "sender": ["1ea4a68818e6"],
           "payloads": ["414ef6b1967c"],
           "settlements": {
-            "binary": "55227363ca22"
+            "binary": "7753343578da"
           },
           "state": "e39817462870",
           "effects": []
@@ -724,7 +724,7 @@
           "sender": ["1ea4a68818e6", "411c5ed8537e"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158"
           },
           "state": "717bd1fbc163",
@@ -737,9 +737,9 @@
           "sender": ["1ea4a68818e6", "411c5ed8537e", "66c8c0206a53"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9", "2eee9b17f40e"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -751,7 +751,7 @@
           "sender": ["0582d13e9f8e"],
           "payloads": ["414ef6b1967c"],
           "settlements": {
-            "binary": "55227363ca22"
+            "binary": "7753343578da"
           },
           "state": "e39817462870",
           "effects": []
@@ -763,7 +763,7 @@
           "sender": ["0582d13e9f8e", "411c5ed8537e"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158"
           },
           "state": "717bd1fbc163",
@@ -776,9 +776,9 @@
           "sender": ["0582d13e9f8e", "411c5ed8537e", "66c8c0206a53"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9", "2eee9b17f40e"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -790,7 +790,7 @@
           "sender": ["da561ce5d327"],
           "payloads": ["414ef6b1967c"],
           "settlements": {
-            "binary": "55227363ca22"
+            "binary": "7753343578da"
           },
           "state": "e39817462870",
           "effects": []
@@ -802,7 +802,7 @@
           "sender": ["da561ce5d327", "411c5ed8537e"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158"
           },
           "state": "717bd1fbc163",
@@ -815,9 +815,9 @@
           "sender": ["da561ce5d327", "411c5ed8537e", "66c8c0206a53"],
           "payloads": ["414ef6b1967c", "3a70a3afc2d9", "2eee9b17f40e"],
           "settlements": {
-            "binary": "55227363ca22",
+            "binary": "7753343578da",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -856,7 +856,7 @@
           "settlements": {
             "binary": "32a7c0ae7918",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -895,7 +895,7 @@
           "settlements": {
             "binary": "67daf7391fee",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -934,7 +934,7 @@
           "settlements": {
             "binary": "b948e8307e81",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -973,7 +973,7 @@
           "settlements": {
             "binary": "a947768bc0ed",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []
@@ -1012,7 +1012,7 @@
           "settlements": {
             "binary": "c7584e82c72f",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []

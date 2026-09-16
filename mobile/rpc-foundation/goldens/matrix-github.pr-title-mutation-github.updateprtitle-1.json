@@ -3,7 +3,7 @@
   "family": "github.pr-title-mutation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
@@ -139,15 +139,15 @@
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}",
       "sent": 1
     },
+    "323a83575e15": {
+      "title": {
+        "error": "The host sent a reply this app could not read (github.updatePRTitle)",
+        "ok": false
+      }
+    },
     "578bc8950993": {
       "title": {
         "ok": true
-      }
-    },
-    "5ff779cd8c84": {
-      "title": {
-        "error": "Failed to update title.",
-        "ok": false
       }
     },
     "63139c527e1e": {
@@ -184,15 +184,6 @@
           "id": "frame-1",
           "ok": false
         }
-      }
-    },
-    "6e9fb05124f5": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "Failed to update title.",
-        "ok": false
       }
     },
     "732177caffde": {
@@ -303,6 +294,15 @@
             "error": "refused"
           }
         }
+      }
+    },
+    "9e6b9a9a2771": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "The host sent a reply this app could not read (github.updatePRTitle)",
+        "ok": false
       }
     },
     "a197c20578aa": {
@@ -511,9 +511,9 @@
           "sender": ["2d92f601524b"],
           "payloads": ["3235254d283e"],
           "settlements": {
-            "title": "6e9fb05124f5"
+            "title": "9e6b9a9a2771"
           },
-          "state": "5ff779cd8c84",
+          "state": "323a83575e15",
           "effects": []
         }
       },
@@ -523,9 +523,9 @@
           "sender": ["ec52831dce6f"],
           "payloads": ["3235254d283e"],
           "settlements": {
-            "title": "6e9fb05124f5"
+            "title": "9e6b9a9a2771"
           },
-          "state": "5ff779cd8c84",
+          "state": "323a83575e15",
           "effects": []
         }
       },
@@ -535,9 +535,9 @@
           "sender": ["98cad060a5b3"],
           "payloads": ["3235254d283e"],
           "settlements": {
-            "title": "6e9fb05124f5"
+            "title": "9e6b9a9a2771"
           },
-          "state": "5ff779cd8c84",
+          "state": "323a83575e15",
           "effects": []
         }
       },
@@ -547,9 +547,9 @@
           "sender": ["d8959e64c99e"],
           "payloads": ["3235254d283e"],
           "settlements": {
-            "title": "6e9fb05124f5"
+            "title": "9e6b9a9a2771"
           },
-          "state": "5ff779cd8c84",
+          "state": "323a83575e15",
           "effects": []
         }
       },
@@ -559,9 +559,9 @@
           "sender": ["17e9a253f62d"],
           "payloads": ["3235254d283e"],
           "settlements": {
-            "title": "6e9fb05124f5"
+            "title": "9e6b9a9a2771"
           },
-          "state": "5ff779cd8c84",
+          "state": "323a83575e15",
           "effects": []
         }
       },

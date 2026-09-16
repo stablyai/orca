@@ -3,7 +3,7 @@
   "family": "clipboard.image-upload",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0076104a780d": {
-      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined.",
-      "path": "unsaved"
-    },
     "10eb844da0d9": {
       "name": "clipboard.startImageUpload#1",
       "args": [
@@ -86,16 +82,6 @@
         }
       }
     },
-    "2360f0a18466": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null.",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "32a7c0ae7918": {
       "status": "rejected",
       "startedAt": 0,
@@ -109,16 +95,6 @@
     "350e6f28e830": {
       "failure": "outer refused",
       "path": "unsaved"
-    },
-    "443dd7aae7aa": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined.",
-        "isRpcDeliveryUnknown": false
-      }
     },
     "5884da2bfdb4": {
       "name": "clipboard.startImageUpload#1",
@@ -224,6 +200,10 @@
           }
         }
       }
+    },
+    "6f274c9f1f1c": {
+      "failure": "The host sent a reply this app could not read (clipboard.startImageUpload)",
+      "path": "unsaved"
     },
     "6f4464fb363d": {
       "name": "clipboard.startImageUpload#1",
@@ -390,10 +370,6 @@
       "status": "pending",
       "startedAt": 0
     },
-    "9de89efe4e9a": {
-      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null.",
-      "path": "unsaved"
-    },
     "9dea35e9f187": {
       "name": "clipboard.startImageUpload#1",
       "args": [
@@ -428,11 +404,6 @@
           }
         }
       }
-    },
-    "a8cff4297929": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
-      "sent": 2
     },
     "a947768bc0ed": {
       "status": "rejected",
@@ -474,6 +445,17 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
+      }
+    },
+    "bf4d693e3e27": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (clipboard.startImageUpload)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
       }
     },
     "c7584e82c72f": {
@@ -567,35 +549,6 @@
         "message": "",
         "isRpcDeliveryUnknown": false
       }
-    },
-    "f61098e90dc1": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.appendImageUploadChunk"
-        },
-        {
-          "name": "params",
-          "value": {
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "offset": 0,
-            "uploadId": {
-              "$rpc": "undefined"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
     }
   },
   "recording": {
@@ -619,9 +572,9 @@
           "sender": ["873e759fa035"],
           "payloads": ["8dfd1f053efc"],
           "settlements": {
-            "remote": "443dd7aae7aa"
+            "remote": "bf4d693e3e27"
           },
-          "state": "0076104a780d",
+          "state": "6f274c9f1f1c",
           "effects": []
         }
       },
@@ -631,45 +584,45 @@
           "sender": ["10eb844da0d9"],
           "payloads": ["8dfd1f053efc"],
           "settlements": {
-            "remote": "2360f0a18466"
+            "remote": "bf4d693e3e27"
           },
-          "state": "9de89efe4e9a",
+          "state": "6f274c9f1f1c",
           "effects": []
         }
       },
       {
         "id": "clipboard-image-upload-single-frame-fallback.inner-ok-missing:fell-back",
         "observation": {
-          "sender": ["d8eb6923f5c3", "f61098e90dc1"],
-          "payloads": ["8dfd1f053efc", "a8cff4297929"],
+          "sender": ["d8eb6923f5c3"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
-            "remote": "9270aeb7d9c6"
+            "remote": "bf4d693e3e27"
           },
-          "state": "e8f2e67001e9",
+          "state": "6f274c9f1f1c",
           "effects": []
         }
       },
       {
         "id": "clipboard-image-upload-single-frame-fallback.inner-false-string-error:fell-back",
         "observation": {
-          "sender": ["9dea35e9f187", "f61098e90dc1"],
-          "payloads": ["8dfd1f053efc", "a8cff4297929"],
+          "sender": ["9dea35e9f187"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
-            "remote": "9270aeb7d9c6"
+            "remote": "bf4d693e3e27"
           },
-          "state": "e8f2e67001e9",
+          "state": "6f274c9f1f1c",
           "effects": []
         }
       },
       {
         "id": "clipboard-image-upload-single-frame-fallback.inner-false-object-error:fell-back",
         "observation": {
-          "sender": ["64cf59fb95a9", "f61098e90dc1"],
-          "payloads": ["8dfd1f053efc", "a8cff4297929"],
+          "sender": ["64cf59fb95a9"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
-            "remote": "9270aeb7d9c6"
+            "remote": "bf4d693e3e27"
           },
-          "state": "e8f2e67001e9",
+          "state": "6f274c9f1f1c",
           "effects": []
         }
       },

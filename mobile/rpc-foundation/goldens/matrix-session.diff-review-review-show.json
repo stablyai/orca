@@ -3,7 +3,7 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
@@ -13,6 +13,16 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0624baf0b1a6": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (worktree.show)",
+        "isRpcDeliveryUnknown": false
+      }
+    },
     "0c0e2524ba53": {
       "name": "worktree.show#2",
       "args": [
@@ -977,9 +987,9 @@
             "231aaf164318"
           ],
           "settlements": {
-            "snapshot": "f880a1519497"
+            "snapshot": "0624baf0b1a6"
           },
-          "state": "e13943e37fc3",
+          "state": "e39817462870",
           "effects": []
         }
       },
@@ -1001,9 +1011,9 @@
             "231aaf164318"
           ],
           "settlements": {
-            "snapshot": "f880a1519497"
+            "snapshot": "0624baf0b1a6"
           },
-          "state": "e13943e37fc3",
+          "state": "e39817462870",
           "effects": []
         }
       },

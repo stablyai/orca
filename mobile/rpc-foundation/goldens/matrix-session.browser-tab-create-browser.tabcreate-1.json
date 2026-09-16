@@ -3,7 +3,7 @@
   "family": "session.browser-tab-create",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
@@ -48,13 +48,6 @@
         }
       }
     },
-    "0f00f147f15b": {
-      "name": "toast",
-      "value": {
-        "message": "Cannot read properties of undefined (reading 'browserPageId')"
-      },
-      "sent": 1
-    },
     "134e6545bfe5": {
       "createError": "transport failure",
       "creatingBrowser": false,
@@ -62,6 +55,13 @@
       "pendingBrowserFocusPageId": {
         "$rpc": "null"
       }
+    },
+    "337484f016f1": {
+      "name": "toast",
+      "value": {
+        "message": "The host sent a reply this app could not read (browser.tabCreate)"
+      },
+      "sent": 1
     },
     "34f8f43bb20d": {
       "name": "browser.tabCreate#1",
@@ -99,14 +99,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "3e99c39467ab": {
-      "createError": "Cannot read properties of undefined (reading 'browserPageId')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
       }
     },
     "3eefc1d18e90": {
@@ -320,12 +312,13 @@
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}",
       "sent": 1
     },
-    "b6dd9c0d3c75": {
-      "name": "toast",
-      "value": {
-        "message": "Cannot read properties of null (reading 'browserPageId')"
-      },
-      "sent": 1
+    "b562af7f460c": {
+      "createError": "The host sent a reply this app could not read (browser.tabCreate)",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
     },
     "bf4b67f33eaf": {
       "name": "browser.tabCreate#1",
@@ -452,14 +445,6 @@
         }
       }
     },
-    "e38f04f0e3d3": {
-      "createError": "Cannot read properties of null (reading 'browserPageId')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
     "e6b6cf30c6ee": {
       "createError": "Unknown method",
       "creatingBrowser": false,
@@ -545,8 +530,8 @@
           "settlements": {
             "browser": "7ed3d39f0607"
           },
-          "state": "3e99c39467ab",
-          "effects": ["0f00f147f15b"]
+          "state": "b562af7f460c",
+          "effects": ["337484f016f1"]
         }
       },
       {
@@ -557,8 +542,8 @@
           "settlements": {
             "browser": "7ed3d39f0607"
           },
-          "state": "e38f04f0e3d3",
-          "effects": ["b6dd9c0d3c75"]
+          "state": "b562af7f460c",
+          "effects": ["337484f016f1"]
         }
       },
       {

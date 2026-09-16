@@ -3,7 +3,7 @@
   "family": "settings.new-tab-local-agents",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",
@@ -107,12 +107,6 @@
           "ok": true
         }
       }
-    },
-    "25716369cd8f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": []
     },
     "26accd69bc48": {
       "name": "repo.list#1",
@@ -253,16 +247,6 @@
         }
       }
     },
-    "5651342f395d": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "detectedAgents is not iterable",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "70d128c20ae4": {
       "name": "preflight.detectAgents#1",
       "args": [
@@ -333,6 +317,17 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "98b298cb3858": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (preflight.detectAgents)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
     },
     "a4f215e7dc86": {
       "name": "preflight.detectAgents#1",
@@ -635,7 +630,7 @@
           "sender": ["0f1ed2b7a695", "554718767f5a", "1276b51224e0"],
           "payloads": ["fd387fe4211d", "d0694611a403", "c067848d8ca8"],
           "settlements": {
-            "load": "25716369cd8f"
+            "load": "98b298cb3858"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -647,7 +642,7 @@
           "sender": ["0f1ed2b7a695", "554718767f5a", "b81865b9d76c"],
           "payloads": ["fd387fe4211d", "d0694611a403", "c067848d8ca8"],
           "settlements": {
-            "load": "25716369cd8f"
+            "load": "98b298cb3858"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -659,7 +654,7 @@
           "sender": ["0f1ed2b7a695", "554718767f5a", "487b99cbe545"],
           "payloads": ["fd387fe4211d", "d0694611a403", "c067848d8ca8"],
           "settlements": {
-            "load": "5651342f395d"
+            "load": "98b298cb3858"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -671,7 +666,7 @@
           "sender": ["0f1ed2b7a695", "554718767f5a", "a4f215e7dc86"],
           "payloads": ["fd387fe4211d", "d0694611a403", "c067848d8ca8"],
           "settlements": {
-            "load": "5651342f395d"
+            "load": "98b298cb3858"
           },
           "state": "44136fa355b3",
           "effects": []
@@ -683,7 +678,7 @@
           "sender": ["0f1ed2b7a695", "554718767f5a", "7e07877d28cf"],
           "payloads": ["fd387fe4211d", "d0694611a403", "c067848d8ca8"],
           "settlements": {
-            "load": "5651342f395d"
+            "load": "98b298cb3858"
           },
           "state": "44136fa355b3",
           "effects": []

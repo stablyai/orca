@@ -3,7 +3,7 @@
   "family": "github.pr-read",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "71e308e574b951174cc7ec5c57a6bb5718195a9f",
+  "baseline": "d8aeb2d2f88194c36925898fc3ce78fc38267bdc",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
@@ -13,6 +13,12 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "04c85ffba34f": {
+      "pr-for-branch": {
+        "error": "The host sent a reply this app could not read (github.prForBranch)",
+        "ok": false
+      }
+    },
     "0a56183795de": {
       "pr-for-branch": {
         "ok": true,
@@ -21,9 +27,12 @@
         }
       }
     },
-    "1178750bd3e5": {
-      "pr-for-branch": {
-        "error": "GitHub returned an invalid pull request response.",
+    "0bd591f1a6ca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "The host sent a reply this app could not read (github.prForBranch)",
         "ok": false
       }
     },
@@ -99,15 +108,6 @@
       "name": "github.prForBranch#2",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}",
       "sent": 2
-    },
-    "a976d414bc11": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "GitHub returned an invalid pull request response.",
-        "ok": false
-      }
     },
     "ab4b72242bb7": {
       "name": "github.prForBranch#3",
@@ -217,9 +217,9 @@
           "payloads": ["35eb8ce186f2", "a3f868623d30"],
           "settlements": {
             "upstream": "fe9c1046b91d",
-            "malformed": "a976d414bc11"
+            "malformed": "0bd591f1a6ca"
           },
-          "state": "1178750bd3e5",
+          "state": "04c85ffba34f",
           "effects": []
         }
       },
@@ -230,7 +230,7 @@
           "payloads": ["35eb8ce186f2", "a3f868623d30", "47a1e5a3aa01"],
           "settlements": {
             "upstream": "fe9c1046b91d",
-            "malformed": "a976d414bc11",
+            "malformed": "0bd591f1a6ca",
             "no-pr": "8a5cb8b66303"
           },
           "state": "0a56183795de",
