@@ -10,7 +10,7 @@ export type RunningAgentTargetState = Pick<
   AppState,
   'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
 > &
-  Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>>
+  Partial<Pick<AppState, 'runtimePaneTitlesByTabId' | 'paneForegroundAgentByPaneKey'>>
 
 export type RunningAgentSendTarget = {
   paneKey: string
@@ -76,7 +76,7 @@ export function deriveRunningAgentSendTargets(
     } else if (decision.hookState === null) {
       if (liveTitleStatus === 'permission') {
         disabledReason = 'Agent needs permission'
-      } else if (liveTitleStatus === null) {
+      } else if (liveTitleStatus === null && !hasLiveForegroundAgentProof(state, paneKey, ptyId)) {
         disabledReason = 'Agent status is stale'
       }
     } else if (!ptyId) {
@@ -100,6 +100,21 @@ export function deriveRunningAgentSendTargets(
   }
 
   return targets
+}
+
+// Why: a long-running agent stops emitting hooks and can hold a title the send
+// detector rejects, so the pane's process-table identity is the remaining proof
+// that the agent is still there (issue #14798: 30-minute hook staleness).
+function hasLiveForegroundAgentProof(
+  state: RunningAgentTargetState,
+  paneKey: string,
+  ptyId: string | null
+): boolean {
+  if (!ptyId) {
+    return false
+  }
+  const foreground = state.paneForegroundAgentByPaneKey?.[paneKey]
+  return foreground?.agent != null && foreground.shellForeground !== true
 }
 
 function detectLiveAgentPaneStatus(
