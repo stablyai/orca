@@ -43,7 +43,14 @@ export function sha256(message: Uint8Array): Uint8Array {
       words[index] = (words[index - 16] + s0 + words[index - 7] + s1) | 0
     }
 
-    let [a, b, c, d, e, f, g, h] = hash
+    let a = hash[0]
+    let b = hash[1]
+    let c = hash[2]
+    let d = hash[3]
+    let e = hash[4]
+    let f = hash[5]
+    let g = hash[6]
+    let h = hash[7]
     for (let index = 0; index < 64; index += 1) {
       const sigma1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25)
       const choice = (e & f) ^ (~e & g)

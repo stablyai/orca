@@ -167,6 +167,7 @@ export function AiVaultVirtualRow({
           }
           showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
+          subagentResume={{ getState: getSessionResumeState, onResume }}
           onResume={() => {
             if (resumeState?.worktreeId) {
               onResume(row.session, resumeState.worktreeId)

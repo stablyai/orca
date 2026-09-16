@@ -1,3 +1,4 @@
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { forwardRef, useCallback, useImperativeHandle, useState } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
@@ -32,6 +33,7 @@ import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-sen
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
+import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 
 export type {
   NativeChatComposerHandle,
@@ -147,7 +149,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       ? [true, !canSend]
       : [targetPtyId !== null, targetPtyId === null || !canSend]
 
-    const syncCaret = useCallback((el: HTMLTextAreaElement) => {
+    const syncCaret = useCallback((el: NativeChatComposerInput) => {
       setCaret(el.selectionStart ?? el.value.length)
     }, [])
 
@@ -172,6 +174,14 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolvePendingImageAttachment,
       dropPendingImageAttachment
     } = attachments
+    useNativeChatWorkspaceFileDrop({
+      terminalTabId,
+      structuredWorktreeId: structuredTransport?.worktreeId,
+      disabled,
+      paneKey,
+      attachResolvedPaths,
+      setNotice
+    })
     // A pasted image has no agent-readable path until its save lands; sending
     // mid-save would ship the message without the image the chip promises.
     const hasPendingAttachment = imageAttachments.some((attachment) => attachment.pending)
@@ -353,7 +363,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
 
     const handleDraftChange = useCallback(
-      (value: string, element: HTMLTextAreaElement) => {
+      (value: string, element: NativeChatComposerInput) => {
         setDraft(value)
         setHistory((prev) => ({ entries: prev.entries, index: null }))
         syncCaret(element)

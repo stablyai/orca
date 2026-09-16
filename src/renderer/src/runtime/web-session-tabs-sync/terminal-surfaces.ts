@@ -21,6 +21,7 @@ import type {
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
 export function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
@@ -60,7 +61,12 @@ export function buildMirroredAgentTabs(
   currentUnifiedTabs: readonly Tab[],
   now: number
 ): MirroredAgentTab[] {
-  const agentTabs = snapshot.tabs.filter(isAgentSessionTab)
+  const agentTabs = snapshot.tabs
+    .filter(isAgentSessionTab)
+    .filter(
+      (tab) =>
+        !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
+    )
   const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
@@ -110,7 +116,9 @@ export function buildMirroredAgentTabs(
       unifiedTab: {
         id: localId,
         entityId: tab.sessionId,
-        groupId: hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
+        // Keep the local group while a provisional tab is promoted; host placement can lag the
+        // user's split choice and must not move the mounted pane during adoption.
+        groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,

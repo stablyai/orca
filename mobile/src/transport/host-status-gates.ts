@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from './rpc-client'
-import type { ConnectionState, RpcSuccess } from './types'
+import type { ConnectionState } from './types'
+import { hostStatusProbe } from './host-status-probe-operations'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
 import { normalizeHostAppVersion, recordHostAppVersion } from './host-app-version-store'
@@ -47,11 +48,12 @@ export function useHostStatusGates(args: {
     }
     void (async () => {
       try {
-        const response = await requestClient.sendRequest('status.get')
+        const reply = await hostStatusProbe.request(requestClient)
         if (cancelled) {
           return
         }
-        if (!response.ok) {
+        const accepted = hostStatusProbe.interpret(reply)
+        if (!accepted.accepted) {
           settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
@@ -60,7 +62,8 @@ export function useHostStatusGates(args: {
           })
           return
         }
-        const status = (response as RpcSuccess).result as DesktopStatus & {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const status = accepted.value as DesktopStatus & {
           capabilities?: string[]
         }
         const verdict = evaluateCompat({

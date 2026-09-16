@@ -1,14 +1,8 @@
-import { z } from 'zod'
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
+import { ClientCapabilitiesUpdate } from '../../../../shared/rpc-contract/runtime-client-capabilities-params'
 
-const ClientCapabilitiesUpdate = z
-  .object({
-    clientCapabilities: z.array(z.string().min(1).max(128)).max(64)
-  })
-  .strict()
-
-export const RUNTIME_CLIENT_CAPABILITY_METHODS: RpcAnyMethod[] = [
+export const RUNTIME_CLIENT_CAPABILITY_METHODS = [
   defineMethod({
     name: 'runtime.clientCapabilities.update',
     params: ClientCapabilitiesUpdate,

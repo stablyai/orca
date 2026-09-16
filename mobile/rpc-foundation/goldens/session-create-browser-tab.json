@@ -1,0 +1,96 @@
+{
+  "operation": "session.content-create",
+  "family": "session.content-create",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "36dbd24dc3d24be8c14217ced1963d10ef8264438729dd146cbff79d9fbdf279",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "07d997e5200c": {
+      "name": "browser.tabCreate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "browserPageId": "page-1"
+          }
+        }
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "b0f36384bc0f": {
+      "name": "browser.tabCreate#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}",
+      "sent": 1
+    },
+    "c859631e4bcf": {
+      "name": "fetch-pending-browser-tabs",
+      "value": {},
+      "sent": 1
+    },
+    "ea918e983453": {
+      "name": "fetch-session-tabs",
+      "value": {},
+      "sent": 1
+    },
+    "f1e12d7f04c7": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": "page-1"
+    }
+  },
+  "recording": {
+    "scenario": "session-create-browser-tab",
+    "checkpoints": [
+      {
+        "id": "created",
+        "observation": {
+          "sender": ["07d997e5200c"],
+          "payloads": ["b0f36384bc0f"],
+          "settlements": {
+            "browser": "84e5ca07cb7a"
+          },
+          "state": "f1e12d7f04c7",
+          "effects": ["ea918e983453", "c859631e4bcf", "c859631e4bcf"]
+        }
+      }
+    ]
+  }
+}

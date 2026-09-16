@@ -5,9 +5,11 @@ import {
   type LinearIssue,
   type LinearIssueChild,
   type TaskItem,
-  createLinearTask,
-  isSuccess
+  createLinearTask
 } from './mobile-tasks-legacy-foundation'
+import { linearIssueRead } from './mobile-task-item-detail-operations'
+import { linearIssueCommentWrite } from './mobile-task-item-comment-operations'
+import { linearIssueCreate } from './mobile-task-item-state-operations'
 
 export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsModel) {
   const {
@@ -34,8 +36,8 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'linear.addIssueComment',
+        const reply = await linearIssueCommentWrite.request(
+          client,
           {
             issueId: item.source.id,
             workspaceId: item.source.workspaceId,
@@ -43,10 +45,12 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = linearIssueCommentWrite.interpret(reply) as {
+          ok?: boolean
+          id?: string
+          error?: string
         }
-        const result = response.result as { ok?: boolean; id?: string; error?: string }
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add comment')
         }
@@ -79,15 +83,13 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'linear.getIssue',
+        const reply = await linearIssueRead.request(
+          client,
           { id: child.id, workspaceId },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const issue = response.result as LinearIssue | null
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const issue = linearIssueRead.interpret(reply) as LinearIssue | null
         if (!issue) {
           throw new Error('Sub-issue not found')
         }
@@ -113,8 +115,8 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'linear.createIssue',
+        const reply = await linearIssueCreate.request(
+          client,
           {
             teamId: item.source.team.id,
             title,
@@ -124,10 +126,8 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = linearIssueCreate.interpret(reply) as {
           ok?: boolean
           id?: string
           identifier?: string

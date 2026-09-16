@@ -1,3 +1,5 @@
+import { StaleRelayBrokerError } from './relay-session-broker-contract'
+export { StaleRelayBrokerError } from './relay-session-broker-contract'
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
@@ -17,21 +19,17 @@ import {
   type RelayAssignment
 } from './relay-http-client'
 import { RelayOriginPool } from './relay-origin-pool'
+import { RelayRegionRefresh } from './relay-region-refresh'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
 import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-session-broker-contract'
 
 export type { RelayBrokerStatus } from './relay-session-broker-contract'
 
-export class StaleRelayBrokerError extends Error {
-  constructor() {
-    super('stale_relay_broker')
-  }
-}
-
 export class RelaySessionBroker {
   private readonly options: RelaySessionBrokerOptions
   private readonly relayHostId: string
   private readonly originPool: RelayOriginPool
+  private readonly regionRefresh: RelayRegionRefresh | null
   private authorization: RelayAuthorization | null = null
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
@@ -55,6 +53,21 @@ export class RelaySessionBroker {
       random: options.random,
       now: options.now
     })
+    this.regionRefresh = options.measureRegionDecision
+      ? new RelayRegionRefresh({
+          directorUrl: options.authConfig.relayDirectorUrl,
+          relayHostId: this.relayHostId,
+          token: () => this.authorization?.relayToken,
+          assignment: () => this.originPool.activeAssignment,
+          isCurrent: () => this.isCurrent(),
+          isOnline: () => this.originPool.hasLiveControl(),
+          applyAssignment: (assignment) => this.originPool.applyAssignmentMetadata(assignment),
+          measure: options.measureRegionDecision,
+          fetch: options.fetch,
+          now: options.now,
+          random: options.random
+        })
+      : null
   }
 
   static async connect(options: RelaySessionBrokerOptions): Promise<RelaySessionBroker> {
@@ -194,6 +207,7 @@ export class RelaySessionBroker {
       this.refreshTimer = null
     }
     this.originPool.closeNow(hostCloseReason)
+    this.regionRefresh?.close()
     if (publishOffline) {
       this.options.onStatus('offline')
     }
@@ -220,6 +234,9 @@ export class RelaySessionBroker {
       // through to the placement lane.
       reconnect: true,
       preferredRegion,
+      ...(this.regionRefresh
+        ? { regionCorrection: { v: 1 as const, action: 'issue-window' as const } }
+        : {}),
       isCurrent: () => this.isCurrent(),
       fetch: this.options.fetch
     })
@@ -236,6 +253,7 @@ export class RelaySessionBroker {
     this.authorization = authorization
     this.publishStatus('registered')
     this.scheduleRefresh()
+    this.regionRefresh?.start(assignment)
   }
 
   private scheduleRefresh(): void {
@@ -267,6 +285,7 @@ export class RelaySessionBroker {
       this.assertCurrent()
       this.originPool.refreshAuthorization(authorization.relayToken)
       this.authorization = authorization
+      this.regionRefresh?.checkDeadline()
       this.scheduleRefresh()
     } catch {
       const expiry = this.authorization?.expiresAt ?? 0

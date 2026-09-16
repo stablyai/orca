@@ -52,8 +52,8 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('run generation separates the bug from the legitimate reclaim', () => {
-    // Both shapes are `completed hook = A, title = B`. Ordering alone cannot tell them apart.
-    const shape = (hookRun: number, titleRun: number): PaneAgentEvidence[] => [
+    // Both cases are `completed hook = A, title = B`. Ordering alone cannot tell them apart.
+    const evidenceFor = (hookRun: number, titleRun: number): PaneAgentEvidence[] => [
       { source: 'completed-hook', agent: 'claude', run: { authorityId: H, incarnation: hookRun } },
       { source: 'title', agent: 'codex', run: { authorityId: H, incarnation: titleRun } }
     ]
@@ -61,7 +61,7 @@ describe('resolvePaneAgentIdentity', () => {
     it('keeps the completed hook when both belong to the current run', () => {
       // The reported bug: nothing new started, so the hook is still the truth.
       const result = resolvePaneAgentIdentity({
-        evidence: shape(7, 7),
+        evidence: evidenceFor(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
       })
       expect(result).toMatchObject({ agent: 'claude', source: 'completed-hook' })
@@ -72,7 +72,7 @@ describe('resolvePaneAgentIdentity', () => {
       // The legitimate reclaim: the pane was reused, so run 7's hook describes an agent that is
       // no longer there. It is ineligible, not merely outranked.
       const result = resolvePaneAgentIdentity({
-        evidence: shape(7, 8),
+        evidence: evidenceFor(7, 8),
         currentRun: { authorityId: H, incarnation: 8 }
       })
       expect(result).toMatchObject({ agent: 'codex', source: 'title' })
@@ -82,11 +82,11 @@ describe('resolvePaneAgentIdentity', () => {
     it('produces opposite answers from identical evidence, given only the run ids', () => {
       // The whole point, stated as one assertion.
       const bug = resolvePaneAgentIdentity({
-        evidence: shape(7, 7),
+        evidence: evidenceFor(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
       })
       const reclaim = resolvePaneAgentIdentity({
-        evidence: shape(7, 8),
+        evidence: evidenceFor(7, 8),
         currentRun: { authorityId: H, incarnation: 8 }
       })
       expect(bug.agent).not.toBe(reclaim.agent)

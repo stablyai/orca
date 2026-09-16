@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './orchestration-db'
+import { UNBOUND_RUN_ID } from './contract-constants'
 
 describe('writers require a Run', () => {
   let db: OrchestrationDb
@@ -8,11 +9,11 @@ describe('writers require a Run', () => {
   })
   afterEach(() => db.close())
 
-  it('rejects a message without a Run instead of using the legacy Run', () => {
-    expect(() => db.insertMessage({ from: 'sender', to: 'worker', subject: 'mail' })).toThrow(
-      'Run is required'
-    )
-    expect(db.db.prepare('SELECT id FROM messages').all()).toEqual([])
+  it('files a message without a Run under the unbound Run, never the legacy one', () => {
+    const message = db.insertMessage({ from: 'sender', to: 'worker', subject: 'mail' })
+    expect(message.run_id).toBe(UNBOUND_RUN_ID)
+    expect(db.getRun(UNBOUND_RUN_ID)).toMatchObject({ legacy: 0 })
+    expect(db.getUnreadMessages('worker').map((row) => row.id)).toEqual([message.id])
   })
 
   it('rejects a Task without a Run instead of using the legacy Run', () => {

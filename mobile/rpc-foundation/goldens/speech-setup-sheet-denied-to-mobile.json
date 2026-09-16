@@ -1,0 +1,84 @@
+{
+  "operation": "speech.setup-sheet",
+  "family": "speech.setup-sheet",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
+  "scenarioSha256": "69c1c20ea667a2b6a5b53aeb3d9af11b2b707e04086e15ee4ff9e954b1701851",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "100447f8b483": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Update the paired desktop Orca app to use mobile voice settings.",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "44136fa355b3": {},
+    "db814c0e0956": {
+      "name": "speech.models.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": "speech.models.list is not available to mobile clients"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f98fd51d5ce2": {
+      "name": "speech.models.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}",
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "speech-setup-sheet-denied-to-mobile",
+    "checkpoints": [
+      {
+        "id": "denied",
+        "observation": {
+          "sender": ["db814c0e0956"],
+          "payloads": ["f98fd51d5ce2"],
+          "settlements": {
+            "list": "100447f8b483"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -4,6 +4,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { SkillUploadRetainedPaths } from './skill-upload-retained-paths'
 import { SkillUploadSessionService } from './skill-upload-session-service'
 
 const roots: string[] = []
@@ -30,10 +31,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-type RetainedPathCleanup = {
-  removeFailedCleanup(path: string): Promise<void>
-}
-
 afterEach(async () => {
   vi.useRealTimers()
   openGate.release = null
@@ -51,8 +48,8 @@ function identity(bytes: Buffer) {
   }
 }
 
-function retainedPathCleanup(service: SkillUploadSessionService): RetainedPathCleanup {
-  return Reflect.get(service, 'retainedPaths') as RetainedPathCleanup
+function retainedPathCleanup(service: SkillUploadSessionService): SkillUploadRetainedPaths {
+  return service['retainedPaths']
 }
 
 async function stagedArchiveCount(uploads: string): Promise<number> {

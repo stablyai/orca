@@ -1,0 +1,88 @@
+{
+  "operation": "tasks.worktree-create-retry",
+  "family": "worktree.create-retry",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "scenarioSha256": "16abe9e1a8d4cff17b3ea29d40277ae30a3d555a4a9efa08b2745c3a85b02740",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "240b0b1c72b2": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": ""
+      }
+    },
+    "43e8315bc2fe": {
+      "name": "worktree.create#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-1",
+            "name": "kestrel",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "internal",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7d651cae8837": {
+      "outcome": {
+        "error": ""
+      }
+    },
+    "de75bbf6c762": {
+      "name": "worktree.create#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}",
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "tw-create-retry-unretryable-refusal",
+    "checkpoints": [
+      {
+        "id": "refused-empty-message",
+        "observation": {
+          "sender": ["43e8315bc2fe"],
+          "payloads": ["de75bbf6c762"],
+          "settlements": {
+            "create": "240b0b1c72b2"
+          },
+          "state": "7d651cae8837",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -68,7 +68,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           // Why: resume can reveal many split panes at once; spread inactive replays across frames so xterm scrollback replay doesn't block return.
           scheduleHiddenOutputRestore(
             session.pane.terminal,
-            () => {
+            (): boolean => {
               session.hiddenOutputRestoreScheduled = false
               if (
                 session.disposed ||
@@ -80,9 +80,11 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
                   session.hiddenOutputRestorePendingChunks.length === 0) ||
                 !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
               ) {
-                return
+                // Why report false: nothing replayed here, so the scheduler can spend
+                // this frame on the next queued pane instead of on a hidden/stale one.
+                return false
               }
-              session.requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true })
+              return session.requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true }) === true
             },
             priority
           )

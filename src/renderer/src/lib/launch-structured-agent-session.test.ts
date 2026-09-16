@@ -134,13 +134,13 @@ describe('structured agent session launch', () => {
     }
   )
 
-  it('fails closed when the create support probe cannot be answered', async () => {
+  it('keeps an unanswered create support probe recoverable', async () => {
     vi.mocked(callStructuredAgentSession).mockRejectedValue(new Error('runtime unreachable'))
 
     const intent = createStructuredAgentSessionLaunchIntent('workspace-1', 'claude')
 
     await expect(launchStructuredAgentSession(intent)).rejects.toBeInstanceOf(
-      StructuredAgentSessionCreateRefusalError
+      StructuredAgentSessionCreateUnknownOutcomeError
     )
     expect(callStructuredAgentSession).toHaveBeenCalledOnce()
   })
@@ -206,7 +206,7 @@ describe('structured agent session launch', () => {
       launchStructuredAgentSession(
         createStructuredAgentSessionLaunchIntent('workspace-1', 'claude')
       )
-    ).rejects.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
+    ).rejects.toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
     expect(callStructuredAgentSession).toHaveBeenCalledOnce()
   })
 
@@ -220,7 +220,7 @@ describe('structured agent session launch', () => {
       launchStructuredAgentSession(
         createStructuredAgentSessionLaunchIntent('workspace-1', 'claude')
       )
-    ).rejects.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
+    ).rejects.toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
     expect(callStructuredAgentSession).toHaveBeenCalledOnce()
   })
 

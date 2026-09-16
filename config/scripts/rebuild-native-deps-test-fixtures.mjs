@@ -358,7 +358,7 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
 }
 
 export function writeFakeWindowsRegistry(projectDir) {
-  const registryDir = join(projectDir, 'node_modules', 'windows-native-registry')
+  const registryDir = join(projectDir, 'node_modules', '@orca', 'windows-registry')
   mkdirSync(registryDir, { recursive: true })
   writeFileSync(
     join(registryDir, 'index.js'),

@@ -1,21 +1,12 @@
 import React from 'react'
-import {
-  Check,
-  CheckCheck,
-  GitFork,
-  Layers,
-  ListChecks,
-  ListFilter,
-  Rows3,
-  Search,
-  Trash2
-} from 'lucide-react'
+import { CheckCheck, ListFilter, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -27,12 +18,19 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import {
-  ActivityScopeFilterMenuSections,
-  useActivityScopeFilterActive
+  ActivityScopeFilterMenuItems,
+  useActivityScopeFilterActive,
+  useActivityScopeFilterMenuItemsVisible
 } from './activity-scope-filter-controls'
 import type { ActivityGroupBy } from './activity-thread-types'
 
-const ALIGNED_CHECKBOX_ITEM_CLASS = 'pl-2 [&>span.absolute]:hidden'
+const GROUP_BY_OPTIONS = [
+  'none',
+  'status',
+  'project',
+  'worktree',
+  'agent'
+] as const satisfies readonly ActivityGroupBy[]
 
 function getActivityGroupByLabel(groupBy: ActivityGroupBy): string {
   switch (groupBy) {
@@ -63,7 +61,7 @@ export function ActivityThreadOptionsMenu({
   showSearch = false,
   onShowSearchChange,
   unreadOnly = false,
-  onToggleUnread
+  onUnreadOnlyChange
 }: {
   groupBy?: ActivityGroupBy
   onGroupByChange?: (groupBy: ActivityGroupBy) => void
@@ -78,10 +76,14 @@ export function ActivityThreadOptionsMenu({
   showSearch?: boolean
   onShowSearchChange?: (showSearch: boolean) => void
   unreadOnly?: boolean
-  onToggleUnread?: () => void
+  onUnreadOnlyChange?: (unreadOnly: boolean) => void
 }): React.JSX.Element {
   const skipCloseAutoFocusRef = React.useRef(false)
   const scopeFilterActive = useActivityScopeFilterActive()
+  const scopeFilterItemsVisible = useActivityScopeFilterMenuItemsVisible()
+  const hasFilters = Boolean(
+    onUnreadOnlyChange || onShowChildAgentsChange || scopeFilterItemsVisible
+  )
   const optionsLabel = scopeFilterActive
     ? translate(
         'auto.components.activity.ActivityPrototypePage.threadListOptionsFiltered',
@@ -126,7 +128,7 @@ export function ActivityThreadOptionsMenu({
         side="right"
         align="start"
         sideOffset={8}
-        className="w-56"
+        className="w-60"
         onCloseAutoFocus={(event) => {
           if (skipCloseAutoFocusRef.current) {
             event.preventDefault()
@@ -134,70 +136,56 @@ export function ActivityThreadOptionsMenu({
           }
         }}
       >
-        {onShowSearchChange || onToggleUnread ? (
+        {hasFilters ? (
           <>
-            {onShowSearchChange ? (
+            <DropdownMenuLabel>
+              {translate(
+                'auto.components.activity.ActivityPrototypePage.filtersSection',
+                'Filters'
+              )}
+            </DropdownMenuLabel>
+            {onUnreadOnlyChange ? (
               <DropdownMenuCheckboxItem
-                checked={showSearch}
-                className={ALIGNED_CHECKBOX_ITEM_CLASS}
-                onCheckedChange={(checked) => {
-                  skipCloseAutoFocusRef.current = checked === true
-                  onShowSearchChange(checked === true)
-                }}
+                checked={unreadOnly}
+                onCheckedChange={(checked) => onUnreadOnlyChange(checked === true)}
+                onSelect={(event) => event.preventDefault()}
               >
-                <Search className="size-3.5 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.showSearch',
-                    'Show search'
-                  )}
-                </span>
-                {showSearch ? <Check className="size-3.5" /> : null}
+                {translate(
+                  'auto.components.activity.ActivityPrototypePage.showUnreadOnly',
+                  'Show unread only'
+                )}
               </DropdownMenuCheckboxItem>
             ) : null}
-            {onToggleUnread ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuCheckboxItem
-                    checked={unreadOnly}
-                    className={ALIGNED_CHECKBOX_ITEM_CLASS}
-                    onCheckedChange={() => onToggleUnread()}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    <ListChecks className="size-3.5 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">
-                      {translate(
-                        'auto.components.activity.ActivityPrototypePage.showUnreadOnly',
-                        'Show unread only'
-                      )}
-                    </span>
-                    {unreadOnly ? <Check className="size-3.5" /> : null}
-                  </DropdownMenuCheckboxItem>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.unreadOnlyDescription',
-                    'Filters the activity list to show only threads with unread updates.'
-                  )}
-                </TooltipContent>
-              </Tooltip>
+            {onShowChildAgentsChange ? (
+              <DropdownMenuCheckboxItem
+                checked={showChildAgents}
+                onCheckedChange={(checked) => onShowChildAgentsChange(checked === true)}
+                onSelect={(event) => event.preventDefault()}
+              >
+                {translate(
+                  'auto.components.activity.ActivityPrototypePage.showChildAgents',
+                  'Show child agents'
+                )}
+              </DropdownMenuCheckboxItem>
             ) : null}
+            <ActivityScopeFilterMenuItems />
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <ActivityScopeFilterMenuSections />
+        <DropdownMenuLabel>
+          {translate('auto.components.activity.ActivityPrototypePage.viewSection', 'View')}
+        </DropdownMenuLabel>
         {groupBy && onGroupByChange ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
-              <Layers className="size-3.5 text-muted-foreground" />
-              <span className="flex flex-1 items-center justify-between gap-2">
+              <span className="flex flex-1 items-center justify-between gap-3">
                 <span>
                   {translate(
                     'auto.components.activity.ActivityPrototypePage.770d458144',
                     'Group by'
                   )}
                 </span>
-                <span className="text-[11px] font-medium text-muted-foreground">
+                <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
                   {getActivityGroupByLabel(groupBy)}
                 </span>
               </span>
@@ -207,73 +195,36 @@ export function ActivityThreadOptionsMenu({
                 value={groupBy}
                 onValueChange={(value) => onGroupByChange(value as ActivityGroupBy)}
               >
-                {[
-                  ['none', 'None', 'auto.components.activity.ActivityPrototypePage.none'],
-                  ['status', 'Status', 'auto.components.activity.ActivityPrototypePage.4a3986b200'],
-                  [
-                    'project',
-                    'Project',
-                    'auto.components.activity.ActivityPrototypePage.8c3b621ddf'
-                  ],
-                  [
-                    'worktree',
-                    'Worktree',
-                    'auto.components.activity.ActivityPrototypePage.b29191b3e0'
-                  ],
-                  ['agent', 'Agent', 'auto.components.activity.ActivityPrototypePage.f6396e1f85']
-                ].map(([value, label, key]) => (
+                {GROUP_BY_OPTIONS.map((value) => (
                   <DropdownMenuRadioItem
                     key={value}
                     value={value}
                     onSelect={(event) => event.preventDefault()}
                   >
-                    {translate(key, label)}
+                    {getActivityGroupByLabel(value)}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         ) : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuCheckboxItem
-              checked={compactMode}
-              className={ALIGNED_CHECKBOX_ITEM_CLASS}
-              onCheckedChange={(checked) => onCompactModeChange(checked === true)}
-              onSelect={(event) => event.preventDefault()}
-            >
-              <Rows3 className="size-3.5 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate">
-                {translate(
-                  'auto.components.activity.ActivityPrototypePage.f70e4bec47',
-                  'Compact mode'
-                )}
-              </span>
-              {compactMode ? <Check className="size-3.5" /> : null}
-            </DropdownMenuCheckboxItem>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>
-            {translate(
-              'auto.components.activity.ActivityPrototypePage.compactModeDescription',
-              'Shows shorter thread rows with one-line titles and two-line status messages.'
-            )}
-          </TooltipContent>
-        </Tooltip>
-        {onShowChildAgentsChange ? (
+        <DropdownMenuCheckboxItem
+          checked={compactMode}
+          onCheckedChange={(checked) => onCompactModeChange(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {translate('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
+        </DropdownMenuCheckboxItem>
+        {onShowSearchChange ? (
           <DropdownMenuCheckboxItem
-            checked={showChildAgents}
-            className={ALIGNED_CHECKBOX_ITEM_CLASS}
-            onCheckedChange={(checked) => onShowChildAgentsChange(checked === true)}
-            onSelect={(event) => event.preventDefault()}
+            checked={showSearch}
+            onCheckedChange={(checked) => {
+              const show = checked === true
+              skipCloseAutoFocusRef.current = show
+              onShowSearchChange(show)
+            }}
           >
-            <GitFork className="size-3.5 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">
-              {translate(
-                'auto.components.activity.ActivityPrototypePage.showChildAgents',
-                'Show child agents'
-              )}
-            </span>
-            {showChildAgents ? <Check className="size-3.5" /> : null}
+            {translate('auto.components.activity.ActivityPrototypePage.showSearch', 'Show search')}
           </DropdownMenuCheckboxItem>
         ) : null}
         {onMarkAllThreadsRead || onClearCompleted ? (

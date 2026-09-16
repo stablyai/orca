@@ -11,6 +11,7 @@ import {
 } from './markdown-doc-links'
 import {
   isReservedRichMarkdownTransportBody,
+  skipInlineTransportStartScan,
   type RichMarkdownSourceTransport
 } from './rich-markdown-source-transport'
 import { renderRichMarkdownDocLinkHtml } from './rich-markdown-doc-link-dom'
@@ -126,7 +127,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
     markdownTokenizer: {
       name: 'markdownDocLink',
       level: 'inline',
-      start: transport.startFor('document-link'),
+      start: skipInlineTransportStartScan,
       tokenize(src: string) {
         const matched = transport.match(src, 'document-link')
         if (!matched) {

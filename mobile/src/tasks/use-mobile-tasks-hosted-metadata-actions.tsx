@@ -1,6 +1,11 @@
 import type { GitlabGithubStatusActionsModel } from './use-mobile-tasks-gitlab-github-status-actions'
 import { useCallback } from './mobile-tasks-dependencies'
-import { type TaskItem, isSuccess } from './mobile-tasks-legacy-foundation'
+import type { TaskItem } from './mobile-tasks-legacy-foundation'
+import {
+  githubPullRequestUpdate,
+  gitlabIssueUpdate,
+  gitlabMergeRequestUpdate
+} from './mobile-task-item-state-operations'
 
 export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusActionsModel) {
   const {
@@ -33,8 +38,8 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.updatePR',
+        const reply = await githubPullRequestUpdate.request(
+          client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
@@ -45,10 +50,11 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubPullRequestUpdate.interpret(reply) as {
+          ok?: boolean
+          error?: string
         }
-        const result = response.result as { ok?: boolean; error?: string }
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub pull request')
         }
@@ -107,31 +113,41 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
       setMutatingStatus(true)
       setError('')
       try {
-        const method = item.source.type === 'issue' ? 'gitlab.updateIssue' : 'gitlab.updateMR'
-        const params =
+        // The method and its params were a pair of local ternaries over the item type, not a step
+        // handed in at runtime, so each arm sends its own operation with its own params type.
+        const updated =
           item.source.type === 'issue'
-            ? {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                updates,
-                projectRef: item.source.projectRef
-              }
-            : {
-                repo: `id:${item.source.repoId}`,
-                iid: item.source.number,
-                projectRef: item.source.projectRef,
-                updates: {
-                  title: updates.title,
-                  body: updates.body,
-                  addLabels: updates.addLabels,
-                  removeLabels: updates.removeLabels
-                }
-              }
-        const response = await client.sendRequest(method, params, { timeoutMs: 30_000 })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+            ? gitlabIssueUpdate.interpret(
+                await gitlabIssueUpdate.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    number: item.source.number,
+                    updates,
+                    projectRef: item.source.projectRef
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+            : gitlabMergeRequestUpdate.interpret(
+                await gitlabMergeRequestUpdate.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    iid: item.source.number,
+                    projectRef: item.source.projectRef,
+                    updates: {
+                      title: updates.title,
+                      body: updates.body,
+                      addLabels: updates.addLabels,
+                      removeLabels: updates.removeLabels
+                    }
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = updated as { ok?: boolean; error?: string }
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitLab item')
         }

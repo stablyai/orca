@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT,
-  isSkillsCliAgentKeyShaped,
+  isUsableSkillsCliAgentKey,
   SKILLS_CLI_UNIVERSAL_AGENT_KEY,
   toSkillsCliAgentKeys
 } from './skills-cli-agent-keys'
@@ -117,10 +117,10 @@ describe('skills CLI agent keys', () => {
 
   it('rejects values the skills CLI would drop, and allows the explicit wildcard', () => {
     for (const bad of ['-y', '--copy', '', ' ', 'a b', 'a,b']) {
-      expect(isSkillsCliAgentKeyShaped(bad), bad).toBe(false)
+      expect(isUsableSkillsCliAgentKey(bad), bad).toBe(false)
     }
     for (const good of ['claude-code', 'universal', 'trae-cn', 'inference-sh', '*']) {
-      expect(isSkillsCliAgentKeyShaped(good), good).toBe(true)
+      expect(isUsableSkillsCliAgentKey(good), good).toBe(true)
     }
   })
 

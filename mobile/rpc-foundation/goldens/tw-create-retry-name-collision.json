@@ -1,0 +1,179 @@
+{
+  "operation": "tasks.worktree-create-retry",
+  "family": "worktree.create-retry",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "scenarioSha256": "6cb658dadc9e146c4f36c6ce643451e72300b8cdda19cc684ffa9fb2b0822c0a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2b7c07c2d2af": {
+      "name": "worktree.create#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-1",
+            "name": "kestrel",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "conflict",
+            "message": "Branch \"kestrel\" already exists."
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "96ffe866d064": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "name": "kestrel-2",
+        "worktreeId": "repo-1::/w2"
+      }
+    },
+    "b701efecb63f": {
+      "name": "worktree.create#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel-2\",\"clientMutationId\":\"mutation-2\"}}",
+      "sent": 2
+    },
+    "c277d86477c3": {
+      "name": "worktree.create#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-2",
+            "name": "kestrel-2",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "d0c9ecd48c97": {
+      "name": "worktree.create#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-2",
+            "name": "kestrel-2",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "displayName": "kestrel-2",
+              "id": "repo-1::/w2"
+            }
+          }
+        }
+      }
+    },
+    "db70004d62eb": {
+      "outcome": {
+        "name": "kestrel-2",
+        "worktreeId": "repo-1::/w2"
+      }
+    },
+    "de75bbf6c762": {
+      "name": "worktree.create#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}",
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "tw-create-retry-name-collision",
+    "checkpoints": [
+      {
+        "id": "retrying",
+        "observation": {
+          "sender": ["2b7c07c2d2af", "c277d86477c3"],
+          "payloads": ["de75bbf6c762", "b701efecb63f"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "created-suffixed",
+        "observation": {
+          "sender": ["2b7c07c2d2af", "d0c9ecd48c97"],
+          "payloads": ["de75bbf6c762", "b701efecb63f"],
+          "settlements": {
+            "create": "96ffe866d064"
+          },
+          "state": "db70004d62eb",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

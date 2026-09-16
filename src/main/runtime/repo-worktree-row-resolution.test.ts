@@ -4,6 +4,8 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
+import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
   listStoredWorktreeRowsForRepo,
   resolveRepoWorktreeRows,
@@ -349,4 +351,43 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
     await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toBeNull()
     expect(deps.scanRepo).not.toHaveBeenCalled()
   })
+})
+
+describe('folder-to-Git checkout identity', () => {
+  it.each([
+    ['C:\\projects\\draft', 'C:/projects/draft'],
+    ['C:\\projects\\draft', 'c:/projects/draft']
+  ])(
+    'preserves the live folder locator %s in desktop and runtime listings',
+    async (folderPath, gitPath) => {
+      const owner = {
+        ...repo('folder', folderPath),
+        kind: 'git' as const,
+        folderUpgradeGitRootPath: gitPath
+      }
+      const deps = createDeps([owner])
+      const oldId = `folder::${folderPath}`
+      const metadata = mergeWorktreeMetaForWrite(undefined, {
+        hostId: 'local',
+        instanceId: 'existing-omp',
+        comment: 'keep me'
+      })
+      deps.metaById[oldId] = metadata
+      Object.assign(deps.store, { getProjectHostSetups: () => [] })
+      deps.scanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree(gitPath)] })
+
+      const detected = buildDetectedGitWorktrees(deps.store, owner, [gitWorktree(gitPath)])
+      const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+      for (const result of [detected, rows]) {
+        expect(result).toHaveLength(1)
+        expect(result[0]).toMatchObject({
+          id: oldId,
+          path: folderPath,
+          instanceId: 'existing-omp',
+          comment: 'keep me'
+        })
+      }
+      expect(Object.keys(deps.metaById)).toEqual([oldId])
+    }
+  )
 })

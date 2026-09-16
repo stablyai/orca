@@ -71,17 +71,17 @@ export function runQuickCommandInNewTab({
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
-    if (result?.tabId) {
-      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
+    if (
+      result?.surface.kind === 'local-terminal' ||
+      result?.surface.kind === 'local-agent-session'
+    ) {
+      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.surface.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
-      return { tabId: result.tabId }
+      return { tabId: result.surface.tabId }
     }
-    // Structured launches publish their tab asynchronously and therefore do not
-    // return a local tab id; preserve quick-command recency immediately using
-    // the caller's group (or its active group fallback).
-    if (result?.focusAfterMenuClose === 'structured-session') {
+    if (result?.surface.kind === 'host-published') {
       const launchedGroupId = resolveQuickCommandLaunchGroupId(worktreeId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)

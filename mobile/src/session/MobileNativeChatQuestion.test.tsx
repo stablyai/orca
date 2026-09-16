@@ -14,7 +14,8 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',
-  CircleHelp: 'CircleHelp'
+  CircleHelp: 'CircleHelp',
+  X: 'X'
 }))
 
 describe('MobileNativeChatQuestion', () => {
@@ -102,5 +103,28 @@ describe('MobileNativeChatQuestion', () => {
     await act(async () => submit.props.onPress())
 
     expect(onAnswer).toHaveBeenCalledWith('east-token, other-token:ap-south')
+  })
+
+  it('passes the rendered prompt identity to cancel', async () => {
+    const onCancel = vi.fn(async () => true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatQuestion, {
+          question: {
+            question: 'Pick one',
+            prompt: { itemId: 'question-1', expectedRevision: 7 },
+            options: ['Choice'],
+            multiSelect: false,
+            allowOther: false,
+            optionTokens: ['choice-token']
+          },
+          onAnswer: vi.fn(async () => true),
+          onCancel
+        })
+      )
+    })
+    const cancel = renderer.root.findByProps({ accessibilityLabel: 'Cancel' })
+    await act(async () => cancel.props.onPress())
+    expect(onCancel).toHaveBeenCalledWith({ itemId: 'question-1', expectedRevision: 7 })
   })
 })

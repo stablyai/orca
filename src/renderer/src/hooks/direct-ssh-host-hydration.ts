@@ -18,7 +18,7 @@ import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
 
 export const DIRECT_SSH_HOST_READ_TIMEOUT_MS = 5_000
 
-type HostReadTimer = unknown
+type HostReadTimer = ReturnType<typeof setTimeout>
 
 export type DirectSshHostHydrationDeps = {
   store: Pick<StoreApi<AppState>, 'getState' | 'setState'>
@@ -121,7 +121,7 @@ export function createDirectSshHostHydration(
   const setTimer: NonNullable<DirectSshHostHydrationDeps['setTimer']> =
     deps.setTimer ?? ((callback, delayMs) => setTimeout(callback, delayMs))
   const clearTimer: NonNullable<DirectSshHostHydrationDeps['clearTimer']> =
-    deps.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>))
+    deps.clearTimer ?? ((timer) => clearTimeout(timer))
   const catalogRevisionByTarget = new Map<string, number>()
   const catalogInFlight = new Map<string, Promise<'complete' | 'degraded' | 'stale'>>()
   const pendingDeadlines = new Set<{ timer: HostReadTimer; settle: () => void }>()

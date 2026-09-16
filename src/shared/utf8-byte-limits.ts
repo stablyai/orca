@@ -66,6 +66,10 @@ export function isUtf8ByteLengthWithinLimit(text: string, maxBytes: number): boo
   if (text.length > maxBytes) {
     return false
   }
+  // UTF-8 needs at most three bytes per UTF-16 unit, including unpaired surrogates.
+  if (text.length * 3 <= maxBytes) {
+    return true
+  }
   if (Number.isSafeInteger(maxBytes) && maxBytes <= MAX_UTF8_SCRATCH_BYTES) {
     if (utf8Scratch.length < maxBytes) {
       utf8Scratch = new Uint8Array(maxBytes)

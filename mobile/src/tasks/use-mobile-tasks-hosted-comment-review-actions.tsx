@@ -10,9 +10,17 @@ import {
   type GitHubAssignableUser,
   type GitHubDetailCheck,
   type TaskItem,
-  isSuccess,
   splitReviewerList
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubIssueCommentWrite,
+  gitlabIssueCommentWrite,
+  gitlabMergeRequestCommentWrite
+} from './mobile-task-item-comment-operations'
+import {
+  githubPullRequestChecksRead,
+  githubReviewerRequest
+} from './mobile-task-item-state-operations'
 
 export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataActionsModel) {
   const {
@@ -45,39 +53,49 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response =
+        // Three methods, one per provider and item type. Each arm sends its own operation rather
+        // than one call picking a method string and a matching params shape.
+        const written =
           item.provider === 'github'
-            ? await client.sendRequest(
-                'github.addIssueComment',
-                {
-                  repo: `id:${item.source.repoId}`,
-                  number: item.source.number,
-                  body,
-                  type: item.source.type
-                },
-                { timeoutMs: 30_000 }
+            ? githubIssueCommentWrite.interpret(
+                await githubIssueCommentWrite.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    number: item.source.number,
+                    body,
+                    type: item.source.type
+                  },
+                  { timeoutMs: 30_000 }
+                )
               )
-            : await client.sendRequest(
-                item.source.type === 'mr' ? 'gitlab.addMRComment' : 'gitlab.addIssueComment',
-                item.source.type === 'mr'
-                  ? {
+            : item.source.type === 'mr'
+              ? gitlabMergeRequestCommentWrite.interpret(
+                  await gitlabMergeRequestCommentWrite.request(
+                    client,
+                    {
                       repo: `id:${item.source.repoId}`,
                       iid: item.source.number,
                       body,
                       projectRef: item.source.projectRef
-                    }
-                  : {
+                    },
+                    { timeoutMs: 30_000 }
+                  )
+                )
+              : gitlabIssueCommentWrite.interpret(
+                  await gitlabIssueCommentWrite.request(
+                    client,
+                    {
                       repo: `id:${item.source.repoId}`,
                       number: item.source.number,
                       body,
                       projectRef: item.source.projectRef
                     },
-                { timeoutMs: 30_000 }
-              )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+                    { timeoutMs: 30_000 }
+                  )
+                )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = written as {
           ok?: boolean
           error?: string
           comment?: DetailComment
@@ -140,8 +158,8 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.requestPRReviewers',
+        const reply = await githubReviewerRequest.request(
+          client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
@@ -149,10 +167,8 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubReviewerRequest.interpret(reply) as { ok?: boolean; error?: string }
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
         }
@@ -221,8 +237,8 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.prChecks',
+        const reply = await githubPullRequestChecksRead.request(
+          client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
@@ -231,13 +247,12 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (!Array.isArray(response.result)) {
+        const payload = githubPullRequestChecksRead.interpret(reply)
+        if (!Array.isArray(payload)) {
           throw new Error('Invalid checks response')
         }
-        const checks = response.result as GitHubDetailCheck[]
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const checks = payload as GitHubDetailCheck[]
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>
           current?.provider === 'github' ? { ...current, checks } : current

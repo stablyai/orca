@@ -2,6 +2,7 @@ import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-se
 import { agentSessionRefusalOperationState } from './agent-session-refusal-retry'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
+import { DISPATCH_REJECTED_CANCELLED } from './structured-agent-session-dispatch-rejection'
 
 export type StructuredAgentSessionOutboxState = 'queued' | 'dispatching' | 'unconfirmed'
 
@@ -14,6 +15,7 @@ export type StructuredAgentSessionOutboxEntry = {
   queuedAt: number
   lastAttemptAt: number | null
   retryAfterUnknownSubmittedAt: number | null
+  source?: 'launch'
 }
 
 export type StructuredAgentSessionAttachment = {
@@ -71,15 +73,23 @@ export function updateStructuredAgentSessionOutboxEntry(
 export function requeueStructuredAgentSessionSendRefusal(
   entry: StructuredAgentSessionOutboxEntry,
   code: AgentSessionWireRefusalCode,
-  createOperationId: () => string
+  createOperationId: () => string,
+  retainOperationId = false
 ): StructuredAgentSessionOutboxEntry {
-  if (agentSessionRefusalOperationState('agentSession.send', code) !== 'settled-rejected') {
+  const refusalState = agentSessionRefusalOperationState('agentSession.send', code)
+  if (
+    refusalState !== 'settled-rejected' ||
+    retainOperationId ||
+    entry.state === 'unconfirmed' ||
+    entry.retryAfterUnknownSubmittedAt !== null
+  ) {
     return { ...entry, state: 'queued' }
   }
   return {
     ...entry,
     clientMessageId: createOperationId(),
     state: 'queued',
+    lastAttemptAt: null,
     retryAfterUnknownSubmittedAt: null
   }
 }
@@ -93,6 +103,15 @@ export function reconcileStructuredAgentSessionOutbox(
     const submission = settled.get(entry.clientMessageId)
     if (submission?.dispatchState === 'accepted') {
       return []
+    }
+    if (
+      submission?.dispatchState === 'rejected' &&
+      submission.reason === DISPATCH_REJECTED_CANCELLED
+    ) {
+      return []
+    }
+    if (submission?.dispatchState === 'pending') {
+      return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
     }
     if (
       submission?.dispatchState === 'unknown' &&
@@ -139,7 +158,8 @@ export function parseStructuredAgentSessionOutboxEntry(
     retryAfterUnknownSubmittedAt:
       typeof entry.retryAfterUnknownSubmittedAt === 'number'
         ? entry.retryAfterUnknownSubmittedAt
-        : null
+        : null,
+    ...(entry.source === 'launch' ? { source: 'launch' as const } : {})
   }
 }
 
@@ -159,7 +179,6 @@ export function structuredAgentSessionSendRequest(
         fields
       })
     },
-    ...(entry.retryAfterUnknownSubmittedAt !== null ? { retryUnknown: true } : {}),
     ...fields
   }
 }

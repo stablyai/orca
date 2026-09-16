@@ -3,6 +3,7 @@ import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import { UNBOUND_RUN_ID } from '../contract-constants'
 
 // ── Messages ──
 
@@ -25,9 +26,17 @@ export type MessageInsert = {
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
-  const runId = msg.runId
-  if (!runId) {
-    throw new Error('Run is required')
+  // A sender in no Run (two plain terminals, `send --to <handle>`) still gets durable mail. It is
+  // filed under the unbound Run, never the legacy one, which the schema-skew probe reads as pre-Runs.
+  // Created on first use so `run list` shows it only to a user who has such mail.
+  const runId = msg.runId ?? UNBOUND_RUN_ID
+  if (msg.runId == null) {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO runs (id, objective, home_database, consumer_generation, legacy)
+         VALUES (?, 'Mail from terminals in no Run', 'this_database', 0, 0)`
+      )
+      .run(UNBOUND_RUN_ID)
   }
   const deliveryContract = msg.deliveryContract ?? 'current_delivery'
   this.requireRun(runId)

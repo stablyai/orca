@@ -61,7 +61,7 @@ export async function buildSnapshot(
   // Why: cross-origin iframes have their own AX trees accessible only through
   // their dedicated CDP session. Append their elements after the parent tree
   // so the agent can see and interact with iframe content.
-  const iframeRefSessions: { ref: string; sessionId: string }[] = []
+  const iframeRefSessions = new Map<string, string>()
   if (iframeSessions && makeIframeSender && iframeSessions.size > 0) {
     for (const [_frameId, sessionId] of iframeSessions) {
       try {
@@ -82,7 +82,7 @@ export async function buildSnapshot(
           const startRef = refCounter
           walkTree(iframeRoot, iframeNodeById, 1, entries, () => refCounter++)
           for (let i = startRef; i < refCounter; i++) {
-            iframeRefSessions.push({ ref: `@e${i}`, sessionId })
+            iframeRefSessions.set(`@e${i}`, sessionId)
           }
         }
       } catch {
@@ -120,12 +120,11 @@ export async function buildSnapshot(
       }
       lines.push(`${indent}[${entry.ref}] ${entry.role} "${displayName}"`)
       refs.push({ ref: entry.ref, role: entry.role, name: displayName })
-      const iframeSession = iframeRefSessions.find((s) => s.ref === entry.ref)
       refMap.set(entry.ref, {
         backendDOMNodeId: entry.backendDOMNodeId,
         role: entry.role,
         name: entry.name,
-        sessionId: iframeSession?.sessionId,
+        sessionId: iframeRefSessions.get(entry.ref),
         nth: total > 1 ? nth : undefined
       })
     } else {

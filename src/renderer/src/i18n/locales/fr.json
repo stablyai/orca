@@ -835,7 +835,6 @@
       "useComposerState": {
         "7eb3f44ff7": "L'agent sélectionné est désactivé. Choisissez un agent activé avant de créer.",
         "b2ead86962": "Échec de la résolution de la base de la PR.",
-        "a9ff236145": "Certaines pièces jointes n'ont pas pu être envoyées.",
         "3db83fc58a": "Aucun chemin de projet n'est disponible sur cet hôte pour les pièces jointes.",
         "ba6cb77082": "Échec de la connexion au projet.",
         "chooseOrAddProjectBeforeWorkspace": "Choisissez ou ajoutez un projet avant de créer un espace de travail.",
@@ -2201,8 +2200,6 @@
         "recentChatsTerminalsHeader": "Chats et terminaux récents",
         "27f10cca63": "Rechercher chats, terminaux, worktrees, paramètres et actions...",
         "2770f02910": "Rechercher chats, terminaux, worktrees, paramètres et actions",
-        "paletteOpenTabBranch": "Nom de branche",
-        "paletteOpenTabWorkspace": "Nom de l'espace de travail",
         "lastActiveTime": "Dernière activité il y a {{value0}}"
       },
       "github": {
@@ -2384,6 +2381,10 @@
                 "7c302f8174": "Sans titre"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "Cette vue ne contient encore aucun élément.",
+            "7e4a2f80c6": "Les éléments ajoutés récemment peuvent mettre un moment à apparaître."
           }
         },
         "GitHubMarkdownComposer": {
@@ -5044,7 +5045,6 @@
           "49f62c5665": "Tableau des espaces de travail",
           "5c9c7c16aa": "Ajoutez un projet pour créer des espaces de travail",
           "a30e34eb5c": "Fermer le tableau des espaces de travail",
-          "createMenu": "Créer",
           "addProject": "Ajouter un projet"
         },
         "SidebarNav": {
@@ -15464,6 +15464,10 @@
           "4616ea39fd": "Aller à l'espace de travail",
           "threadListOptionsFiltered": "Options de la liste des fils, filtres actifs",
           "showSearch": "Afficher la recherche",
+          "showUnreadOnly": "Afficher uniquement les fils non lus",
+          "showChildAgents": "Afficher les agents enfants",
+          "filtersSection": "Filtres",
+          "viewSection": "Affichage",
           "59b131fbd9": "Marquer le fil comme non lu",
           "beb2c19173": "Non lus",
           "5651b216c6": "Projet inconnu",
@@ -16028,7 +16032,8 @@
         "chooseInAgentPicker": "Choisir dans le sélecteur d'agents…",
         "toggleOption": "Basculer {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "Valeur actuelle inconnue — choisissez Activé ou Désactivé",
+        "valueIsDefault": "Par défaut",
+        "valueNotReported": "Non signalé",
         "sentNotConfirmed": "Envoyé à l'agent — non confirmé",
         "setWhenSessionStarts": "Défini au démarrage de la session.",
         "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
@@ -16041,9 +16046,7 @@
           "high": "Haute",
           "xhigh": "Extra élevé",
           "max": "Max",
-          "ultra": "Ultra",
-          "on": "Activé",
-          "off": "Désactivé"
+          "ultra": "Ultra"
         }
       },
       "tool": {
@@ -16588,5 +16591,13 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "attend une réponse",
+      "working": "en cours",
+      "stopped": "arrêté",
+      "finished": "terminé"
+    }
   }
 }

@@ -1,0 +1,672 @@
+{
+  "operation": "session.tabs-stream-health",
+  "family": "session.tabs-stream-health",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
+  "scenarioSha256": "fab12524a09049d976da752cbe1b837a0aee04ce6e1eef75cbf517c862cb0d4a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "13a8f05b6027": {
+      "name": "fetch-errored",
+      "value": "transport failure",
+      "sent": 1
+    },
+    "17e92af0f44e": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1ee5cdadc74e": {
+      "name": "session.tabs.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 1
+    },
+    "2eae38db7631": {
+      "name": "fetch-errored",
+      "value": "",
+      "sent": 1
+    },
+    "32f791db34da": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "42599e959a49": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "442e980f817f": {
+      "name": "fetch-failed",
+      "value": {
+        "code": "refused",
+        "message": "outer refused"
+      },
+      "sent": 1
+    },
+    "49a2260ea0e7": {
+      "accepted": "unapplied",
+      "applicationRevision": 0
+    },
+    "4fb2d760b54b": {
+      "name": "fetch-succeeded",
+      "value": {
+        "$rpc": "undefined"
+      },
+      "sent": 1
+    },
+    "5a7cc7a45078": {
+      "name": "fetch-started",
+      "value": {},
+      "sent": 0
+    },
+    "5a9d6a1160e9": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "67009efe57d4": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "95ecf909b622": {
+      "name": "fetch-failed",
+      "value": {
+        "code": "refused",
+        "message": ""
+      },
+      "sent": 1
+    },
+    "96129665cfbc": {
+      "name": "fetch-succeeded",
+      "value": {
+        "error": "inner refused",
+        "ok": false
+      },
+      "sent": 1
+    },
+    "9653864fb896": {
+      "name": "fetch-succeeded",
+      "value": {
+        "tabs": [
+          {
+            "id": "tab-1"
+          }
+        ]
+      },
+      "sent": 1
+    },
+    "a9ecd3aba46a": {
+      "name": "fetch-succeeded",
+      "value": {
+        "error": "refused"
+      },
+      "sent": 1
+    },
+    "b6ed47ca5ea3": {
+      "accepted": {
+        "source": "list",
+        "tabs": []
+      },
+      "applicationRevision": 0
+    },
+    "b77d683ee6ee": {
+      "name": "fetch-failed",
+      "value": {
+        "code": "method_not_found",
+        "message": "Unknown method"
+      },
+      "sent": 1
+    },
+    "c5969ebad6b7": {
+      "name": "fetch-succeeded",
+      "value": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      },
+      "sent": 1
+    },
+    "d46815b7ac09": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tabs": [
+              {
+                "id": "tab-1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "d65a3b8025b0": {
+      "name": "fetch-errored",
+      "value": "Cannot read properties of null (reading 'tabs')",
+      "sent": 1
+    },
+    "dea35a8e61e3": {
+      "name": "fetch-succeeded",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
+    },
+    "df60619a0815": {
+      "name": "fetch-errored",
+      "value": "Cannot read properties of undefined (reading 'tabs')",
+      "sent": 1
+    },
+    "e29309cc10af": {
+      "accepted": {
+        "source": "list",
+        "tabs": [
+          {
+            "id": "tab-1"
+          }
+        ]
+      },
+      "applicationRevision": 0
+    },
+    "e4b0c74e48f9": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "e582528e16b2": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eb7e045cfdd3": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f65bb5453d98": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "fafc7ede7ef6": {
+      "name": "session.tabs.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.tabs-stream-health-session.tabs.list-1",
+    "checkpoints": [
+      {
+        "id": "session-tabs-health-reconciled.normal:reconciled",
+        "observation": {
+          "sender": ["d46815b7ac09"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "e29309cc10af",
+          "effects": ["5a7cc7a45078", "9653864fb896"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.result-absent:reconciled",
+        "observation": {
+          "sender": ["e4b0c74e48f9"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["5a7cc7a45078", "4fb2d760b54b", "df60619a0815"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.result-null:reconciled",
+        "observation": {
+          "sender": ["32f791db34da"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["5a7cc7a45078", "dea35a8e61e3", "d65a3b8025b0"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.inner-ok-missing:reconciled",
+        "observation": {
+          "sender": ["42599e959a49"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "b6ed47ca5ea3",
+          "effects": ["5a7cc7a45078", "a9ecd3aba46a"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.inner-false-string-error:reconciled",
+        "observation": {
+          "sender": ["e582528e16b2"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "b6ed47ca5ea3",
+          "effects": ["5a7cc7a45078", "96129665cfbc"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.inner-false-object-error:reconciled",
+        "observation": {
+          "sender": ["17e92af0f44e"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "b6ed47ca5ea3",
+          "effects": ["5a7cc7a45078", "c5969ebad6b7"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.outer-refused:reconciled",
+        "observation": {
+          "sender": ["5a9d6a1160e9"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["5a7cc7a45078", "442e980f817f"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.outer-refused-no-message:reconciled",
+        "observation": {
+          "sender": ["67009efe57d4"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["5a7cc7a45078", "95ecf909b622"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.method-not-found:reconciled",
+        "observation": {
+          "sender": ["f65bb5453d98"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["5a7cc7a45078", "b77d683ee6ee"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.transport-rejection:reconciled",
+        "observation": {
+          "sender": ["fafc7ede7ef6"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["5a7cc7a45078", "13a8f05b6027"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.transport-rejection-no-message:reconciled",
+        "observation": {
+          "sender": ["eb7e045cfdd3"],
+          "payloads": ["1ee5cdadc74e"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["5a7cc7a45078", "2eae38db7631"]
+        }
+      }
+    ]
+  }
+}

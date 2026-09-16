@@ -1,6 +1,5 @@
-import { z } from 'zod'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { releaseFederatedWorker } from '../federation/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { resolvePinnedFederatedServer } from './worker-observation'
@@ -10,8 +9,9 @@ import {
   type WorkerReleaseReceipt
 } from './worker-release-completion'
 import { WorkerDispatchParams, WorkerRetainParams } from './worker-release-schemas'
+import { OrchestrationWorkerTerminalUserInputParams } from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
 
-export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineMethod({
     name: 'orchestration.workerRelease',
     params: WorkerDispatchParams,
@@ -135,15 +135,16 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
     // `sessionId` addresses a worker that IS a structured agent session. Its pane key is a random
     // identity credential that never leaves main, so the caller names the session and the owning
     // runtime resolves it — a renderer echoing the pane key back would make it learnable.
-    params: z
-      .object({ paneKey: z.string().min(1).optional(), sessionId: z.string().min(1).optional() })
-      .refine((value) => Boolean(value.paneKey ?? value.sessionId), 'Missing paneKey or sessionId'),
+    params: OrchestrationWorkerTerminalUserInputParams,
     // Real user keystrokes durably relinquish orchestration ownership on the owning runtime, so
     // restarts, SSH drops, remote viewing, and renderer remounts cannot erase the takeover.
     handler: (params, { runtime }) => {
       // A structured worker reports by session id; it has no pane of its own to name.
       const paneKey =
-        params.paneKey ?? runtime.getStructuredWorkerPaneKeyForSession(params.sessionId!)
+        params.paneKey ??
+        (params.sessionId
+          ? runtime.getStructuredWorkerPaneKeyForSession(params.sessionId)
+          : runtime.getTerminalPaneKey(params.terminal!))
       const changed = paneKey
         ? runtime.getOrchestrationDb().markWorkerTerminalUserOwned(paneKey)
         : 0

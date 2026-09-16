@@ -9,6 +9,7 @@ import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
   AgentHookStatusChangeEntry,
+  AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload,
   StatusDropListener
 } from './server-types'
@@ -54,6 +55,26 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.statusChangeListeners.add(listener)
     return () => {
       this.statusChangeListeners.delete(listener)
+    }
+  }
+
+  /** Accepted duplicate evidence renews leases without becoming a semantic row mutation. */
+  subscribeStatusFreshness(
+    listener: (status: AgentHookStatusFreshnessObservation) => void
+  ): () => void {
+    this.statusFreshnessListeners.add(listener)
+    return () => {
+      this.statusFreshnessListeners.delete(listener)
+    }
+  }
+
+  protected emitStatusFreshnessObservation(status: AgentHookStatusFreshnessObservation): void {
+    for (const listener of this.statusFreshnessListeners) {
+      try {
+        listener(status)
+      } catch (err) {
+        console.error('[agent-hooks] status-freshness listener threw', err)
+      }
     }
   }
 
@@ -177,6 +198,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
       }
       if (!enriched.providerSessionOnly) {
         statuses.push({
+          paneKey,
           state: enriched.payload.state,
           receivedAt: enriched.receivedAt,
           observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)

@@ -20,19 +20,6 @@ import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
 
-export function isGrokIdleNotification(message: string | undefined): boolean {
-  if (!message) {
-    return false
-  }
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('type your message') ||
-    lower.includes('enter send') ||
-    lower.includes('shift-tab normal') ||
-    lower.includes('ask a side question')
-  )
-}
-
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
 export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {

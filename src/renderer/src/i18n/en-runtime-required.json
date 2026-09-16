@@ -1503,16 +1503,7 @@
           "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
           "cc8c5ca224": "Windows default",
-          "d78fc4fdef": "Loading distributions",
-          "minimumContrast": {
-            "automatic": "Automatic: {{light}} on light backgrounds, {{dark}} on dark.",
-            "description": "Lifts terminal foreground colors that sit too close to the background. Leave blank for automatic, or set 1 to render program colors exactly as sent.",
-            "disabled": "Correction off. Programs that rely on low contrast, like Powerline separators, render as sent.",
-            "pinned": "Targets {{ratio}}:1 contrast for foreground colors, where possible.",
-            "placeholder": "Auto",
-            "suffix": "blank = automatic, 1 = off",
-            "title": "Minimum Contrast Ratio"
-          }
+          "d78fc4fdef": "Loading distributions"
         },
         "TerminalSettingsPreview": {
           "d06664e889": "dark"
@@ -2544,6 +2535,14 @@
       }
     },
     "hooks": {
+      "useComposerState": {
+        "attachSkipMissing": "No longer at its original path.",
+        "attachSkipPermissionDenied": "Permission denied.",
+        "attachSkipSymlink": "Symbolic links cannot be attached.",
+        "attachSkipUnsupported": "Unsupported file type.",
+        "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+      },
       "useIpcEvents": {
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
         "f6300deb8b": "New Browser Tab"
@@ -2572,6 +2571,15 @@
         }
       },
       "worktree": {
+        "creation": {
+          "flow": {
+            "structured": {
+              "launch": {
+                "unknown": "Could not confirm whether {{value0}} chat opened. Retry to check again."
+              }
+            }
+          }
+        },
         "palette": {
           "search": {
             "0b01ff98d2": "Port",
@@ -2619,6 +2627,11 @@
   },
   "components": {
     "native-chat": {
+      "ask": {
+        "asked": "Asked:",
+        "awaiting": "Awaiting user input:",
+        "questionCount": "{{value0}} questions"
+      },
       "composer": {
         "effort": "Effort"
       },

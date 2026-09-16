@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
+import { isSupportedWindowsShellOverride } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
@@ -365,22 +365,6 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR2'
 ])
 
-const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
-  'powershell.exe',
-  'powershell',
-  'pwsh.exe',
-  'pwsh',
-  'cmd.exe',
-  'cmd',
-  'wsl.exe',
-  'wsl',
-  // Why: both spellings classify as a POSIX startup family, so rejecting them here made the relay
-  // the one host that hard-failed a setting the local and daemon PTYs accept.
-  'bash.exe',
-  'bash',
-  WINDOWS_GIT_BASH_SHELL
-])
-
 function resolvePtyShellOverride(shellOverride: string): string {
   if (!shellOverride) {
     return ''
@@ -388,8 +372,7 @@ function resolvePtyShellOverride(shellOverride: string): string {
   if (process.platform !== 'win32') {
     return ''
   }
-  const normalized = shellOverride.toLowerCase()
-  if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
+  if (!isSupportedWindowsShellOverride(shellOverride)) {
     throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
   }
   return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
@@ -645,7 +628,14 @@ export class PtyHandler {
 
   /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
   private relayNodePtyDir(): string {
-    return join(__dirname, 'node_modules', 'node-pty')
+    // Packaged relays live under Resources/relay while runtime dependencies are
+    // copied to the sibling Resources/node_modules directory. Development
+    // bundles keep node_modules beside the relay output, so retain that path as
+    // the fallback.
+    const packagedRoot = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+    const packagedDir = packagedRoot ? join(packagedRoot, 'node_modules', 'node-pty') : ''
+    const localDir = join(__dirname, 'node_modules', 'node-pty')
+    return packagedDir && existsSync(packagedDir) ? packagedDir : localDir
   }
 
   /**
@@ -2907,10 +2897,10 @@ export class PtyHandler {
       if (this.ptys.has(entry.id) || this.pendingReviveIds.has(entry.id)) {
         continue
       }
-      // Only re-attach if the original process is still alive
-      try {
-        process.kill(entry.pid, 0)
-      } catch {
+      // Only re-attach if the host proves the original process is still there. `isProcessAlive`
+      // is ESRCH-only for the same reason `reapPtyProvenExited` is: a refusal this host cannot
+      // resolve is unverifiable, not absence (docs/reference/ssh-execution-boundary.md).
+      if (!Number.isInteger(entry.pid) || entry.pid <= 0 || !isProcessAlive(entry.pid)) {
         continue
       }
       const ownedPath = entry.worktreeId

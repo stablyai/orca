@@ -102,7 +102,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
 
     try {
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-a')
+      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:target-a'
+      })
 
       expect(provider.listWorktrees).toHaveBeenCalledWith(REMOTE_REPO_PATH)
       expect(provider.removeWorktree).toHaveBeenCalledWith(TEST_WORKTREE_PATH, true)
@@ -127,7 +132,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
 
     try {
       await expect(
-        runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-a')
+        runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+          force: true,
+          runHooks: false,
+          allowUnverifiedPtyStop: false,
+          hostId: 'ssh:target-a'
+        })
       ).resolves.toEqual({})
 
       expect(provider.listWorktrees).toHaveBeenCalledWith(REMOTE_REPO_PATH)
@@ -152,7 +162,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
 
     try {
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-b')
+      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:target-b'
+      })
 
       expect(providerB.removeWorktree).toHaveBeenCalledWith(TEST_WORKTREE_PATH, true)
       expect(providerA.listWorktrees).not.toHaveBeenCalled()
@@ -168,7 +183,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'ssh:target-a')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:target-a'
+      })
     ).rejects.toThrow('Remote connection dropped')
 
     expect(listWorktreesStrict).not.toHaveBeenCalled()
@@ -181,7 +201,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'runtime:env-1')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'runtime:env-1'
+      })
     ).rejects.toThrow('not dispatched by this process')
 
     expect(listWorktreesStrict).not.toHaveBeenCalled()
@@ -201,7 +226,12 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
 
     try {
       await expect(
-        runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'runtime:env-1')
+        runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+          force: true,
+          runHooks: false,
+          allowUnverifiedPtyStop: false,
+          hostId: 'runtime:env-1'
+        })
       ).rejects.toThrow('not dispatched by this process')
 
       // Selector resolution still lists through the raw field before removal begins — a read on

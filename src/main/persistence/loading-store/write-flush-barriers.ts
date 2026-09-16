@@ -269,7 +269,7 @@ export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations)
 }
 
 export function installWriteFlushBarrierOperationsContext(
-  target: object,
+  target: WriteFlushBarrierOperations,
   source: WriteFlushBarrierOperations
 ): void {
   Object.defineProperty(target, writeFlushBarrierOperationsContext, {
