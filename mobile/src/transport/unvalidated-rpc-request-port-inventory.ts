@@ -52,11 +52,14 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
 export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcRequestPortEntry[] = [
   // app/h/[hostId]/ — Expo route screens
-  // Holdout: the screen now mounts, and both sends are still out of reach. Its second mount effect
-  // opens `accounts.subscribe`, the request-only runner refuses a subscription, and the crash
-  // boundary takes the tree with it — so the refresh control and the account rows that carry
-  // `accounts.list` and the three `accounts.select*` methods no longer exist to be driven.
-  // Subscriptions are a later step.
+  // Holdout behind two gates. The first is the mount: the screen reads
+  // `expo-router.useFocusEffect` and `react-native.ScrollView`, neither is a substituted member, so
+  // the trap refuses before any effect runs. Substituting exactly those two clears it and exposes
+  // the second gate — the mount effect that opens `accounts.subscribe`, which the request-only
+  // runner refuses, leaving `status.get` as the only send and taking the tree with it. So the
+  // refresh control and the account rows carrying `accounts.list` and the three `accounts.select*`
+  // methods never exist to be driven. Subscriptions are a later step, and the two members are left
+  // out here because the engine gains `useFocusEffect` on its own track.
   { file: 'app/h/[hostId]/accounts.tsx', references: 2 },
 
   // app/ — Expo route screens
@@ -82,10 +85,11 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // desktop view-settings mirror and the list's pin, remove and activate mutations migrated in
   // step 4; see host-screen-operations.ts.
   // Holdout: the last `worktree.sleep` is an `onPress` this file builds for `ActionSheetContent`,
-  // which renders only inside an open `BottomDrawer`. That subtree is `MountedBottomDrawer`, whose
-  // reanimated timing driver decides when its children exist and whose gesture builder is a fluent
-  // API with no inert form a recording has read. Nothing else exposes the action list, so reaching
-  // this send means standing in for both engines rather than pinning a device input.
+  // which renders only inside an open `BottomDrawer`. Nothing gates those children — the drawer
+  // mounts on `visible || mounted` and `MountedBottomDrawer` renders them unconditionally inside
+  // its `Modal`. The block is that module's imports: reanimated and gesture-handler, neither of
+  // which has a substitute, so reaching this send means standing in for both engines rather than
+  // pinning a device input.
   { file: 'src/host-screen/host-screen-overlays.tsx', references: 1 },
 
   // src/notifications/ — push registration and delivery. Registration and unregistration migrated
