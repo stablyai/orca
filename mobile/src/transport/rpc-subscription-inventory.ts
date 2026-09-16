@@ -37,7 +37,7 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
     method: 'accounts.subscribe',
     coverage: {
       kind: 'walled',
-      wall: 'The screen reads `expo-router.useFocusEffect` and `react-native.ScrollView`, neither a substituted member, so the mount trap refuses before any effect runs. The engine gains `useFocusEffect` on its own track.'
+      wall: 'The screen renders `react-native.ScrollView` and calls `react-native.Alert` to report a failed switch, neither a substituted member, so the mount trap refuses on the first render: `Unsubstituted native member: react-native.ScrollView`.'
     }
   },
   {
