@@ -7,6 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { republishMobileSessionWorktree } from '@/runtime/sync-runtime-graph/graph-publication'
 
 export function registerBrowserRequestIpcBridge(
   unsubs: (() => void)[],
@@ -66,6 +67,27 @@ export function registerBrowserRequestIpcBridge(
           error: err instanceof Error ? err.message : 'Tab creation failed'
         })
       }
+    })
+  )
+
+  unsubs.push(
+    window.api.ui.onRequestGraphResync((data) => {
+      // Why: main asks for a full republish of one worktree so the phone's first
+      // list carries the desktop's already-open renderer-owned browser tabs. Force
+      // the worktree's snapshot to re-send and report whether it actually reached
+      // main via `ok`, so main marks the resync done only on success and keeps
+      // retrying a failed publish. Always reply (even on failure) so the awaiting
+      // list never hangs.
+      void (async () => {
+        let ok = false
+        try {
+          ok = await republishMobileSessionWorktree(data.worktreeId)
+        } catch (err) {
+          console.error('[runtime] Failed to resync renderer graph for worktree', err)
+        } finally {
+          window.api.ui.replyGraphResync({ requestId: data.requestId, ok })
+        }
+      })()
     })
   )
 
