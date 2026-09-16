@@ -8386,6 +8386,201 @@
       ]
     },
     {
+      "id": "pr-sidebar-load",
+      "operation": "session.pr-sidebar",
+      "version": 1,
+      "family": "session.pr-sidebar",
+      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://x/12",
+              "updatedAt": "2026-01-01",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": 12
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://x/12",
+                "headSha": "head-sha-1",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        }
+      ]
+    },
+    {
+      "id": "pr-sidebar-checks-refused",
+      "operation": "session.pr-sidebar",
+      "version": 1,
+      "family": "session.pr-sidebar",
+      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://x/12",
+              "updatedAt": "2026-01-01",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": 12
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://x/12",
+                "headSha": "head-sha-1",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "checks": []
+            }
+          }
+        },
+        {
+          "checkpoint": "checks-refused"
+        }
+      ]
+    },
+    {
       "id": "pr-mutation-status",
       "operation": "session.pr-mutations",
       "version": 1,

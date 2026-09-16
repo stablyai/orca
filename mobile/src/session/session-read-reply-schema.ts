@@ -127,6 +127,3 @@ export const markdownTabDocumentSchema = z.looseObject({
  * `{ error }` to — a member reader would have to pick one arm before the caller discriminates.
  */
 export const sessionForwardedReplySchema = z.unknown()
-
-export type MobileSessionTerminalInventory = z.output<typeof sessionTerminalInventorySchema>
-export type MobileMarkdownTabDocument = z.output<typeof markdownTabDocumentSchema>

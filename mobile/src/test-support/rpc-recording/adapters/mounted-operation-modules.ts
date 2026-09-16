@@ -37,6 +37,7 @@ import {
 import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
 import { newWorkspaceRepositoryMountAdapters } from './new-workspace-repository-mount-adapters'
 import { pairingJournalMountAdapters } from './pairing-journal-mount-adapters'
+import { prSidebarMountAdapters } from './pr-sidebar-mount-adapters'
 import { pushDismissalMountAdapters } from './push-dismissal-mount-adapters'
 import {
   pushRegistrationMountAdapters,
@@ -139,6 +140,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     exposes: notificationTestScreenMountExposures
   },
   { source: 'pairing-journal-mount-adapters.ts', mounts: pairingJournalMountAdapters },
+  { source: 'pr-sidebar-mount-adapters.ts', mounts: prSidebarMountAdapters },
   { source: 'push-dismissal-mount-adapters.ts', mounts: pushDismissalMountAdapters },
   {
     source: 'push-registration-mount-adapters.ts',

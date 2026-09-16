@@ -12,6 +12,7 @@ import {
   checkStatusLabel,
   firstFailingCheckKey,
   prCheckKey,
+  prChecksSummaryLabel,
   sortPRChecks,
   summarizePRChecks
 } from './pr-checks-presentation'
@@ -31,7 +32,7 @@ export type PrChecksTriage = {
 type Props = {
   checks: PRCheckDetail[]
   // Set when the checks read failed; the section shows it in place of the rows.
-  checksError?: string | null
+  checksError: string | null
   client: RpcClient | null
   worktreeId: string
   prRepo?: GitHubPrRepoSlug | null
@@ -152,7 +153,7 @@ export function PRChecksSection({
               { color: statusColor(checkOutcomeToken(summary.outcome)) }
             ]}
           >
-            {summary.label}
+            {prChecksSummaryLabel(summary, checksError)}
           </Text>
           {/* Rerun is offered only when something failed; spinner-in-place while in-flight. */}
           {actions && summary.failed > 0 ? (

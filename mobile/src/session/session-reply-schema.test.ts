@@ -18,6 +18,7 @@ import {
 import {
   githubPrForBranchSchema,
   githubPrRepoSlugSchema,
+  githubWorkItemDetailsSchema,
   hostedReviewForBranchSchema
 } from './github-pr-read-reply-schema'
 import { prChecksSchema } from './github-pr-entity-reply-schema'
@@ -316,6 +317,35 @@ describe('closed arm sets drop rather than default', () => {
 
   it('refuses a diff whose kind names no arm the screen can render', () => {
     expect(refuses(reviewGitDiffSchema, { kind: 'lfs-pointer' })).toBe(true)
+  })
+
+  it('drops a checks summary whose state is an arm the header cannot colour', () => {
+    const details = reads(githubWorkItemDetailsSchema, {
+      item: {
+        id: 'i-1',
+        number: 7,
+        type: 'pr',
+        state: 'open',
+        checksSummary: { state: 'stalled', total: 3, failed: 1 }
+      }
+    })
+    expect(details?.item.checksSummary).toBeUndefined()
+  })
+
+  it('drops a reaction whose content is an arm with no emoji to draw', () => {
+    const details = reads(githubWorkItemDetailsSchema, {
+      item: { id: 'i-1', number: 7, type: 'pr', state: 'open' },
+      comments: [
+        {
+          id: 1,
+          reactions: [
+            { content: '+1', count: 2 },
+            { content: 'party', count: 9 }
+          ]
+        }
+      ]
+    })
+    expect(details?.comments[0]?.reactions).toEqual([{ content: '+1', count: 2 }])
   })
 })
 

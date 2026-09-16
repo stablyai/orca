@@ -18,9 +18,9 @@
  * reader can tell an import from a regression. #20954 brought three
  * (`notification-stream-closed`, `native-chat-session-page`, `terminal-buffer-cleared`).
  *
- * The source-control domain came off this list in #20950 and the session domain in step 7; the
- * nine session files it names are gone rather than lowered, because every reader in them is a
- * schema now.
+ * A file leaves the list by deletion, not by reaching zero: an entry asserts the file still holds
+ * at least one unchecked reader, so a `readers: 0` line is itself a failure. Migrating a domain
+ * therefore removes its files outright.
  *
  * Two holes this list does not close, both deliberate:
  *   - A hand-written reader that returns `{ compatible: true, ... }` without going through those

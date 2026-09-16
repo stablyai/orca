@@ -26,10 +26,10 @@ export const PR_STATE = ['open', 'closed', 'merged', 'draft'] as const
 export const CHECK_STATUS = ['pending', 'success', 'failure', 'neutral'] as const
 export const MERGEABLE_STATE = ['MERGEABLE', 'CONFLICTING', 'UNKNOWN'] as const
 export const REVIEW_DECISION = ['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'] as const
-export const CHECK_RUN_STATUS = ['queued', 'in_progress', 'completed'] as const
+const CHECK_RUN_STATUS = ['queued', 'in_progress', 'completed'] as const
 // `action_required` stays in the set: dropping it rendered a merge-blocking approval gate as a
 // pending check, because the shared classifier counts it as a failure.
-export const CHECK_RUN_CONCLUSION = [
+const CHECK_RUN_CONCLUSION = [
   'success',
   'failure',
   'cancelled',
@@ -39,9 +39,9 @@ export const CHECK_RUN_CONCLUSION = [
   'skipped',
   'pending'
 ] as const
-export const MERGE_METHOD = ['merge', 'squash', 'rebase'] as const
-export const CHECK_SUMMARY_STATE = ['success', 'failure', 'pending', 'neutral', 'none'] as const
-export const REACTION_CONTENT = [
+const MERGE_METHOD = ['merge', 'squash', 'rebase'] as const
+const CHECK_SUMMARY_STATE = ['success', 'failure', 'pending', 'neutral', 'none'] as const
+const REACTION_CONTENT = [
   '+1',
   '-1',
   'laugh',

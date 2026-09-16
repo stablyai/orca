@@ -296,5 +296,3 @@ export const githubWorkItemDetailsSchema = z
         }
   )
   .nullable()
-
-export type GitHubPrRepoSlugReply = z.output<typeof githubPrRepoSlugSchema>

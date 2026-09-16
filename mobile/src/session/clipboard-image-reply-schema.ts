@@ -30,5 +30,3 @@ export const clipboardImagePathSchema = z.string()
  * would fail a reply for a field with no consumer.
  */
 export const clipboardImageUnreadReplySchema = z.unknown()
-
-export type MobileClipboardImageUploadSlot = z.output<typeof clipboardImageUploadSlotSchema>
