@@ -48,9 +48,11 @@ export const detectedAgentsSchema = z.array(z.unknown())
  * The workspace file paths native chat suggests, from either the search or the legacy inventory.
  *
  * The schema answers the path list itself rather than the host's row array, because that list is
- * all either call site ever wanted: an empty `relativePath` was already dropped. `files` may be
- * absent — main's `?? []` made a reply without it an empty suggestion list — but a `files` that is
- * not an array was a `.map` on a string, which is the shape this refuses.
+ * all either call site ever wanted: an empty `relativePath` was already dropped. Nothing is
+ * required: main's `?? []` made a reply without `files` an empty suggestion list, and a `files`
+ * that is not an array was a `.map` on a string, which the salvaged optional turns into the same
+ * empty list. What the schema adds is the container — a bare string reply is named rather than
+ * crashing the composer's debounce.
  */
 export const workspaceFilePathsSchema = z
   .looseObject({
