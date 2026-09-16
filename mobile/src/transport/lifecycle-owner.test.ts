@@ -197,6 +197,45 @@ describe('stale-inflight-cleanup', () => {
   })
 })
 
+describe('stale-settlement-cleanup', () => {
+  it('keeps a retired request from clearing the slot the live one holds', async () => {
+    const owner: Owner = new GenerationScopedRequestOwner()
+    const scope = scopeAt('w1', 1)
+    let started = 0
+    const stale = pending()
+    const live = pending()
+    const staleLoaded = owner.load(scope, QUERY, () => {
+      started++
+      return stale.start()
+    })
+
+    owner.reset()
+    const liveLoaded = owner.load(scope, QUERY, () => {
+      started++
+      return live.start()
+    })
+    expect(started).toBe(2)
+
+    // The retired request settles last. Its cleanup names the slot by key, which the live request
+    // now holds, so only promise identity keeps it from evicting a request still in flight.
+    stale.resolve(['stale.ts'])
+    const retired = await settled(staleLoaded)
+    expect(owner.commit(retired.lease, retired.value)).toBe('retired-generation')
+
+    const joined = owner.load(scope, QUERY, () => {
+      started++
+      return pending().start()
+    })
+    expect(started).toBe(2)
+    expect(joined).toBe(liveLoaded)
+
+    live.resolve(['live.ts'])
+    const lease = await settled(joined)
+    expect(owner.commit(lease.lease, lease.value)).toBe('committed')
+    expect(owner.read(scope, QUERY)).toEqual(['live.ts'])
+  })
+})
+
 describe('owner boundaries', () => {
   it('refuses a peer owner lease', async () => {
     const owner: Owner = new GenerationScopedRequestOwner()
