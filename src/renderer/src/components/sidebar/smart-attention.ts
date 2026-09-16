@@ -3,6 +3,7 @@ import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { isSyntheticAgentPermissionTitle } from '../../../../shared/synthetic-agent-title'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -300,8 +301,14 @@ export function collectTabPaneInputs(
   const hasLivePty = tabHasLivePty(sources.ptyIdsByTabId, tab.id)
   // Why: leaves covered by a hook entry skip the title fallback so we don't double-count them.
   const hookLeafIds = new Set<string>()
+  // Stale hooks still suppress one-shot permission titles, matching worktree and tab status dots.
+  const permissionHookLeafIds = new Set<string>()
   for (const entry of sources.entriesByTabId.get(tab.id) ?? []) {
     panes.push({ kind: 'hook', entry, hasLivePty })
+    const leafId = leafIdFromPaneKey(entry.paneKey)
+    if (leafId !== null) {
+      permissionHookLeafIds.add(leafId)
+    }
     // Why: restored rows own their co-restored title without asserting live state.
     if (
       !entry.restoredUnconfirmed &&
@@ -309,7 +316,6 @@ export function collectTabPaneInputs(
     ) {
       continue
     }
-    const leafId = leafIdFromPaneKey(entry.paneKey)
     if (leafId !== null) {
       hookLeafIds.add(leafId)
     }
@@ -322,7 +328,10 @@ export function collectTabPaneInputs(
 
   const paneTitles = sources.runtimePaneTitlesByTabId[tab.id]
   if (!paneTitles || Object.keys(paneTitles).length === 0) {
-    if (hookLeafIds.size === 0) {
+    const coveredLeafIds = isSyntheticAgentPermissionTitle(tab.title)
+      ? permissionHookLeafIds
+      : hookLeafIds
+    if (coveredLeafIds.size === 0) {
       // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
       panes.push({
         kind: 'title',
@@ -337,10 +346,13 @@ export function collectTabPaneInputs(
   const tabLayout = sources.terminalLayoutsByTabId?.[tab.id]
   const paneTitleEntries = Object.entries(paneTitles)
   for (const [runtimePaneId, title] of paneTitleEntries) {
+    const coveredLeafIds = isSyntheticAgentPermissionTitle(title)
+      ? permissionHookLeafIds
+      : hookLeafIds
     const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
     const hasSingleUnmappedHook =
-      leafId === null && hookLeafIds.size === 1 && paneTitleEntries.length === 1
-    if ((leafId !== null && hookLeafIds.has(leafId)) || hasSingleUnmappedHook) {
+      leafId === null && coveredLeafIds.size === 1 && paneTitleEntries.length === 1
+    if ((leafId !== null && coveredLeafIds.has(leafId)) || hasSingleUnmappedHook) {
       continue
     }
     panes.push({ kind: 'title', status: classifyTitleActivity(title), worktreeLastActivityAt })

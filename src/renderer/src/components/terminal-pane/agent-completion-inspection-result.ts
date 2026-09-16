@@ -53,13 +53,16 @@ export function handleAgentCompletionInspectionResult(args: {
     dispatchCompletion,
     remoteInspection
   } = args
-  if (isClientOnlyUnverifiableInspection(result)) {
+  const remote = options.isRemotePtyId?.(options.getPtyId() ?? '') === true
+  if (
+    isClientOnlyUnverifiableInspection(result) ||
+    (!remote && result.childProcessEvidence === 'unverifiable')
+  ) {
     state.pendingProcessExitAgent = null
     state.consecutiveInspectionErrors += 1
     scheduleNextPoll()
     return false
   }
-  const remote = options.isRemotePtyId?.(options.getPtyId() ?? '') === true
   if (remote) {
     const evidence = result.foregroundProcessEvidence
     // Remote identity is host-authoritative. Compatibility names and unverifiable observations

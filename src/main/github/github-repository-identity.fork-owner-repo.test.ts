@@ -28,6 +28,7 @@ vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
+import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
 import { getOwnerRepoForRemote, _resetOwnerRepoCache } from './github-repository-identity'
 import { getOwnerRepo, getIssueOwnerRepo } from './github-owner-repo-selection'
 import { getRepoUpstream } from './client'
@@ -53,13 +54,17 @@ const REMOTE_URLS_BY_REPO: Record<string, Record<string, string>> = {
 
 beforeEach(() => {
   _resetOwnerRepoCache()
+  _resetRemoteNameListingCache()
   gitExecFileAsyncMock.mockReset()
   ghExecFileAsyncMock.mockReset()
   gitExecFileAsyncMock.mockImplementation(
     async (args: string[], options: { cwd?: string } = {}) => {
-      // getRemoteUrlForRepo calls: ['remote', 'get-url', <remoteName>]
+      const configured = REMOTE_URLS_BY_REPO[options.cwd ?? ''] ?? {}
+      if (args[0] === 'remote' && args[1] !== 'get-url') {
+        return { stdout: `${Object.keys(configured).join('\n')}\n` }
+      }
       const remoteName = args[2]
-      const url = REMOTE_URLS_BY_REPO[options.cwd ?? '']?.[remoteName]
+      const url = configured[remoteName]
       if (!url) {
         const err = new Error(`fatal: No such remote '${remoteName}'`) as Error & { code?: number }
         err.code = 128
@@ -92,16 +97,22 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
     expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
   })
 
-  it('caches the missing-upstream probe so repeat lookups skip the git spawn', async () => {
+  it('skips git remote get-url upstream on origin-only clones and caches the listing', async () => {
     await getOwnerRepo(NON_FORK_PATH)
-    const upstreamProbes = (): number =>
-      gitExecFileAsyncMock.mock.calls.filter(([args]) => args[2] === 'upstream').length
-    expect(upstreamProbes()).toBe(1)
+    const upstreamGetUrl = (): number =>
+      gitExecFileAsyncMock.mock.calls.filter(
+        ([args]) => args[1] === 'get-url' && args[2] === 'upstream'
+      ).length
+    const listCalls = (): number =>
+      gitExecFileAsyncMock.mock.calls.filter(
+        ([args]) => args[0] === 'remote' && args[1] !== 'get-url'
+      ).length
+    expect(upstreamGetUrl()).toBe(0)
+    expect(listCalls()).toBe(1)
 
     await getOwnerRepo(NON_FORK_PATH)
-    // Second lookup within the negative-cache TTL must not respawn git for
-    // the missing upstream remote.
-    expect(upstreamProbes()).toBe(1)
+    expect(upstreamGetUrl()).toBe(0)
+    expect(listCalls()).toBe(1)
   })
 
   it('resolves the upstream parent for SSH-style remote URLs', async () => {

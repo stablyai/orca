@@ -1,3 +1,5 @@
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import { proveClaudeTranscriptBranch } from '../claude/claude-transcript-branch-proof'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { join } from 'node:path'
@@ -26,6 +28,8 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   /** Managed-account auth state for a Claude launch, mirroring the terminal preflight.
    *  Required: an absent policy is what silently under-strips. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
+  /** The user's Agent Permissions setting for Claude; absent means prompting. */
+  resolveClaudePermissionMode?: () => Promise<PermissionMode> | PermissionMode
   readClaudeManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
@@ -48,6 +52,9 @@ export function createStructuredClaudeRuntimeAdapter(
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
       resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
+      ...(deps.resolveClaudePermissionMode
+        ? { resolvePermissionMode: deps.resolveClaudePermissionMode }
+        : {}),
       ...(deps.readClaudeManagedAccountGate
         ? { readManagedAccountGate: deps.readClaudeManagedAccountGate }
         : {})
@@ -70,10 +77,25 @@ export function createStructuredClaudeRuntimeAdapter(
         })
       )
     },
-    readTranscriptLeaf: async ({ providerSessionId, previousLeafUuid, claudeConfigDir }) => {
+    readTranscriptLeaf: async ({
+      providerSessionId,
+      previousLeafUuid,
+      intentionalRewindUuid,
+      claudeConfigDir
+    }) => {
       const transcriptPath = await resolveSessionFilePath('claude', providerSessionId, {
         claudeProjectsDir: join(claudeConfigDir, 'projects')
       })
+      if (transcriptPath && intentionalRewindUuid !== undefined) {
+        return (
+          await proveClaudeTranscriptBranch({
+            transcriptPath,
+            providerSessionId,
+            previousLeafUuid,
+            intentionalRewindUuid
+          })
+        ).leafUuid
+      }
       return transcriptPath
         ? await readClaudeTranscriptLeafUuid(transcriptPath, providerSessionId, previousLeafUuid)
         : null

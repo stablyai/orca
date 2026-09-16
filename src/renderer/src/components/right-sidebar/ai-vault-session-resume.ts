@@ -15,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   canJumpToAiVaultSessionWorktree,
+  resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
 
@@ -83,6 +84,32 @@ export function resolveAiVaultSessionResumeState(args: {
     worktreeId: null,
     usesSessionWorktree: false
   }
+}
+
+export function resolveAiVaultHistorySessionResumeState(
+  args: Omit<
+    Parameters<typeof resolveAiVaultSessionResumeState>[0],
+    'sessionFilePath' | 'sessionExecutionHostId'
+  > & {
+    session: AiVaultSession
+  }
+): AiVaultSessionResumeState {
+  const child = Boolean(args.session.subagent)
+  return resolveAiVaultSessionResumeState({
+    ...args,
+    sessionFilePath: args.session.filePath,
+    sessionExecutionHostId: args.session.executionHostId,
+    worktreeInfo: child
+      ? resolveAiVaultSessionWorktreeInfo({
+          session: args.session,
+          worktrees: args.worktrees,
+          repos: args.repos,
+          activeWorktreeId: args.activeWorktreeId
+        })
+      : args.worktreeInfo,
+    // Lazy children are absent from the panel map; never resume them in an unrelated active workspace.
+    activeWorktreeId: child ? null : args.activeWorktreeId
+  })
 }
 
 export function resolveAiVaultSessionResumeActions(args: {

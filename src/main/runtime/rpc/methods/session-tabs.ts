@@ -1,6 +1,5 @@
-import { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import {
   CreateTerminalTab,
   SessionTabsUnsubscribe,
@@ -14,11 +13,13 @@ import {
 } from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
+import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
+import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
 
-export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
+export const SESSION_TAB_METHODS = [
   defineMethod({
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
@@ -115,13 +116,16 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
+      const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
       emit({
         type: 'snapshot',
-        ...projectSessionTabsForClient(
-          initial,
-          clientKind,
-          clientCapabilities,
-          isStructuredNativeChatEnabled(runtime)
+        ...withProofDelta(
+          projectSessionTabsForClient(
+            initial,
+            clientKind,
+            clientCapabilities,
+            isStructuredNativeChatEnabled(runtime)
+          )
         )
       })
       initialized = true
@@ -133,11 +137,13 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         if (snapshot.worktree === subscribedWorktree) {
           emit({
             type: 'updated',
-            ...projectSessionTabsForClient(
-              snapshot,
-              clientKind,
-              clientCapabilities,
-              isStructuredNativeChatEnabled(runtime)
+            ...withProofDelta(
+              projectSessionTabsForClient(
+                snapshot,
+                clientKind,
+                clientCapabilities,
+                isStructuredNativeChatEnabled(runtime)
+              )
             )
           })
         }
@@ -175,11 +181,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'session.tabs.unsubscribeAll',
-    params: z
-      .object({
-        subscriptionId: z.string().min(1).optional()
-      })
-      .nullish(),
+    params: SessionTabsUnsubscribeAllParams,
     handler: async (params, { runtime, connectionId }) => {
       const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
       if (params?.subscriptionId) {

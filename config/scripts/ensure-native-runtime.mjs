@@ -22,7 +22,7 @@ const runtime = readRuntimeArg()
 const NATIVE_MODULES = [
   'node-pty',
   ...(process.platform === 'win32'
-    ? ['windows-native-registry', '@vscode/windows-process-tree']
+    ? ['@orca/windows-registry', '@vscode/windows-process-tree']
     : [])
 ]
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
@@ -275,7 +275,7 @@ function loadNativeModule(moduleName) {
     }
     return
   }
-  if (moduleName === 'windows-native-registry') {
+  if (moduleName === '@orca/windows-registry') {
     const registry = require(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.
     registry.getRegistryKey(registry.HK.CU, 'Environment')

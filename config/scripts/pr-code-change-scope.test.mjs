@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -7,7 +7,8 @@ import {
   classifyPrJobs,
   isDocsOnlyPath,
   PR_CHECK_JOBS,
-  shouldRunPrChecks
+  shouldRunPrChecks,
+  STATIC_ANALYSIS_SCAN_ROOTS
 } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -327,11 +328,41 @@ describe('per-job path classification', () => {
     expect(
       classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
     ).toBe(true)
-    // Why false: a mobile-only diff skips every desktop job, so the install step's own
-    // job never runs and claiming the install is needed contradicts should_run.
-    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(false)
+    // Why true: a mobile-only diff still skips the desktop suite, but the repo-wide audits lint
+    // mobile/, so static analysis runs and its changed-code pass needs the mobile types.
+    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(true)
     expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
-    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(true)
+  })
+
+  // Why: `mobile/` is desktop-irrelevant for every other job, so a mobile-only diff used to skip
+  // the audits that do lint it. That is how #20702 landed two duplicate imports which then failed
+  // this gate on every later PR's merge ref until #20895 swept them.
+  it('runs static analysis for a mobile-only diff without dragging in the desktop suite', () => {
+    const result = classifyPrJobs([
+      'mobile/src/test-support/rpc-recording/adapters/push-registration-mount-adapters.ts'
+    ])
+    expect(result.static_analysis).toBe(true)
+    expect(result.mobile_dependencies).toBe(true)
+    expect(result.should_run).toBe(false)
+    for (const job of ['typecheck', 'test', 'package', 'package_windows', 'git_compatibility']) {
+      expect(result[job], job).toBe(false)
+    }
+  })
+
+  // The ratchet: adding a tree to an audit command has to widen this trigger on its own.
+  it('runs static analysis for every tree the audit commands scan', () => {
+    expect(STATIC_ANALYSIS_SCAN_ROOTS).toEqual(
+      expect.arrayContaining(['src', 'config', 'tests', 'mobile'])
+    )
+    for (const root of STATIC_ANALYSIS_SCAN_ROOTS) {
+      expect(classifyPrJobs([`${root}/changed-file.ts`]).static_analysis, root).toBe(true)
+    }
+  })
+
+  it('leaves diffs the audits never read out of static analysis', () => {
+    expect(classifyPrJobs(['README.md']).static_analysis).toBe(false)
+    expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
   })
 
   it('keeps unit-test-only diffs out of packaging', () => {
@@ -352,6 +383,54 @@ describe('per-job path classification', () => {
     expect(result.stdout).toContain('git_compatibility=false\n')
     expect(result.stdout).toContain('package=false\n')
     expect(result.stdout).toContain('test=true\n')
+  })
+
+  // A long-lived PR whose base.sha has gone stale diffs thousands of files, so the writer
+  // outruns one pipe buffer. A single fd-0 read then returns early, breaks the writer's pipe,
+  // and still exits 0 -- emitting no pairs at all, which silently skips every lane.
+  it('classifies a path that arrives after the first pipe buffer', async () => {
+    const filler = Array.from(
+      { length: 12_000 },
+      (_, index) => `docs/reference/generated-placeholder-${index}.md`
+    )
+    const input = `${[...filler, 'config/patches/xterm-upstream.json'].join('\n')}\n`
+    expect(input.length).toBeGreaterThan(64 * 1024)
+
+    const child = spawn(process.execPath, ['config/scripts/pr-code-change-scope.mjs'], {
+      cwd: projectDir,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    let brokePipe = false
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => (stdout += chunk))
+    child.stderr.on('data', (chunk) => (stderr += chunk))
+    child.stdin.on('error', (error) => {
+      brokePipe ||= error.code === 'EPIPE'
+    })
+
+    const exitCode = await new Promise((resolvePromise) => {
+      child.on('close', resolvePromise)
+      let offset = 0
+      const step = () => {
+        if (offset >= input.length) {
+          child.stdin.end()
+          return
+        }
+        child.stdin.write(input.slice(offset, offset + 64 * 1024))
+        offset += 64 * 1024
+        setTimeout(step, 20)
+      }
+      step()
+    })
+
+    expect(stderr).not.toContain('EAGAIN')
+    expect(brokePipe).toBe(false)
+    expect(exitCode, stderr).toBe(0)
+    expect(stdout).toContain('should_run=true\n')
+    expect(stdout).toContain('xterm_patch_sync=true\n')
   })
 })
 

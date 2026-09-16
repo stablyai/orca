@@ -90,6 +90,26 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
+  it.each([
+    [':', 'working'],
+    ['>', 'idle'],
+    ['!', 'waiting']
+  ])('retains hook-less OMP rows for owner marker %s', (marker, state) => {
+    const title = `OMP ${marker} Run a long task`
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
+      ptyIdsByTabId: { 'tab-1': ['pty-omp'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
+      ['omp', state, title]
+    ])
+  })
+
   it('keeps Pi-compatible title-derived rows as Pi for launched Pi sessions', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'pi' })],

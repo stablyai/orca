@@ -25,7 +25,11 @@ import {
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
-import type { HostProfile, RpcResponse } from './types'
+import type { HostProfile } from './types'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 
 export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred' | 'abandoned'
 
@@ -127,13 +131,12 @@ async function runRecovery(
       }
       if (credential.kind === 'invite' && endpoints.installStatus?.state === 'not-found') {
         journal = await transitionToInviteAuthorization(journal, dependencies)
+        const installReply = await relayCredentialProvision.request(client, {
+          reqId: journal.metadata.installReqId,
+          newResumeTokenHash: journal.metadata.pendingResumeTokenHash
+        })
         const installed = DeviceCredentialInstalledSchema.parse(
-          requireSuccess(
-            await client.sendRequest('pairing.provisionRelay', {
-              reqId: journal.metadata.installReqId,
-              newResumeTokenHash: journal.metadata.pendingResumeTokenHash
-            })
-          )
+          relayCredentialProvision.interpret(installReply)
         )
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
@@ -219,14 +222,11 @@ async function getRecoveryStatus(
   journal: MobileRelayPairingJournal,
   kind: 'resume' | 'invite'
 ) {
-  return PairingGetEndpointsResultSchema.parse(
-    requireSuccess(
-      await client.sendRequest('pairing.getEndpoints', {
-        installReqId: journal.metadata.installReqId,
-        ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
-      })
-    )
-  )
+  const reply = await relayPairingEndpointsRead.request(client, {
+    installReqId: journal.metadata.installReqId,
+    ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
+  })
+  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
 }
 
 async function transitionToInviteAuthorization(
@@ -292,13 +292,6 @@ function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoin
 
 function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
   return { ...journal.metadata.relay, inviteToken: journal.secrets.inviteToken }
-}
-
-function requireSuccess(response: RpcResponse): unknown {
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
-  }
-  return response.result
 }
 
 function assertCommitted(

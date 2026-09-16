@@ -57,6 +57,7 @@ export function createTabsCreateActions(
           worktreeId,
           ...(executionHostId ? { executionHostId } : {}),
           contentType,
+          ...(init?.agentSessionAgent ? { agentSessionAgent: init.agentSessionAgent } : {}),
           label:
             init?.label ??
             (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
@@ -120,7 +121,7 @@ export function createTabsCreateActions(
           target.sourceGroupId
         )
         if (!sourceGroup) {
-          return {}
+          return state
         }
         const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
         const currentGroups = state.groupsByWorktree[worktreeId] ?? []
@@ -138,6 +139,7 @@ export function createTabsCreateActions(
           worktreeId,
           ...(executionHostId ? { executionHostId } : {}),
           contentType,
+          ...(init?.agentSessionAgent ? { agentSessionAgent: init.agentSessionAgent } : {}),
           label:
             init?.label ??
             (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),

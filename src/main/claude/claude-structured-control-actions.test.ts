@@ -4,10 +4,12 @@ import {
   answerClaudePrompt,
   stopClaudeBackgroundTasks
 } from './claude-structured-control-actions'
+import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { sessionFor, userMessage } from './claude-structured-dispatch-test-support'
 
 type InterruptResult = Awaited<ReturnType<ClaudeSession['connection']['interrupt']>>
 
@@ -23,11 +25,11 @@ function sessionWith(input: {
 } {
   const interrupt = vi.fn(input.interrupt)
   const cancelAsyncMessage = vi.fn(input.cancelAsyncMessage ?? (async () => {}))
-  const session = {
-    capabilities: input.capabilities ?? [],
-    prompts: input.prompts ?? new ClaudePromptRegistry(),
-    connection: { interrupt, cancelAsyncMessage }
-  } as unknown as ClaudeSession
+  const session = sessionFor()
+  session.capabilities = input.capabilities ?? []
+  session.prompts = input.prompts ?? new ClaudePromptRegistry()
+  session.connection.interrupt = interrupt
+  session.connection.cancelAsyncMessage = cancelAsyncMessage
   return { session, interrupt, cancelAsyncMessage }
 }
 
@@ -54,15 +56,69 @@ describe('cancelClaudeTurn', () => {
     expect(cancelAsyncMessage.mock.calls.map((call) => call[0])).toEqual(['queued-1', 'queued-2'])
   })
 
-  it('sends cancel_queued and never sweeps when the CLI advertises the capability', async () => {
+  it('settles every cancelled queued waiter when the CLI advertises the capability', async () => {
+    const cancelled = Array.from({ length: 64 }, (_, index) => `queued-${index}`)
     const { session, interrupt, cancelAsyncMessage } = sessionWith({
       capabilities: ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1'],
-      interrupt: async () => ({ still_queued: [], cancelled: ['queued-1'] })
+      interrupt: async () => ({ still_queued: [], cancelled })
     })
+    const resolutions = cancelled.map(() => vi.fn())
+    session.dispatchWaiters = cancelled.map((sentUuid, index): ClaudeDispatchWaiter => ({
+      acceptsResult: false,
+      clientMessageId: `client-${index}`,
+      sentUuid,
+      dispatchSequence: index + 1,
+      replayContentKey: `content-${index}`,
+      resolve: resolutions[index]!
+    }))
+    const settled = vi.fn()
 
-    await expect(cancelClaudeTurn(session, 5_000)).resolves.toEqual({ cancelled: true })
+    await expect(cancelClaudeTurn(session, 5_000, () => true, settled)).resolves.toEqual({
+      cancelled: true
+    })
     expect(interrupt).toHaveBeenCalledWith({ cancelQueued: true, timeoutMs: 5_000 })
     expect(cancelAsyncMessage).not.toHaveBeenCalled()
+    expect(session.dispatchWaiters).toEqual([])
+    expect(resolutions.every((resolve) => resolve.mock.calls[0]?.[0] === null)).toBe(true)
+    expect(settled).toHaveBeenCalledTimes(64)
+    expect(settled).toHaveBeenNthCalledWith(1, {
+      clientMessageId: 'client-0',
+      state: 'rejected',
+      reason: 'provider_cancelled_before_start'
+    })
+  })
+
+  it('rejects an ambiguously written dispatch when a later interrupt confirms it was cancelled', async () => {
+    let cancelledUuid = ''
+    const { session } = sessionWith({
+      capabilities: ['interrupt_cancel_queued_v1'],
+      interrupt: async () => ({ still_queued: [], cancelled: [cancelledUuid] })
+    })
+    session.connection.send = vi.fn(async () => {
+      throw new Error('connection lost after write')
+    })
+    const settled = vi.fn()
+
+    await expect(
+      dispatchClaudeTurn(session, {
+        clientMessageId: 'client-ambiguous',
+        body: userMessage([{ type: 'text', text: 'queued' }])
+      })
+    ).resolves.toMatchObject({ state: 'unknown' })
+    expect(session.dispatchWaiters).toEqual([])
+    expect(session.retiredDispatchWaiters).toHaveLength(1)
+    cancelledUuid = session.retiredDispatchWaiters[0]!.sentUuid
+
+    await expect(cancelClaudeTurn(session, 5_000, () => true, settled)).resolves.toEqual({
+      cancelled: true
+    })
+    expect(session.retiredDispatchWaiters).toEqual([])
+    expect(settled).toHaveBeenCalledOnce()
+    expect(settled).toHaveBeenCalledWith({
+      clientMessageId: 'client-ambiguous',
+      state: 'rejected',
+      reason: 'provider_cancelled_before_start'
+    })
   })
 
   it('reports a not-running interrupt as not cancelled without throwing', async () => {
@@ -87,6 +143,40 @@ describe('cancelClaudeTurn', () => {
 })
 
 describe('answerClaudePrompt', () => {
+  it('resolves cancellation observation when teardown clears the prompt registry', async () => {
+    const prompts = new ClaudePromptRegistry()
+    const settle = vi.fn()
+    const prompt = prompts.register({
+      requestId: 'perm-clear',
+      toolName: 'Bash',
+      toolUseId: 'tool-clear',
+      input: { command: 'ls' },
+      suggestions: [],
+      settle
+    })!
+    prompts.bindJournalItemId('journal-clear', prompt.promptKey)
+    const claim = prompts.claim('journal-clear', 'approval')
+    if (!claim) {
+      throw new Error('expected prompt claim')
+    }
+    const observed = prompts.observeCancellation(claim)
+    if (!observed) {
+      throw new Error('expected cancellation observation')
+    }
+    let observedCancellation = false
+    void observed.then(() => {
+      observedCancellation = true
+    })
+
+    expect(prompts.clear()).toEqual([prompt])
+    await Promise.resolve()
+
+    expect(observedCancellation).toBe(true)
+    expect(prompts.find('journal-clear')).toBeNull()
+    expect(prompts.ownsClaim(claim)).toBe(false)
+    expect(settle).not.toHaveBeenCalled()
+  })
+
   it('settles the pending prompt callback and forgets it', async () => {
     const prompts = new ClaudePromptRegistry()
     const settle = vi.fn()
@@ -100,20 +190,35 @@ describe('answerClaudePrompt', () => {
     })!
     prompts.bindJournalItemId('journal-1', prompt.promptKey)
     const { session } = sessionWith({ interrupt: async () => undefined, prompts })
+    const resolvePrompt = vi.fn()
+    session.translator = {
+      handle: vi.fn(),
+      journalPrompts: {
+        cancel: vi.fn(() => ({ accepted: true as const })),
+        resolve: resolvePrompt
+      },
+      currentTurnId: null,
+      flush: vi.fn(),
+      pendingStreamedBlocks: 0,
+      dispose: vi.fn()
+    }
 
-    await answerClaudePrompt(session, { itemId: 'journal-1', kind: 'approval', optionId: 'allow' })
+    const claim = prompts.claim('journal-1', 'approval')
+    if (!claim) {
+      throw new Error('expected prompt claim')
+    }
+    await answerClaudePrompt(session, claim, 'allow')
 
     expect(settle).toHaveBeenCalledWith(
       expect.objectContaining({ behavior: 'allow', toolUseID: 'tool-1' })
     )
     expect(prompts.find('journal-1')).toBeNull()
+    expect(resolvePrompt).toHaveBeenCalledWith(prompt.promptKey)
   })
 
-  it('refuses an answer for a prompt Claude is no longer waiting on', async () => {
-    const { session } = sessionWith({ interrupt: async () => undefined })
-    await expect(
-      answerClaudePrompt(session, { itemId: 'missing', kind: 'approval', optionId: 'allow' })
-    ).rejects.toThrow(/no longer waiting/)
+  it('refuses to claim a prompt Claude is no longer waiting on', () => {
+    const prompts = new ClaudePromptRegistry()
+    expect(prompts.claim('missing', 'approval')).toBeNull()
   })
 })
 

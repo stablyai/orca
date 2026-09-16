@@ -9,6 +9,7 @@ vi.mock('react-native', async () => {
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
     React.createElement('Text', props, children)
   return {
+    ActivityIndicator: 'ActivityIndicator',
     Animated: {
       Text,
       Value: class {
@@ -104,6 +105,21 @@ describe('MobileNativeChatMessage', () => {
       .findAllByType('Text' as never)
       .map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+  })
+
+  it('makes user message text selectable', () => {
+    const tree = render(userMessage([{ type: 'text', text: 'Prompt I typed' }]))
+    const text = tree.root
+      .findAllByType('Text' as never)
+      .find((node) => String(node.children.join('')) === 'Prompt I typed')
+    expect(text?.props.selectable).toBe(true)
+  })
+
+  it('routes assistant prose through selectable Markdown', () => {
+    const tree = render(toolMessage([{ type: 'text', text: 'Agent reply prose' }]))
+    const markdown = tree.root.findByType('MobileMarkdown' as never)
+    expect(markdown.props.content).toBe('Agent reply prose')
+    expect(markdown.props.rangeSelectable).toBe(true)
   })
 
   it('labels a tool row with the target path instead of raw input JSON', () => {
@@ -253,12 +269,12 @@ describe('MobileNativeChatMessage', () => {
       expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
     })
 
-    it('renders the turn status row under a user message', () => {
+    it('renders the settled turn status row under a user message', () => {
       const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
         structuredActivityUi: true,
-        turnStatus: { startedAt: Date.now(), thinking: true, workedSeconds: null }
+        turnStatus: { startedAt: Date.now() - 3_000, thinking: false, workedSeconds: 3 }
       })
-      expect(textIn(tree.root)).toContain('Thinking')
+      expect(textIn(tree.root)).toContain('Worked for 3s')
     })
 
     it('does not render a turn status row without one', () => {

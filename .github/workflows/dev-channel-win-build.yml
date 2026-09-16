@@ -219,6 +219,8 @@ jobs:
       # Why retried: pnpm install triggers electron's postinstall, which pulls the
       # Electron binary from GitHub release assets, and that CDN returns transient
       # 504s often enough to lose a build to it.
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:

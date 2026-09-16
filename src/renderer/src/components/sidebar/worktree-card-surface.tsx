@@ -53,7 +53,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         // Why: the live data attribute updates before React state during navigation,
         // so it must own the complete active style without stale utility classes.
         isLineageDropTarget
-          ? 'border border-accent-foreground/20 bg-accent/80'
+          ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
           : isActiveSurface
             ? 'border border-transparent'
             : isMultiSelected
@@ -72,7 +72,10 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
-      data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
+      data-worktree-card-active={
+        isActiveSurface && !isLineageDropTarget ? activeSurfaceVariant : undefined
+      }
+      data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
       onClick={handleClick}
       onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
       draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}

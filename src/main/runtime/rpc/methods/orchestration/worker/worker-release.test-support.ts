@@ -1,6 +1,6 @@
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import type { RpcContext } from '../../../core'
+import { eraseRpcMethods, type RpcContext } from '../../../core'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 
@@ -130,7 +130,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
   }
 
   function findMethod(name: string) {
-    const method = ORCHESTRATION_METHODS.find((m) => m.name === name)
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }

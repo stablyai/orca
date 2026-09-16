@@ -3,7 +3,8 @@ import { useFocusEffect } from 'expo-router'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import type { ConnectionState } from '../transport/types'
+import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
 import { getLiveWorktreeDisplayName, type WorktreeDisplayNameSource } from './worktree-display-name'
 import { FLOATING_WORKSPACE_TITLE, isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import {
@@ -88,7 +89,7 @@ export function useLiveWorktreeName({
         // only the newest read may publish or stop the retry poll.
         const generation = ++refreshGeneration
         try {
-          const response = await client.sendRequest('worktree.show', {
+          const response = await sessionWorktreeRecordRead.request(client, {
             worktree: `id:${worktreeId}`
           })
           if (stale || generation !== refreshGeneration) {
@@ -110,15 +111,17 @@ export function useLiveWorktreeName({
               ? current
               : { worktreeId, resolution }
           )
-          if (!response.ok) {
+          // The resolution above comes off the raw reply on purpose: `selector_not_found` is what
+          // proves the worktree is gone, and no acceptance policy carries a refusal code. The skip
+          // below is the same verdict as main's `!response.ok`, since a refusal is the only reply
+          // this policy declines.
+          const accepted = sessionWorktreeRecordRead.interpret(response)
+          if (!accepted.accepted) {
             return
           }
-          const result = (response as RpcSuccess).result as {
-            worktree?: WorktreeDisplayNameSource
-          }
-          const liveName = result.worktree
-            ? getLiveWorktreeDisplayName([result.worktree], worktreeId)
-            : null
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this member unread; the reader hands back the same `worktree` value.
+          const worktree = accepted.value as WorktreeDisplayNameSource | undefined
+          const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
             setWorktreeName((current) =>
               current.worktreeId === worktreeId && current.name === liveName

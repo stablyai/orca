@@ -16,27 +16,29 @@ export function patchTaskPageGitHubWorkItemPages(
   patch: Partial<GitHubWorkItem>,
   shouldPatch?: (item: GitHubWorkItem) => boolean
 ): (GitHubWorkItem[] | null)[] {
-  let changed = false
-  const nextPages = pages.map((page) => {
+  let nextPages: (GitHubWorkItem[] | null)[] | undefined
+  pages.forEach((page, pageIndex) => {
     if (!page) {
-      return null
+      return
     }
-    let pageChanged = false
-    const nextPage = page.map((item) => {
+    let nextPage: GitHubWorkItem[] | undefined
+    page.forEach((item, itemIndex) => {
       if (
         item.id !== itemKey.id ||
         item.repoId !== itemKey.repoId ||
         (shouldPatch && !shouldPatch(item))
       ) {
-        return item
+        return
       }
-      changed = true
-      pageChanged = true
-      return { ...item, ...patch }
+      nextPage ??= page.slice()
+      nextPage[itemIndex] = { ...item, ...patch }
     })
-    return pageChanged ? nextPage : page
+    if (nextPage) {
+      nextPages ??= pages.slice()
+      nextPages[pageIndex] = nextPage
+    }
   })
-  return changed ? nextPages : (pages as (GitHubWorkItem[] | null)[])
+  return nextPages ?? (pages as (GitHubWorkItem[] | null)[])
 }
 
 /** Match each item to pending/confirmed authority by repoId + itemId + remembered sourceScope. */

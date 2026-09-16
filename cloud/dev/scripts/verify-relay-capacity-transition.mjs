@@ -108,8 +108,8 @@ export function parseCapacityTransitionArguments(argv) {
   const regionalRehomeProtocol = values['regional-rehome-protocol'] === undefined
     ? undefined
     : integer(values['regional-rehome-protocol'], '--regional-rehome-protocol')
-  if (regionalRehomeProtocol !== undefined && ![0, 1].includes(regionalRehomeProtocol)) {
-    throw new Error('--regional-rehome-protocol must be 0 or 1')
+  if (regionalRehomeProtocol !== undefined && ![0, 1, 3].includes(regionalRehomeProtocol)) {
+    throw new Error('--regional-rehome-protocol must be 0, 1, or 3')
   }
   if (runtime === 'unavailable' && regionalRehomeProtocol !== undefined) {
     throw new Error('unavailable runtime cannot prove the regional rehome protocol')

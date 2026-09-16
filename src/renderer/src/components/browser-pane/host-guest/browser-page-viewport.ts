@@ -137,12 +137,30 @@ export function ensureBrowserPageViewport(
   return viewport
 }
 
+/** Divides the preset's window-DIP size by the live UI zoom factor (see `main.css`). */
+export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-viewport'
+
+// Why the DIP conversion: CDP emulates the guest viewport in window DIP, but UI zoom
+// redefines this renderer's CSS px, so an unconverted `${width}px` host box outgrows the
+// emulated page and leaves an unpainted strip beside it (STA-7568).
 function applyViewportPresetSizeStyles(
   viewport: BrowserPageViewport,
   size: { width: number; height: number } | null
 ): void {
-  viewport.content.style.width = size ? `${size.width}px` : '100%'
-  viewport.content.style.height = size ? `${size.height}px` : '100%'
+  if (size) {
+    viewport.content.style.setProperty('--browser-page-viewport-width', `${size.width}px`)
+    viewport.content.style.setProperty('--browser-page-viewport-height', `${size.height}px`)
+    // Why: an inline width/height would outrank the class rule's zoom division.
+    viewport.content.style.removeProperty('width')
+    viewport.content.style.removeProperty('height')
+    viewport.content.classList.add(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)
+  } else {
+    viewport.content.classList.remove(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)
+    viewport.content.style.removeProperty('--browser-page-viewport-width')
+    viewport.content.style.removeProperty('--browser-page-viewport-height')
+    viewport.content.style.width = '100%'
+    viewport.content.style.height = '100%'
+  }
   viewport.scroller.style.overflow = size ? 'auto' : ''
 }
 

@@ -1,0 +1,249 @@
+{
+  "operation": "relay.credential-rotation",
+  "family": "relay.credential-rotation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
+  "scenarioSha256": "c786fb19f9593ee60238e42813561edf6f5e976fcf217dff8de977a333fe8451",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0f448fcd9d34": {
+      "name": "pairing.getEndpoints#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "rotate-VftjjHf-4Lb1-Sdfryl-LA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "rotate-VftjjHf-4Lb1-Sdfryl-LA",
+              "result": {
+                "authorizationMode": "authenticated-direct",
+                "currentVersion": 4,
+                "reqId": "rotate-VftjjHf-4Lb1-Sdfryl-LA",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "8336e309abb8": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "rotate-VftjjHf-4Lb1-Sdfryl-LA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "rotate-VftjjHf-4Lb1-Sdfryl-LA",
+              "state": "not-found",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "85b38f117802": {
+      "name": "bundle-written",
+      "value": {
+        "grace": {
+          "$rpc": "null"
+        },
+        "pending": true,
+        "version": 3
+      },
+      "sent": 0
+    },
+    "923a7c4f532d": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"rotate-VftjjHf-4Lb1-Sdfryl-LA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\",\"expectedCurrentHash\":\"r_9byaBlTZTXS3aLLlWTKwss-nmx4vGRrjKskxWyP30\"}}",
+      "sent": 2
+    },
+    "9ade8126917f": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedCurrentHash": "r_9byaBlTZTXS3aLLlWTKwss-nmx4vGRrjKskxWyP30",
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "rotate-VftjjHf-4Lb1-Sdfryl-LA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "authorizationMode": "authenticated-direct",
+            "currentVersion": 4,
+            "reqId": "rotate-VftjjHf-4Lb1-Sdfryl-LA",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
+    },
+    "a69b88101d55": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"rotate-VftjjHf-4Lb1-Sdfryl-LA\"}}",
+      "sent": 1
+    },
+    "b16bdfbd5633": {
+      "name": "pairing.getEndpoints#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"rotate-VftjjHf-4Lb1-Sdfryl-LA\"}}",
+      "sent": 3
+    },
+    "eee85d194a6b": {
+      "name": "bundle-written",
+      "value": {
+        "grace": {
+          "$rpc": "null"
+        },
+        "pending": false,
+        "version": 4
+      },
+      "sent": 3
+    },
+    "f2c843a9b548": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "bundle": {
+          "current": {
+            "expiresAt": 1767830400000,
+            "hash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "token": "PF6BtAxexo4Eo0Bsl9Y8-9xTrog3GhJRIbWVYUPA7i0",
+            "version": 4
+          },
+          "deviceToken": "device-token-1",
+          "grace": {
+            "$rpc": "undefined"
+          },
+          "hostId": "host-1",
+          "pending": {
+            "$rpc": "undefined"
+          },
+          "v": 1
+        },
+        "relay": {
+          "assignmentEpoch": 1,
+          "cellUrl": "https://cell.example",
+          "directorUrl": "https://director.example",
+          "e2eeFraming": 2,
+          "relayHostId": "relay-host-0001x",
+          "v": 1
+        }
+      }
+    },
+    "fdf764b375ae": {
+      "outcome": {
+        "relayHostId": "relay-host-0001x",
+        "version": 4
+      },
+      "pending": false,
+      "version": 4
+    }
+  },
+  "recording": {
+    "scenario": "relay-rotation-installs-and-commits",
+    "checkpoints": [
+      {
+        "id": "credential-rotated",
+        "observation": {
+          "sender": ["8336e309abb8", "9ade8126917f", "0f448fcd9d34"],
+          "payloads": ["a69b88101d55", "923a7c4f532d", "b16bdfbd5633"],
+          "settlements": {
+            "rotate": "f2c843a9b548"
+          },
+          "state": "fdf764b375ae",
+          "effects": ["85b38f117802", "eee85d194a6b"]
+        }
+      }
+    ]
+  }
+}

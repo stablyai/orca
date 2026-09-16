@@ -59,8 +59,6 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/renderer/src/components/automations/AutomationListLocalRow.tsx', 2],
       'src/renderer/src/components/automations/automation-draft-model.ts',
       ['src/renderer/src/components/automations/automation-list-search-rows.ts', 2],
-      ['src/renderer/src/components/dashboard-popout/AgentMapSnapshotWorkspaceMenu.tsx', 2],
-      ['src/renderer/src/components/dashboard-popout/AgentMapWorktreeRingNode.tsx', 2],
       ['src/renderer/src/components/settings/NativeChatSupportedAgents.tsx', 2],
       ['src/renderer/src/components/settings/QuickCommandsList.tsx', 2],
       ['src/renderer/src/components/tab-bar/TabBarQuickCommandItem.tsx', 2],
@@ -150,6 +148,7 @@ const INVENTORY: readonly InventoryGroup[] = [
     classification: 'identity-consumer',
     paths: [
       ['mobile/src/session/mobile-terminal-tab-agent.ts', 2],
+      ['src/main/runtime/tui-idle-evidence.ts', 2],
       ['src/renderer/src/lib/open-tab-occupant-agent.ts', 2],
       ['src/renderer/src/lib/use-tab-agent.ts', 3]
     ]

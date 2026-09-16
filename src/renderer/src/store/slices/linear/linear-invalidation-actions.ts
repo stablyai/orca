@@ -148,7 +148,7 @@ export function createLinearInvalidationActions(
                 ? nextCustomViewIssueCache.cache
                 : s.linearCustomViewIssueCache
             }
-          : {}
+          : s
       })
     }
   }

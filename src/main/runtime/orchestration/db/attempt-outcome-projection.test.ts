@@ -48,7 +48,7 @@ describe('durable Attempt observation and outcome projection', () => {
 
   function createAttempt(): { taskId: string; dispatchId: string } {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'observe outcome' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'observe outcome' })
     const dispatch = createRootDispatch(db, task.id, 'term_observed')
     return { taskId: task.id, dispatchId: dispatch.id }
   }
@@ -162,7 +162,10 @@ describe('durable Attempt observation and outcome projection', () => {
     const path = join(dir, 'orchestration.sqlite')
     try {
       db = new OrchestrationDb(path)
-      const task = db.createTask({ spec: 'durable observation' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'durable observation'
+      })
       const dispatch = createRootDispatch(db, task.id, 'term_durable')
       db.recordAttemptObservation(
         fact(dispatch.id, {
@@ -189,7 +192,10 @@ describe('durable Attempt observation and outcome projection', () => {
 
   it('keeps worker_done settlement as the atomic success fast path', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'worker_done fast path' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'worker_done fast path'
+    })
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

@@ -213,9 +213,9 @@ The commands, snapshot and ref rules, page affinity, and `browser_*` recoveries 
 
 This guide covers worktrees, terminals, and handoffs on its own. At a gate below, run `ORCA skills get orca-cli --reference references/<file>.md` and read only that document; `--references` lists the names. If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full` once instead: it returns this guide plus every reference from the same CLI build, so read only the named one. If `--full` is rejected too, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
 
-| Action gate | Reference |
-|---|---|
-| Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md` |
-| Creating, editing, running, or inspecting scheduled automations | `references/automations.md` |
-| Publishing or revoking an artifact link, or publishing installed skills | `references/publishing.md` |
-| Mobile emulator taps, gestures, typing, buttons, camera, or permissions | invoke the `orca-emulator` skill |
+| Action gate                                                                                                     | Reference                        |
+| --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |
+| Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
+| Publishing or revoking an artifact link, or publishing installed skills                                         | `references/publishing.md`       |
+| Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |

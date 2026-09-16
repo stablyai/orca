@@ -8,6 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import {
+  agentJournalItemKey,
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session-journal-item-key'
@@ -17,6 +18,7 @@ import {
   boundPayload,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { journalDatabaseFile, journalDirectoryFor, journalPathSegment } from './journal-paths'
 import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
 import type { openAgentSessionJournal } from './journal-store-factory'
@@ -94,6 +96,60 @@ describe('sequences', () => {
     expect(results.map((result) => result.revision)).toEqual([1, 2, 3])
     expect(journal.snapshot().items).toHaveLength(1)
     expect(journal.snapshot().items[0]?.revision).toBe(3)
+  })
+
+  it('visits reduced items at their creation sequence without promoting an older revision', async () => {
+    const journal = await open()
+    await journal.appendItem(item(0), body('first'), { fence: 1 })
+    const latest = await journal.appendItem(item(1), body('second'), { fence: 1 })
+    await journal.appendItem(item(0), body('first revised'), { fence: 1 })
+    const visited: { itemId: string; sequence: number }[] = []
+
+    journal.visitItems((itemId, sequence) => visited.push({ itemId, sequence }))
+
+    expect(visited).toEqual([
+      { itemId: agentJournalItemKey(item(0)), sequence: 2 },
+      { itemId: latest.itemId, sequence: latest.cursor.sequence }
+    ])
+  })
+
+  it('reads the live turn off reduced items, agreeing with the rendered snapshot', async () => {
+    const journal = await open()
+    const turnItem = (turnId: string): AgentJournalItemIdentity => ({
+      provider: 'legacy',
+      agent: 'codex',
+      sessionId: 'session-1',
+      recordId: `turn-lifecycle:${turnId}`
+    })
+    const rendered = (): string | null =>
+      activeStructuredAgentSessionTurnId(journal.snapshot().items)
+    const bothAgreeOn = async (turnId: string | null): Promise<void> => {
+      expect(journal.activeTurnId()).toBe(turnId)
+      expect(rendered()).toBe(turnId)
+    }
+
+    await journal.appendItem(
+      turnItem('turn-1'),
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      { fence: 1 }
+    )
+    await journal.appendItem(item(0), body('work'), { fence: 1 })
+    await bothAgreeOn('turn-1')
+
+    // The completion is a revision, so it keeps the row's creation sequence rather than moving it.
+    await journal.appendItem(
+      turnItem('turn-1'),
+      { kind: 'turn', turnId: 'turn-1', state: 'completed' },
+      { fence: 1 }
+    )
+    await bothAgreeOn(null)
+
+    await journal.appendItem(
+      turnItem('turn-2'),
+      { kind: 'turn', turnId: 'turn-2', state: 'running' },
+      { fence: 1 }
+    )
+    await bothAgreeOn('turn-2')
   })
 
   it('preserves an oversized identity and its raw digest-form mimic across reopen', async () => {

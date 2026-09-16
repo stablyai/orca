@@ -1,0 +1,963 @@
+{
+  "operation": "tasks.workspace-sparse",
+  "family": "tasks.workspace-sparse",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "3d4637406e2d658b72f73153f0a5e176cb8b143593b72bce0cdf979bc6e4cbdd",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0a30edace604": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Failed to save sparse preset.",
+      "sent": 2
+    },
+    "14b354ce0ded": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}",
+      "sent": 1
+    },
+    "15dd622cbe08": {
+      "name": "repo.saveSparsePreset#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}",
+      "sent": 2
+    },
+    "1923ab7dba76": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "1f453ea83df7": {
+      "presets": [],
+      "presetsError": "transport failure",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "23c24a8bc04b": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Connection closed",
+      "sent": 2
+    },
+    "23e798f4b47c": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3dea8cd23ff6": {
+      "name": "workspaceSparsePresetsError",
+      "value": "outer refused",
+      "sent": 2
+    },
+    "3f2baafe9f80": {
+      "name": "workspaceSparseSaving",
+      "value": false,
+      "sent": 2
+    },
+    "404305aa2e3a": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "452edc62bce0": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
+    },
+    "4d66e995ff47": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "50299594248a": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 2
+    },
+    "594fac1293d4": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 1
+    },
+    "5b8f6c626989": {
+      "name": "workspaceSparsePresetId",
+      "value": "p1",
+      "sent": 2
+    },
+    "5c44ff5f6877": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "preset": {
+              "directories": ["docs"],
+              "id": "p1",
+              "name": "docs"
+            }
+          }
+        }
+      }
+    },
+    "74c1230400a6": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "7c00933f99aa": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Cannot read properties of null (reading 'preset')",
+      "sent": 2
+    },
+    "89aa7a3bd619": {
+      "name": "ssh.getState#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "state": {
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "ssh-1"
+            }
+          }
+        }
+      }
+    },
+    "8a48f96e40fe": {
+      "name": "workspaceSparsePresets",
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "sent": 2
+    },
+    "8e410711e308": {
+      "presets": [],
+      "presetsError": "Cannot read properties of undefined (reading 'preset')",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "8ff2b79a90fb": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": true,
+      "sent": 2
+    },
+    "92b857799ffd": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "95295c6eaa8d": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "990a149dc1be": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "bcfc7df6e4f2": {
+      "presets": [],
+      "presetsError": "",
+      "saving": true,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "bd0266b23771": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "befb68fa6c76": {
+      "presets": [],
+      "presetsError": "Failed to save sparse preset.",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "bf4ab087f5b3": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Cannot read properties of undefined (reading 'preset')",
+      "sent": 2
+    },
+    "c33fee0d8294": {
+      "presets": [],
+      "presetsError": "Unknown method",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "c5a3f70f9b02": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "c74f5fe12440": {
+      "name": "workspaceSparseSaving",
+      "value": true,
+      "sent": 1
+    },
+    "d14de7ce4d84": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "d74bc3778ca8": {
+      "presets": [],
+      "presetsError": "outer refused",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "df20e67660fc": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Unknown method",
+      "sent": 2
+    },
+    "e52233a9ff71": {
+      "presets": [],
+      "presetsError": "Cannot read properties of null (reading 'preset')",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ee3a941d5e9c": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "ef39f35afb7f": {
+      "name": "workspaceSparseDraft",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
+    },
+    "f4d4ba362712": {
+      "name": "repo.saveSparsePreset#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f77e22eef962": {
+      "name": "workspaceSparsePresetsError",
+      "value": "transport failure",
+      "sent": 2
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.workspace-sparse-repo.savesparsepreset-1",
+    "checkpoints": [
+      {
+        "id": "tw-workspace-sparse-saved.prelude:ssh-state-read",
+        "observation": {
+          "sender": ["89aa7a3bd619"],
+          "payloads": ["14b354ce0ded"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "ee3a941d5e9c",
+          "effects": ["452edc62bce0"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.prelude:cleanup",
+        "observation": {
+          "sender": ["89aa7a3bd619", "4d66e995ff47"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "bcfc7df6e4f2",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "23c24a8bc04b",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.normal:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "5c44ff5f6877"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "404305aa2e3a",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.result-absent:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "95295c6eaa8d"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "8e410711e308",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "bf4ab087f5b3",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.result-null:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "d14de7ce4d84"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "e52233a9ff71",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "7c00933f99aa",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-ok-missing:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "92b857799ffd"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "befb68fa6c76",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "0a30edace604",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-false-string-error:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "bd0266b23771"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "befb68fa6c76",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "0a30edace604",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-false-object-error:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "c5a3f70f9b02"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "befb68fa6c76",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "0a30edace604",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.outer-refused:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "1923ab7dba76"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "d74bc3778ca8",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "3dea8cd23ff6",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.outer-refused-no-message:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "990a149dc1be"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "ee3a941d5e9c",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "50299594248a",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.method-not-found:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "74c1230400a6"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "c33fee0d8294",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "df20e67660fc",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.transport-rejection:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "f4d4ba362712"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "1f453ea83df7",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "f77e22eef962",
+            "3f2baafe9f80"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.transport-rejection-no-message:preset-saved",
+        "observation": {
+          "sender": ["89aa7a3bd619", "23e798f4b47c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "ee3a941d5e9c",
+          "effects": [
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "50299594248a",
+            "3f2baafe9f80"
+          ]
+        }
+      }
+    ]
+  }
+}

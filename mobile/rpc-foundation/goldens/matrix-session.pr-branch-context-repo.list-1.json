@@ -1,0 +1,867 @@
+{
+  "operation": "session.pr-branch-context",
+  "family": "session.pr-branch-context",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "d456ec18056eb9663e99d4991784bd802422256d81ddd7509720814da06915f4",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "205b2a8716a9": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "2432ad799433": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "id": "repo-9",
+                "worktreeBaseRef": "origin/main"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "26accd69bc48": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "2c98f3579e7e": {
+      "name": "git.branchCompare#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
+      "sent": 4
+    },
+    "2dfe41567b29": {
+      "name": "git.status#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 3
+    },
+    "335768b54f09": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "3ec8052ccdb3": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "baseRef": "origin/main",
+              "linkedPR": 12
+            }
+          }
+        }
+      }
+    },
+    "3feccf790548": {
+      "name": "git.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "branch": "feature",
+            "entries": [
+              {
+                "added": 3,
+                "area": "unstaged",
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              }
+            ],
+            "head": "head-sha-1",
+            "upstreamStatus": {
+              "ahead": 1,
+              "behind": 0,
+              "hasUpstream": true
+            }
+          }
+        }
+      }
+    },
+    "521ebac025f3": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "64ad9a7ea2cd": {
+      "name": "git.branchCompare#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/main",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 1,
+                "path": "src/old.ts",
+                "removed": 0,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "changedFiles": 1,
+              "compareRef": "feature",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base",
+              "status": "ready"
+            }
+          }
+        }
+      }
+    },
+    "6da1f95af186": {
+      "identity": "unread",
+      "repoContext": "unread"
+    },
+    "6e5c6593dad8": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9c58eb1d4d91": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 3
+    },
+    "b8b93d3f8005": {
+      "name": "git.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "bcd88b035c68": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "c70359272e10": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "cc1facdf008c": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d76c1ced0b3a": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "e8bad95ea299": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "edfc4ab3b60b": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 3
+    },
+    "f0e28a4b20aa": {
+      "identity": {
+        "branch": "feature",
+        "headSha": "head-sha-1",
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      },
+      "repoContext": "unread"
+    },
+    "f1a2cd24ab44": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "ff397549b306": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "ffc37850babd": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "branch": "feature",
+        "headSha": "head-sha-1",
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.pr-branch-context-repo.list-1",
+    "checkpoints": [
+      {
+        "id": "pr-branch-identity.prelude:pending",
+        "observation": {
+          "sender": ["b8b93d3f8005", "c70359272e10", "26accd69bc48"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91"],
+          "settlements": {
+            "identity": "9270aeb7d9c6"
+          },
+          "state": "6da1f95af186",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.normal:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.result-absent:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "d76c1ced0b3a", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.result-null:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "f1a2cd24ab44", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.inner-ok-missing:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "205b2a8716a9", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.inner-false-string-error:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "bcd88b035c68", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.inner-false-object-error:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "e8bad95ea299", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.outer-refused:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "ff397549b306", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.outer-refused-no-message:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "521ebac025f3", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.method-not-found:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "335768b54f09", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.transport-rejection:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "6e5c6593dad8", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-branch-identity.transport-rejection-no-message:identity",
+        "observation": {
+          "sender": ["3feccf790548", "3ec8052ccdb3", "cc1facdf008c", "64ad9a7ea2cd"],
+          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "settlements": {
+            "identity": "ffc37850babd"
+          },
+          "state": "f0e28a4b20aa",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

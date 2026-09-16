@@ -83,6 +83,8 @@ export type PersistedUIState = {
   agentsShowChildAgents?: boolean
   /** Agents-view compact thread rows. Absent means on. */
   agentsCompactMode?: boolean
+  /** Agents sidebar search field visibility. Absent means on. */
+  agentsShowSearch?: boolean
   /** Agents-view unread-only thread filter. Absent means 'all'. */
   agentsReadFilter?: ThreadReadFilter
   /** Agents-view thread grouping. Absent means 'status'. */
@@ -123,6 +125,8 @@ export type PersistedUIState = {
   /** Client-side footer presentation; verbose preserves the pre-roster all-window default. */
   statusBarUsageMode?: StatusBarUsageMode
   dismissedUpdateVersion: string | null
+  /** Version when the sign-out notice was seen or dismissed; any value suppresses future appearances. */
+  dismissedUnexpectedSignoutVersion?: string | null
   lastUpdateCheckAt: number | null
   /** Dev-only update channel override; absent means the build's own channel. */
   releaseChannelOverride?: ReleaseChannel | null

@@ -13,6 +13,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
+import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -24,6 +25,11 @@ export type CodexStructuredLaunchResolverDeps = {
   /** Fresh shell/configured environment for this spawn; never written to the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveRollout?: typeof resolvePinnedCodexRolloutProof
+  /** Test seam for the host capability; production uses the native process table. */
+  isWindowsProcessStartTimeAvailable?: () => boolean
+  /** The user's Agent Permissions setting as app-server argv, re-read per acquisition.
+   *  Absent means the CLI's own approval prompts stay on. */
+  resolvePermissionArgs?: () => string[]
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -46,6 +52,13 @@ export function createCodexStructuredLaunchResolver(
         `codex structured sessions run on the local host, not ${location.executionHostId}`
       )
     }
+    // Refuse before resolving launch data; a PID alone cannot prove Windows ownership.
+    if (
+      process.platform === 'win32' &&
+      !(deps.isWindowsProcessStartTimeAvailable ?? isWindowsProcessStartTimeAvailable)()
+    ) {
+      throw new Error('codex structured sessions require Windows process creation-time proof')
+    }
     if (accountHome.variable !== 'CODEX_HOME') {
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
@@ -56,7 +69,9 @@ export function createCodexStructuredLaunchResolver(
       pathEnv,
       ...(homePath ? { homePath } : {})
     })
-    const args = [...(record.launchArgs ?? []), 'app-server']
+    // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
+    // concern, and the permission posture they used to smuggle in is derived per acquisition.
+    const args = [...(deps.resolvePermissionArgs?.() ?? []), 'app-server']
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
     return {

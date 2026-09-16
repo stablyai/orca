@@ -1,3 +1,5 @@
+import { resolveActiveProjectKey, toAiVaultProjectKey } from './ai-vault-project-key'
+export { toAiVaultProjectKey } from './ai-vault-project-key'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -19,8 +21,7 @@ import {
   type AiVaultSessionProject
 } from '../../../../shared/ai-vault-session-filters'
 
-// Why: the plain project descriptor moved to /shared (so the lifted filter core
-// stays renderer-free). Re-export it here for renderer import parity.
+// Preserve renderer imports of the renderer-free descriptor.
 export type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
 
 export type AiVaultProjectContext = {
@@ -92,25 +93,25 @@ export function buildAiVaultSessionProjectById({
     setupByRepoId
   )
   const sessionProjectById = new Map<string, AiVaultSessionProject>()
+  const projectsByHostAndCwd = new Map<
+    ExecutionHostId | null,
+    Map<string | null, AiVaultSessionProject>
+  >()
   for (const session of sessions) {
-    sessionProjectById.set(
-      session.id,
-      resolveSessionProject(session, candidates, projectLabelByKey)
-    )
+    const host = normalizeExecutionHostId(session.executionHostId)
+    let projectsByCwd = projectsByHostAndCwd.get(host)
+    if (!projectsByCwd) {
+      projectsByCwd = new Map()
+      projectsByHostAndCwd.set(host, projectsByCwd)
+    }
+    let project = projectsByCwd.get(session.cwd)
+    if (!project) {
+      project = resolveSessionProject(session, candidates, projectLabelByKey)
+      projectsByCwd.set(session.cwd, project)
+    }
+    sessionProjectById.set(session.id, { ...project })
   }
   return sessionProjectById
-}
-
-export function toAiVaultProjectKey(
-  projectId: string | null | undefined,
-  repoId?: string | null
-): string | null {
-  if (projectId) {
-    // Why: legacy projections can already use repo-prefixed project ids; wrapping
-    // them again would split active scope and resolved session keys.
-    return projectId.startsWith('repo:') ? projectId : `project:${projectId}`
-  }
-  return repoId ? `repo:${repoId}` : null
 }
 
 function buildSetupByRepoId(
@@ -318,23 +319,4 @@ function folderProject(cwd: string): AiVaultSessionProject {
     key: folderGroupKey(cwd),
     label: folderLabel(cwd)
   }
-}
-
-function resolveActiveProjectKey(
-  activeRepo: Repo | null,
-  activeWorktree: Worktree | null,
-  setupByRepoId: ReadonlyMap<string, ProjectHostSetup>
-): string | null {
-  if (activeWorktree?.projectId) {
-    return toAiVaultProjectKey(activeWorktree.projectId, activeWorktree.repoId)
-  }
-
-  const setup =
-    (activeRepo ? setupByRepoId.get(activeRepo.id) : null) ??
-    (activeWorktree ? setupByRepoId.get(activeWorktree.repoId) : null)
-  if (setup) {
-    return toAiVaultProjectKey(setup.projectId, setup.repoId || activeRepo?.id)
-  }
-
-  return toAiVaultProjectKey(null, activeRepo?.id ?? activeWorktree?.repoId ?? null)
 }

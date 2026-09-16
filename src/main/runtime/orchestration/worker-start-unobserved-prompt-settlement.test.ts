@@ -6,7 +6,7 @@ const INCARNATION = 'runtime_test:term_worker:1'
 let db: OrchestrationDb
 
 function startWorker(spec: string): { taskId: string; dispatchId: string; capability: string } {
-  const task = db.createTask({ spec })
+  const task = db.createTask({ runId: 'run_legacy_local', spec })
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: Number.MAX_SAFE_INTEGER,

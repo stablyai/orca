@@ -99,6 +99,36 @@ afterEach(async () => {
 })
 
 describe('worktree create preparation registry', () => {
+  it.each([undefined, 'Ubuntu'])(
+    'preserves create priority through claim probes on %s',
+    async (wslDistro) => {
+      const routing = wslDistro ? { wslDistro } : {}
+      mocks.getWorktreeOptions.mockReturnValue(routing)
+      await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+      expect(mocks.resolveBaseRef).toHaveBeenLastCalledWith(repo.path, 'origin/main', routing)
+      expect(mocks.prepareCheckout.mock.calls[0]?.[4]).not.toHaveProperty('admissionTier')
+
+      const options = { ...routing, admissionTier: 'interactive' as const }
+      await expect(
+        consumePreparedWorktreeCreate({
+          repoPath: repo.path,
+          workspaceRoot: '/workspace',
+          worktreePath: '/workspace/final',
+          branch: 'feature/test',
+          baseBranch: 'main',
+          options
+        })
+      ).resolves.toMatchObject({ status: 'hit', retargeted: true })
+      expect(mocks.resolveBaseRef).toHaveBeenLastCalledWith(repo.path, 'main', options)
+      expect(mocks.measureDivergence).toHaveBeenCalledWith(
+        repo.path,
+        'refs/remotes/origin/main',
+        'refs/heads/main',
+        options
+      )
+    }
+  )
+
   it('starts the checkout only once the async workspace root resolves', async () => {
     let resolveRoot!: (root: string) => void
     mocks.computeWorkspaceRootAsync.mockReturnValue(
@@ -185,7 +215,12 @@ describe('worktree create preparation registry', () => {
         branch: 'feature/test',
         baseBranch: 'main'
       })
-    ).resolves.toEqual({ status: 'hit', retargeted: true, result: {} })
+    ).resolves.toEqual({
+      status: 'hit',
+      retargeted: true,
+      result: {},
+      rearm: expect.any(Function)
+    })
     // Finalize still receives the requested base, so it resets onto the requested commit.
     expect(mocks.finalize).toHaveBeenCalledWith(
       repo.path,
@@ -261,7 +296,12 @@ describe('worktree create preparation registry', () => {
         branch: 'feature/test',
         baseBranch: 'refs/remotes/origin/main'
       })
-    ).resolves.toEqual({ status: 'hit', retargeted: false, result: {} })
+    ).resolves.toEqual({
+      status: 'hit',
+      retargeted: false,
+      result: {},
+      rearm: expect.any(Function)
+    })
   })
 
   it('never hands the same prepared checkout to two concurrent creates', async () => {
@@ -414,7 +454,9 @@ describe('worktree create preparation registry', () => {
     })
     try {
       await flushBackgroundWork()
-      expect(mocks.discard).toHaveBeenCalledWith(repo.path, stalePath, {})
+      expect(mocks.discard).toHaveBeenCalledWith(repo.path, stalePath, {
+        admissionTier: 'background'
+      })
       expect(ready).toBe(true)
       await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
       expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
@@ -456,8 +498,10 @@ describe('worktree create preparation registry', () => {
 
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
-    expect(mocks.unlock).toHaveBeenCalledWith(repo.path, '/workspace/final', {})
-    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, '/workspace/final', {})
+    expect(mocks.unlock).toHaveBeenCalledWith(repo.path, '/workspace/final', {
+      admissionTier: 'background'
+    })
+    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, '/workspace/final', expect.anything())
   })
 
   it('does not classify a user branch worktree under the preparation directory as stale', async () => {
@@ -516,14 +560,18 @@ describe('worktree create preparation registry', () => {
     expect(mocks.discard).toHaveBeenCalledTimes(1)
   })
 
+  /** Mirrors a real create: consume, then run the deferred re-arm once the create has returned. */
   async function consumeOnce(name: string): Promise<void> {
-    await consumePreparedWorktreeCreate({
+    const attempt = await consumePreparedWorktreeCreate({
       repoPath: repo.path,
       workspaceRoot: '/workspace',
       worktreePath: `/workspace/${name}`,
       branch: `feature/${name}`,
       baseBranch: 'origin/main'
     })
+    if (attempt.status === 'hit') {
+      attempt.rearm()
+    }
   }
 
   it('does not re-arm after an isolated create', async () => {
@@ -553,8 +601,68 @@ describe('worktree create preparation registry', () => {
         branch: 'feature/third',
         baseBranch: 'origin/main'
       })
-    ).resolves.toEqual({ status: 'hit', retargeted: false, result: {} })
+    ).resolves.toEqual({
+      status: 'hit',
+      retargeted: false,
+      result: {},
+      rearm: expect.any(Function)
+    })
     expect(mocks.finalize).toHaveBeenCalledTimes(3)
+  })
+
+  it('holds the re-arm checkout until the create runs the deferred thunk', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await consumeOnce('first')
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    mocks.prepareCheckout.mockClear()
+
+    const attempt = await consumePreparedWorktreeCreate({
+      repoPath: repo.path,
+      workspaceRoot: '/workspace',
+      worktreePath: '/workspace/second',
+      branch: 'feature/second',
+      baseBranch: 'origin/main'
+    })
+
+    // Drained first: an eager re-arm reaches prepareCheckout only after the pool awaits stale
+    // cleanup, so asserting in the same turn would pass with the deferral removed.
+    await flushBackgroundWork()
+    // The replacement checkout would otherwise hold a git admission slot for the rest of the create.
+    expect(mocks.prepareCheckout).not.toHaveBeenCalled()
+    expect(attempt.status).toBe('hit')
+    if (attempt.status === 'hit') {
+      attempt.rearm()
+    }
+    await flushBackgroundWork()
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
+  })
+
+  // `startPreparation` overwrites the map entry outright, so a thunk that armed over a prefetch
+  // would leave that prefetch's locked checkout on disk with nothing holding a reference to it.
+  it('skips the deferred re-arm when a prefetch armed the same key mid-create', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await consumeOnce('first')
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+
+    const attempt = await consumePreparedWorktreeCreate({
+      repoPath: repo.path,
+      workspaceRoot: '/workspace',
+      worktreePath: '/workspace/second',
+      branch: 'feature/second',
+      baseBranch: 'origin/main'
+    })
+    expect(attempt.status).toBe('hit')
+
+    // The user reopens the composer while the create is still finishing.
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    mocks.prepareCheckout.mockClear()
+
+    if (attempt.status === 'hit') {
+      attempt.rearm()
+    }
+    await flushBackgroundWork()
+
+    expect(mocks.prepareCheckout).not.toHaveBeenCalled()
   })
 
   it('does not re-arm when finalization failed', async () => {

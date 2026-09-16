@@ -4,11 +4,16 @@ import {
   type DetailComment,
   type GitHubProjectRow,
   commentAuthor,
-  isSuccess,
   projectRowGitHubRepository,
   projectRowType,
   splitRepositorySlug
 } from './mobile-tasks-legacy-foundation'
+import { githubProjectCommentDelete } from './mobile-task-project-board-operations'
+import {
+  githubIssueCommentWrite,
+  githubReviewCommentReplyWrite,
+  githubReviewThreadResolve
+} from './mobile-task-item-comment-operations'
 
 export function useMobileTasksProjectThreadReplyActions(
   model: ProjectWorkspaceCommentActionsModel
@@ -41,8 +46,8 @@ export function useMobileTasksProjectThreadReplyActions(
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.project.deleteIssueCommentBySlug',
+        const reply = await githubProjectCommentDelete.request(
+          client,
           {
             owner: slug.owner,
             repo: slug.repo,
@@ -51,10 +56,8 @@ export function useMobileTasksProjectThreadReplyActions(
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectCommentDelete.interpret(reply) as {
           ok?: boolean
           error?: string | { message?: string }
         }
@@ -102,8 +105,8 @@ export function useMobileTasksProjectThreadReplyActions(
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.resolveReviewThread',
+        const reply = await githubReviewThreadResolve.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
@@ -112,10 +115,7 @@ export function useMobileTasksProjectThreadReplyActions(
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (response.result !== true) {
+        if (githubReviewThreadResolve.interpret(reply) !== true) {
           throw new Error(resolve ? 'Failed to resolve thread' : 'Failed to reopen thread')
         }
         setProjectRowDetail((current) =>
@@ -155,41 +155,49 @@ export function useMobileTasksProjectThreadReplyActions(
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const canUseReviewReply =
+        // The same predicate as before, but as the anchor it selects: `commentId` and `line` are
+        // numbers only inside it, which the boolean it used to be could not carry to the send.
+        const reviewAnchor =
           row.itemType === 'PULL_REQUEST' &&
           comment.path &&
           typeof comment.line === 'number' &&
           typeof comment.id === 'number'
-        const response = canUseReviewReply
-          ? await client.sendRequest(
-              'github.addPRReviewCommentReply',
-              {
-                repo: `id:${repo.id}`,
-                prNumber: row.content.number,
-                prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-                commentId: comment.id,
-                body,
-                threadId: comment.threadId,
-                path: comment.path,
-                line: comment.line
-              },
-              { timeoutMs: 30_000 }
+            ? { path: comment.path, line: comment.line, commentId: comment.id }
+            : null
+        // A review reply and a plain issue comment are different methods, so each arm sends its
+        // own operation rather than one call picking a method string.
+        const written = reviewAnchor
+          ? githubReviewCommentReplyWrite.interpret(
+              await githubReviewCommentReplyWrite.request(
+                client,
+                {
+                  repo: `id:${repo.id}`,
+                  prNumber: row.content.number,
+                  prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
+                  commentId: reviewAnchor.commentId,
+                  body,
+                  threadId: comment.threadId,
+                  path: reviewAnchor.path,
+                  line: reviewAnchor.line
+                },
+                { timeoutMs: 30_000 }
+              )
             )
-          : await client.sendRequest(
-              'github.addIssueComment',
-              {
-                repo: `id:${repo.id}`,
-                number: row.content.number,
-                prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-                body: `@${commentAuthor(comment)} ${body}`,
-                type: projectRowType(row) ?? 'issue'
-              },
-              { timeoutMs: 30_000 }
+          : githubIssueCommentWrite.interpret(
+              await githubIssueCommentWrite.request(
+                client,
+                {
+                  repo: `id:${repo.id}`,
+                  number: row.content.number,
+                  prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
+                  body: `@${commentAuthor(comment)} ${body}`,
+                  type: projectRowType(row) ?? 'issue'
+                },
+                { timeoutMs: 30_000 }
+              )
             )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = written as {
           ok?: boolean
           error?: string
           comment?: DetailComment

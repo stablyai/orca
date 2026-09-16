@@ -1,0 +1,151 @@
+{
+  "operation": "tasks.composer-hosted-base",
+  "family": "worktree.hosted-base",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "scenarioSha256": "451e74a430d2549976fa360a0e43e76a8d855b1470b8e313797019770ceca4cb",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "65f985665d42": {
+      "name": "worktree.resolveMrBase#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}",
+      "sent": 2
+    },
+    "723a115a3810": {
+      "name": "worktree.resolveMrBase#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.resolveMrBase"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mrIid": 7,
+            "repo": "id:repo-1",
+            "sourceBranch": "feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": ""
+          }
+        }
+      }
+    },
+    "95d2391d09f2": {
+      "name": "worktree.resolvePrBase#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}",
+      "sent": 1
+    },
+    "ae0c82b12f2a": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "pull request not found",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c57e06c96492": {
+      "mrBase": "unresolved",
+      "prBase": "unresolved"
+    },
+    "eb01c2306db5": {
+      "name": "worktree.resolvePrBase#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.resolvePrBase"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headRefName": "feature",
+            "prNumber": 12,
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "pull request not found"
+          }
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-hosted-base-soft-error",
+    "checkpoints": [
+      {
+        "id": "in-band-error",
+        "observation": {
+          "sender": ["eb01c2306db5"],
+          "payloads": ["95d2391d09f2"],
+          "settlements": {
+            "pr": "ae0c82b12f2a"
+          },
+          "state": "c57e06c96492",
+          "effects": []
+        }
+      },
+      {
+        "id": "in-band-empty-error",
+        "observation": {
+          "sender": ["eb01c2306db5", "723a115a3810"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
+          "settlements": {
+            "pr": "ae0c82b12f2a",
+            "mr": "f3b516f62081"
+          },
+          "state": "c57e06c96492",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

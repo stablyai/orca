@@ -1,3 +1,4 @@
+import { SessionHistorySettingsPane } from './SessionHistorySettingsPane'
 import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from './AutomationsSettingsPane'
 import { GeneralPane } from './GeneralPane'
@@ -173,6 +174,31 @@ export function renderShareSkillsSettingsSection(
       searchEntries={navigation.getSectionSearchEntries('share-skills')}
     >
       {view.isSectionMounted('share-skills') ? <ShareSkillsSettingsPane /> : null}
+    </SettingsSection>
+  )
+}
+
+export function renderSessionHistorySettingsSection(
+  context: SettingsRenderContext
+): React.JSX.Element {
+  const { model, navigation, view } = context
+  return (
+    <SettingsSection
+      id="session-history"
+      title={translate('sessionHistory.settings.title', 'Agent Session History')}
+      description={translate(
+        'sessionHistory.settings.description',
+        'Manage session search on this computer. These settings do not enable indexing on SSH or paired hosts.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('session-history')}
+    >
+      {view.isSectionMounted('session-history') ? (
+        <SessionHistorySettingsPane
+          key={JSON.stringify(model.settings.aiVaultSearch)}
+          settings={model.settings}
+          updateSettings={model.updateSettingsOrThrow}
+        />
+      ) : null}
     </SettingsSection>
   )
 }

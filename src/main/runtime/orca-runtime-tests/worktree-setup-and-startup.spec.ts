@@ -77,7 +77,9 @@ describe('OrcaRuntimeService', () => {
       '/tmp/workspaces/runtime-hook-test',
       'runtime-hook-test',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(result).toEqual({
       worktree: expect.objectContaining({

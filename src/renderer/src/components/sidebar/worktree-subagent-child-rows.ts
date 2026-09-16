@@ -1,5 +1,6 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { resolveAgentChildWorkFreshness } from '../../../../shared/agent-status-child-work-freshness'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 /** Row-identity key for an in-process subagent child row. The NUL separator
@@ -21,7 +22,7 @@ export function buildSubagentChildRows(args: {
   parentEntry: AgentStatusEntry
   tab: TerminalTab
   /** Freshness of the parent's hook stream. A stale parent means active child
-   *  states are equally stale, so they decay to idle together. */
+   *  states are equally unverifiable. */
   parentIsFresh: boolean
 }): DashboardAgentRow[] {
   const subagents = args.parentEntry.subagents
@@ -29,8 +30,14 @@ export function buildSubagentChildRows(args: {
     return []
   }
   return subagents.map((subagent) => {
-    const activeState = args.parentIsFresh && subagent.state !== 'idle' ? subagent.state : undefined
-    const state = activeState ?? 'idle'
+    const freshness = resolveAgentChildWorkFreshness({
+      state: subagent.state,
+      membership: 'live',
+      parentEvidenceFresh: args.parentIsFresh,
+      transportObservation: args.parentEntry.subagentObservation ?? 'live'
+    })
+    const state = freshness === 'done' ? 'idle' : freshness === 'monitoring' ? 'working' : freshness
+    const activeState = state !== 'idle' && state !== 'unverifiable' ? state : undefined
     const startedAt = subagent.startedAt > 0 ? subagent.startedAt : args.parentEntry.stateStartedAt
     const paneKey = subagentRowKey(args.parentEntry.paneKey, subagent.id)
     const entry: AgentStatusEntry = {

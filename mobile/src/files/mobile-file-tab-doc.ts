@@ -1,11 +1,13 @@
 import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-diff-lines'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { mobileDiffImageDataUri, type MobileBinaryDiffResult } from './mobile-diff-image-preview'
-
-type FileTabDocClient = Pick<RpcClient, 'sendRequest'>
+import {
+  fileTabDiffRead,
+  fileTabImageRead,
+  fileTabTextRead,
+  type MobileFileTabDocRpcSender
+} from './mobile-file-tab-doc-operations'
 
 // The ready doc a session file tab renders. Mirrors the ready arm of the route's
 // FileDocState; kept in src so the loader stays testable without the route.
@@ -24,21 +26,19 @@ export type MobileFileTabDocRequest = {
 // Throws 'binary_file'/'file_too_large'/the RPC error message; callers map those
 // to error docs.
 export async function resolveMobileFileTabDoc(
-  client: FileTabDocClient,
+  client: MobileFileTabDocRpcSender,
   request: MobileFileTabDocRequest
 ): Promise<MobileFileTabDoc> {
   const worktree = `id:${request.worktreeId}`
   const { relativePath } = request
   if (request.diffSource === 'staged' || request.diffSource === 'unstaged') {
-    const response = await client.sendRequest('git.diff', {
+    const reply = await fileTabDiffRead.request(client, {
       worktree,
       filePath: relativePath,
       staged: request.diffSource === 'staged'
     })
-    if (!response.ok) {
-      throw new Error((response as RpcFailure).error.message)
-    }
-    const result = (response as RpcSuccess).result as
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    const result = fileTabDiffRead.interpret(reply) as
       | { kind: 'text'; originalContent: string; modifiedContent: string }
       | MobileBinaryDiffResult
     if (result.kind !== 'text') {
@@ -56,11 +56,9 @@ export async function resolveMobileFileTabDoc(
 
   const artifactKind = classifyMobileArtifact(relativePath)
   if (artifactKind === 'image') {
-    const preview = await client.sendRequest('files.readPreview', { worktree, relativePath })
-    if (!preview.ok) {
-      throw new Error((preview as RpcFailure).error.message)
-    }
-    const result = (preview as RpcSuccess).result as {
+    const preview = await fileTabImageRead.request(client, { worktree, relativePath })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    const result = fileTabImageRead.interpret(preview) as {
       content: string
       isImage?: boolean
       mimeType?: string
@@ -72,11 +70,9 @@ export async function resolveMobileFileTabDoc(
     return { status: 'ready', kind: 'image', dataUri }
   }
 
-  const response = await client.sendRequest('files.read', { worktree, relativePath })
-  if (!response.ok) {
-    throw new Error((response as RpcFailure).error.message)
-  }
-  const result = (response as RpcSuccess).result as {
+  const reply = await fileTabTextRead.request(client, { worktree, relativePath })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const result = fileTabTextRead.interpret(reply) as {
     content: string
     truncated: boolean
     byteLength: number

@@ -39,6 +39,7 @@ const SETTINGS_NAV_TARGETS = [
   'agents',
   'orchestration',
   'artifacts',
+  'session-history',
   'share-skills',
   'automations',
   'orca-account',

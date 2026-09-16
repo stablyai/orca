@@ -15,6 +15,10 @@ import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
+import {
+  parseMobilePushRegistration,
+  type MobilePushRegistration
+} from '../../shared/mobile-push-contract'
 
 export type { DeviceScope }
 
@@ -33,6 +37,9 @@ export type DeviceEntry = {
   // Why: a grant handed out with a tailcat address blob is only reachable while that tunnel runs, so the
   // next launch must know to bring the tunnel up before its client reconnects.
   pairingTransport?: RuntimePairingTransport
+  // Why: survives a desktop restart so the host can keep pushing without the phone
+  // re-registering. Absent on every registry written before background push existed.
+  pushRegistration?: MobilePushRegistration
 }
 
 export type RuntimePairingTransport = 'tailcat'
@@ -184,6 +191,26 @@ export class DeviceRegistry {
     return true
   }
 
+  /** Passing null clears the registration (unregister, or a token the gateway reported dead). */
+  setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index === -1 || this.devices[index]?.scope !== 'mobile') {
+      return false
+    }
+    const nextDevices = this.devices.map((device, candidateIndex) => {
+      if (candidateIndex !== index) {
+        return device
+      }
+      const { pushRegistration: _dropped, ...rest } = device
+      return registration ? { ...rest, pushRegistration: registration } : rest
+    })
+    // Why: persist before the memory swap so a failed write cannot leave the dispatcher
+    // pushing to a registration disk says is gone (or vice versa on reload).
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
+  }
+
   setMobilePairingConnectionMode(deviceId: string, mode: MobilePairingConnectionMode): boolean {
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
     if (index === -1 || this.devices[index]?.scope !== 'mobile') {
@@ -326,7 +353,10 @@ export class DeviceRegistry {
         // Why: registries written before this field existed only ever held network-reach grants (phones and
         // LAN links), so a missing value must keep binding every interface on reconnect.
         pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
-        ...(device.pairingTransport === 'tailcat' ? { pairingTransport: 'tailcat' as const } : {})
+        ...(device.pairingTransport === 'tailcat' ? { pairingTransport: 'tailcat' as const } : {}),
+        // Why: a malformed row must degrade to "no background push", never fail the load
+        // and strand every paired device.
+        pushRegistration: parseMobilePushRegistration(device.pushRegistration)
       }))
       this.registryUnreadable = false
     } catch (error) {

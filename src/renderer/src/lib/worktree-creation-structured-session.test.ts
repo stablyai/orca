@@ -1,23 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  state: {
-    pendingWorktreeCreations: { 'creation-1': {} } as Record<string, unknown>
-  },
-  listener: null as ((state: { pendingWorktreeCreations: Record<string, unknown> }) => void) | null,
-  unsubscribe: vi.fn(),
-  startStructuredAgentLaunch: vi.fn(),
-  cancelStructuredAgentLaunch: vi.fn(),
-  closeStructuredAgentSession: vi.fn(),
-  callRuntimeRpc: vi.fn(),
-  activateStructuredAgentSessionById: vi.fn()
-}))
+type PendingCreationState = { pendingWorktreeCreations: Record<string, unknown> }
+type PendingCreationListener = (state: PendingCreationState) => void
+type BeginArgs = {
+  beforeOpen?: (sessionId: string) => boolean | void
+  hooks?: { signal?: AbortSignal }
+}
+const mocks = vi.hoisted(() => {
+  let listener: PendingCreationListener | null = null
+  return {
+    state: {
+      pendingWorktreeCreations: Object.fromEntries([['creation-1', {}]]),
+      updatePendingWorktreeCreation: vi.fn<(id: string, patch: unknown) => void>()
+    },
+    get listener() {
+      return listener
+    },
+    set listener(value: PendingCreationListener | null) {
+      listener = value
+    },
+    unsubscribe: vi.fn<() => void>(),
+    beginStructuredAgentSessionProvisionalLaunch:
+      vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>(),
+    activateAndRevealWorktree: vi.fn<(worktreeId: string, options?: unknown) => unknown>()
+  }
+})
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(vi.fn(), {
+  useAppStore: Object.assign(vi.fn<() => unknown>(), {
     getState: () => mocks.state,
-    subscribe: vi.fn(
-      (listener: (state: { pendingWorktreeCreations: Record<string, unknown> }) => void) => {
+    subscribe: vi.fn<(listener: PendingCreationListener) => () => void>(
+      (listener: PendingCreationListener) => {
         mocks.listener = listener
         return mocks.unsubscribe
       }
@@ -25,149 +38,126 @@ vi.mock('@/store', () => ({
   })
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
-  startStructuredAgentLaunch: mocks.startStructuredAgentLaunch,
-  cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
-}))
-
-vi.mock('@/runtime/structured-agent-session-close', () => ({
-  closeStructuredAgentSession: mocks.closeStructuredAgentSession
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc
-}))
-
-vi.mock('@/runtime/runtime-worktree-selector', () => ({
-  toRuntimeWorktreeSelector: (worktreeId: string) => ({ id: worktreeId })
-}))
-
-vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
-  activateStructuredAgentSessionById: mocks.activateStructuredAgentSessionById
-}))
-
-vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
-  ensureWorktreeHasInitialTerminal: vi.fn()
+vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
-}))
-
-vi.mock('@/lib/agent-trust-preflight', () => ({
-  preflightAgentTrust: vi.fn()
-}))
-
-vi.mock('@/lib/launch-structured-agent-session', () => ({
-  StructuredAgentSessionCreateRefusalError: class extends Error {}
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
 
+const request = {
+  repoId: 'repo-1',
+  name: 'routing-recovery',
+  setupDecision: 'run' as const,
+  agent: 'codex' as const,
+  agentLaunchRoute: 'structured-native-chat' as const,
+  pendingFirstAgentMessageRename: true,
+  note: '',
+  startupPlan: null,
+  quickPrompt: 'Fix the route',
+  quickTelemetry: null
+}
+
+const baseArgs = {
+  creationId: 'creation-1',
+  request,
+  agentLaunchRoute: 'structured-native-chat' as const,
+  worktreeId: 'worktree-1',
+  shouldActivateOnCompletion: true,
+  activation: false as const,
+  primaryTabId: null
+}
+
 describe('launchStructuredWorktreeSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.state = { pendingWorktreeCreations: { 'creation-1': {} } }
+    mocks.state.pendingWorktreeCreations = Object.fromEntries([['creation-1', {}]])
     mocks.listener = null
-    mocks.closeStructuredAgentSession.mockResolvedValue('closed')
-    mocks.callRuntimeRpc.mockResolvedValue(undefined)
+    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.beforeOpen?.('session-1')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
+    })
   })
 
-  it('cancels and retires a session when its pending creation is dismissed', async () => {
-    let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
-    const launchResult = new Promise<{ sessionId: string; fence: number }>((resolve) => {
-      resolveLaunch = resolve
+  it('reveals the created workspace before opening its final-id chat tab', async () => {
+    const order: string[] = []
+    mocks.activateAndRevealWorktree.mockImplementation(() => {
+      order.push('reveal')
+      return { primaryTabId: null }
     })
-    mocks.startStructuredAgentLaunch.mockReturnValue({
-      sessionId: 'session-1',
-      launchResult,
-      isVisibilityUnknown: () => false,
-      releaseCallerAfterUnknownOutcome: vi.fn(),
-      claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))
-    })
-
-    const resultPromise = launchStructuredWorktreeSession({
-      creationId: 'creation-1',
-      request: {
-        repoId: 'repo-1',
-        name: 'routing-recovery',
-        setupDecision: 'run',
-        agent: 'codex',
-        pendingFirstAgentMessageRename: false,
-        note: '',
-        startupPlan: null,
-        quickPrompt: 'Fix the route',
-        quickTelemetry: null
-      },
-      worktreeId: 'worktree-1',
-      shouldActivateOnCompletion: true,
-      fallbackStartupOpt: undefined,
-      activation: false,
-      primaryTabId: null
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      order.push('begin')
+      args.beforeOpen?.('session-1')
+      order.push('open')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
     })
 
-    mocks.state = { pendingWorktreeCreations: {} }
-    mocks.listener?.(mocks.state)
-    resolveLaunch({ sessionId: 'session-1', fence: 1 })
-
-    await expect(resultPromise).resolves.toEqual({
-      accepted: true,
-      cancelled: true,
-      visibilityUnknown: false,
-      activation: false,
-      primaryTabId: null
-    })
-    expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'session-1')
-    expect(mocks.closeStructuredAgentSession).toHaveBeenCalledWith({ kind: 'local' }, 'session-1')
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'session.tabs.close', {
-      worktree: { id: 'worktree-1' },
-      tabId: 'agent-session:session-1',
-      reason: 'user'
-    })
-    expect(mocks.activateStructuredAgentSessionById).not.toHaveBeenCalled()
-    expect(mocks.unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('reports an unknown launch without claiming a visible surface', async () => {
-    const releaseCallerAfterUnknownOutcome = vi.fn()
-    mocks.startStructuredAgentLaunch.mockReturnValue({
-      sessionId: 'session-unknown',
-      launchResult: Promise.reject(new Error('connection lost')),
-      isVisibilityUnknown: () => true,
-      releaseCallerAfterUnknownOutcome,
-      claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))
-    })
-
-    await expect(
-      launchStructuredWorktreeSession({
-        creationId: 'creation-1',
-        request: {
-          repoId: 'repo-1',
-          name: 'routing-recovery',
-          setupDecision: 'run',
-          agent: 'codex',
-          pendingFirstAgentMessageRename: false,
-          note: '',
-          startupPlan: null,
-          quickPrompt: 'Fix the route',
-          quickTelemetry: null
-        },
-        worktreeId: 'worktree-1',
-        shouldActivateOnCompletion: true,
-        fallbackStartupOpt: undefined,
-        activation: false,
-        primaryTabId: null
-      })
-    ).resolves.toEqual({
+    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toEqual({
       accepted: true,
       cancelled: false,
-      visibilityUnknown: true,
-      activation: false,
+      activation: { primaryTabId: null },
+      primaryTabId: 'agent-session:session-1'
+    })
+    expect(order).toEqual(['begin', 'reveal', 'open'])
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { worktreeId: 'worktree-1' },
+        activate: true,
+        plan: expect.objectContaining({
+          route: 'structured-native-chat',
+          agent: 'codex',
+          prompt: 'Fix the route'
+        })
+      })
+    )
+  })
+
+  it('does not launch after the pending creation was cancelled', async () => {
+    mocks.state.pendingWorktreeCreations = {}
+
+    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
+      accepted: true,
+      cancelled: true,
       primaryTabId: null
     })
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
+  })
 
-    expect(mocks.activateStructuredAgentSessionById).not.toHaveBeenCalled()
-    expect(releaseCallerAfterUnknownOutcome).toHaveBeenCalledOnce()
-    expect(mocks.unsubscribe).toHaveBeenCalledOnce()
+  it('keeps deferred activation from selecting the provisional tab', async () => {
+    await expect(
+      launchStructuredWorktreeSession({
+        ...baseArgs,
+        shouldActivateOnCompletion: false,
+        primaryTabId: 'existing-tab'
+      })
+    ).resolves.toMatchObject({ primaryTabId: 'agent-session:session-1' })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({ activate: false })
+    )
+  })
+
+  it('does not open a tab when cancellation races the reveal callback', async () => {
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      const pending = mocks.state.pendingWorktreeCreations
+      mocks.state.pendingWorktreeCreations = {}
+      mocks.listener?.(mocks.state)
+      mocks.state.pendingWorktreeCreations = pending
+      const allowed = args.beforeOpen?.('session-1')
+      return allowed === false
+        ? null
+        : { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
+    })
+
+    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
+      accepted: true,
+      cancelled: false,
+      primaryTabId: null
+    })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 })

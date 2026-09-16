@@ -6,7 +6,7 @@ import { applyTabOrderSortValues, partitionPinnedTabOrder } from './tabs-tab-ord
 import {
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,
-  patchTerminalTabPinned
+  patchTerminalTabRow
 } from './tabs-host-mirroring'
 
 export function createTabsLabelActions(
@@ -50,7 +50,7 @@ export function createTabsLabelActions(
             }
           }
         }
-        return {}
+        return state
       })
       if (reordered && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
@@ -58,11 +58,24 @@ export function createTabsLabelActions(
     },
 
     setTabLabel: (tabId, label) => {
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? state)
     },
 
     setTabViewMode: (tabId, mode) => {
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }) ?? {})
+      set((state) => {
+        const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })
+        const rowPatch = patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
+        if (!tabPatch && !rowPatch.tabsByWorktree) {
+          return state
+        }
+        return {
+          ...tabPatch,
+          // Why the row too: viewMode is declared on both types and host-sync
+          // already writes it to the row. Only these local toggles skipped it, so
+          // readers had to OR the two indices to find out who owns the surface.
+          ...rowPatch
+        }
+      })
       mirrorTabViewModeToHost(get(), tabId, mode)
     },
 
@@ -75,7 +88,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return {}
+          return state
         }
         // Why: viewMode defaults to 'terminal' for legacy/missing, so the first toggle flips to 'chat'.
         const fromMode: 'terminal' | 'chat' = found.tab.viewMode === 'chat' ? 'chat' : 'terminal'
@@ -86,7 +99,10 @@ export function createTabsLabelActions(
             (terminal) => terminal.id === found.tab.entityId
           )?.launchAgent ?? null
         toggled = { from: fromMode, to: nextMode, agent }
-        return patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }) ?? {}
+        return {
+          ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }),
+          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: nextMode })
+        }
       })
       // Why: emit after the state write so the event reflects the committed mode.
       const committed = toggled as {
@@ -102,7 +118,7 @@ export function createTabsLabelActions(
 
     setTabCustomLabel: (tabId, label, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? {})
+      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state)
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -110,7 +126,7 @@ export function createTabsLabelActions(
 
     setUnifiedTabColor: (tabId, color) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? {})
+      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
       if (exists) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -121,7 +137,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return {}
+          return state
         }
         const { tab, worktreeId } = found
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
@@ -141,7 +157,7 @@ export function createTabsLabelActions(
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
           // Why: reconcile derives pin from the TerminalTab, so mirror it there too or a host snapshot recomputes isPinned:false and un-pins during the echo window.
-          ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, true),
+          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })
@@ -159,7 +175,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return {}
+          return state
         }
         const { tab, worktreeId } = found
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
@@ -178,7 +194,7 @@ export function createTabsLabelActions(
             ...state.unifiedTabsByWorktree,
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
-          ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, false),
+          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: false }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })

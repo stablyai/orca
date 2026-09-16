@@ -44,7 +44,8 @@ export function buildViewportUserAgentOverride(args: {
     return { userAgent: googleAuthUserAgent() }
   }
   if (!args.mobile) {
-    // Why: desktop presets republish the session's own identity unchanged.
+    // Why: desktop presets republish the session's clean identity, or a preset would put the
+    // Electron/app tokens back on the wire and a transplanted session gets revoked (STA-7147).
     return { userAgent: args.baseUserAgent }
   }
   const chromeMajor = extractChromeMajor(args.baseUserAgent)

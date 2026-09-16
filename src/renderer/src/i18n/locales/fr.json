@@ -835,7 +835,6 @@
       "useComposerState": {
         "7eb3f44ff7": "L'agent sélectionné est désactivé. Choisissez un agent activé avant de créer.",
         "b2ead86962": "Échec de la résolution de la base de la PR.",
-        "a9ff236145": "Certaines pièces jointes n'ont pas pu être envoyées.",
         "3db83fc58a": "Aucun chemin de projet n'est disponible sur cet hôte pour les pièces jointes.",
         "ba6cb77082": "Échec de la connexion au projet.",
         "chooseOrAddProjectBeforeWorkspace": "Choisissez ou ajoutez un projet avant de créer un espace de travail.",
@@ -2201,8 +2200,6 @@
         "recentChatsTerminalsHeader": "Chats et terminaux récents",
         "27f10cca63": "Rechercher chats, terminaux, worktrees, paramètres et actions...",
         "2770f02910": "Rechercher chats, terminaux, worktrees, paramètres et actions",
-        "paletteOpenTabBranch": "Nom de branche",
-        "paletteOpenTabWorkspace": "Nom de l'espace de travail",
         "lastActiveTime": "Dernière activité il y a {{value0}}"
       },
       "github": {
@@ -2384,6 +2381,10 @@
                 "7c302f8174": "Sans titre"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "Cette vue ne contient encore aucun élément.",
+            "7e4a2f80c6": "Les éléments ajoutés récemment peuvent mettre un moment à apparaître."
           }
         },
         "GitHubMarkdownComposer": {
@@ -5040,12 +5041,11 @@
           "keepDefaultBranchAria": "Garder la branche par défaut visible tout en masquant les espaces de travail en veille"
         },
         "SidebarHeader": {
-          "25a95899c9": "Ajouter un projet",
           "92154beb7e": "Nouvel espace de travail",
           "49f62c5665": "Tableau des espaces de travail",
           "5c9c7c16aa": "Ajoutez un projet pour créer des espaces de travail",
-          "ca6f729da2": "Nouvel espace de travail ({{value0}})",
-          "a30e34eb5c": "Fermer le tableau des espaces de travail"
+          "a30e34eb5c": "Fermer le tableau des espaces de travail",
+          "addProject": "Ajouter un projet"
         },
         "SidebarNav": {
           "80611a8b10": "Recherche",
@@ -15463,6 +15463,11 @@
           "795cbf26e2": "Filtrer...",
           "4616ea39fd": "Aller à l'espace de travail",
           "threadListOptionsFiltered": "Options de la liste des fils, filtres actifs",
+          "showSearch": "Afficher la recherche",
+          "showUnreadOnly": "Afficher uniquement les fils non lus",
+          "showChildAgents": "Afficher les agents enfants",
+          "filtersSection": "Filtres",
+          "viewSection": "Affichage",
           "59b131fbd9": "Marquer le fil comme non lu",
           "beb2c19173": "Non lus",
           "5651b216c6": "Projet inconnu",
@@ -16027,7 +16032,8 @@
         "chooseInAgentPicker": "Choisir dans le sélecteur d'agents…",
         "toggleOption": "Basculer {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "Valeur actuelle inconnue — choisissez Activé ou Désactivé",
+        "valueIsDefault": "Par défaut",
+        "valueNotReported": "Non signalé",
         "sentNotConfirmed": "Envoyé à l'agent — non confirmé",
         "setWhenSessionStarts": "Défini au démarrage de la session.",
         "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
@@ -16040,9 +16046,7 @@
           "high": "Haute",
           "xhigh": "Extra élevé",
           "max": "Max",
-          "ultra": "Ultra",
-          "on": "Activé",
-          "off": "Désactivé"
+          "ultra": "Ultra"
         }
       },
       "tool": {
@@ -16400,78 +16404,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "Vue tableau de bord",
-      "board": "Tableau de bord",
-      "map": "Carte des agents"
-    },
-    "map": {
-      "host": {
-        "local": "Local",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "Distant"
-      },
-      "filters": {
-        "showStates": "États des agents",
-        "agentlessWorkspaces": "Espaces de travail sans agents",
-        "orchestrationLinks": "Liens d'orchestration",
-        "orchestrationLinksHidden": "Liens d'orchestration masqués",
-        "workspaceVisibility": "Contenu de la carte",
-        "title": "Contrôles de la carte",
-        "reset": "Réinitialiser",
-        "ofTotalAgents": "sur {{total}} agents affichés",
-        "quickViews": "Vues rapides",
-        "agents": "Agents",
-        "time": "Heure",
-        "lifespan": "Durée de vie de la session",
-        "sinceMessage": "Depuis le dernier message",
-        "timeInState": "Temps dans l'état actuel",
-        "timeMinimum": "{{label}} minimum",
-        "timeMaximum": "{{label}} maximum",
-        "timeAny": "tous",
-        "timeRangeCount": "{{count}} plages",
-        "resetRanges": "Réinitialiser les plages",
-        "summaryAll": "Tous",
-        "summaryCount": "{{shown}} sur {{total}}",
-        "summarySelected": "{{count}} sélectionnés",
-        "workspace": "Espace de travail",
-        "stateChip": "État : {{states}}"
-      },
-      "liveContainmentMap": "Carte d'imbrication en temps réel",
-      "empty": "Aucun agent ne correspond aux filtres actuels.",
-      "canvasLabel": "Carte imbriquée des projets, espaces de travail et agents",
-      "zoomOut": "Zoom arrière",
-      "zoomIn": "Zoom avant",
-      "fit": "Ajuster",
-      "openWorktree": "Ouvrir les détails du worktree {{worktree}}",
-      "openFolderWorkspace": "Ouvrir les détails de l'espace de travail de type dossier {{workspace}}",
-      "worktreeSummary": "{{total}} agents · {{active}} actifs · {{done}} terminés",
-      "worktreeSummary_one": "{{total}} agent · {{active}} actif · {{done}} terminé",
-      "worktreeSummary_other": "{{total}} agents · {{active}} actifs · {{done}} terminés",
-      "runningAgents": "Agents",
-      "spawnAgent": "Démarrer un nouvel agent",
-      "noLaunchableAgents": "Aucun agent activé détecté.",
-      "sleepWorkspace": "Veille",
-      "projectCount": "{{agents}} agents · {{workspaces}} workspaces",
-      "agentCount": "{{count}} agents",
-      "agentCount_one": "{{count}} agent",
-      "agentCount_other": "{{count}} agents",
-      "noWorkspaceAgents": "Aucun agent dans cet espace de travail.",
-      "status": {
-        "doneSeen": "Terminé, vu"
-      },
-      "quickView": {
-        "everything": "Tout",
-        "attention": "Me concerne",
-        "stuck": "Bloqué",
-        "unread": "Non lus",
-        "recent": "30 dernières minutes",
-        "longRunning": "Exécutions longues",
-        "stale": "Inactif > 3 j",
-        "orchestration": "Orchestration"
-      }
-    },
     "placeholder": {
       "title": "Tableau de bord des agents",
       "description": "C'est ici que tous vos agents s'afficheront d'un coup d'œil. Le tableau arrive bientôt."
@@ -16533,8 +16465,7 @@
       "project": "Projet",
       "workspaceStatus": "Statut de l'espace de travail",
       "reviewStatus": "Statut PR / MR",
-      "clearAll": "Effacer tous les filtres",
-      "removeChip": "Retirer {{filter}}"
+      "clearAll": "Effacer tous les filtres"
     },
     "search": {
       "placeholder": "Rechercher un worktree, un projet ou un agent…",
@@ -16587,5 +16518,13 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "attend une réponse",
+      "working": "en cours",
+      "stopped": "arrêté",
+      "finished": "terminé"
+    }
   }
 }

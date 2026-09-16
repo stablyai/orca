@@ -1,0 +1,110 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "jsPlugins": [
+    {
+      "name": "anti-slop",
+      "specifier": "../.anti-slop-plugin/index.ts"
+    }
+  ],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "ignorePatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/out",
+    "cloud/**",
+    "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
+    "tests/e2e/.cross-version-checkouts"
+  ],
+  "rules": {
+    "anti-slop/no-array-filter-map": "off",
+    "anti-slop/no-chained-type-assertions": "off",
+    "anti-slop/no-conditional-empty-object-spread": "off",
+    "anti-slop/no-known-value-widening": "off",
+    "anti-slop/no-module-mocking": "error",
+    "anti-slop/no-object-parameters": "error",
+    "anti-slop/no-reduce-accumulator-copy": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/no-runtime-typeof": "off",
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-unknown-parameters": "off",
+    "anti-slop/no-unknown-returns": "off",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-unsafe-dictionary-type": "off",
+    "anti-slop/no-widen-then-assert": "error",
+    "anti-slop/require-readable-spacing": "off",
+    "anti-slop/require-safety-comment-for-type-assertion": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+        "tests/**/*.{ts,tsx}",
+        "**/__mocks__/**"
+      ],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
+    // The exemptions below are file-scoped rather than inline `oxlint-disable` comments
+    // because the root lint scan does not load this plugin, so an inline directive naming
+    // an anti-slop rule always reads back as an unused directive there.
+    //
+    // In the screenshot annotator a "shape" is the drawn geometry -- pen, arrow, rect,
+    // ellipse, highlight. A domain noun, and it pervades every symbol in the module.
+    // mobile/src/test-support/rpc-recording is the golden recorder engine. recorder-digest.ts
+    // hashes these files' RAW BYTES into every golden's `recorderSha256` header, so any edit
+    // here -- a rename or even an added comment -- invalidates all 208 recordings. The exemption
+    // is config-scoped for that reason: an inline directive would change the bytes it protects.
+    {
+      "files": ["**/test-support/rpc-recording/**"],
+      "rules": {
+        "anti-slop/no-shape-in-symbol-names": "off"
+      }
+    },
+    {
+      "files": ["**/browser-pane/annotate/**"],
+      "rules": {
+        "anti-slop/no-shape-in-symbol-names": "off"
+      }
+    },
+    // lucide exports the icon component as `Shapes`, and the matching REPO_LUCIDE_ICONS key
+    // is the persisted icon name shared by the desktop picker and mobile.
+    {
+      "files": [
+        "**/components/repo/repo-icon.tsx",
+        "**/worktree-list/rows/repo-header-project-actions.tsx",
+        "**/components/MobileRepoIcon.tsx"
+      ],
+      "rules": {
+        "anti-slop/no-shape-in-symbol-names": "off"
+      }
+    },
+    // `shapedSidebar` is a persisted onboarding-checklist field and a telemetry enum member;
+    // renaming it would orphan saved state.
+    {
+      "files": ["**/src/shared/constants.ts", "**/src/shared/onboarding-state-types.ts"],
+      "rules": {
+        "anti-slop/no-shape-in-symbol-names": "off"
+      }
+    },
+    // Matching zod's own literal `shape` property is what selects the ZodObject branch of
+    // RpcSendInput's conditional type.
+    {
+      "files": ["**/rpc-contract/rpc-send-params.ts"],
+      "rules": {
+        "anti-slop/no-shape-in-symbol-names": "off"
+      }
+    }
+  ]
+}

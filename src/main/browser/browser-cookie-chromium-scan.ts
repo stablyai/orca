@@ -7,7 +7,7 @@ import {
 } from './browser-cookie-import-policy'
 import { prepareStagedCookiesForImport } from './browser-cookie-staged-import'
 import { chromiumTimestampToUnix, buildChromiumCookieInsertParams } from './browser-cookie-sqlite'
-import { chromiumSameSite } from './browser-cookie-validation'
+import { databaseSameSite } from './browser-cookie-validation'
 import {
   buildUndecryptableWarning,
   cookieEncryptionVersion,
@@ -97,7 +97,8 @@ export function scanChromiumCookieRows(
     const path = sourceRow.path as string
     const secure = sourceRow.is_secure === 1n
     const httpOnly = sourceRow.is_httponly === 1n
-    const sameSite = chromiumSameSite(Number(sourceRow.samesite ?? 0))
+    // Why: pre-samesite schemas and NULL rows follow Chromium's own unspecified fallback.
+    const sameSite = databaseSameSite(Number(sourceRow.samesite ?? -1))
     const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
     const partition = partitionBySourceRow.get(sourceRow)!
     // Why: cookie values are raw bytes, not UTF-8; latin1 preserves 0x00–0xFF without lossy replacement.

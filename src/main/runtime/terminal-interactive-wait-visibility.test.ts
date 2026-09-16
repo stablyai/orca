@@ -1,9 +1,14 @@
 // A worker parked on an interactive prompt must be distinguishable from one that is thinking
 // or inside a long tool call (STA-4513, STA-3714).
 import { readFileSync } from 'node:fs'
+import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import {
+  createTranscriptPane,
+  type TranscriptPaneOptions,
+  TRANSCRIPT_PANE_PTY_ID as PTY_ID
+} from './agent-transcript-pane-test-harness'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
 
 vi.mock('electron', () => ({
@@ -13,12 +18,11 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const TAB_ID = 'tab-1'
-const WORKTREE_ID = 'wt-1'
-const PTY_ID = 'pty-1'
-
-// Captured verbatim from cursor-agent 2026.08.11-e8db854 driven through Orca.
+// cursor-agent 2026.08.11-e8db854's screens, but NOT raw PTY output: these files contain no
+// escape bytes and no carriage returns, so they came through a terminal's renderer and a
+// clipboard. They evidence wording, ordering and glyphs — which is all the rules below key on —
+// and evidence nothing about the caret, cursor moves, repaints or the alternate screen buffer.
+// Record new fixtures with config/scripts/capture-agent-pty-transcript.mjs, which keeps the bytes.
 function fixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
 }
@@ -39,71 +43,13 @@ function agentStatusOsc(state: string): string {
   return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType: 'claude' })}`
 }
 
-async function createPane(options: {
-  paneTitle: string
-  foregroundProcess: string | null
-  data: string
-  /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
-  connectionId?: string
-  /** Simulates a PTY controller whose foreground probe never settles. */
-  foregroundProbeHangs?: boolean
-  onForegroundProbe?: () => void
-}): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
-  const runtime = new OrcaRuntimeService(null)
-  const internals = runtime as unknown as {
-    resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
-  }
-  vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
-    id: WORKTREE_ID,
-    path: '/repo/app',
-    connectionId: options.connectionId ?? null,
-    repo: null,
-    folderWorkspace: null
-  })
-  runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: PTY_ID, incarnationId: 'inc-1' }),
-    write: () => true,
-    kill: () => true,
-    getForegroundProcess: (): Promise<string | null> => {
-      options.onForegroundProbe?.()
-      return options.foregroundProbeHangs === true
-        ? new Promise<string | null>(() => {})
-        : Promise.resolve(options.foregroundProcess)
-    }
-  })
-  const terminal = await runtime.createTerminal(`id:${WORKTREE_ID}`, {
-    tabId: TAB_ID,
-    leafId: LEAF_ID,
-    title: 'Terminal'
-  })
-  runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
-    tabs: [
-      {
-        tabId: TAB_ID,
-        worktreeId: WORKTREE_ID,
-        title: 'Terminal',
-        activeLeafId: LEAF_ID,
-        layout: null
-      }
-    ],
-    leaves: [
-      {
-        tabId: TAB_ID,
-        worktreeId: WORKTREE_ID,
-        leafId: LEAF_ID,
-        paneRuntimeId: 1,
-        ptyId: PTY_ID,
-        paneTitle: options.paneTitle
-      }
-    ]
-  })
-  // Why the guard: a restore seed is only applied to a never-written record, so the restore
-  // cases must not write an empty chunk first.
-  if (options.data.length > 0) {
-    runtime.onPtyData(PTY_ID, options.data, Date.now())
-  }
-  return { runtime, handle: terminal.handle }
+async function createPane(
+  options: TranscriptPaneOptions
+): Promise<Awaited<ReturnType<typeof createTranscriptPane>>> {
+  // Compose the same central hook-store wiring as desktop and orcad so OSC rows exercise the
+  // production status path rather than silently disappearing in a bare runtime fixture.
+  const statusWiring = makeAgentStatusStoreWiring()
+  return createTranscriptPane(options, statusWiring.deps)
 }
 
 // cursor-agent renders a braille spinner in its OSC title while it works, and Orca reads
@@ -299,7 +245,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       })
 
       await expect(runtime.showTerminal(handle)).resolves.toMatchObject({
-        agentWait: { source: 'prompt-text', reason: 'codex-trust-workspace' }
+        agentWait: { source: 'prompt-text', reason: 'agent-trust-workspace' }
       })
     })
 

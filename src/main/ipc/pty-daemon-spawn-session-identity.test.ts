@@ -435,7 +435,8 @@ describe('registerPtyHandlers', () => {
             worktreeId: 'wt-1',
             tabId: 'tab-1',
             leafId,
-            ptyId: 'ssh-pty'
+            ptyId: 'ssh-pty',
+            origin: 'spawn'
           },
           'ssh:ssh-1'
         )

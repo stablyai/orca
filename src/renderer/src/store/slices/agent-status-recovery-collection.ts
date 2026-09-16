@@ -10,7 +10,6 @@ import {
   retainedAgentEntryFromLive
 } from './agent-status-pane-key-tab-binding'
 import {
-  carryOverAutomaticResumeBlock,
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,
   markManualSleepLazyRestore,
@@ -96,10 +95,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(
-          record,
-          state.sleepingAgentSessionsByPaneKey[retained.entry.paneKey]
-        )
       }
       records[record.paneKey] = record
     }
@@ -133,7 +128,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(record, state.sleepingAgentSessionsByPaneKey[paneKey])
       }
       records[record.paneKey] = record
     }

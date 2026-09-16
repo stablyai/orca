@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto'
-import type { EffortLevel, Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
+import type {
+  Options as ClaudeAgentSdkOptions,
+  PermissionMode
+} from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -35,9 +38,12 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'extraArgs'
   | 'model'
   | 'effort'
+  | 'permissionMode'
+  | 'allowDangerouslySkipPermissions'
   | 'sessionId'
   | 'resume'
   | 'resumeSessionAt'
+  | 'resumeDropsTurn'
 >
 
 /**
@@ -57,8 +63,6 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   extraArgs: { 'replay-user-messages': null }
 }
 
-const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max']
-
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const next: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) {
@@ -70,47 +74,18 @@ function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Recor
 }
 
 /**
- * Translate the record's durable launch arguments into SDK options.
+ * Agent Permissions as query-start options.
  *
- * Typed option first so a flag is never emitted twice; `extraArgs` carries
- * anything without one. A token expressible neither way is refused rather than
- * dropped — a silent drop is how this lane loses launch flags.
+ * The SDK refuses `bypassPermissions` unless the allow flag rides with it, so the two are built
+ * here together and never emitted apart. The prompting mode is stated rather than left out: the
+ * SDK fills an absent mode with `default` anyway, and saying so keeps the launch readable.
  */
-export function claudeSdkOptionsForLaunchArgs(
-  args: readonly string[]
-): Pick<ClaudeStructuredSdkOptions, 'model' | 'effort' | 'extraArgs'> {
-  let model: string | undefined
-  let effort: EffortLevel | undefined
-  const extraArgs: Record<string, string | null> = {}
-  for (let index = 0; index < args.length; index += 1) {
-    const token = args[index] ?? ''
-    if (!token.startsWith('--') || token.length <= 2) {
-      throw new Error(
-        `claude launch argument ${token} has no SDK option; refusing rather than dropping it`
-      )
-    }
-    const equals = token.indexOf('=')
-    const flag = equals === -1 ? token : token.slice(0, equals)
-    let value = equals === -1 ? null : token.slice(equals + 1)
-    if (value === null) {
-      const next = args[index + 1]
-      if (next !== undefined && !next.startsWith('-')) {
-        value = next
-        index += 1
-      }
-    }
-    if (flag === '--model' && value !== null) {
-      model = value
-    } else if (flag === '--effort' && value !== null && EFFORT_LEVELS.includes(value)) {
-      effort = value as EffortLevel
-    } else {
-      extraArgs[flag.slice(2)] = value
-    }
-  }
+export function claudeStructuredPermissionOptions(
+  mode: PermissionMode
+): Pick<ClaudeStructuredSdkOptions, 'permissionMode' | 'allowDangerouslySkipPermissions'> {
   return {
-    ...(model === undefined ? {} : { model }),
-    ...(effort === undefined ? {} : { effort }),
-    ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {})
+    permissionMode: mode,
+    ...(mode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {})
   }
 }
 
@@ -141,6 +116,8 @@ export type ClaudeStructuredLaunchResolverDeps = {
    * inherit a guess. Build it with claudeStructuredAuthPolicyForSettings.
    */
   resolveAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
+  /** The user's Agent Permissions setting, re-read per acquisition. Absent means prompting. */
+  resolvePermissionMode?: () => Promise<PermissionMode> | PermissionMode
   /** How long an in-flight account switch may hold a launch before it is refused. */
   authSwitchSettleTimeoutMs?: number
   /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
@@ -218,7 +195,11 @@ export function createClaudeStructuredLaunchResolver(
       head?.handle.provider === 'claude'
         ? head.handle.sessionId
         : claudeSessionIdForOrcaSession(identity.sessionId)
-    const durable = claudeSdkOptionsForLaunchArgs(record.launchArgs ?? [])
+    // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
+    // concern, and the permission mode they used to smuggle in is a typed option now.
+    const permission = claudeStructuredPermissionOptions(
+      (await deps.resolvePermissionMode?.()) ?? 'default'
+    )
     const command = (deps.resolveCommand ?? resolveClaudeCommand)()
     const auth = await deps.resolveAuthPolicy()
     const overlay = await deps.resolveEnv?.()
@@ -255,9 +236,8 @@ export function createClaudeStructuredLaunchResolver(
     return {
       pathToClaudeCodeExecutable: command,
       options: {
-        ...durable,
         ...CLAUDE_STRUCTURED_BASE_OPTIONS,
-        extraArgs: { ...durable.extraArgs, ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs },
+        ...permission,
         ...(head?.handle.provider === 'claude'
           ? {
               resume: providerSessionId,

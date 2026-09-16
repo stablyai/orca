@@ -63,7 +63,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix',
         'abc123',
-        false
+        false,
+        false,
+        {}
       )
       expect(gitSpy).toHaveBeenCalledWith(
         ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
@@ -119,7 +121,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix',
         sha,
-        false
+        false,
+        false,
+        {}
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -188,7 +192,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/bitbucket',
         'abc123',
-        false
+        false,
+        false,
+        {}
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -249,7 +255,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        {}
       )
     } finally {
       gitSpy.mockRestore()
@@ -296,7 +304,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        {}
       )
     } finally {
       gitSpy.mockRestore()
@@ -353,7 +363,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        {}
       )
     } finally {
       gitSpy.mockRestore()
@@ -402,7 +414,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        {}
       )
     } finally {
       gitSpy.mockRestore()

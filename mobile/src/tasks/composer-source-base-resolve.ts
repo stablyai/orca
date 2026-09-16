@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import type { GitHubPrStartPoint } from '../../../src/shared/worktree/types'
+import { worktreeMrBaseResolve, worktreePrBaseResolve } from './mobile-workspace-create-operations'
 
 // The resolved start point for a linked PR/MR: the base branch to create from
 // plus the optional review-compare ref, push target, and exact branch name.
@@ -23,8 +23,8 @@ export async function resolveComposerPrBase(args: {
   isCrossRepository?: boolean
 }): Promise<GitHubPrStartPoint> {
   const { client, repoId, prNumber, headRefName, baseRefName, isCrossRepository } = args
-  const response = await client.sendRequest(
-    'worktree.resolvePrBase',
+  const reply = await worktreePrBaseResolve.request(
+    client,
     {
       repo: `id:${repoId}`,
       prNumber,
@@ -34,10 +34,8 @@ export async function resolveComposerPrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = (response as RpcSuccess).result as GitHubPrStartPoint | { error: string }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const result = worktreePrBaseResolve.interpret(reply) as GitHubPrStartPoint | { error: string }
   if ('error' in result) {
     throw new Error(result.error)
   }
@@ -54,8 +52,8 @@ export async function resolveComposerMrBase(args: {
   isCrossRepository?: boolean
 }): Promise<ComposerHostedBase> {
   const { client, repoId, mrIid, sourceBranch, targetBranch, isCrossRepository } = args
-  const response = await client.sendRequest(
-    'worktree.resolveMrBase',
+  const reply = await worktreeMrBaseResolve.request(
+    client,
     {
       repo: `id:${repoId}`,
       mrIid,
@@ -65,10 +63,8 @@ export async function resolveComposerMrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = (response as RpcSuccess).result as HostedBaseResult
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const result = worktreeMrBaseResolve.interpret(reply) as HostedBaseResult
   if ('error' in result) {
     throw new Error(result.error)
   }

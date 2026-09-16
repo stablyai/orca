@@ -1,4 +1,9 @@
 import type {
+  AiVaultSearchRequest,
+  AiVaultSearchResponse,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault-search-types'
+import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
@@ -18,8 +23,18 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import type { ExecutionHostId } from '../../shared/execution-host'
 
 export type AiVaultApi = {
+  /** Omitted host means this host; search addresses one index at a time. */
+  searchSessions: (
+    request: AiVaultSearchRequest,
+    executionHostScope?: ExecutionHostId
+  ) => Promise<AiVaultSearchResponse>
+  /** Status describes one index, so it never accepts the `all` scope. */
+  searchStatus: (executionHostScope?: ExecutionHostId) => Promise<AiVaultSearchStatus>
+  /** Deletes and rebuilds this desktop's local search index. */
+  clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>

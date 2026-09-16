@@ -128,10 +128,10 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
     for (const entry of compare.entries) {
       // Exactly what the renderer sends: paths from the compare entry list,
       // OIDs from the compare summary that produced that same list.
-      const callerShape = { filePath: entry.path, oldPath: entry.oldPath }
-      const legacy = await branchDiff(callerShape)
+      const callerParams = { filePath: entry.path, oldPath: entry.oldPath }
+      const legacy = await branchDiff(callerParams)
       const pinned = await branchDiff({
-        ...callerShape,
+        ...callerParams,
         baseRef: compare.summary.mergeBase,
         headOid: compare.summary.headOid
       })

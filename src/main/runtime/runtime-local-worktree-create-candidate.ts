@@ -57,7 +57,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   store?: RuntimeStore
   baseBranch: string
   localWorktreeGitOptions: { wslDistro?: string }
-  localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }]
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
   const sanitizedName = sanitizeWorktreeName(args.request.name)
@@ -115,7 +114,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         args.repo.path,
         branchName,
         args.baseBranch,
-        ...args.localWorktreeGitOptionArgs
+        args.localWorktreeGitOptions
       )
       return checkoutExistingBranch
     }

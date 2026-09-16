@@ -11,7 +11,13 @@ import {
   parseProjectInput,
   useCallback
 } from './mobile-tasks-dependencies'
-import { type GitHubProjectTable, isSuccess } from './mobile-tasks-legacy-foundation'
+import type { GitHubProjectTable } from './mobile-tasks-legacy-foundation'
+import {
+  githubProjectListRead,
+  githubProjectRefResolve,
+  githubProjectViewListRead,
+  githubProjectViewTableRead
+} from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectLoadingActions(model: TaskPaginationActionsModel) {
   const {
@@ -48,13 +54,9 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     }
     setGithubProjectError('')
     setGithubProjectPartialFailures([])
-    const response = await client.sendRequest('github.project.listAccessible', {
-      host: 'github.com'
-    })
-    if (!isSuccess(response)) {
-      throw new Error(response.error.message)
-    }
-    const result = response.result as
+    const reply = await githubProjectListRead.request(client, { host: 'github.com' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    const result = githubProjectListRead.interpret(reply) as
       | {
           ok: true
           projects: GitHubProjectSummary[]
@@ -73,16 +75,14 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
         return []
       }
-      const response = await client.sendRequest('github.project.listViews', {
+      const reply = await githubProjectViewListRead.request(client, {
         owner: project.owner,
         host: githubProjectHost(project.host),
         ownerType: project.ownerType,
         projectNumber: project.number
       })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      const result = githubProjectViewListRead.interpret(reply) as
         | { ok: true; views: GitHubProjectViewSummary[] }
         | { ok: false; error: { message: string } }
       if (!result.ok) {
@@ -109,8 +109,8 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       setGithubProjectLoading(true)
       setGithubProjectError('')
       try {
-        const response = await client.sendRequest(
-          'github.project.viewTable',
+        const reply = await githubProjectViewTableRead.request(
+          client,
           {
             owner: activeGitHubProject.owner,
             host: activeGitHubProjectHost,
@@ -121,10 +121,8 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
           },
           { timeoutMs: 60_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectViewTableRead.interpret(reply) as
           | { ok: true; data: GitHubProjectTable }
           | { ok: false; error: { message: string }; totalCount?: number }
         if (!result.ok) {
@@ -262,14 +260,12 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     setGithubProjectPasteError('')
     setGithubProjectError('')
     try {
-      const response = await client.sendRequest('github.project.resolveRef', {
+      const reply = await githubProjectRefResolve.request(client, {
         input,
         host: githubProjectHost(parsed.host)
       })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      const result = githubProjectRefResolve.interpret(reply) as
         | {
             ok: true
             owner: string

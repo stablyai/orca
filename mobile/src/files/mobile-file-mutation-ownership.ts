@@ -2,8 +2,12 @@ import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-mutation-ownership'
 import type { RuntimeStatus } from '../../../src/shared/runtime-types'
 import type { SshConnectionState, SshMutationExpectation } from '../../../src/shared/ssh-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import {
+  fileOwnershipRuntimeStatusRead,
+  fileOwnershipSshStateRead,
+  fileOwnershipWorktreeRead,
+  type MobileFileOwnershipRpcSender
+} from './mobile-file-ownership-operations'
 
 const FILE_MUTATION_TIMEOUT_MS = 15_000
 const SSH_OWNER_CHANGED_MESSAGE =
@@ -35,47 +39,42 @@ export function buildMobileFileMutationOwnership(
 }
 
 export async function captureMobileFileMutationOwnership(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileFileOwnershipRpcSender,
   worktree: string
 ): Promise<MobileFileMutationOwnership> {
-  const status = await requestResult<Pick<RuntimeStatus, 'capabilities'>>(
-    client,
-    'status.get',
-    undefined
-  )
+  const statusReply = await fileOwnershipRuntimeStatusRead.request(client, undefined, {
+    timeoutMs: FILE_MUTATION_TIMEOUT_MS
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply) as Pick<
+    RuntimeStatus,
+    'capabilities'
+  >
   assertFileMutationOwnershipCapability(status)
 
-  const result = await requestResult<{ worktree?: { hostId?: string | null } }>(
+  const worktreeReply = await fileOwnershipWorktreeRead.request(
     client,
-    'worktree.show',
-    { worktree }
+    { worktree },
+    { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
   )
-  if (!result.worktree) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const summary = fileOwnershipWorktreeRead.interpret(worktreeReply) as
+    | { hostId?: string | null }
+    | undefined
+  if (!summary) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
 
-  const host = parseExecutionHostId(result.worktree.hostId)
-  const sshState =
-    host?.kind === 'ssh'
-      ? (
-          await requestResult<{ state: SshConnectionState | null }>(client, 'ssh.getState', {
-            targetId: host.targetId
-          })
-        ).state
-      : null
-  return buildMobileFileMutationOwnership(result.worktree.hostId, sshState)
-}
-
-async function requestResult<TResult>(
-  client: Pick<RpcClient, 'sendRequest'>,
-  method: string,
-  params: unknown
-): Promise<TResult> {
-  const response = await client.sendRequest(method, params, {
-    timeoutMs: FILE_MUTATION_TIMEOUT_MS
-  })
-  if (!response.ok) {
-    throw new Error((response as RpcFailure).error.message)
+  const host = parseExecutionHostId(summary.hostId)
+  let sshState: SshConnectionState | null = null
+  if (host?.kind === 'ssh') {
+    const stateReply = await fileOwnershipSshStateRead.request(
+      client,
+      { targetId: host.targetId },
+      { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    sshState = fileOwnershipSshStateRead.interpret(stateReply) as SshConnectionState | null
   }
-  return (response as RpcSuccess).result as TResult
+  return buildMobileFileMutationOwnership(summary.hostId, sshState)
 }

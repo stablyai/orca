@@ -1,7 +1,10 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   OXLINT_SCANS,
   diagnosticTouchesAddedLines,
+  isAntiSlopDirectiveUnusedWarning,
   isMovedCode,
   isRootCodeQualityPath,
   overlapsAddedLines,
@@ -108,5 +111,46 @@ describe('moved-code exemption', () => {
 
   it('never exempts an empty highlight', () => {
     expect(isMovedCode(['', '   '], [['a()']])).toBe(false)
+  })
+})
+
+describe('anti-slop directive unused warning', () => {
+  const root = path.resolve(import.meta.dirname, '..', '..')
+  // Assembled so no line here is itself a directive the gate would scan.
+  const directive = (rule) => `/* oxlint-disable ${rule} -- reason */`
+
+  const withFixture = (firstLine, assert) => {
+    const directory = mkdtempSync(path.join(root, 'config', 'anti-slop-directive-test-'))
+    try {
+      const file = path.join(directory, 'fixture.ts')
+      writeFileSync(file, [firstLine, 'export const value = 1', ''].join('\n'))
+      assert({
+        message: 'Unused oxlint-disable directive (no problems were reported).',
+        filename: file,
+        labels: [{ span: { line: 1 } }]
+      })
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }
+
+  it('exempts a suppression the root scan cannot resolve', () => {
+    withFixture(directive('anti-slop/no-module-mocking'), (diagnostic) => {
+      expect(isAntiSlopDirectiveUnusedWarning(diagnostic, root)).toBe(true)
+    })
+  })
+
+  it('still reports an unused directive for a rule the root scan does load', () => {
+    withFixture(directive('unicorn/no-array-reduce'), (diagnostic) => {
+      expect(isAntiSlopDirectiveUnusedWarning(diagnostic, root)).toBe(false)
+    })
+  })
+
+  it('ignores diagnostics that are not unused-directive warnings', () => {
+    withFixture(directive('anti-slop/no-module-mocking'), (diagnostic) => {
+      expect(
+        isAntiSlopDirectiveUnusedWarning({ ...diagnostic, message: 'Unexpected any.' }, root)
+      ).toBe(false)
+    })
   })
 })

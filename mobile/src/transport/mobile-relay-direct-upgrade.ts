@@ -20,8 +20,13 @@ import {
   writeMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
 } from './mobile-relay-direct-upgrade-journal'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 import type { RpcClient } from './rpc-client'
-import type { HostProfile, RpcResponse } from './types'
+import type { HostProfile } from './types'
+import { isMethodNotFoundRefusal } from './rpc-acceptance-policies'
 
 export type MobileRelayDirectUpgradeResult = {
   host: HostProfile
@@ -75,15 +80,17 @@ export async function upgradeDirectMobileRelay(args: {
     throw new Error('relay endpoint unavailable for direct pairing upgrade')
   }
 
-  const provisionResponse = await args.client.sendRequest('pairing.provisionRelay', {
+  const provisionReply = await relayCredentialProvision.request(args.client, {
     reqId: journal.reqId,
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
-  if (isMethodNotFound(provisionResponse)) {
+  if (isMethodNotFoundRefusal(provisionReply)) {
     await dependencies.clearJournal(args.host.id)
     return null
   }
-  const installed = DeviceCredentialInstalledSchema.parse(requireSuccess(provisionResponse))
+  const installed = DeviceCredentialInstalledSchema.parse(
+    relayCredentialProvision.interpret(provisionReply)
+  )
   assertDirectInstall(journal, installed)
   const reconciled = await getEndpoints(args.client, journal.reqId)
   if (reconciled === 'method-not-found') {
@@ -135,11 +142,11 @@ async function getEndpoints(
   client: RpcClient,
   installReqId: string
 ): Promise<PairingGetEndpointsResult | 'method-not-found'> {
-  const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (isMethodNotFound(response)) {
+  const reply = await relayPairingEndpointsRead.request(client, { installReqId })
+  if (isMethodNotFoundRefusal(reply)) {
     return 'method-not-found'
   }
-  return PairingGetEndpointsResultSchema.parse(requireSuccess(response))
+  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
 }
 
 function assertDirectInstall(
@@ -161,15 +168,4 @@ function assertCommitted(
   ) {
     throw new Error('relay credential install was not authoritatively reconciled')
   }
-}
-
-function requireSuccess(response: RpcResponse): unknown {
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
-  }
-  return response.result
-}
-
-function isMethodNotFound(response: RpcResponse): boolean {
-  return !response.ok && response.error.code === 'method_not_found'
 }
