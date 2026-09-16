@@ -57,14 +57,15 @@ export function replyPartitions(normal: unknown): ReplyPartition[] {
  * here, including the unary envelopes: the dispatcher sends exactly those once a streaming handler
  * returns, and each drives a real branch of the registry rather than a shape invented for symmetry.
  *
- * `streaming` is carried over from the scripted frame, because that flag is what routes a response
- * to the open stream rather than to a retired request id. Dropping it would leave `normal` a
- * different shape from the frame it replays, and a success control that is not one.
+ * Every success partition is stamped `streaming: true`, because that flag is what routes a response
+ * to the open stream rather than to a retired request id. Without it `normal` would be a different
+ * shape from the frame it replays, and a success control that is not one. A base frame that scripts
+ * a non-streaming unary closer is therefore unsupported here: no scenario writes one, and its matrix
+ * would need the flag varied per partition rather than stamped.
  */
-function frameReplyPartitions(scripted: unknown, normal: unknown): ReplyPartition[] {
-  const streaming = successEnvelope(scripted)?.streaming === true
+function frameReplyPartitions(normal: unknown): ReplyPartition[] {
   return replyPartitions(normal).flatMap((partition) => {
-    const envelope = streaming ? successEnvelope(partition.reply) : null
+    const envelope = successEnvelope(partition.reply)
     return 'reject' in partition
       ? []
       : [{ ...partition, reply: envelope ? { ...envelope, streaming: true } : partition.reply }]
@@ -79,7 +80,7 @@ function successEnvelope(reply: unknown): Record<string, unknown> | null {
 }
 
 /** One reply a base scenario scripts, as a site the matrix drives. */
-export type MatrixSite = { id: string; index: number; reply: unknown }
+type MatrixSite = { id: string; index: number; reply: unknown }
 
 /**
  * Every reply the base scenario scripts, in order.
@@ -136,9 +137,9 @@ export function driveReplyMatrix(
   if (sites.length !== 1) {
     throw new Error(`Matrix requires exactly one reply at: ${request}`)
   }
-  const { index: divergence, reply: scripted } = sites[0]!
+  const { index: divergence } = sites[0]!
   const framed = 'frame' in base.steps[divergence]!
-  const partitions = framed ? frameReplyPartitions(scripted, normal) : replyPartitions(normal)
+  const partitions = framed ? frameReplyPartitions(normal) : replyPartitions(normal)
   return hoistPreludeCheckpoints(
     base,
     partitions.map((partition) => ({
@@ -146,25 +147,27 @@ export function driveReplyMatrix(
       scenario: {
         ...base,
         id: `${base.id}.${partition.id}`,
-        steps: base.steps.map((step, index): ScenarioStep =>
-          index !== divergence
-            ? index > divergence && ('complete' in step || 'bind' in step)
-              ? // The diverged reply may have ended the chain, so downstream replies are answered
-                // only if the operation asked. The sender list records which.
-                { ...step, optional: true }
-              : step
-            : 'frame' in step
-              ? { frame: step.frame, params: step.params, reply: partition.reply }
-              : 'complete' in step
-                ? {
-                    complete: step.complete,
-                    params: step.params,
-                    ...('reject' in partition
-                      ? { reject: partition.reject }
-                      : { reply: partition.reply })
-                  }
-                : step
-        )
+        steps: base.steps.map((step, index): ScenarioStep => {
+          if (index > divergence) {
+            // The diverged reply may have ended the chain, so downstream replies are answered only
+            // if the operation asked. The sender list records which.
+            return 'complete' in step || 'bind' in step ? { ...step, optional: true } : step
+          }
+          if (index !== divergence) {
+            return step
+          }
+          if ('frame' in step) {
+            return { frame: step.frame, params: step.params, reply: partition.reply }
+          }
+          if ('complete' in step) {
+            return {
+              complete: step.complete,
+              params: step.params,
+              ...('reject' in partition ? { reject: partition.reject } : { reply: partition.reply })
+            }
+          }
+          return step
+        })
       }
     }))
   )

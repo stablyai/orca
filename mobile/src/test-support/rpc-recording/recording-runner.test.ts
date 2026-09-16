@@ -530,6 +530,30 @@ describe('recording boundaries', () => {
     }
   })
 
+  it('files only a subscribe as an open stream, not the unsubscribe it publishes later', async () => {
+    const clock = vitestRecordingScheduler()
+    clock.start()
+    const transport = new ScriptedRpcTransport(clock.elapsed)
+    try {
+      const dispose = transport.client.subscribe(CLIENT_EVENTS, null, () => {})
+      transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
+      dispose()
+      // The unsubscribe is a published payload but never a stream. Filed as one, a frame aimed at it
+      // routed at its wire id, matched nothing, recorded nothing and reported success.
+      expect(transport.payloads.map((payload) => payload.name)).toEqual([
+        `${CLIENT_EVENTS}#1`,
+        'runtime.clientEvents.unsubscribe#1'
+      ])
+      expect(() =>
+        transport.frame('runtime.clientEvents.unsubscribe#1', null, readyFrame('sub-1'))
+      ).toThrow('Missing subscription payload')
+    } finally {
+      transport.dispose()
+      await clock.flush()
+      clock.stop()
+    }
+  })
+
   it('stamps each payload with the request count, which is all a reordered subscribe moves', async () => {
     const subscribeFirst = await payloadsFrom((client) => {
       client.subscribe(CLIENT_EVENTS, null, () => {})

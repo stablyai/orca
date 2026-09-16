@@ -267,9 +267,9 @@ scripts**, one golden per site, and nothing is crossed against consumed fields. 
 too, so a subscription's `ready` and each event it carries are sites like any completion — named by
 payload and occurrence, because one subscribe carries many frames and the name alone repeats. Nine
 of the eleven partitions apply at a frame: the two transport rejections are the shapes a _request
-promise_ fails with, and a subscription holds no promise for them to fail. The success shapes keep
-the scripted frame's `streaming` flag, since that flag is what routes a response to the open stream
-rather than to a retired request id — without it `normal` would be a different shape from the frame
+promise_ fails with, and a subscription holds no promise for them to fail. Every success shape is
+stamped `streaming: true`, since that flag is what routes a response to the open stream rather than
+to a retired request id — without it `normal` would be a different shape from the frame
 it replays, and no longer a control. Until frames were sites, `reply-matrix.ts` read only
 `'complete' in step`, so a frame was never varied and a family that only subscribes threw
 `No scripted reply to drive a matrix over`. The partitions are the reply shapes a host can send: a

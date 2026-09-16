@@ -32,6 +32,7 @@ export class ScriptedRpcTransport {
     { id: string; params: unknown; deliver: (response: RpcResponse) => boolean }
   >()
   private activeName = ''
+  private opening = false
   private frameCount = 0
   private state: ConnectionState = 'connected'
   private listeners = new Set<(state: ConnectionState) => void>()
@@ -97,11 +98,16 @@ export class ScriptedRpcTransport {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stream registry publishes the frame it just built.
         const payload = value as { id: string; method: string; params: unknown }
         const name = this.occurrence(payload.method)
-        this.openStreams.set(name, {
-          id: payload.id,
-          params: payload.params,
-          deliver: (response) => streams.handleResponse(response)
-        })
+        // Only a subscribe opens a stream. The registry sends its unsubscribes through this same
+        // hook, and filing one under `openStreams` made a frame aimed at an unsubscribe name route
+        // at that id, find nothing, record nothing and not throw.
+        if (this.opening) {
+          this.openStreams.set(name, {
+            id: payload.id,
+            params: payload.params,
+            deliver: (response) => streams.handleResponse(response)
+          })
+        }
         this.publish(name, value)
         return true
       }
@@ -115,8 +121,14 @@ export class ScriptedRpcTransport {
           this.tracker.sendRequest(...args).then(resolve, reject)
         })
       },
-      subscribe: (method, params, onData, options) =>
-        streams.subscribe(method, params, onData, options),
+      subscribe: (method, params, onData, options) => {
+        this.opening = true
+        try {
+          return streams.subscribe(method, params, onData, options)
+        } finally {
+          this.opening = false
+        }
+      },
       updateTerminalSubscriptionViewport: (terminal, viewport) =>
         streams.updateTerminalViewport(terminal, viewport),
       getState: () => this.state,
