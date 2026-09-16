@@ -75,9 +75,6 @@ export function tasksRouteScreenMountAdapters(
           if (name === 'ensure-repos') {
             return performHookAction(() => model().repoListEnsureLoaded())
           }
-          if (name === 'reload-repos') {
-            return performHookAction(() => model().repoListReload())
-          }
           throw new Error(`Unknown tasks route action: ${name}`)
         },
         state: () => {
