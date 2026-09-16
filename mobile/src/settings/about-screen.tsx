@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, Globe } from 'lucide-react-native'
@@ -25,11 +25,15 @@ function XIcon({ size = 16, color = colors.textSecondary }) {
 export default function AboutScreen({
   onBack,
   openExternal,
-  versionLabel
+  versionLabel,
+  footer
 }: {
   onBack: () => void
   openExternal: (url: string) => Promise<unknown>
   versionLabel: string
+  // Why: platform-specific extras (e.g. the Android update-check toggle) render between the link
+  // list and the version line without this shared screen needing to know what they are.
+  footer?: ReactNode
 }) {
   const [error, setError] = useState<string | null>(null)
   const openLink = (url: string) => {
@@ -89,6 +93,8 @@ export default function AboutScreen({
           <Text style={styles.rowValue}>@orca_build</Text>
         </Pressable>
       </View>
+
+      {footer}
 
       <Text style={styles.versionText}>{versionLabel}</Text>
       {error && (
