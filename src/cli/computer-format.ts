@@ -63,7 +63,12 @@ export function prepareComputerCliJsonResult<TResult>(
       screenshotStatus?: unknown
     }
   }
-  if (!record.result || !('screenshotStatus' in record.result)) {
+  // `in` throws on a primitive, and a primitive can never carry a screenshot
+  if (
+    typeof record.result !== 'object' ||
+    !record.result ||
+    !('screenshotStatus' in record.result)
+  ) {
     return response
   }
   const screenshot = record.result?.screenshot
