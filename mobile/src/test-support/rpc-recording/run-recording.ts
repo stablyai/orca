@@ -44,6 +44,12 @@ export async function runRecording(
   const teardown = async (): Promise<void> => {
     cleaned = true
     await mounted?.dispose()
+    // Drained before the set is read, not after: a cleanup that closes its stream on a due 0ms
+    // timer has not run yet when `dispose()` returns, and reading here would record it as an
+    // uncancelled registration — the one shape this observation reserves for a cleanup that never
+    // ran. With the drain first, a deferred close and a never-closed stream stop being
+    // byte-identical.
+    await scheduler.flush()
     // A stream the product forgot to close is only visible on the wire when its method has an
     // unsubscribe builder; `notifications.subscribe` has none, so closing it writes nothing and the
     // leak stays a live registry record until some later cutover replays it. Observed here, after
@@ -54,6 +60,8 @@ export async function runRecording(
       effect('streams-registered-at-teardown', registered)
     }
     transport.dispose()
+    // Again after disposal: tearing the registries down rejects what the product still awaited, and
+    // an unhandled rejection is an effect the cleanup checkpoint has to see.
     await scheduler.flush()
   }
   try {

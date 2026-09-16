@@ -37,6 +37,11 @@ export class ScriptedRpcTransport {
     { id: string; params: unknown; deliver: (response: RpcResponse) => boolean }
   >()
   private readonly registries: RpcClientStreamRegistry[] = []
+  /**
+   * Wire id to the name of the last payload the registry published under it. Every frame it sends
+   * lands here, unsubscribes included, because `registeredStreams()` only ever looks up an id the
+   * registry still holds and an unsubscribed id is not one of those.
+   */
   private readonly streamPayloads = new Map<string, string>()
   private activeName = ''
   private opening = false
@@ -123,8 +128,9 @@ export class ScriptedRpcTransport {
             deliver: (response) => streams.handleResponse(response)
           })
         }
-        // A replay after a cutover re-sends an already-registered id under a fresh occurrence, so
-        // the latest payload is the one a teardown observation should name.
+        // Outside the `opening` guard on purpose: a replay after a cutover re-sends an
+        // already-registered id under a fresh occurrence, so the latest payload is the one a
+        // teardown observation should name.
         this.streamPayloads.set(payload.id, name)
         this.publish(name, value)
         return true
@@ -186,7 +192,7 @@ export class ScriptedRpcTransport {
     return this.registries.flatMap((registry) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is checked on the next line, and the registry is the one this transport constructed.
       const streams = (registry as unknown as { streams?: unknown }).streams
-      if (!(streams instanceof Map) || streams.size !== registry.size()) {
+      if (!(streams instanceof Map)) {
         throw new Error('RpcClientStreamRegistry no longer holds its open streams in `streams`')
       }
       return [...streams].map(

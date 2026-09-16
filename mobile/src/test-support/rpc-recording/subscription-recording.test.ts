@@ -199,7 +199,7 @@ describe('subscription recordings', () => {
     }
   })
   it('observes a stream the product left registered at teardown, and nothing when it closes', async () => {
-    const drive = async (close: boolean): Promise<RecordedValue> => {
+    const drive = async (close: 'never' | 'sync' | 'timer'): Promise<RecordedValue> => {
       const recording = await runRecording(
         {
           id: 'teardown-streams',
@@ -222,8 +222,11 @@ describe('subscription recordings', () => {
             },
             state: () => ({}),
             dispose: () => {
-              if (close) {
+              if (close === 'sync') {
                 unsubscribe()
+              }
+              if (close === 'timer') {
+                setTimeout(unsubscribe, 0)
               }
             }
           }
@@ -233,13 +236,16 @@ describe('subscription recordings', () => {
       // Teardown is the last checkpoint only when it observed something, which is the point.
       return recording.checkpoints.at(-1)!.observation.effects
     }
-    expect(await drive(false)).toMatchObject([
+    expect(await drive('never')).toMatchObject([
       {
         name: 'streams-registered-at-teardown',
         value: [{ method: CLIENT_EVENTS, payload: `${CLIENT_EVENTS}#1`, cancelled: false }]
       }
     ])
-    expect(await drive(true)).toEqual([])
+    expect(await drive('sync')).toEqual([])
+    // A close deferred to a due 0ms timer is a cleanup that ran. Read before the teardown drain it
+    // was byte-identical to the stream above, which is the one thing `cancelled: false` may not mean.
+    expect(await drive('timer')).toEqual([])
   })
 
   it('drives the reply matrix over frames, and matrixes a family that only subscribes', () => {

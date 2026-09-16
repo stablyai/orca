@@ -6,7 +6,7 @@ import type { RpcClientContextValue } from '../../transport/rpc-client-context-c
 export const HOST_CLIENT_CONTEXT_LOCAL = 'Ctx'
 
 /** What the exposure files that local under on the mounted module. */
-export const RECORDER_HOST_CLIENT_CONTEXT = 'recorderHostClientContext'
+const RECORDER_HOST_CLIENT_CONTEXT = 'recorderHostClientContext'
 
 const HOST_CLIENT_CONTEXT_MODULE = 'mobile/src/transport/client-context.tsx'
 

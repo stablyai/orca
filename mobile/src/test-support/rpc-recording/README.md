@@ -605,13 +605,17 @@ silent improvement.
 ### Streams still registered at teardown
 
 Teardown also asks each session's `RpcClientStreamRegistry` what it still holds, after the product's
-own cleanup has run and before the transport disposes the registries, and records a non-empty answer
-as a `streams-registered-at-teardown` effect. Each entry is the stream's method, the subscribe
-payload it was opened on, and whether the registry has it marked cancelled. The set is read off the
-registry's own map rather than mirrored from the subscribes and frames the recorder watches go by:
-the leak this exists to catch is exactly a divergence between what the product believes it closed
-and what the registry still holds, so a mirror would reproduce the product's bookkeeping instead of
-observing it.
+own cleanup has run and drained and before the transport disposes the registries, and records a
+non-empty answer as a `streams-registered-at-teardown` effect. Each entry is the stream's method,
+the subscribe payload it was opened on, and whether the registry has it marked cancelled. The set is
+read off the registry's own map rather than mirrored from the subscribes and frames the recorder
+watches go by: the leak this exists to catch is exactly a divergence between what the product
+believes it closed and what the registry still holds, so a mirror would reproduce the product's
+bookkeeping instead of observing it.
+
+The drain before the read is part of the contract. A cleanup that closes its stream on a due 0ms
+timer has not run when `dispose()` returns, so reading the set first made a deferred close
+byte-identical to a stream nobody ever closed.
 
 Why it is not enough to watch the wire: closing a stream only writes a frame when its method has an
 unsubscribe builder, and `notifications.subscribe` has none. Deleting that cleanup's
@@ -624,4 +628,5 @@ checkpoint. Four goldens report a non-empty set today, and all four are the same
 well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
 the record cancelled and keeps it until the id arrives — the retention the per-session registry
 paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
-a product cleanup that never ran records `cancelled: false`.
+a product cleanup that never ran records `cancelled: false`, and because the drain precedes the
+read, a cleanup that merely deferred its close records nothing at all.
