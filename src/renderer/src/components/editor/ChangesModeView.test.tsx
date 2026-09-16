@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, Suspense } from 'react'
+import { act, Suspense, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
@@ -11,12 +11,30 @@ import {
 } from './large-diff-render-limit'
 
 const diffViewerMock = vi.hoisted(() => ({
-  latestProps: null as DiffViewerProps | null
+  latestProps: null as DiffViewerProps | null,
+  events: [] as string[],
+  models: new Map<string, { content: string; undo: string[] }>()
 }))
 
 vi.mock('./DiffViewer', () => ({
-  default: (props: DiffViewerProps) => {
+  default: function MockDiffViewer(props: DiffViewerProps) {
     diffViewerMock.latestProps = props
+    const modelKey = props.modifiedModelKey ?? props.modelKey
+    const model = diffViewerMock.models.get(modelKey) ?? {
+      content: props.modifiedContent,
+      undo: []
+    }
+    if (model.content !== props.modifiedContent) {
+      model.undo.push(model.content)
+      model.content = props.modifiedContent
+    }
+    diffViewerMock.models.set(modelKey, model)
+    useEffect(() => {
+      diffViewerMock.events.push(`mount:${modelKey}`)
+      return () => {
+        diffViewerMock.events.push(`unmount:${modelKey}`)
+      }
+    }, [modelKey])
     return <div data-testid="diff-viewer-probe" />
   }
 }))
@@ -60,6 +78,8 @@ describe('ChangesModeView', () => {
     container = null
     root = null
     diffViewerMock.latestProps = null
+    diffViewerMock.events.length = 0
+    diffViewerMock.models.clear()
   })
 
   it('passes pruned diff limits through and suppresses the identical-content banner', async () => {
@@ -97,5 +117,87 @@ describe('ChangesModeView', () => {
     await vi.waitFor(() => expect(diffViewerMock.latestProps).not.toBeNull())
     expect(diffViewerMock.latestProps?.largeDiffRenderLimit).toBe(largeDiffRenderLimit)
     expect(container.textContent).not.toContain('No uncommitted changes.')
+  })
+
+  it('rotates the modified model only for an explicit external reload', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    const diff = {
+      kind: 'text' as const,
+      originalContent: 'head',
+      modifiedContent: 'worktree',
+      originalIsBinary: false as const,
+      modifiedIsBinary: false as const
+    }
+
+    await act(async () => {
+      root?.render(
+        <Suspense fallback={null}>
+          <ChangesModeView
+            activeFile={{ ...createOpenFile(), diffContentReloadNonce: 1 }}
+            dc={diff}
+            modifiedContent="worktree"
+            activeConflictEntry={null}
+            resolvedLanguage="plaintext"
+            sideBySide={false}
+            viewStateScopeId="file-1"
+            diffViewStateKey="file-1:changes"
+            onContentChange={vi.fn()}
+            onSave={vi.fn()}
+          />
+        </Suspense>
+      )
+    })
+
+    await vi.waitFor(() => expect(diffViewerMock.latestProps).not.toBeNull())
+    expect(diffViewerMock.latestProps?.modifiedModelKey).toBe('file-1:changes:modified:1')
+  })
+
+  it('keeps the modified model and undo history across a changes-mode save', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    const activeFile = createOpenFile()
+    const renderView = (modifiedContent: string): void => {
+      root?.render(
+        <Suspense fallback={null}>
+          <ChangesModeView
+            activeFile={activeFile}
+            dc={{
+              kind: 'text',
+              originalContent: 'head',
+              modifiedContent,
+              originalIsBinary: false,
+              modifiedIsBinary: false
+            }}
+            modifiedContent={modifiedContent}
+            activeConflictEntry={null}
+            resolvedLanguage="plaintext"
+            sideBySide={false}
+            viewStateScopeId="file-1"
+            diffViewStateKey="file-1:changes"
+            onContentChange={vi.fn()}
+            onSave={vi.fn()}
+          />
+        </Suspense>
+      )
+    }
+
+    await act(async () => renderView('initial content'))
+    const modelKey = diffViewerMock.latestProps?.modifiedModelKey
+    const model = modelKey ? diffViewerMock.models.get(modelKey) : undefined
+    if (!modelKey || !model) {
+      throw new Error('expected a changes-mode modified model')
+    }
+    model.content = 'user edit'
+    model.undo.push('initial content')
+
+    await act(async () => renderView('user edit'))
+
+    expect(diffViewerMock.latestProps?.modifiedModelKey).toBe(modelKey)
+    expect(diffViewerMock.events).toEqual([`mount:${modelKey}`])
+    expect(model).toEqual({ content: 'user edit', undo: ['initial content'] })
   })
 })

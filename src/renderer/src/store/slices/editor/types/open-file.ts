@@ -132,8 +132,10 @@ export type OpenFile = {
   pendingOwnerMigration?: boolean
   /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
   pendingSelfMoveEcho?: { operationId: string; targetPath: string }
-  /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
+  /** Why: rotates the modified Monaco model only; bump it after replacement content is already cached, never before. */
   diffContentReloadNonce?: number
+  /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
+  diffContentRefreshNonce?: number
   /** Why: bumping refetches clean tabs — the user's manual recovery when a remote watcher misses an external write. */
   fileContentReloadNonce?: number
   /** Why: CI check-details tabs are virtual editor tabs backed by fetched PR check-run metadata, not a file on disk. */

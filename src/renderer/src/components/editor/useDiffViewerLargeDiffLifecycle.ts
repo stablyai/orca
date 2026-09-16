@@ -44,40 +44,70 @@ export function useDiffViewerLargeDiffLifecycle({
   const currentDiffModelPathsRef = useRef(currentDiffModelPaths)
   currentDiffModelPathsRef.current = currentDiffModelPaths
   const previousDiffModelPathsRef = useRef(currentDiffModelPaths)
+  const deferredSupersededModelPathsRef = useRef<string[]>([])
 
   useEffect(() => {
     const previousModelPaths = previousDiffModelPathsRef.current
     previousDiffModelPathsRef.current = currentDiffModelPaths
+    // Why: a rotation arriving before the deferred pass runs would otherwise
+    // strand the earlier superseded model, so carry it into this round.
     const supersededModelPaths = [
-      previousModelPaths.originalModelPath !== currentDiffModelPaths.originalModelPath
-        ? previousModelPaths.originalModelPath
-        : null,
-      previousModelPaths.modifiedModelPath !== currentDiffModelPaths.modifiedModelPath
-        ? previousModelPaths.modifiedModelPath
-        : null
-    ].filter((modelPath): modelPath is string => modelPath !== null)
+      ...new Set([
+        ...deferredSupersededModelPathsRef.current,
+        previousModelPaths.originalModelPath !== currentDiffModelPaths.originalModelPath
+          ? previousModelPaths.originalModelPath
+          : null,
+        previousModelPaths.modifiedModelPath !== currentDiffModelPaths.modifiedModelPath
+          ? previousModelPaths.modifiedModelPath
+          : null
+      ])
+    ].filter(
+      (modelPath): modelPath is string =>
+        modelPath !== null &&
+        modelPath !== currentDiffModelPaths.originalModelPath &&
+        modelPath !== currentDiffModelPaths.modifiedModelPath
+    )
+    deferredSupersededModelPathsRef.current = []
     if (supersededModelPaths.length === 0) {
       return
     }
-    const diffEditor = diffEditorRef.current
-    if (diffEditor) {
-      const originalModel = monaco.editor.getModel(
-        monaco.Uri.parse(currentDiffModelPaths.originalModelPath)
-      )
-      const modifiedModel = monaco.editor.getModel(
-        monaco.Uri.parse(currentDiffModelPaths.modifiedModelPath)
-      )
-      if (!originalModel || !modifiedModel) {
-        return
+    let disposed = false
+    const synchronizeAndDispose = (): boolean => {
+      const diffEditor = diffEditorRef.current
+      if (diffEditor) {
+        const originalModel = monaco.editor.getModel(
+          monaco.Uri.parse(currentDiffModelPaths.originalModelPath)
+        )
+        const modifiedModel = monaco.editor.getModel(
+          monaco.Uri.parse(currentDiffModelPaths.modifiedModelPath)
+        )
+        if (!originalModel || !modifiedModel) {
+          return false
+        }
+        const activeModels = diffEditor.getModel()
+        if (activeModels?.original !== originalModel || activeModels.modified !== modifiedModel) {
+          // Why: @monaco-editor/react swaps the two child models separately, but
+          // Monaco's diff widget must release its old pair before either is disposed.
+          diffEditor.setModel({ original: originalModel, modified: modifiedModel })
+        }
       }
-      const activeModels = diffEditor.getModel()
-      if (activeModels?.original !== originalModel || activeModels.modified !== modifiedModel) {
-        // Why: @monaco-editor/react swaps the two child models separately, but
-        // Monaco's diff widget must release its old pair before either is disposed.
-        diffEditor.setModel({ original: originalModel, modified: modifiedModel })
+      disposeUnattachedMonacoModelPaths(monaco, supersededModelPaths)
+      disposed = true
+      return true
+    }
+
+    if (synchronizeAndDispose()) {
+      return
+    }
+    // Why: the child DiffEditor creates a path-swapped model after this parent
+    // effect; defer cleanup until both replacement models exist.
+    const disposeTimer = window.setTimeout(synchronizeAndDispose, 0)
+    return () => {
+      window.clearTimeout(disposeTimer)
+      if (!disposed) {
+        deferredSupersededModelPathsRef.current = supersededModelPaths
       }
     }
-    disposeUnattachedMonacoModelPaths(monaco, supersededModelPaths)
   }, [currentDiffModelPaths, diffEditorRef])
 
   useEffect(() => {
