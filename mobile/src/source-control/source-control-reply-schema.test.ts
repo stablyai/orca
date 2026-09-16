@@ -170,9 +170,11 @@ describe('an enum arm this build does not know', () => {
     expect(parsed.data?.entries[0]?.conflictStatusSource).toBeUndefined()
   })
 
-  it('degrades a hosted-review provider rather than refusing the eligibility', () => {
+  it('passes a hosted-review provider through instead of degrading it', () => {
+    // Not an openEnum: this member is sent back on create, so a fallback would rewrite the bytes
+    // rather than soften a reading.
     const parsed = hostedReviewEligibilitySchema.safeParse({ provider: 'codeberg' })
-    expect(parsed.data?.provider).toBe('unsupported')
+    expect(parsed.data?.provider).toBe('codeberg')
     expect(hostedReviewEligibilitySchema.safeParse({}).success).toBe(false)
     expect(hostedReviewEligibilitySchema.safeParse({ provider: 7 }).success).toBe(false)
   })

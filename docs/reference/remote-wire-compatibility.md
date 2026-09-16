@@ -102,6 +102,15 @@ gate, and a conflicted worktree that looks clean is granted a hosted-review crea
 should not have. Withholding an affordance is a degrade; removing the evidence a gate
 reads is not.
 
+A fallback is only ever allowed to shape a *reading*. If the member is sent back to the
+host — a token the client echoes into a later call's params — pass it through as
+`z.string()` and let the send site keep it verbatim. `hostedReview`'s `provider` is the
+case: the eligibility reply names it and the create call returns it, so an
+`openEnum(..., 'unsupported')` there does not soften how the client reads a newer host's
+provider, it puts `unsupported` on the wire and makes that host refuse its own. A
+reply-schema fallback must never shape a param. Gate on the token instead, where the
+client decides what it is willing to do with an arm it does not know.
+
 ## Enforcement
 
 `tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts` runs the real

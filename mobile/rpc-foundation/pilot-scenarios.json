@@ -5306,6 +5306,282 @@
       ]
     },
     {
+      "id": "sc-create-intent-unlisted-provider",
+      "operation": "source-control.create-intent",
+      "version": 1,
+      "family": "hostedReview.create-intent",
+      "sites": [
+        "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
+        "mobile/src/source-control/mobile-hosted-review-create-intent.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "run",
+          "id": "run",
+          "args": {}
+        },
+        {
+          "checkpoint": "initial-status-pending"
+        },
+        {
+          "complete": "git.status#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "abc1234",
+              "entries": [
+                {
+                  "path": "src/app.ts",
+                  "status": "modified",
+                  "area": "staged"
+                },
+                {
+                  "path": "src/new.ts",
+                  "status": "untracked",
+                  "area": "untracked"
+                }
+              ],
+              "upstreamStatus": {
+                "ahead": 1,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "stage-pending"
+        },
+        {
+          "complete": "git.bulkStage#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "filePaths": ["src/new.ts"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "complete": "git.status#2",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "abc1234",
+              "entries": [
+                {
+                  "path": "src/app.ts",
+                  "status": "modified",
+                  "area": "staged"
+                }
+              ],
+              "upstreamStatus": {
+                "ahead": 1,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "generate-message-pending"
+        },
+        {
+          "complete": "git.generateCommitMessage#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": true,
+              "message": "feat: recorded"
+            }
+          }
+        },
+        {
+          "checkpoint": "commit-pending"
+        },
+        {
+          "complete": "git.commit#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "message": "feat: recorded"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": true
+            }
+          }
+        },
+        {
+          "complete": "git.status#3",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "def5678",
+              "entries": [],
+              "upstreamStatus": {
+                "ahead": 1,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "prefill-pending"
+        },
+        {
+          "complete": "hostedReview.getCreationEligibility#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "branch": "feature",
+            "base": null,
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "ahead": 1,
+            "behind": 0,
+            "linkedGitHubPR": null,
+            "linkedGitLabMR": null
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "codeberg",
+              "defaultBaseRef": "main",
+              "title": "Host title",
+              "body": "Host body",
+              "canCreate": true,
+              "blockedReason": "needs_push",
+              "nextAction": null,
+              "reviewLookupOutcome": "not_found"
+            }
+          }
+        },
+        {
+          "checkpoint": "push-pending"
+        },
+        {
+          "complete": "git.push#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "complete": "git.status#4",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "def5678",
+              "entries": [],
+              "upstreamStatus": {
+                "ahead": 0,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "hostedReview.getCreationEligibility#2",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "branch": "feature",
+            "base": null,
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "ahead": 0,
+            "behind": 0,
+            "linkedGitHubPR": null,
+            "linkedGitLabMR": null
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "codeberg",
+              "defaultBaseRef": "main",
+              "title": "Host title",
+              "body": "Host body",
+              "canCreate": true,
+              "blockedReason": null,
+              "nextAction": null,
+              "reviewLookupOutcome": "not_found"
+            }
+          }
+        },
+        {
+          "checkpoint": "create-pending"
+        },
+        {
+          "complete": "hostedReview.create#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "provider": "codeberg",
+            "base": "main",
+            "head": "feature",
+            "title": "Host title",
+            "body": "Host body",
+            "draft": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "number": 5,
+              "url": "https://codeberg.test/pr/5"
+            }
+          }
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "main"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
       "id": "tw-create-retry-created",
       "operation": "tasks.worktree-create-retry",
       "version": 1,

@@ -1,4 +1,3 @@
-import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
@@ -55,7 +54,9 @@ export async function fetchMobileHostedReviewEligibility(
 }
 
 export type MobileHostedReviewPrefill = {
-  provider: HostedReviewProvider
+  // The host's own token, echoed back on create. Never narrowed here — see
+  // hosted-review-reply-schema.ts.
+  provider: string
   base: string
   title: string
   body: string
@@ -140,7 +141,7 @@ export function shouldPushBeforeMobileHostedReviewCreate(
 }
 
 export type MobileHostedReviewCreateInput = {
-  provider: HostedReviewProvider
+  provider: string
   base: string
   head?: string
   title: string
@@ -159,7 +160,8 @@ export function buildMobileHostedReviewCreateParams(
   return {
     repo: mobileRepoSelectorFromWorktreeId(worktreeId),
     worktree: `id:${worktreeId}`,
-    provider: input.provider,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the params type lists this build's provider arms, but the arm set is the host's, and the host is the one that named this token in its own eligibility reply. Narrowing here is the defect this assertion exists to avoid: it would put 'unsupported' on the wire and make a newer host refuse its own provider. The allow-list that decides whether mobile may create is supportsHostedReviewCreation(), which already answers no for a token this build does not know.
+    provider: input.provider as RpcSendParams<'hostedReview.create'>['provider'],
     base: input.base.trim(),
     ...(input.head && input.head.trim().length > 0 ? { head: input.head.trim() } : {}),
     title: input.title.trim(),

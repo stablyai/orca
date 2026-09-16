@@ -7,6 +7,7 @@ import {
   buildMobilePrCreateParams,
   getMobilePrCreateBlockMessage,
   mobileRepoSelectorFromWorktreeId,
+  createMobilePr,
   resolveMobilePrPrefill,
   shouldPushBeforeMobilePrCreate,
   type MobilePrPrefill
@@ -251,6 +252,38 @@ describe('resolveMobilePrPrefill', () => {
     ahead: 1,
     behind: 0
   }
+
+  it('sends back a provider token this build does not list, unchanged', async () => {
+    // The regression this pins: an enum fallback on the eligibility reply put 'unsupported' on the
+    // wire, and the host that named 'codeberg' refused its own provider.
+    const client = clientWith([
+      ok({
+        provider: 'codeberg',
+        canCreate: true,
+        review: null,
+        blockedReason: null,
+        nextAction: null,
+        defaultBaseRef: 'main',
+        title: 'Add feature',
+        body: '',
+        reviewLookupOutcome: 'not_found'
+      }),
+      ok({ ok: true, number: 12, url: 'https://codeberg.test/pr/12' }),
+      ok({ worktree: { id: 'wt' } })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.provider).toBe('codeberg')
+
+    await createMobilePr(client, 'repo-1::/tmp/wt', {
+      provider: prefill.provider,
+      base: prefill.base,
+      title: prefill.title,
+      body: prefill.body,
+      draft: false
+    })
+    const created = client.calls.find((call) => call.method === 'hostedReview.create')
+    expect(created?.params).toMatchObject({ provider: 'codeberg' })
+  })
 
   it('derives provider/base/title/body from eligibility (non-GitHub honored)', async () => {
     const client = clientWith([
