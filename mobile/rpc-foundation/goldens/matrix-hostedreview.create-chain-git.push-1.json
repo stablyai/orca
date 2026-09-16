@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "fcf5cdc7388457156dd81fe28a470f42fbabac7435ec5572cb19e209f410ca84",
   "platform": "darwin",
@@ -13,6 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "06a94a810e5f": {
+      "name": "hostedReview.create#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
+    },
+    "06e930bb7dd8": {
+      "name": "worktree.set#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}"
+    },
     "0e00dbc486b4": {
       "name": "git.push#1",
       "args": [
@@ -150,11 +158,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "6108ce22d0dc": {
-      "name": "hostedReview.create#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}",
-      "sent": 2
     },
     "6c0349218dd0": {
       "name": "git.push#1",
@@ -301,10 +304,9 @@
       "status": "pending",
       "startedAt": 0
     },
-    "9f78c498e866": {
+    "95b1f2f379aa": {
       "name": "git.push#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
     "9fca4a23f963": {
       "outcome": {
@@ -477,11 +479,6 @@
         "startedAt": 0
       }
     },
-    "d0ffc98cfa0e": {
-      "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}",
-      "sent": 3
-    },
     "d493a7059b00": {
       "name": "git.push#1",
       "args": [
@@ -599,7 +596,7 @@
         "id": "sc-create-pushes-then-creates.prelude:push-pending",
         "observation": {
           "sender": ["b7a56d89f615"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -611,7 +608,7 @@
         "id": "sc-create-pushes-then-creates.normal:create-pending",
         "observation": {
           "sender": ["f9869252c305", "a1f0c8bb5bcd"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -623,7 +620,7 @@
         "id": "sc-create-pushes-then-creates.normal:link-pending",
         "observation": {
           "sender": ["f9869252c305", "7037e9e29078", "a942a97a5d17"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -635,7 +632,7 @@
         "id": "sc-create-pushes-then-creates.normal:settled",
         "observation": {
           "sender": ["f9869252c305", "7037e9e29078", "7c0cf8d696d8"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "a95ae8a9ee57"
           },
@@ -647,7 +644,7 @@
         "id": "sc-create-pushes-then-creates.result-absent:create-pending",
         "observation": {
           "sender": ["7b027798abe5", "a1f0c8bb5bcd"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -659,7 +656,7 @@
         "id": "sc-create-pushes-then-creates.result-absent:link-pending",
         "observation": {
           "sender": ["7b027798abe5", "7037e9e29078", "a942a97a5d17"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -671,7 +668,7 @@
         "id": "sc-create-pushes-then-creates.result-absent:settled",
         "observation": {
           "sender": ["7b027798abe5", "7037e9e29078", "7c0cf8d696d8"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "a95ae8a9ee57"
           },
@@ -683,7 +680,7 @@
         "id": "sc-create-pushes-then-creates.result-null:create-pending",
         "observation": {
           "sender": ["e58ae363032b", "a1f0c8bb5bcd"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -695,7 +692,7 @@
         "id": "sc-create-pushes-then-creates.result-null:link-pending",
         "observation": {
           "sender": ["e58ae363032b", "7037e9e29078", "a942a97a5d17"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -707,7 +704,7 @@
         "id": "sc-create-pushes-then-creates.result-null:settled",
         "observation": {
           "sender": ["e58ae363032b", "7037e9e29078", "7c0cf8d696d8"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "a95ae8a9ee57"
           },
@@ -719,7 +716,7 @@
         "id": "sc-create-pushes-then-creates.inner-ok-missing:create-pending",
         "observation": {
           "sender": ["0e00dbc486b4", "a1f0c8bb5bcd"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -731,7 +728,7 @@
         "id": "sc-create-pushes-then-creates.inner-ok-missing:link-pending",
         "observation": {
           "sender": ["0e00dbc486b4", "7037e9e29078", "a942a97a5d17"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -743,7 +740,7 @@
         "id": "sc-create-pushes-then-creates.inner-ok-missing:settled",
         "observation": {
           "sender": ["0e00dbc486b4", "7037e9e29078", "7c0cf8d696d8"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "a95ae8a9ee57"
           },
@@ -755,7 +752,7 @@
         "id": "sc-create-pushes-then-creates.inner-false-string-error:create-pending",
         "observation": {
           "sender": ["3718951f62b7", "a1f0c8bb5bcd"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -767,7 +764,7 @@
         "id": "sc-create-pushes-then-creates.inner-false-string-error:link-pending",
         "observation": {
           "sender": ["3718951f62b7", "7037e9e29078", "a942a97a5d17"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -779,7 +776,7 @@
         "id": "sc-create-pushes-then-creates.inner-false-string-error:settled",
         "observation": {
           "sender": ["3718951f62b7", "7037e9e29078", "7c0cf8d696d8"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "a95ae8a9ee57"
           },
@@ -791,7 +788,7 @@
         "id": "sc-create-pushes-then-creates.inner-false-object-error:create-pending",
         "observation": {
           "sender": ["a28defbf7f69", "a1f0c8bb5bcd"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -803,7 +800,7 @@
         "id": "sc-create-pushes-then-creates.inner-false-object-error:link-pending",
         "observation": {
           "sender": ["a28defbf7f69", "7037e9e29078", "a942a97a5d17"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -815,7 +812,7 @@
         "id": "sc-create-pushes-then-creates.inner-false-object-error:settled",
         "observation": {
           "sender": ["a28defbf7f69", "7037e9e29078", "7c0cf8d696d8"],
-          "payloads": ["9f78c498e866", "6108ce22d0dc", "d0ffc98cfa0e"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
           "settlements": {
             "create": "a95ae8a9ee57"
           },
@@ -827,7 +824,7 @@
         "id": "sc-create-pushes-then-creates.outer-refused:create-pending",
         "observation": {
           "sender": ["d493a7059b00"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -839,7 +836,7 @@
         "id": "sc-create-pushes-then-creates.outer-refused:link-pending",
         "observation": {
           "sender": ["d493a7059b00"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -851,7 +848,7 @@
         "id": "sc-create-pushes-then-creates.outer-refused:settled",
         "observation": {
           "sender": ["d493a7059b00"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -863,7 +860,7 @@
         "id": "sc-create-pushes-then-creates.outer-refused-no-message:create-pending",
         "observation": {
           "sender": ["6c0349218dd0"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -875,7 +872,7 @@
         "id": "sc-create-pushes-then-creates.outer-refused-no-message:link-pending",
         "observation": {
           "sender": ["6c0349218dd0"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -887,7 +884,7 @@
         "id": "sc-create-pushes-then-creates.outer-refused-no-message:settled",
         "observation": {
           "sender": ["6c0349218dd0"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -899,7 +896,7 @@
         "id": "sc-create-pushes-then-creates.method-not-found:create-pending",
         "observation": {
           "sender": ["ae61c1e930df"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -911,7 +908,7 @@
         "id": "sc-create-pushes-then-creates.method-not-found:link-pending",
         "observation": {
           "sender": ["ae61c1e930df"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -923,7 +920,7 @@
         "id": "sc-create-pushes-then-creates.method-not-found:settled",
         "observation": {
           "sender": ["ae61c1e930df"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -935,7 +932,7 @@
         "id": "sc-create-pushes-then-creates.transport-rejection:create-pending",
         "observation": {
           "sender": ["33b2843692a3"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -947,7 +944,7 @@
         "id": "sc-create-pushes-then-creates.transport-rejection:link-pending",
         "observation": {
           "sender": ["33b2843692a3"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -959,7 +956,7 @@
         "id": "sc-create-pushes-then-creates.transport-rejection:settled",
         "observation": {
           "sender": ["33b2843692a3"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -971,7 +968,7 @@
         "id": "sc-create-pushes-then-creates.transport-rejection-no-message:create-pending",
         "observation": {
           "sender": ["403ae2f01ce3"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -983,7 +980,7 @@
         "id": "sc-create-pushes-then-creates.transport-rejection-no-message:link-pending",
         "observation": {
           "sender": ["403ae2f01ce3"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },
@@ -995,7 +992,7 @@
         "id": "sc-create-pushes-then-creates.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["403ae2f01ce3"],
-          "payloads": ["9f78c498e866"],
+          "payloads": ["95b1f2f379aa"],
           "settlements": {
             "create": "d9fba50c2d0c"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "046dd3a125a3c9abcf5a0dd122818939b516adb91cbda2554b3409d4bb3a7980",
   "platform": "darwin",
@@ -63,6 +63,14 @@
           }
         }
       }
+    },
+    "46027e62015d": {
+      "name": "repo.searchRefs#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
+    },
+    "4cedb91a2f7a": {
+      "name": "repo.sparsePresets#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
     "539a8c80071f": {
       "name": "workspaceSparsePresetsLoaded",
@@ -135,11 +143,6 @@
       "presetsError": "",
       "presetsLoaded": true
     },
-    "bc245469b086": {
-      "name": "repo.searchRefs#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}",
-      "sent": 2
-    },
     "c8d4d05367d6": {
       "name": "repo.sparsePresets#1",
       "args": [
@@ -179,11 +182,6 @@
         }
       }
     },
-    "c9ed58434d0b": {
-      "name": "repo.sparsePresets#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}",
-      "sent": 1
-    },
     "d74e7c93c5be": {
       "name": "workspaceBaseBranchResults",
       "value": [],
@@ -222,7 +220,7 @@
         "id": "presets-loaded",
         "observation": {
           "sender": ["c8d4d05367d6"],
-          "payloads": ["c9ed58434d0b"],
+          "payloads": ["4cedb91a2f7a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -245,7 +243,7 @@
         "id": "branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "395368dea8ff"],
-          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "payloads": ["4cedb91a2f7a", "46027e62015d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"

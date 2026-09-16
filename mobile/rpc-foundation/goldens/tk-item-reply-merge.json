@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "b8e60092a29ea4944a891adc026444cc1da18c52221876f9e7c07b450b34cea8",
   "platform": "darwin",
@@ -13,6 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "036b197488e0": {
+      "name": "github.addPRReviewCommentReply#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"commentId\":501,\"body\":\"a reply\",\"threadId\":\"thread-1\",\"path\":\"src/index.ts\",\"line\":12}}"
+    },
     "05d134c26c53": {
       "name": "github.mergePR#1",
       "args": [
@@ -47,6 +51,10 @@
           }
         }
       }
+    },
+    "08f1b4229a2c": {
+      "name": "github.addIssueComment#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"body\":\"@octocat a reply\",\"type\":\"pr\"}}"
     },
     "0be9101a1dfc": {
       "name": "mutatingStatus",
@@ -191,25 +199,14 @@
       "value": false,
       "sent": 1
     },
-    "48b5e80976b1": {
-      "name": "linear.updateIssue#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"linear.updateIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\",\"updates\":{\"stateId\":\"state-2\"}}}",
-      "sent": 4
-    },
-    "50b7beefee34": {
-      "name": "github.mergePR#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"method\":\"squash\"}}",
-      "sent": 3
-    },
-    "5701a4cdd402": {
-      "name": "github.addPRReviewCommentReply#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"commentId\":501,\"body\":\"a reply\",\"threadId\":\"thread-1\",\"path\":\"src/index.ts\",\"line\":12}}",
-      "sent": 1
-    },
     "583b546bd557": {
       "name": "mutatingStatus",
       "value": true,
       "sent": 1
+    },
+    "6bd857c36deb": {
+      "name": "github.mergePR#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"method\":\"squash\"}}"
     },
     "70678ab6df9a": {
       "name": "mutatingStatus",
@@ -441,6 +438,10 @@
       "value": "",
       "sent": 2
     },
+    "b959a668e307": {
+      "name": "linear.updateIssue#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"linear.updateIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\",\"updates\":{\"stateId\":\"state-2\"}}}"
+    },
     "bc3f6bcb8a5e": {
       "name": "detailPayload",
       "value": {
@@ -602,11 +603,6 @@
         "reviewRequests": []
       }
     },
-    "db5675927800": {
-      "name": "github.addIssueComment#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"body\":\"@octocat a reply\",\"type\":\"pr\"}}",
-      "sent": 2
-    },
     "dbbebbd74a18": {
       "name": "error",
       "value": "",
@@ -722,7 +718,7 @@
         "id": "review-reply-settled",
         "observation": {
           "sender": ["ae78fb6dcf29"],
-          "payloads": ["5701a4cdd402"],
+          "payloads": ["036b197488e0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "review-reply-0": "eb79a9b3682a"
@@ -741,7 +737,7 @@
         "id": "issue-reply-settled",
         "observation": {
           "sender": ["ae78fb6dcf29", "976ce137a1ed"],
-          "payloads": ["5701a4cdd402", "db5675927800"],
+          "payloads": ["036b197488e0", "08f1b4229a2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "review-reply-0": "eb79a9b3682a",
@@ -766,7 +762,7 @@
         "id": "merge-settled",
         "observation": {
           "sender": ["ae78fb6dcf29", "976ce137a1ed", "05d134c26c53"],
-          "payloads": ["5701a4cdd402", "db5675927800", "50b7beefee34"],
+          "payloads": ["036b197488e0", "08f1b4229a2c", "6bd857c36deb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "review-reply-0": "eb79a9b3682a",
@@ -796,7 +792,7 @@
         "id": "linear-status-settled",
         "observation": {
           "sender": ["ae78fb6dcf29", "976ce137a1ed", "05d134c26c53", "7df24cf10f99"],
-          "payloads": ["5701a4cdd402", "db5675927800", "50b7beefee34", "48b5e80976b1"],
+          "payloads": ["036b197488e0", "08f1b4229a2c", "6bd857c36deb", "b959a668e307"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "review-reply-0": "eb79a9b3682a",

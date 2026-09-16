@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "95ca47f382997c412da974e564a46b1ae0c20d6e0f3ca14258d33c8d8b51a160",
   "platform": "darwin",
@@ -325,6 +325,10 @@
         }
       }
     },
+    "a87f1f91dc98": {
+      "name": "worktree.ps#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
     "a947768bc0ed": {
       "status": "rejected",
       "startedAt": 0,
@@ -521,11 +525,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "c97fe566ef74": {
-      "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"supportsWorktreeVisibilitySourceDefaults\":true}}",
-      "sent": 1
-    },
     "f5d207eddd1d": {
       "name": "worktree.ps#1",
       "args": [
@@ -601,7 +600,7 @@
         "id": "worktree-catalog-snapshot.prelude:catalog-pending",
         "observation": {
           "sender": ["f97b6b46b1d5"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "9270aeb7d9c6"
           },
@@ -613,7 +612,7 @@
         "id": "worktree-catalog-snapshot.normal:settled",
         "observation": {
           "sender": ["227f9e3de4fa"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "9948855e8b8d"
           },
@@ -625,7 +624,7 @@
         "id": "worktree-catalog-snapshot.result-absent:settled",
         "observation": {
           "sender": ["ad584cc963bb"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -637,7 +636,7 @@
         "id": "worktree-catalog-snapshot.result-null:settled",
         "observation": {
           "sender": ["b670d230caf2"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -649,7 +648,7 @@
         "id": "worktree-catalog-snapshot.inner-ok-missing:settled",
         "observation": {
           "sender": ["4262ba495b1b"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -661,7 +660,7 @@
         "id": "worktree-catalog-snapshot.inner-false-string-error:settled",
         "observation": {
           "sender": ["5a288976750e"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -673,7 +672,7 @@
         "id": "worktree-catalog-snapshot.inner-false-object-error:settled",
         "observation": {
           "sender": ["f5d207eddd1d"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -685,7 +684,7 @@
         "id": "worktree-catalog-snapshot.outer-refused:settled",
         "observation": {
           "sender": ["b14360b67647"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "0d9bf2f46a5e"
           },
@@ -697,7 +696,7 @@
         "id": "worktree-catalog-snapshot.outer-refused-no-message:settled",
         "observation": {
           "sender": ["a0fab6bf1fb0"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "0d9bf2f46a5e"
           },
@@ -709,7 +708,7 @@
         "id": "worktree-catalog-snapshot.method-not-found:settled",
         "observation": {
           "sender": ["5d54bccfc557"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "8e2c2fbe7e94"
           },
@@ -721,7 +720,7 @@
         "id": "worktree-catalog-snapshot.transport-rejection:settled",
         "observation": {
           "sender": ["b1ae1170d95b"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "a947768bc0ed"
           },
@@ -733,7 +732,7 @@
         "id": "worktree-catalog-snapshot.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["08dde29706df"],
-          "payloads": ["c97fe566ef74"],
+          "payloads": ["a87f1f91dc98"],
           "settlements": {
             "fetch": "c7584e82c72f"
           },

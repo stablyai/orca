@@ -144,11 +144,6 @@ export type TerminalCreateResult = {
 
 export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
 
-export type RuntimeRepoSummary = {
-  id: string
-  connectionId?: string | null
-}
-
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 
 export type TerminalGestureInputBucket = {

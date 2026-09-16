@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
   "scenarioSha256": "ba8728e890e0e9c10ea163bd16f4f99fbc9727cd2f9c4ed69c56436d8bc29f89",
   "platform": "darwin",
@@ -216,11 +216,6 @@
       "value": {},
       "sent": 2
     },
-    "52c3c247865d": {
-      "name": "files.open#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}",
-      "sent": 2
-    },
     "6ec7ceb8bafd": {
       "name": "files.resolveTerminalPath#1",
       "args": [
@@ -293,11 +288,6 @@
           "ok": false
         }
       }
-    },
-    "9120b59f16ec": {
-      "name": "files.resolveTerminalPath#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}",
-      "sent": 1
     },
     "986ca89cb4f6": {
       "name": "files.resolveTerminalPath#1",
@@ -466,6 +456,10 @@
         }
       }
     },
+    "d88940bfb593": {
+      "name": "files.resolveTerminalPath#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+    },
     "d9a357a79330": {
       "name": "files.open#1",
       "args": [
@@ -508,6 +502,10 @@
         "$rpc": "undefined"
       }
     },
+    "f334b291fecc": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
+    },
     "f8a009b4a36e": {
       "activeSessionTabId": "tab-opened",
       "failed": 0,
@@ -524,7 +522,7 @@
         "id": "file-tap-opens-worktree-file.normal:switched",
         "observation": {
           "sender": ["18cda90904c3", "d9a357a79330"],
-          "payloads": ["9120b59f16ec", "52c3c247865d"],
+          "payloads": ["d88940bfb593", "f334b291fecc"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -537,7 +535,7 @@
         "id": "file-tap-opens-worktree-file.normal:settled",
         "observation": {
           "sender": ["18cda90904c3", "d9a357a79330"],
-          "payloads": ["9120b59f16ec", "52c3c247865d"],
+          "payloads": ["d88940bfb593", "f334b291fecc"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -550,7 +548,7 @@
         "id": "file-tap-opens-worktree-file.result-absent:switched",
         "observation": {
           "sender": ["3f64ebc424e8"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -563,7 +561,7 @@
         "id": "file-tap-opens-worktree-file.result-absent:settled",
         "observation": {
           "sender": ["3f64ebc424e8"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -576,7 +574,7 @@
         "id": "file-tap-opens-worktree-file.result-null:switched",
         "observation": {
           "sender": ["31f84e3531c0"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -589,7 +587,7 @@
         "id": "file-tap-opens-worktree-file.result-null:settled",
         "observation": {
           "sender": ["31f84e3531c0"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -602,7 +600,7 @@
         "id": "file-tap-opens-worktree-file.inner-ok-missing:switched",
         "observation": {
           "sender": ["10db95f1c64d"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -615,7 +613,7 @@
         "id": "file-tap-opens-worktree-file.inner-ok-missing:settled",
         "observation": {
           "sender": ["10db95f1c64d"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -628,7 +626,7 @@
         "id": "file-tap-opens-worktree-file.inner-false-string-error:switched",
         "observation": {
           "sender": ["986ca89cb4f6"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -641,7 +639,7 @@
         "id": "file-tap-opens-worktree-file.inner-false-string-error:settled",
         "observation": {
           "sender": ["986ca89cb4f6"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -654,7 +652,7 @@
         "id": "file-tap-opens-worktree-file.inner-false-object-error:switched",
         "observation": {
           "sender": ["2f4867eaa094"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -667,7 +665,7 @@
         "id": "file-tap-opens-worktree-file.inner-false-object-error:settled",
         "observation": {
           "sender": ["2f4867eaa094"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -680,7 +678,7 @@
         "id": "file-tap-opens-worktree-file.outer-refused:switched",
         "observation": {
           "sender": ["caa3fdbab58a"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -693,7 +691,7 @@
         "id": "file-tap-opens-worktree-file.outer-refused:settled",
         "observation": {
           "sender": ["caa3fdbab58a"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -706,7 +704,7 @@
         "id": "file-tap-opens-worktree-file.outer-refused-no-message:switched",
         "observation": {
           "sender": ["9b581f30ecf9"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -719,7 +717,7 @@
         "id": "file-tap-opens-worktree-file.outer-refused-no-message:settled",
         "observation": {
           "sender": ["9b581f30ecf9"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -732,7 +730,7 @@
         "id": "file-tap-opens-worktree-file.method-not-found:switched",
         "observation": {
           "sender": ["7f9e906655aa"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -745,7 +743,7 @@
         "id": "file-tap-opens-worktree-file.method-not-found:settled",
         "observation": {
           "sender": ["7f9e906655aa"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -758,7 +756,7 @@
         "id": "file-tap-opens-worktree-file.transport-rejection:switched",
         "observation": {
           "sender": ["6ec7ceb8bafd"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -771,7 +769,7 @@
         "id": "file-tap-opens-worktree-file.transport-rejection:settled",
         "observation": {
           "sender": ["6ec7ceb8bafd"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -784,7 +782,7 @@
         "id": "file-tap-opens-worktree-file.transport-rejection-no-message:switched",
         "observation": {
           "sender": ["cbff15f6958f"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -797,7 +795,7 @@
         "id": "file-tap-opens-worktree-file.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["cbff15f6958f"],
-          "payloads": ["9120b59f16ec"],
+          "payloads": ["d88940bfb593"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"

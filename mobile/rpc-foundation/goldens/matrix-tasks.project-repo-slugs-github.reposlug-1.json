@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "667a06cf9ff8129eee64327566012448abe1fe31f58c0d9b882b13e74db5a877",
   "platform": "darwin",
@@ -174,6 +174,10 @@
         }
       }
     },
+    "6530ef4dbd15": {
+      "name": "github.repoSlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
     "687b5a42463c": {
       "name": "github.repoSlug#1",
       "args": [
@@ -308,11 +312,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "81640993e00b": {
-      "name": "github.repoSlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}",
-      "sent": 1
     },
     "8a9b6f06911d": {
       "cache": {
@@ -567,7 +566,7 @@
         "id": "tk-project-repo-slugs.normal:mounted",
         "observation": {
           "sender": ["5330ec46fa7e"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -579,7 +578,7 @@
         "id": "tk-project-repo-slugs.result-absent:mounted",
         "observation": {
           "sender": ["e933226b8b59"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -591,7 +590,7 @@
         "id": "tk-project-repo-slugs.result-null:mounted",
         "observation": {
           "sender": ["6eacf14fe40e"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -603,7 +602,7 @@
         "id": "tk-project-repo-slugs.inner-ok-missing:mounted",
         "observation": {
           "sender": ["ffd83cd58474"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -615,7 +614,7 @@
         "id": "tk-project-repo-slugs.inner-false-string-error:mounted",
         "observation": {
           "sender": ["a6d3481c0eea"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -627,7 +626,7 @@
         "id": "tk-project-repo-slugs.inner-false-object-error:mounted",
         "observation": {
           "sender": ["00546d51a1b2"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -639,7 +638,7 @@
         "id": "tk-project-repo-slugs.outer-refused:mounted",
         "observation": {
           "sender": ["dc2fd792171e"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -651,7 +650,7 @@
         "id": "tk-project-repo-slugs.outer-refused-no-message:mounted",
         "observation": {
           "sender": ["436770d5f8a8"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -663,7 +662,7 @@
         "id": "tk-project-repo-slugs.method-not-found:mounted",
         "observation": {
           "sender": ["96fe094f2ea3"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -675,7 +674,7 @@
         "id": "tk-project-repo-slugs.transport-rejection:mounted",
         "observation": {
           "sender": ["7de03629a406"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -687,7 +686,7 @@
         "id": "tk-project-repo-slugs.transport-rejection-no-message:mounted",
         "observation": {
           "sender": ["687b5a42463c"],
-          "payloads": ["81640993e00b"],
+          "payloads": ["6530ef4dbd15"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

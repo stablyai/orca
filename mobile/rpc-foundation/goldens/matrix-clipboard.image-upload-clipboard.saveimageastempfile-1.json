@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "fa69748b6d0e29abc37757b48bcb22dac07af1686554200ceaf18b4e3d62e4ac",
   "platform": "darwin",
@@ -197,6 +197,10 @@
         }
       }
     },
+    "520b3fe0fb07": {
+      "name": "clipboard.startImageUpload#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
     "5f0bdbce1ddf": {
       "failure": "",
       "path": "unsaved"
@@ -264,6 +268,10 @@
         }
       }
     },
+    "7a67576b4db6": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}"
+    },
     "7a9387a4c64a": {
       "failure": "transport failure",
       "path": "unsaved"
@@ -308,11 +316,6 @@
           }
         }
       }
-    },
-    "8dfd1f053efc": {
-      "name": "clipboard.startImageUpload#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
-      "sent": 1
     },
     "923de2c0221d": {
       "failure": {
@@ -561,11 +564,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "d6a7fe2e0164": {
-      "name": "clipboard.saveImageAsTempFile#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}",
-      "sent": 2
-    },
     "e939e5e1437a": {
       "failure": "Unknown method",
       "path": "unsaved"
@@ -604,7 +602,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.normal:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "61599dd8e71a"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "7f1260e77032"
           },
@@ -616,7 +614,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.result-absent:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "73fe3aca4d79"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "eb79a9b3682a"
           },
@@ -628,7 +626,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.result-null:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "b9ede26528d9"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "ee20a1dc39e7"
           },
@@ -640,7 +638,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.inner-ok-missing:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "9bb070695706"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "301151228fa3"
           },
@@ -652,7 +650,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.inner-false-string-error:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "84271db61a98"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "9f00dd54ba64"
           },
@@ -664,7 +662,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.inner-false-object-error:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "9c3a6678afcc"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "ad8a954e879d"
           },
@@ -676,7 +674,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.outer-refused:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "16df47fdaef5"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "32a7c0ae7918"
           },
@@ -688,7 +686,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.outer-refused-no-message:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "a79e227c913e"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "f3b516f62081"
           },
@@ -700,7 +698,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.method-not-found:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "a3d9fec4cf5a"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "b948e8307e81"
           },
@@ -712,7 +710,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.transport-rejection:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "44fb3e60f264"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "a947768bc0ed"
           },
@@ -724,7 +722,7 @@
         "id": "clipboard-image-upload-single-frame-fallback.transport-rejection-no-message:fell-back",
         "observation": {
           "sender": ["12f2bb1c7b16", "447c096794ae"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "remote": "c7584e82c72f"
           },

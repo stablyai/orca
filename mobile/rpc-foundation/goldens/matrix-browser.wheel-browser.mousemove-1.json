@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "c1283bbfb340e968bbd4c86ac63489995d6191290751316228d27779dc6a2c55",
   "platform": "darwin",
@@ -196,6 +196,10 @@
         }
       }
     },
+    "3ae1d19b9c51": {
+      "name": "browser.mouseMove#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
+    },
     "56a99047a121": {
       "name": "browser.mouseMove#1",
       "args": [
@@ -231,11 +235,6 @@
           }
         }
       }
-    },
-    "60d1415b69e8": {
-      "name": "browser.mouseMove#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}",
-      "sent": 1
     },
     "63c8cd9dbd5c": {
       "name": "browser.mouseMove#1",
@@ -308,6 +307,10 @@
           }
         }
       }
+    },
+    "8bf9a97ea141": {
+      "name": "browser.mouseWheel#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseWheel\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"dx\":0,\"dy\":-120}}"
     },
     "9855d4ec3415": {
       "busy": false,
@@ -390,11 +393,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "d2d492cca894": {
-      "name": "browser.mouseWheel#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseWheel\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"dx\":0,\"dy\":-120}}",
-      "sent": 2
     },
     "d7c29eb4797b": {
       "name": "browser.mouseMove#1",
@@ -482,7 +480,7 @@
         "id": "browser-wheel-scrolled.normal:scrolled",
         "observation": {
           "sender": ["56a99047a121", "71b1fb55eafa"],
-          "payloads": ["60d1415b69e8", "d2d492cca894"],
+          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -495,7 +493,7 @@
         "id": "browser-wheel-scrolled.result-absent:scrolled",
         "observation": {
           "sender": ["e9f7ceb55fe0", "71b1fb55eafa"],
-          "payloads": ["60d1415b69e8", "d2d492cca894"],
+          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -508,7 +506,7 @@
         "id": "browser-wheel-scrolled.result-null:scrolled",
         "observation": {
           "sender": ["63c8cd9dbd5c", "71b1fb55eafa"],
-          "payloads": ["60d1415b69e8", "d2d492cca894"],
+          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -521,7 +519,7 @@
         "id": "browser-wheel-scrolled.inner-ok-missing:scrolled",
         "observation": {
           "sender": ["22a1fb464229", "71b1fb55eafa"],
-          "payloads": ["60d1415b69e8", "d2d492cca894"],
+          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -534,7 +532,7 @@
         "id": "browser-wheel-scrolled.inner-false-string-error:scrolled",
         "observation": {
           "sender": ["a6b85f927c18", "71b1fb55eafa"],
-          "payloads": ["60d1415b69e8", "d2d492cca894"],
+          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -547,7 +545,7 @@
         "id": "browser-wheel-scrolled.inner-false-object-error:scrolled",
         "observation": {
           "sender": ["2cdb242ced7a", "71b1fb55eafa"],
-          "payloads": ["60d1415b69e8", "d2d492cca894"],
+          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -560,7 +558,7 @@
         "id": "browser-wheel-scrolled.outer-refused:scrolled",
         "observation": {
           "sender": ["1f5a0be7a1a8"],
-          "payloads": ["60d1415b69e8"],
+          "payloads": ["3ae1d19b9c51"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -573,7 +571,7 @@
         "id": "browser-wheel-scrolled.outer-refused-no-message:scrolled",
         "observation": {
           "sender": ["d7c29eb4797b"],
-          "payloads": ["60d1415b69e8"],
+          "payloads": ["3ae1d19b9c51"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -586,7 +584,7 @@
         "id": "browser-wheel-scrolled.method-not-found:scrolled",
         "observation": {
           "sender": ["329c4e091114"],
-          "payloads": ["60d1415b69e8"],
+          "payloads": ["3ae1d19b9c51"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -599,7 +597,7 @@
         "id": "browser-wheel-scrolled.transport-rejection:scrolled",
         "observation": {
           "sender": ["3052368779e3"],
-          "payloads": ["60d1415b69e8"],
+          "payloads": ["3ae1d19b9c51"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -612,7 +610,7 @@
         "id": "browser-wheel-scrolled.transport-rejection-no-message:scrolled",
         "observation": {
           "sender": ["cdedc2083eee"],
-          "payloads": ["60d1415b69e8"],
+          "payloads": ["3ae1d19b9c51"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"

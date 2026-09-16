@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "fc690a2ac59a6fbcdc08f9b91e769cd793f5a48d9034a50c2d587ce0d0fca3d9",
   "platform": "darwin",
@@ -119,6 +119,10 @@
         "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined.",
         "isRpcDeliveryUnknown": false
       }
+    },
+    "520b3fe0fb07": {
+      "name": "clipboard.startImageUpload#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
     },
     "5573fed479c2": {
       "attached": "unattached",
@@ -270,10 +274,9 @@
         }
       }
     },
-    "72c805fadcfb": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
-      "sent": 2
+    "7a67576b4db6": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}"
     },
     "7d50e9097d4b": {
       "name": "clipboard.saveImageAsTempFile#1",
@@ -339,6 +342,10 @@
       "attached": "unattached",
       "failure": ""
     },
+    "8504c3b81dd7": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
     "873e759fa035": {
       "name": "clipboard.startImageUpload#1",
       "args": [
@@ -373,11 +380,6 @@
     "8de120313755": {
       "attached": "unattached",
       "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined."
-    },
-    "8dfd1f053efc": {
-      "name": "clipboard.startImageUpload#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
-      "sent": 1
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -422,11 +424,6 @@
         }
       }
     },
-    "a8cff4297929": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
-      "sent": 2
-    },
     "a947768bc0ed": {
       "status": "rejected",
       "startedAt": 0,
@@ -436,6 +433,10 @@
         "message": "transport failure",
         "isRpcDeliveryUnknown": true
       }
+    },
+    "b69a955ea891": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
     },
     "b782aed57bef": {
       "name": "clipboard.startImageUpload#1",
@@ -505,11 +506,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "d6a7fe2e0164": {
-      "name": "clipboard.saveImageAsTempFile#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}",
-      "sent": 2
     },
     "d8eb6923f5c3": {
       "name": "clipboard.startImageUpload#1",
@@ -592,7 +588,7 @@
         "id": "clipboard-image-attachment-upload-refused.normal:upload-refused",
         "observation": {
           "sender": ["7e48c58139e5", "d3e85c1d5bb4"],
-          "payloads": ["8dfd1f053efc", "72c805fadcfb"],
+          "payloads": ["520b3fe0fb07", "b69a955ea891"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
@@ -604,7 +600,7 @@
         "id": "clipboard-image-attachment-upload-refused.result-absent:upload-refused",
         "observation": {
           "sender": ["873e759fa035"],
-          "payloads": ["8dfd1f053efc"],
+          "payloads": ["520b3fe0fb07"],
           "settlements": {
             "normal": "443dd7aae7aa"
           },
@@ -616,7 +612,7 @@
         "id": "clipboard-image-attachment-upload-refused.result-null:upload-refused",
         "observation": {
           "sender": ["10eb844da0d9"],
-          "payloads": ["8dfd1f053efc"],
+          "payloads": ["520b3fe0fb07"],
           "settlements": {
             "normal": "2360f0a18466"
           },
@@ -628,7 +624,7 @@
         "id": "clipboard-image-attachment-upload-refused.inner-ok-missing:upload-refused",
         "observation": {
           "sender": ["d8eb6923f5c3", "f61098e90dc1"],
-          "payloads": ["8dfd1f053efc", "a8cff4297929"],
+          "payloads": ["520b3fe0fb07", "8504c3b81dd7"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
@@ -640,7 +636,7 @@
         "id": "clipboard-image-attachment-upload-refused.inner-false-string-error:upload-refused",
         "observation": {
           "sender": ["9dea35e9f187", "f61098e90dc1"],
-          "payloads": ["8dfd1f053efc", "a8cff4297929"],
+          "payloads": ["520b3fe0fb07", "8504c3b81dd7"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
@@ -652,7 +648,7 @@
         "id": "clipboard-image-attachment-upload-refused.inner-false-object-error:upload-refused",
         "observation": {
           "sender": ["64cf59fb95a9", "f61098e90dc1"],
-          "payloads": ["8dfd1f053efc", "a8cff4297929"],
+          "payloads": ["520b3fe0fb07", "8504c3b81dd7"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
@@ -664,7 +660,7 @@
         "id": "clipboard-image-attachment-upload-refused.outer-refused:upload-refused",
         "observation": {
           "sender": ["71c09680e90b"],
-          "payloads": ["8dfd1f053efc"],
+          "payloads": ["520b3fe0fb07"],
           "settlements": {
             "normal": "32a7c0ae7918"
           },
@@ -676,7 +672,7 @@
         "id": "clipboard-image-attachment-upload-refused.outer-refused-no-message:upload-refused",
         "observation": {
           "sender": ["6f4464fb363d"],
-          "payloads": ["8dfd1f053efc"],
+          "payloads": ["520b3fe0fb07"],
           "settlements": {
             "normal": "f3b516f62081"
           },
@@ -688,7 +684,7 @@
         "id": "clipboard-image-attachment-upload-refused.method-not-found:upload-refused",
         "observation": {
           "sender": ["12f2bb1c7b16", "7d50e9097d4b"],
-          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
+          "payloads": ["520b3fe0fb07", "7a67576b4db6"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
@@ -700,7 +696,7 @@
         "id": "clipboard-image-attachment-upload-refused.transport-rejection:upload-refused",
         "observation": {
           "sender": ["5884da2bfdb4"],
-          "payloads": ["8dfd1f053efc"],
+          "payloads": ["520b3fe0fb07"],
           "settlements": {
             "normal": "a947768bc0ed"
           },
@@ -712,7 +708,7 @@
         "id": "clipboard-image-attachment-upload-refused.transport-rejection-no-message:upload-refused",
         "observation": {
           "sender": ["b782aed57bef"],
-          "payloads": ["8dfd1f053efc"],
+          "payloads": ["520b3fe0fb07"],
           "settlements": {
             "normal": "c7584e82c72f"
           },

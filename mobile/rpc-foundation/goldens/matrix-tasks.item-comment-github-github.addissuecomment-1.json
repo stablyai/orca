@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "1cc7fdf3139e0c5a81cd83987ffedc4f59cd4866fc1b4018b61e35eacc74fc11",
   "platform": "darwin",
@@ -406,6 +406,10 @@
         "reviewRequests": []
       }
     },
+    "79a7f51f2a84": {
+      "name": "github.addIssueComment#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"body\":\"a comment\",\"type\":\"issue\"}}"
+    },
     "7d901d60a01a": {
       "name": "error",
       "value": "[object Object]",
@@ -473,11 +477,6 @@
         },
         "reviewRequests": []
       }
-    },
-    "9cd49fc064c7": {
-      "name": "github.addIssueComment#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"body\":\"a comment\",\"type\":\"issue\"}}",
-      "sent": 1
     },
     "9e263f5e91be": {
       "name": "error",
@@ -1248,7 +1247,7 @@
         "id": "tk-item-comment-github.normal:comment-settled",
         "observation": {
           "sender": ["7297a232d830"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1267,7 +1266,7 @@
         "id": "tk-item-comment-github.result-absent:comment-settled",
         "observation": {
           "sender": ["f11c380fcc49"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1280,7 +1279,7 @@
         "id": "tk-item-comment-github.result-null:comment-settled",
         "observation": {
           "sender": ["eeabdda57f2e"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1293,7 +1292,7 @@
         "id": "tk-item-comment-github.inner-ok-missing:comment-settled",
         "observation": {
           "sender": ["4d8af8e76f0d"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1312,7 +1311,7 @@
         "id": "tk-item-comment-github.inner-false-string-error:comment-settled",
         "observation": {
           "sender": ["b7d0cffab0ca"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1325,7 +1324,7 @@
         "id": "tk-item-comment-github.inner-false-object-error:comment-settled",
         "observation": {
           "sender": ["6c11b73fe686"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1338,7 +1337,7 @@
         "id": "tk-item-comment-github.outer-refused:comment-settled",
         "observation": {
           "sender": ["e4efd14a7239"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1351,7 +1350,7 @@
         "id": "tk-item-comment-github.outer-refused-no-message:comment-settled",
         "observation": {
           "sender": ["5949b46afd35"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1364,7 +1363,7 @@
         "id": "tk-item-comment-github.method-not-found:comment-settled",
         "observation": {
           "sender": ["faeb3568c88c"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1377,7 +1376,7 @@
         "id": "tk-item-comment-github.transport-rejection:comment-settled",
         "observation": {
           "sender": ["2145a24ffb7c"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1390,7 +1389,7 @@
         "id": "tk-item-comment-github.transport-rejection-no-message:comment-settled",
         "observation": {
           "sender": ["befa2eb39911"],
-          "payloads": ["9cd49fc064c7"],
+          "payloads": ["79a7f51f2a84"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"

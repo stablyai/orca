@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "7840e811e81d3645f1c874b871158202a53432989f3b5c849df12550b082813b",
   "platform": "darwin",
@@ -101,6 +101,10 @@
         }
       }
     },
+    "0f1253424990": {
+      "name": "github.project.listViews#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3}}"
+    },
     "156064e9724d": {
       "name": "githubProjectPasteBusy",
       "value": true,
@@ -110,6 +114,10 @@
       "name": "githubProjectSearch",
       "value": "",
       "sent": 5
+    },
+    "1d3552e91192": {
+      "name": "github.project.listAccessible#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listAccessible\",\"params\":{\"host\":\"github.com\"}}"
     },
     "25b0ac550549": {
       "name": "githubProjectPartialFailures",
@@ -189,6 +197,14 @@
       "value": true,
       "sent": 4
     },
+    "39bc2fd66e3d": {
+      "name": "github.project.viewTable#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.viewTable\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3,\"viewId\":\"view-1\"}}"
+    },
+    "3e904e0d43b4": {
+      "name": "github.project.listViews#2",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.com\",\"ownerType\":\"organization\",\"projectNumber\":3}}"
+    },
     "42d96f8f44ae": {
       "name": "githubProjectError",
       "value": "",
@@ -236,11 +252,6 @@
           }
         }
       }
-    },
-    "474d63060ff3": {
-      "name": "github.project.viewTable#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.viewTable\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3,\"viewId\":\"view-1\"}}",
-      "sent": 3
     },
     "47ebe03e8b7f": {
       "name": "githubProjectViews",
@@ -291,15 +302,9 @@
       },
       "sent": 5
     },
-    "74ee0682f370": {
-      "name": "github.project.listViews#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3}}",
-      "sent": 2
-    },
-    "7ca39426a1f8": {
-      "name": "github.project.listAccessible#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listAccessible\",\"params\":{\"host\":\"github.com\"}}",
-      "sent": 1
+    "6f73e51854d5": {
+      "name": "github.project.resolveRef#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.resolveRef\",\"params\":{\"input\":\"https://github.com/orgs/owner/projects/3\",\"host\":\"github.com\"}}"
     },
     "80ceb7c32703": {
       "name": "githubProjects",
@@ -318,11 +323,6 @@
       "name": "showGitHubProjectPicker",
       "value": false,
       "sent": 4
-    },
-    "a55aa59164e2": {
-      "name": "github.project.listViews#2",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.com\",\"ownerType\":\"organization\",\"projectNumber\":3}}",
-      "sent": 5
     },
     "b05e50b1dc22": {
       "name": "githubProjectPasteBusy",
@@ -405,11 +405,6 @@
           }
         }
       }
-    },
-    "d81c02b76226": {
-      "name": "github.project.resolveRef#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.resolveRef\",\"params\":{\"input\":\"https://github.com/orgs/owner/projects/3\",\"host\":\"github.com\"}}",
-      "sent": 4
     },
     "ddc3cac1e389": {
       "name": "githubProjectTable",
@@ -540,7 +535,7 @@
         "id": "projects-settled",
         "observation": {
           "sender": ["43d044e8caea"],
-          "payloads": ["7ca39426a1f8"],
+          "payloads": ["1d3552e91192"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "projects-0": "eb79a9b3682a"
@@ -553,7 +548,7 @@
         "id": "views-settled",
         "observation": {
           "sender": ["43d044e8caea", "09d1a467c534"],
-          "payloads": ["7ca39426a1f8", "74ee0682f370"],
+          "payloads": ["1d3552e91192", "0f1253424990"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "projects-0": "eb79a9b3682a",
@@ -573,7 +568,7 @@
         "id": "table-settled",
         "observation": {
           "sender": ["43d044e8caea", "09d1a467c534", "dec0f3dc00c9"],
-          "payloads": ["7ca39426a1f8", "74ee0682f370", "474d63060ff3"],
+          "payloads": ["1d3552e91192", "0f1253424990", "39bc2fd66e3d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "projects-0": "eb79a9b3682a",
@@ -607,11 +602,11 @@
             "02a4a58d8dfb"
           ],
           "payloads": [
-            "7ca39426a1f8",
-            "74ee0682f370",
-            "474d63060ff3",
-            "d81c02b76226",
-            "a55aa59164e2"
+            "1d3552e91192",
+            "0f1253424990",
+            "39bc2fd66e3d",
+            "6f73e51854d5",
+            "3e904e0d43b4"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",

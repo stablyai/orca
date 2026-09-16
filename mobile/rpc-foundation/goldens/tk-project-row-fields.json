@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "370aeaee59978071ccb821da13c9e6114936c168947b608539cdb80d40cc9889",
   "scenarioSha256": "af54a351f4b79fff4a11948fc47a9f5194733065682ff96d6b46b9ae292e327e",
   "platform": "darwin",
@@ -125,16 +125,6 @@
         "itemType": "ISSUE"
       },
       "sent": 1
-    },
-    "3602df6361c4": {
-      "name": "github.project.updateItemField#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\",\"value\":{\"kind\":\"single-select\",\"optionId\":\"option-1\"}}}",
-      "sent": 1
-    },
-    "3dd9611f0850": {
-      "name": "github.project.clearItemField#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.clearItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\"}}",
-      "sent": 2
     },
     "424e9a1ae7ed": {
       "error": "",
@@ -271,6 +261,10 @@
         }
       }
     },
+    "4bb4179487e7": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueTypeBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"issueTypeId\":\"type-1\"}}"
+    },
     "55107e6e9979": {
       "name": "githubProjectTable",
       "value": {
@@ -361,11 +355,6 @@
         "id": "item-1",
         "itemType": "ISSUE"
       },
-      "sent": 3
-    },
-    "60c2e1f55655": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueTypeBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"issueTypeId\":\"type-1\"}}",
       "sent": 3
     },
     "68296a29ee63": {
@@ -538,6 +527,10 @@
       },
       "sent": 3
     },
+    "895e7a6b9398": {
+      "name": "github.project.updateItemField#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\",\"value\":{\"kind\":\"single-select\",\"optionId\":\"option-1\"}}}"
+    },
     "b2345144ca7e": {
       "name": "projectFieldDrafts",
       "value": {
@@ -646,6 +639,10 @@
           }
         }
       }
+    },
+    "dca464e5bca3": {
+      "name": "github.project.clearItemField#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.clearItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\"}}"
     },
     "de29905548eb": {
       "error": "",
@@ -756,7 +753,7 @@
         "id": "set-field-settled",
         "observation": {
           "sender": ["d19660e0ba85"],
-          "payloads": ["3602df6361c4"],
+          "payloads": ["895e7a6b9398"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a"
@@ -769,7 +766,7 @@
         "id": "clear-field-settled",
         "observation": {
           "sender": ["d19660e0ba85", "46c028c0d924"],
-          "payloads": ["3602df6361c4", "3dd9611f0850"],
+          "payloads": ["895e7a6b9398", "dca464e5bca3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -793,7 +790,7 @@
         "id": "issue-type-settled",
         "observation": {
           "sender": ["d19660e0ba85", "46c028c0d924", "d8504a4a27ff"],
-          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
+          "payloads": ["895e7a6b9398", "dca464e5bca3", "4bb4179487e7"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",

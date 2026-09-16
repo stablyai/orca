@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "d73fed49e0a7e3e054d5c2fa75780f98bf78b6fa7e02f1ccb2fdc49465cf2fe5",
   "platform": "darwin",
@@ -26,6 +26,10 @@
           "dedupeTtlMs": 60000
         }
       }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "3b0c9705ec9a": {
       "capabilities": {
@@ -70,11 +74,6 @@
           }
         }
       }
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
     }
   },
   "recording": {
@@ -84,7 +83,7 @@
         "id": "legacy-host-window",
         "observation": {
           "sender": ["488c988b5918"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "probe": "03f6a4ac937a"
           },

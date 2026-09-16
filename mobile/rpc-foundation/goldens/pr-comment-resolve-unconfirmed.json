@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "f425131d29fee8826c00a550fb537d0bd1a37bbaf3b33992984d5e04a990a512",
   "platform": "darwin",
@@ -21,11 +21,6 @@
         "error": "Failed to update review thread.",
         "ok": false
       }
-    },
-    "35ba72e2b9cd": {
-      "name": "github.resolveReviewThread#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}",
-      "sent": 2
     },
     "5603f79b1c06": {
       "resolve-thread": {
@@ -65,11 +60,6 @@
         }
       }
     },
-    "9ab4446a2d2c": {
-      "name": "github.resolveReviewThread#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}",
-      "sent": 1
-    },
     "9b791087c56d": {
       "name": "github.resolveReviewThread#1",
       "args": [
@@ -102,6 +92,14 @@
           "result": false
         }
       }
+    },
+    "aa66cdc0c8db": {
+      "name": "github.resolveReviewThread#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}"
+    },
+    "ac8f4045a561": {
+      "name": "github.resolveReviewThread#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}"
     }
   },
   "recording": {
@@ -111,7 +109,7 @@
         "id": "explicit-false",
         "observation": {
           "sender": ["9b791087c56d"],
-          "payloads": ["9ab4446a2d2c"],
+          "payloads": ["aa66cdc0c8db"],
           "settlements": {
             "explicit-false": "1165af07b50f"
           },
@@ -123,7 +121,7 @@
         "id": "absent-result",
         "observation": {
           "sender": ["9b791087c56d", "70d79a65b986"],
-          "payloads": ["9ab4446a2d2c", "35ba72e2b9cd"],
+          "payloads": ["aa66cdc0c8db", "ac8f4045a561"],
           "settlements": {
             "explicit-false": "1165af07b50f",
             "absent-result": "1165af07b50f"

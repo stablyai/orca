@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
   "scenarioSha256": "efb8d1cd2a2ff0ade4cdc48a1aacec565e33b405bbe95c100b86534cdde49740",
   "platform": "darwin",
@@ -24,6 +24,10 @@
         "kind": "error",
         "message": "Cannot read properties of undefined (reading 'sessions')"
       }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "232a27ecb718": {
       "name": "aiVault.listSessions#1",
@@ -69,11 +73,6 @@
         "kind": "error",
         "message": "Unable to load agent sessions"
       }
-    },
-    "56c96fec6d08": {
-      "name": "aiVault.listSessions#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
-      "sent": 2
     },
     "61f76365e23c": {
       "activeWorktreePath": "/repo/feature",
@@ -121,6 +120,10 @@
           }
         }
       }
+    },
+    "681cb0d74271": {
+      "name": "aiVault.listSessions#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
     },
     "698f848e6967": {
       "activeWorktreePath": "/repo/feature",
@@ -202,11 +205,6 @@
           "ok": false
         }
       }
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
     },
     "a07975f2dc20": {
       "name": "aiVault.listSessions#1",
@@ -584,7 +582,7 @@
         "id": "aivault-history-scan-fulfilled.normal:ready",
         "observation": {
           "sender": ["6e50957443ea", "b567072e5440"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -596,7 +594,7 @@
         "id": "aivault-history-scan-fulfilled.result-absent:ready",
         "observation": {
           "sender": ["6e50957443ea", "fe995263cbdb"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -608,7 +606,7 @@
         "id": "aivault-history-scan-fulfilled.result-null:ready",
         "observation": {
           "sender": ["6e50957443ea", "63954da09bd5"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -620,7 +618,7 @@
         "id": "aivault-history-scan-fulfilled.inner-ok-missing:ready",
         "observation": {
           "sender": ["6e50957443ea", "a07975f2dc20"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -632,7 +630,7 @@
         "id": "aivault-history-scan-fulfilled.inner-false-string-error:ready",
         "observation": {
           "sender": ["6e50957443ea", "cb6df2fa8b89"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -644,7 +642,7 @@
         "id": "aivault-history-scan-fulfilled.inner-false-object-error:ready",
         "observation": {
           "sender": ["6e50957443ea", "b439901fb32e"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -656,7 +654,7 @@
         "id": "aivault-history-scan-fulfilled.outer-refused:ready",
         "observation": {
           "sender": ["6e50957443ea", "e52e185c004d"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -668,7 +666,7 @@
         "id": "aivault-history-scan-fulfilled.outer-refused-no-message:ready",
         "observation": {
           "sender": ["6e50957443ea", "82e315fc9ae9"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -680,7 +678,7 @@
         "id": "aivault-history-scan-fulfilled.method-not-found:ready",
         "observation": {
           "sender": ["6e50957443ea", "b4700df437ac"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -692,7 +690,7 @@
         "id": "aivault-history-scan-fulfilled.transport-rejection:ready",
         "observation": {
           "sender": ["6e50957443ea", "232a27ecb718"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -704,7 +702,7 @@
         "id": "aivault-history-scan-fulfilled.transport-rejection-no-message:ready",
         "observation": {
           "sender": ["6e50957443ea", "c5357db644f1"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

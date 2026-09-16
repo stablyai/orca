@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "97a8b8f5b9a7c7467745666becee07f5dfc57fb283d4e80dcbe7941509177598",
   "platform": "darwin",
@@ -13,21 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "281aabb80148": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 2
+    "594101d24d72": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "74dda17aff6f": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": "origin/rel"
-    },
-    "ad49fec56c14": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 2
     },
     "b2161cb8d5b5": {
       "name": "worktree.show#1",
@@ -62,6 +56,10 @@
           "ok": false
         }
       }
+    },
+    "cec763c8abc6": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
     "dc11f1ff4a3d": {
       "baseRef": "origin/rel"
@@ -112,7 +110,7 @@
         "id": "settled",
         "observation": {
           "sender": ["b2161cb8d5b5", "f6f2870a1e9d"],
-          "payloads": ["281aabb80148", "ad49fec56c14"],
+          "payloads": ["cec763c8abc6", "594101d24d72"],
           "settlements": {
             "resolve": "74dda17aff6f"
           },

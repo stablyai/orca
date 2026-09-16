@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "1e7cad00f4dfcda65a3830b0b2468020816b940611af1b68600de33cd8c1d7c2",
   "platform": "darwin",
@@ -76,15 +76,13 @@
         "startedAt": 0
       }
     },
-    "2c98f3579e7e": {
-      "name": "git.branchCompare#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
-      "sent": 4
+    "3179b4e89c80": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
-    "2dfe41567b29": {
+    "317a243394fa": {
       "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
-      "sent": 3
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
     "3ec8052ccdb3": {
       "name": "worktree.show#1",
@@ -121,6 +119,10 @@
           }
         }
       }
+    },
+    "3fa5df34c660": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
     "3feccf790548": {
       "name": "git.status#1",
@@ -361,11 +363,6 @@
         }
       }
     },
-    "9c58eb1d4d91": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 3
-    },
     "a947768bc0ed": {
       "status": "rejected",
       "startedAt": 0,
@@ -550,6 +547,10 @@
         }
       }
     },
+    "da6855b5e2bf": {
+      "name": "git.branchCompare#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
+    },
     "dedfcab351e6": {
       "name": "git.status#1",
       "args": [
@@ -579,11 +580,6 @@
           "ok": true
         }
       }
-    },
-    "edfc4ab3b60b": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
-      "sent": 3
     },
     "f043e677bc3b": {
       "identity": {
@@ -768,7 +764,7 @@
         "id": "pr-branch-identity.prelude:pending",
         "observation": {
           "sender": ["b8b93d3f8005", "c70359272e10", "26accd69bc48"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80"],
           "settlements": {
             "identity": "9270aeb7d9c6"
           },
@@ -780,7 +776,7 @@
         "id": "pr-branch-identity.normal:identity",
         "observation": {
           "sender": ["3feccf790548", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "ffc37850babd"
           },
@@ -792,7 +788,7 @@
         "id": "pr-branch-identity.result-absent:identity",
         "observation": {
           "sender": ["dedfcab351e6", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -804,7 +800,7 @@
         "id": "pr-branch-identity.result-null:identity",
         "observation": {
           "sender": ["d52732ec0da4", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -816,7 +812,7 @@
         "id": "pr-branch-identity.inner-ok-missing:identity",
         "observation": {
           "sender": ["b2cc0d6f05e0", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -828,7 +824,7 @@
         "id": "pr-branch-identity.inner-false-string-error:identity",
         "observation": {
           "sender": ["925bc1732e6e", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -840,7 +836,7 @@
         "id": "pr-branch-identity.inner-false-object-error:identity",
         "observation": {
           "sender": ["f55a580e621c", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -852,7 +848,7 @@
         "id": "pr-branch-identity.outer-refused:identity",
         "observation": {
           "sender": ["c7c47b24d772", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -864,7 +860,7 @@
         "id": "pr-branch-identity.outer-refused-no-message:identity",
         "observation": {
           "sender": ["773f406d8ab5", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -876,7 +872,7 @@
         "id": "pr-branch-identity.method-not-found:identity",
         "observation": {
           "sender": ["93b9682c496c", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "d344a3126471"
           },
@@ -888,7 +884,7 @@
         "id": "pr-branch-identity.transport-rejection:identity",
         "observation": {
           "sender": ["4327397d6202", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "a947768bc0ed"
           },
@@ -900,7 +896,7 @@
         "id": "pr-branch-identity.transport-rejection-no-message:identity",
         "observation": {
           "sender": ["f04da7e8c374", "3ec8052ccdb3", "2432ad799433", "64ad9a7ea2cd"],
-          "payloads": ["2dfe41567b29", "edfc4ab3b60b", "9c58eb1d4d91", "2c98f3579e7e"],
+          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "da6855b5e2bf"],
           "settlements": {
             "identity": "c7584e82c72f"
           },

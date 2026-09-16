@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
   "scenarioSha256": "0fe163f405373adbb1913dddd79d6d596bf88d69fc27c824ba5a2cd4c1406446",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "002b5db3666b": {
-      "name": "pairing.getEndpoints#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 3
-    },
     "011ca02158db": {
       "name": "pairing.provisionRelay#1",
       "args": [
@@ -155,6 +150,10 @@
         }
       }
     },
+    "1d7fdb67d4da": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}"
+    },
     "2a6e0fd0f08e": {
       "name": "pairing.provisionRelay#1",
       "args": [
@@ -238,11 +237,6 @@
       "value": "host-1",
       "sent": 3
     },
-    "4a4993ef4038": {
-      "name": "pairing.provisionRelay#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}",
-      "sent": 2
-    },
     "4e3b57d795cb": {
       "status": "rejected",
       "startedAt": 0,
@@ -320,10 +314,9 @@
       },
       "outcome": "declined"
     },
-    "723e3af65fac": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 1
+    "7583d8b57ef8": {
+      "name": "pairing.getEndpoints#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
     },
     "7d023da12fdb": {
       "name": "journal-cleared",
@@ -634,6 +627,10 @@
         }
       }
     },
+    "beafd16aeb22": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
+    },
     "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
@@ -714,7 +711,7 @@
         "id": "relay-direct-upgrade-commits.normal:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "a3865c87e54b", "157eaa06961f"],
-          "payloads": ["723e3af65fac", "4a4993ef4038", "002b5db3666b"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da", "7583d8b57ef8"],
           "settlements": {
             "upgrade": "590b3311b0c4"
           },
@@ -726,7 +723,7 @@
         "id": "relay-direct-upgrade-commits.result-absent:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "bcb3b3b6333a"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "8cfbee11e6cb"
           },
@@ -738,7 +735,7 @@
         "id": "relay-direct-upgrade-commits.result-null:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "ce15ce71fe2b"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "06dee54a3689"
           },
@@ -750,7 +747,7 @@
         "id": "relay-direct-upgrade-commits.inner-ok-missing:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "0799e98bb19f"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "f19ff6c94d68"
           },
@@ -762,7 +759,7 @@
         "id": "relay-direct-upgrade-commits.inner-false-string-error:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "85d4f26647a1"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "5099f8914209"
           },
@@ -774,7 +771,7 @@
         "id": "relay-direct-upgrade-commits.inner-false-object-error:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "9ff97c1fab7b"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "5099f8914209"
           },
@@ -786,7 +783,7 @@
         "id": "relay-direct-upgrade-commits.outer-refused:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "3a68c3c9ea85"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "4e3b57d795cb"
           },
@@ -798,7 +795,7 @@
         "id": "relay-direct-upgrade-commits.outer-refused-no-message:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "8dda0f58317b"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "d56bfdbce702"
           },
@@ -810,7 +807,7 @@
         "id": "relay-direct-upgrade-commits.method-not-found:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "2a6e0fd0f08e"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "ee20a1dc39e7"
           },
@@ -822,7 +819,7 @@
         "id": "relay-direct-upgrade-commits.transport-rejection:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "9017cc29cb80"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "a947768bc0ed"
           },
@@ -834,7 +831,7 @@
         "id": "relay-direct-upgrade-commits.transport-rejection-no-message:direct-upgrade-committed",
         "observation": {
           "sender": ["ba95b28e3a94", "011ca02158db"],
-          "payloads": ["723e3af65fac", "4a4993ef4038"],
+          "payloads": ["beafd16aeb22", "1d7fdb67d4da"],
           "settlements": {
             "upgrade": "c7584e82c72f"
           },

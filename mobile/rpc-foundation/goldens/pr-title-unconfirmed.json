@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "669260c675021b37252dc5023a7a78e4e90536c2f35d9a5da3e53778e6a0cf52",
   "platform": "darwin",
@@ -19,10 +19,13 @@
         "ok": false
       }
     },
-    "3235254d283e": {
+    "2a122cfe29f9": {
       "name": "github.updatePRTitle#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}"
+    },
+    "41c5cf93e77f": {
+      "name": "github.updatePRTitle#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}"
     },
     "5ff779cd8c84": {
       "title": {
@@ -47,11 +50,6 @@
         "error": "Request failed: github.updatePRTitle",
         "ok": false
       }
-    },
-    "8aa220b4e884": {
-      "name": "github.updatePRTitle#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}",
-      "sent": 2
     },
     "91e54f9a137c": {
       "name": "github.updatePRTitle#1",
@@ -130,7 +128,7 @@
         "id": "explicit-false",
         "observation": {
           "sender": ["91e54f9a137c"],
-          "payloads": ["3235254d283e"],
+          "payloads": ["2a122cfe29f9"],
           "settlements": {
             "explicit-false": "6e9fb05124f5"
           },
@@ -142,7 +140,7 @@
         "id": "refused",
         "observation": {
           "sender": ["91e54f9a137c", "ccb426fd8467"],
-          "payloads": ["3235254d283e", "8aa220b4e884"],
+          "payloads": ["2a122cfe29f9", "41c5cf93e77f"],
           "settlements": {
             "explicit-false": "6e9fb05124f5",
             "refused": "73a201bf0d92"

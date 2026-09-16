@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { Keyboard, Platform, type View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { newTabRepoListRead, type MobileRuntimeRepoSummary } from './mobile-session-read-operations'
 import {
   triggerSelection,
   triggerSuccess,
@@ -17,7 +17,6 @@ import { clearTerminalLiveInputFocusTimer } from '../terminal/terminal-live-inpu
 import { stripTerminalSelectionGutter } from '../../../src/shared/terminal-selection-gutter'
 import { useTerminalCopyTrimsGutter } from '../terminal/terminal-copy-gutter-preference'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
-import type { RuntimeRepoSummary } from './mobile-session-route-types'
 import type { MobileSessionTerminalInputModel } from './use-mobile-session-terminal-input'
 
 export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalInputModel) {
@@ -197,12 +196,9 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       return null
     }
     const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
-    const repoResponse = await client.sendRequest('repo.list')
-    if (!repoResponse.ok) {
-      throw new Error((repoResponse as RpcFailure).error.message)
-    }
-    const repos =
-      ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
+    const repoResponse = await newTabRepoListRead.request(client)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    const repos = (newTabRepoListRead.interpret(repoResponse) as MobileRuntimeRepoSummary[]) ?? []
     return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null
   }, [client, isFloatingWorkspaceRoute, worktreeId])
 

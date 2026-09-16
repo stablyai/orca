@@ -14,6 +14,7 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalItemBody,
   AgentJournalMessageItem,
+  AgentJournalDispatchState,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
@@ -204,6 +205,8 @@ export type StructuredAgentSessionAdapter = {
     turnId: string
     fence: number
     prompt?: { itemId: string }
+    /** Latest journal submission for this fence, when the host has one. */
+    dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
   }): Promise<{ cancelled: boolean }>
   stopBackgroundTasks?(input: {
     sessionId: string

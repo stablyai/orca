@@ -15,12 +15,16 @@ export const OPERATION_MUTATIONS = {
       : 'rejected'`,
     after: `    return isLogicalClientCutoverError(error) ? 'unknown' : 'rejected'`
   },
-  // Re-anchored where the operation migration moved the acceptance read; the defect it injects —
-  // a stale workspace response poisoning the search cache — is unchanged.
+  // Re-anchored where the lifecycle migration moved the guard: the hand-rolled generation compare
+  // became the owner's, so the anchor is the owner's compare. The defect it injects — a stale
+  // workspace response poisoning the search cache — is unchanged.
   race: {
-    file: 'use-mobile-native-chat-file-search.ts',
-    before: '!accepted.accepted || generationRef.current !== generation',
-    after: '!accepted.accepted'
+    file: 'generation-scoped-request-owner.ts',
+    before: `    if (state.generation !== this.currentGeneration) {
+      return 'retired-generation'
+    }
+`,
+    after: ''
   },
   // Accepts a null result envelope instead of rejecting it. The guard is repeated for three
   // mutations in this file; the anchor carries the message so only the recorded one is edited.
@@ -57,6 +61,36 @@ export const OPERATION_MUTATIONS = {
             linearIssueRead.interpret(response)
             return response
           }),`
+  },
+  // Decodes the reply envelope instead of the accepted snapshot, so the Home card publishes nothing
+  // where a host answered.
+  'home-accounts-envelope': {
+    file: 'mobile-home-host-requests.ts',
+    before: 'const snapshot = decodeAccountsSnapshot(accounts.value)',
+    after: 'const snapshot = decodeAccountsSnapshot(reply)'
+  },
+  // Reads the push test result one level above the envelope, so an accepted test reports failure.
+  'push-test-envelope': {
+    file: 'notification-display-test.tsx',
+    before: 'const result = delivered.value as MobilePushTestResult',
+    after: 'const result = reply as unknown as MobilePushTestResult'
+  },
+  // Publishes the repo reply's payload instead of the member the reader took off it.
+  'task-screen-repo-envelope': {
+    file: 'use-mobile-tasks-route-and-item-state.tsx',
+    before: 'return newTabRepoListRead.interpret(reply) as RepoSummary[]',
+    after: 'return (reply as { result?: unknown }).result as RepoSummary[]'
+  },
+  // Drops the context reload the workspace switch chains off its send, so the sheet keeps showing
+  // the previous workspace's teams after the host accepted the change.
+  'linear-workspace-context-reload': {
+    file: 'mobile-tasks-filter-pickers.tsx',
+    before: `          void linearWorkspaceSelect
+            .request(client, { workspaceId })
+            .then(() => loadLinearContext())`,
+    after: `          void linearWorkspaceSelect
+            .request(client, { workspaceId })
+            .then(() => undefined)`
   },
   // Reads the overrides one level above the settings envelope.
   'bot-overrides-envelope': {
@@ -135,6 +169,25 @@ export const OPERATION_MUTATIONS = {
         setRuntimeSettings(settingsValue)
       }`,
     after: '      setRuntimeSettings(settingsValue)'
+  },
+  // Keeps the composed draft cleared after a send the runtime refused, so the text the user typed
+  // is gone and only a retype recovers it. Anchored on the branch that reads the send verdict, not
+  // on the send, so the step-4 migration of this file does not move it.
+  'terminal-send-refusal-restores-draft': {
+    file: 'use-mobile-session-terminal-send-actions.ts',
+    before: `      if (!accepted) {
+        restoreRejectedDraft()
+      }`,
+    after: `      if (accepted) {
+        restoreRejectedDraft()
+      }`
+  },
+  // Resolves the connection of whichever repo the host listed first instead of the workspace's own,
+  // so a terminal opens against a different machine than the one the workspace lives on.
+  'worktree-connection-first-repo': {
+    file: 'use-mobile-session-accessory-selection.ts',
+    before: 'return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null',
+    after: 'return repos[0]?.connectionId?.trim() || null'
   },
   // Publishes the settings envelope as the refreshed task runtime settings.
   'task-workspace-envelope': {

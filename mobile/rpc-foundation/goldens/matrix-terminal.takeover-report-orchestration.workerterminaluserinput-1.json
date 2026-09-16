@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "6913de3f553b47a7e6663e21b0b93e97df26405c210db876f0b9593bd38936be",
   "platform": "darwin",
@@ -13,6 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "002261d201ea": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
     "0203262b5432": {
       "name": "orchestration.workerTerminalUserInput#1",
       "args": [
@@ -80,11 +84,6 @@
           }
         }
       }
-    },
-    "077fe24856b3": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 1
     },
     "119211148b44": {
       "name": "orchestration.workerTerminalUserInput#1",
@@ -189,11 +188,6 @@
           "ok": true
         }
       }
-    },
-    "488e1b567bfb": {
-      "name": "orchestration.workerTerminalUserInput#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 2
     },
     "48f55b70e1c2": {
       "name": "orchestration.workerTerminalUserInput#1",
@@ -337,6 +331,10 @@
         }
       }
     },
+    "797d27f8307a": {
+      "name": "orchestration.workerTerminalUserInput#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
     "880e2feac97b": {
       "name": "orchestration.workerTerminalUserInput#1",
       "args": [
@@ -460,7 +458,7 @@
         "id": "terminal-takeover-report-retried.normal:reported-on-retry",
         "observation": {
           "sender": ["14ce070cad1b"],
-          "payloads": ["077fe24856b3"],
+          "payloads": ["002261d201ea"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -472,7 +470,7 @@
         "id": "terminal-takeover-report-retried.result-absent:reported-on-retry",
         "observation": {
           "sender": ["45e7c7d3167f"],
-          "payloads": ["077fe24856b3"],
+          "payloads": ["002261d201ea"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -484,7 +482,7 @@
         "id": "terminal-takeover-report-retried.result-null:reported-on-retry",
         "observation": {
           "sender": ["022b9ce8ac66"],
-          "payloads": ["077fe24856b3"],
+          "payloads": ["002261d201ea"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -496,7 +494,7 @@
         "id": "terminal-takeover-report-retried.inner-ok-missing:reported-on-retry",
         "observation": {
           "sender": ["48f55b70e1c2"],
-          "payloads": ["077fe24856b3"],
+          "payloads": ["002261d201ea"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -508,7 +506,7 @@
         "id": "terminal-takeover-report-retried.inner-false-string-error:reported-on-retry",
         "observation": {
           "sender": ["119211148b44"],
-          "payloads": ["077fe24856b3"],
+          "payloads": ["002261d201ea"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -520,7 +518,7 @@
         "id": "terminal-takeover-report-retried.inner-false-object-error:reported-on-retry",
         "observation": {
           "sender": ["6c2d0a45ffab"],
-          "payloads": ["077fe24856b3"],
+          "payloads": ["002261d201ea"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -532,7 +530,7 @@
         "id": "terminal-takeover-report-retried.outer-refused:reported-on-retry",
         "observation": {
           "sender": ["789b4e1c4a4e", "db9815351ccf"],
-          "payloads": ["077fe24856b3", "488e1b567bfb"],
+          "payloads": ["002261d201ea", "797d27f8307a"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -544,7 +542,7 @@
         "id": "terminal-takeover-report-retried.outer-refused-no-message:reported-on-retry",
         "observation": {
           "sender": ["cd393aacf981", "db9815351ccf"],
-          "payloads": ["077fe24856b3", "488e1b567bfb"],
+          "payloads": ["002261d201ea", "797d27f8307a"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -556,7 +554,7 @@
         "id": "terminal-takeover-report-retried.method-not-found:reported-on-retry",
         "observation": {
           "sender": ["880e2feac97b", "db9815351ccf"],
-          "payloads": ["077fe24856b3", "488e1b567bfb"],
+          "payloads": ["002261d201ea", "797d27f8307a"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -568,7 +566,7 @@
         "id": "terminal-takeover-report-retried.transport-rejection:reported-on-retry",
         "observation": {
           "sender": ["0203262b5432", "db9815351ccf"],
-          "payloads": ["077fe24856b3", "488e1b567bfb"],
+          "payloads": ["002261d201ea", "797d27f8307a"],
           "settlements": {
             "report": "eb79a9b3682a"
           },
@@ -580,7 +578,7 @@
         "id": "terminal-takeover-report-retried.transport-rejection-no-message:reported-on-retry",
         "observation": {
           "sender": ["4f58026b7877", "db9815351ccf"],
-          "payloads": ["077fe24856b3", "488e1b567bfb"],
+          "payloads": ["002261d201ea", "797d27f8307a"],
           "settlements": {
             "report": "eb79a9b3682a"
           },

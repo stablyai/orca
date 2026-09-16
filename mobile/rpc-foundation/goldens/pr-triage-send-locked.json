@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "d80bc346e84bc35e6dce70643dcd3af3ea9e5a7f8a1f2b7a9e92c71c0c30d4c9",
   "platform": "darwin",
@@ -22,11 +22,6 @@
         "message": "Terminal input is locked",
         "isRpcDeliveryUnknown": false
       }
-    },
-    "39a17efe1de6": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
     },
     "a4273b38df83": {
       "launched": "unlaunched"
@@ -68,11 +63,6 @@
         }
       }
     },
-    "c286eacee37b": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}",
-      "sent": 2
-    },
     "d0f04fba35ce": {
       "name": "session.tabs.createTerminal#1",
       "args": [
@@ -113,6 +103,14 @@
           }
         }
       }
+    },
+    "d3b1c8acd1dd": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
+    "f3199cb6db52": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}"
     }
   },
   "recording": {
@@ -122,7 +120,7 @@
         "id": "locked",
         "observation": {
           "sender": ["d0f04fba35ce", "aec093de35d6"],
-          "payloads": ["39a17efe1de6", "c286eacee37b"],
+          "payloads": ["d3b1c8acd1dd", "f3199cb6db52"],
           "settlements": {
             "launch": "0f026fafa7e1"
           },

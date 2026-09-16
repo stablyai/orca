@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "85160836c5a5c9bae76aff82c834ceb908f9262a90facd6e055c289362664eaa",
   "platform": "darwin",
@@ -95,6 +95,10 @@
         "reviewRequests": []
       },
       "sent": 1
+    },
+    "095ff0ea9c3e": {
+      "name": "github.addPRReviewCommentReply#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commentId\":501,\"body\":\"a reply\",\"threadId\":\"thread-1\",\"path\":\"src/index.ts\",\"line\":12}}"
     },
     "0f3697bbd111": {
       "name": "projectMutating",
@@ -858,11 +862,6 @@
       "value": {},
       "sent": 4
     },
-    "8dc2f0b815b9": {
-      "name": "github.addPRReviewCommentReply#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commentId\":501,\"body\":\"a reply\",\"threadId\":\"thread-1\",\"path\":\"src/index.ts\",\"line\":12}}",
-      "sent": 3
-    },
     "9138850642c5": {
       "name": "projectRowDetailError",
       "value": "outer refused",
@@ -1338,20 +1337,14 @@
       },
       "sent": 3
     },
-    "d018a759f2a7": {
+    "cf954aa5f6bf": {
       "name": "github.resolveReviewThread#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-1\",\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"threadId\":\"thread-1\",\"resolve\":true}}",
-      "sent": 2
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-1\",\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"threadId\":\"thread-1\",\"resolve\":true}}"
     },
     "d1bb762720d5": {
       "name": "projectMutating",
       "value": true,
       "sent": 1
-    },
-    "d49ee0febc71": {
-      "name": "github.addIssueComment#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"body\":\"@octocat a reply\",\"type\":\"pr\"}}",
-      "sent": 4
     },
     "d515951be1e3": {
       "name": "projectRowDetail",
@@ -1460,6 +1453,10 @@
       "value": "transport failure",
       "sent": 3
     },
+    "d7467bca27a7": {
+      "name": "github.project.deleteIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501}}"
+    },
     "d856c0886ca0": {
       "name": "projectRowDetailError",
       "value": "Unknown method",
@@ -1556,6 +1553,10 @@
           }
         }
       }
+    },
+    "e3ad9b260dec": {
+      "name": "github.addIssueComment#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"body\":\"@octocat a reply\",\"type\":\"pr\"}}"
     },
     "e76d5520ec18": {
       "detail": {
@@ -1726,11 +1727,6 @@
         }
       }
     },
-    "f87580087aa8": {
-      "name": "github.project.deleteIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501}}",
-      "sent": 1
-    },
     "fa2e7b92e1d5": {
       "name": "projectMutating",
       "value": false,
@@ -1751,7 +1747,7 @@
         "id": "tk-project-row-threads.prelude:delete-comment-settled",
         "observation": {
           "sender": ["b94df8ff01a9"],
-          "payloads": ["f87580087aa8"],
+          "payloads": ["d7467bca27a7"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a"
@@ -1764,7 +1760,7 @@
         "id": "tk-project-row-threads.prelude:thread-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40"],
-          "payloads": ["f87580087aa8", "d018a759f2a7"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1787,7 +1783,7 @@
         "id": "tk-project-row-threads.prelude:cleanup",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "14f66e7d5055"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1815,7 +1811,7 @@
         "id": "tk-project-row-threads.normal:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1844,7 +1840,7 @@
         "id": "tk-project-row-threads.normal:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "f674d050fe62", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1879,7 +1875,7 @@
         "id": "tk-project-row-threads.result-absent:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "66da313dd708"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1907,7 +1903,7 @@
         "id": "tk-project-row-threads.result-absent:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "66da313dd708", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1941,7 +1937,7 @@
         "id": "tk-project-row-threads.result-null:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "afc96b1cc014"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -1969,7 +1965,7 @@
         "id": "tk-project-row-threads.result-null:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "afc96b1cc014", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2003,7 +1999,7 @@
         "id": "tk-project-row-threads.inner-ok-missing:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "165bbcc6d7dc"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2032,7 +2028,7 @@
         "id": "tk-project-row-threads.inner-ok-missing:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "165bbcc6d7dc", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2067,7 +2063,7 @@
         "id": "tk-project-row-threads.inner-false-string-error:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "f59816cbb4a7"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2095,7 +2091,7 @@
         "id": "tk-project-row-threads.inner-false-string-error:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "f59816cbb4a7", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2129,7 +2125,7 @@
         "id": "tk-project-row-threads.inner-false-object-error:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "b6e86a35bef1"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2157,7 +2153,7 @@
         "id": "tk-project-row-threads.inner-false-object-error:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "b6e86a35bef1", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2191,7 +2187,7 @@
         "id": "tk-project-row-threads.outer-refused:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "cd005a64924e"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2219,7 +2215,7 @@
         "id": "tk-project-row-threads.outer-refused:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "cd005a64924e", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2253,7 +2249,7 @@
         "id": "tk-project-row-threads.outer-refused-no-message:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "de7e00504f8b"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2281,7 +2277,7 @@
         "id": "tk-project-row-threads.outer-refused-no-message:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "de7e00504f8b", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2315,7 +2311,7 @@
         "id": "tk-project-row-threads.method-not-found:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "97cb3dc78363"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2343,7 +2339,7 @@
         "id": "tk-project-row-threads.method-not-found:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "97cb3dc78363", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2377,7 +2373,7 @@
         "id": "tk-project-row-threads.transport-rejection:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "32874acc8cbf"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2405,7 +2401,7 @@
         "id": "tk-project-row-threads.transport-rejection:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "32874acc8cbf", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2439,7 +2435,7 @@
         "id": "tk-project-row-threads.transport-rejection-no-message:review-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "ae08229ffb6c"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",
@@ -2467,7 +2463,7 @@
         "id": "tk-project-row-threads.transport-rejection-no-message:issue-reply-settled",
         "observation": {
           "sender": ["b94df8ff01a9", "1689d9f91f40", "ae08229ffb6c", "df5e09a21420"],
-          "payloads": ["f87580087aa8", "d018a759f2a7", "8dc2f0b815b9", "d49ee0febc71"],
+          "payloads": ["d7467bca27a7", "cf954aa5f6bf", "095ff0ea9c3e", "e3ad9b260dec"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete-comment-0": "eb79a9b3682a",

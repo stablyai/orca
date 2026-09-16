@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "76b53dea504a688493843e23e8e7d052fc196f559bb1e2579d0fd38bf3156d0e",
   "scenarioSha256": "cc6de73be00be072f9a3b7fd63459fd1a529c45d0916a67d5fe6d90dbee61e91",
   "platform": "darwin",
@@ -58,11 +58,6 @@
           "ok": true
         }
       }
-    },
-    "31c5054bc660": {
-      "name": "accounts.consumeCodexResetCredit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}",
-      "sent": 1
     },
     "32a7c0ae7918": {
       "status": "rejected",
@@ -346,6 +341,10 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "95625d997965": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}"
     },
     "a7ee87932ad2": {
       "name": "accounts.consumeCodexResetCredit#1",
@@ -764,7 +763,7 @@
         "id": "codex-reset-credit-consumed.prelude:requested",
         "observation": {
           "sender": ["90f55bfe00c2"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "9270aeb7d9c6"
           },
@@ -776,7 +775,7 @@
         "id": "codex-reset-credit-consumed.normal:consumed",
         "observation": {
           "sender": ["c4a98628ea44"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "fed9e1669a83"
           },
@@ -788,7 +787,7 @@
         "id": "codex-reset-credit-consumed.result-absent:consumed",
         "observation": {
           "sender": ["1fe9cca0cfea"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "e1ee0a1ae721"
           },
@@ -800,7 +799,7 @@
         "id": "codex-reset-credit-consumed.result-null:consumed",
         "observation": {
           "sender": ["ea4200bda9a6"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "e1ee0a1ae721"
           },
@@ -812,7 +811,7 @@
         "id": "codex-reset-credit-consumed.inner-ok-missing:consumed",
         "observation": {
           "sender": ["e418952ce431"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "e1ee0a1ae721"
           },
@@ -824,7 +823,7 @@
         "id": "codex-reset-credit-consumed.inner-false-string-error:consumed",
         "observation": {
           "sender": ["396ce6536d6c"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "e1ee0a1ae721"
           },
@@ -836,7 +835,7 @@
         "id": "codex-reset-credit-consumed.inner-false-object-error:consumed",
         "observation": {
           "sender": ["3e0977e026e9"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "e1ee0a1ae721"
           },
@@ -848,7 +847,7 @@
         "id": "codex-reset-credit-consumed.outer-refused:consumed",
         "observation": {
           "sender": ["45c6bf0513f4"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "32a7c0ae7918"
           },
@@ -860,7 +859,7 @@
         "id": "codex-reset-credit-consumed.outer-refused-no-message:consumed",
         "observation": {
           "sender": ["3aec3f08d180"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "f3b516f62081"
           },
@@ -872,7 +871,7 @@
         "id": "codex-reset-credit-consumed.method-not-found:consumed",
         "observation": {
           "sender": ["6e14949b9d4b"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "b948e8307e81"
           },
@@ -884,7 +883,7 @@
         "id": "codex-reset-credit-consumed.transport-rejection:consumed",
         "observation": {
           "sender": ["a7ee87932ad2"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "a947768bc0ed"
           },
@@ -896,7 +895,7 @@
         "id": "codex-reset-credit-consumed.transport-rejection-no-message:consumed",
         "observation": {
           "sender": ["b0762ae2d280"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "c7584e82c72f"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "82b891c7a7a2f255e2d22a372ee6112c9cc1f650259244e87f2e8c1356e97e5f",
   "platform": "darwin",
@@ -13,15 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0b078c630b23": {
-      "name": "preflight.detectRemoteAgents#2",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
-      "sent": 4
-    },
-    "14b354ce0ded": {
-      "name": "ssh.getState#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}",
-      "sent": 1
+    "0a7094a9a9ac": {
+      "name": "preflight.detectRemoteAgents#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
     },
     "4e2e9a890ced": {
       "detected": ["codex"],
@@ -33,6 +27,10 @@
         "requiresConnection": false,
         "status": "connected"
       }
+    },
+    "57095302d8c1": {
+      "name": "ssh.connect#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
     },
     "6004e75ef39e": {
       "name": "preflight.detectRemoteAgents#2",
@@ -59,10 +57,9 @@
         "startedAt": 0
       }
     },
-    "77f42ff60d15": {
-      "name": "ssh.connect#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}",
-      "sent": 3
+    "66a99391260b": {
+      "name": "preflight.detectRemoteAgents#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
     },
     "81c9c204b647": {
       "name": "ssh.connect#1",
@@ -175,11 +172,6 @@
         }
       }
     },
-    "bb1f9f7430c4": {
-      "name": "preflight.detectRemoteAgents#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
-      "sent": 2
-    },
     "ca123825be51": {
       "name": "ssh.getState#1",
       "args": [
@@ -227,6 +219,10 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f9dfbe0c0ea7": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
     }
   },
   "recording": {
@@ -236,7 +232,7 @@
         "id": "state-pending",
         "observation": {
           "sender": ["ca123825be51"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -248,7 +244,7 @@
         "id": "settled",
         "observation": {
           "sender": ["89aa7a3bd619", "9a892112da5b", "81c9c204b647", "6004e75ef39e"],
-          "payloads": ["14b354ce0ded", "bb1f9f7430c4", "77f42ff60d15", "0b078c630b23"],
+          "payloads": ["f9dfbe0c0ea7", "0a7094a9a9ac", "57095302d8c1", "66a99391260b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"

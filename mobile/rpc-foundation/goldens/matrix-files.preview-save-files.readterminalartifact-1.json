@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "1a4f7dff351be244712bedb8f495c83a531cfbfc5b5923267d1ed46bf2d6d11b",
   "platform": "darwin",
@@ -288,10 +288,9 @@
         }
       }
     },
-    "a3bce9470bbb": {
-      "name": "files.readTerminalArtifact#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}",
-      "sent": 1
+    "a3886e3a9791": {
+      "name": "files.writeTerminalArtifact#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.writeTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\",\"content\":\"next\"}}"
     },
     "a947768bc0ed": {
       "status": "rejected",
@@ -354,10 +353,9 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "d76588bfa9bd": {
-      "name": "files.writeTerminalArtifact#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.writeTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\",\"content\":\"next\"}}",
-      "sent": 2
+    "e0401d205ea2": {
+      "name": "files.readTerminalArtifact#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}"
     },
     "e088aa7f81b8": {
       "name": "files.readTerminalArtifact#1",
@@ -538,7 +536,7 @@
         "id": "files-save-verified.prelude:verify-pending",
         "observation": {
           "sender": ["e81d5596c201"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "9270aeb7d9c6"
           },
@@ -550,7 +548,7 @@
         "id": "files-save-verified.normal:settled",
         "observation": {
           "sender": ["e391aec81b96", "7875007ef392"],
-          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
+          "payloads": ["e0401d205ea2", "a3886e3a9791"],
           "settlements": {
             "save": "54a6055a16b5"
           },
@@ -562,7 +560,7 @@
         "id": "files-save-verified.result-absent:settled",
         "observation": {
           "sender": ["139c55987ba6"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -574,7 +572,7 @@
         "id": "files-save-verified.result-null:settled",
         "observation": {
           "sender": ["7500d091ea19"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -586,7 +584,7 @@
         "id": "files-save-verified.inner-ok-missing:settled",
         "observation": {
           "sender": ["f488aff81e98"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -598,7 +596,7 @@
         "id": "files-save-verified.inner-false-string-error:settled",
         "observation": {
           "sender": ["e088aa7f81b8"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -610,7 +608,7 @@
         "id": "files-save-verified.inner-false-object-error:settled",
         "observation": {
           "sender": ["67427c41b324"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -622,7 +620,7 @@
         "id": "files-save-verified.outer-refused:settled",
         "observation": {
           "sender": ["68b5d189bcca"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -634,7 +632,7 @@
         "id": "files-save-verified.outer-refused-no-message:settled",
         "observation": {
           "sender": ["e2791dca552b"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -646,7 +644,7 @@
         "id": "files-save-verified.method-not-found:settled",
         "observation": {
           "sender": ["ac130adfeffb"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -658,7 +656,7 @@
         "id": "files-save-verified.transport-rejection:settled",
         "observation": {
           "sender": ["7886fcdc8065"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "a947768bc0ed"
           },
@@ -670,7 +668,7 @@
         "id": "files-save-verified.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["9d9aa1c01790"],
-          "payloads": ["a3bce9470bbb"],
+          "payloads": ["e0401d205ea2"],
           "settlements": {
             "save": "c7584e82c72f"
           },

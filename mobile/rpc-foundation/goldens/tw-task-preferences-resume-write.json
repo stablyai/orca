@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "31bfa49f888b0eb3f72873bf4a3af26129e78c23126e8fc8fe45b952caa60904",
   "platform": "darwin",
@@ -13,10 +13,13 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "7a73ebbabb90": {
+    "43a97b36b849": {
       "name": "ui.set#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}",
-      "sent": 2
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}"
+    },
+    "8214f29cee6d": {
+      "name": "ui.set#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"taskResumeState\":{\"githubItemsPreset\":\"issues\"}}}"
     },
     "a569eb8ebbdd": {
       "name": "ui.set#1",
@@ -98,11 +101,6 @@
         }
       }
     },
-    "e7c50b077f61": {
-      "name": "ui.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"taskResumeState\":{\"githubItemsPreset\":\"issues\"}}}",
-      "sent": 1
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -129,7 +127,7 @@
         "id": "best-effort-resume-write",
         "observation": {
           "sender": ["a569eb8ebbdd"],
-          "payloads": ["e7c50b077f61"],
+          "payloads": ["8214f29cee6d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "resume": "eb79a9b3682a"
@@ -142,7 +140,7 @@
         "id": "awaited-trust-write-refused",
         "observation": {
           "sender": ["a569eb8ebbdd", "bea815de84ac"],
-          "payloads": ["e7c50b077f61", "7a73ebbabb90"],
+          "payloads": ["8214f29cee6d", "43a97b36b849"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "resume": "eb79a9b3682a",

@@ -15,3 +15,18 @@ export const homeHostStatsRead = bindDeferredRpcOperation(
     read: rpcUncheckedPayloadReader('home-stats-summary')
   })
 )
+
+/**
+ * The Home card's per-host accounts snapshot. Decorative like the counts above: a refused list
+ * leaves the card on the snapshot it already holds, so refusal is a skip. The payload stays
+ * unchecked because `decodeAccountsSnapshot` is what validates it, at the call site.
+ */
+export const homeHostAccountsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'accounts.home-snapshot-or-skip',
+    method: 'accounts.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('home-accounts-snapshot')
+  })
+)

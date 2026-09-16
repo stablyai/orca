@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "5100bd674509d1d83b1e2594eee036af21ea14b12226185b44070555d1d43060",
   "platform": "darwin",
@@ -93,6 +93,10 @@
         "$rpc": "null"
       }
     },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
     "1fe9fbe7d375": {
       "createError": "Cannot read properties of undefined (reading 'capabilities')",
       "creatingBrowser": false,
@@ -100,6 +104,10 @@
       "pendingBrowserFocusPageId": {
         "$rpc": "null"
       }
+    },
+    "37cca55d53d5": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}"
     },
     "39cfe991f857": {
       "name": "toast",
@@ -207,11 +215,6 @@
         }
       }
     },
-    "4c5f889d4eb7": {
-      "name": "files.createFile#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}",
-      "sent": 3
-    },
     "5216935e6a30": {
       "name": "toast",
       "value": {
@@ -314,11 +317,6 @@
         "$rpc": "null"
       }
     },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
     "8bdc2aec524d": {
       "name": "worktree.show#1",
       "args": [
@@ -383,6 +381,10 @@
           "ok": true
         }
       }
+    },
+    "9199aee60486": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
     },
     "a56852d6836b": {
       "name": "status.get#1",
@@ -465,11 +467,6 @@
       },
       "sent": 1
     },
-    "ca3214963232": {
-      "name": "files.open#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}",
-      "sent": 4
-    },
     "d38c135a5752": {
       "name": "files.open#1",
       "args": [
@@ -520,6 +517,10 @@
         "$rpc": "null"
       }
     },
+    "e344f453f8a0": {
+      "name": "files.createFile#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}"
+    },
     "e6b6cf30c6ee": {
       "createError": "Unknown method",
       "creatingBrowser": false,
@@ -527,11 +528,6 @@
       "pendingBrowserFocusPageId": {
         "$rpc": "null"
       }
-    },
-    "e7e6fb5e264b": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
-      "sent": 2
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -626,7 +622,7 @@
         "id": "session-create-markdown-note.normal:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "4267c22fd1f9", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -638,7 +634,7 @@
         "id": "session-create-markdown-note.result-absent:created",
         "observation": {
           "sender": ["90817e8c47cb"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -650,7 +646,7 @@
         "id": "session-create-markdown-note.result-null:created",
         "observation": {
           "sender": ["0d163aa89099"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -662,7 +658,7 @@
         "id": "session-create-markdown-note.inner-ok-missing:created",
         "observation": {
           "sender": ["48e2bdc38094"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -674,7 +670,7 @@
         "id": "session-create-markdown-note.inner-false-string-error:created",
         "observation": {
           "sender": ["f2a2b92aa73c"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -686,7 +682,7 @@
         "id": "session-create-markdown-note.inner-false-object-error:created",
         "observation": {
           "sender": ["f68f9c806fb2"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -698,7 +694,7 @@
         "id": "session-create-markdown-note.outer-refused:created",
         "observation": {
           "sender": ["0b7588536afb"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -710,7 +706,7 @@
         "id": "session-create-markdown-note.outer-refused-no-message:created",
         "observation": {
           "sender": ["a8d9f204690e"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -722,7 +718,7 @@
         "id": "session-create-markdown-note.method-not-found:created",
         "observation": {
           "sender": ["753f8f2aac3b"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -734,7 +730,7 @@
         "id": "session-create-markdown-note.transport-rejection:created",
         "observation": {
           "sender": ["4b0fb2833d76"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -746,7 +742,7 @@
         "id": "session-create-markdown-note.transport-rejection-no-message:created",
         "observation": {
           "sender": ["74a9cdb3c227"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },

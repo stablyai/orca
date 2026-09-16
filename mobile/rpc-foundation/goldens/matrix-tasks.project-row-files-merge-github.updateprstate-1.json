@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "b228732762828412ad3d9eec3ece00a897d866046e37044322c3911758d6e0a9",
   "scenarioSha256": "8d31245ea6869184de082cf9ef3af8d6e0806ab48b6f159e5076f786745c4413",
   "platform": "darwin",
@@ -65,6 +65,10 @@
         }
       },
       "sent": 1
+    },
+    "06d558d172f7": {
+      "name": "github.updatePRState#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
     },
     "0be9101a1dfc": {
       "name": "mutatingStatus",
@@ -193,6 +197,10 @@
       "value": "",
       "sent": 4
     },
+    "251de2865843": {
+      "name": "github.mergePR#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"method\":\"squash\"}}"
+    },
     "252f3a25533f": {
       "name": "actionItem",
       "value": {
@@ -204,6 +212,10 @@
       "name": "prFileLoadingPath",
       "value": "src/index.ts",
       "sent": 0
+    },
+    "29ab02f35956": {
+      "name": "github.prFileContents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prFileContents\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"path\":\"src/index.ts\",\"status\":\"modified\",\"headSha\":\"head-sha\",\"baseSha\":\"base-sha\"}}"
     },
     "2dcc3610aa80": {
       "name": "error",
@@ -452,6 +464,10 @@
         "itemType": "PULL_REQUEST"
       }
     },
+    "4d1d017cea91": {
+      "name": "github.addPRReviewComment#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewComment\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commitId\":\"head-sha\",\"path\":\"src/index.ts\",\"line\":12,\"body\":\"a review comment\"}}"
+    },
     "4dc5f6b0c764": {
       "name": "github.updatePRState#1",
       "args": [
@@ -531,11 +547,6 @@
           }
         }
       }
-    },
-    "64f9432f6c71": {
-      "name": "github.updateIssue#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"state\":\"closed\"}}}",
-      "sent": 4
     },
     "6a8206273d9c": {
       "name": "github.updatePRState#1",
@@ -681,11 +692,6 @@
         }
       }
     },
-    "94340748de2a": {
-      "name": "github.mergePR#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"method\":\"squash\"}}",
-      "sent": 3
-    },
     "9a4ad458f55c": {
       "name": "github.updatePRState#1",
       "args": [
@@ -724,10 +730,9 @@
         }
       }
     },
-    "b84494cf2d3b": {
-      "name": "github.prFileContents#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prFileContents\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"path\":\"src/index.ts\",\"status\":\"modified\",\"headSha\":\"head-sha\",\"baseSha\":\"base-sha\"}}",
-      "sent": 1
+    "c02d6dba8a29": {
+      "name": "github.updateIssue#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"state\":\"closed\"}}}"
     },
     "c0bf26bdb1b1": {
       "name": "github.updatePRState#1",
@@ -945,11 +950,6 @@
       "value": "",
       "sent": 3
     },
-    "deafdf0df276": {
-      "name": "github.addPRReviewComment#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewComment\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commitId\":\"head-sha\",\"path\":\"src/index.ts\",\"line\":12,\"body\":\"a review comment\"}}",
-      "sent": 2
-    },
     "e02a62a4ddf5": {
       "name": "expandedPrFilePath",
       "value": "src/index.ts",
@@ -967,11 +967,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "eddbc5f50eef": {
-      "name": "github.updatePRState#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}",
-      "sent": 5
     },
     "f070b17abcde": {
       "name": "prFileLoadingPath",
@@ -1020,7 +1015,7 @@
         "id": "tk-project-row-files-merge.prelude:expand-settled",
         "observation": {
           "sender": ["cb3d443fc9be"],
-          "payloads": ["b84494cf2d3b"],
+          "payloads": ["29ab02f35956"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a"
@@ -1039,7 +1034,7 @@
         "id": "tk-project-row-files-merge.prelude:file-comment-settled",
         "observation": {
           "sender": ["cb3d443fc9be", "c274925d7845"],
-          "payloads": ["b84494cf2d3b", "deafdf0df276"],
+          "payloads": ["29ab02f35956", "4d1d017cea91"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a",
@@ -1064,7 +1059,7 @@
         "id": "tk-project-row-files-merge.prelude:merge-settled",
         "observation": {
           "sender": ["cb3d443fc9be", "c274925d7845", "359e5860abb8"],
-          "payloads": ["b84494cf2d3b", "deafdf0df276", "94340748de2a"],
+          "payloads": ["29ab02f35956", "4d1d017cea91", "251de2865843"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a",
@@ -1095,7 +1090,7 @@
         "id": "tk-project-row-files-merge.prelude:issue-state-settled",
         "observation": {
           "sender": ["cb3d443fc9be", "c274925d7845", "359e5860abb8", "02509b3a87d5"],
-          "payloads": ["b84494cf2d3b", "deafdf0df276", "94340748de2a", "64f9432f6c71"],
+          "payloads": ["29ab02f35956", "4d1d017cea91", "251de2865843", "c02d6dba8a29"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand-0": "eb79a9b3682a",
@@ -1138,11 +1133,11 @@
             "3825598c02f7"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1191,11 +1186,11 @@
             "13ab8771d5c0"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1244,11 +1239,11 @@
             "8e0d841c499e"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1297,11 +1292,11 @@
             "6203f9c80a3e"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1350,11 +1345,11 @@
             "718ebcf73f73"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1403,11 +1398,11 @@
             "9a4ad458f55c"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1456,11 +1451,11 @@
             "34718313adf4"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1509,11 +1504,11 @@
             "6a8206273d9c"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1562,11 +1557,11 @@
             "c0bf26bdb1b1"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1615,11 +1610,11 @@
             "4dc5f6b0c764"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1668,11 +1663,11 @@
             "100ba187880b"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1721,11 +1716,11 @@
             "13526638734c"
           ],
           "payloads": [
-            "b84494cf2d3b",
-            "deafdf0df276",
-            "94340748de2a",
-            "64f9432f6c71",
-            "eddbc5f50eef"
+            "29ab02f35956",
+            "4d1d017cea91",
+            "251de2865843",
+            "c02d6dba8a29",
+            "06d558d172f7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",

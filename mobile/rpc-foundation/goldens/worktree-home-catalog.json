@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "4749bb3b871275ba08f026f9b6bcfd383605f443e7bba70a7f89175b91db6fa5",
   "platform": "darwin",
@@ -74,6 +74,10 @@
       }
     },
     "44136fa355b3": {},
+    "4912be5d956f": {
+      "name": "worktree.ps#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
     "86091b4d2b73": {
       "name": "info",
       "value": {
@@ -121,11 +125,6 @@
         "startedAt": 0
       }
     },
-    "c72cb878ff2a": {
-      "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}",
-      "sent": 1
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -142,7 +141,7 @@
         "id": "catalog-pending",
         "observation": {
           "sender": ["bc1a8e138f82"],
-          "payloads": ["c72cb878ff2a"],
+          "payloads": ["4912be5d956f"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -154,7 +153,7 @@
         "id": "settled",
         "observation": {
           "sender": ["2e82f8bbb1f1"],
-          "payloads": ["c72cb878ff2a"],
+          "payloads": ["4912be5d956f"],
           "settlements": {
             "load": "eb79a9b3682a"
           },

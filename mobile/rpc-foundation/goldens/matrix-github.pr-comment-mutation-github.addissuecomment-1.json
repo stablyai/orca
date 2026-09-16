@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "0c8f09683408a919dd3ac2b7cd12197d8745882627134cde95ecee209575b027",
   "platform": "darwin",
@@ -206,6 +206,10 @@
         }
       }
     },
+    "478fd4bcbb87": {
+      "name": "github.addIssueComment#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"body\":\"recorded comment\",\"type\":\"pr\"}}"
+    },
     "4fccb238edb1": {
       "name": "github.addIssueComment#1",
       "args": [
@@ -242,11 +246,6 @@
         }
       }
     },
-    "5708d54f0f07": {
-      "name": "github.addIssueComment#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"body\":\"recorded comment\",\"type\":\"pr\"}}",
-      "sent": 2
-    },
     "5f1bb831eeeb": {
       "edit-comment": {
         "ok": true
@@ -270,11 +269,6 @@
         "error": "Request failed: github.addIssueComment",
         "ok": false
       }
-    },
-    "6aa18d3e13ab": {
-      "name": "github.resolveReviewThread#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}",
-      "sent": 3
     },
     "6e135fd30dcd": {
       "delete-comment": {
@@ -444,6 +438,10 @@
           "result": true
         }
       }
+    },
+    "8108c9f604fb": {
+      "name": "github.addPRReviewCommentReply#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"commentId\":55,\"body\":\"recorded reply\",\"threadId\":\"thread-1\",\"path\":\"src/app.ts\",\"line\":3}}"
     },
     "8302b53c96cd": {
       "edit-comment": {
@@ -679,6 +677,10 @@
         "ok": false
       }
     },
+    "af688481a64e": {
+      "name": "github.project.deleteIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55}}"
+    },
     "b05590db45b7": {
       "reply": {
         "ok": true
@@ -730,16 +732,6 @@
         }
       }
     },
-    "c40fec826b4d": {
-      "name": "github.project.updateIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55,\"body\":\"edited\"}}",
-      "sent": 4
-    },
-    "c676e676ae9d": {
-      "name": "github.addPRReviewCommentReply#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"commentId\":55,\"body\":\"recorded reply\",\"threadId\":\"thread-1\",\"path\":\"src/app.ts\",\"line\":3}}",
-      "sent": 1
-    },
     "c809528f892d": {
       "name": "github.addIssueComment#1",
       "args": [
@@ -778,11 +770,6 @@
           }
         }
       }
-    },
-    "c9b1ffba7154": {
-      "name": "github.project.deleteIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55}}",
-      "sent": 5
     },
     "ca6d007cb7b8": {
       "name": "github.addIssueComment#1",
@@ -921,6 +908,10 @@
         "ok": true
       }
     },
+    "d9b62b144917": {
+      "name": "github.resolveReviewThread#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}"
+    },
     "dbf8fad741cc": {
       "reply": {
         "ok": true
@@ -965,6 +956,10 @@
         "error": "inner refused",
         "ok": false
       }
+    },
+    "e8277b2fbe2f": {
+      "name": "github.project.updateIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55,\"body\":\"edited\"}}"
     },
     "ed14ba07acb1": {
       "reply": {
@@ -1043,7 +1038,7 @@
         "id": "pr-comment-mutation.prelude:reply",
         "observation": {
           "sender": ["b72d1b08ed71"],
-          "payloads": ["c676e676ae9d"],
+          "payloads": ["8108c9f604fb"],
           "settlements": {
             "reply": "fbc958e4d46e"
           },
@@ -1055,7 +1050,7 @@
         "id": "pr-comment-mutation.normal:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "c809528f892d"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e"
@@ -1068,7 +1063,7 @@
         "id": "pr-comment-mutation.normal:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "c809528f892d", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1082,7 +1077,7 @@
         "id": "pr-comment-mutation.normal:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "c809528f892d", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1104,11 +1099,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1125,7 +1120,7 @@
         "id": "pr-comment-mutation.result-absent:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "7223e2d25a72"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e"
@@ -1138,7 +1133,7 @@
         "id": "pr-comment-mutation.result-absent:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "7223e2d25a72", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1152,7 +1147,7 @@
         "id": "pr-comment-mutation.result-absent:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "7223e2d25a72", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1174,11 +1169,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1195,7 +1190,7 @@
         "id": "pr-comment-mutation.result-null:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "4fccb238edb1"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e"
@@ -1208,7 +1203,7 @@
         "id": "pr-comment-mutation.result-null:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "4fccb238edb1", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1222,7 +1217,7 @@
         "id": "pr-comment-mutation.result-null:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "4fccb238edb1", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1244,11 +1239,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1265,7 +1260,7 @@
         "id": "pr-comment-mutation.inner-ok-missing:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "45f8781a0214"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e"
@@ -1278,7 +1273,7 @@
         "id": "pr-comment-mutation.inner-ok-missing:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "45f8781a0214", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1292,7 +1287,7 @@
         "id": "pr-comment-mutation.inner-ok-missing:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "45f8781a0214", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -1314,11 +1309,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1335,7 +1330,7 @@
         "id": "pr-comment-mutation.inner-false-string-error:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "871b2a18f62d"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "9f00dd54ba64"
@@ -1348,7 +1343,7 @@
         "id": "pr-comment-mutation.inner-false-string-error:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "871b2a18f62d", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "9f00dd54ba64",
@@ -1362,7 +1357,7 @@
         "id": "pr-comment-mutation.inner-false-string-error:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "871b2a18f62d", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "9f00dd54ba64",
@@ -1384,11 +1379,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1405,7 +1400,7 @@
         "id": "pr-comment-mutation.inner-false-object-error:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "23bd818e8ba6"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "9f00dd54ba64"
@@ -1418,7 +1413,7 @@
         "id": "pr-comment-mutation.inner-false-object-error:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "23bd818e8ba6", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "9f00dd54ba64",
@@ -1432,7 +1427,7 @@
         "id": "pr-comment-mutation.inner-false-object-error:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "23bd818e8ba6", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "9f00dd54ba64",
@@ -1454,11 +1449,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1475,7 +1470,7 @@
         "id": "pr-comment-mutation.outer-refused:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "735f219f431b"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "1b2778bf67a2"
@@ -1488,7 +1483,7 @@
         "id": "pr-comment-mutation.outer-refused:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "735f219f431b", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "1b2778bf67a2",
@@ -1502,7 +1497,7 @@
         "id": "pr-comment-mutation.outer-refused:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "735f219f431b", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "1b2778bf67a2",
@@ -1524,11 +1519,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1545,7 +1540,7 @@
         "id": "pr-comment-mutation.outer-refused-no-message:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "6ef76b3e8f0d"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "692d2314c7c5"
@@ -1558,7 +1553,7 @@
         "id": "pr-comment-mutation.outer-refused-no-message:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "6ef76b3e8f0d", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "692d2314c7c5",
@@ -1572,7 +1567,7 @@
         "id": "pr-comment-mutation.outer-refused-no-message:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "6ef76b3e8f0d", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "692d2314c7c5",
@@ -1594,11 +1589,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1615,7 +1610,7 @@
         "id": "pr-comment-mutation.method-not-found:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "08b540c77640"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fa93ca01f266"
@@ -1628,7 +1623,7 @@
         "id": "pr-comment-mutation.method-not-found:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "08b540c77640", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fa93ca01f266",
@@ -1642,7 +1637,7 @@
         "id": "pr-comment-mutation.method-not-found:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "08b540c77640", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fa93ca01f266",
@@ -1664,11 +1659,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1685,7 +1680,7 @@
         "id": "pr-comment-mutation.transport-rejection:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "94828c89cc0f"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "a197c20578aa"
@@ -1698,7 +1693,7 @@
         "id": "pr-comment-mutation.transport-rejection:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "94828c89cc0f", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "a197c20578aa",
@@ -1712,7 +1707,7 @@
         "id": "pr-comment-mutation.transport-rejection:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "94828c89cc0f", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "a197c20578aa",
@@ -1734,11 +1729,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1755,7 +1750,7 @@
         "id": "pr-comment-mutation.transport-rejection-no-message:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "ca6d007cb7b8"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fb4429083480"
@@ -1768,7 +1763,7 @@
         "id": "pr-comment-mutation.transport-rejection-no-message:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "ca6d007cb7b8", "7d998237c7b0"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fb4429083480",
@@ -1782,7 +1777,7 @@
         "id": "pr-comment-mutation.transport-rejection-no-message:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "ca6d007cb7b8", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
+          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fb4429083480",
@@ -1804,11 +1799,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "c676e676ae9d",
-            "5708d54f0f07",
-            "6aa18d3e13ab",
-            "c40fec826b4d",
-            "c9b1ffba7154"
+            "8108c9f604fb",
+            "478fd4bcbb87",
+            "d9b62b144917",
+            "e8277b2fbe2f",
+            "af688481a64e"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",

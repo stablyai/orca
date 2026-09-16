@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
   "scenarioSha256": "a9a3191e2e8c36870ce2769a7bb972813f435267fdc6ed9e42632a57a227bbd6",
   "platform": "darwin",
@@ -43,11 +43,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "045d8ec6a888": {
-      "name": "ui.set#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"sortBy\":\"name\"}}",
-      "sent": 2
     },
     "114056cffd39": {
       "name": "ui.get#1",
@@ -161,6 +156,10 @@
       "value": "none",
       "sent": 1
     },
+    "292b632037a0": {
+      "name": "ui.set#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"sortBy\":\"name\"}}"
+    },
     "3650379e5c37": {
       "name": "ui.get#1",
       "args": [
@@ -194,6 +193,10 @@
           "ok": false
         }
       }
+    },
+    "5907841fc56d": {
+      "name": "ui.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     },
     "5fbdd64c75bc": {
       "name": "ui.get#1",
@@ -513,11 +516,6 @@
       "sortMode": "recent",
       "statuses": []
     },
-    "c178812d69e7": {
-      "name": "ui.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}",
-      "sent": 1
-    },
     "d88f3b1774b1": {
       "name": "filters",
       "value": {
@@ -549,7 +547,7 @@
         "id": "host-view-settings-sync.prelude:ui-pending",
         "observation": {
           "sender": ["5fbdd64c75bc"],
-          "payloads": ["c178812d69e7"],
+          "payloads": ["5907841fc56d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "9270aeb7d9c6"
@@ -562,7 +560,7 @@
         "id": "host-view-settings-sync.normal:settled",
         "observation": {
           "sender": ["a424515cabc9", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -587,7 +585,7 @@
         "id": "host-view-settings-sync.result-absent:settled",
         "observation": {
           "sender": ["61275c3082ca", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -607,7 +605,7 @@
         "id": "host-view-settings-sync.result-null:settled",
         "observation": {
           "sender": ["993945d30ef2", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -627,7 +625,7 @@
         "id": "host-view-settings-sync.inner-ok-missing:settled",
         "observation": {
           "sender": ["9a285e681215", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -647,7 +645,7 @@
         "id": "host-view-settings-sync.inner-false-string-error:settled",
         "observation": {
           "sender": ["17aa61c35dcf", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -667,7 +665,7 @@
         "id": "host-view-settings-sync.inner-false-object-error:settled",
         "observation": {
           "sender": ["8ab3467032ef", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -687,7 +685,7 @@
         "id": "host-view-settings-sync.outer-refused:settled",
         "observation": {
           "sender": ["1308c5012cf9", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -707,7 +705,7 @@
         "id": "host-view-settings-sync.outer-refused-no-message:settled",
         "observation": {
           "sender": ["3650379e5c37", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -727,7 +725,7 @@
         "id": "host-view-settings-sync.method-not-found:settled",
         "observation": {
           "sender": ["114056cffd39", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -747,7 +745,7 @@
         "id": "host-view-settings-sync.transport-rejection:settled",
         "observation": {
           "sender": ["757d36f7d7c1", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
@@ -767,7 +765,7 @@
         "id": "host-view-settings-sync.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["0039f2221403", "78f2fbcd0185"],
-          "payloads": ["c178812d69e7", "045d8ec6a888"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",

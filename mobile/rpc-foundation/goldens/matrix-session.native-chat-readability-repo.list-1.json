@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "d6a0472f274d55aab584b58b67018d042ee1ba6799f42072a8a5986f45554bfc",
   "platform": "darwin",
@@ -187,10 +187,9 @@
         }
       }
     },
-    "5730368193ee": {
+    "6bdbf70bafa2": {
       "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "6e5c6593dad8": {
       "name": "repo.list#1",
@@ -412,7 +411,7 @@
         "id": "native-chat-readability-local-repo.normal:readable",
         "observation": {
           "sender": ["0f1ed2b7a695"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -424,7 +423,7 @@
         "id": "native-chat-readability-local-repo.result-absent:readable",
         "observation": {
           "sender": ["2ebe4d776f9b"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -436,7 +435,7 @@
         "id": "native-chat-readability-local-repo.result-null:readable",
         "observation": {
           "sender": ["38e790fd9e9c"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -448,7 +447,7 @@
         "id": "native-chat-readability-local-repo.inner-ok-missing:readable",
         "observation": {
           "sender": ["06b63e0d9986"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -460,7 +459,7 @@
         "id": "native-chat-readability-local-repo.inner-false-string-error:readable",
         "observation": {
           "sender": ["f96e83d33565"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -472,7 +471,7 @@
         "id": "native-chat-readability-local-repo.inner-false-object-error:readable",
         "observation": {
           "sender": ["9d3fa0db2665"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -484,7 +483,7 @@
         "id": "native-chat-readability-local-repo.outer-refused:readable",
         "observation": {
           "sender": ["b9f0f1e94cd9"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -496,7 +495,7 @@
         "id": "native-chat-readability-local-repo.outer-refused-no-message:readable",
         "observation": {
           "sender": ["06fc8e7b85d5"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -508,7 +507,7 @@
         "id": "native-chat-readability-local-repo.method-not-found:readable",
         "observation": {
           "sender": ["e341bd05e614"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -520,7 +519,7 @@
         "id": "native-chat-readability-local-repo.transport-rejection:readable",
         "observation": {
           "sender": ["6e5c6593dad8"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -532,7 +531,7 @@
         "id": "native-chat-readability-local-repo.transport-rejection-no-message:readable",
         "observation": {
           "sender": ["cc1facdf008c"],
-          "payloads": ["5730368193ee"],
+          "payloads": ["6bdbf70bafa2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

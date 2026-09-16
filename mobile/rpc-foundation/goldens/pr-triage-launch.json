@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "8bb2ff4e899ee873289fed7c1ef12e7f9dba91949125b1f0e4336d378ceb071e",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "39a17efe1de6": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
-    },
     "43aa948e3918": {
       "name": "terminal.send#1",
       "args": [
@@ -90,11 +85,6 @@
         "startedAt": 0
       }
     },
-    "c286eacee37b": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}",
-      "sent": 2
-    },
     "d0f04fba35ce": {
       "name": "session.tabs.createTerminal#1",
       "args": [
@@ -136,6 +126,10 @@
         }
       }
     },
+    "d3b1c8acd1dd": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -143,6 +137,10 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f3199cb6db52": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}"
     },
     "fe1fe746e77a": {
       "launched": "sent"
@@ -155,7 +153,7 @@
         "id": "pending",
         "observation": {
           "sender": ["b5eced0566fb"],
-          "payloads": ["39a17efe1de6"],
+          "payloads": ["d3b1c8acd1dd"],
           "settlements": {
             "launch": "9270aeb7d9c6"
           },
@@ -167,7 +165,7 @@
         "id": "launched",
         "observation": {
           "sender": ["d0f04fba35ce", "43aa948e3918"],
-          "payloads": ["39a17efe1de6", "c286eacee37b"],
+          "payloads": ["d3b1c8acd1dd", "f3199cb6db52"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },

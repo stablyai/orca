@@ -263,6 +263,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
   surfaceOwner?: false
+  /** Windows shell the created tab spawns AS, instead of the host default. */
+  shellOverride?: string
 }
 
 export type RuntimeTerminalCreateRequestPayload =

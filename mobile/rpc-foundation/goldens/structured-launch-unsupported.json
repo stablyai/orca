@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
   "scenarioSha256": "c30e9cae49e134715c009a98f423f3e4a9d552c014be3e28b38e98c57999b6f5",
   "platform": "darwin",
@@ -13,10 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3db129933d79": {
+    "4a8f44bda967": {
       "name": "agentSession.createSupport#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
     },
     "551313dcc738": {
       "launched": {
@@ -76,7 +75,7 @@
         "id": "unsupported",
         "observation": {
           "sender": ["bef30d717da6"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "dd51c5566f19"
           },

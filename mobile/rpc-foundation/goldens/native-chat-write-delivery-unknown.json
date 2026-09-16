@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "22f7711ed82a4d56f1886a746838e3eb85c555c9069694ba3aa958e121cc1ee9",
   "platform": "darwin",
@@ -15,6 +15,10 @@
   "values": {
     "44d966fae591": {
       "body": "unknown"
+    },
+    "6bb5bb25e4d4": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "ed1d171deda5": {
       "status": "fulfilled",
@@ -59,11 +63,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "f61b028e9602": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -73,7 +72,7 @@
         "id": "unknown",
         "observation": {
           "sender": ["f1e77c2f84bd"],
-          "payloads": ["f61b028e9602"],
+          "payloads": ["6bb5bb25e4d4"],
           "settlements": {
             "body": "ed1d171deda5"
           },

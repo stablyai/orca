@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "8dc3fd27c5720276608ca8743990e4f57d94eab84f620e9aa42702a4686fd5a9",
   "platform": "darwin",
@@ -18,10 +18,9 @@
       "value": "host-1",
       "sent": 4
     },
-    "2e0a00540206": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}",
-      "sent": 1
+    "247b92f9351d": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}"
     },
     "50f1b63c9e0d": {
       "name": "pairing.getEndpoints#1",
@@ -130,6 +129,10 @@
         }
       }
     },
+    "748cf6b7a942": {
+      "name": "pairing.getEndpoints#3",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
+    },
     "7a3e4e5413b5": {
       "outcome": "recovered",
       "winner": {
@@ -173,11 +176,6 @@
           }
         }
       }
-    },
-    "8ba03f7fcc7b": {
-      "name": "pairing.getEndpoints#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 2
     },
     "9bb91a6d0ca7": {
       "name": "pairing.getEndpoints#2",
@@ -225,10 +223,9 @@
         }
       }
     },
-    "b1003d00d1be": {
-      "name": "pairing.provisionRelay#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}",
-      "sent": 3
+    "b6e709c11a41": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}"
     },
     "bcb071e85da1": {
       "name": "journal-cleared",
@@ -256,10 +253,9 @@
       "settledAt": 0,
       "value": "recovered"
     },
-    "f4a3f7deb30c": {
-      "name": "pairing.getEndpoints#3",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 4
+    "f98de3f4f0c2": {
+      "name": "pairing.getEndpoints#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
     }
   },
   "recording": {
@@ -269,7 +265,7 @@
         "id": "recovered-through-invite",
         "observation": {
           "sender": ["50f1b63c9e0d", "9bb91a6d0ca7", "8a13a5758a69", "6f09228b201f"],
-          "payloads": ["2e0a00540206", "8ba03f7fcc7b", "b1003d00d1be", "f4a3f7deb30c"],
+          "payloads": ["b6e709c11a41", "f98de3f4f0c2", "247b92f9351d", "748cf6b7a942"],
           "settlements": {
             "recover": "f0723ea3ab16"
           },

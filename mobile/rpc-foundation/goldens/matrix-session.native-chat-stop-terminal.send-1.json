@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "96499f352af2ff884bfa94996659609fdbd228e1d071ad462400b978ab8e239b",
   "platform": "darwin",
@@ -13,10 +13,17 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1ce75e48864f": {
+    "161bbe9b0076": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "191580ba859d": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "1a91fe5e4856": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "1d3e6369460d": {
       "name": "terminal.send#1",
@@ -176,15 +183,9 @@
         }
       }
     },
-    "4dfb46310986": {
+    "538133eba781": {
       "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 3
-    },
-    "56f3ab2e0d0b": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 3
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "6042c9b66ea6": {
       "name": "terminal.send#1",
@@ -229,6 +230,10 @@
       "name": "cancel-pending",
       "value": {},
       "sent": 0
+    },
+    "63ceb8bb55e0": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
     "6d0a95c36d38": {
       "name": "terminal.send#1",
@@ -449,11 +454,6 @@
         }
       }
     },
-    "b139ed2905d3": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 2
-    },
     "c285187dc5a0": {
       "name": "terminal.send#1",
       "args": [
@@ -582,11 +582,6 @@
         "$rpc": "undefined"
       }
     },
-    "f6d9dea0749b": {
-      "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 2
-    },
     "feec2910cb8d": {
       "name": "terminal.send#1",
       "args": [
@@ -637,7 +632,7 @@
         "id": "native-chat-stop-accepted.normal:first-accepted",
         "observation": {
           "sender": ["1d3e6369460d", "960f67ee14e2"],
-          "payloads": ["1ce75e48864f", "b139ed2905d3"],
+          "payloads": ["1a91fe5e4856", "191580ba859d"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -649,7 +644,7 @@
         "id": "native-chat-stop-accepted.normal:settled",
         "observation": {
           "sender": ["1d3e6369460d", "960f67ee14e2", "86ab67d60a77"],
-          "payloads": ["1ce75e48864f", "b139ed2905d3", "4dfb46310986"],
+          "payloads": ["1a91fe5e4856", "191580ba859d", "538133eba781"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -661,7 +656,7 @@
         "id": "native-chat-stop-accepted.result-absent:first-accepted",
         "observation": {
           "sender": ["492866c0c9e1"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -673,7 +668,7 @@
         "id": "native-chat-stop-accepted.result-absent:settled",
         "observation": {
           "sender": ["492866c0c9e1", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -685,7 +680,7 @@
         "id": "native-chat-stop-accepted.result-null:first-accepted",
         "observation": {
           "sender": ["99589ad65e33"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -697,7 +692,7 @@
         "id": "native-chat-stop-accepted.result-null:settled",
         "observation": {
           "sender": ["99589ad65e33", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -709,7 +704,7 @@
         "id": "native-chat-stop-accepted.inner-ok-missing:first-accepted",
         "observation": {
           "sender": ["6042c9b66ea6"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -721,7 +716,7 @@
         "id": "native-chat-stop-accepted.inner-ok-missing:settled",
         "observation": {
           "sender": ["6042c9b66ea6", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -733,7 +728,7 @@
         "id": "native-chat-stop-accepted.inner-false-string-error:first-accepted",
         "observation": {
           "sender": ["ceb10c5df8a0"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -745,7 +740,7 @@
         "id": "native-chat-stop-accepted.inner-false-string-error:settled",
         "observation": {
           "sender": ["ceb10c5df8a0", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -757,7 +752,7 @@
         "id": "native-chat-stop-accepted.inner-false-object-error:first-accepted",
         "observation": {
           "sender": ["feec2910cb8d"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -769,7 +764,7 @@
         "id": "native-chat-stop-accepted.inner-false-object-error:settled",
         "observation": {
           "sender": ["feec2910cb8d", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -781,7 +776,7 @@
         "id": "native-chat-stop-accepted.outer-refused:first-accepted",
         "observation": {
           "sender": ["afbfdc05c156"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -793,7 +788,7 @@
         "id": "native-chat-stop-accepted.outer-refused:settled",
         "observation": {
           "sender": ["afbfdc05c156", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -805,7 +800,7 @@
         "id": "native-chat-stop-accepted.outer-refused-no-message:first-accepted",
         "observation": {
           "sender": ["c285187dc5a0"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -817,7 +812,7 @@
         "id": "native-chat-stop-accepted.outer-refused-no-message:settled",
         "observation": {
           "sender": ["c285187dc5a0", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -829,7 +824,7 @@
         "id": "native-chat-stop-accepted.method-not-found:first-accepted",
         "observation": {
           "sender": ["3e35736d8479"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -841,7 +836,7 @@
         "id": "native-chat-stop-accepted.method-not-found:settled",
         "observation": {
           "sender": ["3e35736d8479", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -853,7 +848,7 @@
         "id": "native-chat-stop-accepted.transport-rejection:first-accepted",
         "observation": {
           "sender": ["6d0a95c36d38"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -865,7 +860,7 @@
         "id": "native-chat-stop-accepted.transport-rejection:settled",
         "observation": {
           "sender": ["6d0a95c36d38", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -877,7 +872,7 @@
         "id": "native-chat-stop-accepted.transport-rejection-no-message:first-accepted",
         "observation": {
           "sender": ["cf7a58e6ca1e"],
-          "payloads": ["1ce75e48864f"],
+          "payloads": ["1a91fe5e4856"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
@@ -889,7 +884,7 @@
         "id": "native-chat-stop-accepted.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["cf7a58e6ca1e", "3c04f6d0878f", "862750fdf5df"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b", "56f3ab2e0d0b"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076", "63ceb8bb55e0"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },

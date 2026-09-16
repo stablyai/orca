@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "d4031721b16d7c281c544e7b2eef774fd20dda1890d7ebaadcbbb1eda4d276fd",
   "platform": "darwin",
@@ -13,10 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "037a93bf236b": {
+    "1062fb0e8dcf": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/img.png\\u001b[201~ \",\"enter\":false}}",
-      "sent": 4
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/img.png\\u001b[201~ \",\"enter\":false}}"
     },
     "1c2f6fe81321": {
       "name": "before-terminal-send",
@@ -62,15 +61,14 @@
         }
       }
     },
+    "520b3fe0fb07": {
+      "name": "clipboard.startImageUpload#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
     "5f71b4d3d25c": {
       "name": "upload-start",
       "value": {},
       "sent": 0
-    },
-    "72c805fadcfb": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
-      "sent": 2
     },
     "7e48c58139e5": {
       "name": "clipboard.startImageUpload#1",
@@ -118,10 +116,13 @@
         "$rpc": "null"
       }
     },
-    "8dfd1f053efc": {
-      "name": "clipboard.startImageUpload#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
-      "sent": 1
+    "972fbf8b960e": {
+      "name": "clipboard.commitImageUpload#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}"
+    },
+    "b69a955ea891": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
     },
     "e93276a9971b": {
       "name": "clipboard.commitImageUpload#1",
@@ -153,11 +154,6 @@
           "result": "/tmp/img.png"
         }
       }
-    },
-    "e9a3deaf4515": {
-      "name": "clipboard.commitImageUpload#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}",
-      "sent": 3
     },
     "f1a3d38271bc": {
       "name": "clipboard.appendImageUploadChunk#1",
@@ -202,7 +198,7 @@
         "id": "rejected",
         "observation": {
           "sender": ["7e48c58139e5", "f1a3d38271bc", "e93276a9971b", "308e09c6a619"],
-          "payloads": ["8dfd1f053efc", "72c805fadcfb", "e9a3deaf4515", "037a93bf236b"],
+          "payloads": ["520b3fe0fb07", "b69a955ea891", "972fbf8b960e", "1062fb0e8dcf"],
           "settlements": {
             "anonymous": "7ed3d39f0607"
           },

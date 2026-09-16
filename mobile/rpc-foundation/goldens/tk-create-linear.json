@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "f6c7eea985190d9edeead5b36f90c8aa98679f69d19dab7579fec88841645259",
   "platform": "darwin",
@@ -58,6 +58,10 @@
       "value": true,
       "sent": 0
     },
+    "6105e77e3945": {
+      "name": "linear.createIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A new task\",\"description\":\"a body\",\"workspaceId\":\"linear-workspace\"}}"
+    },
     "61b2cb7e4313": {
       "composer": false,
       "creating": false,
@@ -107,11 +111,6 @@
       "name": "error",
       "value": "",
       "sent": 0
-    },
-    "b06990400bdd": {
-      "name": "linear.createIssue#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A new task\",\"description\":\"a body\",\"workspaceId\":\"linear-workspace\"}}",
-      "sent": 1
     },
     "b83a4bfe6154": {
       "name": "actionItem",
@@ -173,7 +172,7 @@
         "id": "create-settled",
         "observation": {
           "sender": ["11915dfdb24a"],
-          "payloads": ["b06990400bdd"],
+          "payloads": ["6105e77e3945"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"

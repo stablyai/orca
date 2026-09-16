@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "8e00afc85e5b82d75bedecea0c748a3c8658cfc8545650e755c03f51fdc932d6",
   "platform": "darwin",
@@ -98,11 +98,6 @@
         "$rpc": "null"
       }
     },
-    "46d0f1129c84": {
-      "name": "linear.getIssue#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}",
-      "sent": 2
-    },
     "4a3ebfb61f95": {
       "name": "detailError",
       "value": "transport failure",
@@ -151,11 +146,6 @@
       "name": "detailLoading",
       "value": true,
       "sent": 0
-    },
-    "5b2b6dd0b30f": {
-      "name": "linear.issueComments#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}",
-      "sent": 2
     },
     "5ce7f3fa558f": {
       "name": "linear.getIssue#1",
@@ -417,6 +407,10 @@
         }
       }
     },
+    "bb215a1eb59b": {
+      "name": "linear.getIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+    },
     "bc9642565680": {
       "name": "linear.getIssue#1",
       "args": [
@@ -482,6 +476,10 @@
           }
         }
       }
+    },
+    "e7f73629d075": {
+      "name": "linear.issueComments#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -565,7 +563,7 @@
         "id": "b3.prelude:pending",
         "observation": {
           "sender": ["fc4ce176400a", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -577,7 +575,7 @@
         "id": "b3.normal:issue-refused-comments-pending",
         "observation": {
           "sender": ["a91a12c2af5d", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -589,7 +587,7 @@
         "id": "b3.normal:settled",
         "observation": {
           "sender": ["a91a12c2af5d", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -607,7 +605,7 @@
         "id": "b3.result-absent:issue-refused-comments-pending",
         "observation": {
           "sender": ["77d756736896", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -619,7 +617,7 @@
         "id": "b3.result-absent:settled",
         "observation": {
           "sender": ["77d756736896", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -637,7 +635,7 @@
         "id": "b3.result-null:issue-refused-comments-pending",
         "observation": {
           "sender": ["68f4ab6eb5df", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -649,7 +647,7 @@
         "id": "b3.result-null:settled",
         "observation": {
           "sender": ["68f4ab6eb5df", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -667,7 +665,7 @@
         "id": "b3.inner-ok-missing:issue-refused-comments-pending",
         "observation": {
           "sender": ["d5a45b61726a", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -679,7 +677,7 @@
         "id": "b3.inner-ok-missing:settled",
         "observation": {
           "sender": ["d5a45b61726a", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -697,7 +695,7 @@
         "id": "b3.inner-false-string-error:issue-refused-comments-pending",
         "observation": {
           "sender": ["a1504f9a0912", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -709,7 +707,7 @@
         "id": "b3.inner-false-string-error:settled",
         "observation": {
           "sender": ["a1504f9a0912", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -727,7 +725,7 @@
         "id": "b3.inner-false-object-error:issue-refused-comments-pending",
         "observation": {
           "sender": ["5ce7f3fa558f", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -739,7 +737,7 @@
         "id": "b3.inner-false-object-error:settled",
         "observation": {
           "sender": ["5ce7f3fa558f", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -757,7 +755,7 @@
         "id": "b3.outer-refused:issue-refused-comments-pending",
         "observation": {
           "sender": ["ff164d27a928", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -769,7 +767,7 @@
         "id": "b3.outer-refused:settled",
         "observation": {
           "sender": ["ff164d27a928", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -787,7 +785,7 @@
         "id": "b3.outer-refused-no-message:issue-refused-comments-pending",
         "observation": {
           "sender": ["1736ff39135a", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -799,7 +797,7 @@
         "id": "b3.outer-refused-no-message:settled",
         "observation": {
           "sender": ["1736ff39135a", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -817,7 +815,7 @@
         "id": "b3.method-not-found:issue-refused-comments-pending",
         "observation": {
           "sender": ["8ec7d930f214", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -829,7 +827,7 @@
         "id": "b3.method-not-found:settled",
         "observation": {
           "sender": ["8ec7d930f214", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -847,7 +845,7 @@
         "id": "b3.transport-rejection:issue-refused-comments-pending",
         "observation": {
           "sender": ["bc9642565680", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -865,7 +863,7 @@
         "id": "b3.transport-rejection:settled",
         "observation": {
           "sender": ["bc9642565680", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -883,7 +881,7 @@
         "id": "b3.transport-rejection-no-message:issue-refused-comments-pending",
         "observation": {
           "sender": ["b15e02226c97", "3cb9a384ce0e"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -901,7 +899,7 @@
         "id": "b3.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["b15e02226c97", "4e7c4654b51d"],
-          "payloads": ["46d0f1129c84", "5b2b6dd0b30f"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

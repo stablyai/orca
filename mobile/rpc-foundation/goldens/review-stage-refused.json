@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
   "scenarioSha256": "46b720fed417d29f79dbde4cc7941579f2d6a2f920bae24234537480079e7de5",
   "platform": "darwin",
@@ -48,11 +48,6 @@
         }
       }
     },
-    "03e8a48af722": {
-      "name": "git.discard#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.discard\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}",
-      "sent": 1
-    },
     "36787858f78b": {
       "actionError": "Cannot discard during a merge",
       "busyAction": {
@@ -93,6 +88,10 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ffc8292df05c": {
+      "name": "git.discard#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.discard\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
     }
   },
   "recording": {
@@ -102,7 +101,7 @@
         "id": "refused",
         "observation": {
           "sender": ["0038658e2aec"],
-          "payloads": ["03e8a48af722"],
+          "payloads": ["ffc8292df05c"],
           "settlements": {
             "discard": "eb79a9b3682a"
           },

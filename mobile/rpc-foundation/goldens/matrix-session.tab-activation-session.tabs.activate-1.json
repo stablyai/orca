@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
   "scenarioSha256": "d25fc19d4e3e9b12f2a60a076ea10741e13fc45dcd9a76bd3a9d88432c3e6fbe",
   "platform": "darwin",
@@ -50,10 +50,9 @@
         }
       }
     },
-    "11b4a1934825": {
+    "0442e34fbb3f": {
       "name": "terminal.focus#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}"
     },
     "12726a31e046": {
       "name": "session.tabs.activate#1",
@@ -392,11 +391,6 @@
         }
       }
     },
-    "7cd4f4dc7a60": {
-      "name": "session.tabs.activate#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}",
-      "sent": 2
-    },
     "7d4b7965217b": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -552,6 +546,10 @@
         "message": "",
         "isRpcDeliveryUnknown": true
       }
+    },
+    "c9c16f3b6d6f": {
+      "name": "session.tabs.activate#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
     },
     "c9ffa22c6b1c": {
       "name": "session.tabs.activate#1",
@@ -811,7 +809,7 @@
         "id": "session-tab-activation-focus-and-activate.normal:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "e495a9a84cf0"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "84d74a6de2ca"
@@ -824,7 +822,7 @@
         "id": "session-tab-activation-focus-and-activate.result-absent:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "c9ffa22c6b1c"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "86832c8db827"
@@ -837,7 +835,7 @@
         "id": "session-tab-activation-focus-and-activate.result-null:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "02648396b3a2"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "bb654f2bdea7"
@@ -850,7 +848,7 @@
         "id": "session-tab-activation-focus-and-activate.inner-ok-missing:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "12726a31e046"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "7d4b7965217b"
@@ -863,7 +861,7 @@
         "id": "session-tab-activation-focus-and-activate.inner-false-string-error:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "2a882f2e8b6b"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "5f3ba1cd76e0"
@@ -876,7 +874,7 @@
         "id": "session-tab-activation-focus-and-activate.inner-false-object-error:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "aa61e32f6fc2"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "23857f5f3255"
@@ -889,7 +887,7 @@
         "id": "session-tab-activation-focus-and-activate.outer-refused:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "3b8731983e55"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "ccf7770577df"
@@ -902,7 +900,7 @@
         "id": "session-tab-activation-focus-and-activate.outer-refused-no-message:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "799e842efb06"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "43044100d546"
@@ -915,7 +913,7 @@
         "id": "session-tab-activation-focus-and-activate.method-not-found:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "d53e4b22b23e"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "45c1af849de7"
@@ -928,7 +926,7 @@
         "id": "session-tab-activation-focus-and-activate.transport-rejection:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "8a96ab8caedf"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "a947768bc0ed"
@@ -941,7 +939,7 @@
         "id": "session-tab-activation-focus-and-activate.transport-rejection-no-message:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "e972c0a27347"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "c7584e82c72f"

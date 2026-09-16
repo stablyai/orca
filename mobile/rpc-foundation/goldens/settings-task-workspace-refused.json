@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "a699a0a5b128fa422dab0c7557b5aa18599b2d23fa6685cdcc02e17edf328af1",
   "platform": "darwin",
@@ -55,17 +55,16 @@
       },
       "sent": 1
     },
-    "5c52bc3f9e55": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 1
-    },
     "7abdfe20af50": {
       "creating": "linear:1",
       "error": "",
       "settings": {
         "disabledTuiAgents": ["claude"]
       }
+    },
+    "7ddcb1852b39": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -145,7 +144,7 @@
         "id": "settings-pending",
         "observation": {
           "sender": ["090c88478661"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
@@ -158,7 +157,7 @@
         "id": "settled",
         "observation": {
           "sender": ["d6140b218abd"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"

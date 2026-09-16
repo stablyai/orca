@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "4246e7ffa62e85aac489c561171a6468f862b7f18eefac9926b65073616b6d35",
   "platform": "darwin",
@@ -91,11 +91,6 @@
         }
       }
     },
-    "207e61d5e813": {
-      "name": "github.prForBranch#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}",
-      "sent": 3
-    },
     "2638b3063bb1": {
       "name": "github.repoSlug#1",
       "args": [
@@ -131,10 +126,13 @@
         }
       }
     },
-    "384abd5851d2": {
+    "3879f5d02dc5": {
+      "name": "github.listAssignableUsers#1",
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-9\"}}"
+    },
+    "3b464a1ac1ab": {
       "name": "github.prChecks#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}",
-      "sent": 5
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
     },
     "41113a109089": {
       "repo-slug": {
@@ -147,11 +145,6 @@
       }
     },
     "44136fa355b3": {},
-    "499ca7b4c13a": {
-      "name": "github.prCheckDetails#1",
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null}}",
-      "sent": 6
-    },
     "4a081d46fc88": {
       "name": "github.prChecks#1",
       "args": [
@@ -257,11 +250,6 @@
           }
         }
       }
-    },
-    "4c91dcea8967": {
-      "name": "github.workItemDetails#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}",
-      "sent": 4
     },
     "50f04028e403": {
       "check-details": {
@@ -526,6 +514,10 @@
           "repo": "orca"
         }
       }
+    },
+    "8cbb79ec0c39": {
+      "name": "hostedReview.forBranch#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":12,\"active\":true}}"
     },
     "9353f049138c": {
       "name": "github.prCheckDetails#1",
@@ -880,10 +872,9 @@
         }
       }
     },
-    "ba3f7a2212a2": {
-      "name": "hostedReview.forBranch#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":12,\"active\":true}}",
-      "sent": 2
+    "ba1b866ad599": {
+      "name": "github.workItemDetails#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}"
     },
     "c9cb3ce714a0": {
       "name": "github.prForBranch#1",
@@ -931,6 +922,10 @@
         }
       }
     },
+    "d08ed4a769f3": {
+      "name": "github.prCheckDetails#1",
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null}}"
+    },
     "d89e7b8ce2a0": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -965,6 +960,14 @@
           }
         ]
       }
+    },
+    "e323dec040c2": {
+      "name": "github.prForBranch#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}"
+    },
+    "eb6a2b2f507e": {
+      "name": "github.repoSlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-9\"}}"
     },
     "efcf99a657b9": {
       "name": "github.listAssignableUsers#1",
@@ -1152,11 +1155,6 @@
         }
       }
     },
-    "f2282e0dfeff": {
-      "name": "github.repoSlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-9\"}}",
-      "sent": 1
-    },
     "f2563d0882ec": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -1195,11 +1193,6 @@
           "url": "https://x/12"
         }
       }
-    },
-    "f6aef41b070e": {
-      "name": "github.listAssignableUsers#1",
-      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-9\"}}",
-      "sent": 7
     },
     "fd7cf23591a3": {
       "hosted-review": {
@@ -1352,7 +1345,7 @@
         "id": "repo-slug",
         "observation": {
           "sender": ["2638b3063bb1"],
-          "payloads": ["f2282e0dfeff"],
+          "payloads": ["eb6a2b2f507e"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0"
           },
@@ -1364,7 +1357,7 @@
         "id": "hosted-review",
         "observation": {
           "sender": ["2638b3063bb1", "1bdfee368839"],
-          "payloads": ["f2282e0dfeff", "ba3f7a2212a2"],
+          "payloads": ["eb6a2b2f507e", "8cbb79ec0c39"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7"
@@ -1377,7 +1370,7 @@
         "id": "pr-for-branch",
         "observation": {
           "sender": ["2638b3063bb1", "1bdfee368839", "c9cb3ce714a0"],
-          "payloads": ["f2282e0dfeff", "ba3f7a2212a2", "207e61d5e813"],
+          "payloads": ["eb6a2b2f507e", "8cbb79ec0c39", "e323dec040c2"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
@@ -1391,7 +1384,7 @@
         "id": "work-item",
         "observation": {
           "sender": ["2638b3063bb1", "1bdfee368839", "c9cb3ce714a0", "59ec56b0e49c"],
-          "payloads": ["f2282e0dfeff", "ba3f7a2212a2", "207e61d5e813", "4c91dcea8967"],
+          "payloads": ["eb6a2b2f507e", "8cbb79ec0c39", "e323dec040c2", "ba1b866ad599"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
@@ -1413,11 +1406,11 @@
             "4a081d46fc88"
           ],
           "payloads": [
-            "f2282e0dfeff",
-            "ba3f7a2212a2",
-            "207e61d5e813",
-            "4c91dcea8967",
-            "384abd5851d2"
+            "eb6a2b2f507e",
+            "8cbb79ec0c39",
+            "e323dec040c2",
+            "ba1b866ad599",
+            "3b464a1ac1ab"
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
@@ -1442,12 +1435,12 @@
             "9353f049138c"
           ],
           "payloads": [
-            "f2282e0dfeff",
-            "ba3f7a2212a2",
-            "207e61d5e813",
-            "4c91dcea8967",
-            "384abd5851d2",
-            "499ca7b4c13a"
+            "eb6a2b2f507e",
+            "8cbb79ec0c39",
+            "e323dec040c2",
+            "ba1b866ad599",
+            "3b464a1ac1ab",
+            "d08ed4a769f3"
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
@@ -1474,13 +1467,13 @@
             "efcf99a657b9"
           ],
           "payloads": [
-            "f2282e0dfeff",
-            "ba3f7a2212a2",
-            "207e61d5e813",
-            "4c91dcea8967",
-            "384abd5851d2",
-            "499ca7b4c13a",
-            "f6aef41b070e"
+            "eb6a2b2f507e",
+            "8cbb79ec0c39",
+            "e323dec040c2",
+            "ba1b866ad599",
+            "3b464a1ac1ab",
+            "d08ed4a769f3",
+            "3879f5d02dc5"
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",

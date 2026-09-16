@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "92c29bd78ca0c0d5917e9386fc447bb9a1698b1d1ffaba0db7546eaac60da639",
   "scenarioSha256": "c47656a4ca21762e4b5a247ddf9a96efb746bec81e942ffa308a774bab1449e2",
   "platform": "darwin",
@@ -218,11 +218,6 @@
         }
       }
     },
-    "2c2ff4eed497": {
-      "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}",
-      "sent": 1
-    },
     "3e27f9568029": {
       "name": "lastKnownWorktrees",
       "value": [
@@ -245,10 +240,9 @@
       ],
       "sent": 0
     },
-    "43444aeb669c": {
-      "name": "worktree.activate#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}",
-      "sent": 2
+    "4caf7515e224": {
+      "name": "worktree.set#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
     },
     "4f1b109adcc0": {
       "name": "worktree.rm#1",
@@ -350,6 +344,10 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "69d698d4f352": {
+      "name": "worktree.rm#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
     },
     "6e959a9dd70e": {
       "confirmRemoveHost": false,
@@ -601,11 +599,6 @@
       ],
       "sent": 3
     },
-    "ba712c70aeb2": {
-      "name": "worktree.rm#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}",
-      "sent": 3
-    },
     "bb44ad78848e": {
       "name": "optimisticActiveWorktreeIdentity",
       "value": "|wt-1",
@@ -636,6 +629,10 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "c3eecb0c6e96": {
+      "name": "worktree.activate#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
     },
     "ce97d2eedacb": {
       "name": "worktree.rm#1",
@@ -777,7 +774,7 @@
         "id": "host-worktree-actions-pin-open-delete.prelude:pin-optimistic",
         "observation": {
           "sender": ["bf2b36bda2d2"],
-          "payloads": ["2c2ff4eed497"],
+          "payloads": ["4caf7515e224"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a"
@@ -790,7 +787,7 @@
         "id": "host-worktree-actions-pin-open-delete.prelude:delete-optimistic",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "e3e3c397a66a"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -812,7 +809,7 @@
         "id": "host-worktree-actions-pin-open-delete.prelude:cleanup",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "60cb8c68db7d"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -836,7 +833,7 @@
         "id": "host-worktree-actions-pin-open-delete.normal:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "2b635c2a4fbb"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -858,7 +855,7 @@
         "id": "host-worktree-actions-pin-open-delete.result-absent:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "972099c06c75"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -880,7 +877,7 @@
         "id": "host-worktree-actions-pin-open-delete.result-null:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "909c8bc23636"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -902,7 +899,7 @@
         "id": "host-worktree-actions-pin-open-delete.inner-ok-missing:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "ff4c661d50a3"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -924,7 +921,7 @@
         "id": "host-worktree-actions-pin-open-delete.inner-false-string-error:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "4f1b109adcc0"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -946,7 +943,7 @@
         "id": "host-worktree-actions-pin-open-delete.inner-false-object-error:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "11e971c034ae"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -968,7 +965,7 @@
         "id": "host-worktree-actions-pin-open-delete.outer-refused:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "7ce7ff16ad9e"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -992,7 +989,7 @@
         "id": "host-worktree-actions-pin-open-delete.outer-refused-no-message:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "2c0740d2cefb"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -1016,7 +1013,7 @@
         "id": "host-worktree-actions-pin-open-delete.method-not-found:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "86754b292acd"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -1040,7 +1037,7 @@
         "id": "host-worktree-actions-pin-open-delete.transport-rejection:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "ce97d2eedacb"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -1064,7 +1061,7 @@
         "id": "host-worktree-actions-pin-open-delete.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "cf69e8a7e125"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",

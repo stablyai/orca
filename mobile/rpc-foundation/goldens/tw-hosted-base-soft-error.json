@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "451e74a430d2549976fa360a0e43e76a8d855b1470b8e313797019770ceca4cb",
   "platform": "darwin",
@@ -13,10 +13,13 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "65f985665d42": {
+    "0e24d2a37a0d": {
+      "name": "worktree.resolvePrBase#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
+    },
+    "69afcaf1cb72": {
       "name": "worktree.resolveMrBase#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}",
-      "sent": 2
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}"
     },
     "723a115a3810": {
       "name": "worktree.resolveMrBase#1",
@@ -52,11 +55,6 @@
           }
         }
       }
-    },
-    "95d2391d09f2": {
-      "name": "worktree.resolvePrBase#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}",
-      "sent": 1
     },
     "ae0c82b12f2a": {
       "status": "rejected",
@@ -125,7 +123,7 @@
         "id": "in-band-error",
         "observation": {
           "sender": ["eb01c2306db5"],
-          "payloads": ["95d2391d09f2"],
+          "payloads": ["0e24d2a37a0d"],
           "settlements": {
             "pr": "ae0c82b12f2a"
           },
@@ -137,7 +135,7 @@
         "id": "in-band-empty-error",
         "observation": {
           "sender": ["eb01c2306db5", "723a115a3810"],
-          "payloads": ["95d2391d09f2", "65f985665d42"],
+          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
           "settlements": {
             "pr": "ae0c82b12f2a",
             "mr": "f3b516f62081"

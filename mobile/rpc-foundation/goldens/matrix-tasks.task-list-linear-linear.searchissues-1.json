@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "c589700af145f58c37292dafb891b3b7d50302fd4ec044155c044ccd48f79c74",
   "platform": "darwin",
@@ -214,11 +214,6 @@
       "loading": false,
       "refreshing": false
     },
-    "2fa05a58f1ae": {
-      "name": "linear.listIssues#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}",
-      "sent": 1
-    },
     "3133fa990514": {
       "name": "items",
       "value": [],
@@ -325,6 +320,10 @@
           ]
         }
       }
+    },
+    "5b8a2e3e390d": {
+      "name": "linear.listIssues#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
     "5c2874ad80bc": {
       "name": "error",
@@ -438,6 +437,10 @@
           }
         }
       }
+    },
+    "8780e3ee6661": {
+      "name": "linear.searchIssues#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
     "8fc99972bdd2": {
       "name": "linear.searchIssues#1",
@@ -700,11 +703,6 @@
       "value": "",
       "sent": 2
     },
-    "b83b4bb2ab33": {
-      "name": "linear.searchIssues#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}",
-      "sent": 2
-    },
     "be487c948252": {
       "name": "error",
       "value": "Unexpected Linear tasks response",
@@ -817,7 +815,7 @@
         "id": "tk-list-linear.prelude:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb"],
-          "payloads": ["2fa05a58f1ae"],
+          "payloads": ["5b8a2e3e390d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
@@ -836,7 +834,7 @@
         "id": "tk-list-linear.prelude:set-query-done",
         "observation": {
           "sender": ["86aeb72f48eb"],
-          "payloads": ["2fa05a58f1ae"],
+          "payloads": ["5b8a2e3e390d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -856,7 +854,7 @@
         "id": "tk-list-linear.prelude:cleanup",
         "observation": {
           "sender": ["86aeb72f48eb", "0d2639e26cc5"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -883,7 +881,7 @@
         "id": "tk-list-linear.normal:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "5494ca4c103e"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -909,7 +907,7 @@
         "id": "tk-list-linear.result-absent:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "a45f546835a8"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -936,7 +934,7 @@
         "id": "tk-list-linear.result-null:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "e04d208486e7"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -963,7 +961,7 @@
         "id": "tk-list-linear.inner-ok-missing:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "8fc99972bdd2"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -990,7 +988,7 @@
         "id": "tk-list-linear.inner-false-string-error:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "0f4daa370be3"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -1017,7 +1015,7 @@
         "id": "tk-list-linear.inner-false-object-error:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "ad3c905e6ecc"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -1044,7 +1042,7 @@
         "id": "tk-list-linear.outer-refused:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "2c8d737b5665"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -1071,7 +1069,7 @@
         "id": "tk-list-linear.outer-refused-no-message:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "14b2c61abd6c"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -1098,7 +1096,7 @@
         "id": "tk-list-linear.method-not-found:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "94a885e6f790"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -1125,7 +1123,7 @@
         "id": "tk-list-linear.transport-rejection:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "99e5be0a1b11"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -1152,7 +1150,7 @@
         "id": "tk-list-linear.transport-rejection-no-message:load-settled",
         "observation": {
           "sender": ["86aeb72f48eb", "0914e9c666b1"],
-          "payloads": ["2fa05a58f1ae", "b83b4bb2ab33"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
   "scenarioSha256": "64a7af1bfac25dfe673832ef0ef7776be8d1a628c995eafd938fa3ad11d7ba0f",
   "platform": "darwin",
@@ -59,6 +59,10 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
+    },
+    "132591a733d1": {
+      "name": "gitlab.updateIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"updates\":{\"state\":\"closed\"},\"projectRef\":\"group/project\"}}"
     },
     "13b233a5bc5a": {
       "name": "itemRemoveAssigneesDraft",
@@ -334,6 +338,10 @@
         }
       }
     },
+    "71cb3feddd6c": {
+      "name": "github.updateIssue#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"title\":\"Renamed\",\"addLabels\":[\"triage\"],\"removeLabels\":[\"bug\"]}}}"
+    },
     "74c6c47d6a72": {
       "name": "gitlab.updateIssue#1",
       "args": [
@@ -408,11 +416,6 @@
           "ok": false
         }
       }
-    },
-    "75f13d97f25f": {
-      "name": "github.updateIssue#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"title\":\"Renamed\",\"addLabels\":[\"triage\"],\"removeLabels\":[\"bug\"]}}}",
-      "sent": 2
     },
     "779cb33e2c39": {
       "name": "gitlab.updateIssue#1",
@@ -492,11 +495,6 @@
       "name": "mutatingStatus",
       "value": false,
       "sent": 2
-    },
-    "948d1db5279c": {
-      "name": "gitlab.updateIssue#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"updates\":{\"state\":\"closed\"},\"projectRef\":\"group/project\"}}",
-      "sent": 1
     },
     "9999466f95f3": {
       "name": "detailPayload",
@@ -1063,7 +1061,7 @@
         "id": "tk-item-status-gitlab.normal:gitlab-status-settled",
         "observation": {
           "sender": ["779cb33e2c39"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1076,7 +1074,7 @@
         "id": "tk-item-status-gitlab.normal:github-metadata-settled",
         "observation": {
           "sender": ["779cb33e2c39", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1105,7 +1103,7 @@
         "id": "tk-item-status-gitlab.result-absent:gitlab-status-settled",
         "observation": {
           "sender": ["c2492936b676"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1118,7 +1116,7 @@
         "id": "tk-item-status-gitlab.result-absent:github-metadata-settled",
         "observation": {
           "sender": ["c2492936b676", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1147,7 +1145,7 @@
         "id": "tk-item-status-gitlab.result-null:gitlab-status-settled",
         "observation": {
           "sender": ["21940eac2e09"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1160,7 +1158,7 @@
         "id": "tk-item-status-gitlab.result-null:github-metadata-settled",
         "observation": {
           "sender": ["21940eac2e09", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1189,7 +1187,7 @@
         "id": "tk-item-status-gitlab.inner-ok-missing:gitlab-status-settled",
         "observation": {
           "sender": ["e051b754feec"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1202,7 +1200,7 @@
         "id": "tk-item-status-gitlab.inner-ok-missing:github-metadata-settled",
         "observation": {
           "sender": ["e051b754feec", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1231,7 +1229,7 @@
         "id": "tk-item-status-gitlab.inner-false-string-error:gitlab-status-settled",
         "observation": {
           "sender": ["4e1886bc3875"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1244,7 +1242,7 @@
         "id": "tk-item-status-gitlab.inner-false-string-error:github-metadata-settled",
         "observation": {
           "sender": ["4e1886bc3875", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1273,7 +1271,7 @@
         "id": "tk-item-status-gitlab.inner-false-object-error:gitlab-status-settled",
         "observation": {
           "sender": ["63b0ae8ff253"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1286,7 +1284,7 @@
         "id": "tk-item-status-gitlab.inner-false-object-error:github-metadata-settled",
         "observation": {
           "sender": ["63b0ae8ff253", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1315,7 +1313,7 @@
         "id": "tk-item-status-gitlab.outer-refused:gitlab-status-settled",
         "observation": {
           "sender": ["22919860bacb"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1328,7 +1326,7 @@
         "id": "tk-item-status-gitlab.outer-refused:github-metadata-settled",
         "observation": {
           "sender": ["22919860bacb", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1357,7 +1355,7 @@
         "id": "tk-item-status-gitlab.outer-refused-no-message:gitlab-status-settled",
         "observation": {
           "sender": ["755d2a2dffe0"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1370,7 +1368,7 @@
         "id": "tk-item-status-gitlab.outer-refused-no-message:github-metadata-settled",
         "observation": {
           "sender": ["755d2a2dffe0", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1399,7 +1397,7 @@
         "id": "tk-item-status-gitlab.method-not-found:gitlab-status-settled",
         "observation": {
           "sender": ["17f5e522f786"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1412,7 +1410,7 @@
         "id": "tk-item-status-gitlab.method-not-found:github-metadata-settled",
         "observation": {
           "sender": ["17f5e522f786", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1441,7 +1439,7 @@
         "id": "tk-item-status-gitlab.transport-rejection:gitlab-status-settled",
         "observation": {
           "sender": ["74c6c47d6a72"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1454,7 +1452,7 @@
         "id": "tk-item-status-gitlab.transport-rejection:github-metadata-settled",
         "observation": {
           "sender": ["74c6c47d6a72", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",
@@ -1483,7 +1481,7 @@
         "id": "tk-item-status-gitlab.transport-rejection-no-message:gitlab-status-settled",
         "observation": {
           "sender": ["2e2e489860b5"],
-          "payloads": ["948d1db5279c"],
+          "payloads": ["132591a733d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
@@ -1496,7 +1494,7 @@
         "id": "tk-item-status-gitlab.transport-rejection-no-message:github-metadata-settled",
         "observation": {
           "sender": ["2e2e489860b5", "9fb1b1ad3675"],
-          "payloads": ["948d1db5279c", "75f13d97f25f"],
+          "payloads": ["132591a733d1", "71cb3feddd6c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a",

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "485b2751006ee8fb4df28b228ea7adda85779feae83974eb0f7e795e31c500a1",
   "platform": "darwin",
@@ -281,6 +281,10 @@
         }
       }
     },
+    "5e330d49c396": {
+      "name": "git.status#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
     "6decf368b25a": {
       "committed": "uncommitted",
       "status": {
@@ -413,11 +417,6 @@
           }
         }
       }
-    },
-    "96e616bda11d": {
-      "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 1
     },
     "a947768bc0ed": {
       "status": "rejected",
@@ -676,7 +675,7 @@
         "id": "sc-review-status-normalized.prelude:pending",
         "observation": {
           "sender": ["0278e0f0d6cf"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "9270aeb7d9c6"
           },
@@ -688,7 +687,7 @@
         "id": "sc-review-status-normalized.normal:settled",
         "observation": {
           "sender": ["302b94359544"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "c7ee072b3a0f"
           },
@@ -700,7 +699,7 @@
         "id": "sc-review-status-normalized.result-absent:settled",
         "observation": {
           "sender": ["ded34c45400d"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "da676cfabd9b"
           },
@@ -712,7 +711,7 @@
         "id": "sc-review-status-normalized.result-null:settled",
         "observation": {
           "sender": ["de6ba431eb6a"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "da676cfabd9b"
           },
@@ -724,7 +723,7 @@
         "id": "sc-review-status-normalized.inner-ok-missing:settled",
         "observation": {
           "sender": ["85dbdff1cd63"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "da676cfabd9b"
           },
@@ -736,7 +735,7 @@
         "id": "sc-review-status-normalized.inner-false-string-error:settled",
         "observation": {
           "sender": ["14d2bbeaba4d"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "da676cfabd9b"
           },
@@ -748,7 +747,7 @@
         "id": "sc-review-status-normalized.inner-false-object-error:settled",
         "observation": {
           "sender": ["e10b4a9e84d2"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "da676cfabd9b"
           },
@@ -760,7 +759,7 @@
         "id": "sc-review-status-normalized.outer-refused:settled",
         "observation": {
           "sender": ["18d8663eabd9"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "1b2778bf67a2"
           },
@@ -772,7 +771,7 @@
         "id": "sc-review-status-normalized.outer-refused-no-message:settled",
         "observation": {
           "sender": ["41689f68ece0"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "23426bcb23a5"
           },
@@ -784,7 +783,7 @@
         "id": "sc-review-status-normalized.method-not-found:settled",
         "observation": {
           "sender": ["483a7fd348d4"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "fa93ca01f266"
           },
@@ -796,7 +795,7 @@
         "id": "sc-review-status-normalized.transport-rejection:settled",
         "observation": {
           "sender": ["0bd335404e92"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "a947768bc0ed"
           },
@@ -808,7 +807,7 @@
         "id": "sc-review-status-normalized.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["dd13d6753285"],
-          "payloads": ["96e616bda11d"],
+          "payloads": ["5e330d49c396"],
           "settlements": {
             "status": "c7584e82c72f"
           },

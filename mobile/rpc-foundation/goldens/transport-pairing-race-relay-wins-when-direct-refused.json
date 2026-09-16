@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "a34ffec446f9bbc465bd3f7d0a43166c9bc221a6ece8714e0b5717169625cf43",
   "platform": "darwin",
@@ -13,6 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
     "36caf183b988": {
       "name": "status.get#2",
       "args": [
@@ -86,11 +90,6 @@
         }
       }
     },
-    "63ab1563ba51": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
-    },
     "a7d5becc0aed": {
       "outcome": "relay"
     },
@@ -99,10 +98,9 @@
       "value": "direct",
       "sent": 2
     },
-    "b33a14df0df6": {
+    "c0c86e67c300": {
       "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -112,7 +110,7 @@
         "id": "relay-wins",
         "observation": {
           "sender": ["4b5a09699ceb", "36caf183b988"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300"],
           "settlements": {
             "race": "416024b9c436"
           },

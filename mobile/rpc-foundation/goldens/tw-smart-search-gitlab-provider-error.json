@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "4537bf83f7a030521eec549adf4490da5be183471d5a9f9e58b71815b29481ff",
   "platform": "darwin",
@@ -14,6 +14,10 @@
   "goldenFormatVersion": 5,
   "values": {
     "44136fa355b3": {},
+    "46027e62015d": {
+      "name": "repo.searchRefs#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
+    },
     "51e012c25ebf": {
       "branches": [
         {
@@ -62,11 +66,6 @@
         }
       }
     },
-    "5f5d42cbb59c": {
-      "name": "gitlab.listWorkItems#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"state\":\"opened\",\"page\":1,\"perPage\":50,\"query\":\"bug\"}}",
-      "sent": 1
-    },
     "791f6fc629fc": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -77,6 +76,10 @@
           "refName": "origin/main"
         }
       ]
+    },
+    "86057be07bd0": {
+      "name": "gitlab.listWorkItems#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"state\":\"opened\",\"page\":1,\"perPage\":50,\"query\":\"bug\"}}"
     },
     "97c2301d5d8c": {
       "name": "gitlab.listWorkItems#1",
@@ -119,11 +122,6 @@
         }
       }
     },
-    "bc245469b086": {
-      "name": "repo.searchRefs#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}",
-      "sent": 2
-    },
     "bf7ab976b200": {
       "status": "rejected",
       "startedAt": 0,
@@ -142,7 +140,7 @@
         "id": "in-band-provider-error",
         "observation": {
           "sender": ["97c2301d5d8c"],
-          "payloads": ["5f5d42cbb59c"],
+          "payloads": ["86057be07bd0"],
           "settlements": {
             "gitlab": "bf7ab976b200"
           },
@@ -154,7 +152,7 @@
         "id": "branch-ref-details",
         "observation": {
           "sender": ["97c2301d5d8c", "522d9e5c292e"],
-          "payloads": ["5f5d42cbb59c", "bc245469b086"],
+          "payloads": ["86057be07bd0", "46027e62015d"],
           "settlements": {
             "gitlab": "bf7ab976b200",
             "branches": "791f6fc629fc"

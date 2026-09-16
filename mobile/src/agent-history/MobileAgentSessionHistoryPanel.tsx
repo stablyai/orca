@@ -15,9 +15,9 @@ import { useRouter } from 'expo-router'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useHostClient } from '../transport/client-context'
-import type { RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -88,12 +88,14 @@ export function MobileAgentSessionHistoryPanel({
     let cancelled = false
     void (async () => {
       try {
-        const worktreeResponse = await client.sendRequest('worktree.ps', { limit: 10000 })
+        const worktreeReply = await worktreeCatalogRead.request(client, { limit: 10000 })
         if (cancelled) {
           return
         }
-        if (worktreeResponse.ok) {
-          const result = (worktreeResponse as RpcSuccess).result as { worktrees: Worktree[] }
+        const catalog = worktreeCatalogRead.interpret(worktreeReply)
+        if (catalog.accepted) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          const result = catalog.value as { worktrees: Worktree[] }
           setWorktrees(result.worktrees)
         }
       } catch {

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "39451d3c811068754f91ac243fe1208f4ce742df53261314345d8209ba761e94",
   "platform": "darwin",
@@ -202,6 +202,10 @@
         }
       }
     },
+    "37921d9fdeb7": {
+      "name": "preflight.detectRemoteAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
     "43ead075ce12": {
       "agent": "claude",
       "connecting": false,
@@ -266,11 +270,6 @@
         "message": "Cannot read properties of null (reading 'hooks')",
         "isRpcDeliveryUnknown": false
       }
-    },
-    "6ec9160ebc42": {
-      "name": "preflight.detectRemoteAgents#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
-      "sent": 1
     },
     "70a84db3f870": {
       "name": "repo.hooks#1",
@@ -384,6 +383,10 @@
           "ok": false
         }
       }
+    },
+    "7c9498659f58": {
+      "name": "ssh.connect#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
     },
     "7e1d82e5b5ed": {
       "agent": "claude",
@@ -568,11 +571,6 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "c461e0bfea7c": {
-      "name": "ssh.connect#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}",
-      "sent": 2
-    },
     "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
@@ -595,11 +593,6 @@
       },
       "sent": 0
     },
-    "e02697448559": {
-      "name": "repo.hooks#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}",
-      "sent": 3
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -607,6 +600,10 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f0a9f62da106": {
+      "name": "repo.hooks#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
     "f21c4f69fe5a": {
       "status": "rejected",
@@ -699,7 +696,7 @@
         "id": "tw-workspace-ssh-connected.prelude:agents-detected",
         "observation": {
           "sender": ["17e35b25d15d"],
-          "payloads": ["6ec9160ebc42"],
+          "payloads": ["37921d9fdeb7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -711,7 +708,7 @@
         "id": "tw-workspace-ssh-connected.prelude:connected",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
@@ -733,7 +730,7 @@
         "id": "tw-workspace-ssh-connected.normal:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "80a4af19f556"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -756,7 +753,7 @@
         "id": "tw-workspace-ssh-connected.result-absent:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "f7b1983b91e9"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -779,7 +776,7 @@
         "id": "tw-workspace-ssh-connected.result-null:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "ff43290f6836"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -802,7 +799,7 @@
         "id": "tw-workspace-ssh-connected.inner-ok-missing:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "5278c299d57a"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -825,7 +822,7 @@
         "id": "tw-workspace-ssh-connected.inner-false-string-error:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "02800add9d11"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -848,7 +845,7 @@
         "id": "tw-workspace-ssh-connected.inner-false-object-error:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "8c3bb432df5b"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -871,7 +868,7 @@
         "id": "tw-workspace-ssh-connected.outer-refused:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "7c7a826833e0"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -894,7 +891,7 @@
         "id": "tw-workspace-ssh-connected.outer-refused-no-message:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "1fcb0efb54e8"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -917,7 +914,7 @@
         "id": "tw-workspace-ssh-connected.method-not-found:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "70a84db3f870"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -940,7 +937,7 @@
         "id": "tw-workspace-ssh-connected.transport-rejection:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "941b6aeb0d6f"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -963,7 +960,7 @@
         "id": "tw-workspace-ssh-connected.transport-rejection-no-message:setup-prompted",
         "observation": {
           "sender": ["17e35b25d15d", "71d817ffdd81", "33cfd55c1890"],
-          "payloads": ["6ec9160ebc42", "c461e0bfea7c", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",

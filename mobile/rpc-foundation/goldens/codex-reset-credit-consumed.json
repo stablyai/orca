@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "76b53dea504a688493843e23e8e7d052fc196f559bb1e2579d0fd38bf3156d0e",
   "scenarioSha256": "00260be9809576607ac91bfacd9fa6cc4f8a190c6b88804c977ea07d36d7162e",
   "platform": "darwin",
@@ -17,11 +17,6 @@
       "settled": {
         "$rpc": "null"
       }
-    },
-    "31c5054bc660": {
-      "name": "accounts.consumeCodexResetCredit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}",
-      "sent": 1
     },
     "60304d1e19bb": {
       "settled": {
@@ -68,6 +63,10 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "95625d997965": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}"
     },
     "ab755576c214": {
       "name": "device-store.setItem",
@@ -264,7 +263,7 @@
         "id": "requested",
         "observation": {
           "sender": ["90f55bfe00c2"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "9270aeb7d9c6"
           },
@@ -276,7 +275,7 @@
         "id": "consumed",
         "observation": {
           "sender": ["c4a98628ea44"],
-          "payloads": ["31c5054bc660"],
+          "payloads": ["95625d997965"],
           "settlements": {
             "confirm": "fed9e1669a83"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "3453024581230908d1e0e9335f5310e7b4ae03faf50d93654b9ff28c464fb95f",
   "platform": "darwin",
@@ -89,11 +89,6 @@
         }
       }
     },
-    "14b354ce0ded": {
-      "name": "ssh.getState#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}",
-      "sent": 1
-    },
     "14db652edf02": {
       "name": "ssh.getState#1",
       "args": [
@@ -123,11 +118,6 @@
           "ok": true
         }
       }
-    },
-    "15dd622cbe08": {
-      "name": "repo.saveSparsePreset#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}",
-      "sent": 2
     },
     "1db4236fbf9f": {
       "name": "workspaceSshState",
@@ -765,6 +755,14 @@
         "targetId": "ssh-1"
       }
     },
+    "f9dfbe0c0ea7": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "fd758406cc2c": {
+      "name": "repo.saveSparsePreset#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
+    },
     "ff6c3161dcc7": {
       "name": "ssh.getState#1",
       "args": [
@@ -807,7 +805,7 @@
         "id": "tw-workspace-sparse-saved.normal:ssh-state-read",
         "observation": {
           "sender": ["89aa7a3bd619"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -819,7 +817,7 @@
         "id": "tw-workspace-sparse-saved.normal:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -841,7 +839,7 @@
         "id": "tw-workspace-sparse-saved.result-absent:ssh-state-read",
         "observation": {
           "sender": ["14db652edf02"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -853,7 +851,7 @@
         "id": "tw-workspace-sparse-saved.result-absent:preset-saved",
         "observation": {
           "sender": ["14db652edf02", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -875,7 +873,7 @@
         "id": "tw-workspace-sparse-saved.result-null:ssh-state-read",
         "observation": {
           "sender": ["0eabd872f405"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -887,7 +885,7 @@
         "id": "tw-workspace-sparse-saved.result-null:preset-saved",
         "observation": {
           "sender": ["0eabd872f405", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -909,7 +907,7 @@
         "id": "tw-workspace-sparse-saved.inner-ok-missing:ssh-state-read",
         "observation": {
           "sender": ["0a16839c6f87"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -921,7 +919,7 @@
         "id": "tw-workspace-sparse-saved.inner-ok-missing:preset-saved",
         "observation": {
           "sender": ["0a16839c6f87", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -943,7 +941,7 @@
         "id": "tw-workspace-sparse-saved.inner-false-string-error:ssh-state-read",
         "observation": {
           "sender": ["b09dd4915f43"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -955,7 +953,7 @@
         "id": "tw-workspace-sparse-saved.inner-false-string-error:preset-saved",
         "observation": {
           "sender": ["b09dd4915f43", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -977,7 +975,7 @@
         "id": "tw-workspace-sparse-saved.inner-false-object-error:ssh-state-read",
         "observation": {
           "sender": ["e18278fce524"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -989,7 +987,7 @@
         "id": "tw-workspace-sparse-saved.inner-false-object-error:preset-saved",
         "observation": {
           "sender": ["e18278fce524", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -1011,7 +1009,7 @@
         "id": "tw-workspace-sparse-saved.outer-refused:ssh-state-read",
         "observation": {
           "sender": ["d0fad8f739ca"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1023,7 +1021,7 @@
         "id": "tw-workspace-sparse-saved.outer-refused:preset-saved",
         "observation": {
           "sender": ["d0fad8f739ca", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -1045,7 +1043,7 @@
         "id": "tw-workspace-sparse-saved.outer-refused-no-message:ssh-state-read",
         "observation": {
           "sender": ["ff6c3161dcc7"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1057,7 +1055,7 @@
         "id": "tw-workspace-sparse-saved.outer-refused-no-message:preset-saved",
         "observation": {
           "sender": ["ff6c3161dcc7", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -1079,7 +1077,7 @@
         "id": "tw-workspace-sparse-saved.method-not-found:ssh-state-read",
         "observation": {
           "sender": ["b705ba88a562"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1091,7 +1089,7 @@
         "id": "tw-workspace-sparse-saved.method-not-found:preset-saved",
         "observation": {
           "sender": ["b705ba88a562", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -1113,7 +1111,7 @@
         "id": "tw-workspace-sparse-saved.transport-rejection:ssh-state-read",
         "observation": {
           "sender": ["2d910059043a"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1125,7 +1123,7 @@
         "id": "tw-workspace-sparse-saved.transport-rejection:preset-saved",
         "observation": {
           "sender": ["2d910059043a", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -1147,7 +1145,7 @@
         "id": "tw-workspace-sparse-saved.transport-rejection-no-message:ssh-state-read",
         "observation": {
           "sender": ["f36f17f8d448"],
-          "payloads": ["14b354ce0ded"],
+          "payloads": ["f9dfbe0c0ea7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1159,7 +1157,7 @@
         "id": "tw-workspace-sparse-saved.transport-rejection-no-message:preset-saved",
         "observation": {
           "sender": ["f36f17f8d448", "5c44ff5f6877"],
-          "payloads": ["14b354ce0ded", "15dd622cbe08"],
+          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"

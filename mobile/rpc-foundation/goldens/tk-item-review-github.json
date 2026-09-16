@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "3ba358ff7b6a95d9158257225483f77578dfa10c8643cdf89f8a81e0022997e9",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "03f32ac43ec3": {
-      "name": "github.prChecks#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"noCache\":true}}",
-      "sent": 2
-    },
     "0879b3f9a393": {
       "name": "itemReviewersDraft",
       "value": "",
@@ -54,11 +49,6 @@
           "title": "A pull request"
         }
       ],
-      "sent": 1
-    },
-    "15f7c99a18fb": {
-      "name": "github.requestPRReviewers#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}",
       "sent": 1
     },
     "1a20f26b6a0f": {
@@ -124,6 +114,14 @@
       "name": "mutatingStatus",
       "value": false,
       "sent": 1
+    },
+    "4fdc894b14c6": {
+      "name": "github.prChecks#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"noCache\":true}}"
+    },
+    "53b8bc3863fe": {
+      "name": "github.requestPRReviewers#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
     },
     "583b546bd557": {
       "name": "mutatingStatus",
@@ -608,7 +606,7 @@
         "id": "reviewers-settled",
         "observation": {
           "sender": ["d4d38f1bf018"],
-          "payloads": ["15f7c99a18fb"],
+          "payloads": ["53b8bc3863fe"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a"
@@ -629,7 +627,7 @@
         "id": "checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "8e390a30a275"],
-          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
+          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "2e3d939dc162dbc5a38d8a7207111688204a825fd70348721917b3016e1c9470",
   "scenarioSha256": "90f49e430518bfc6e662da1d0c55b0084f30ab54dabdd15293b1f8ad9d2fa592",
   "platform": "darwin",
@@ -19,10 +19,13 @@
       "settledAt": 0,
       "value": true
     },
-    "aff6f3c3c1c1": {
+    "95f8386a206f": {
+      "name": "notifications.registerPush#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
+    },
+    "acb7d3830175": {
       "name": "notifications.unregisterPush#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unregisterPush\",\"params\":null}",
-      "sent": 2
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unregisterPush\",\"params\":null}"
     },
     "b39a27f847f4": {
       "name": "notifications.unregisterPush#1",
@@ -101,11 +104,6 @@
     "deec5cecd49f": {
       "register": true,
       "unregister": true
-    },
-    "e45f138ab181": {
-      "name": "notifications.registerPush#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -115,7 +113,7 @@
         "id": "settled",
         "observation": {
           "sender": ["d30fd4b61f0c", "b39a27f847f4"],
-          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
+          "payloads": ["95f8386a206f", "acb7d3830175"],
           "settlements": {
             "register": "84e5ca07cb7a",
             "unregister": "84e5ca07cb7a"

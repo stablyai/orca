@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "69c1c20ea667a2b6a5b53aeb3d9af11b2b707e04086e15ee4ff9e954b1701851",
   "platform": "darwin",
@@ -58,10 +58,9 @@
         }
       }
     },
-    "f98fd51d5ce2": {
+    "f7f1557b866b": {
       "name": "speech.models.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}"
     }
   },
   "recording": {
@@ -71,7 +70,7 @@
         "id": "denied",
         "observation": {
           "sender": ["db814c0e0956"],
-          "payloads": ["f98fd51d5ce2"],
+          "payloads": ["f7f1557b866b"],
           "settlements": {
             "list": "100447f8b483"
           },

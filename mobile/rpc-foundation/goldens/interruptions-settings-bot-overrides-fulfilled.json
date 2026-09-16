@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "2d5c6dea28aa1a7bb9e4aa14a4c8441527d9ad401ad30161f05ea1f8da836bb2",
   "platform": "darwin",
@@ -75,10 +75,9 @@
       }
     },
     "4f53cda18c2b": [],
-    "5c52bc3f9e55": {
+    "7ddcb1852b39": {
       "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "7fc945a92540": {
       "name": "settings.get#1",
@@ -158,7 +157,7 @@
         "id": "settings-bot-overrides-fulfilled.prelude:settings-pending",
         "observation": {
           "sender": ["090c88478661"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -170,7 +169,7 @@
         "id": "settings-bot-overrides-fulfilled.timeout:interrupted",
         "observation": {
           "sender": ["7fc945a92540"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -182,7 +181,7 @@
         "id": "settings-bot-overrides-fulfilled.timeout:settled",
         "observation": {
           "sender": ["7fc945a92540"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -194,7 +193,7 @@
         "id": "settings-bot-overrides-fulfilled.disconnect:interrupted",
         "observation": {
           "sender": ["af6903aed166"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "disconnect": "eb79a9b3682a"
@@ -207,7 +206,7 @@
         "id": "settings-bot-overrides-fulfilled.disconnect:settled",
         "observation": {
           "sender": ["af6903aed166"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "disconnect": "eb79a9b3682a"
@@ -220,7 +219,7 @@
         "id": "settings-bot-overrides-fulfilled.cutover:interrupted",
         "observation": {
           "sender": ["06eff8247d02"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
@@ -233,7 +232,7 @@
         "id": "settings-bot-overrides-fulfilled.cutover:settled",
         "observation": {
           "sender": ["06eff8247d02"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"

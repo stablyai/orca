@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
   "scenarioSha256": "c858cfca59148548146b4c0a775e9518d3ab826ef268ccc9af60b04e52cc9e3d",
   "platform": "darwin",
@@ -79,11 +79,6 @@
         }
       }
     },
-    "44751250aabd": {
-      "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}",
-      "sent": 1
-    },
     "6bdf0d77510f": {
       "actionError": "Workspace is locked",
       "busyAction": {
@@ -117,6 +112,10 @@
         "$rpc": "null"
       }
     },
+    "9a5a5e546290": {
+      "name": "worktree.set#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}"
+    },
     "b914541ed9b0": {
       "status": "rejected",
       "startedAt": 0,
@@ -135,7 +134,7 @@
         "id": "rolled-back",
         "observation": {
           "sender": ["29ae38d1c0cf"],
-          "payloads": ["44751250aabd"],
+          "payloads": ["9a5a5e546290"],
           "settlements": {
             "mark-reviewed": "b914541ed9b0"
           },

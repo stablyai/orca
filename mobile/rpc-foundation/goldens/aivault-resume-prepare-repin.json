@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "6719aea706086a68709894546f9595264407db2df94fa56180cb3c68b08aaa69",
   "platform": "darwin",
@@ -35,10 +35,9 @@
         "filePath": "/sessions/rollout.jsonl"
       }
     },
-    "770627dbd25d": {
+    "9a6c365d544f": {
       "name": "aiVault.prepareSessionResume#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}"
     },
     "d8803e70463f": {
       "name": "aiVault.prepareSessionResume#1",
@@ -85,7 +84,7 @@
         "id": "repinned",
         "observation": {
           "sender": ["d8803e70463f"],
-          "payloads": ["770627dbd25d"],
+          "payloads": ["9a6c365d544f"],
           "settlements": {
             "prepare": "15e10cea84b9"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
   "scenarioSha256": "2f0a6aa8ce100edbce9ccf64c81efe64356fccbdcd2e16f561360e2b11b5700f",
   "platform": "darwin",
@@ -47,6 +47,10 @@
       "sendSheet": {
         "$rpc": "null"
       }
+    },
+    "47164a430928": {
+      "name": "files.openDiff#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.openDiff\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\",\"staged\":false}}"
     },
     "aefdadd223ee": {
       "name": "files.openDiff#1",
@@ -91,11 +95,6 @@
         "$rpc": "undefined"
       }
     },
-    "ed424c831c19": {
-      "name": "files.openDiff#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.openDiff\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\",\"staged\":false}}",
-      "sent": 1
-    },
     "f08ae8feb9a9": {
       "name": "open-session",
       "value": {},
@@ -109,7 +108,7 @@
         "id": "opened",
         "observation": {
           "sender": ["aefdadd223ee"],
-          "payloads": ["ed424c831c19"],
+          "payloads": ["47164a430928"],
           "settlements": {
             "open-in-session": "eb79a9b3682a"
           },

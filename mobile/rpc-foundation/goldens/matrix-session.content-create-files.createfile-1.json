@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "06bf92360e6985770c08a9e53be0f55b6e8ff120d4e6411dacc22e88d08cef32",
   "platform": "darwin",
@@ -71,6 +71,14 @@
         "$rpc": "null"
       }
     },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "37cca55d53d5": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}"
+    },
     "4267c22fd1f9": {
       "name": "files.createFile#1",
       "args": [
@@ -105,11 +113,6 @@
           }
         }
       }
-    },
-    "4c5f889d4eb7": {
-      "name": "files.createFile#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}",
-      "sent": 3
     },
     "57c499bb588a": {
       "name": "files.createFile#1",
@@ -262,11 +265,6 @@
         }
       }
     },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
     "858443742ca1": {
       "createError": "Failed to create markdown note",
       "creatingBrowser": false,
@@ -316,6 +314,10 @@
           }
         }
       }
+    },
+    "9199aee60486": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
     },
     "9692063e7d70": {
       "name": "toast",
@@ -471,11 +473,6 @@
         }
       }
     },
-    "ca3214963232": {
-      "name": "files.open#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}",
-      "sent": 4
-    },
     "d38c135a5752": {
       "name": "files.open#1",
       "args": [
@@ -587,6 +584,10 @@
         }
       }
     },
+    "e344f453f8a0": {
+      "name": "files.createFile#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}"
+    },
     "e6b6cf30c6ee": {
       "createError": "Unknown method",
       "creatingBrowser": false,
@@ -594,11 +595,6 @@
       "pendingBrowserFocusPageId": {
         "$rpc": "null"
       }
-    },
-    "e7e6fb5e264b": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
-      "sent": 2
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -616,7 +612,7 @@
         "id": "session-create-markdown-note.normal:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "4267c22fd1f9", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -628,7 +624,7 @@
         "id": "session-create-markdown-note.result-absent:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "6dbcdf95b6b6", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -640,7 +636,7 @@
         "id": "session-create-markdown-note.result-null:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "77c6fe7dd40b", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -652,7 +648,7 @@
         "id": "session-create-markdown-note.inner-ok-missing:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "97472d30cdaa", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -664,7 +660,7 @@
         "id": "session-create-markdown-note.inner-false-string-error:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "b8e28a0d1137", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -676,7 +672,7 @@
         "id": "session-create-markdown-note.inner-false-object-error:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "134529524560", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -688,7 +684,7 @@
         "id": "session-create-markdown-note.outer-refused:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "71b67af3c605"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -700,7 +696,7 @@
         "id": "session-create-markdown-note.outer-refused-no-message:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "d3f9329bc046"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -712,7 +708,7 @@
         "id": "session-create-markdown-note.method-not-found:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "b48dafba8627"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -724,7 +720,7 @@
         "id": "session-create-markdown-note.transport-rejection:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "57c499bb588a"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -736,7 +732,7 @@
         "id": "session-create-markdown-note.transport-rejection-no-message:created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "de7d988ecdc7"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },

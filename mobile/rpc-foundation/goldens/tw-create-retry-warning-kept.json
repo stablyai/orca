@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "f469b2b7d61e7fc500fa97b5548f5a3732b0dbcdb405412a514a609f786dfbb5",
   "platform": "darwin",
@@ -13,6 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "43a221c63628": {
+      "name": "worktree.create#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
+    },
     "6ad759c47a41": {
       "name": "worktree.create#1",
       "args": [
@@ -61,11 +65,6 @@
         "worktreeId": "repo-1::/w"
       }
     },
-    "de75bbf6c762": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}",
-      "sent": 1
-    },
     "f800fc04633e": {
       "outcome": {
         "name": "kestrel",
@@ -81,7 +80,7 @@
         "id": "created-with-warning",
         "observation": {
           "sender": ["6ad759c47a41"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "97555d579c32"
           },

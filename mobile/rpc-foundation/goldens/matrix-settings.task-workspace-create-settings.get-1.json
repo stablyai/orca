@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "7e4c5bb29e0f630cda8a09233575b9295e485f3d3e315ebdc0458c69515fcfc7",
   "platform": "darwin",
@@ -257,11 +257,6 @@
       },
       "sent": 1
     },
-    "5c52bc3f9e55": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 1
-    },
     "6a98511b6371": {
       "name": "settings.get#1",
       "args": [
@@ -302,6 +297,10 @@
       "settings": {
         "disabledTuiAgents": ["claude"]
       }
+    },
+    "7ddcb1852b39": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "8b77098df0c3": {
       "name": "settings.get#1",
@@ -371,11 +370,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "92e24c796e40": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"orc-1\",\"displayName\":\"ORC-1 Recorded issue\",\"displayNameKind\":\"generated\",\"linkedLinearIssue\":\"ORC-1\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://linear.app/orca/issue/ORC-1\",\"createdWithAgent\":\"claude\"}}",
-      "sent": 2
     },
     "94d10e7369a8": {
       "name": "setupPrompt",
@@ -448,6 +442,10 @@
           "ok": false
         }
       }
+    },
+    "baa74a0ec378": {
+      "name": "worktree.create#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"orc-1\",\"displayName\":\"ORC-1 Recorded issue\",\"displayNameKind\":\"generated\",\"linkedLinearIssue\":\"ORC-1\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://linear.app/orca/issue/ORC-1\",\"createdWithAgent\":\"claude\"}}"
     },
     "d27ce798af34": {
       "name": "settings.get#1",
@@ -620,7 +618,7 @@
         "id": "settings-task-workspace-create-linear.prelude:settings-pending",
         "observation": {
           "sender": ["090c88478661"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
@@ -633,7 +631,7 @@
         "id": "settings-task-workspace-create-linear.prelude:cleanup",
         "observation": {
           "sender": ["f84a8688af61"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -653,7 +651,7 @@
         "id": "settings-task-workspace-create-linear.normal:created",
         "observation": {
           "sender": ["2473f12c7cdd", "0f72e7ee78c9"],
-          "payloads": ["5c52bc3f9e55", "92e24c796e40"],
+          "payloads": ["7ddcb1852b39", "baa74a0ec378"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -675,7 +673,7 @@
         "id": "settings-task-workspace-create-linear.result-absent:created",
         "observation": {
           "sender": ["e0cf1af55a54"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -695,7 +693,7 @@
         "id": "settings-task-workspace-create-linear.result-null:created",
         "observation": {
           "sender": ["e1bd8b4a5d70"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -715,7 +713,7 @@
         "id": "settings-task-workspace-create-linear.inner-ok-missing:created",
         "observation": {
           "sender": ["0fc3e204e7ba", "0f72e7ee78c9"],
-          "payloads": ["5c52bc3f9e55", "92e24c796e40"],
+          "payloads": ["7ddcb1852b39", "baa74a0ec378"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -737,7 +735,7 @@
         "id": "settings-task-workspace-create-linear.inner-false-string-error:created",
         "observation": {
           "sender": ["d27ce798af34", "0f72e7ee78c9"],
-          "payloads": ["5c52bc3f9e55", "92e24c796e40"],
+          "payloads": ["7ddcb1852b39", "baa74a0ec378"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -759,7 +757,7 @@
         "id": "settings-task-workspace-create-linear.inner-false-object-error:created",
         "observation": {
           "sender": ["127ad2bdc042", "0f72e7ee78c9"],
-          "payloads": ["5c52bc3f9e55", "92e24c796e40"],
+          "payloads": ["7ddcb1852b39", "baa74a0ec378"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -781,7 +779,7 @@
         "id": "settings-task-workspace-create-linear.outer-refused:created",
         "observation": {
           "sender": ["8f8296303a77"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -801,7 +799,7 @@
         "id": "settings-task-workspace-create-linear.outer-refused-no-message:created",
         "observation": {
           "sender": ["6a98511b6371"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -821,7 +819,7 @@
         "id": "settings-task-workspace-create-linear.method-not-found:created",
         "observation": {
           "sender": ["b759ab27e4dd"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -841,7 +839,7 @@
         "id": "settings-task-workspace-create-linear.transport-rejection:created",
         "observation": {
           "sender": ["8b77098df0c3"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -861,7 +859,7 @@
         "id": "settings-task-workspace-create-linear.transport-rejection-no-message:created",
         "observation": {
           "sender": ["2b3aa0da0852"],
-          "payloads": ["5c52bc3f9e55"],
+          "payloads": ["7ddcb1852b39"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"

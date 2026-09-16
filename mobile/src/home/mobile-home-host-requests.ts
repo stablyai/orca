@@ -8,8 +8,7 @@ import {
   type TaskProvider
 } from '../tasks/mobile-task-providers'
 import type { RpcClient } from '../transport/rpc-client'
-import { sendSingleFlightRequest } from '../transport/request-single-flight'
-import { homeHostStatsRead } from './mobile-home-host-operations'
+import { homeHostAccountsRead, homeHostStatsRead } from './mobile-home-host-operations'
 
 type HomeTaskSettings = {
   visibleTaskProviders?: unknown
@@ -62,10 +61,12 @@ export function fetchMobileHomeAccounts(
   setSnapshots: HomeAccountsSetter,
   disposed: () => boolean
 ): void {
-  sendSingleFlightRequest(client, hostId, 'accounts.list')
-    .then((response) => {
-      if (!disposed() && response.ok) {
-        const snapshot = decodeAccountsSnapshot(response.result)
+  homeHostAccountsRead
+    .requestSingleFlight(client, hostId)
+    .then((reply) => {
+      const accounts = homeHostAccountsRead.interpret(reply)
+      if (!disposed() && accounts.accepted) {
+        const snapshot = decodeAccountsSnapshot(accounts.value)
         setSnapshots((previous) => ({ ...previous, [hostId]: snapshot }))
       }
     })

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "2deb0435ef63a3e0102e28f2f3f331039486d193d1e1ffdfb53ad86d3ff039f0",
   "platform": "darwin",
@@ -55,6 +55,10 @@
         }
       }
     },
+    "1617f98dc371": {
+      "name": "hostedReview.create#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
+    },
     "3ff86ed23cf9": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -66,10 +70,9 @@
         "url": "https://review.test/5"
       }
     },
-    "8056b0204a25": {
+    "7b353f33f66f": {
       "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}",
-      "sent": 2
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}"
     },
     "91f262b2079b": {
       "name": "worktree.set#1",
@@ -114,11 +117,6 @@
         "ok": true,
         "url": "https://review.test/5"
       }
-    },
-    "f5dea50053bb": {
-      "name": "hostedReview.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -128,7 +126,7 @@
         "id": "settled",
         "observation": {
           "sender": ["122ef8a1f0b9", "91f262b2079b"],
-          "payloads": ["f5dea50053bb", "8056b0204a25"],
+          "payloads": ["1617f98dc371", "7b353f33f66f"],
           "settlements": {
             "create": "3ff86ed23cf9"
           },

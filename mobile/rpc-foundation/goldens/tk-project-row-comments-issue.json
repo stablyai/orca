@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "6f1bfb05a9df6482200bbab4400fd07a09955d47fcc468e1d2feda1ca9875aa1",
   "platform": "darwin",
@@ -18,10 +18,18 @@
       "value": false,
       "sent": 1
     },
+    "0ce8caa0cc82": {
+      "name": "github.project.addIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.addIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"body\":\"a project comment\"}}"
+    },
     "0f3697bbd111": {
       "name": "projectMutating",
       "value": true,
       "sent": 2
+    },
+    "16637fd57f65": {
+      "name": "github.project.updateIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501,\"body\":\"an edited comment\"}}"
     },
     "4b9c688ebd34": {
       "name": "projectEditingCommentDraft",
@@ -171,11 +179,6 @@
         "id": "item-1",
         "itemType": "ISSUE"
       }
-    },
-    "5f2604a47fa1": {
-      "name": "github.project.updateIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501,\"body\":\"an edited comment\"}}",
-      "sent": 3
     },
     "6f4f9198e5ff": {
       "name": "projectMutating",
@@ -343,6 +346,10 @@
         "itemType": "ISSUE"
       }
     },
+    "9340829c00ac": {
+      "name": "github.project.updateIssueBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"title\":\"Renamed\"}}}"
+    },
     "9698ad92ebc9": {
       "name": "projectCommentDraft",
       "value": "",
@@ -447,16 +454,6 @@
         },
         "reviewRequests": []
       },
-      "sent": 2
-    },
-    "c2bda70f8353": {
-      "name": "github.project.updateIssueBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"title\":\"Renamed\"}}}",
-      "sent": 1
-    },
-    "cfc8331c4dc0": {
-      "name": "github.project.addIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.addIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"body\":\"a project comment\"}}",
       "sent": 2
     },
     "d1bb762720d5": {
@@ -617,7 +614,7 @@
         "id": "update-item-settled",
         "observation": {
           "sender": ["a3c003fbf907"],
-          "payloads": ["c2bda70f8353"],
+          "payloads": ["9340829c00ac"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -630,7 +627,7 @@
         "id": "add-comment-settled",
         "observation": {
           "sender": ["a3c003fbf907", "909e5a140366"],
-          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
+          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -653,7 +650,7 @@
         "id": "update-comment-settled",
         "observation": {
           "sender": ["a3c003fbf907", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
+          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",

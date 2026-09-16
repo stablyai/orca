@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
   "scenarioSha256": "5de4936aed0efd0d8bd5bc5ce893d561f6bc3d0fdf4a76c9e33e7cbefd6ec362",
   "platform": "darwin",
@@ -103,6 +103,10 @@
         "provider": "gitlab"
       }
     },
+    "bbda8a8eedb1": {
+      "name": "gitlab.updateMRState#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateMRState\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"state\":\"closed\",\"projectRef\":\"group/project\"}}"
+    },
     "cc96725d8f47": {
       "name": "mutatingStatus",
       "value": true,
@@ -115,11 +119,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "eef11f4ec3f3": {
-      "name": "gitlab.updateMRState#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateMRState\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"state\":\"closed\",\"projectRef\":\"group/project\"}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -129,7 +128,7 @@
         "id": "gitlab-status-settled",
         "observation": {
           "sender": ["1380dafff177"],
-          "payloads": ["eef11f4ec3f3"],
+          "payloads": ["bbda8a8eedb1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"

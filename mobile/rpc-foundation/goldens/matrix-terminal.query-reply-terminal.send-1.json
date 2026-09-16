@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "15b5694a63d54aeb4f4d9a861729e7e3b42ce06b15af6784fcb1afab744ed18b",
   "platform": "darwin",
@@ -299,6 +299,10 @@
         }
       }
     },
+    "77094de33a4f": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
     "7c12e14c2dd9": {
       "name": "terminal.send#1",
       "args": [
@@ -470,11 +474,6 @@
         }
       }
     },
-    "a766e4175d1c": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
-    },
     "f043bb99cc1d": {
       "accepted": false
     }
@@ -486,7 +485,7 @@
         "id": "terminal-query-reply-accepted.normal:accepted",
         "observation": {
           "sender": ["4ed60727a7ff"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },
@@ -498,7 +497,7 @@
         "id": "terminal-query-reply-accepted.result-absent:accepted",
         "observation": {
           "sender": ["88cfdbfbe02c"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -510,7 +509,7 @@
         "id": "terminal-query-reply-accepted.result-null:accepted",
         "observation": {
           "sender": ["22ecc0da8593"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -522,7 +521,7 @@
         "id": "terminal-query-reply-accepted.inner-ok-missing:accepted",
         "observation": {
           "sender": ["62a266491834"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -534,7 +533,7 @@
         "id": "terminal-query-reply-accepted.inner-false-string-error:accepted",
         "observation": {
           "sender": ["9b8953212260"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -546,7 +545,7 @@
         "id": "terminal-query-reply-accepted.inner-false-object-error:accepted",
         "observation": {
           "sender": ["954da0737971"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -558,7 +557,7 @@
         "id": "terminal-query-reply-accepted.outer-refused:accepted",
         "observation": {
           "sender": ["672329e62a64"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -570,7 +569,7 @@
         "id": "terminal-query-reply-accepted.outer-refused-no-message:accepted",
         "observation": {
           "sender": ["3290e88f844f"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -582,7 +581,7 @@
         "id": "terminal-query-reply-accepted.method-not-found:accepted",
         "observation": {
           "sender": ["5871998f69af"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -594,7 +593,7 @@
         "id": "terminal-query-reply-accepted.transport-rejection:accepted",
         "observation": {
           "sender": ["13a2535cdcfb"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -606,7 +605,7 @@
         "id": "terminal-query-reply-accepted.transport-rejection-no-message:accepted",
         "observation": {
           "sender": ["7c12e14c2dd9"],
-          "payloads": ["a766e4175d1c"],
+          "payloads": ["77094de33a4f"],
           "settlements": {
             "send": "7ed3d39f0607"
           },

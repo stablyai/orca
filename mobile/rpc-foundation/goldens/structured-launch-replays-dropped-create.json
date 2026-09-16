@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
   "scenarioSha256": "fb1ab1209f0a7c03ee1b3985401ce2df080d673532f045c4fca26e754d5e5a9f",
   "platform": "darwin",
@@ -13,16 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "00c2dc84f227": {
-      "name": "agentSession.create#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 3
-    },
-    "3db129933d79": {
-      "name": "agentSession.createSupport#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 1
-    },
     "4a72f70dd463": {
       "name": "agentSession.create#1",
       "args": [
@@ -63,6 +53,10 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "4a8f44bda967": {
+      "name": "agentSession.createSupport#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
     },
     "5576fc62b696": {
       "name": "agentSession.create#2",
@@ -110,6 +104,10 @@
         }
       }
     },
+    "68ca9e9559ad": {
+      "name": "agentSession.create#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
+    },
     "6d6669cd1a85": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -118,6 +116,10 @@
         "kind": "created",
         "sessionId": "claude_00000000_0000_4000_8000_000000000001"
       }
+    },
+    "87c3a18d4168": {
+      "name": "agentSession.create#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
     },
     "bc88a2996f1c": {
       "name": "agentSession.createSupport#1",
@@ -153,11 +155,6 @@
         }
       }
     },
-    "ca22846fa804": {
-      "name": "agentSession.create#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 2
-    },
     "d00057b53c3e": {
       "launched": {
         "kind": "created",
@@ -172,7 +169,7 @@
         "id": "replayed",
         "observation": {
           "sender": ["bc88a2996f1c", "4a72f70dd463", "5576fc62b696"],
-          "payloads": ["3db129933d79", "ca22846fa804", "00c2dc84f227"],
+          "payloads": ["4a8f44bda967", "87c3a18d4168", "68ca9e9559ad"],
           "settlements": {
             "claude": "6d6669cd1a85"
           },

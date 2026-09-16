@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "a88061d3d1f03074b0ed2b663b523f1602362bc317ba614106f1f646d037d6e3",
   "platform": "darwin",
@@ -157,10 +157,13 @@
         }
       }
     },
-    "5730368193ee": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
+    "2aac570a2011": {
+      "name": "ssh.listTargetSummaries#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
+    },
+    "4335d4b6568f": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "5fd9a3414746": {
       "name": "ssh.listTargetSummaries#1",
@@ -211,10 +214,9 @@
         ["Remote", "repo-2"]
       ]
     },
-    "6d3dba7b22b6": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 4
+    "6bdbf70bafa2": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "70f9ee89a1da": {
       "name": "ssh.listTargetSummaries#1",
@@ -455,11 +457,6 @@
         }
       }
     },
-    "c78ad1abf9d8": {
-      "name": "ssh.listTargetSummaries#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}",
-      "sent": 4
-    },
     "cb88e4c74a37": {
       "name": "ssh.listTargetSummaries#1",
       "args": [
@@ -558,6 +555,10 @@
           "ok": false
         }
       }
+    },
+    "df7cbc246ac0": {
+      "name": "host.platform#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
     },
     "eabc0f0fcd85": {
       "name": "hostLabelById",
@@ -668,11 +669,6 @@
           "ok": false
         }
       }
-    },
-    "fc07cf302dbe": {
-      "name": "host.platform#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}",
-      "sent": 4
     }
   },
   "recording": {
@@ -682,7 +678,7 @@
         "id": "settings-repo-metadata-fulfilled.normal:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "f7539bb05693", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -695,7 +691,7 @@
         "id": "settings-repo-metadata-fulfilled.normal:settled",
         "observation": {
           "sender": ["b40605df86b7", "f7539bb05693", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -715,7 +711,7 @@
         "id": "settings-repo-metadata-fulfilled.result-absent:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "70f9ee89a1da", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -728,7 +724,7 @@
         "id": "settings-repo-metadata-fulfilled.result-absent:settled",
         "observation": {
           "sender": ["b40605df86b7", "70f9ee89a1da", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -748,7 +744,7 @@
         "id": "settings-repo-metadata-fulfilled.result-null:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "9fdaf48cf9b6", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -761,7 +757,7 @@
         "id": "settings-repo-metadata-fulfilled.result-null:settled",
         "observation": {
           "sender": ["b40605df86b7", "9fdaf48cf9b6", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -781,7 +777,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-ok-missing:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "153aad174580", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -794,7 +790,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-ok-missing:settled",
         "observation": {
           "sender": ["b40605df86b7", "153aad174580", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -814,7 +810,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-string-error:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "d589c372905b", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -827,7 +823,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-string-error:settled",
         "observation": {
           "sender": ["b40605df86b7", "d589c372905b", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -847,7 +843,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-object-error:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "205d78f95e06", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -860,7 +856,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-object-error:settled",
         "observation": {
           "sender": ["b40605df86b7", "205d78f95e06", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -880,7 +876,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "5fd9a3414746", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -893,7 +889,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused:settled",
         "observation": {
           "sender": ["b40605df86b7", "5fd9a3414746", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -913,7 +909,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused-no-message:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "dcd949b896ed", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -926,7 +922,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused-no-message:settled",
         "observation": {
           "sender": ["b40605df86b7", "dcd949b896ed", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -946,7 +942,7 @@
         "id": "settings-repo-metadata-fulfilled.method-not-found:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "f7da3ff7d52e", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -959,7 +955,7 @@
         "id": "settings-repo-metadata-fulfilled.method-not-found:settled",
         "observation": {
           "sender": ["b40605df86b7", "f7da3ff7d52e", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -979,7 +975,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "900068047f8a", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -992,7 +988,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection:settled",
         "observation": {
           "sender": ["b40605df86b7", "900068047f8a", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -1012,7 +1008,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection-no-message:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "cb88e4c74a37", "090c88478661", "02449e890487"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -1025,7 +1021,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["b40605df86b7", "cb88e4c74a37", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
+          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"

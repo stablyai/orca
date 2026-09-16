@@ -16,6 +16,7 @@ import type { AgentSessionSubscribers } from './structured-agent-session-subscri
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
 import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 
 type HostHandoffAccess = {
   session: (sessionId: string) => StructuredAgentSessionHostSession
@@ -101,8 +102,18 @@ export function createStructuredAgentSessionHostHandoff(
     },
     acknowledgeNativeRelease: (sessionId) => deps.adapter.acknowledgeSessionRelease?.(sessionId),
     acquireNative: (input) => acquireNativeHandoffOwner(deps, host, input),
-    acquireNativeStop: async (sessionId, turnId, fence) =>
-      (await deps.adapter.cancelTurn({ sessionId, turnId, fence })).cancelled,
+    acquireNativeStop: async (sessionId, turnId, fence) => {
+      const session = host.session(sessionId)
+      const dispatchStatus = latestJournalDispatchObservation(session.journal, fence)
+      return (
+        await deps.adapter.cancelTurn({
+          sessionId,
+          turnId,
+          fence,
+          ...(dispatchStatus ? { dispatchStatus } : {})
+        })
+      ).cancelled
+    },
     importTuiHistory: (input) => importTuiHistory(deps, host, input),
     retryPendingSettlement: (sessionId) =>
       retryLoadedStructuredAgentSessionSettlement({

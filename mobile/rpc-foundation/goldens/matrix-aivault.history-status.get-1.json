@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
   "scenarioSha256": "a5698ca720dad08561a509c9c18f7586611fc68c58bd86791f4fcefc7915ab1f",
   "platform": "darwin",
@@ -60,6 +60,10 @@
           "ok": false
         }
       }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "2698c9770ad3": {
       "name": "status.get#1",
@@ -137,10 +141,9 @@
         "message": "Cannot read properties of undefined (reading 'capabilities')"
       }
     },
-    "56c96fec6d08": {
+    "681cb0d74271": {
       "name": "aiVault.listSessions#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
-      "sent": 2
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
     },
     "698f848e6967": {
       "activeWorktreePath": "/repo/feature",
@@ -228,11 +231,6 @@
       "screenState": {
         "kind": "unsupported"
       }
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
     },
     "88200d49083c": {
       "name": "status.get#1",
@@ -584,7 +582,7 @@
         "id": "aivault-history-scan-fulfilled.normal:ready",
         "observation": {
           "sender": ["6e50957443ea", "b567072e5440"],
-          "payloads": ["852980e2efc0", "56c96fec6d08"],
+          "payloads": ["1e5b32902af7", "681cb0d74271"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -596,7 +594,7 @@
         "id": "aivault-history-scan-fulfilled.result-absent:ready",
         "observation": {
           "sender": ["7d3dd7f9381b"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -608,7 +606,7 @@
         "id": "aivault-history-scan-fulfilled.result-null:ready",
         "observation": {
           "sender": ["88200d49083c"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -620,7 +618,7 @@
         "id": "aivault-history-scan-fulfilled.inner-ok-missing:ready",
         "observation": {
           "sender": ["4451bb95a76e"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -632,7 +630,7 @@
         "id": "aivault-history-scan-fulfilled.inner-false-string-error:ready",
         "observation": {
           "sender": ["944bf432f199"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -644,7 +642,7 @@
         "id": "aivault-history-scan-fulfilled.inner-false-object-error:ready",
         "observation": {
           "sender": ["89236e432861"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -656,7 +654,7 @@
         "id": "aivault-history-scan-fulfilled.outer-refused:ready",
         "observation": {
           "sender": ["16cd464bf664"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -668,7 +666,7 @@
         "id": "aivault-history-scan-fulfilled.outer-refused-no-message:ready",
         "observation": {
           "sender": ["9cdf3c107e7b"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -680,7 +678,7 @@
         "id": "aivault-history-scan-fulfilled.method-not-found:ready",
         "observation": {
           "sender": ["c71b2f8a6993"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -692,7 +690,7 @@
         "id": "aivault-history-scan-fulfilled.transport-rejection:ready",
         "observation": {
           "sender": ["de87f6266897"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -704,7 +702,7 @@
         "id": "aivault-history-scan-fulfilled.transport-rejection-no-message:ready",
         "observation": {
           "sender": ["2698c9770ad3"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

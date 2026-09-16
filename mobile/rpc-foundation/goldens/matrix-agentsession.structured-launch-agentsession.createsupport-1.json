@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
   "scenarioSha256": "211e3780edc0ff5fa0529c0de0e8bc2fd746a19c8a6b4e49900f6c4e56d53f7c",
   "platform": "darwin",
@@ -101,10 +101,9 @@
         "kind": "unsupported"
       }
     },
-    "3db129933d79": {
+    "4a8f44bda967": {
       "name": "agentSession.createSupport#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
     },
     "551313dcc738": {
       "launched": {
@@ -448,7 +447,7 @@
         "id": "structured-launch-unsupported.normal:unsupported",
         "observation": {
           "sender": ["bef30d717da6"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "dd51c5566f19"
           },
@@ -460,7 +459,7 @@
         "id": "structured-launch-unsupported.result-absent:unsupported",
         "observation": {
           "sender": ["b5992e9c9c01"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "f0bb9de9827c"
           },
@@ -472,7 +471,7 @@
         "id": "structured-launch-unsupported.result-null:unsupported",
         "observation": {
           "sender": ["70998d5a1f56"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "f0bb9de9827c"
           },
@@ -484,7 +483,7 @@
         "id": "structured-launch-unsupported.inner-ok-missing:unsupported",
         "observation": {
           "sender": ["add0a607a4c6"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "f0bb9de9827c"
           },
@@ -496,7 +495,7 @@
         "id": "structured-launch-unsupported.inner-false-string-error:unsupported",
         "observation": {
           "sender": ["af6b02a86254"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "f0bb9de9827c"
           },
@@ -508,7 +507,7 @@
         "id": "structured-launch-unsupported.inner-false-object-error:unsupported",
         "observation": {
           "sender": ["03bae1ffdae6"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "f0bb9de9827c"
           },
@@ -520,7 +519,7 @@
         "id": "structured-launch-unsupported.outer-refused:unsupported",
         "observation": {
           "sender": ["f698ccf3773d"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "2c227fd1941f"
           },
@@ -532,7 +531,7 @@
         "id": "structured-launch-unsupported.outer-refused-no-message:unsupported",
         "observation": {
           "sender": ["0972c78c3d52"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "2c227fd1941f"
           },
@@ -544,7 +543,7 @@
         "id": "structured-launch-unsupported.method-not-found:unsupported",
         "observation": {
           "sender": ["99caa4276b06"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "2c227fd1941f"
           },
@@ -556,7 +555,7 @@
         "id": "structured-launch-unsupported.transport-rejection:unsupported",
         "observation": {
           "sender": ["e4a3b2c6a246"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "2c227fd1941f"
           },
@@ -568,7 +567,7 @@
         "id": "structured-launch-unsupported.transport-rejection-no-message:unsupported",
         "observation": {
           "sender": ["c0c67a317e23"],
-          "payloads": ["3db129933d79"],
+          "payloads": ["4a8f44bda967"],
           "settlements": {
             "claude": "2c227fd1941f"
           },

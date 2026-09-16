@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "3f448feff463b59c3927dae020ecd8d4931bb4a6036df6d6af080de2ec5fcf2b",
   "platform": "darwin",
@@ -155,6 +155,10 @@
       "value": false,
       "sent": 0
     },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
     "1f7d21cec906": {
       "name": "ui.get#1",
       "args": [
@@ -283,11 +287,6 @@
       "value": "all",
       "sent": 5
     },
-    "32dffd7f2f66": {
-      "name": "preflight.check#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
-      "sent": 5
-    },
     "334b82d94582": {
       "name": "linearStatusPickerItem",
       "value": {
@@ -398,11 +397,6 @@
       "name": "showGitHubProjectViewPicker",
       "value": false,
       "sent": 1
-    },
-    "5014b6118ca4": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 5
     },
     "52e9c7685310": {
       "name": "pendingHostedMerge",
@@ -576,21 +570,11 @@
         }
       }
     },
-    "7e22edf8e391": {
-      "name": "linear.status#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
-      "sent": 5
-    },
     "84465663f388": {
       "name": "actionItem",
       "value": {
         "$rpc": "null"
       },
-      "sent": 1
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
       "sent": 1
     },
     "85beb8cfde14": {
@@ -758,11 +742,6 @@
     "947cf7373dd6": {
       "name": "linearTeams",
       "value": [],
-      "sent": 5
-    },
-    "977d0336784f": {
-      "name": "ui.get#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}",
       "sent": 5
     },
     "9b1d9febbcf6": {
@@ -938,6 +917,10 @@
       "name": "showGitHubPagePicker",
       "value": false,
       "sent": 1
+    },
+    "aba4413b55bb": {
+      "name": "linear.status#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
     },
     "ae0c3d3070af": {
       "name": "showGitHubProjectSortPicker",
@@ -1201,6 +1184,10 @@
         }
       }
     },
+    "e60346521f80": {
+      "name": "ui.get#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
+    },
     "e69b48c9e675": {
       "name": "pendingHostedStateChange",
       "value": {
@@ -1218,6 +1205,10 @@
       "value": false,
       "sent": 0
     },
+    "eac54552d8bc": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -1230,6 +1221,10 @@
       "name": "showLinearGroupPicker",
       "value": false,
       "sent": 1
+    },
+    "ee444fb637a3": {
+      "name": "preflight.check#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
     },
     "f1905d689cd8": {
       "name": "showGitLabFilterPicker",
@@ -1288,11 +1283,11 @@
             "a4760ef5a9f4"
           ],
           "payloads": [
-            "852980e2efc0",
-            "5014b6118ca4",
-            "977d0336784f",
-            "32dffd7f2f66",
-            "7e22edf8e391"
+            "1e5b32902af7",
+            "eac54552d8bc",
+            "e60346521f80",
+            "ee444fb637a3",
+            "aba4413b55bb"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1353,11 +1348,11 @@
             "aa624b10c314"
           ],
           "payloads": [
-            "852980e2efc0",
-            "5014b6118ca4",
-            "977d0336784f",
-            "32dffd7f2f66",
-            "7e22edf8e391"
+            "1e5b32902af7",
+            "eac54552d8bc",
+            "e60346521f80",
+            "ee444fb637a3",
+            "aba4413b55bb"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1430,7 +1425,7 @@
         "id": "settings-task-hydration-fulfilled.result-absent:settings-pending",
         "observation": {
           "sender": ["7d3dd7f9381b"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1483,7 +1478,7 @@
         "id": "settings-task-hydration-fulfilled.result-absent:settled",
         "observation": {
           "sender": ["7d3dd7f9381b"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1536,7 +1531,7 @@
         "id": "settings-task-hydration-fulfilled.result-null:settings-pending",
         "observation": {
           "sender": ["88200d49083c"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1589,7 +1584,7 @@
         "id": "settings-task-hydration-fulfilled.result-null:settled",
         "observation": {
           "sender": ["88200d49083c"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1642,7 +1637,7 @@
         "id": "settings-task-hydration-fulfilled.inner-ok-missing:settings-pending",
         "observation": {
           "sender": ["4451bb95a76e"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1735,7 +1730,7 @@
         "id": "settings-task-hydration-fulfilled.inner-ok-missing:settled",
         "observation": {
           "sender": ["4451bb95a76e"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1828,7 +1823,7 @@
         "id": "settings-task-hydration-fulfilled.inner-false-string-error:settings-pending",
         "observation": {
           "sender": ["944bf432f199"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1921,7 +1916,7 @@
         "id": "settings-task-hydration-fulfilled.inner-false-string-error:settled",
         "observation": {
           "sender": ["944bf432f199"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2014,7 +2009,7 @@
         "id": "settings-task-hydration-fulfilled.inner-false-object-error:settings-pending",
         "observation": {
           "sender": ["89236e432861"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2107,7 +2102,7 @@
         "id": "settings-task-hydration-fulfilled.inner-false-object-error:settled",
         "observation": {
           "sender": ["89236e432861"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2200,7 +2195,7 @@
         "id": "settings-task-hydration-fulfilled.outer-refused:settings-pending",
         "observation": {
           "sender": ["16cd464bf664"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2253,7 +2248,7 @@
         "id": "settings-task-hydration-fulfilled.outer-refused:settled",
         "observation": {
           "sender": ["16cd464bf664"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2306,7 +2301,7 @@
         "id": "settings-task-hydration-fulfilled.outer-refused-no-message:settings-pending",
         "observation": {
           "sender": ["9cdf3c107e7b"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2359,7 +2354,7 @@
         "id": "settings-task-hydration-fulfilled.outer-refused-no-message:settled",
         "observation": {
           "sender": ["9cdf3c107e7b"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2412,7 +2407,7 @@
         "id": "settings-task-hydration-fulfilled.method-not-found:settings-pending",
         "observation": {
           "sender": ["c71b2f8a6993"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2465,7 +2460,7 @@
         "id": "settings-task-hydration-fulfilled.method-not-found:settled",
         "observation": {
           "sender": ["c71b2f8a6993"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2518,7 +2513,7 @@
         "id": "settings-task-hydration-fulfilled.transport-rejection:settings-pending",
         "observation": {
           "sender": ["de87f6266897"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2571,7 +2566,7 @@
         "id": "settings-task-hydration-fulfilled.transport-rejection:settled",
         "observation": {
           "sender": ["de87f6266897"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2624,7 +2619,7 @@
         "id": "settings-task-hydration-fulfilled.transport-rejection-no-message:settings-pending",
         "observation": {
           "sender": ["2698c9770ad3"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -2677,7 +2672,7 @@
         "id": "settings-task-hydration-fulfilled.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["2698c9770ad3"],
-          "payloads": ["852980e2efc0"],
+          "payloads": ["1e5b32902af7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

@@ -16,6 +16,9 @@ import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-termi
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
+import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import {
@@ -152,6 +155,23 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     workspace: TerminalWorkspaceLaunchScope,
     opts: TerminalCreateOptions
   ): Promise<TerminalCreateOptions> {
+    // Before any early return: every create lane funnels through here, and a host that cannot
+    // apply the requested shell must refuse rather than spawn its default one.
+    const shellRefusal = terminalShellOverrideRefusal({
+      shellOverride: opts.shellOverride,
+      connectionId: workspace.connectionId,
+      platform: process.platform,
+      projectRuntime:
+        opts.shellOverride && this.store
+          ? resolveLocalProjectRuntimeForWorktreeId(this.store, workspace.id)
+          : undefined,
+      // Same resolution as the spawn lanes below, so the refusal judges the cwd the PTY gets.
+      cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+      workspacePath: workspace.path
+    })
+    if (shellRefusal) {
+      throw shellRefusal
+    }
     // Why: raw shell commands like `codex exec` must remain user-authored shell.
     // Only unmanaged, repo-backed, bare agent launches get Settings defaults.
     const callerSuppliedLaunch =
@@ -186,7 +206,8 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
+      // A requested shell is the one this PTY will actually be, so it owns the quoting family.
+      terminalWindowsShell: opts.shellOverride ?? settings.terminalWindowsShell
     })
     if (opts.startupAgent && !isTuiAgentEnabled(opts.startupAgent, settings.disabledTuiAgents)) {
       throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)

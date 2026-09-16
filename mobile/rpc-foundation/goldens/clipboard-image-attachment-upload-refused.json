@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "e7f492523421873f045726e15ec95eac26d43f7e971a33fd89ec1a9749492987",
   "platform": "darwin",
@@ -13,6 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "520b3fe0fb07": {
+      "name": "clipboard.startImageUpload#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
     "5f71b4d3d25c": {
       "name": "upload-start",
       "value": {},
@@ -27,11 +31,6 @@
         "message": "Image is too large",
         "isRpcDeliveryUnknown": false
       }
-    },
-    "8dfd1f053efc": {
-      "name": "clipboard.startImageUpload#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
-      "sent": 1
     },
     "cc325ad637ea": {
       "attached": "unattached",
@@ -80,7 +79,7 @@
         "id": "upload-refused",
         "observation": {
           "sender": ["ec6fd7f06461"],
-          "payloads": ["8dfd1f053efc"],
+          "payloads": ["520b3fe0fb07"],
           "settlements": {
             "normal": "765ab192e1a5"
           },

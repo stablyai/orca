@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "3e8804f21d32370bb0bc48c4ea3d182748d48dc19d73de1b50005f18368566ba",
   "platform": "darwin",
@@ -13,8 +13,16 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "191580ba859d": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
     "46771288e046": {
       "body": "accepted"
+    },
+    "6bb5bb25e4d4": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "7291a73df186": {
       "status": "fulfilled",
@@ -57,11 +65,6 @@
         }
       }
     },
-    "b139ed2905d3": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 2
-    },
     "c7c300e28254": {
       "name": "terminal.send#1",
       "args": [
@@ -103,11 +106,6 @@
           }
         }
       }
-    },
-    "f61b028e9602": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -117,7 +115,7 @@
         "id": "accepted",
         "observation": {
           "sender": ["c7c300e28254", "960f67ee14e2"],
-          "payloads": ["f61b028e9602", "b139ed2905d3"],
+          "payloads": ["6bb5bb25e4d4", "191580ba859d"],
           "settlements": {
             "body": "7291a73df186"
           },

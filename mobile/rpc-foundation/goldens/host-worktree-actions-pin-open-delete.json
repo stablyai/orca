@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "92c29bd78ca0c0d5917e9386fc447bb9a1698b1d1ffaba0db7546eaac60da639",
   "scenarioSha256": "720add498c79425ca8efc9764fd5d8307fe33bc891842604cfc899f770b79811",
   "platform": "darwin",
@@ -104,11 +104,6 @@
         }
       }
     },
-    "2c2ff4eed497": {
-      "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}",
-      "sent": 1
-    },
     "3e27f9568029": {
       "name": "lastKnownWorktrees",
       "value": [
@@ -131,10 +126,9 @@
       ],
       "sent": 0
     },
-    "43444aeb669c": {
-      "name": "worktree.activate#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}",
-      "sent": 2
+    "4caf7515e224": {
+      "name": "worktree.set#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
     },
     "56b6d4fb8c56": {
       "name": "worktree.set#1",
@@ -169,6 +163,10 @@
           }
         }
       }
+    },
+    "69d698d4f352": {
+      "name": "worktree.rm#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
     },
     "6e959a9dd70e": {
       "confirmRemoveHost": false,
@@ -241,11 +239,6 @@
       "value": ["wt-1"],
       "sent": 0
     },
-    "ba712c70aeb2": {
-      "name": "worktree.rm#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}",
-      "sent": 3
-    },
     "bb44ad78848e": {
       "name": "optimisticActiveWorktreeIdentity",
       "value": "|wt-1",
@@ -276,6 +269,10 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "c3eecb0c6e96": {
+      "name": "worktree.activate#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
     },
     "e3e3c397a66a": {
       "name": "worktree.rm#1",
@@ -319,7 +316,7 @@
         "id": "pin-optimistic",
         "observation": {
           "sender": ["bf2b36bda2d2"],
-          "payloads": ["2c2ff4eed497"],
+          "payloads": ["4caf7515e224"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a"
@@ -332,7 +329,7 @@
         "id": "delete-optimistic",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "e3e3c397a66a"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -354,7 +351,7 @@
         "id": "settled",
         "observation": {
           "sender": ["56b6d4fb8c56", "04938673cbf5", "2b635c2a4fbb"],
-          "payloads": ["2c2ff4eed497", "43444aeb669c", "ba712c70aeb2"],
+          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",

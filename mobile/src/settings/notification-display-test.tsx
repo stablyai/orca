@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
+import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
+import type { RpcFailure } from '../transport/types'
 import type { MobilePushTestResult } from '../../../src/shared/mobile-push-contract'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
@@ -33,18 +35,21 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       }
       let unavailable = 'Update your desktop to run this test.'
       for (const { client } of connected) {
-        const response = await client.sendRequest('notifications.testPush', null, {
+        const reply = await pushDeliveryTest.request(client, null, {
           timeoutMs: 20000,
           failWhenDisconnected: true
         })
-        if (!response.ok) {
-          const code = response.error?.code
+        const delivered = pushDeliveryTest.interpret(reply)
+        if (!delivered.accepted) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+          const code = (reply as RpcFailure).error?.code
           if (code === 'forbidden' || code === 'method_not_found') {
             continue
           }
           throw new Error('Could not reach the desktop. Try again.')
         }
-        const result = response.result as MobilePushTestResult
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = delivered.value as MobilePushTestResult
         if (result?.accepted) {
           setMessage('Accepted by Orca’s push service. Check for the notification.')
           return

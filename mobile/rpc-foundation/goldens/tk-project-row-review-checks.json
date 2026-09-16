@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "370aeaee59978071ccb821da13c9e6114936c168947b608539cdb80d40cc9889",
   "scenarioSha256": "08caec8e0ab5e674aabbf034ca88fc4a000c4b645ad6397afe6dc18db1f7c098",
   "platform": "darwin",
@@ -91,11 +91,6 @@
       "mutating": false,
       "refreshSeq": 0
     },
-    "23b7a2047b2c": {
-      "name": "github.setPRFileViewed#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-1\",\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/index.ts\",\"viewed\":true}}",
-      "sent": 4
-    },
     "2cd85ef93c74": {
       "detail": {
         "assignees": ["octocat"],
@@ -157,10 +152,18 @@
       "mutating": false,
       "refreshSeq": 0
     },
+    "2eee910f375e": {
+      "name": "github.requestPRReviewers#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"reviewers\":[\"octocat\"]}}"
+    },
     "347fa6adc9f3": {
       "name": "projectRowDetailError",
       "value": "",
       "sent": 3
+    },
+    "4b9b887ee27f": {
+      "name": "github.setPRFileViewed#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-1\",\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/index.ts\",\"viewed\":true}}"
     },
     "5cdba004ba6c": {
       "detail": {
@@ -351,11 +354,6 @@
       "name": "projectMutating",
       "value": true,
       "sent": 3
-    },
-    "78b2174d020d": {
-      "name": "github.prChecks#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha\",\"noCache\":true}}",
-      "sent": 2
     },
     "7941a2b950be": {
       "name": "github.prChecks#1",
@@ -659,10 +657,9 @@
       },
       "sent": 4
     },
-    "9f8e0346d638": {
-      "name": "github.requestPRReviewers#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"reviewers\":[\"octocat\"]}}",
-      "sent": 1
+    "98fec6b761cc": {
+      "name": "github.prChecks#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha\",\"noCache\":true}}"
     },
     "d10f79760196": {
       "name": "github.rerunPRChecks#1",
@@ -710,10 +707,9 @@
       "value": true,
       "sent": 1
     },
-    "e931ac403da8": {
+    "dc5439b12876": {
       "name": "github.rerunPRChecks#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha\",\"failedOnly\":true}}",
-      "sent": 3
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha\",\"failedOnly\":true}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -741,7 +737,7 @@
         "id": "reviewers-settled",
         "observation": {
           "sender": ["8bb4bae45cc1"],
-          "payloads": ["9f8e0346d638"],
+          "payloads": ["2eee910f375e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a"
@@ -760,7 +756,7 @@
         "id": "checks-settled",
         "observation": {
           "sender": ["8bb4bae45cc1", "7941a2b950be"],
-          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "payloads": ["2eee910f375e", "98fec6b761cc"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -784,7 +780,7 @@
         "id": "rerun-settled",
         "observation": {
           "sender": ["8bb4bae45cc1", "7941a2b950be", "d10f79760196"],
-          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "payloads": ["2eee910f375e", "98fec6b761cc", "dc5439b12876"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -813,7 +809,7 @@
         "id": "viewed-settled",
         "observation": {
           "sender": ["8bb4bae45cc1", "7941a2b950be", "d10f79760196", "694581af73a0"],
-          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "payloads": ["2eee910f375e", "98fec6b761cc", "dc5439b12876", "4b9b887ee27f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",

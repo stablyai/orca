@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "e93a36ef900de27e1a566cdb2389ba4f900a330eadbb476b9bfb1ef05707b352",
   "platform": "darwin",
@@ -190,6 +190,10 @@
     },
     "3f946ad0279c": {
       "outcome": "uncreated"
+    },
+    "43a221c63628": {
+      "name": "worktree.create#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
     },
     "489c189aebca": {
       "name": "worktree.create#1",
@@ -502,11 +506,6 @@
         }
       }
     },
-    "de75bbf6c762": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}",
-      "sent": 1
-    },
     "df162b95f465": {
       "outcome": {
         "name": "kestrel",
@@ -521,7 +520,7 @@
         "id": "tw-create-retry-created.normal:created",
         "observation": {
           "sender": ["489c189aebca"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "b32227fdb10b"
           },
@@ -533,7 +532,7 @@
         "id": "tw-create-retry-created.result-absent:created",
         "observation": {
           "sender": ["cf574d8c995b"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "2588fd63a157"
           },
@@ -545,7 +544,7 @@
         "id": "tw-create-retry-created.result-null:created",
         "observation": {
           "sender": ["0938d32a2ec2"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "b5447f4dd931"
           },
@@ -557,7 +556,7 @@
         "id": "tw-create-retry-created.inner-ok-missing:created",
         "observation": {
           "sender": ["6bf7db287168"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "199931225ca2"
           },
@@ -569,7 +568,7 @@
         "id": "tw-create-retry-created.inner-false-string-error:created",
         "observation": {
           "sender": ["96a4c62e654d"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "199931225ca2"
           },
@@ -581,7 +580,7 @@
         "id": "tw-create-retry-created.inner-false-object-error:created",
         "observation": {
           "sender": ["2e78a1dad2ea"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "199931225ca2"
           },
@@ -593,7 +592,7 @@
         "id": "tw-create-retry-created.outer-refused:created",
         "observation": {
           "sender": ["c8b7b7e4da75"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "7665e4eb5ce2"
           },
@@ -605,7 +604,7 @@
         "id": "tw-create-retry-created.outer-refused-no-message:created",
         "observation": {
           "sender": ["b6ebedadd49b"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "240b0b1c72b2"
           },
@@ -617,7 +616,7 @@
         "id": "tw-create-retry-created.method-not-found:created",
         "observation": {
           "sender": ["151fd59f40cd"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "7fbbbeb1902c"
           },
@@ -629,7 +628,7 @@
         "id": "tw-create-retry-created.transport-rejection:created",
         "observation": {
           "sender": ["292579caa07d"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "a947768bc0ed"
           },
@@ -641,7 +640,7 @@
         "id": "tw-create-retry-created.transport-rejection-no-message:created",
         "observation": {
           "sender": ["8cf7217b02de"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "c7584e82c72f"
           },

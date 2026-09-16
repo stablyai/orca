@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
   "scenarioSha256": "297ea4075333e178ca20247eb0abf6600efb44fe2b33f5142d1c1cabffb5a2d3",
   "platform": "darwin",
@@ -68,16 +68,6 @@
       "value": {},
       "sent": 2
     },
-    "52c3c247865d": {
-      "name": "files.open#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}",
-      "sent": 2
-    },
-    "9120b59f16ec": {
-      "name": "files.resolveTerminalPath#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}",
-      "sent": 1
-    },
     "b765beef262e": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -88,6 +78,10 @@
           "relativePath": "src/app.ts"
         }
       ]
+    },
+    "d88940bfb593": {
+      "name": "files.resolveTerminalPath#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
     },
     "d9a357a79330": {
       "name": "files.open#1",
@@ -131,6 +125,10 @@
         "$rpc": "undefined"
       }
     },
+    "f334b291fecc": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
+    },
     "f8a009b4a36e": {
       "activeSessionTabId": "tab-opened",
       "failed": 0,
@@ -147,7 +145,7 @@
         "id": "switched",
         "observation": {
           "sender": ["18cda90904c3", "d9a357a79330"],
-          "payloads": ["9120b59f16ec", "52c3c247865d"],
+          "payloads": ["d88940bfb593", "f334b291fecc"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"
@@ -160,7 +158,7 @@
         "id": "settled",
         "observation": {
           "sender": ["18cda90904c3", "d9a357a79330"],
-          "payloads": ["9120b59f16ec", "52c3c247865d"],
+          "payloads": ["d88940bfb593", "f334b291fecc"],
           "settlements": {
             "tap": "eb79a9b3682a",
             "list": "b765beef262e"

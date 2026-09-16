@@ -46,8 +46,6 @@ type StreamSubscription = {
   cancel: () => void
 }
 
-type GenerationClient = RpcClient & { getGeneration?: () => number }
-
 export class MobileSessionTabsStreamHealth<Result, Tab> {
   private readonly inFlight = new Map<string, RequestCohort>()
   private generation: number
@@ -322,7 +320,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
   }
 
   private readGeneration(): number {
-    return (this.options.client as GenerationClient).getGeneration?.() ?? 0
+    return this.options.client.getGeneration?.() ?? 0
   }
 
   private readApplicationRevision(): number {

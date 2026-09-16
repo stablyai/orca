@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
   "scenarioSha256": "b9edb5c27852d4e1e968f85668f1ea7afde3ed1c6e5c6582d6607f9fa5643356",
   "platform": "darwin",
@@ -71,11 +71,6 @@
       "loading": false,
       "persisted": [false],
       "ready": true
-    },
-    "a832f000ad89": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}",
-      "sent": 1
     },
     "aa6cb2d59de0": {
       "name": "settings.updateTerminalQuickCommands#1",
@@ -494,6 +489,10 @@
         }
       }
     },
+    "e1663c7c38e3": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}"
+    },
     "e1a6101399e1": {
       "name": "settings.updateTerminalQuickCommands#1",
       "args": [
@@ -536,17 +535,16 @@
         }
       }
     },
+    "e3cf3d452fcf": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}"
+    },
     "e481e68c74c9": {
       "commands": [],
       "error": "",
       "loading": false,
       "persisted": [false],
       "ready": true
-    },
-    "e6aede33fdf3": {
-      "name": "settings.updateTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}",
-      "sent": 2
     },
     "e9c308be6dea": {
       "commands": [],
@@ -571,7 +569,7 @@
         "id": "quick-commands-loaded-and-saved.normal:saved",
         "observation": {
           "sender": ["d766ce9ee125", "b0069ba7e0a2"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -584,7 +582,7 @@
         "id": "quick-commands-loaded-and-saved.result-absent:saved",
         "observation": {
           "sender": ["d766ce9ee125", "aa6cb2d59de0"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -597,7 +595,7 @@
         "id": "quick-commands-loaded-and-saved.result-null:saved",
         "observation": {
           "sender": ["d766ce9ee125", "b8ac830eaf5f"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -610,7 +608,7 @@
         "id": "quick-commands-loaded-and-saved.inner-ok-missing:saved",
         "observation": {
           "sender": ["d766ce9ee125", "da090221e587"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -623,7 +621,7 @@
         "id": "quick-commands-loaded-and-saved.inner-false-string-error:saved",
         "observation": {
           "sender": ["d766ce9ee125", "e1603b0c081f"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -636,7 +634,7 @@
         "id": "quick-commands-loaded-and-saved.inner-false-object-error:saved",
         "observation": {
           "sender": ["d766ce9ee125", "cd5b13bf9061"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -649,7 +647,7 @@
         "id": "quick-commands-loaded-and-saved.outer-refused:saved",
         "observation": {
           "sender": ["d766ce9ee125", "e1a6101399e1"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -662,7 +660,7 @@
         "id": "quick-commands-loaded-and-saved.outer-refused-no-message:saved",
         "observation": {
           "sender": ["d766ce9ee125", "d02852b743c2"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -675,7 +673,7 @@
         "id": "quick-commands-loaded-and-saved.method-not-found:saved",
         "observation": {
           "sender": ["d766ce9ee125", "c321b3e8e439"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -688,7 +686,7 @@
         "id": "quick-commands-loaded-and-saved.transport-rejection:saved",
         "observation": {
           "sender": ["d766ce9ee125", "35b74155a70e"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"
@@ -701,7 +699,7 @@
         "id": "quick-commands-loaded-and-saved.transport-rejection-no-message:saved",
         "observation": {
           "sender": ["d766ce9ee125", "b5abe986e17a"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"

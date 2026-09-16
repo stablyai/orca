@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "3aa23f15da8fe9972e47c767db454b41750ca353ab10797082fde4514ffe9da0",
   "platform": "darwin",
@@ -13,6 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0adf11d42d1a": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
     "0c2cba5f3708": {
       "name": "workspaceAgent",
       "value": "claude",
@@ -106,6 +110,10 @@
         }
       }
     },
+    "37921d9fdeb7": {
+      "name": "preflight.detectRemoteAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
     "433c16de7ff8": {
       "name": "workspaceSshState",
       "value": {
@@ -118,20 +126,10 @@
       },
       "sent": 2
     },
-    "6ec9160ebc42": {
-      "name": "preflight.detectRemoteAgents#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
-      "sent": 1
-    },
     "77b6cedadbe8": {
       "name": "workspaceAgentOverridden",
       "value": false,
       "sent": 0
-    },
-    "8d086baac3c0": {
-      "name": "ssh.getState#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}",
-      "sent": 2
     },
     "8ecc31aa9892": {
       "name": "ssh.getState#1",
@@ -216,11 +214,6 @@
       },
       "sent": 0
     },
-    "e02697448559": {
-      "name": "repo.hooks#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}",
-      "sent": 3
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -228,6 +221,10 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f0a9f62da106": {
+      "name": "repo.hooks#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
     }
   },
   "recording": {
@@ -237,7 +234,7 @@
         "id": "ensure-rejected",
         "observation": {
           "sender": ["28be8cfc5f01", "8ecc31aa9892"],
-          "payloads": ["6ec9160ebc42", "8d086baac3c0"],
+          "payloads": ["37921d9fdeb7", "0adf11d42d1a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "0f1cf505ed63"
@@ -256,7 +253,7 @@
         "id": "no-setup-script",
         "observation": {
           "sender": ["28be8cfc5f01", "8ecc31aa9892", "15d9dbcfd2ce"],
-          "payloads": ["6ec9160ebc42", "8d086baac3c0", "e02697448559"],
+          "payloads": ["37921d9fdeb7", "0adf11d42d1a", "f0a9f62da106"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "0f1cf505ed63",

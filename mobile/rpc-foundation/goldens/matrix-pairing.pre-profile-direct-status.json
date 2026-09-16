@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "a28912c9abb97a227904723ff0de8162de31fce66c056da1813e0c18f6e01ccf",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0b5064a35c5a": {
-      "name": "pairing.provisionRelay#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}",
-      "sent": 3
-    },
     "0b595cd54ac3": {
       "name": "journal-saved",
       "value": "pair-fixture-1",
@@ -61,6 +56,14 @@
           "ok": false
         }
       }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "1f4d3b93dbcb": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}"
     },
     "2698c9770ad3": {
       "name": "status.get#1",
@@ -164,11 +167,6 @@
         }
       }
     },
-    "402b39e9424c": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}",
-      "sent": 4
-    },
     "40741be1b91f": {
       "outcome": "failed: relay credential install result does not match pairing journal",
       "savedHost": {
@@ -218,6 +216,10 @@
       "name": "journal-cleared",
       "value": "pair-fixture-1",
       "sent": 4
+    },
+    "53412dd89894": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
     },
     "56266d1e7340": {
       "name": "pairing.getEndpoints#1",
@@ -271,11 +273,6 @@
           }
         }
       }
-    },
-    "63ab1563ba51": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
     },
     "6b9f1bf73e55": {
       "name": "bundle-written",
@@ -504,15 +501,14 @@
       "value": "direct",
       "sent": 2
     },
-    "b33a14df0df6": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
-    },
     "b96f13a39e18": {
       "name": "journal-updated",
       "value": "pair-fixture-1",
       "sent": 2
+    },
+    "c0c86e67c300": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "c71b2f8a6993": {
       "name": "status.get#1",
@@ -605,7 +601,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.normal:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -626,7 +622,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.result-absent:paired-over-direct",
         "observation": {
           "sender": ["7d3dd7f9381b", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -647,7 +643,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.result-null:paired-over-direct",
         "observation": {
           "sender": ["88200d49083c", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -668,7 +664,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.inner-ok-missing:paired-over-direct",
         "observation": {
           "sender": ["4451bb95a76e", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -689,7 +685,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-string-error:paired-over-direct",
         "observation": {
           "sender": ["944bf432f199", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -710,7 +706,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-object-error:paired-over-direct",
         "observation": {
           "sender": ["89236e432861", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -731,7 +727,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused:paired-over-direct",
         "observation": {
           "sender": ["16cd464bf664", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "7479478e7dbb"
           },
@@ -749,7 +745,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused-no-message:paired-over-direct",
         "observation": {
           "sender": ["9cdf3c107e7b", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "7479478e7dbb"
           },
@@ -767,7 +763,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.method-not-found:paired-over-direct",
         "observation": {
           "sender": ["c71b2f8a6993", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "7479478e7dbb"
           },
@@ -785,7 +781,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection:paired-over-direct",
         "observation": {
           "sender": ["de87f6266897", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "7479478e7dbb"
           },
@@ -803,7 +799,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection-no-message:paired-over-direct",
         "observation": {
           "sender": ["2698c9770ad3", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
           "settlements": {
             "pair": "7479478e7dbb"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "281ccf5a082f3788ae8bf19f742ea4baf35c20c78bc91d7d91873845583e1a91",
   "platform": "darwin",
@@ -16,11 +16,6 @@
     "432332c9740e": {
       "failure": "Created terminal response was invalid",
       "launched": "unlaunched"
-    },
-    "495d8519301e": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
     },
     "681fc4d59b92": {
       "status": "rejected",
@@ -75,6 +70,10 @@
           }
         }
       }
+    },
+    "eb30e498d168": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     }
   },
   "recording": {
@@ -84,7 +83,7 @@
         "id": "invalid-tab",
         "observation": {
           "sender": ["af9961132c24"],
-          "payloads": ["495d8519301e"],
+          "payloads": ["eb30e498d168"],
           "settlements": {
             "full": "681fc4d59b92"
           },

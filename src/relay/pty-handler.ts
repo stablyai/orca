@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
+import { isSupportedWindowsShellOverride } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
@@ -365,22 +365,6 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR2'
 ])
 
-const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
-  'powershell.exe',
-  'powershell',
-  'pwsh.exe',
-  'pwsh',
-  'cmd.exe',
-  'cmd',
-  'wsl.exe',
-  'wsl',
-  // Why: both spellings classify as a POSIX startup family, so rejecting them here made the relay
-  // the one host that hard-failed a setting the local and daemon PTYs accept.
-  'bash.exe',
-  'bash',
-  WINDOWS_GIT_BASH_SHELL
-])
-
 function resolvePtyShellOverride(shellOverride: string): string {
   if (!shellOverride) {
     return ''
@@ -388,8 +372,7 @@ function resolvePtyShellOverride(shellOverride: string): string {
   if (process.platform !== 'win32') {
     return ''
   }
-  const normalized = shellOverride.toLowerCase()
-  if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
+  if (!isSupportedWindowsShellOverride(shellOverride)) {
     throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
   }
   return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride

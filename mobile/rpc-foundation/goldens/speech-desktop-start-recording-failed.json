@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "75b8d1b7ed98b2bf7420986958d0a36222b007c535f85c1308b534301241ec2d",
   "platform": "darwin",
@@ -58,11 +58,6 @@
         }
       }
     },
-    "601f4167c1ac": {
-      "name": "speech.dictation.cancel#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"dictation-1\"}}",
-      "sent": 2
-    },
     "7a657475cacc": {
       "status": "rejected",
       "startedAt": 0,
@@ -79,6 +74,10 @@
         "id": "dictation-1"
       },
       "sent": 1
+    },
+    "a78a87e09f05": {
+      "name": "speech.dictation.cancel#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"dictation-1\"}}"
     },
     "bbe508ab7f95": {
       "name": "speech.dictation.start#1",
@@ -113,10 +112,9 @@
         }
       }
     },
-    "cbb6c5c8ae91": {
+    "e1538fe51a1e": {
       "name": "speech.dictation.start#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}",
-      "sent": 1
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}"
     },
     "ff7a7828636f": {
       "name": "keep-awake-release",
@@ -133,7 +131,7 @@
         "id": "rolled-back",
         "observation": {
           "sender": ["bbe508ab7f95", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "start": "7a657475cacc"
           },

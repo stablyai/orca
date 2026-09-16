@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "3cda09e4a4ad4092f5f9a48b7c9715a99a51eb3bc4bed00f7054537a9e21cea9",
   "platform": "darwin",
@@ -15,6 +15,10 @@
   "values": {
     "3f946ad0279c": {
       "outcome": "uncreated"
+    },
+    "43a221c63628": {
+      "name": "worktree.create#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
     },
     "4b9d2713abf2": {
       "status": "rejected",
@@ -58,11 +62,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "de75bbf6c762": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -72,7 +71,7 @@
         "id": "unknown-not-failed",
         "observation": {
           "sender": ["50eee544463d"],
-          "payloads": ["de75bbf6c762"],
+          "payloads": ["43a221c63628"],
           "settlements": {
             "create": "4b9d2713abf2"
           },

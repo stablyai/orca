@@ -1,13 +1,14 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
 
-// The two workspace-catalog reads, both best-effort: a refused catalog leaves the last proven
-// counts and the last confirmed rows in place rather than rendering a host as empty (STA-3123).
+// Both reads here are best-effort: a refused catalog leaves the last proven counts and the last
+// confirmed rows in place rather than rendering a host as empty (STA-3123).
 
 /**
- * worktree.ps. One family for both readers — the Home card's summary and the host screen's
- * snapshot poll — because they ask the same question with the same acceptance. The payload stays
- * unchecked: the snapshot client admits an `unchanged` envelope the card never sees.
+ * worktree.ps. One family for all three readers — the Home card's summary, the host screen's
+ * snapshot poll and the agent-history panel's `scopePaths` seed — because they ask the same
+ * question with the same acceptance. The payload stays unchecked: the snapshot client admits an
+ * `unchanged` envelope the card never sees.
  */
 export const worktreeCatalogRead = bindDeferredRpcOperation(
   defineRpcOperation({

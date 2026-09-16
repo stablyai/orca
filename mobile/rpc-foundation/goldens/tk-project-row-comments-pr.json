@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "e5ff558593fd32d66e6ba1722ebf54d50992c9c2b6db41ef2435b47972fbd0fd",
   "platform": "darwin",
@@ -128,6 +128,10 @@
       "value": true,
       "sent": 0
     },
+    "80e87e83df29": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updatePullRequestBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":2,\"updates\":{\"title\":\"Renamed\"}}}"
+    },
     "c8e3f060e5f1": {
       "name": "projectRowItem",
       "value": {
@@ -210,11 +214,6 @@
       },
       "sent": 1
     },
-    "e1d50458f904": {
-      "name": "github.project.updatePullRequestBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updatePullRequestBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":2,\"updates\":{\"title\":\"Renamed\"}}}",
-      "sent": 1
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -231,7 +230,7 @@
         "id": "update-item-settled",
         "observation": {
           "sender": ["0fa9db1cc7c0"],
-          "payloads": ["e1d50458f904"],
+          "payloads": ["80e87e83df29"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"

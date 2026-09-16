@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "12f1006d704e362552317a3afcb4db4366146da3a863a1c55b524c6fc1b9757a",
   "platform": "darwin",
@@ -119,6 +119,10 @@
       "name": "prune-live-input",
       "value": ["terminal-1", "terminal-2"],
       "sent": 1
+    },
+    "5eea50c700fd": {
+      "name": "terminal.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}"
     },
     "6a8e7504d43b": {
       "name": "terminal.list#1",
@@ -339,11 +343,6 @@
         }
       }
     },
-    "c08af175e65b": {
-      "name": "terminal.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}",
-      "sent": 1
-    },
     "c2ee5279a532": {
       "name": "terminal.list#1",
       "args": [
@@ -469,7 +468,7 @@
         "id": "session-terminal-list-merged.normal:listed",
         "observation": {
           "sender": ["c2ee5279a532"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "84e5ca07cb7a"
           },
@@ -481,7 +480,7 @@
         "id": "session-terminal-list-merged.result-absent:listed",
         "observation": {
           "sender": ["6a8e7504d43b"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -493,7 +492,7 @@
         "id": "session-terminal-list-merged.result-null:listed",
         "observation": {
           "sender": ["9d8ce13428ab"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -505,7 +504,7 @@
         "id": "session-terminal-list-merged.inner-ok-missing:listed",
         "observation": {
           "sender": ["bdf04e5ac57b"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -517,7 +516,7 @@
         "id": "session-terminal-list-merged.inner-false-string-error:listed",
         "observation": {
           "sender": ["04a21fb366ae"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -529,7 +528,7 @@
         "id": "session-terminal-list-merged.inner-false-object-error:listed",
         "observation": {
           "sender": ["d717363e37dc"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -541,7 +540,7 @@
         "id": "session-terminal-list-merged.outer-refused:listed",
         "observation": {
           "sender": ["4e9902faac20"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -553,7 +552,7 @@
         "id": "session-terminal-list-merged.outer-refused-no-message:listed",
         "observation": {
           "sender": ["bc87546461f3"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -565,7 +564,7 @@
         "id": "session-terminal-list-merged.method-not-found:listed",
         "observation": {
           "sender": ["70acf7d1b267"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -577,7 +576,7 @@
         "id": "session-terminal-list-merged.transport-rejection:listed",
         "observation": {
           "sender": ["e187b80ff917"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -589,7 +588,7 @@
         "id": "session-terminal-list-merged.transport-rejection-no-message:listed",
         "observation": {
           "sender": ["3cd6cd315c56"],
-          "payloads": ["c08af175e65b"],
+          "payloads": ["5eea50c700fd"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "780ca2a1fe641fa2137c42bbb33014d7196fca2e076e0c7a49d69cca301d933e",
+  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "cd65f6b30f92d9542d19ad74cc9437ea33a1ec8fbdf4439ba13c14960f8a1994",
   "platform": "darwin",
@@ -79,11 +79,6 @@
           "ok": false
         }
       }
-    },
-    "601f4167c1ac": {
-      "name": "speech.dictation.cancel#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"dictation-1\"}}",
-      "sent": 2
     },
     "7ed3d39f0607": {
       "status": "fulfilled",
@@ -258,6 +253,10 @@
         }
       }
     },
+    "a78a87e09f05": {
+      "name": "speech.dictation.cancel#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"dictation-1\"}}"
+    },
     "bbe508ab7f95": {
       "name": "speech.dictation.start#1",
       "args": [
@@ -290,11 +289,6 @@
           }
         }
       }
-    },
-    "cbb6c5c8ae91": {
-      "name": "speech.dictation.start#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}",
-      "sent": 1
     },
     "ce0d14ebee21": {
       "name": "speech.dictation.start#1",
@@ -401,6 +395,10 @@
       "idle": false,
       "started": false
     },
+    "e1538fe51a1e": {
+      "name": "speech.dictation.start#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -448,7 +446,7 @@
         "id": "speech-desktop-start-superseded.normal:stale-start-cancelled",
         "observation": {
           "sender": ["bbe508ab7f95", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -461,7 +459,7 @@
         "id": "speech-desktop-start-superseded.result-absent:stale-start-cancelled",
         "observation": {
           "sender": ["87ea622bd437", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -474,7 +472,7 @@
         "id": "speech-desktop-start-superseded.result-null:stale-start-cancelled",
         "observation": {
           "sender": ["8384bf167bb1", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -487,7 +485,7 @@
         "id": "speech-desktop-start-superseded.inner-ok-missing:stale-start-cancelled",
         "observation": {
           "sender": ["ce0d14ebee21", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -500,7 +498,7 @@
         "id": "speech-desktop-start-superseded.inner-false-string-error:stale-start-cancelled",
         "observation": {
           "sender": ["d74bc2ce6806", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -513,7 +511,7 @@
         "id": "speech-desktop-start-superseded.inner-false-object-error:stale-start-cancelled",
         "observation": {
           "sender": ["92b319a1e1ae", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -526,7 +524,7 @@
         "id": "speech-desktop-start-superseded.outer-refused:stale-start-cancelled",
         "observation": {
           "sender": ["59e9ca68d314", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -539,7 +537,7 @@
         "id": "speech-desktop-start-superseded.outer-refused-no-message:stale-start-cancelled",
         "observation": {
           "sender": ["a3d98968619a", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -552,7 +550,7 @@
         "id": "speech-desktop-start-superseded.method-not-found:stale-start-cancelled",
         "observation": {
           "sender": ["7f93ccc70f02", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -565,7 +563,7 @@
         "id": "speech-desktop-start-superseded.transport-rejection:stale-start-cancelled",
         "observation": {
           "sender": ["debfc02fbb08", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
@@ -578,7 +576,7 @@
         "id": "speech-desktop-start-superseded.transport-rejection-no-message:stale-start-cancelled",
         "observation": {
           "sender": ["fae9f51834d5", "58ed4d5abdf0"],
-          "payloads": ["cbb6c5c8ae91", "601f4167c1ac"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
           "settlements": {
             "supersede": "eb79a9b3682a",
             "start": "7ed3d39f0607"
