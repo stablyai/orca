@@ -58,13 +58,18 @@ afterEach(() => {
   container.remove()
 })
 
-function renderItem(item: HostedTerminalQuickCommand = entry): {
+function renderItem(
+  item: HostedTerminalQuickCommand = entry,
+  canDuplicate = true
+): {
   onRun: ReturnType<typeof vi.fn>
   onEdit: ReturnType<typeof vi.fn>
+  onDuplicate: ReturnType<typeof vi.fn>
   onDelete: ReturnType<typeof vi.fn>
 } {
   const onRun = vi.fn()
   const onEdit = vi.fn()
+  const onDuplicate = vi.fn()
   const onDelete = vi.fn()
   act(() => {
     root.render(
@@ -74,14 +79,16 @@ function renderItem(item: HostedTerminalQuickCommand = entry): {
         createElement(TabBarQuickCommandItem, {
           entry: item,
           showHostLabel: false,
+          canDuplicate,
           onRun,
           onEdit,
+          onDuplicate,
           onDelete
         })
       )
     )
   })
-  return { onRun, onEdit, onDelete }
+  return { onRun, onEdit, onDuplicate, onDelete }
 }
 
 describe('TabBarQuickCommandItem', () => {
@@ -172,6 +179,42 @@ describe('TabBarQuickCommandItem', () => {
 
     expect(container.querySelector('button[aria-label="Couldn\'t copy"]')).not.toBeNull()
     expect(container.querySelector('button[aria-label="Copied"]')).toBeNull()
+  })
+
+  it('duplicates without running, editing, or copying the command', () => {
+    const { onRun, onEdit, onDuplicate, onDelete } = renderItem()
+
+    const duplicateButton = container.querySelector('button[aria-label="Duplicate Git status"]')
+    if (!(duplicateButton instanceof HTMLButtonElement)) {
+      throw new Error('duplicate button not found')
+    }
+
+    act(() => {
+      duplicateButton.click()
+    })
+
+    expect(onDuplicate).toHaveBeenCalledTimes(1)
+    expect(onRun).not.toHaveBeenCalled()
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('disables duplication once the quick command limit is reached', () => {
+    const { onDuplicate } = renderItem(entry, false)
+
+    const duplicateButton = container.querySelector(
+      'button[aria-label="Quick command limit reached"]'
+    )
+    if (!(duplicateButton instanceof HTMLButtonElement)) {
+      throw new Error('duplicate button not found')
+    }
+
+    expect(duplicateButton.disabled).toBe(true)
+    act(() => {
+      duplicateButton.click()
+    })
+    expect(onDuplicate).not.toHaveBeenCalled()
   })
 
   it('prevents nested action pointerdown from selecting the command row', () => {

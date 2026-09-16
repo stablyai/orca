@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import {
   applyTerminalQuickCommandMutation,
   buildTerminalQuickCommandInput,
+  canAddTerminalQuickCommand,
+  duplicateTerminalQuickCommand,
   flattenTerminalQuickCommand,
   getTerminalQuickCommandAction,
   getTerminalQuickCommandBody,
   getDefaultTerminalQuickCommands,
   isTerminalQuickCommandComplete,
+  MAX_QUICK_COMMAND_LABEL_LENGTH,
+  MAX_QUICK_COMMANDS,
   normalizeTerminalQuickCommands,
   parseNormalizedTerminalQuickCommands,
   supportsTerminalAgentQuickCommand,
@@ -384,5 +389,126 @@ describe('flattenTerminalQuickCommand', () => {
       appendEnter: true
     })
     expect(result.command).toBe('echo one; echo two')
+  })
+})
+
+describe('duplicateTerminalQuickCommand', () => {
+  const base = {
+    id: 'original',
+    label: 'Start Claude Max',
+    command: 'claude --effort max',
+    appendEnter: true,
+    scope: { type: 'repo' as const, repoId: 'repo-1' }
+  }
+
+  it('copies every field except the id and label', () => {
+    const copy = duplicateTerminalQuickCommand(base, 'new-id')
+    expect(copy).toEqual({
+      ...base,
+      id: 'new-id',
+      label: 'Start Claude Max (copy)'
+    })
+  })
+
+  it('preserves agent action fields', () => {
+    const agentCommand = {
+      id: 'original',
+      label: 'Review',
+      action: 'agent-prompt' as const,
+      agent: 'claude' as const,
+      prompt: 'review this diff',
+      scope: { type: 'global' as const }
+    }
+    expect(duplicateTerminalQuickCommand(agentCommand, 'new-id')).toEqual({
+      ...agentCommand,
+      id: 'new-id',
+      label: 'Review (copy)'
+    })
+  })
+
+  it('numbers repeated copies instead of chaining the suffix', () => {
+    const first = duplicateTerminalQuickCommand(base, 'id-2', [base])
+    const second = duplicateTerminalQuickCommand(first, 'id-3', [base, first])
+    expect(first.label).toBe('Start Claude Max (copy)')
+    expect(second.label).toBe('Start Claude Max (copy 2)')
+  })
+
+  it('skips labels already taken', () => {
+    const taken = { ...base, id: 'other', label: 'Start Claude Max (copy)' }
+    expect(duplicateTerminalQuickCommand(base, 'id-3', [base, taken]).label).toBe(
+      'Start Claude Max (copy 2)'
+    )
+  })
+
+  it('keeps the suffix intact when the label hits the length cap', () => {
+    const longLabel = 'a'.repeat(MAX_QUICK_COMMAND_LABEL_LENGTH)
+    const copy = duplicateTerminalQuickCommand({ ...base, label: longLabel }, 'id-2')
+    expect(copy.label.length).toBeLessThanOrEqual(MAX_QUICK_COMMAND_LABEL_LENGTH)
+    expect(copy.label.endsWith(' (copy)')).toBe(true)
+  })
+
+  it('produces a command that is already in canonical form', () => {
+    const [canonical] = normalizeTerminalQuickCommands([base])
+    const copy = duplicateTerminalQuickCommand(canonical!, 'new-id')
+    // Why: the duplicate is persisted as-is, so it must survive the wire parser
+    // without normalization rewriting it.
+    expect(parseNormalizedTerminalQuickCommands([canonical!, copy])).not.toBeNull()
+  })
+
+  it('renumbers a label that is only the copy suffix instead of chaining it', () => {
+    expect(duplicateTerminalQuickCommand({ ...base, label: '(copy)' }, 'id-2').label).toBe(
+      '(copy 2)'
+    )
+  })
+
+  it('never returns a label with surrounding whitespace', () => {
+    // Why: the save path trims, so an untrimmed copy would not match its own
+    // persisted form and the wire parser would reject the host echo.
+    for (const label of ['', '   ', '(copy)']) {
+      const copy = duplicateTerminalQuickCommand({ ...base, label }, 'id-2')
+      expect(copy.label).toBe(copy.label.trim())
+      expect(copy.label.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('terminates when the counter exceeds the safe integer range', () => {
+    // Why: Number(n) + 1 === n past 2^53, which spun the uniqueness loop forever
+    // — and the source command's own label is always in the existing set.
+    const label = 'Deploy (copy 9007199254740992)'
+    const source = { ...base, label }
+    const copy = duplicateTerminalQuickCommand(source, 'id-2', [source])
+    expect(copy.label).not.toBe(label)
+    expect(copy.label.length).toBeLessThanOrEqual(MAX_QUICK_COMMAND_LABEL_LENGTH)
+  })
+
+  it('does not grow a suffix chain across repeated duplication', () => {
+    let current: TerminalQuickCommand = { ...base, label: 'Deploy' }
+    const seen: TerminalQuickCommand[] = [current]
+    for (let round = 0; round < 5; round += 1) {
+      current = duplicateTerminalQuickCommand(current, `id-${round}`, seen)
+      seen.push(current)
+    }
+    expect(seen.map((entry) => entry.label)).toEqual([
+      'Deploy',
+      'Deploy (copy)',
+      'Deploy (copy 2)',
+      'Deploy (copy 3)',
+      'Deploy (copy 4)',
+      'Deploy (copy 5)'
+    ])
+  })
+})
+
+describe('canAddTerminalQuickCommand', () => {
+  it('blocks once the list is at the cap', () => {
+    const commands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) => ({
+      id: `id-${index}`,
+      label: `Command ${index}`,
+      command: 'echo hi',
+      appendEnter: true
+    }))
+    expect(canAddTerminalQuickCommand(commands)).toBe(false)
+    expect(canAddTerminalQuickCommand(commands.slice(1))).toBe(true)
+    expect(canAddTerminalQuickCommand([])).toBe(true)
   })
 })

@@ -6,6 +6,7 @@ import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
+  duplicateTerminalQuickCommand,
   getQuickCommandPreview,
   MAX_QUICK_COMMANDS,
   quickCommandMatchesRepo
@@ -91,6 +92,17 @@ export function QuickCommandsSheet({
         ? quickCommandToDraft(command)
         : createEmptyQuickCommandDraft(repoId ? { type: 'repo', repoId } : { type: 'global' })
     )
+    setView('editor')
+  }
+
+  const openDuplicateEditor = (command: TerminalQuickCommand) => {
+    if (commands.length >= MAX_QUICK_COMMANDS) {
+      return
+    }
+    // Why: only the derived label is kept — the draft id stays null so the save
+    // path mints a fresh one instead of overwriting the source command.
+    const { label } = duplicateTerminalQuickCommand(command, command.id, commands)
+    setDraft({ ...quickCommandToDraft(command), id: null, label })
     setView('editor')
   }
 
@@ -190,6 +202,7 @@ export function QuickCommandsSheet({
           onQueryChange={setQuery}
           onLaunch={handleLaunch}
           onEdit={openEditor}
+          onDuplicate={openDuplicateEditor}
           onDelete={handleDelete}
           onAdd={() => openEditor()}
         />
