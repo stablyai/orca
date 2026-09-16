@@ -10,12 +10,35 @@ import {
 export const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 export const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
 
-export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
+export type MeasuredRowScrollAdjustmentArgs = {
   isScrolling: boolean
   now: number
   suppressUntil: number
-}): boolean {
-  return !args.isScrolling && args.now >= args.suppressUntil
+  /** Row top/bottom before this measurement, in list coordinates. */
+  itemStart: number
+  itemEnd: number
+  scrollOffset: number
+  isFirstMeasure: boolean
+  scrollDirection: 'forward' | 'backward' | null
+}
+
+// Mirrors TanStack's default fold rule on top of the input-quiet gates: only a row
+// above the viewport top moves what the user is looking at. Correcting for a row at
+// or below the fold scrolls the list when it can and, when it cannot (list shorter
+// than the viewport), TanStack still books the write into scrollOffset — the range
+// and sticky header then follow an offset the element never reached.
+export function shouldAdjustWorktreeSidebarMeasuredRowScroll(
+  args: MeasuredRowScrollAdjustmentArgs
+): boolean {
+  if (args.isScrolling || args.now < args.suppressUntil) {
+    return false
+  }
+  if (args.isFirstMeasure) {
+    return args.itemStart < args.scrollOffset
+  }
+  // Why: a row spanning the fold grows below the anchor point; a backward scroll
+  // cascades corrections into visible jumps (TanStack #1218).
+  return args.itemEnd <= args.scrollOffset && args.scrollDirection !== 'backward'
 }
 
 export type WorktreeSidebarScrollSuppression = ReturnType<
