@@ -36,6 +36,9 @@ export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvide
   if (provider === 'bitbucket') {
     return 'Connect Bitbucket in Settings > Integrations'
   }
+  if (provider === 'custom') {
+    return 'Add a token for this server in Settings → Integrations'
+  }
   return 'Run gh auth login'
 }
 

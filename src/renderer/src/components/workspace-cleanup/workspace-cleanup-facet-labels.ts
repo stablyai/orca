@@ -105,6 +105,8 @@ export function getWorkspaceCleanupReviewProviderLabel(provider: HostedReviewPro
       return 'Azure DevOps'
     case 'gitea':
       return 'Gitea'
+    case 'custom':
+      return 'Custom git server'
     case 'unsupported':
       return translate('components.workspace.cleanup.browse.review.otherProvider', 'Other')
   }
