@@ -75,6 +75,16 @@ export function setElectronProxyCredentialsForSession(
   }
 }
 
+/**
+ * The credentials of the last applied policy, keyed by host and port so a proxy the
+ * policy no longer names never receives them.
+ */
+export function getElectronProxyCredentialsForSession(
+  proxySession: ProxySession
+): ElectronProxyCredentials | null {
+  return proxyCredentialsBySession.get(proxySession) ?? null
+}
+
 export function clearElectronProxyCredentialsForSession(proxySession: ProxySession): void {
   proxyCredentialsBySession.delete(proxySession)
 }

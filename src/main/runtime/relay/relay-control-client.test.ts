@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import http, { type ClientRequestArgs } from 'node:http'
+import type { Duplex } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -166,6 +168,52 @@ describe('RelayControlClient', () => {
     await accepted
     client.closeNow()
 
+    await expect(connecting).rejects.toThrow('relay_control_closed')
+  })
+
+  it('dials the control socket through the app proxy agent', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('expected TCP relay test server')
+    }
+    const dialTargets: string[] = []
+    class RecordingAgent extends http.Agent {
+      override createConnection(
+        options: ClientRequestArgs,
+        callback?: (err: Error | null, stream: Duplex) => void
+      ): Duplex | null | undefined {
+        dialTargets.push(`${String(options.host)}:${String(options.port)}`)
+        return super.createConnection(options, callback)
+      }
+    }
+    const keypair = nacl.box.keyPair()
+    const client = new RelayControlClient({
+      cellUrl: `http://127.0.0.1:${address.port}`,
+      relayJwt: 'scoped-token',
+      relayHostId: createHash('sha256').update(keypair.publicKey).digest('base64url').slice(0, 16),
+      assignmentEpoch: 1,
+      identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+      keypair: {
+        ...keypair,
+        publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
+      },
+      appVersion: '1.2.3',
+      onConnectionOpen: vi.fn(),
+      onDrain: vi.fn(),
+      onClose: vi.fn(),
+      socketAgent: new RecordingAgent()
+    })
+    clients.push(client)
+    const accepted = new Promise<void>((resolve) => server.once('connection', () => resolve()))
+
+    const connecting = client.connect()
+    await accepted
+
+    expect(dialTargets).toEqual([`127.0.0.1:${address.port}`])
+    client.closeNow()
     await expect(connecting).rejects.toThrow('relay_control_closed')
   })
 

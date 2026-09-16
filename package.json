@@ -179,6 +179,7 @@
     "@xterm/headless": "6.1.0-beta.302",
     "agent-browser": "~0.27.0",
     "electron-updater": "^6.8.9",
+    "https-proxy-agent": "^7.0.6",
     "i18next": "^26.3.1",
     "jsonc-parser": "^3.3.1",
     "node-pty": "^1.1.0",
@@ -191,6 +192,7 @@
     "ssh2": "^1.17.0",
     "tldts": "7.4.12",
     "tweetnacl": "^1.0.3",
+    "undici": "^7.29.0",
     "ws": "^8.21.3",
     "yaml": "^2.8.4",
     "zod": "~4.5.4"

@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
+import { setDefaultProxySessionResolver } from '../../network/electron-default-proxy-session'
 import {
   RELAY_HOST_ATTACH_DEADLINE_MS,
   type RelayConnectionOpenMessage,
@@ -120,6 +121,30 @@ describe('RelayControlOrigin pending-connection replay', () => {
     fakes.controls.length = 0
     fakes.transports.length = 0
     fakes.controlConnect.mockReset()
+  })
+
+  afterEach(() => {
+    setDefaultProxySessionResolver(null)
+  })
+
+  it('refuses a control whose proxy resolution outlived the origin', async () => {
+    let releaseProxy = (): void => {}
+    const heldProxy = new Promise<string>((resolve) => {
+      releaseProxy = () => resolve('DIRECT')
+    })
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy: () => heldProxy,
+      setProxy: async () => {}
+    }))
+    const { origin } = createOrigin()
+
+    const opening = origin.open()
+    await origin.close()
+    releaseProxy()
+
+    await expect(opening).rejects.toThrow('relay_control_closed')
+    // A client built after the teardown would never be closed by it and could still activate.
+    expect(fakes.controls).toHaveLength(0)
   })
 
   it('pins the attach deadline this file mirrors from the relay contract', () => {

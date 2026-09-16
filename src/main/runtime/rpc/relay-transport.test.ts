@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createServer as createHttpServer } from 'node:http'
+import { connect as connectSocket, type Server } from 'node:net'
 import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
+import { setDefaultProxySessionResolver } from '../../network/electron-default-proxy-session'
 import { CloudRelayTransport } from './relay-transport'
 
 function nextMessage(ws: WebSocket): Promise<{ data: Buffer; isBinary: boolean }> {
@@ -11,9 +14,38 @@ function nextMessage(ws: WebSocket): Promise<{ data: Buffer; isBinary: boolean }
 describe('CloudRelayTransport', () => {
   const servers: WebSocketServer[] = []
   const transports: CloudRelayTransport[] = []
+  const proxies: Server[] = []
+
+  /** A CONNECT proxy that records its targets and tunnels every tunnel to the test cell. */
+  async function startConnectProxy(cellPort: number): Promise<{ port: number; targets: string[] }> {
+    const targets: string[] = []
+    const proxy = createHttpServer()
+    proxy.on('connect', (request, clientSocket, head) => {
+      targets.push(request.url ?? '')
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+      const upstream = connectSocket(cellPort, '127.0.0.1', () => {
+        upstream.write(head)
+        clientSocket.pipe(upstream)
+        upstream.pipe(clientSocket)
+      })
+      clientSocket.on('error', () => upstream.destroy())
+      upstream.on('error', () => clientSocket.destroy())
+    })
+    proxies.push(proxy)
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve))
+    const address = proxy.address()
+    if (typeof address === 'string' || address === null) {
+      throw new Error('expected TCP proxy')
+    }
+    return { port: address.port, targets }
+  }
 
   afterEach(async () => {
+    setDefaultProxySessionResolver(null)
     await Promise.all(transports.splice(0).map((transport) => transport.stop()))
+    await Promise.all(
+      proxies.splice(0).map((proxy) => new Promise<void>((resolve) => proxy.close(() => resolve())))
+    )
     await Promise.all(
       servers.splice(0).map(
         (server) =>
@@ -92,6 +124,321 @@ describe('CloudRelayTransport', () => {
     })
     socket.close()
     await vi.waitFor(() => expect(onConnectionClosed).toHaveBeenCalledWith('conn/with spaces'))
+  })
+
+  it('tunnels the cell data socket through the app proxy', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (typeof address === 'string' || address === null) {
+      throw new Error('expected TCP relay test server')
+    }
+    const proxy = await startConnectProxy(address.port)
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy: async () => `PROXY 127.0.0.1:${proxy.port}`,
+      setProxy: async () => {}
+    }))
+    const transport = new CloudRelayTransport({
+      cellUrl: 'http://relay-cell.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 7,
+      onConnectionClosed: vi.fn()
+    })
+    transports.push(transport)
+    transport.onMessage(vi.fn())
+    transport.onConnectionClose(vi.fn())
+    const accepted = new Promise<{ path: string }>((resolve) => {
+      server.once('connection', (_socket, request) => resolve({ path: request.url ?? '' }))
+    })
+    await transport.start()
+
+    const opening = transport.openConnection({
+      connId: 'conn-1',
+      connTicket: 'ticket-1',
+      kind: 'invite',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 5_000
+    })
+    const { path } = await accepted
+    await opening
+
+    expect(proxy.targets).toEqual(['relay-cell.example:80'])
+    expect(path).toBe('/v1/host/data/conn-1')
+  })
+
+  it('opens one socket when the same connection is opened twice while the proxy resolves', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (typeof address === 'string' || address === null) {
+      throw new Error('expected TCP relay test server')
+    }
+    let connections = 0
+    server.on('connection', () => {
+      connections += 1
+    })
+    const proxy = await startConnectProxy(address.port)
+    let releaseProxy = (): void => {}
+    const heldProxy = new Promise<string>((resolve) => {
+      releaseProxy = () => resolve(`PROXY 127.0.0.1:${proxy.port}`)
+    })
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy: () => heldProxy,
+      setProxy: async () => {}
+    }))
+    const transport = new CloudRelayTransport({
+      cellUrl: 'http://relay-cell.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 7,
+      onConnectionClosed: vi.fn()
+    })
+    transports.push(transport)
+    transport.onMessage(vi.fn())
+    transport.onConnectionClose(vi.fn())
+    await transport.start()
+    const connection = {
+      connId: 'conn-1',
+      connTicket: 'ticket-1',
+      kind: 'invite' as const,
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 5_000
+    }
+
+    const first = transport.openConnection(connection)
+    const second = transport.openConnection(connection)
+    releaseProxy()
+    await Promise.all([first, second])
+
+    // A second socket would overwrite the first one's mapping mid-open and leak its cleanup.
+    expect(connections).toBe(1)
+  })
+
+  it('keeps a stale open from taking the socket of a newer attempt for the same connId', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (typeof address === 'string' || address === null) {
+      throw new Error('expected TCP relay test server')
+    }
+    let connections = 0
+    server.on('connection', () => {
+      connections += 1
+    })
+    const proxy = await startConnectProxy(address.port)
+    let releaseProxy = (): void => {}
+    const heldProxy = new Promise<string>((resolve) => {
+      releaseProxy = () => resolve(`PROXY 127.0.0.1:${proxy.port}`)
+    })
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy: () => heldProxy,
+      setProxy: async () => {}
+    }))
+    const transport = new CloudRelayTransport({
+      cellUrl: 'http://relay-cell.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 7,
+      onConnectionClosed: vi.fn()
+    })
+    transports.push(transport)
+    transport.onMessage(vi.fn())
+    transport.onConnectionClose(vi.fn())
+    await transport.start()
+    const connection = {
+      connId: 'conn-1',
+      connTicket: 'ticket-1',
+      kind: 'invite' as const,
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 5_000
+    }
+
+    const stale = transport.openConnection(connection)
+    await transport.stop()
+    await transport.start()
+    const fresh = transport.openConnection(connection)
+    releaseProxy()
+
+    await expect(stale).rejects.toThrow('relay_transport_stopped')
+    await fresh
+    // The stale continuation used to find the newer attempt's claim and register too.
+    expect(connections).toBe(1)
+  })
+
+  it('releases the claim when the dial fails', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (typeof address === 'string' || address === null) {
+      throw new Error('expected TCP relay test server')
+    }
+    const proxy = await startConnectProxy(address.port)
+    const accepted = new Promise<void>((resolve) => server.once('connection', () => resolve()))
+    let failing = true
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy: async () => {
+        if (failing) {
+          throw new Error('proxy lookup failed')
+        }
+        return `PROXY 127.0.0.1:${proxy.port}`
+      },
+      setProxy: async () => {}
+    }))
+    const transport = new CloudRelayTransport({
+      cellUrl: 'http://relay-cell.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 7,
+      onConnectionClosed: vi.fn()
+    })
+    transports.push(transport)
+    transport.onMessage(vi.fn())
+    transport.onConnectionClose(vi.fn())
+    await transport.start()
+    const connection = {
+      connId: 'conn-1',
+      connTicket: 'ticket-1',
+      kind: 'invite' as const,
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 5_000
+    }
+
+    await expect(transport.openConnection(connection)).rejects.toThrow('proxy lookup failed')
+
+    // A claim left behind would make every later open of this connId return without dialling.
+    failing = false
+    await transport.openConnection(connection)
+    await accepted
+    expect(proxy.targets).toEqual(['relay-cell.example:80'])
+  })
+
+  it('refuses a generation change while a connection is claimed', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (typeof address === 'string' || address === null) {
+      throw new Error('expected TCP relay test server')
+    }
+    const proxy = await startConnectProxy(address.port)
+    let releaseProxy = (): void => {}
+    const heldProxy = new Promise<string>((resolve) => {
+      releaseProxy = () => resolve(`PROXY 127.0.0.1:${proxy.port}`)
+    })
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy: () => heldProxy,
+      setProxy: async () => {}
+    }))
+    const transport = new CloudRelayTransport({
+      cellUrl: 'http://relay-cell.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 7,
+      onConnectionClosed: vi.fn()
+    })
+    transports.push(transport)
+    transport.onMessage(vi.fn())
+    transport.onConnectionClose(vi.fn())
+    await transport.start()
+
+    const opening = transport.openConnection({
+      connId: 'conn-1',
+      connTicket: 'ticket-1',
+      kind: 'invite',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 5_000
+    })
+    // The auth frame sends whichever generation is current when the socket opens, so a
+    // transition now would authenticate the ticket against the wrong one.
+    expect(() => transport.setGeneration(8)).toThrow('invalid_relay_generation_transition')
+
+    releaseProxy()
+    await opening
+
+    expect(proxy.targets).toEqual(['relay-cell.example:80'])
+  })
+
+  it('drops a socket whose proxy resolution outlived stop() and a restart', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const accepted = vi.fn()
+    server.on('connection', accepted)
+    let releaseProxy = (): void => {}
+    const heldProxy = new Promise<string>((resolve) => {
+      releaseProxy = () => resolve('DIRECT')
+    })
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy: () => heldProxy,
+      setProxy: async () => {}
+    }))
+    const transport = new CloudRelayTransport({
+      cellUrl: 'http://relay-cell.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 7,
+      onConnectionClosed: vi.fn()
+    })
+    transports.push(transport)
+    transport.onMessage(vi.fn())
+    transport.onConnectionClose(vi.fn())
+    await transport.start()
+
+    const opening = transport.openConnection({
+      connId: 'conn-1',
+      connTicket: 'ticket-1',
+      kind: 'invite',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 5_000
+    })
+    await transport.stop()
+    // The new lifecycle must not adopt a socket the previous one started opening.
+    await transport.start()
+    releaseProxy()
+
+    await expect(opening).rejects.toThrow('relay_transport_stopped')
+    expect(accepted).not.toHaveBeenCalled()
+  })
+
+  it('drops a socket whose proxy resolution outlived stop()', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const accepted = vi.fn()
+    server.on('connection', accepted)
+    let releaseProxy = (): void => {}
+    const heldProxy = new Promise<string>((resolve) => {
+      releaseProxy = () => resolve('DIRECT')
+    })
+    const resolveProxy = vi.fn(() => heldProxy)
+    setDefaultProxySessionResolver(() => ({
+      resolveProxy,
+      setProxy: async () => {}
+    }))
+    const transport = new CloudRelayTransport({
+      cellUrl: 'http://relay-cell.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 7,
+      onConnectionClosed: vi.fn()
+    })
+    transports.push(transport)
+    transport.onMessage(vi.fn())
+    transport.onConnectionClose(vi.fn())
+    await transport.start()
+
+    const opening = transport.openConnection({
+      connId: 'conn-1',
+      connTicket: 'ticket-1',
+      kind: 'invite',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 5_000
+    })
+    // stop() snapshots the sockets it knows about, so this one must never be created.
+    await transport.stop()
+    releaseProxy()
+
+    await expect(opening).rejects.toThrow('relay_transport_stopped')
+    expect(resolveProxy).toHaveBeenCalledOnce()
+    expect(accepted).not.toHaveBeenCalled()
   })
 
   it('stop() resolves after the close timeout when a socket never emits close', async () => {

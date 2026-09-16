@@ -1,9 +1,9 @@
-import WebSocket, { type RawData } from 'ws'
+import type { RawData, WebSocket } from 'ws'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
+import { dialRelayCellSocket } from './relay-cell-socket'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
 
-const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
 // Why: terminate() normally emits 'close' within one tick; 5s covers slow
 // teardown without letting a dead socket hold stop() (and app quit) hostage.
 export const RELAY_SOCKET_CLOSE_TIMEOUT_MS = 5_000
@@ -46,8 +46,9 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   private readonly cellWebSocketOrigin: string
   private readonly relayHostId: string
   private generation: number
-  private readonly createSocket: (url: string) => WebSocket
+  private readonly injectedSocketFactory: ((url: string) => WebSocket) | null
   private readonly onConnectionClosed: ((connectionId: string) => void) | undefined
+  private readonly claimedConnectionIds = new Map<string, symbol>()
   private readonly socketsByConnectionId = new Map<string, WebSocket>()
   private readonly metadataBySocket = new Map<WebSocket, MobileSocketTransportMetadata>()
   private readonly clientIds = new Map<WebSocket, string>()
@@ -62,10 +63,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.relayHostId = options.relayHostId
     this.generation = options.generation
     this.onConnectionClosed = options.onConnectionClosed
-    this.createSocket =
-      options.createSocket ??
-      ((url) =>
-        new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES }))
+    this.injectedSocketFactory = options.createSocket ?? null
   }
 
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {
@@ -96,6 +94,9 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     }
     if (
       this.socketsByConnectionId.size > 0 ||
+      // A claimed connection is one whose socket is still opening: its auth frame will carry
+      // whatever generation this promise lands on, so the transition has to wait for it too.
+      this.claimedConnectionIds.size > 0 ||
       !Number.isSafeInteger(generation) ||
       generation <= 0
     ) {
@@ -118,12 +119,22 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     return sockets.length
   }
 
+  // A matching claim means this attempt still owns the connId: stop() drops every claim, and a
+  // later attempt for the same connId replaces it.
+  private releaseClaim(connectionId: string, claim: symbol): void {
+    if (this.claimedConnectionIds.get(connectionId) === claim) {
+      this.claimedConnectionIds.delete(connectionId)
+    }
+  }
+
   async start(): Promise<void> {
     this.stopped = false
   }
 
   async stop(): Promise<void> {
     this.stopped = true
+    // An open still resolving its proxy never reaches finalize; its claim must not outlive stop().
+    this.claimedConnectionIds.clear()
     const sockets = [...this.metadataBySocket.keys()]
     await forEachWithConcurrency(sockets, RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY, (socket) =>
       this.terminateWithinCloseDeadline(socket)
@@ -134,11 +145,30 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     if (this.stopped) {
       throw new Error('relay_transport_stopped')
     }
-    if (this.socketsByConnectionId.has(connection.connId)) {
+    if (this.claimedConnectionIds.has(connection.connId)) {
       return
     }
+    // Why: the claim spans the await below, because the socket map only gains an entry once the
+    // handshake is wired. A rebind replaying pending connections would otherwise open a second
+    // socket for a connId whose first open is still resolving its proxy, and the later
+    // registration would overwrite the first socket's mapping mid-open.
+    const claim = Symbol('relay-connection-claim')
+    this.claimedConnectionIds.set(connection.connId, claim)
     const url = `${this.cellWebSocketOrigin}/v1/host/data/${encodeURIComponent(connection.connId)}`
-    const socket = this.createSocket(url)
+    let socket: WebSocket
+    try {
+      // Why synchronous for a factory: callers rely on attaching their listeners before
+      // this returns, and the proxy dial below is the only part that has to await.
+      socket = this.injectedSocketFactory
+        ? this.injectedSocketFactory(url)
+        : await dialRelayCellSocket(
+            url,
+            () => this.claimedConnectionIds.get(connection.connId) === claim
+          )
+    } catch (error) {
+      this.releaseClaim(connection.connId, claim)
+      throw error
+    }
     const metadata: MobileSocketTransportMetadata = {
       transport: 'relay',
       relayHostId: this.relayHostId,
@@ -167,6 +197,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
           return
         }
         finalized = true
+        this.releaseClaim(connection.connId, claim)
         clearTimeout(deadline)
         this.finalizeConnection(connection.connId, socket)
       }

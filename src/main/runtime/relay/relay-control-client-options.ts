@@ -1,4 +1,5 @@
 import type WebSocket from 'ws'
+import type { Agent } from 'node:http'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { RelayConnectionOpenMessage, RelayDrainMessage } from './relay-control-protocol'
 
@@ -16,7 +17,9 @@ export type RelayControlClientOptions = {
   onDrain: (message: RelayDrainMessage) => void
   onClose: (code: number) => void
   onPendingChanged?: () => void
-  createSocket?: (url: string, relayJwt: string) => WebSocket
+  createSocket?: (url: string, relayJwt: string, agent?: Agent) => WebSocket
+  /** The app-proxy agent for the control socket; absent once a factory is injected. */
+  socketAgent?: Agent
   connectDeadlineMs?: number
   silenceLimitMs?: number
 }
