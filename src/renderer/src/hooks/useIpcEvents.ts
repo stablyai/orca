@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
+import { queueBlankTerminalStartupCommand } from '@/lib/blank-terminal-startup-command'
 import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
@@ -2483,6 +2484,7 @@ export function useIpcEvents(): void {
             return
           }
           const newTab = store.createTab(worktreeId)
+          queueBlankTerminalStartupCommand(store, newTab.id)
           store.setActiveTabType('terminal')
           // Why: mirror Terminal.tsx handleNewTab so a new tab appends at the end, not index 0, when tabBarOrder is unset.
           const freshStore = useAppStore.getState()

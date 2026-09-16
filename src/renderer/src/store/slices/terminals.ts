@@ -53,6 +53,7 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shel
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
+import { queueBlankTerminalStartupCommand } from '@/lib/blank-terminal-startup-command'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
@@ -1548,6 +1549,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
     const terminal = get().createTab(worktreeId, groupId)
+    queueBlankTerminalStartupCommand(get(), terminal.id)
     get().setActiveTab(terminal.id)
     get().setActiveTabType('terminal')
     const latest = get()

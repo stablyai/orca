@@ -5,11 +5,12 @@ import { getConnectionId } from './connection-context'
 import { detectLanguage } from './language-detect'
 import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { queueBlankTerminalStartupCommand } from './blank-terminal-startup-command'
 import { translate } from '@/i18n/i18n'
 
 type FloatingWorkspaceTerminalStore = Pick<
   AppState,
-  'activeGroupIdByWorktree' | 'createTab' | 'activateTab'
+  'activeGroupIdByWorktree' | 'createTab' | 'activateTab' | 'queueTabStartupCommand' | 'settings'
 >
 
 type FloatingWorkspaceBrowserStore = Pick<
@@ -30,6 +31,7 @@ export async function createFloatingWorkspaceTerminalTab(
   const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, {
     activate: false
   })
+  queueBlankTerminalStartupCommand(store, tab.id)
   store.activateTab(tab.id)
   focusTerminalTabSurface(tab.id)
   return tab

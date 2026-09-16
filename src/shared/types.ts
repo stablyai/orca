@@ -2998,6 +2998,9 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Shell command typed into every new terminal that opens without an agent launch (e.g. an alias like `tc`).
+   *  Delivered after the shell is ready; empty/undefined keeps the plain shell. */
+  blankTerminalStartupCommand?: string
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
    *  History-only: does not change which account/config/hooks Orca uses. */
   codexSessionSourceHome?: {

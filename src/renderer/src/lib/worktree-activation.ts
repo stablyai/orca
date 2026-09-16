@@ -16,6 +16,7 @@ import type {
 } from '../../../shared/agent-session-resume'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
+import { queueBlankTerminalStartupCommand } from './blank-terminal-startup-command'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
@@ -167,7 +168,10 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     startup: { command: string; env?: Record<string, string> }
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
-  settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
+  settings?: Pick<
+    GlobalSettings,
+    'experimentalNativeChat' | 'openAgentTabsInChatByDefault' | 'blankTerminalStartupCommand'
+  > | null
 }
 
 /**
@@ -557,6 +561,8 @@ export function ensureWorktreeHasInitialTerminal(
       )
     }
     store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
+  } else {
+    queueBlankTerminalStartupCommand(store, terminalTab.id)
   }
   queueSetupAndIssueCommands(
     store,
@@ -629,6 +635,9 @@ function applyDefaultTerminalTabs(
     const templateCommand = template.command?.trim()
     if (templateCommand && defaultTabs.runCommands && !(index === 0 && startup)) {
       store.queueTabStartupCommand(tab.id, { command: templateCommand })
+    } else if (!templateCommand && !isStartupTab) {
+      // Why: a command-less template tab is a plain shell, so it takes the global blank-terminal startup command.
+      queueBlankTerminalStartupCommand(store, tab.id)
     }
   }
 

@@ -33,6 +33,7 @@ import {
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
+import { queueBlankTerminalStartupCommand } from '@/lib/blank-terminal-startup-command'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import EditorAutosaveController from './editor/EditorAutosaveController'
@@ -1535,9 +1536,10 @@ function Terminal(): React.JSX.Element | null {
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
-      setActiveTabType('terminal')
       // Why: persist tab-bar order with the new terminal appended; else reconcileOrder falls back to terminals-first and jumps it to index 0 before editor tabs.
       const state = useAppStore.getState()
+      queueBlankTerminalStartupCommand(state, newTab.id)
+      setActiveTabType('terminal')
       const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
       const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []

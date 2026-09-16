@@ -155,6 +155,35 @@ describe('Cmd+J lifted creation actions', () => {
     expect(store.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).toHaveLength(1)
   })
 
+  it('queues the blank-terminal startup command on a locally created terminal tab', async () => {
+    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
+    const store = createTestStore()
+    seedStore(store, {
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      settings: {
+        activeRuntimeEnvironmentId: 'runtime-1',
+        blankTerminalStartupCommand: 'tc'
+      } as AppState['settings'],
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'group-1',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: null,
+            tabOrder: []
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'group-1' }
+    })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
+
+    const [tab] = store.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+    expect(tab).toBeDefined()
+    expect(store.getState().pendingStartupByTabId[tab!.id]).toEqual({ command: 'tc' })
+  })
+
   it('does not fall back to a local terminal tab when paired-web creation fails', async () => {
     createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
     const store = createTestStore()

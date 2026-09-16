@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
+import { BlankTerminalStartupCommandSetting } from './BlankTerminalStartupCommandSetting'
 import {
   AgentSessionSourceHomeInput,
   buildCodexSessionSourceHomeControl,
@@ -849,6 +850,13 @@ export function AgentsPane({
             )
           })}
         </div>
+
+        {/* Why: lives next to the default-agent choice because it is the
+            agent-less counterpart — what a fresh shell runs when no agent does. */}
+        <BlankTerminalStartupCommandSetting
+          value={settings.blankTerminalStartupCommand ?? ''}
+          onSave={(value) => updateSettings({ blankTerminalStartupCommand: value })}
+        />
       </section>
 
       <AgentRuntimeSetting

@@ -5,6 +5,7 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { queueBlankTerminalStartupCommand } from '@/lib/blank-terminal-startup-command'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -39,6 +40,7 @@ export function createNewTerminalTab(
     shellOverride,
     options?.startupCwd ? { startupCwd: options.startupCwd } : undefined
   )
+  queueBlankTerminalStartupCommand(state, newTab.id)
   state.setActiveTabType('terminal')
   // Why: persist the tab bar order with the new terminal at the end of the
   // current visual order. Without this, reconcileTabOrder falls back to

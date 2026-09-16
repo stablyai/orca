@@ -124,6 +124,42 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
+  it('queues the blank-terminal startup command on the initial tab when no agent startup is seeded', () => {
+    const store = createMockStore({ settings: { blankTerminalStartupCommand: ' tc ' } })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledTimes(1)
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'tc' })
+  })
+
+  it('keeps the seeded agent startup instead of the blank-terminal startup command', () => {
+    const store = createMockStore({ settings: { blankTerminalStartupCommand: 'tc' } })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', { command: 'claude' })
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledTimes(1)
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'claude' })
+  })
+
+  it('queues the blank-terminal startup command only on command-less default tabs', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({
+      createTab,
+      settings: { blankTerminalStartupCommand: 'tc' }
+    })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, undefined, {
+      runCommands: true,
+      tabs: [{ title: 'Dev', command: 'pnpm dev' }, { title: 'Shell' }]
+    })
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledTimes(2)
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'pnpm dev' })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', { command: 'tc' })
+  })
+
   it('creates configured default tabs once with title, color, and opted-in commands', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
