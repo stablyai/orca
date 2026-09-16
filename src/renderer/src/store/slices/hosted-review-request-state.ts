@@ -2,6 +2,9 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { slowTaskRequiredIdleMs } from '@/components/right-sidebar/coalesced-poll-runner'
 
 const HOSTED_REVIEW_REVALIDATION_IDLE_MULTIPLIER = 5
+// Why: provider outages can resolve immediately while leaving the cache stale;
+// keep repeated visible callers off the API even when no duration backoff applies.
+const HOSTED_REVIEW_REVALIDATION_MIN_INTERVAL_MS = 3000
 const HOSTED_REVIEW_REVALIDATION_MAX_INTERVAL_MS = 5 * 60_000
 
 export const inflightHostedReviewRequests = new Map<
@@ -32,7 +35,7 @@ function requiredHostedReviewRevalidationIdleMs(lane: HostedReviewRevalidationLa
   return slowTaskRequiredIdleMs(
     lane.lastRunDurationMs,
     HOSTED_REVIEW_REVALIDATION_IDLE_MULTIPLIER,
-    0,
+    HOSTED_REVIEW_REVALIDATION_MIN_INTERVAL_MS,
     HOSTED_REVIEW_REVALIDATION_MAX_INTERVAL_MS
   )
 }
