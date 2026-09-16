@@ -3,6 +3,7 @@
 // every gh call through the runner gives us transient-5xx retry, WSL path
 // translation, and a single hook point for future quota tracking.
 import { acquire, release } from '../gh-utils'
+import { isGitHubOwnerSlug } from '../../../shared/github/owner-slug'
 import { extractExecError, ghExecFileAsync } from '../../git/runner'
 import {
   repositoryRateLimitGuard,
@@ -60,17 +61,16 @@ export async function projectHostAuthenticationError(
 
 // ─── Slug validation ──────────────────────────────────────────────────
 
-// Why: GitHub usernames/org logins disallow `_`, `.`, leading `-`. Repo names
-// are looser — they allow leading `_`, `.`, `-` (`.` and `..` reserved). We
-// validate each separately so untrusted Project row data (`nameWithOwner`)
-// can't become an arbitrary REST path while still accepting realistic repo
-// names like `_internal` or `.github`.
-const OWNER_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
+// Why: the owner check lives in shared/github/owner-slug (main, renderer and
+// mobile all parse it). Repo names are looser — they allow leading `_`, `.`, `-`
+// (`.` and `..` reserved). We validate each separately so untrusted Project row
+// data (`nameWithOwner`) can't become an arbitrary REST path while still
+// accepting realistic repo names like `_internal` or `.github`.
 const REPO_SLUG_RE = /^[A-Za-z0-9._-]+$/
 const REPO_SLUG_RESERVED = new Set(['.', '..'])
 
 export function isValidOwnerSlug(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && OWNER_SLUG_RE.test(value)
+  return isGitHubOwnerSlug(value)
 }
 
 export function isValidRepoSlug(value: unknown): value is string {
