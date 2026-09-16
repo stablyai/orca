@@ -35,9 +35,9 @@ type SessionFieldDisposition = {
  * is now a compile error to skip, and the two owner-keyed lists below are what those paths
  * actually iterate -- so a field marked `prunedByOwnerKey` is pruned by construction.
  *
- * Not covered: `mergeWorkspaceSessions`, the apply side of a transfer, is still a hand-written
- * field list. It is safe for this field only because `extractSessionForTransfer` never emits it --
- * classify a new field as transferable and that merge has to be edited by hand.
+ * `mergeWorkspaceSessions`, the apply side of a transfer, is a hand-written field list too, so
+ * `SESSION_FIELDS_TRANSFERRED` below drives a probe per transferable field: classify a new field as
+ * transferable and that merge fails a test until it carries the field through.
  */
 export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   // Residue: it can name the repo being removed, and no main-side path clears it. Harmless only
@@ -152,3 +152,16 @@ export const SESSION_FIELDS_PRUNED_BY_OWNER_KEY = SESSION_FIELDS.filter(
 export const SESSION_FIELDS_COPIED_BY_OWNER_KEY = SESSION_FIELDS.filter(
   (field) => WORKSPACE_SESSION_FIELD_DISPOSITION[field].onTransfer === 'copiedByOwnerKey'
 )
+
+/** Fields a transfer can carry, so the apply-side merge has to account for each one. */
+export type TransferredSessionField = {
+  [
+    K in keyof typeof WORKSPACE_SESSION_FIELD_DISPOSITION
+  ]: (typeof WORKSPACE_SESSION_FIELD_DISPOSITION)[K]['onTransfer'] extends 'notTransferred'
+    ? never
+    : K
+}[keyof typeof WORKSPACE_SESSION_FIELD_DISPOSITION]
+
+export const SESSION_FIELDS_TRANSFERRED = SESSION_FIELDS.filter(
+  (field) => WORKSPACE_SESSION_FIELD_DISPOSITION[field].onTransfer !== 'notTransferred'
+) as TransferredSessionField[]
