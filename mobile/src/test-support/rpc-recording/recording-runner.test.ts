@@ -596,9 +596,9 @@ describe('recording boundaries', () => {
     expect(replies.get('stream.outer-refused')).toMatchObject({
       reply: { ok: false, error: { code: 'refused' } }
     })
-    // A diverged frame can close the stream, so the frames scripted after it are answered only if
-    // the registry still routes them.
-    expect(variants[0]!.steps[3]).toEqual({ ...base.steps[3], optional: true })
+    // No `optional` on a downstream frame: the registry routes a streaming response to the id that
+    // opened the stream whatever the divergence did, so every scripted frame still lands.
+    expect(variants[0]!.steps[3]).toEqual(base.steps[3])
   })
 
   it('refuses a mutation anchor that matches more than once', () => {

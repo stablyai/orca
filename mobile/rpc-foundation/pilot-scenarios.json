@@ -18848,6 +18848,28 @@
           "checkpoint": "repos-changed"
         },
         {
+          "action": "cutover",
+          "id": "cutover"
+        },
+        {
+          "checkpoint": "re-subscribed"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#2",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-2"
+            }
+          }
+        },
+        {
+          "checkpoint": "replayed"
+        },
+        {
           "action": "stop",
           "id": "stop"
         },

@@ -85,8 +85,10 @@ export class ScriptedRpcTransport {
   }
 
   private session(): RpcClient {
-    // Per physical session, not shared like the tracker: the registry holds the open streams, so a
-    // cutover re-sends every subscribe through the replacement instead of resuming an invisible one.
+    // One registry per physical session, the way `DirectRpcClient` builds one: the tracker is shared
+    // because a logical request outlives a cutover, a stream does not. Byte-neutral either way — the
+    // re-send after a cutover comes from the logical client's own replay — but it keeps a frame
+    // routed through the session that published its subscribe.
     const streams = new RpcClientStreamRegistry({
       nextId: () => this.nextFrameId(),
       deviceToken: DEVICE_TOKEN,
@@ -155,7 +157,7 @@ export class ScriptedRpcTransport {
    * A whole host response delivered at a subscribe payload's wire id, through the real registry, so
    * `ready`, a data event, `end` and a refusal are one step kind rather than four.
    */
-  frame(name: string, params: unknown, reply: unknown, optional?: true): void {
+  frame(name: string, params: unknown, reply: unknown): void {
     const stream = this.openStreams.get(name)
     if (!stream) {
       throw new Error(`Missing subscription payload: ${name}`)
@@ -165,9 +167,10 @@ export class ScriptedRpcTransport {
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the response as JSON; the wire id is the transport’s.
     const routed = stream.deliver({ ...(reply as object), id: stream.id } as RpcResponse)
-    if (!routed && !optional) {
-      // A matrix variant's diverged reply can close the stream, which is what `optional` covers.
-      // Anywhere else, a frame the registry routes nowhere is a scenario that has stopped matching.
+    if (!routed) {
+      // Only a non-streaming reply lands here: the registry routes every streaming response to the
+      // id that opened the stream, retired or not. A scenario that has stopped matching, not a
+      // stream that closed early.
       throw new Error(`No open stream for frame: ${name}`)
     }
   }

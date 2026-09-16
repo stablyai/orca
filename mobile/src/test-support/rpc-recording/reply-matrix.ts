@@ -61,21 +61,14 @@ export function replyPartitions(normal: unknown): ReplyPartition[] {
  * to the open stream rather than to a retired request id. Dropping it would leave `normal` a
  * different shape from the frame it replays, and a success control that is not one.
  */
-export function frameReplyPartitions(scripted: unknown, normal: unknown): ReplyPartition[] {
-  return replyPartitions(normal).flatMap((partition) =>
-    'reject' in partition
+function frameReplyPartitions(scripted: unknown, normal: unknown): ReplyPartition[] {
+  const streaming = successEnvelope(scripted)?.streaming === true
+  return replyPartitions(normal).flatMap((partition) => {
+    const envelope = streaming ? successEnvelope(partition.reply) : null
+    return 'reject' in partition
       ? []
-      : [{ ...partition, reply: streamedReply(partition.reply, scripted) ?? partition.reply }]
-  )
-}
-
-function streamedReply(reply: unknown, scripted: unknown): Record<string, unknown> | null {
-  const envelope = successEnvelope(reply)
-  return envelope && isStreamed(scripted) ? { ...envelope, streaming: true } : null
-}
-
-function isStreamed(reply: unknown): boolean {
-  return successEnvelope(reply)?.streaming === true
+      : [{ ...partition, reply: envelope ? { ...envelope, streaming: true } : partition.reply }]
+  })
 }
 
 /** A success envelope, spreadable: only one carries `streaming`, a refusal has no result to stream. */
@@ -155,9 +148,9 @@ export function driveReplyMatrix(
         id: `${base.id}.${partition.id}`,
         steps: base.steps.map((step, index): ScenarioStep =>
           index !== divergence
-            ? index > divergence && ('complete' in step || 'bind' in step || 'frame' in step)
-              ? // The diverged reply may have ended the chain or closed the stream, so downstream
-                // replies are answered only if the operation asked. The sender list records which.
+            ? index > divergence && ('complete' in step || 'bind' in step)
+              ? // The diverged reply may have ended the chain, so downstream replies are answered
+                // only if the operation asked. The sender list records which.
                 { ...step, optional: true }
               : step
             : 'frame' in step

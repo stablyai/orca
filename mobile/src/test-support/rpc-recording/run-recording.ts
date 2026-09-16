@@ -68,9 +68,7 @@ export async function runRecording(
           transport.complete(step.complete, step.params, step.reply, step.reject)
         }
       } else if ('frame' in step) {
-        // The optional gate sits inside the transport for a frame: whether a stream is still open is
-        // the registry's own state, and mirroring it here would reimplement what it decides.
-        transport.frame(step.frame, step.params, step.reply, step.optional)
+        transport.frame(step.frame, step.params, step.reply)
       } else if ('bind' in step) {
         if (!step.optional || transport.outstanding(step.request)) {
           transport.bind(step.bind, step.request, step.params)

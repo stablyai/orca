@@ -266,7 +266,8 @@ the scripted frame's `streaming` flag, since that flag is what routes a response
 rather than to a retired request id — without it `normal` would be a different shape from the frame
 it replays, and no longer a control. Until frames were sites, `reply-matrix.ts` read only
 `'complete' in step`, so a frame was never varied and a family that only subscribes threw
-`No scripted reply to drive a matrix over`. The partitions are the reply shapes a host can send: a normal result, an absent result, `null`, an inner `{ok: false}`
+`No scripted reply to drive a matrix over`. The partitions are the reply shapes a host can send: a
+normal result, an absent result, `null`, an inner `{ok: false}`
 envelope with a string or object error, an inner envelope missing `ok`, an outer refusal with and
 without a message, `method_not_found`, and a transport rejection with and without a message. Shapes
 that were recorded before and are gone were unreachable: `successResponse` always sets `result`, so
@@ -377,15 +378,19 @@ lingering.
 
 What is still not covered: what the count-based raw-port inventory covers instead (which files
 reach `sendRequest`, and how often), native storage, transport skew, and the two mutations under
-_Known-open holes_ below. The `subscribe` / `sendUnsubscribe` ports are covered as of the two
-client-event families, with three bounds on that. Blur is unrecorded: `useFocusEffect` is
-substituted as `useEffect`, so a route's focus cleanup is recorded at unmount and an unsubscribe
-only a blur would reach is not — driving focus needs a substitute, and no recording reads one yet.
-The terminal stream and the browser screencast are unrecorded for a different reason: the frame
-plumbing covers them, but their consumers write to a webview terminal ref this runner has no
-substitute for. And `accounts.subscribe` in `use-mobile-home-host-connections.ts` is unrecorded
-because its snapshot decoder is re-exported through a React Native screen module the loader cannot
-reach, which is the same wall the accounts read has always been behind. Four of the nine
+_Known-open holes_ below. The `subscribe` / `sendUnsubscribe` ports are covered for
+`runtime.clientEvents.subscribe` only — the two client-event families are the whole of it. Nine
+product call sites call `client.subscribe`; those two are recorded and seven are not, and no golden
+mentions any of their methods: `notifications.subscribe`, `agentSession.subscribe`,
+`session.tabs.subscribe`, `nativeChat.subscribe`, `terminal.subscribe`, `browser.screencast` and
+`accounts.subscribe`. The frame plumbing is method-agnostic, so what stops each of the seven is its
+consumer, not the runner. `terminal.subscribe` and `browser.screencast` write to a webview terminal
+ref this runner has no substitute for. `accounts.subscribe` sits behind a snapshot decoder
+re-exported through a React Native screen module the loader cannot reach, the same wall the accounts
+read has always been behind. The remaining four are unwritten scenarios, not walls. Blur is
+unrecorded across all of them: `useFocusEffect` is substituted as `useEffect`, so a route's focus
+cleanup is recorded at unmount and an unsubscribe only a blur would reach is not — driving focus
+needs a substitute, and no recording reads one yet. Four of the nine
 probes pin behaviour with no demonstrated mutation — the two mixed reject/refusal new-tab orders
 and the home-providers and resume-metadata refresh refusals; they are frozen observations, not
 proven defect detectors. `settings.resume-metadata` projects `{}` as its state, so its probe
