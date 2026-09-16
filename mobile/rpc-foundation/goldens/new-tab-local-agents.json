@@ -3,7 +3,7 @@
   "family": "settings.new-tab-local-agents",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "d8d8dddea59a7d38bca35f43d9e4c74cdf18bc3e",
+  "baseline": "ccd228af24db04c0ea70d7a73702a5e05f970753",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",

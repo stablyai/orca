@@ -3,7 +3,7 @@
   "family": "github.pr-comment-mutation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "ccd228af24db04c0ea70d7a73702a5e05f970753",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
@@ -13,24 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "020284980ba5": {
-      "delete-comment": {
-        "ok": true
-      },
-      "edit-comment": {
-        "ok": true
-      },
-      "reply": {
-        "ok": true
-      },
-      "resolve-thread": {
-        "error": "Failed to update review thread.",
-        "ok": false
-      },
-      "root-comment": {
-        "ok": true
-      }
-    },
     "0828ac16da32": {
       "name": "github.resolveReviewThread#1",
       "ordinal": 5,
@@ -68,6 +50,15 @@
         }
       }
     },
+    "0e0226959068": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
+        "ok": false
+      }
+    },
     "0e1350af1723": {
       "name": "github.resolveReviewThread#1",
       "ordinal": 5,
@@ -99,15 +90,6 @@
           "id": "frame-3",
           "ok": true
         }
-      }
-    },
-    "1165af07b50f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "Failed to update review thread.",
-        "ok": false
       }
     },
     "14120b04af8e": {
@@ -165,21 +147,6 @@
         "ok": true
       }
     },
-    "19beec93ad88": {
-      "edit-comment": {
-        "ok": true
-      },
-      "reply": {
-        "ok": true
-      },
-      "resolve-thread": {
-        "error": "Failed to update review thread.",
-        "ok": false
-      },
-      "root-comment": {
-        "ok": true
-      }
-    },
     "1b2778bf67a2": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -201,12 +168,18 @@
         "ok": true
       }
     },
-    "266cacb5b483": {
+    "25a251ffa90c": {
+      "delete-comment": {
+        "ok": true
+      },
+      "edit-comment": {
+        "ok": true
+      },
       "reply": {
         "ok": true
       },
       "resolve-thread": {
-        "error": "Failed to update review thread.",
+        "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
         "ok": false
       },
       "root-comment": {
@@ -358,6 +331,18 @@
         "ok": true
       }
     },
+    "5269959dbad4": {
+      "reply": {
+        "ok": true
+      },
+      "resolve-thread": {
+        "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
+        "ok": false
+      },
+      "root-comment": {
+        "ok": true
+      }
+    },
     "58627406aba1": {
       "name": "github.addPRReviewCommentReply#1",
       "ordinal": 2,
@@ -503,6 +488,21 @@
             "ok": true
           }
         }
+      }
+    },
+    "a154e99865c1": {
+      "edit-comment": {
+        "ok": true
+      },
+      "reply": {
+        "ok": true
+      },
+      "resolve-thread": {
+        "error": "The host sent a reply this app could not read (github.resolveReviewThread)",
+        "ok": false
+      },
+      "root-comment": {
+        "ok": true
       }
     },
     "a197c20578aa": {
@@ -1026,9 +1026,9 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f"
+            "resolve-thread": "0e0226959068"
           },
-          "state": "266cacb5b483",
+          "state": "5269959dbad4",
           "effects": []
         }
       },
@@ -1040,10 +1040,10 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e"
           },
-          "state": "19beec93ad88",
+          "state": "a154e99865c1",
           "effects": []
         }
       },
@@ -1067,11 +1067,11 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e",
             "delete-comment": "fbc958e4d46e"
           },
-          "state": "020284980ba5",
+          "state": "25a251ffa90c",
           "effects": []
         }
       },
@@ -1083,9 +1083,9 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f"
+            "resolve-thread": "0e0226959068"
           },
-          "state": "266cacb5b483",
+          "state": "5269959dbad4",
           "effects": []
         }
       },
@@ -1097,10 +1097,10 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e"
           },
-          "state": "19beec93ad88",
+          "state": "a154e99865c1",
           "effects": []
         }
       },
@@ -1124,11 +1124,11 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e",
             "delete-comment": "fbc958e4d46e"
           },
-          "state": "020284980ba5",
+          "state": "25a251ffa90c",
           "effects": []
         }
       },
@@ -1140,9 +1140,9 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f"
+            "resolve-thread": "0e0226959068"
           },
-          "state": "266cacb5b483",
+          "state": "5269959dbad4",
           "effects": []
         }
       },
@@ -1154,10 +1154,10 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e"
           },
-          "state": "19beec93ad88",
+          "state": "a154e99865c1",
           "effects": []
         }
       },
@@ -1181,11 +1181,11 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e",
             "delete-comment": "fbc958e4d46e"
           },
-          "state": "020284980ba5",
+          "state": "25a251ffa90c",
           "effects": []
         }
       },
@@ -1197,9 +1197,9 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f"
+            "resolve-thread": "0e0226959068"
           },
-          "state": "266cacb5b483",
+          "state": "5269959dbad4",
           "effects": []
         }
       },
@@ -1211,10 +1211,10 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e"
           },
-          "state": "19beec93ad88",
+          "state": "a154e99865c1",
           "effects": []
         }
       },
@@ -1238,11 +1238,11 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e",
             "delete-comment": "fbc958e4d46e"
           },
-          "state": "020284980ba5",
+          "state": "25a251ffa90c",
           "effects": []
         }
       },
@@ -1254,9 +1254,9 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f"
+            "resolve-thread": "0e0226959068"
           },
-          "state": "266cacb5b483",
+          "state": "5269959dbad4",
           "effects": []
         }
       },
@@ -1268,10 +1268,10 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e"
           },
-          "state": "19beec93ad88",
+          "state": "a154e99865c1",
           "effects": []
         }
       },
@@ -1295,11 +1295,11 @@
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
-            "resolve-thread": "1165af07b50f",
+            "resolve-thread": "0e0226959068",
             "edit-comment": "fbc958e4d46e",
             "delete-comment": "fbc958e4d46e"
           },
-          "state": "020284980ba5",
+          "state": "25a251ffa90c",
           "effects": []
         }
       },

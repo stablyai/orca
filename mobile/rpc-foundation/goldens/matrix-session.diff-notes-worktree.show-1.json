@@ -3,7 +3,7 @@
   "family": "session.diff-notes",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "ccd228af24db04c0ea70d7a73702a5e05f970753",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
@@ -269,15 +269,6 @@
         }
       }
     },
-    "70c6ae2e6f4a": {
-      "name": "unhandled-rejection",
-      "ordinal": 3,
-      "value": {
-        "category": "TypeError",
-        "isRpcDeliveryUnknown": false,
-        "message": "Cannot read properties of undefined (reading 'worktree')"
-      }
-    },
     "7ceace53bbee": {
       "name": "worktree.show#1",
       "ordinal": 1,
@@ -350,15 +341,6 @@
         }
       }
     },
-    "90a104fa0cf9": {
-      "name": "unhandled-rejection",
-      "ordinal": 3,
-      "value": {
-        "category": "TypeError",
-        "isRpcDeliveryUnknown": false,
-        "message": "Cannot read properties of null (reading 'worktree')"
-      }
-    },
     "cf4fa55e3a8d": {
       "name": "unhandled-rejection",
       "ordinal": 3,
@@ -410,6 +392,16 @@
         "category": "Error",
         "isRpcDeliveryUnknown": true,
         "message": "transport failure"
+      }
+    },
+    "da8252771fbd": {
+      "name": "unhandled-rejection",
+      "ordinal": 3,
+      "value": {
+        "category": "RpcIncompatibleReplyError",
+        "code": "incompatible_reply",
+        "isRpcDeliveryUnknown": false,
+        "message": "The host sent a reply this app could not read (worktree.show)"
       }
     },
     "e28b1ad79121": {
@@ -518,7 +510,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "432aeb4f1709",
-          "effects": ["70c6ae2e6f4a"]
+          "effects": ["da8252771fbd"]
         }
       },
       {
@@ -530,7 +522,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "432aeb4f1709",
-          "effects": ["90a104fa0cf9"]
+          "effects": ["da8252771fbd"]
         }
       },
       {

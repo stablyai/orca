@@ -3,7 +3,7 @@
   "family": "session.worktree-connection",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "ccd228af24db04c0ea70d7a73702a5e05f970753",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "e7e3718f685e3713cf1b8209d59d618741f892bd286853b79bb456c59cec8d86",
@@ -43,16 +43,6 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
-      }
-    },
-    "2381a3fe154e": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'repos')",
-        "isRpcDeliveryUnknown": false
       }
     },
     "24485b5028f5": {
@@ -95,13 +85,6 @@
         "message": "outer refused",
         "isRpcDeliveryUnknown": false
       }
-    },
-    "37c71f7bece7": {
-      "connectionId": "Cannot read properties of undefined (reading 'repos')",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "unpasted"
     },
     "3be971df5814": {
       "name": "repo.list#1",
@@ -329,16 +312,6 @@
         }
       }
     },
-    "63dfbb6942f2": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'repos')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "72444832e687": {
       "name": "repo.list#1",
       "ordinal": 3,
@@ -407,15 +380,6 @@
           }
         }
       }
-    },
-    "87c5de8dadf8": {
-      "connectionId": {
-        "$rpc": "null"
-      },
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "unpasted"
     },
     "978b9015256c": {
       "connectionId": "transport failure",
@@ -521,6 +485,13 @@
         "isRpcDeliveryUnknown": false
       }
     },
+    "bf883027660c": {
+      "connectionId": "The host sent a reply this app could not read (repo.list)",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "unpasted"
+    },
     "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
@@ -536,13 +507,6 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "d1013a931f34": {
-      "connectionId": "Cannot read properties of null (reading 'repos')",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "unpasted"
-    },
     "d607cc114b04": {
       "connectionId": "outer refused",
       "crash": {
@@ -554,6 +518,17 @@
       "name": "repo.list#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "d8654a93cec4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (repo.list)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
     },
     "e61132f30b52": {
       "status": "fulfilled",
@@ -574,14 +549,6 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "ee20a1dc39e7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "null"
       }
     },
     "f3b516f62081": {
@@ -618,9 +585,9 @@
           "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "connection": "2381a3fe154e"
+            "connection": "d8654a93cec4"
           },
-          "state": "37c71f7bece7",
+          "state": "bf883027660c",
           "effects": []
         }
       },
@@ -631,9 +598,9 @@
           "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "connection": "63dfbb6942f2"
+            "connection": "d8654a93cec4"
           },
-          "state": "d1013a931f34",
+          "state": "bf883027660c",
           "effects": []
         }
       },
@@ -644,9 +611,9 @@
           "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "connection": "ee20a1dc39e7"
+            "connection": "d8654a93cec4"
           },
-          "state": "87c5de8dadf8",
+          "state": "bf883027660c",
           "effects": []
         }
       },
@@ -657,9 +624,9 @@
           "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "connection": "ee20a1dc39e7"
+            "connection": "d8654a93cec4"
           },
-          "state": "87c5de8dadf8",
+          "state": "bf883027660c",
           "effects": []
         }
       },
@@ -670,9 +637,9 @@
           "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "connection": "ee20a1dc39e7"
+            "connection": "d8654a93cec4"
           },
-          "state": "87c5de8dadf8",
+          "state": "bf883027660c",
           "effects": []
         }
       },

@@ -3,7 +3,7 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "ccd228af24db04c0ea70d7a73702a5e05f970753",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
@@ -52,13 +52,13 @@
         }
       }
     },
-    "681fc4d59b92": {
+    "478ad4afe83e": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
         "category": "Error",
-        "message": "Created terminal response was invalid",
+        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)",
         "isRpcDeliveryUnknown": false
       }
     },
@@ -80,7 +80,7 @@
           "sender": ["2540affc8fa5"],
           "payloads": ["94d38f1838f6"],
           "settlements": {
-            "launch": "681fc4d59b92"
+            "launch": "478ad4afe83e"
           },
           "state": "a4273b38df83",
           "effects": []
