@@ -3,7 +3,7 @@
   "family": "components.new-workspace-repositories",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "64c1772f0f95a3c43fbb14398a8804b2b4784f7f18874e4fd79767ae634c7faa",
@@ -117,16 +117,6 @@
             "error": "refused"
           }
         }
-      }
-    },
-    "2f24355c470f": {
-      "crash": "Cannot read properties of undefined (reading 'length')",
-      "loading": false,
-      "repos": {
-        "$rpc": "undefined"
-      },
-      "selected": {
-        "$rpc": "null"
       }
     },
     "35f85fe3b71c": {
@@ -355,13 +345,6 @@
         }
       }
     },
-    "8e89c111cb2c": {
-      "name": "screen.crash",
-      "ordinal": 3,
-      "value": {
-        "message": "Cannot read properties of undefined (reading 'length')"
-      }
-    },
     "d68475063b62": {
       "name": "repo.list#1",
       "ordinal": 1,
@@ -542,8 +525,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "2f24355c470f",
-          "effects": ["8e89c111cb2c"]
+          "state": "6a50de773e54",
+          "effects": []
         }
       },
       {
@@ -554,8 +537,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "2f24355c470f",
-          "effects": ["8e89c111cb2c"]
+          "state": "6a50de773e54",
+          "effects": []
         }
       },
       {
@@ -566,8 +549,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "2f24355c470f",
-          "effects": ["8e89c111cb2c"]
+          "state": "6a50de773e54",
+          "effects": []
         }
       },
       {

@@ -3,9 +3,9 @@
   "family": "session.review-branch-diff",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "05d42780508d46d5c88f0c987448dc693bb49208a4298e6cf2f0d5e3979066af",
   "platform": "darwin",
@@ -13,46 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1ba6250404ac": {
+    "184898f3448c": {
       "name": "git.branchDiff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchDiff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "compare": {
-              "baseOid": "base-oid",
-              "baseRef": "origin/main",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
-            },
-            "filePath": "src/app.ts",
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "2b60e29f5b1c": {
-      "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -83,12 +46,11 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-1",
-          "ok": false
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
     },
@@ -121,183 +83,9 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "3ff39593f995": {
+    "47bfba92ccde": {
       "name": "git.branchDiff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchDiff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "compare": {
-              "baseOid": "base-oid",
-              "baseRef": "origin/main",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
-            },
-            "filePath": "src/app.ts",
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "534cf7badcbc": {
-      "branchCompare": "unloaded",
-      "diff": {
-        "itemKey": "branch:src/app.ts",
-        "kind": "binary"
-      },
-      "snapshot": "unloaded"
-    },
-    "67cae2e16a3b": {
-      "name": "git.branchDiff#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}",
-      "sent": 1
-    },
-    "67daf7391fee": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unable to load diff",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "82d2a0bd7903": {
-      "name": "git.branchDiff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchDiff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "compare": {
-              "baseOid": "base-oid",
-              "baseRef": "origin/main",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
-            },
-            "filePath": "src/app.ts",
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "9650a1849626": {
-      "name": "git.branchDiff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchDiff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "compare": {
-              "baseOid": "base-oid",
-              "baseRef": "origin/main",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
-            },
-            "filePath": "src/app.ts",
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "ac85149368b6": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "The host sent a reply this app could not read (git.branchDiff)",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "bfc42188b2f9": {
-      "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -337,18 +125,61 @@
         }
       }
     },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
+    "4a1c896f4fef": {
+      "name": "git.branchDiff#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "compare": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base"
+            },
+            "filePath": "src/app.ts",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
       }
     },
-    "cdde2fa29d08": {
+    "534cf7badcbc": {
+      "branchCompare": "unloaded",
+      "diff": {
+        "itemKey": "branch:src/app.ts",
+        "kind": "binary"
+      },
+      "snapshot": "unloaded"
+    },
+    "551c785629a1": {
       "name": "git.branchDiff#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}"
+    },
+    "638cb6ada56b": {
+      "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -382,13 +213,24 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "error": "refused"
           }
         }
       }
     },
-    "ce89618d90b4": {
+    "67daf7391fee": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unable to load diff",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "714ef7b515d2": {
       "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -427,8 +269,9 @@
         }
       }
     },
-    "d0c1438ea96a": {
+    "895406b61707": {
       "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -470,13 +313,9 @@
         }
       }
     },
-    "e39817462870": {
-      "branchCompare": "unloaded",
-      "diff": "unloaded",
-      "snapshot": "unloaded"
-    },
-    "f7f8f22083a7": {
+    "9234de2a5458": {
       "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -508,13 +347,76 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "transport failure",
+          "message": "",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "fa38c3c55a35": {
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ac85149368b6": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (git.branchDiff)",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "b0f6c8c624f6": {
       "name": "git.branchDiff#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "compare": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base"
+            },
+            "filePath": "src/app.ts",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "b440c4acb647": {
+      "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -549,6 +451,115 @@
           "ok": true
         }
       }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "c7d45ceefb2c": {
+      "name": "git.branchDiff#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "compare": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base"
+            },
+            "filePath": "src/app.ts",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e39817462870": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": "unloaded"
+    },
+    "ed7ba902b54c": {
+      "name": "git.branchDiff#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "compare": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base"
+            },
+            "filePath": "src/app.ts",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
     }
   },
   "recording": {
@@ -557,8 +568,8 @@
       {
         "id": "review-branch-diff-shapes.normal:branch",
         "observation": {
-          "sender": ["ce89618d90b4"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["714ef7b515d2"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "365c17523d76"
           },
@@ -569,8 +580,8 @@
       {
         "id": "review-branch-diff-shapes.normal:no-compare",
         "observation": {
-          "sender": ["ce89618d90b4"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["714ef7b515d2"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "365c17523d76",
             "no-compare": "38fb361f406c"
@@ -582,8 +593,8 @@
       {
         "id": "review-branch-diff-shapes.result-absent:branch",
         "observation": {
-          "sender": ["fa38c3c55a35"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["b440c4acb647"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6"
           },
@@ -594,8 +605,8 @@
       {
         "id": "review-branch-diff-shapes.result-absent:no-compare",
         "observation": {
-          "sender": ["fa38c3c55a35"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["b440c4acb647"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
@@ -607,8 +618,8 @@
       {
         "id": "review-branch-diff-shapes.result-null:branch",
         "observation": {
-          "sender": ["cdde2fa29d08"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["184898f3448c"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6"
           },
@@ -619,8 +630,8 @@
       {
         "id": "review-branch-diff-shapes.result-null:no-compare",
         "observation": {
-          "sender": ["cdde2fa29d08"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["184898f3448c"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
@@ -632,8 +643,8 @@
       {
         "id": "review-branch-diff-shapes.inner-ok-missing:branch",
         "observation": {
-          "sender": ["3ff39593f995"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["638cb6ada56b"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6"
           },
@@ -644,8 +655,8 @@
       {
         "id": "review-branch-diff-shapes.inner-ok-missing:no-compare",
         "observation": {
-          "sender": ["3ff39593f995"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["638cb6ada56b"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
@@ -657,8 +668,8 @@
       {
         "id": "review-branch-diff-shapes.inner-false-string-error:branch",
         "observation": {
-          "sender": ["9650a1849626"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["c7d45ceefb2c"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6"
           },
@@ -669,8 +680,8 @@
       {
         "id": "review-branch-diff-shapes.inner-false-string-error:no-compare",
         "observation": {
-          "sender": ["9650a1849626"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["c7d45ceefb2c"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
@@ -682,8 +693,8 @@
       {
         "id": "review-branch-diff-shapes.inner-false-object-error:branch",
         "observation": {
-          "sender": ["d0c1438ea96a"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["895406b61707"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6"
           },
@@ -694,8 +705,8 @@
       {
         "id": "review-branch-diff-shapes.inner-false-object-error:no-compare",
         "observation": {
-          "sender": ["d0c1438ea96a"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["895406b61707"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "ac85149368b6",
             "no-compare": "38fb361f406c"
@@ -707,8 +718,8 @@
       {
         "id": "review-branch-diff-shapes.outer-refused:branch",
         "observation": {
-          "sender": ["82d2a0bd7903"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["ed7ba902b54c"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "32a7c0ae7918"
           },
@@ -719,8 +730,8 @@
       {
         "id": "review-branch-diff-shapes.outer-refused:no-compare",
         "observation": {
-          "sender": ["82d2a0bd7903"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["ed7ba902b54c"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "32a7c0ae7918",
             "no-compare": "38fb361f406c"
@@ -732,8 +743,8 @@
       {
         "id": "review-branch-diff-shapes.outer-refused-no-message:branch",
         "observation": {
-          "sender": ["bfc42188b2f9"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["47bfba92ccde"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "67daf7391fee"
           },
@@ -744,8 +755,8 @@
       {
         "id": "review-branch-diff-shapes.outer-refused-no-message:no-compare",
         "observation": {
-          "sender": ["bfc42188b2f9"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["47bfba92ccde"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "67daf7391fee",
             "no-compare": "38fb361f406c"
@@ -757,8 +768,8 @@
       {
         "id": "review-branch-diff-shapes.method-not-found:branch",
         "observation": {
-          "sender": ["2b60e29f5b1c"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["b0f6c8c624f6"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "b948e8307e81"
           },
@@ -769,8 +780,8 @@
       {
         "id": "review-branch-diff-shapes.method-not-found:no-compare",
         "observation": {
-          "sender": ["2b60e29f5b1c"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["b0f6c8c624f6"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "b948e8307e81",
             "no-compare": "38fb361f406c"
@@ -782,8 +793,8 @@
       {
         "id": "review-branch-diff-shapes.transport-rejection:branch",
         "observation": {
-          "sender": ["f7f8f22083a7"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["4a1c896f4fef"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "a947768bc0ed"
           },
@@ -794,8 +805,8 @@
       {
         "id": "review-branch-diff-shapes.transport-rejection:no-compare",
         "observation": {
-          "sender": ["f7f8f22083a7"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["4a1c896f4fef"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "a947768bc0ed",
             "no-compare": "38fb361f406c"
@@ -807,8 +818,8 @@
       {
         "id": "review-branch-diff-shapes.transport-rejection-no-message:branch",
         "observation": {
-          "sender": ["1ba6250404ac"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["9234de2a5458"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "c7584e82c72f"
           },
@@ -819,8 +830,8 @@
       {
         "id": "review-branch-diff-shapes.transport-rejection-no-message:no-compare",
         "observation": {
-          "sender": ["1ba6250404ac"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["9234de2a5458"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "c7584e82c72f",
             "no-compare": "38fb361f406c"

@@ -3,9 +3,9 @@
   "family": "session.review-send-sheet",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
   "scenarioSha256": "8b4a06c1b2918d5ed5f40102c1c7cb411e02aba5e7601e98658d673634784bb0",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1ee5cdadc74e": {
-      "name": "session.tabs.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
-      "sent": 1
-    },
     "697177595a0a": {
       "actionError": {
         "$rpc": "null"
@@ -60,8 +55,20 @@
         ]
       }
     },
-    "c723becec2d4": {
+    "6eb439bad25e": {
+      "name": "reply-salvage",
+      "ordinal": 3,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["1"],
+        "method": "session.tabs.list",
+        "operation": "session.review-terminal-list",
+        "variant": "review-terminal-tabs"
+      }
+    },
+    "9a3dbd49ee14": {
       "name": "session.tabs.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -105,6 +112,11 @@
         }
       }
     },
+    "acb5ae38e750": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -120,13 +132,13 @@
       {
         "id": "listed",
         "observation": {
-          "sender": ["c723becec2d4"],
-          "payloads": ["1ee5cdadc74e"],
+          "sender": ["9a3dbd49ee14"],
+          "payloads": ["acb5ae38e750"],
           "settlements": {
             "open": "eb79a9b3682a"
           },
           "state": "697177595a0a",
-          "effects": []
+          "effects": ["6eb439bad25e"]
         }
       }
     ]

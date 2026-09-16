@@ -3,7 +3,7 @@
   "family": "clipboard.image-upload",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
@@ -82,42 +82,6 @@
             "$rpc": "null"
           }
         }
-      }
-    },
-    "0886378046b0": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "path": {
-        "$rpc": "undefined"
-      }
-    },
-    "2565f3b22472": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "path": {
-        "error": "inner refused",
-        "ok": false
-      }
-    },
-    "2c021902d01b": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "path": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
-    },
-    "301151228fa3": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "refused"
       }
     },
     "32a7c0ae7918": {
@@ -311,6 +275,17 @@
       "failure": "",
       "path": "unsaved"
     },
+    "67b442005898": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (clipboard.saveImageAsTempFile)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
     "7a9387a4c64a": {
       "failure": "transport failure",
       "path": "unsaved"
@@ -397,23 +372,6 @@
       },
       "path": "/tmp/legacy.png"
     },
-    "927229706f96": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "path": {
-        "error": "refused"
-      }
-    },
-    "9f00dd54ba64": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "inner refused",
-        "ok": false
-      }
-    },
     "a947768bc0ed": {
       "status": "rejected",
       "startedAt": 0,
@@ -422,25 +380,6 @@
         "category": "Error",
         "message": "transport failure",
         "isRpcDeliveryUnknown": true
-      }
-    },
-    "ad8a954e879d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
-    },
-    "afb22d946687": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "path": {
-        "$rpc": "null"
       }
     },
     "b948e8307e81": {
@@ -508,22 +447,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "ee20a1dc39e7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "null"
       }
     },
     "f100a8a8f589": {
@@ -607,6 +530,10 @@
           "ok": false
         }
       }
+    },
+    "ff4c5fd9c1aa": {
+      "failure": "The host sent a reply this app could not read (clipboard.saveImageAsTempFile)",
+      "path": "unsaved"
     }
   },
   "recording": {
@@ -630,9 +557,9 @@
           "sender": ["fa3470507c98", "90ff7c821047"],
           "payloads": ["7bc2e4227914", "bf02ba1bc517"],
           "settlements": {
-            "remote": "eb79a9b3682a"
+            "remote": "67b442005898"
           },
-          "state": "0886378046b0",
+          "state": "ff4c5fd9c1aa",
           "effects": []
         }
       },
@@ -642,9 +569,9 @@
           "sender": ["fa3470507c98", "06e55827ea7c"],
           "payloads": ["7bc2e4227914", "bf02ba1bc517"],
           "settlements": {
-            "remote": "ee20a1dc39e7"
+            "remote": "67b442005898"
           },
-          "state": "afb22d946687",
+          "state": "ff4c5fd9c1aa",
           "effects": []
         }
       },
@@ -654,9 +581,9 @@
           "sender": ["fa3470507c98", "386081a78bad"],
           "payloads": ["7bc2e4227914", "bf02ba1bc517"],
           "settlements": {
-            "remote": "301151228fa3"
+            "remote": "67b442005898"
           },
-          "state": "927229706f96",
+          "state": "ff4c5fd9c1aa",
           "effects": []
         }
       },
@@ -666,9 +593,9 @@
           "sender": ["fa3470507c98", "f100a8a8f589"],
           "payloads": ["7bc2e4227914", "bf02ba1bc517"],
           "settlements": {
-            "remote": "9f00dd54ba64"
+            "remote": "67b442005898"
           },
-          "state": "2565f3b22472",
+          "state": "ff4c5fd9c1aa",
           "effects": []
         }
       },
@@ -678,9 +605,9 @@
           "sender": ["fa3470507c98", "e9e0139b9fa1"],
           "payloads": ["7bc2e4227914", "bf02ba1bc517"],
           "settlements": {
-            "remote": "ad8a954e879d"
+            "remote": "67b442005898"
           },
-          "state": "2c021902d01b",
+          "state": "ff4c5fd9c1aa",
           "effects": []
         }
       },

@@ -3,7 +3,7 @@
   "family": "clipboard.image-attachment",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
@@ -95,16 +95,6 @@
         }
       }
     },
-    "2360f0a18466": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null.",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "32a7c0ae7918": {
       "status": "rejected",
       "startedAt": 0,
@@ -151,15 +141,9 @@
         }
       }
     },
-    "443dd7aae7aa": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined.",
-        "isRpcDeliveryUnknown": false
-      }
+    "425f01ad5f1a": {
+      "attached": "unattached",
+      "failure": "The host sent a reply this app could not read (clipboard.startImageUpload)"
     },
     "5573fed479c2": {
       "attached": "unattached",
@@ -313,10 +297,6 @@
       "attached": "unattached",
       "failure": ""
     },
-    "8de120313755": {
-      "attached": "unattached",
-      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined."
-    },
     "8e050dc4db92": {
       "name": "clipboard.startImageUpload#1",
       "ordinal": 2,
@@ -356,10 +336,6 @@
       "status": "pending",
       "startedAt": 0
     },
-    "934346926f7a": {
-      "attached": "unattached",
-      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null."
-    },
     "994fccf9b305": {
       "name": "upload-start",
       "ordinal": 1,
@@ -380,39 +356,15 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "aa2ba6a08e8b": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
-    },
-    "ab55a4eae105": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.appendImageUploadChunk"
-        },
-        {
-          "name": "params",
-          "value": {
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "offset": 0,
-            "uploadId": {
-              "$rpc": "undefined"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
+    "bf4d693e3e27": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (clipboard.startImageUpload)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
       }
     },
     "c7584e82c72f": {
@@ -620,9 +572,9 @@
           "sender": ["cd37c121c1fd"],
           "payloads": ["6696a47819e1"],
           "settlements": {
-            "normal": "443dd7aae7aa"
+            "normal": "bf4d693e3e27"
           },
-          "state": "8de120313755",
+          "state": "425f01ad5f1a",
           "effects": ["994fccf9b305"]
         }
       },
@@ -632,45 +584,45 @@
           "sender": ["d7fc074e6b40"],
           "payloads": ["6696a47819e1"],
           "settlements": {
-            "normal": "2360f0a18466"
+            "normal": "bf4d693e3e27"
           },
-          "state": "934346926f7a",
+          "state": "425f01ad5f1a",
           "effects": ["994fccf9b305"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.inner-ok-missing:upload-refused",
         "observation": {
-          "sender": ["8e050dc4db92", "ab55a4eae105"],
-          "payloads": ["6696a47819e1", "aa2ba6a08e8b"],
+          "sender": ["8e050dc4db92"],
+          "payloads": ["6696a47819e1"],
           "settlements": {
-            "normal": "9270aeb7d9c6"
+            "normal": "bf4d693e3e27"
           },
-          "state": "5573fed479c2",
+          "state": "425f01ad5f1a",
           "effects": ["994fccf9b305"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.inner-false-string-error:upload-refused",
         "observation": {
-          "sender": ["7a79daaa2290", "ab55a4eae105"],
-          "payloads": ["6696a47819e1", "aa2ba6a08e8b"],
+          "sender": ["7a79daaa2290"],
+          "payloads": ["6696a47819e1"],
           "settlements": {
-            "normal": "9270aeb7d9c6"
+            "normal": "bf4d693e3e27"
           },
-          "state": "5573fed479c2",
+          "state": "425f01ad5f1a",
           "effects": ["994fccf9b305"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.inner-false-object-error:upload-refused",
         "observation": {
-          "sender": ["23326ee9349f", "ab55a4eae105"],
-          "payloads": ["6696a47819e1", "aa2ba6a08e8b"],
+          "sender": ["23326ee9349f"],
+          "payloads": ["6696a47819e1"],
           "settlements": {
-            "normal": "9270aeb7d9c6"
+            "normal": "bf4d693e3e27"
           },
-          "state": "5573fed479c2",
+          "state": "425f01ad5f1a",
           "effects": ["994fccf9b305"]
         }
       },

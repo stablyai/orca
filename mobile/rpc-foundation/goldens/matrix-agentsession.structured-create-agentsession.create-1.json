@@ -3,9 +3,9 @@
   "family": "agentSession.structured-create",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
   "scenarioSha256": "81ed7c1a4276cf1d891334c64c06362b88b5f9690b3ebae6d0988559b1faab0f",
   "platform": "darwin",
@@ -13,28 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "00c2dc84f227": {
+    "001cba249e32": {
       "name": "agentSession.create#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 3
-    },
-    "05c8ed108777": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "unknown",
-        "message": "The Claude chat result could not be confirmed."
-      }
-    },
-    "122f5b326dbb": {
-      "launched": {
-        "kind": "failed",
-        "message": "Unknown method"
-      }
-    },
-    "13ac3c302b9f": {
-      "name": "agentSession.create#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -64,21 +45,13 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "13de7bc25fad": {
+    "00c4403a6cae": {
       "name": "agentSession.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -117,259 +90,9 @@
         }
       }
     },
-    "14c94f13d5b4": {
+    "052339a099eb": {
       "name": "agentSession.create#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "agentSession.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "envelope": {
-              "clientOperationId": "1767225600000-00000000000040008000000000000002",
-              "expectedRuntimeFence": {
-                "$rpc": "null"
-              },
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "18bdbb57da23": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "unknown",
-        "message": "outer refused"
-      }
-    },
-    "3db129933d79": {
-      "name": "agentSession.createSupport#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 1
-    },
-    "4664ed595c8c": {
-      "name": "agentSession.create#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "agentSession.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "envelope": {
-              "clientOperationId": "1767225600000-00000000000040008000000000000002",
-              "expectedRuntimeFence": {
-                "$rpc": "null"
-              },
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "5ced191e47dd": {
-      "name": "agentSession.create#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "agentSession.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "envelope": {
-              "clientOperationId": "1767225600000-00000000000040008000000000000002",
-              "expectedRuntimeFence": {
-                "$rpc": "null"
-              },
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "616f0f78cd71": {
-      "launched": {
-        "kind": "unknown",
-        "message": "outer refused"
-      }
-    },
-    "6d6669cd1a85": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "created",
-        "sessionId": "claude_00000000_0000_4000_8000_000000000001"
-      }
-    },
-    "73bdf299262b": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "failed",
-        "message": "Unknown method"
-      }
-    },
-    "7c478b823340": {
-      "name": "agentSession.create#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "agentSession.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "envelope": {
-              "clientOperationId": "1767225600000-00000000000040008000000000000002",
-              "expectedRuntimeFence": {
-                "$rpc": "null"
-              },
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "892bef14ed9a": {
-      "name": "agentSession.create#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "agentSession.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "envelope": {
-              "clientOperationId": "1767225600000-00000000000040008000000000000002",
-              "expectedRuntimeFence": {
-                "$rpc": "null"
-              },
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "96dd4556670e": {
-      "name": "agentSession.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -414,11 +137,75 @@
         }
       }
     },
-    "a4273b38df83": {
-      "launched": "unlaunched"
+    "05c8ed108777": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "unknown",
+        "message": "The Claude chat result could not be confirmed."
+      }
     },
-    "a7c03cc0acb3": {
+    "122f5b326dbb": {
+      "launched": {
+        "kind": "failed",
+        "message": "Unknown method"
+      }
+    },
+    "18bdbb57da23": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "unknown",
+        "message": "outer refused"
+      }
+    },
+    "3ce787e7eb26": {
       "name": "agentSession.create#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": {
+                "$rpc": "null"
+              },
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3e8a38dc3ecb": {
+      "name": "agentSession.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -461,24 +248,39 @@
         }
       }
     },
-    "bc88a2996f1c": {
+    "568aa5cfc6b5": {
       "name": "agentSession.createSupport#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
+    },
+    "5d0f7c315752": {
+      "name": "agentSession.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "agentSession.createSupport"
+          "value": "agentSession.create"
         },
         {
           "name": "params",
           "value": {
             "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": {
+                "$rpc": "null"
+              },
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
             "worktree": "id:workspace-1"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
           }
         }
       ],
@@ -487,27 +289,140 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "supported": true
-          }
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
         }
       }
     },
-    "ca22846fa804": {
-      "name": "agentSession.create#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 2
-    },
-    "d00057b53c3e": {
+    "616f0f78cd71": {
       "launched": {
+        "kind": "unknown",
+        "message": "outer refused"
+      }
+    },
+    "6d6669cd1a85": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
         "kind": "created",
         "sessionId": "claude_00000000_0000_4000_8000_000000000001"
       }
     },
-    "d3d974bd0cb7": {
+    "73bdf299262b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "failed",
+        "message": "Unknown method"
+      }
+    },
+    "7903f6b6f8fd": {
       "name": "agentSession.create#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": {
+                "$rpc": "null"
+              },
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "907c2954b0e2": {
+      "name": "agentSession.create#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": {
+                "$rpc": "null"
+              },
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "91f56e5d551d": {
+      "name": "agentSession.create#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "95e3678a4ba5": {
+      "name": "agentSession.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -542,13 +457,96 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "",
+          "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "d786cd5ee0ac": {
+    "9e17c54fa815": {
       "name": "agentSession.create#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": {
+                "$rpc": "null"
+              },
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "a4273b38df83": {
+      "launched": "unlaunched"
+    },
+    "a75955abbbbc": {
+      "name": "agentSession.createSupport#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "supported": true
+          }
+        }
+      }
+    },
+    "b5f7cf9d778d": {
+      "name": "agentSession.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -593,14 +591,9 @@
         }
       }
     },
-    "f931c8ee446a": {
-      "launched": {
-        "kind": "unknown",
-        "message": "The Claude chat result could not be confirmed."
-      }
-    },
-    "f9e44512925f": {
+    "c4b8d1feb09b": {
       "name": "agentSession.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -630,15 +623,35 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
         }
       }
+    },
+    "d00057b53c3e": {
+      "launched": {
+        "kind": "created",
+        "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+      }
+    },
+    "f931c8ee446a": {
+      "launched": {
+        "kind": "unknown",
+        "message": "The Claude chat result could not be confirmed."
+      }
+    },
+    "fdff1e265b45": {
+      "name": "agentSession.create#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
     }
   },
   "recording": {
@@ -647,8 +660,8 @@
       {
         "id": "structured-agent-session-created.normal:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "d786cd5ee0ac"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "b5f7cf9d778d"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "6d6669cd1a85"
           },
@@ -659,8 +672,8 @@
       {
         "id": "structured-agent-session-created.result-absent:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "13de7bc25fad"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "00c4403a6cae"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "05c8ed108777"
           },
@@ -671,8 +684,8 @@
       {
         "id": "structured-agent-session-created.result-null:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "5ced191e47dd"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "9e17c54fa815"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "05c8ed108777"
           },
@@ -683,8 +696,8 @@
       {
         "id": "structured-agent-session-created.inner-ok-missing:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "7c478b823340"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "907c2954b0e2"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "05c8ed108777"
           },
@@ -695,8 +708,8 @@
       {
         "id": "structured-agent-session-created.inner-false-string-error:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "13ac3c302b9f"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "c4b8d1feb09b"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "05c8ed108777"
           },
@@ -707,8 +720,8 @@
       {
         "id": "structured-agent-session-created.inner-false-object-error:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "96dd4556670e"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "052339a099eb"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "05c8ed108777"
           },
@@ -719,8 +732,8 @@
       {
         "id": "structured-agent-session-created.outer-refused:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "14c94f13d5b4"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "7903f6b6f8fd"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "18bdbb57da23"
           },
@@ -731,8 +744,8 @@
       {
         "id": "structured-agent-session-created.outer-refused-no-message:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "892bef14ed9a"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "5d0f7c315752"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "05c8ed108777"
           },
@@ -743,8 +756,8 @@
       {
         "id": "structured-agent-session-created.method-not-found:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "a7c03cc0acb3"],
-          "payloads": ["3db129933d79", "ca22846fa804"],
+          "sender": ["a75955abbbbc", "3e8a38dc3ecb"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d"],
           "settlements": {
             "claude": "73bdf299262b"
           },
@@ -755,8 +768,8 @@
       {
         "id": "structured-agent-session-created.transport-rejection:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "f9e44512925f", "4664ed595c8c"],
-          "payloads": ["3db129933d79", "ca22846fa804", "00c2dc84f227"],
+          "sender": ["a75955abbbbc", "95e3678a4ba5", "001cba249e32"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d", "fdff1e265b45"],
           "settlements": {
             "claude": "9270aeb7d9c6"
           },
@@ -767,8 +780,8 @@
       {
         "id": "structured-agent-session-created.transport-rejection-no-message:created",
         "observation": {
-          "sender": ["bc88a2996f1c", "d3d974bd0cb7", "4664ed595c8c"],
-          "payloads": ["3db129933d79", "ca22846fa804", "00c2dc84f227"],
+          "sender": ["a75955abbbbc", "3ce787e7eb26", "001cba249e32"],
+          "payloads": ["568aa5cfc6b5", "91f56e5d551d", "fdff1e265b45"],
           "settlements": {
             "claude": "9270aeb7d9c6"
           },

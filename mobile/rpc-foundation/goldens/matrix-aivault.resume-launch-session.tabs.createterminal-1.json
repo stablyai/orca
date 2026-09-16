@@ -3,7 +3,7 @@
   "family": "aiVault.resume-launch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
@@ -91,10 +91,6 @@
           "ok": true
         }
       }
-    },
-    "432332c9740e": {
-      "failure": "Created terminal response was invalid",
-      "launched": "unlaunched"
     },
     "4593130c572f": {
       "name": "session.tabs.createTerminal#1",
@@ -184,6 +180,16 @@
         }
       }
     },
+    "478ad4afe83e": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)",
+        "isRpcDeliveryUnknown": false
+      }
+    },
     "53623411feb6": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 1,
@@ -231,16 +237,6 @@
     "54558214b507": {
       "failure": "Unknown method",
       "launched": "unlaunched"
-    },
-    "681fc4d59b92": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Created terminal response was invalid",
-        "isRpcDeliveryUnknown": false
-      }
     },
     "6e79da536ca9": {
       "status": "fulfilled",
@@ -297,6 +293,10 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "84a5c9365ee8": {
+      "failure": "The host sent a reply this app could not read (session.tabs.createTerminal)",
+      "launched": "unlaunched"
     },
     "919c7f3e8c27": {
       "name": "session.tabs.createTerminal#1",
@@ -665,9 +665,9 @@
           "sender": ["41a658e859b8"],
           "payloads": ["0bce25f5646d"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -677,9 +677,9 @@
           "sender": ["b0e4a76fd545"],
           "payloads": ["0bce25f5646d"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -689,9 +689,9 @@
           "sender": ["f0411f7ef116"],
           "payloads": ["0bce25f5646d"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -701,9 +701,9 @@
           "sender": ["4593130c572f"],
           "payloads": ["0bce25f5646d"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },
@@ -713,9 +713,9 @@
           "sender": ["919c7f3e8c27"],
           "payloads": ["0bce25f5646d"],
           "settlements": {
-            "full": "681fc4d59b92"
+            "full": "478ad4afe83e"
           },
-          "state": "432332c9740e",
+          "state": "84a5c9365ee8",
           "effects": []
         }
       },

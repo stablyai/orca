@@ -3,7 +3,7 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
@@ -132,16 +132,6 @@
         }
       }
     },
-    "55227363ca22": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Diff response was invalid",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "717bd1fbc163": {
       "branchCompare": "unloaded",
       "diff": {
@@ -150,6 +140,16 @@
         "kind": "too-large"
       },
       "snapshot": "unloaded"
+    },
+    "7753343578da": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (git.diff)",
+        "isRpcDeliveryUnknown": false
+      }
     },
     "84090dfad90d": {
       "status": "fulfilled",
@@ -220,7 +220,7 @@
           "settlements": {
             "binary": "84090dfad90d",
             "too-large": "8675e0f40158",
-            "invalid": "55227363ca22"
+            "invalid": "7753343578da"
           },
           "state": "717bd1fbc163",
           "effects": []

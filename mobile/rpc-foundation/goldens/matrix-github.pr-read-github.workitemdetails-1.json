@@ -3,7 +3,7 @@
   "family": "github.pr-read",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "baseline": "84cf72d01e0d63fad0df44eaa36667bab068d24a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
@@ -1047,6 +1047,130 @@
         }
       }
     },
+    "4c08d8ee1be9": {
+      "check-details": {
+        "ok": true,
+        "result": {
+          "annotations": [],
+          "completedAt": {
+            "$rpc": "null"
+          },
+          "conclusion": "success",
+          "detailsUrl": {
+            "$rpc": "null"
+          },
+          "jobs": [],
+          "name": "build",
+          "startedAt": {
+            "$rpc": "null"
+          },
+          "status": "completed",
+          "summary": {
+            "$rpc": "null"
+          },
+          "text": {
+            "$rpc": "null"
+          },
+          "title": {
+            "$rpc": "null"
+          },
+          "url": {
+            "$rpc": "null"
+          }
+        }
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "error": "The host sent a reply this app could not read (github.workItemDetails)",
+        "ok": false
+      }
+    },
     "4cb58b2b8a8a": {
       "assignable": {
         "ok": true,
@@ -1405,6 +1529,15 @@
       "name": "github.prChecks#1",
       "ordinal": 10,
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
+    },
+    "548caab5ab14": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "The host sent a reply this app could not read (github.workItemDetails)",
+        "ok": false
+      }
     },
     "5a46540568af": {
       "hosted-review": {
@@ -3376,6 +3509,82 @@
         "ok": false
       }
     },
+    "c2785bb15b63": {
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "error": "The host sent a reply this app could not read (github.workItemDetails)",
+        "ok": false
+      }
+    },
     "c4e2cfc10080": {
       "hosted-review": {
         "ok": true,
@@ -3732,6 +3941,233 @@
             }
           }
         ]
+      }
+    },
+    "e319d5cb5927": {
+      "assignable": {
+        "ok": true,
+        "result": [
+          {
+            "avatarUrl": "",
+            "login": "octocat",
+            "name": "Octo Cat"
+          }
+        ]
+      },
+      "check-details": {
+        "ok": true,
+        "result": {
+          "annotations": [],
+          "completedAt": {
+            "$rpc": "null"
+          },
+          "conclusion": "success",
+          "detailsUrl": {
+            "$rpc": "null"
+          },
+          "jobs": [],
+          "name": "build",
+          "startedAt": {
+            "$rpc": "null"
+          },
+          "status": "completed",
+          "summary": {
+            "$rpc": "null"
+          },
+          "text": {
+            "$rpc": "null"
+          },
+          "title": {
+            "$rpc": "null"
+          },
+          "url": {
+            "$rpc": "null"
+          }
+        }
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "error": "The host sent a reply this app could not read (github.workItemDetails)",
+        "ok": false
+      }
+    },
+    "e3944d0774f9": {
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "error": "The host sent a reply this app could not read (github.workItemDetails)",
+        "ok": false
       }
     },
     "e97a125cdb88": {
@@ -4497,9 +4933,9 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303"
+            "work-item": "548caab5ab14"
           },
-          "state": "1d52420ad659",
+          "state": "c2785bb15b63",
           "effects": []
         }
       },
@@ -4524,10 +4960,10 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033"
           },
-          "state": "9c65895af93c",
+          "state": "e3944d0774f9",
           "effects": []
         }
       },
@@ -4554,11 +4990,11 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45"
           },
-          "state": "6ab3eb2d5cbe",
+          "state": "4c08d8ee1be9",
           "effects": []
         }
       },
@@ -4587,12 +5023,12 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45",
             "assignable": "a93bcc7122e8"
           },
-          "state": "4cb58b2b8a8a",
+          "state": "e319d5cb5927",
           "effects": []
         }
       },
@@ -4713,9 +5149,9 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303"
+            "work-item": "548caab5ab14"
           },
-          "state": "1d52420ad659",
+          "state": "c2785bb15b63",
           "effects": []
         }
       },
@@ -4740,10 +5176,10 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033"
           },
-          "state": "9c65895af93c",
+          "state": "e3944d0774f9",
           "effects": []
         }
       },
@@ -4770,11 +5206,11 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45"
           },
-          "state": "6ab3eb2d5cbe",
+          "state": "4c08d8ee1be9",
           "effects": []
         }
       },
@@ -4803,12 +5239,12 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45",
             "assignable": "a93bcc7122e8"
           },
-          "state": "4cb58b2b8a8a",
+          "state": "e319d5cb5927",
           "effects": []
         }
       },
@@ -4821,9 +5257,9 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303"
+            "work-item": "548caab5ab14"
           },
-          "state": "1d52420ad659",
+          "state": "c2785bb15b63",
           "effects": []
         }
       },
@@ -4848,10 +5284,10 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033"
           },
-          "state": "9c65895af93c",
+          "state": "e3944d0774f9",
           "effects": []
         }
       },
@@ -4878,11 +5314,11 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45"
           },
-          "state": "6ab3eb2d5cbe",
+          "state": "4c08d8ee1be9",
           "effects": []
         }
       },
@@ -4911,12 +5347,12 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45",
             "assignable": "a93bcc7122e8"
           },
-          "state": "4cb58b2b8a8a",
+          "state": "e319d5cb5927",
           "effects": []
         }
       },
@@ -4929,9 +5365,9 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303"
+            "work-item": "548caab5ab14"
           },
-          "state": "1d52420ad659",
+          "state": "c2785bb15b63",
           "effects": []
         }
       },
@@ -4956,10 +5392,10 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033"
           },
-          "state": "9c65895af93c",
+          "state": "e3944d0774f9",
           "effects": []
         }
       },
@@ -4986,11 +5422,11 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45"
           },
-          "state": "6ab3eb2d5cbe",
+          "state": "4c08d8ee1be9",
           "effects": []
         }
       },
@@ -5019,12 +5455,12 @@
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
             "pr-for-branch": "f2563d0882ec",
-            "work-item": "8a5cb8b66303",
+            "work-item": "548caab5ab14",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45",
             "assignable": "a93bcc7122e8"
           },
-          "state": "4cb58b2b8a8a",
+          "state": "e319d5cb5927",
           "effects": []
         }
       },
