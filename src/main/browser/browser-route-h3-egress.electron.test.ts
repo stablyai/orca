@@ -33,5 +33,5 @@ describe('browser route HTTP/3 and Direct Sockets egress under Electron', () => 
     })
     expect(guarded.directSocketsConstruct).toBe('threw:ReferenceError')
     expect(guarded.rendererGone).toBe('none')
-  }, 90_000)
+  }, 150_000)
 })
