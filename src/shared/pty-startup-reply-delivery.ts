@@ -33,7 +33,7 @@ export type { PtyStartupReplyEchoMatch } from './pty-startup-reply-echo-shapes'
 //
 // Both are projected on every write, which is why (2) is covered at all.
 
-type ExpectedEcho = { projections: readonly EchoProjection[]; remainingBytes: number }
+type ExpectedEcho = { projections: EchoProjection[]; remainingBytes: number }
 
 // Why bytes and not reads: the echo is a fixed ~30 bytes, but nothing bounds how the tty
 // chunks them — an SSH relay or a slow drain delivers a few bytes at a time, and a
@@ -73,7 +73,9 @@ export class PtyStartupReplyDelivery {
     // Why register before the write: node-pty can synchronously re-enter onData, so the
     // echo can arrive inside `writeProvider` itself.
     const expected: ExpectedEcho | null =
-      projections.length > 0 ? { projections, remainingBytes: ECHO_SEARCH_BUDGET_BYTES } : null
+      projections.length > 0
+        ? { projections: [...projections], remainingBytes: ECHO_SEARCH_BUDGET_BYTES }
+        : null
     if (expected) {
       this.expectedEchoes.push(expected)
     }
@@ -98,15 +100,32 @@ export class PtyStartupReplyDelivery {
   matchEcho(data: string): PtyStartupReplyEchoMatch {
     let best: PtyStartupReplyEchoMatch = { kind: 'none' }
     let bestIndex = -1
+    const remainingLineEditorEchoes = this.expectedEchoes.filter((expected) =>
+      expected.projections.some((projection) => projection.source === 'line-editor')
+    ).length
     for (const [index, expected] of this.expectedEchoes.entries()) {
-      const match = locateEcho(expected.projections, data)
+      // The final echo can consume zsh's trailing BEL; earlier echoes leave it for the next reply.
+      const match = locateEcho(
+        expected.projections,
+        data,
+        remainingLineEditorEchoes === 1 &&
+          expected.projections.some((projection) => projection.source === 'line-editor')
+      )
       if (isBetterEchoMatch(match, best)) {
         best = match
         bestIndex = index
       }
     }
     if (best.kind === 'complete') {
-      this.expectedEchoes.splice(bestIndex, 1)
+      const expected = this.expectedEchoes[bestIndex]
+      if (expected) {
+        expected.projections = expected.projections.filter(
+          (projection) => projection.source !== best.source
+        )
+        if (expected.projections.length === 0) {
+          this.expectedEchoes.splice(bestIndex, 1)
+        }
+      }
       return best
     }
     return best
