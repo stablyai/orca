@@ -4,7 +4,7 @@ import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/linea
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { getRepoExecutionHostId } from '../shared/execution-host'
 import { isWorkspaceKey, parseWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
-import { splitWorktreeId } from '../shared/worktree/id'
+import { splitWorktreeIdForFilesystem } from '../shared/worktree/id'
 import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-comparison'
 import type { Store } from './persistence'
 
@@ -72,7 +72,10 @@ export function pruneLineageForMissingRepoWorktrees(
     if (liveIds.has(worktreeId) || preservedMetadataCandidateIds?.has(worktreeId)) {
       return true
     }
-    const worktreePath = splitWorktreeId(worktreeId)?.worktreePath
+    // Why the filesystem view: a folder workspace's `::workspace:<uuid>` suffix is identity, not
+    // path. Reading it raw makes every folder workspace look like a directory git no longer lists,
+    // and prunes the lineage of workspaces whose directory is right there in `livePathKeys`.
+    const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
     if (!worktreePath) {
       return false
     }

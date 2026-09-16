@@ -16,6 +16,7 @@ export type RuntimeStore = {
   getProjectHostSetups?: Store['getProjectHostSetups']
   createProjectHostSetup?: Store['createProjectHostSetup']
   updateProjectHostSetup?: Store['updateProjectHostSetup']
+  relocateRepoPath?: Store['relocateRepoPath']
   deleteProjectHostSetup?: Store['deleteProjectHostSetup']
   getProjectGroups?: Store['getProjectGroups']
   createProjectGroup?: Store['createProjectGroup']
