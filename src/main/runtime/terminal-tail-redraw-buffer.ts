@@ -2,6 +2,7 @@ import {
   hasCanonicalNumericCsiParams,
   parseAnsiControlSequence
 } from './terminal-ansi-normalization'
+import { ownRetainedString } from '../../shared/own-retained-string'
 import { clampTerminalPreviewCursor, trimTerminalLineRight } from './terminal-tail-line-controls'
 import { MAX_TAIL_CHARS, MAX_TAIL_LINES, MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
 
@@ -241,7 +242,11 @@ function finalizeRetainedTerminalRows(
 
   return {
     lines,
-    partialLine,
+    // Why only the partial: redraw rows are built character by character and never sliced from
+    // the chunk, but the partial is re-sliced from its own row on every chunk, so it alone can
+    // accumulate a backing string across frames. Owning the rows too costs 20-36% on TUI floods
+    // for no measured retention.
+    partialLine: ownRetainedString(partialLine),
     redrawCursor,
     truncated,
     newCompleteLines,

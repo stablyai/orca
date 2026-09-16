@@ -1,0 +1,2702 @@
+{
+  "operation": "tasks.project-row-review-checks",
+  "family": "tasks.project-row-review-checks",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "370aeaee59978071ccb821da13c9e6114936c168947b608539cdb80d40cc9889",
+  "scenarioSha256": "20e9631df87e40e64d35cee0c0e06b922fe53bd93e3d9e4078633b85a5278b7e",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "025965054a76": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "02839f22d2db": {
+      "name": "projectMutating",
+      "value": false,
+      "sent": 1
+    },
+    "065cd72ecfab": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "0d3abde11044": {
+      "name": "projectRowDetailError",
+      "value": "Connection closed",
+      "sent": 2
+    },
+    "0f3697bbd111": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 2
+    },
+    "126adb332144": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "1fd8ba4fe09e": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "outer refused",
+      "mutating": false,
+      "refreshSeq": 0
+    },
+    "22ffca652b36": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [
+          {
+            "conclusion": "SUCCESS",
+            "name": "build",
+            "status": "COMPLETED",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "",
+      "mutating": false,
+      "refreshSeq": 0
+    },
+    "23b7a2047b2c": {
+      "name": "github.setPRFileViewed#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-1\",\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/index.ts\",\"viewed\":true}}",
+      "sent": 4
+    },
+    "267aadba5179": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "2a1ffe6c7f4c": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "",
+      "mutating": true,
+      "refreshSeq": 0
+    },
+    "2cd85ef93c74": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "",
+      "mutating": false,
+      "refreshSeq": 0
+    },
+    "347fa6adc9f3": {
+      "name": "projectRowDetailError",
+      "value": "",
+      "sent": 3
+    },
+    "3c5cb4768846": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "4365c86f6a70": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "466f8db9d238": {
+      "name": "projectRowDetailError",
+      "value": "outer refused",
+      "sent": 2
+    },
+    "46b4c26d709a": {
+      "name": "projectRowDetailError",
+      "value": "Unknown method",
+      "sent": 2
+    },
+    "5cdba004ba6c": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [
+          {
+            "conclusion": "SUCCESS",
+            "name": "build",
+            "status": "COMPLETED",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "VIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "",
+      "mutating": false,
+      "refreshSeq": 1
+    },
+    "62edc52051d6": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [
+          {
+            "conclusion": "SUCCESS",
+            "name": "build",
+            "status": "COMPLETED",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "",
+      "mutating": false,
+      "refreshSeq": 1
+    },
+    "674a78fb6dfb": {
+      "name": "projectRowDetailError",
+      "value": "transport failure",
+      "sent": 2
+    },
+    "694581af73a0": {
+      "name": "github.setPRFileViewed#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.setPRFileViewed"
+        },
+        {
+          "name": "params",
+          "value": {
+            "path": "src/index.ts",
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "pullRequestId": "PR_kwDO",
+            "repo": "id:repo-1",
+            "viewed": true
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": true
+        }
+      }
+    },
+    "6f4f9198e5ff": {
+      "name": "projectMutating",
+      "value": false,
+      "sent": 2
+    },
+    "735789ad613e": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "Invalid checks response",
+      "mutating": false,
+      "refreshSeq": 0
+    },
+    "73c3051352c2": {
+      "name": "projectMutating",
+      "value": false,
+      "sent": 3
+    },
+    "761c230291b6": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 3
+    },
+    "78b2174d020d": {
+      "name": "github.prChecks#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha\",\"noCache\":true}}",
+      "sent": 2
+    },
+    "78e4c95a24b3": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "7941a2b950be": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "conclusion": "SUCCESS",
+              "name": "build",
+              "status": "COMPLETED",
+              "url": ""
+            }
+          ]
+        }
+      }
+    },
+    "7b2465eedefe": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 0
+    },
+    "7fde07c7539a": {
+      "name": "projectRowDetail",
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [
+          {
+            "conclusion": "SUCCESS",
+            "name": "build",
+            "status": "COMPLETED",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "sent": 2
+    },
+    "80d38ca65a5d": {
+      "name": "projectRowDetailError",
+      "value": "",
+      "sent": 0
+    },
+    "85f150b2df81": {
+      "name": "projectRowDetailError",
+      "value": "",
+      "sent": 1
+    },
+    "8a1d11133692": {
+      "name": "projectRowDetailError",
+      "value": "",
+      "sent": 2
+    },
+    "8bb4bae45cc1": {
+      "name": "github.requestPRReviewers#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.requestPRReviewers"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "reviewers": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "90f25d344500": {
+      "name": "projectRowDetailError",
+      "value": "Invalid checks response",
+      "sent": 2
+    },
+    "914b1bd28569": {
+      "name": "projectReviewersDraft",
+      "value": "",
+      "sent": 1
+    },
+    "93b879a81965": {
+      "name": "projectRowDetail",
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "sent": 1
+    },
+    "97fbbfe4cfb6": {
+      "name": "projectRowDetail",
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [
+          {
+            "conclusion": "SUCCESS",
+            "name": "build",
+            "status": "COMPLETED",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "VIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "sent": 4
+    },
+    "9f7761a3afec": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "",
+      "mutating": false,
+      "refreshSeq": 1
+    },
+    "9f8e0346d638": {
+      "name": "github.requestPRReviewers#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"reviewers\":[\"octocat\"]}}",
+      "sent": 1
+    },
+    "a96d9b0de727": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "b02a5c30b3c1": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "b2fdd4b38834": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "VIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "",
+      "mutating": false,
+      "refreshSeq": 1
+    },
+    "b418bb46de91": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ce55ed88159e": {
+      "name": "projectRowDetail",
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "VIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "sent": 4
+    },
+    "d10f79760196": {
+      "name": "github.rerunPRChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "d1bb762720d5": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 1
+    },
+    "d543cbf9ae9e": {
+      "name": "github.prChecks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha",
+            "noCache": true,
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "d71bf87d2c40": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "transport failure",
+      "mutating": false,
+      "refreshSeq": 0
+    },
+    "d7be83edec32": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [
+          {
+            "avatarUrl": {
+              "$rpc": "null"
+            },
+            "login": "octocat",
+            "name": {
+              "$rpc": "null"
+            }
+          }
+        ]
+      },
+      "draft": "",
+      "error": "Unknown method",
+      "mutating": false,
+      "refreshSeq": 0
+    },
+    "e931ac403da8": {
+      "name": "github.rerunPRChecks#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha\",\"failedOnly\":true}}",
+      "sent": 3
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f14882f2981f": {
+      "name": "projectRowDetailRefreshSeq",
+      "value": 1,
+      "sent": 3
+    },
+    "fa2e7b92e1d5": {
+      "name": "projectMutating",
+      "value": false,
+      "sent": 4
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.project-row-review-checks-github.prchecks-1",
+    "checkpoints": [
+      {
+        "id": "tk-project-row-review-checks.prelude:reviewers-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1"],
+          "payloads": ["9f8e0346d638"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a"
+          },
+          "state": "2cd85ef93c74",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.prelude:cleanup",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "3c5cb4768846"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "2a1ffe6c7f4c",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "0d3abde11044",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.normal:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "7941a2b950be"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "22ffca652b36",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "7fde07c7539a",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.normal:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "7941a2b950be", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "62edc52051d6",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "7fde07c7539a",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.normal:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "7941a2b950be", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "5cdba004ba6c",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "7fde07c7539a",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "97fbbfe4cfb6",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.result-absent:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "4365c86f6a70"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "735789ad613e",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.result-absent:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "4365c86f6a70", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.result-absent:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "4365c86f6a70", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.result-null:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "d543cbf9ae9e"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "735789ad613e",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.result-null:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "d543cbf9ae9e", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.result-null:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "d543cbf9ae9e", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-ok-missing:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "267aadba5179"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "735789ad613e",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-ok-missing:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "267aadba5179", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-ok-missing:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "267aadba5179", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-false-string-error:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "78e4c95a24b3"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "735789ad613e",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-false-string-error:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "78e4c95a24b3", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-false-string-error:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "78e4c95a24b3", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-false-object-error:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "065cd72ecfab"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "735789ad613e",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-false-object-error:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "065cd72ecfab", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.inner-false-object-error:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "065cd72ecfab", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "90f25d344500",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.outer-refused:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "a96d9b0de727"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "1fd8ba4fe09e",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "466f8db9d238",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.outer-refused:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "a96d9b0de727", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "466f8db9d238",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.outer-refused:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "a96d9b0de727", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "466f8db9d238",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.outer-refused-no-message:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "b02a5c30b3c1"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "2cd85ef93c74",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "8a1d11133692",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.outer-refused-no-message:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "b02a5c30b3c1", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "8a1d11133692",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.outer-refused-no-message:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "b02a5c30b3c1", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "8a1d11133692",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.method-not-found:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "126adb332144"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "d7be83edec32",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "46b4c26d709a",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.method-not-found:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "126adb332144", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "46b4c26d709a",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.method-not-found:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "126adb332144", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "46b4c26d709a",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.transport-rejection:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "b418bb46de91"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "d71bf87d2c40",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "674a78fb6dfb",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.transport-rejection:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "b418bb46de91", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "674a78fb6dfb",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.transport-rejection:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "b418bb46de91", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "674a78fb6dfb",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.transport-rejection-no-message:checks-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "025965054a76"],
+          "payloads": ["9f8e0346d638", "78b2174d020d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a"
+          },
+          "state": "2cd85ef93c74",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "8a1d11133692",
+            "6f4f9198e5ff"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.transport-rejection-no-message:rerun-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "025965054a76", "d10f79760196"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a"
+          },
+          "state": "9f7761a3afec",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "8a1d11133692",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-review-checks.transport-rejection-no-message:viewed-settled",
+        "observation": {
+          "sender": ["8bb4bae45cc1", "025965054a76", "d10f79760196", "694581af73a0"],
+          "payloads": ["9f8e0346d638", "78b2174d020d", "e931ac403da8", "23b7a2047b2c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "reviewers-0": "eb79a9b3682a",
+            "checks-1": "eb79a9b3682a",
+            "rerun-2": "eb79a9b3682a",
+            "viewed-3": "eb79a9b3682a"
+          },
+          "state": "b2fdd4b38834",
+          "effects": [
+            "7b2465eedefe",
+            "80d38ca65a5d",
+            "93b879a81965",
+            "914b1bd28569",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "85f150b2df81",
+            "8a1d11133692",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "8a1d11133692",
+            "f14882f2981f",
+            "73c3051352c2",
+            "761c230291b6",
+            "347fa6adc9f3",
+            "ce55ed88159e",
+            "fa2e7b92e1d5"
+          ]
+        }
+      }
+    ]
+  }
+}

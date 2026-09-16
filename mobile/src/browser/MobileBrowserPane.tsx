@@ -21,6 +21,12 @@ import {
   type PinchGesture
 } from './mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import {
+  browserGoBack,
+  browserGoForward,
+  browserNavigate,
+  browserReload
+} from './mobile-browser-command-operations'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 import { MobileBrowserPaneView } from './MobileBrowserPaneView'
 import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
@@ -237,11 +243,13 @@ export function MobileBrowserPane({
       setError('Enter a valid URL.')
       return
     }
-    const result = (await sendBrowserRequest(
-      'browser.goto',
-      { url },
+    const settled = await sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
       { showBusy: true, timeoutMs: 30_000 }
-    )) as { url?: string } | null
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    const result = settled as { url?: string } | null
     if (typeof result?.url === 'string') {
       setAddressValue(displayBrowserUrl(result.url))
       lastZoomResetUrlRef.current = result.url
@@ -294,19 +302,31 @@ export function MobileBrowserPane({
     if (controlsDisabled || !tab.canGoBack) {
       return
     }
-    void sendBrowserRequest('browser.back', {}, { suppressError: true })
+    void sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserGoBack.interpret(await browserGoBack.request(rpc, page, options)),
+      { suppressError: true }
+    )
   }, [controlsDisabled, sendBrowserRequest, tab.canGoBack])
   const goForward = useCallback(() => {
     if (controlsDisabled || !tab.canGoForward) {
       return
     }
-    void sendBrowserRequest('browser.forward', {}, { suppressError: true })
+    void sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserGoForward.interpret(await browserGoForward.request(rpc, page, options)),
+      { suppressError: true }
+    )
   }, [controlsDisabled, sendBrowserRequest, tab.canGoForward])
   const reloadPage = useCallback(() => {
     if (controlsDisabled) {
       return
     }
-    void sendBrowserRequest('browser.reload', {}, { suppressError: true })
+    void sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserReload.interpret(await browserReload.request(rpc, page, options)),
+      { suppressError: true }
+    )
   }, [controlsDisabled, sendBrowserRequest])
 
   const selectBrowserViewMode = useCallback(

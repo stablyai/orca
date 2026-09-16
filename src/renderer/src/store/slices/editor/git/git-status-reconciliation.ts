@@ -132,7 +132,7 @@ export function reconcileOpenFilesForStatus(
   nextEntries: GitStatusEntry[],
   statusIsComplete: boolean
 ): OpenFile[] {
-  const entriesByPath = new Map(nextEntries.map((entry) => [entry.path, entry]))
+  let entriesByPath: Map<string, GitStatusEntry> | undefined
   let changed = false
 
   const nextOpenFiles = openFiles.flatMap((file) => {
@@ -144,10 +144,13 @@ export function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    const entry = entriesByPath.get(file.relativePath)
     if (!file.conflict) {
       return [file]
     }
+
+    // Most refreshes have no open conflicts and need no status-path index.
+    entriesByPath ??= new Map(nextEntries.map((entry) => [entry.path, entry]))
+    const entry = entriesByPath.get(file.relativePath)
 
     // Why: a capped snapshot cannot prove that an omitted conflict was resolved.
     if (!entry && !statusIsComplete) {

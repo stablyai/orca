@@ -18,7 +18,10 @@ export type RemoteScannerContext = {
 export type RemoteSessionFilesystemProvider = Pick<
   IFilesystemProvider,
   'readDir' | 'readFile' | 'stat'
->
+> & {
+  /** Available only beside the execution host's disk; never opens a client path. */
+  readTranscriptBytes?: (path: string, signal?: AbortSignal) => AsyncIterable<Buffer>
+}
 
 export type RemoteParserOptions = {
   executionHostId: ExecutionHostId
@@ -42,6 +45,16 @@ export type RemoteSessionSource = {
   // artifact dir): count subagent transcripts from the walked listing and drop
   // them from candidates instead of indexing them as sessions.
   partitionSubagentTranscripts?: (paths: readonly string[]) => SubagentTranscriptPartition
+  parseDocument?: (
+    file: FileWithMtime,
+    bytes: AsyncIterable<Buffer>,
+    context: RemoteScannerContext
+  ) => Promise<AiVaultSession | null>
+  parseLines?: (
+    file: FileWithMtime,
+    lines: AsyncIterable<string>,
+    context: RemoteScannerContext
+  ) => Promise<AiVaultSession | null>
   parse: (
     file: FileWithMtime,
     content: string,

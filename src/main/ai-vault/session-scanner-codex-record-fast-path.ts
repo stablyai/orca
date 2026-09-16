@@ -1,3 +1,5 @@
+import { CODEX_TOOL_RESPONSE_TYPES } from './session-scanner-codex-tool-records'
+
 // Records below this size are decoded and parsed exactly: JSON.parse on a
 // kilobyte costs less than the risk of a prefix heuristic, and the scan cost
 // this path exists to remove is entirely in megabyte-scale records.
@@ -22,7 +24,10 @@ const PARSED_EVENT_TYPES = new Set([
 ])
 
 /** Returns the timestamp only when the record cannot affect other visible session fields. */
-export function readCodexTimelineOnlyRecord(line: Buffer): { timestamp: string } | null {
+export function readCodexTimelineOnlyRecord(
+  line: Buffer,
+  includeTools = false
+): { timestamp: string } | null {
   if (line.length <= CODEX_RECORD_PREFIX_LIMIT) {
     return null
   }
@@ -39,6 +44,13 @@ export function readCodexTimelineOnlyRecord(line: Buffer): { timestamp: string }
   // A payload whose type is unreadable from the bounded prefix stays ambiguous.
   const payloadType = CODEX_PAYLOAD_TYPE_PATTERN.exec(prefix.slice(envelope[0].length))?.[1]
   if (!payloadType) {
+    return null
+  }
+  if (
+    includeTools &&
+    recordType === 'response_item' &&
+    CODEX_TOOL_RESPONSE_TYPES.has(payloadType)
+  ) {
     return null
   }
   const parsedPayloadTypes =

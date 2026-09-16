@@ -1,7 +1,5 @@
-import { z } from 'zod'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
-import { requiredString } from '../../../schemas'
+import { defineMethod } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
@@ -12,10 +10,9 @@ import {
   stopStructuredWorker
 } from '../../orchestration-structured-worker-lifecycle'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 
-const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
-
-export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
     params: WorkerDispatchParams,
@@ -245,8 +242,9 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
 
 const activeStopByRuntime = new WeakMap<OrcaRuntimeService, Map<string, Promise<unknown>>>()
 
-/** Two callers stopping one Dispatch: the second reached `beginWorkerStop` after the first moved
- *  the row to `stopping` and got `dispatch_inactive` instead of the first caller's receipt. */
+/** Two callers stopping one Dispatch: coalesced so only one of them closes the terminal. Both are
+ *  in this runtime and so carry one epoch, which `beginWorkerStop` refuses a second time anyway;
+ *  the epoch it does accept belongs to a row a dead runtime stranded, and no caller here holds one. */
 function dedupeWorkerStop(
   runtime: OrcaRuntimeService,
   dispatchId: string,

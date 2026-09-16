@@ -3,7 +3,11 @@ import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
 } from '../../../src/shared/codex-reset-credit-scope'
-import type { RpcClient } from '../transport/rpc-client'
+import {
+  codexResetCreditConsume,
+  type MobileCodexResetCreditRpcSender,
+  type MobileCodexResetCreditSendScope
+} from './codex-reset-credit-consume-operations'
 import {
   clearCodexResetAttemptAfterAuthoritativeResponse,
   CodexResetCreditExpectedScopeSchema,
@@ -217,7 +221,7 @@ function decodeResetResult(
 }
 
 async function performCodexResetCreditRequest(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileCodexResetCreditRpcSender,
   options: {
     hostId: string
     expectedScope: CodexResetCreditExpectedScope
@@ -225,18 +229,19 @@ async function performCodexResetCreditRequest(
   }
 ): Promise<CodexResetCreditRequestResult> {
   const attempt = await getOrCreateCodexResetAttempt(options)
-  const response = await client.sendRequest(
-    'accounts.consumeCodexResetCredit',
+  const response = await codexResetCreditConsume.request(
+    client,
     {
       idempotencyKey: attempt.idempotencyKey,
-      expectedScope: attempt.expectedScope
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every attempt is parsed through CodexResetAttemptSchema, whose refinement pairs runtime 'host' with a null distro and 'wsl' with a trimmed non-empty one. The bytes are unchanged.
+      expectedScope: attempt.expectedScope as MobileCodexResetCreditSendScope
     },
     { timeoutMs: RESET_RPC_TIMEOUT_MS }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = decodeResetResult(response.result, attempt.expectedScope)
+  const result = decodeResetResult(
+    codexResetCreditConsume.interpret(response),
+    attempt.expectedScope
+  )
   let attemptJournalRetained = false
   try {
     await clearCodexResetAttemptAfterAuthoritativeResponse({
@@ -251,7 +256,7 @@ async function performCodexResetCreditRequest(
 }
 
 export async function requestCodexResetCredit(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileCodexResetCreditRpcSender,
   options: {
     hostId: string
     expectedScope: CodexResetCreditExpectedScope

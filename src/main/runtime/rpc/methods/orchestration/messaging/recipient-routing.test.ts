@@ -284,61 +284,46 @@ describe('orchestration recipient routing oracle', () => {
     expect(db.getInbox(100)).toEqual([])
   })
 
-  it.each(['@all', '@worktree:wt_target'])(
-    'partially delivers %s when a listed recipient disappears before routing',
-    async (address) => {
-      setup()
-      vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-        terminals: [terminal('term_coord'), terminal('term_live'), terminal('term_disappeared')],
-        totalCount: 3,
-        truncated: false
-      })
-      mockTerminalPaneKeys((handle) =>
-        handle === 'term_coord'
-          ? harness.coordinatorPaneKey
-          : handle === 'term_live'
-            ? 'tab_live:leaf_live'
-            : null
-      )
-      const adoptionLookup = vi.spyOn(db, 'getLegacyAdoptedRunMailboxOwner')
-
-      const result = (await call({
-        from: 'term_coord',
-        to: address,
-        subject: 'fan-out'
-      })) as GroupSendResult
-
-      expect(result.messages).toHaveLength(1)
-      expect(result.messages[0]).toMatchObject({ to_handle: 'term_live' })
-      expect(result.recipients).toBe(1)
-      expect(result.warnings?.map((warning) => warning.code).sort()).toEqual([
-        'legacy_terminal_recipient',
-        'recipient_unreachable'
-      ])
-      expect(db.getInbox(100)).toHaveLength(1)
-      expect(adoptionLookup).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it('fans out once when historical handles resolve to the same Run mailbox', async () => {
+  it('partially delivers @worktree:<id> when a listed recipient disappears before routing', async () => {
     setup()
-    const foreignRun = db.createRun({
-      objective: 'Foreign Run',
-      coordinatorHandle: 'term_foreign_first',
-      coordinatorPaneKey: 'tab_foreign_first:leaf_foreign_first'
-    })
-    db.bindRun({
-      runId: foreignRun.id,
-      coordinatorHandle: 'term_foreign_second',
-      coordinatorPaneKey: 'tab_foreign_second:leaf_foreign_second'
-    })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [
-        terminal('term_coord'),
-        terminal('term_foreign_first'),
-        terminal('term_foreign_second')
-      ],
+      terminals: [terminal('term_coord'), terminal('term_live'), terminal('term_disappeared')],
       totalCount: 3,
+      truncated: false
+    })
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord'
+        ? harness.coordinatorPaneKey
+        : handle === 'term_live'
+          ? 'tab_live:leaf_live'
+          : null
+    )
+    const adoptionLookup = vi.spyOn(db, 'getLegacyAdoptedRunMailboxOwner')
+
+    const result = (await call({
+      from: 'term_coord',
+      to: '@worktree:wt_target',
+      subject: 'fan-out'
+    })) as GroupSendResult
+
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]).toMatchObject({ to_handle: 'term_live' })
+    expect(result.recipients).toBe(1)
+    expect(result.warnings?.map((warning) => warning.code).sort()).toEqual([
+      'legacy_terminal_recipient',
+      'recipient_unreachable'
+    ])
+    expect(db.getInbox(100)).toHaveLength(1)
+    expect(adoptionLookup).toHaveBeenCalledTimes(1)
+  })
+
+  it('addresses @all recipients by Dispatch, so a vanished worker terminal still gets durable mail', async () => {
+    setup()
+    const task = db.createTask({ spec: 'worker whose pane closed' })
+    const dispatch = createRootDispatch(db, task.id, 'term_gone')
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+      terminals: [terminal('term_coord')],
+      totalCount: 1,
       truncated: false
     })
     mockTerminalPaneKeys((handle) => (handle === 'term_coord' ? harness.coordinatorPaneKey : null))
@@ -346,57 +331,81 @@ describe('orchestration recipient routing oracle', () => {
     const result = (await call({
       from: 'term_coord',
       to: '@all',
-      subject: 'one mailbox'
+      subject: 'fan-out'
     })) as GroupSendResult
 
-    expect(result.recipients).toBe(1)
-    expect(result.messages).toHaveLength(1)
-    expect(result.messages[0]).toMatchObject({
-      run_id: foreignRun.id,
-      to_handle: `run:${foreignRun.id}`
+    expect(result.messages).toEqual([
+      expect.objectContaining({ to_handle: `dispatch:${dispatch.id}`, run_id: senderRunId })
+    ])
+    expect(result.warnings).toBeUndefined()
+  })
+
+  it('does not reach a Dispatch of another Run through @all, whatever terminals the host lists', async () => {
+    setup()
+    const foreignRun = db.createRun({
+      objective: 'Foreign Run',
+      coordinatorHandle: 'term_foreign_coord',
+      coordinatorPaneKey: 'tab_foreign:leaf_foreign'
     })
+    const foreignTask = db.createTask({ spec: 'foreign work', runId: foreignRun.id })
+    createRootDispatch(db, foreignTask.id, 'term_foreign_worker')
+    const ownTask = db.createTask({ spec: 'own work' })
+    const own = createRootDispatch(db, ownTask.id, 'term_own_worker')
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+      terminals: [
+        terminal('term_coord'),
+        terminal('term_foreign_worker'),
+        terminal('term_own_worker')
+      ],
+      totalCount: 3,
+      truncated: false
+    })
+
+    const result = (await call({
+      from: 'term_coord',
+      to: '@all',
+      subject: 'mine only'
+    })) as GroupSendResult
+
+    expect(result.messages.map((message) => message.to_handle)).toEqual([`dispatch:${own.id}`])
     expect(db.getInbox(100)).toHaveLength(1)
   })
 
-  it('excludes historical handles that resolve back to the sender mailbox', async () => {
+  it('skips a federated Dispatch with a warning naming the direct address', async () => {
     setup()
-    db.bindRun({
-      runId: senderRunId,
-      coordinatorHandle: 'term_middle',
-      coordinatorPaneKey: 'tab_middle:leaf_middle'
-    })
-    db.bindRun({
-      runId: senderRunId,
-      coordinatorHandle: 'term_sender',
-      coordinatorPaneKey: 'tab_sender:leaf_sender'
+    const local = createRootDispatch(db, db.createTask({ spec: 'local' }).id, 'term_local')
+    const federated = db.createStartingWorkerDispatch({
+      taskSpec: 'remote work',
+      taskRunId: senderRunId,
+      startOptions: {},
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      federation: {
+        environmentId: 'environment_remote',
+        environmentName: 'remote',
+        peerFingerprint: 'remote_peer',
+        protocolVersion: 3
+      }
     })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [
-        terminal('term_sender'),
-        terminal('term_coord'),
-        terminal('term_middle'),
-        terminal('term_live')
-      ],
-      totalCount: 4,
+      terminals: [terminal('term_coord'), terminal('term_local')],
+      totalCount: 2,
       truncated: false
     })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_sender'
-        ? 'tab_sender:leaf_sender'
-        : handle === 'term_live'
-          ? 'tab_live:leaf_live'
-          : null
-    )
 
     const result = (await call({
-      from: 'term_sender',
+      from: 'term_coord',
       to: '@all',
-      subject: 'exclude self aliases'
+      subject: 'fan-out'
     })) as GroupSendResult
 
-    expect(result.messages).toHaveLength(1)
-    expect(result.messages[0].to_handle).toBe('term_live')
-    expect(result.warnings).toMatchObject([{ code: 'legacy_terminal_recipient' }])
+    expect(result.messages.map((message) => message.to_handle)).toEqual([`dispatch:${local.id}`])
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'recipient_unreachable',
+        recipient: `dispatch:${federated.dispatch.id}`
+      })
+    ])
   })
 
   it('replays one honest receipt and discards retry receipts for rejected recipients', async () => {
@@ -479,20 +488,13 @@ describe('orchestration recipient routing oracle', () => {
 
   it('rolls back a partial group insert before an idempotent retry', async () => {
     setup()
+    createRootDispatch(db, db.createTask({ spec: 'first' }).id, 'term_first')
+    createRootDispatch(db, db.createTask({ spec: 'second' }).id, 'term_second')
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [terminal('term_coord'), terminal('term_first'), terminal('term_second')],
       totalCount: 3,
       truncated: false
     })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_coord'
-        ? harness.coordinatorPaneKey
-        : handle === 'term_first'
-          ? 'tab_first:leaf_first'
-          : handle === 'term_second'
-            ? 'tab_second:leaf_second'
-            : null
-    )
     const insertMessage = db.insertMessage.bind(db)
     vi.spyOn(db, 'insertMessage')
       .mockImplementationOnce(insertMessage)
@@ -516,18 +518,12 @@ describe('orchestration recipient routing oracle', () => {
 
   it('replays a completed group receipt when notification fails after durable insertion', async () => {
     setup()
+    createRootDispatch(db, db.createTask({ spec: 'live' }).id, 'term_live')
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [terminal('term_coord'), terminal('term_live')],
       totalCount: 2,
       truncated: false
     })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_coord'
-        ? harness.coordinatorPaneKey
-        : handle === 'term_live'
-          ? 'tab_live:leaf_live'
-          : null
-    )
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementationOnce(() => {
       throw new Error('injected notification failure')
     })

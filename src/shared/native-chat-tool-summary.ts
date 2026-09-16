@@ -1,6 +1,10 @@
+import {
+  collapsedToolInputPrefix,
+  MAX_TOOL_PREVIEW_LENGTH
+} from './native-chat-tool-preview-prefix'
+import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
-const MAX_PREVIEW_LENGTH = 80
 const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
 const MAX_PREVIEW_DEPTH = 2
@@ -33,10 +37,10 @@ export type ToolInputDisplay = {
 }
 
 export function summarizeToolInput(input: unknown): string {
-  const collapsed = toRawPreview(input).replace(/\s+/g, ' ').trim()
-  return collapsed.length <= MAX_PREVIEW_LENGTH
+  const collapsed = collapsedToolInputPrefix(toRawPreview(input))
+  return collapsed.length <= MAX_TOOL_PREVIEW_LENGTH
     ? collapsed
-    : `${collapsed.slice(0, MAX_PREVIEW_LENGTH - 1)}…`
+    : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
 }
 
 /** Build the renderer-independent row model from one normalization pass. Detail
@@ -123,7 +127,7 @@ function normalizedToolInputHasDetail(input: unknown, label: string): boolean {
   if (isStructuredNormalizedToolInput(input)) {
     return true
   }
-  return typeof input === 'string' && input.replace(/\s+/g, ' ').trim() !== label
+  return typeof input === 'string' && collapsedToolInputPrefix(input) !== label
 }
 
 export function toolFilePath(input: unknown): string | null {
@@ -240,10 +244,10 @@ function firstPrimaryToolArg(
  *  absolute path drops the filename, the one part that tells two rows apart. */
 function summarizeToolPath(path: string): string {
   const collapsed = path.replace(/\s+/g, ' ').trim()
-  if (collapsed.length <= MAX_PREVIEW_LENGTH) {
+  if (collapsed.length <= MAX_TOOL_PREVIEW_LENGTH) {
     return collapsed
   }
-  const tail = collapsed.slice(collapsed.length - (MAX_PREVIEW_LENGTH - 1))
+  const tail = collapsed.slice(collapsed.length - (MAX_TOOL_PREVIEW_LENGTH - 1))
   // Start at a segment boundary so the label doesn't open mid-name.
   const boundary = tail.search(/[\\/]/)
   return `…${boundary > 0 ? tail.slice(boundary) : tail}`
@@ -260,8 +264,20 @@ function summarizePrimaryToolArg(input: unknown): string | null {
   return null
 }
 
-export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
-  const parts: string[] = []
+/** One named call in a run header, kept apart rather than pre-joined so a
+ *  surface can draw the boundary between members itself. */
+export type ToolRunMember = {
+  name: string
+  /** Brief argument, or '' when the call has none worth showing. */
+  arg: string
+  mcpIdentity?: NativeChatMcpIdentity
+}
+
+/** The run header's leading calls. Capped at the same limit the joined string
+ *  has always used, so the two can never disagree about which calls speak for
+ *  a run. */
+export function toolRunSummaryMembers(blocks: readonly NativeChatBlock[]): ToolRunMember[] {
+  const members: ToolRunMember[] = []
   for (const block of blocks) {
     if (!isToolCallBlock(block)) {
       continue
@@ -270,17 +286,28 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
     if (!name) {
       continue
     }
-    const detail = briefToolArg(block.input)
-    parts.push(detail ? `${name} ${detail}` : name)
-    if (parts.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
+    members.push({ name, arg: briefToolArg(block.input), mcpIdentity: block.mcpIdentity })
+    if (members.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
       break
     }
   }
-  return parts.join('  ·  ')
+  return members
+}
+
+export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
+  return toolRunSummaryMembers(blocks)
+    .map((member) => (member.arg ? `${member.name} ${member.arg}` : member.name))
+    .join('  ·  ')
 }
 
 export function countToolCalls(blocks: readonly NativeChatBlock[]): number {
-  return blocks.filter(isToolCallBlock).length
+  let count = 0
+  blocks.forEach((block) => {
+    if (isToolCallBlock(block)) {
+      count += 1
+    }
+  })
+  return count
 }
 
 function toRawPreview(input: unknown): string {

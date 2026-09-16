@@ -1,0 +1,141 @@
+{
+  "operation": "transport.capability-probe",
+  "family": "transport.capability-probe",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
+  "scenarioSha256": "c5d28c2973881ae6cc94c7d8f6eef544046461f15e236634489afd272b5f1e6b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2c76473bef66": {
+      "published": []
+    },
+    "3e25b523d96b": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 250,
+        "settledAt": 250,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": ["push.v1"]
+          }
+        }
+      }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "9d1bfe4d6810": {
+      "published": [["push.v1"]]
+    },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "edf54746317d": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "transport-capability-probe-cutover-reasks-fast",
+    "checkpoints": [
+      {
+        "id": "cutover-rejected-the-probe",
+        "observation": {
+          "sender": ["edf54746317d"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "migrate": "eb79a9b3682a"
+          },
+          "state": "2c76473bef66",
+          "effects": []
+        }
+      },
+      {
+        "id": "published-after-cutover-reask",
+        "observation": {
+          "sender": ["edf54746317d", "3e25b523d96b"],
+          "payloads": ["852980e2efc0", "b33a14df0df6"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "migrate": "eb79a9b3682a"
+          },
+          "state": "9d1bfe4d6810",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

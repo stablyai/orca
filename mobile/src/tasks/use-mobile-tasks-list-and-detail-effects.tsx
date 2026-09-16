@@ -10,9 +10,12 @@ import {
   type LinearState,
   type LinearTeam,
   getTaskPresetQuery,
-  isSuccess,
   scopeGitHubTaskSearch
 } from './mobile-tasks-legacy-foundation'
+import {
+  linearComposerTeamListRead,
+  linearTeamStateListRead
+} from './mobile-task-item-detail-operations'
 
 export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsModel) {
   const {
@@ -191,14 +194,16 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
     let stale = false
     setCreateTeamId(null)
-    void client
-      .sendRequest('linear.listTeams')
+    void linearComposerTeamListRead
+      .request(client)
       .then((response) => {
         if (stale) {
           return
         }
-        if (isSuccess(response)) {
-          const teams = response.result as LinearTeam[]
+        const accepted = linearComposerTeamListRead.interpret(response)
+        if (accepted.accepted) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          const teams = accepted.value as LinearTeam[]
           setLinearTeams(teams)
           setCreateTeamId((current) => current ?? teams[0]?.id ?? null)
         } else {
@@ -232,17 +237,15 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       teamId: linearMetadataItem.source.team.id,
       workspaceId: linearMetadataItem.source.workspaceId
     }
-    void client
-      .sendRequest('linear.teamStates', baseParams)
+    void linearTeamStateListRead
+      .request(client, baseParams)
       .then((statesResponse) => {
         if (stale) {
           return
         }
-        if (isSuccess(statesResponse)) {
-          setLinearStates(statesResponse.result as LinearState[])
-        } else {
-          setLinearStates([])
-        }
+        const accepted = linearTeamStateListRead.interpret(statesResponse)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        setLinearStates(accepted.accepted ? (accepted.value as LinearState[]) : [])
       })
       .catch(() => {
         if (!stale) {

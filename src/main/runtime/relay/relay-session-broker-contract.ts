@@ -4,6 +4,7 @@ import type { MobileRelayStatus } from '../../../shared/mobile-relay-status'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { RelayRegion } from './relay-region-preference'
+import type { RelayRegionDecision, RelayRegionWindow } from './relay-region-correction-protocol'
 
 export type RelayBrokerStatus = MobileRelayStatus
 
@@ -23,6 +24,7 @@ export type RelaySessionBrokerOptions = {
   isCurrent: () => boolean
   refreshAccessToken: () => Promise<string | null>
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
+  measureRegionDecision?: (window: RelayRegionWindow) => Promise<RelayRegionDecision>
   onAssignedCellActive?: (cellUrl: string) => void
   /** `cellUrl` is absent whenever the host holds no active assignment. */
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
@@ -31,4 +33,10 @@ export type RelaySessionBrokerOptions = {
   createDataSocket?: (url: string) => WebSocket
   random?: () => number
   now?: () => number
+}
+
+export class StaleRelayBrokerError extends Error {
+  constructor() {
+    super('stale_relay_broker')
+  }
 }

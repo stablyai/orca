@@ -716,7 +716,6 @@
       "useComposerState": {
         "7eb3f44ff7": "所选智能体已禁用。创建之前选择启用的智能体。",
         "b2ead86962": "无法解析 PR 基础引用。",
-        "a9ff236145": "部分附件无法上传。",
         "3db83fc58a": "没有可用于附件的远程项目路径。",
         "ba6cb77082": "无法连接到项目。",
         "chooseOrAddProjectBeforeWorkspace": "创建工作区前，请选择或添加项目。",
@@ -2221,6 +2220,10 @@
                 "7c302f8174": "无标题"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "此视图暂无任何项目。",
+            "7e4a2f80c6": "最近添加的项目可能需要一段时间才会显示。"
           }
         },
         "GitHubMarkdownComposer": {
@@ -4438,11 +4441,10 @@
           "92154beb7e": "新工作区",
           "49f62c5665": "工作区板",
           "5c9c7c16aa": "添加项目以创建工作区",
-          "ca6f729da2": "新工作区 ({{value0}})",
           "a30e34eb5c": "关闭工作区板",
-          "25a95899c9": "添加项目",
           "spaces": "空间",
-          "views": "侧边栏视图"
+          "views": "侧边栏视图",
+          "addProject": "添加项目"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -14266,8 +14268,6 @@
           "5651b216c6": "未知项目",
           "22b22034bc": "独立终端在活动中不可用。",
           "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。",
-          "compactModeDescription": "以单行标题和两行状态消息显示更短的线程行。",
-          "unreadOnlyDescription": "将活动列表筛选为仅显示有未读更新的线程。",
           "clearCompleted": "清除已完成",
           "none": "无",
           "search": "搜索",
@@ -14285,7 +14285,9 @@
             "idle": "空闲",
             "unverifiable": "暂无近期更新",
             "permission": "需注意"
-          }
+          },
+          "filtersSection": "筛选",
+          "viewSection": "视图"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "显示所有主机和项目"
@@ -14694,7 +14696,8 @@
         "chooseInAgentPicker": "在智能体选择器中选择…",
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "当前值未知 — 请选择开或关",
+        "valueIsDefault": "默认",
+        "valueNotReported": "未报告",
         "sentNotConfirmed": "已发送给智能体 — 尚未确认",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
@@ -14707,9 +14710,7 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
-          "ultra": "极致",
-          "on": "开",
-          "off": "关"
+          "ultra": "极致"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
@@ -15061,6 +15062,14 @@
       "hide": "隐藏智能体",
       "action": "试用智能体",
       "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "需要输入",
+      "working": "处理中",
+      "stopped": "已停止",
+      "finished": "已完成"
     }
   }
 }

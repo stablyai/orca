@@ -1,7 +1,14 @@
 import type { RuntimeSpeechSetupState } from '../../../src/shared/runtime-types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import {
+  dictationConfigWrite,
+  dictationModelDelete,
+  dictationModelDownload,
+  dictationSetupRead
+} from './mobile-dictation-operations'
 
 export type MobileSpeechSetup = RuntimeSpeechSetupState
 export type MobileSpeechModel = RuntimeSpeechSetupState['models'][number]
@@ -15,13 +22,17 @@ const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE =
 
 // Why: mobile can pair with older desktop runtimes that predate speech.models.list;
 // show upgrade guidance instead of leaking the raw denial or not-found error.
-function isLegacyDesktopSpeechSetupError(
-  error: { code?: string; message?: string } | undefined
-): boolean {
-  const message = error?.message ?? ''
+// Why the raw reply: this reads the refusal's code alongside its message, and no acceptance
+// policy carries both through — the same reason mobile-branch-base-ref.ts keeps its own check.
+function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
+  if (reply.ok) {
+    return false
+  }
+  const message = reply.error?.message ?? ''
   return (
     message.includes('speech.models.list') &&
-    (error?.code === 'method_not_found' || message.includes('not available to mobile clients'))
+    (reply.error?.code === 'method_not_found' ||
+      message.includes('not available to mobile clients'))
   )
 }
 
@@ -29,62 +40,61 @@ export function isDictationSetupRequiredError(message: string): boolean {
   return SETUP_REQUIRED_CODES.has(message) || message.startsWith('voice_model_not_ready:')
 }
 
-export async function fetchDictationSetup(
-  client: Pick<RpcClient, 'sendRequest'>
-): Promise<MobileSpeechSetup> {
-  const response = await fetchDictationSetupResponse(client)
-  if (!response.ok) {
-    if (isLegacyDesktopSpeechSetupError(response.error)) {
-      throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
-    }
-    throw new Error(response.error?.message || 'Failed to load dictation models')
+export async function fetchDictationSetup(client: RpcClient): Promise<MobileSpeechSetup> {
+  const reply = await requestDictationSetupReply(client)
+  if (isLegacyDesktopSpeechSetupReply(reply)) {
+    throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
   }
-  return (response as RpcSuccess).result as MobileSpeechSetup
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  return interpretOrThrowRefusalMessage(
+    () => dictationSetupRead.interpret(reply),
+    'Failed to load dictation models'
+  ) as MobileSpeechSetup
 }
 
-async function fetchDictationSetupResponse(client: Pick<RpcClient, 'sendRequest'>) {
+async function requestDictationSetupReply(client: RpcClient): Promise<RpcResponse> {
   try {
-    return await client.sendRequest('speech.models.list', null)
+    return await dictationSetupRead.request(client, null)
   } catch (error) {
     if (!(error instanceof LogicalClientCutoverError)) {
       throw error
     }
     // Why: this read can safely repeat on the authenticated replacement; mutation
     // RPCs must still surface cutover so callers never replay unknown commits.
-    return client.sendRequest('speech.models.list', null)
+    return dictationSetupRead.request(client, null)
   }
 }
 
-export async function downloadDictationModel(
-  client: Pick<RpcClient, 'sendRequest'>,
-  modelId: string
-): Promise<void> {
-  const response = await client.sendRequest('speech.models.download', { modelId })
-  if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to start download')
-  }
+export async function downloadDictationModel(client: RpcClient, modelId: string): Promise<void> {
+  const reply = await dictationModelDownload.request(client, { modelId })
+  interpretOrThrowRefusalMessage(
+    () => dictationModelDownload.interpret(reply),
+    'Failed to start download'
+  )
 }
 
 export async function deleteDictationModel(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcClient,
   modelId: string
 ): Promise<MobileSpeechSetup> {
-  const response = await client.sendRequest('speech.models.delete', { modelId })
-  if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to delete model')
-  }
-  return (response as RpcSuccess).result as MobileSpeechSetup
+  const reply = await dictationModelDelete.request(client, { modelId })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  return interpretOrThrowRefusalMessage(
+    () => dictationModelDelete.interpret(reply),
+    'Failed to delete model'
+  ) as MobileSpeechSetup
 }
 
 export async function setDictationConfig(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcClient,
   params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }
 ): Promise<MobileSpeechSetup> {
-  const response = await client.sendRequest('speech.dictation.setup', params)
-  if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to update dictation settings')
-  }
-  return (response as RpcSuccess).result as MobileSpeechSetup
+  const reply = await dictationConfigWrite.request(client, params)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  return interpretOrThrowRefusalMessage(
+    () => dictationConfigWrite.interpret(reply),
+    'Failed to update dictation settings'
+  ) as MobileSpeechSetup
 }
 
 // A model is mid-download (or extracting) and the sheet should keep polling.

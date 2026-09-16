@@ -1,4 +1,5 @@
 import { normalizeProxyUrl } from '../../shared/network-proxy'
+import type { ProxySession } from './electron-default-proxy-session'
 
 export type ElectronProxyCredentials = {
   host: string
@@ -20,7 +21,7 @@ const DEFAULT_PROXY_PORTS: Record<string, number> = {
   'socks5:': 1080
 }
 
-let proxyCredentialsBySession = new WeakMap<object, ElectronProxyCredentials>()
+let proxyCredentialsBySession = new WeakMap<ProxySession, ElectronProxyCredentials>()
 
 function decodeProxyCredential(value: string): string {
   try {
@@ -64,7 +65,7 @@ export function haveSameElectronProxyCredentials(
 }
 
 export function setElectronProxyCredentialsForSession(
-  proxySession: object,
+  proxySession: ProxySession,
   credentials: ElectronProxyCredentials | null
 ): void {
   if (credentials) {
@@ -74,11 +75,11 @@ export function setElectronProxyCredentialsForSession(
   }
 }
 
-export function clearElectronProxyCredentialsForSession(proxySession: object): void {
+export function clearElectronProxyCredentialsForSession(proxySession: ProxySession): void {
   proxyCredentialsBySession.delete(proxySession)
 }
 
-export function resetElectronProxyCredentialsForTests(proxySession?: object): void {
+export function resetElectronProxyCredentialsForTests(proxySession?: ProxySession): void {
   if (proxySession) {
     clearElectronProxyCredentialsForSession(proxySession)
   } else {
@@ -88,11 +89,11 @@ export function resetElectronProxyCredentialsForTests(proxySession?: object): vo
 
 export function handleElectronProxyLogin(
   event: { preventDefault(): void },
-  webContents: { session: object } | null,
+  webContents: { session: ProxySession } | null,
   _authenticationResponseDetails: unknown,
   authInfo: { isProxy: boolean; host: string; port: number; scheme?: string; realm?: string },
   callback: (username?: string, password?: string) => void,
-  defaultProxySession?: object
+  defaultProxySession?: ProxySession
 ): void {
   if (!authInfo.isProxy) {
     return

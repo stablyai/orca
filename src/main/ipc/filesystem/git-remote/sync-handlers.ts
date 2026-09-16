@@ -15,7 +15,7 @@ import {
 } from '../../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { assertGitPushTargetShape } from '../../../../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../../../../shared/git-push-target-validation'
 import { validateGitForkSyncExpectedUpstream } from '../../../../shared/git-fork-sync'
 import {
   materializeWorktreePushTargetRemote,
@@ -34,7 +34,7 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
     ): Promise<GitUpstreamStatus> => {
       if (args.connectionId) {
         if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
+          assertValidGitPushTarget(args.pushTarget)
         }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -65,7 +65,7 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
     ): Promise<void> => {
       if (args.connectionId) {
         if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
+          assertValidGitPushTarget(args.pushTarget)
         }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

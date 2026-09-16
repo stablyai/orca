@@ -234,7 +234,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   requestStartedEntry
                 )
               ) {
-                return {}
+                return state
               }
               const currentPRCache = state.prCache ?? {}
               const prCache = clearHostedReviewConflictingPrCache({

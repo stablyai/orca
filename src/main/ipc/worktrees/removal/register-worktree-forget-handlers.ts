@@ -103,6 +103,9 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
             : {}),
           localProvider: sshPtyProvider ?? getLocalPtyProvider(),
           onPtyStopped: clearProviderPtyState,
+          // Forgetting an orphan still purges its workspace metadata, so retire structured chat
+          // tabs even when no provider child is attached to the workspace.
+          closeStructuredSessions: true,
           ...(externalHost
             ? {
                 includeProviderInventory: ownerHost?.kind === 'ssh' && Boolean(sshPtyProvider),

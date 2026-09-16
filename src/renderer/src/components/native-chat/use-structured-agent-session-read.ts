@@ -30,19 +30,6 @@ export function useStructuredAgentSessionRead(args: {
 
   useEffect(() => (isVisible ? owner.activate() : undefined), [isVisible, owner])
 
-  useEffect(() => {
-    if (!isVisible) {
-      return
-    }
-    const refresh = (): void => {
-      if (document.hasFocus()) {
-        owner.refresh()
-      }
-    }
-    window.addEventListener('focus', refresh)
-    return () => window.removeEventListener('focus', refresh)
-  }, [isVisible, owner])
-
   return {
     state: snapshot.state,
     loadingOlder: snapshot.loadingOlder,

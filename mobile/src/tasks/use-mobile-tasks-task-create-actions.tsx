@@ -5,9 +5,14 @@ import {
   type TaskItem,
   createGitHubTask,
   createGitLabTask,
-  createLinearTask,
-  isSuccess
+  createLinearTask
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubIssueCreate,
+  gitlabIssueCreate,
+  linearIssueCreate
+} from './mobile-task-item-state-operations'
+import { taskRepoPreferenceWrite } from './mobile-task-list-operations'
 
 export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
   const {
@@ -50,18 +55,26 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
             `Add a Git repository before creating a ${provider === 'github' ? 'GitHub' : 'GitLab'} issue.`
           )
         }
-        const response = await client.sendRequest(
-          provider === 'github' ? 'github.createIssue' : 'gitlab.createIssue',
-          {
-            repo: `id:${repo.id}`,
-            title,
-            body: createBody
-          }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // Two providers, two methods: each arm sends its own operation rather than one call
+        // picking a method string.
+        const created =
+          provider === 'github'
+            ? githubIssueCreate.interpret(
+                await githubIssueCreate.request(client, {
+                  repo: `id:${repo.id}`,
+                  title,
+                  body: createBody
+                })
+              )
+            : gitlabIssueCreate.interpret(
+                await gitlabIssueCreate.request(client, {
+                  repo: `id:${repo.id}`,
+                  title,
+                  body: createBody
+                })
+              )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = created as {
           ok?: boolean
           number?: number
           url?: string
@@ -109,16 +122,14 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
         if (!team) {
           throw new Error('Select a Linear team first.')
         }
-        const response = await client.sendRequest('linear.createIssue', {
+        const reply = await linearIssueCreate.request(client, {
           teamId: team.id,
           title,
           description: createBody.trim() || undefined,
           workspaceId: team.workspaceId
         })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = linearIssueCreate.interpret(reply) as {
           ok?: boolean
           id?: string
           identifier?: string
@@ -177,17 +188,15 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
       }
       setError('')
       try {
-        const response = await client.sendRequest(
-          'repo.update',
+        const reply = await taskRepoPreferenceWrite.request(
+          client,
           {
             repo: `id:${repo.id}`,
             updates: { issueSourcePreference: preference }
           },
           { timeoutMs: 15_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
+        taskRepoPreferenceWrite.interpret(reply)
         // Why: the host owns issueSourcePreference, so re-read the list instead of
         // patching the cached copy and hoping the two stay in step.
         await repoListReload().catch(() => {})

@@ -1,0 +1,1011 @@
+{
+  "operation": "tasks.workspace-source",
+  "family": "tasks.workspace-source",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "9e91d46870cd69279cc7d8ebfd317ab8b13136ccff9662876c7601a3a83ecafe",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0045016f4149": {
+      "branchError": "Cannot read properties of null (reading 'refDetails')",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "0522501c6443": {
+      "name": "workspaceSparsePresets",
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "sent": 1
+    },
+    "185868e61f0d": {
+      "name": "workspaceBaseBranchError",
+      "value": "Cannot read properties of undefined (reading 'refDetails')",
+      "sent": 2
+    },
+    "1f03192052c0": {
+      "name": "workspaceSparsePresetsLoading",
+      "value": false,
+      "sent": 1
+    },
+    "28f23529596e": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "2bd164983c10": {
+      "branchError": "outer refused",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "2e554aeab5d0": {
+      "branchError": "transport failure",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "395368dea8ff": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "refs": ["main"]
+          }
+        }
+      }
+    },
+    "469b68abd6bf": {
+      "name": "workspaceBaseBranchError",
+      "value": "Cannot read properties of null (reading 'refDetails')",
+      "sent": 2
+    },
+    "52925a303ed6": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "539a8c80071f": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": false,
+      "sent": 0
+    },
+    "5485811c08ca": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "57f06e6e349e": {
+      "branchError": "",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "5b0e628f442c": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "61a9907d4e25": {
+      "name": "workspaceBaseBranchError",
+      "value": "",
+      "sent": 2
+    },
+    "66f7aa09c444": {
+      "name": "workspaceBaseBranchLoading",
+      "value": false,
+      "sent": 1
+    },
+    "7444e76d58f7": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "78f4c8d53e98": {
+      "name": "workspaceBaseBranchLoading",
+      "value": true,
+      "sent": 1
+    },
+    "846e910f6579": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "8a621ac1da52": {
+      "name": "workspaceBaseBranchResults",
+      "value": [
+        {
+          "localBranchName": "main",
+          "refName": "main"
+        }
+      ],
+      "sent": 2
+    },
+    "8c08bfbbb957": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": true,
+      "sent": 1
+    },
+    "94cafc85a34d": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "96f470cee43b": {
+      "name": "workspaceBaseBranchError",
+      "value": "",
+      "sent": 1
+    },
+    "a3dae49d6976": {
+      "name": "workspaceBaseBranchError",
+      "value": "Unknown method",
+      "sent": 2
+    },
+    "a81d1426bf3c": {
+      "name": "workspaceBaseBranchLoading",
+      "value": false,
+      "sent": 2
+    },
+    "b78bcf7ca596": {
+      "branchError": "",
+      "branches": [
+        {
+          "localBranchName": "main",
+          "refName": "main"
+        }
+      ],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "bb1a94f8cb3f": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "bc245469b086": {
+      "name": "repo.searchRefs#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}",
+      "sent": 2
+    },
+    "bd26306458d2": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "bd93f3a9862f": {
+      "branchError": "Unknown method",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "c44ace4a8d63": {
+      "name": "workspaceBaseBranchError",
+      "value": "transport failure",
+      "sent": 2
+    },
+    "c8d4d05367d6": {
+      "name": "repo.sparsePresets#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.sparsePresets"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "presets": [
+              {
+                "directories": ["docs"],
+                "id": "p1",
+                "name": "docs"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "c9ed58434d0b": {
+      "name": "repo.sparsePresets#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 1
+    },
+    "ca6dda44e51a": {
+      "name": "workspaceBaseBranchError",
+      "value": "outer refused",
+      "sent": 2
+    },
+    "d74e7c93c5be": {
+      "name": "workspaceBaseBranchResults",
+      "value": [],
+      "sent": 1
+    },
+    "e4bad139cb5f": {
+      "branchError": "Cannot read properties of undefined (reading 'refDetails')",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f0ea20e86c2f": {
+      "name": "workspaceBaseBranchResults",
+      "value": [],
+      "sent": 2
+    },
+    "f359ebae96d2": {
+      "name": "workspaceSparsePresetId",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
+    },
+    "f68a2eba2c59": {
+      "name": "workspaceSparsePresetsLoading",
+      "value": true,
+      "sent": 0
+    },
+    "f6f9a9765c0c": {
+      "name": "repo.searchRefs#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "ff042d71c647": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 0
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.workspace-source-repo.searchrefs-1",
+    "checkpoints": [
+      {
+        "id": "tw-workspace-source-presets.prelude:presets-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6"],
+          "payloads": ["c9ed58434d0b"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "57f06e6e349e",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.normal:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "395368dea8ff"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "b78bcf7ca596",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "8a621ac1da52",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.result-absent:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "846e910f6579"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "e4bad139cb5f",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "185868e61f0d",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.result-null:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "28f23529596e"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "0045016f4149",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "469b68abd6bf",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.inner-ok-missing:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "5485811c08ca"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "57f06e6e349e",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.inner-false-string-error:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "f6f9a9765c0c"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "57f06e6e349e",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.inner-false-object-error:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "94cafc85a34d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "57f06e6e349e",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.outer-refused:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "bb1a94f8cb3f"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "2bd164983c10",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "ca6dda44e51a",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.outer-refused-no-message:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "7444e76d58f7"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "57f06e6e349e",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "61a9907d4e25",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.method-not-found:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "bd26306458d2"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "bd93f3a9862f",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "a3dae49d6976",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.transport-rejection:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "5b0e628f442c"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "2e554aeab5d0",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "c44ace4a8d63",
+            "a81d1426bf3c"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-source-presets.transport-rejection-no-message:branches-loaded",
+        "observation": {
+          "sender": ["c8d4d05367d6", "52925a303ed6"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "57f06e6e349e",
+          "effects": [
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "f0ea20e86c2f",
+            "61a9907d4e25",
+            "a81d1426bf3c"
+          ]
+        }
+      }
+    ]
+  }
+}

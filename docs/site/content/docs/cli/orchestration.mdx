@@ -116,12 +116,14 @@ orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 - Default `check` is the bound Run's oldest unacked Delivery (FIFO). Replay until `--ack`.
 - `--peek` / `--all` do not consume mail.
 - Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done` / heartbeat.
+- Every group except `@worktree:<id>` means the live Dispatches of the sender's own Run, delivered to their Dispatch mailboxes (or child Run mailboxes for nested coordinators). A sender in no Run is refused; `--run` must match the audience and never grants membership.
+- Run groups exclude their owning coordinator. A worker raising a blocker sends to `run:<id>`. `@worktree:<id>` includes coordinators in that workspace.
 - Quote PowerShell group addresses: `--to "@all"`.
 
 ```bash
 orca orchestration send --to @all --subject "Heads up" --body "Pausing dispatches for a review." --json
 orca orchestration send --to @idle --subject "Anyone free?" --json
-orca orchestration send --to @codex --subject "Codex agents only" --json
+orca orchestration send --to @codex --subject "Codex workers in this Run only" --json
 ```
 
 While a wait is active, the CLI emits small JSON heartbeat lines to stderr every 15 seconds. Stdout remains the final command result.

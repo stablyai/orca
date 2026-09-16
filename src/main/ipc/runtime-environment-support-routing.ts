@@ -18,10 +18,7 @@ import {
   type RuntimeEnvironmentCapabilityOutcome
 } from './runtime-environment-capability-evidence'
 import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
-import {
-  clearSharedControlSupport,
-  supportsSharedControl
-} from './runtime-environment-shared-control-support'
+import { supportsSharedControl } from './runtime-environment-shared-control-support'
 import {
   sendRemoteRuntimeRequestAbortable,
   sendRemoteRuntimeSharedControlRequestAbortable
@@ -205,7 +202,6 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
       }
       return response
     }
-    clearSharedControlSupport(environment.id)
     environment = resolveEnvironment(args.userDataPath, environment.id)
   }
   return runtimeEnvironmentChangedFailure(environment, args.method)

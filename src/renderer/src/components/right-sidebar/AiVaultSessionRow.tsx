@@ -1,3 +1,4 @@
+import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
 import type React from 'react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -44,6 +45,7 @@ export function VaultSessionRow({
   resumeActions,
   onResumeInWorktree,
   onResumeInNewTab,
+  subagentResume,
   onCopyResume,
   onCopyId,
   onCopyPath,
@@ -71,6 +73,7 @@ export function VaultSessionRow({
   resumeActions: AiVaultSessionResumeActions
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
+  subagentResume?: AiVaultSubagentResumeActions
   onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath: () => void
@@ -219,6 +222,7 @@ export function VaultSessionRow({
               resumeActions={resumeActions}
               onResumeInWorktree={onResumeInWorktree}
               onResumeInNewTab={onResumeInNewTab}
+              subagentResume={subagentResume}
               onContinueInNewSession={onContinueInNewSession}
               onResumeInNewChat={onResumeInNewChat}
               onOpenLog={onOpenLog}

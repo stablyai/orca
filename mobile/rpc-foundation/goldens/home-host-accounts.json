@@ -1,0 +1,231 @@
+{
+  "operation": "home.host-accounts",
+  "family": "home.host-accounts",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "c632fdbc4b730777ecb09f08bec14cca0586042b01ed99d40d0228806c7def4a",
+  "scenarioSha256": "366426641e25542fcc6fcd351ece6a1ee897c8b3974c08eb7557eadfa4d3b06f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2525c654127c": {
+      "host-1": {
+        "claude": {
+          "accounts": [
+            {
+              "email": "claude@example.test",
+              "id": "claude-1",
+              "updatedAt": 1700000000000
+            }
+          ],
+          "activeAccountId": "claude-1"
+        },
+        "codex": {
+          "accounts": [],
+          "activeAccountId": {
+            "$rpc": "null"
+          }
+        },
+        "rateLimits": {
+          "claude": {
+            "$rpc": "null"
+          },
+          "claudeTarget": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          },
+          "codex": {
+            "$rpc": "null"
+          },
+          "codexTarget": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          },
+          "inactiveClaudeAccounts": [],
+          "inactiveCodexAccounts": []
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "6432de87fc3e": {
+      "name": "accounts.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.list\"}",
+      "sent": 1
+    },
+    "ae89fde72803": {
+      "name": "accounts.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "claude": {
+              "accounts": [
+                {
+                  "email": "claude@example.test",
+                  "id": "claude-1",
+                  "updatedAt": 1700000000000
+                }
+              ],
+              "activeAccountId": "claude-1"
+            },
+            "codex": {
+              "accounts": [],
+              "activeAccountId": {
+                "$rpc": "null"
+              }
+            },
+            "rateLimits": {
+              "claude": {
+                "$rpc": "null"
+              },
+              "codex": {
+                "$rpc": "null"
+              },
+              "inactiveClaudeAccounts": [],
+              "inactiveCodexAccounts": []
+            }
+          }
+        }
+      }
+    },
+    "d54161165272": {
+      "name": "accounts.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "e14c03c3141f": {
+      "name": "accounts",
+      "value": {
+        "host-1": {
+          "claude": {
+            "accounts": [
+              {
+                "email": "claude@example.test",
+                "id": "claude-1",
+                "updatedAt": 1700000000000
+              }
+            ],
+            "activeAccountId": "claude-1"
+          },
+          "codex": {
+            "accounts": [],
+            "activeAccountId": {
+              "$rpc": "null"
+            }
+          },
+          "rateLimits": {
+            "claude": {
+              "$rpc": "null"
+            },
+            "claudeTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "codex": {
+              "$rpc": "null"
+            },
+            "codexTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "inactiveClaudeAccounts": [],
+            "inactiveCodexAccounts": []
+          }
+        }
+      },
+      "sent": 1
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "home-host-accounts",
+    "checkpoints": [
+      {
+        "id": "accounts-pending",
+        "observation": {
+          "sender": ["d54161165272"],
+          "payloads": ["6432de87fc3e"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "accounts-published",
+        "observation": {
+          "sender": ["ae89fde72803"],
+          "payloads": ["6432de87fc3e"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "2525c654127c",
+          "effects": ["e14c03c3141f"]
+        }
+      }
+    ]
+  }
+}

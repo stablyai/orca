@@ -299,7 +299,7 @@ describe('NativeChatToolRun with a spawn group', () => {
     )
 
     expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.queryByText('shell ls')).toBeNull()
+    expect(screen.queryByText('shell')).toBeNull()
   })
 
   it('renders the roster alongside the tool activity of its turn', () => {
@@ -313,6 +313,6 @@ describe('NativeChatToolRun with a spawn group', () => {
     )
 
     expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.getByText('shell ls')).toBeInTheDocument()
+    expect(screen.getByText('shell').closest('button')).toHaveTextContent('shell ls')
   })
 })

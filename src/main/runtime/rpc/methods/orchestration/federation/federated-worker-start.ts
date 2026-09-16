@@ -162,6 +162,7 @@ export async function startFederatedWorker(args: {
         server.environmentId,
         'orchestration.federationAttachStart',
         {
+          runId,
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,

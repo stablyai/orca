@@ -8,6 +8,16 @@ import {
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { beginStructuredAgentSessionTabClose } from '@/runtime/structured-agent-session-tab-retirement'
+import {
+  hasStructuredAgentSessionLaunchCancellationTombstone,
+  shouldRetainStructuredAgentSessionLaunchTab
+} from '@/lib/structured-agent-session-launch-registry'
+import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
+import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -38,6 +48,28 @@ export function createTabsCloseActions(
       const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0
+      if (tab.contentType === 'agent-session') {
+        const provisional =
+          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
+          hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)
+        if (provisional) {
+          clearWebSessionFocusIntentIfMatches(
+            { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+            worktreeId,
+            `agent-session:${tab.entityId}`
+          )
+        }
+        beginStructuredAgentSessionTabClose({
+          target: getActiveRuntimeTarget({
+            activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+          }),
+          worktreeId,
+          tabId: tab.id,
+          sessionId: tab.entityId,
+          provisional
+        })
+        get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
+      }
       // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =
         group.activeTabId === tabId

@@ -1,14 +1,14 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
 import {
   buildMobileImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { nativeChatTerminalWrite } from './mobile-session-write-operations'
+import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
 
 export type AttachMobileImageDeps = {
-  readonly client: Pick<RpcClient, 'sendRequest'>
+  readonly client: MobileClipboardImageRpcSender
   readonly terminal: string
   readonly deviceToken: string | null
   readonly getConnectionId: () => Promise<string | null>
@@ -55,11 +55,11 @@ export async function attachMobileImageToTerminal(
   if (beforeTerminalSend && !(await beforeTerminalSend(terminal))) {
     return false
   }
-  const response = await client.sendRequest('terminal.send', {
+  const response = await nativeChatTerminalWrite.request(client, {
     terminal,
     text: payload,
     enter: false,
     ...(deviceToken ? { client: { id: deviceToken, type: 'mobile' as const } } : {})
   })
-  return isTerminalSendRpcAccepted(response)
+  return nativeChatTerminalWrite.interpret(response) === true
 }

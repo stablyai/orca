@@ -79,8 +79,13 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
               : state.workspacePortScan
         }
       }),
+    // Preserve root identity so no-op writes do not notify every store subscriber.
     setWorkspacePortScanRefreshing: (refreshing) =>
-      set({ workspacePortScanRefreshing: refreshing }),
+      set((state) =>
+        state.workspacePortScanRefreshing === refreshing
+          ? state
+          : { workspacePortScanRefreshing: refreshing }
+      ),
 
     // Why: default true so enabling experimentalPet shows the pet immediately (persisted; "Hide pet" flips it false).
     petVisible: true,

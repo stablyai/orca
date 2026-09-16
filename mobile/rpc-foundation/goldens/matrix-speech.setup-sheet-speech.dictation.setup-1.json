@@ -1,0 +1,979 @@
+{
+  "operation": "speech.setup-sheet",
+  "family": "speech.setup-sheet",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
+  "scenarioSha256": "407a52b099cbf2fcb261010e4235dae2e5e16e11b386fb6bc99d5a2d237af541",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "14adf36a6f27": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "25148d3fd4e0": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "301151228fa3": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "refused"
+      }
+    },
+    "3033fa217374": {
+      "configure": {
+        "error": "inner refused",
+        "ok": false
+      },
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "374a424a4fcb": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "enabled": true,
+            "models": [
+              {
+                "id": "whisper-small",
+                "name": "Small",
+                "status": "ready"
+              }
+            ],
+            "selectedModelId": "whisper-small"
+          }
+        }
+      }
+    },
+    "3bf5ed7bb628": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "43c4c7a19f7e": {
+      "configure": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      },
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "45f050437dd6": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "4670310cd94e": {
+      "name": "speech.models.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "enabled": true,
+            "models": [
+              {
+                "id": "whisper-small",
+                "name": "Small",
+                "status": "ready"
+              }
+            ],
+            "selectedModelId": "whisper-small"
+          }
+        }
+      }
+    },
+    "577b0a918b44": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "686e4bca37ab": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "6c06e4415402": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true
+        }
+      }
+    },
+    "73dfd7a0c915": {
+      "name": "speech.dictation.setup#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.setup\",\"params\":{\"enabled\":true,\"modelId\":\"whisper-small\"}}",
+      "sent": 4
+    },
+    "74cafa3ceeba": {
+      "name": "speech.models.download#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.download\",\"params\":{\"modelId\":\"whisper-small\"}}",
+      "sent": 2
+    },
+    "7af31590ded9": {
+      "configure": "started",
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "7c5b27891a8f": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "81ec9b5ca7f2": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "90128f3a26be": {
+      "name": "speech.models.delete#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.delete\",\"params\":{\"modelId\":\"whisper-small\"}}",
+      "sent": 3
+    },
+    "9f00dd54ba64": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "inner refused",
+        "ok": false
+      }
+    },
+    "a2879fd6371d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "a3cf1a5dec55": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "a9c35a6f891b": {
+      "configure": {
+        "error": "refused"
+      },
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "ad8a954e879d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      }
+    },
+    "b7dd03f7a089": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "be76d126a25c": {
+      "configure": {
+        "$rpc": "null"
+      },
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "c41375ac7391": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "enabled": true,
+            "models": [],
+            "selectedModelId": "whisper-small"
+          }
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d0708dcdf365": {
+      "name": "speech.models.download#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.download"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "started": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebcaa1a8fa3f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to update dictation settings",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "efb9a676286c": {
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "f98fd51d5ce2": {
+      "name": "speech.models.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}",
+      "sent": 1
+    },
+    "fc5fb77f49bb": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-speech.setup-sheet-speech.dictation.setup-1",
+    "checkpoints": [
+      {
+        "id": "speech-setup-sheet-fulfilled.normal:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "374a424a4fcb"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "a2879fd6371d"
+          },
+          "state": "7c5b27891a8f",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.result-absent:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "6c06e4415402"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "eb79a9b3682a"
+          },
+          "state": "7af31590ded9",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.result-null:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "a3cf1a5dec55"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "ee20a1dc39e7"
+          },
+          "state": "be76d126a25c",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "45f050437dd6"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "301151228fa3"
+          },
+          "state": "a9c35a6f891b",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "686e4bca37ab"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "9f00dd54ba64"
+          },
+          "state": "3033fa217374",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "14adf36a6f27"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "ad8a954e879d"
+          },
+          "state": "43c4c7a19f7e",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.outer-refused:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "81ec9b5ca7f2"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "32a7c0ae7918"
+          },
+          "state": "efb9a676286c",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "b7dd03f7a089"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "ebcaa1a8fa3f"
+          },
+          "state": "efb9a676286c",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.method-not-found:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "577b0a918b44"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "b948e8307e81"
+          },
+          "state": "efb9a676286c",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.transport-rejection:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "25148d3fd4e0"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "a947768bc0ed"
+          },
+          "state": "efb9a676286c",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "3bf5ed7bb628"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "c7584e82c72f"
+          },
+          "state": "efb9a676286c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

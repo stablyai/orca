@@ -5,6 +5,7 @@ import type {
   NativeChatMessage,
   NativeChatSubagentState
 } from '../../../shared/native-chat-types'
+import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50
@@ -153,7 +154,7 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
       groupId: clipMetadata(block.groupId, state),
       agents: agents.map((agent) => ({
         ...agent,
-        id: clipMetadata(agent.id, state),
+        id: boundEntryId(agent.id, state),
         label: clipMetadata(agent.label, state),
         state: clipSubagentState(agent.state, state)
       }))
@@ -192,6 +193,18 @@ function isLocalFileLocator(value: string): boolean {
     value.startsWith('/') ||
     value.startsWith('\\\\')
   )
+}
+
+/** A roster entry's id is the roster KEY, so it is redacted like other metadata
+ *  but bounded with a digest rather than clipped: two ids sharing a 512-char
+ *  head must not collapse onto one entry. */
+function boundEntryId(value: string, state: TranscriptBoundState): string {
+  const redacted = redactSensitiveText(value, state.warnings)
+  const bounded = boundSubagentEntryId(redacted)
+  if (bounded !== redacted) {
+    markClipped(state, 'Oversized transcript metadata was clipped.')
+  }
+  return bounded
 }
 
 function clipMetadata(value: string, state: TranscriptBoundState): string {

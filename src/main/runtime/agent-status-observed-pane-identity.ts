@@ -3,6 +3,7 @@ import {
   type AgentStatusRuntimeEnrichment,
   type ObservedAgentStatusPaneIdentity
 } from '../ipc/agent-status-ipc-boundary'
+import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
 
 /** Bounded like the hook server's own per-pane maps; eviction only degrades a row to `unobserved`. */
 const MAX_OBSERVED_PANES = 1024
@@ -41,6 +42,30 @@ export class AgentStatusObservedPaneIdentities {
 
   read(paneKey: string): ObservedAgentStatusPaneIdentity {
     return this.byPaneKey.get(paneKey) ?? UNOBSERVED
+  }
+}
+
+/** Buffers startup replay until PTY recovery has restored the runtime identities it fences. */
+export class AgentStatusObservedPaneIdentityCapture {
+  private readonly pending = new Map<string, EnrichedAgentHookEventPayload>()
+  private runtime: AgentStatusRuntimeEnrichment | null = null
+
+  constructor(private readonly identities: AgentStatusObservedPaneIdentities) {}
+
+  observe(enriched: EnrichedAgentHookEventPayload): void {
+    if (this.runtime) {
+      recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, this.runtime)
+      return
+    }
+    this.pending.set(enriched.paneKey, enriched)
+  }
+
+  attach(runtime: AgentStatusRuntimeEnrichment): void {
+    this.runtime = runtime
+    for (const enriched of this.pending.values()) {
+      recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, runtime)
+    }
+    this.pending.clear()
   }
 }
 

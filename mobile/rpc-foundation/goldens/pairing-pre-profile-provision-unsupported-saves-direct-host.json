@@ -1,0 +1,206 @@
+{
+  "operation": "pairing.pre-profile",
+  "family": "pairing.pre-profile",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
+  "scenarioSha256": "5696ea2a62bb3f24902305f8bac0c4ae8f1e505f359db76fd69aabe353adae86",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0b5064a35c5a": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}",
+      "sent": 3
+    },
+    "0b595cd54ac3": {
+      "name": "journal-saved",
+      "value": "pair-fixture-1",
+      "sent": 0
+    },
+    "26f802fad080": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "4663b0f6e580": {
+      "name": "host-saved",
+      "value": "direct-only",
+      "sent": 3
+    },
+    "4a54bf2090c8": {
+      "outcome": "host-1",
+      "savedHost": "direct-only",
+      "timedOut": false
+    },
+    "4cb6216cee5a": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 3
+    },
+    "63ab1563ba51": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "6cb74a535419": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "8eb785974a39": {
+      "name": "candidate-closed",
+      "value": "direct",
+      "sent": 3
+    },
+    "afe249bdfa5f": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "b96f13a39e18": {
+      "name": "journal-updated",
+      "value": "pair-fixture-1",
+      "sent": 2
+    },
+    "d1b2eddf66f4": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "hostId": "host-1"
+      }
+    },
+    "d433a326314e": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 2
+    },
+    "f4232b7673ea": {
+      "name": "journal-cleared",
+      "value": "pair-fixture-1",
+      "sent": 3
+    }
+  },
+  "recording": {
+    "scenario": "pairing-pre-profile-provision-unsupported-saves-direct-host",
+    "checkpoints": [
+      {
+        "id": "direct-host-saved",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "afe249bdfa5f"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "4a54bf2090c8",
+          "effects": [
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "4663b0f6e580",
+            "f4232b7673ea",
+            "8eb785974a39",
+            "4cb6216cee5a"
+          ]
+        }
+      }
+    ]
+  }
+}

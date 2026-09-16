@@ -1,3 +1,4 @@
+import type { RuntimeTerminalSummary } from './runtime-terminal-summary'
 import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
 import type {
   AgentProviderSessionMetadata,
@@ -13,30 +14,7 @@ import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 
-export type RuntimeTerminalSummary = {
-  handle: string
-  ptyId: string | null
-  incarnationId?: string | null
-  orphaned?: boolean
-  worktreeId: string
-  worktreePath: string
-  branch: string
-  tabId: string
-  leafId: string
-  title: string | null
-  connected: boolean
-  writable: boolean
-  lastOutputAt: number | null
-  preview: string
-  /** Current visibility; absent when the host predates surface reporting. */
-  surface?: 'background' | 'visible'
-  /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
-  agentIdentity?: TuiAgent
-  /** Absent while running or when the host predates the field; never infer a clean finish. */
-  exitCause?: TerminalExitCause
-  /** Absent when the host predates the field or could not name the execution host. */
-  executionHostId?: ExecutionHostId
-}
+export type { RuntimeTerminalSummary } from './runtime-terminal-summary'
 
 export type RuntimeTerminalVisualTerminalNode = {
   type: 'terminal'
@@ -265,6 +243,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
   surfaceOwner?: false
+  /** Windows shell the created tab spawns AS, instead of the host default. */
+  shellOverride?: string
 }
 
 export type RuntimeTerminalCreateRequestPayload =
@@ -332,6 +312,10 @@ export type RuntimeTerminalClose = {
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
+// Why both spellings: the codex-* members were published by every host before the agent-neutral
+// rename, so they are permanent — a client still has to read them off an older host. This build
+// keeps a codex-* reason only where the matched wording is plausibly Codex's own; every matcher
+// that inspects no agent publishes the agent-* spelling.
 export type RuntimeTerminalWaitBlockedReason =
   | 'codex-update-prompt'
   | 'codex-trust-workspace'
@@ -339,6 +323,11 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'codex-model-migration-prompt'
   | 'codex-hooks-review-prompt'
   | 'codex-interactive-prompt'
+  | 'agent-update-prompt'
+  | 'agent-trust-workspace'
+  | 'agent-cwd-prompt'
+  | 'agent-hooks-review-prompt'
+  | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
 
 export type RuntimeTerminalWait = {

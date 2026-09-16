@@ -1,3 +1,4 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
 import { triggerError } from '../platform/haptics'
@@ -8,7 +9,7 @@ import {
   isTerminalLiveInputWithinByteLimit
 } from '../terminal/terminal-live-input'
 import { dismissTerminalKeyboard } from '../terminal/terminal-keyboard-dismiss'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
@@ -87,8 +88,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
 
     try {
       // Why: fail now and restore the text — a send parked across a reconnect would execute long after the tap.
-      const response = await client.sendRequest(
-        'terminal.send',
+      const response = await terminalInputSend.request(
+        client,
         buildTerminalSendParams({
           terminal: activeHandle,
           text,
@@ -97,7 +98,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
-      const accepted = isTerminalSendRpcAccepted(response)
+      const accepted = terminalInputSend.interpret(response) === true
+      if (accepted) {
+        reportWorkerTerminalUserInput(client, activeHandle)
+      }
       if (!accepted) {
         restoreRejectedDraft()
       }
@@ -155,9 +159,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
-      return rpc
-        .sendRequest(
-          'terminal.send',
+      return terminalInputSend
+        .request(
+          rpc,
           buildTerminalSendParams({
             terminal: handle,
             text,
@@ -166,7 +170,16 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
           }),
           TERMINAL_INPUT_SEND_OPTIONS
         )
-        .then(isTerminalSendRpcAccepted, () => false)
+        .then(
+          (response) => {
+            const accepted = terminalInputSend.interpret(response) === true
+            if (accepted) {
+              reportWorkerTerminalUserInput(rpc, handle)
+            }
+            return accepted
+          },
+          () => false
+        )
     },
     [showToast]
   )

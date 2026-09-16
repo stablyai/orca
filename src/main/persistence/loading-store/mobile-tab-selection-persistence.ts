@@ -33,7 +33,7 @@ export class MobileTabSelectionPersistence {
 }
 
 export function installMobileTabSelectionPersistenceContext(
-  target: object,
+  target: MobileTabSelectionPersistence,
   source: MobileTabSelectionPersistence
 ): void {
   Object.defineProperty(target, mobileTabSelectionPersistenceContext, {

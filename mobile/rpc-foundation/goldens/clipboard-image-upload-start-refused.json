@@ -1,0 +1,88 @@
+{
+  "operation": "clipboard.image-upload",
+  "family": "clipboard.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "bf0227939c2d41d6a1ebc5b07a31196043e78f1580811bd32ec6fc5f447f5934",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "765ab192e1a5": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Image is too large",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "8dfd1f053efc": {
+      "name": "clipboard.startImageUpload#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
+      "sent": 1
+    },
+    "a69f0ea71c3c": {
+      "failure": "Image is too large",
+      "path": "unsaved"
+    },
+    "ec6fd7f06461": {
+      "name": "clipboard.startImageUpload#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "too_large",
+            "message": "Image is too large"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "clipboard-image-upload-start-refused",
+    "checkpoints": [
+      {
+        "id": "start-refused",
+        "observation": {
+          "sender": ["ec6fd7f06461"],
+          "payloads": ["8dfd1f053efc"],
+          "settlements": {
+            "remote": "765ab192e1a5"
+          },
+          "state": "a69f0ea71c3c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

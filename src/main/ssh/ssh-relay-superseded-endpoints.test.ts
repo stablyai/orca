@@ -7,7 +7,10 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     (error as { sshChannelCloseConfirmed?: boolean } | null)?.sshChannelCloseConfirmed === false
 }))
 
-import { parseRelayEndpointIncumbentProbe } from './ssh-relay-endpoint-incumbent'
+import {
+  RelayProbeCleanupUnconfirmedError,
+  parseRelayEndpointIncumbentProbe
+} from './ssh-relay-endpoint-incumbent'
 import {
   classifySupersededRelay,
   supersededRelayEndpointListCommand,
@@ -97,6 +100,23 @@ describe('classifySupersededRelay', () => {
 })
 
 describe('sweepSupersededRelayEndpoints', () => {
+  it('stops the sweep before cleanup when probe group termination is unconfirmed', async () => {
+    execCommand
+      .mockResolvedValueOnce(OLD_SOCK)
+      .mockResolvedValueOnce(
+        probe([
+          'PRESENT=yes',
+          'LISTEN=accepted',
+          'HOLDERS_SOURCE=unavailable',
+          'PROBE_CLEANUP=unconfirmed'
+        ])
+      )
+    await expect(sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)).rejects.toBeInstanceOf(
+      RelayProbeCleanupUnconfirmedError
+    )
+    expect(issuedCommands()).toHaveLength(2)
+  })
+
   it('leaves an upgrade-orphaned relay that still owns terminals running, untouched', async () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
@@ -106,7 +126,7 @@ describe('sweepSupersededRelayEndpoints', () => {
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ sockPath: OLD_SOCK, outcome: 'retained-live-work' })
-    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
+    expect(issuedCommands().some((command) => /\bkill\s/.test(command))).toBe(false)
     expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
   })
 

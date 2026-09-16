@@ -1,6 +1,58 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { TuiAgent } from './tui-agent'
 
+/** Why recovery reasons live in the shared row type: the tab row carries the
+ *  recovery ledger, and the ledger records which reason it last acted on. */
+export type TerminalPaneRecoveryReason =
+  | 'write-stalled'
+  | 'replay-wedged'
+  | 'input-undeliverable'
+  // The paired runtime that owns the PTY refused this write and said so on the
+  // wire. Distinct from 'input-undeliverable' because it skips the liveness
+  // probe: main's registry holds no entry for a `remote:` id, so `pty:hasPty`
+  // routes it to the local provider and answers a fabricated "dead". The
+  // rejection frame is the evidence instead — it came from the process that
+  // owns the PTY, over a connection that is by construction still up.
+  | 'input-rejected-by-host'
+  | 'reattach-unverifiable'
+  // A restore was requested for a certified-dead pipeline (reveal path).
+  | 'restore-blocked'
+  // A spawn resolved without a PTY id, so the pane is mounted with no transport
+  // binding. pty:data for the old id then lands in the pre-handler buffer, which
+  // ACKs it — main's delivery health stays green while the pane shows nothing.
+  | 'spawn-left-pane-unbound'
+
+/** Same vocabulary the direct-SSH pane retry ledger settles with
+ *  (DirectSshPaneRetryResult), so a pane reports both through one call. */
+export type TerminalPaneRecoveryOutcome =
+  | 'pending'
+  | 'success'
+  | 'failed'
+  | 'timed-out'
+  | 'superseded'
+
+/** The tab's recovery ledger. Lives on the row — not in a module- or
+ *  store-level map keyed by tabId — so a tab's existence and its recovery
+ *  budget are the same object: nothing can release the budget while keeping
+ *  the row, and closing the tab drops both together (crash b5cfc6ca). */
+export type TerminalTabRecoveryLedger = {
+  /** Remount timestamps inside the rolling window. Backstop, not the control. */
+  attemptedAt: number[]
+  /** Recovery epoch. A mounted pane captures it and stale requests are refused. */
+  generation: number
+  /** What the mounted pane observed for the attempt this ledger describes. */
+  outcome: TerminalPaneRecoveryOutcome
+  /** When that attempt was requested. Bounds how long 'pending' may block. */
+  startedAt: number
+  /** The reason this attempt acted on. A settled failure refuses the SAME
+   *  reason again until a new trigger arrives. */
+  reason: TerminalPaneRecoveryReason
+  /** `tab.generation` right after the remount. Any later bump — authority
+   *  change, SSH pane retry, activation respawn — is a new trigger, so the
+   *  mismatch alone supersedes this ledger. No writer required. */
+  tabGeneration: number
+}
+
 // ─── Terminal Tab (legacy — used by persistence and TerminalContentSlice) ─
 export type TerminalTab = {
   id: string
@@ -53,6 +105,11 @@ export type TerminalTab = {
    *  `sortEpoch` increments. Split layouts use a numeric count because one tab
    *  can remount several panes. Never persisted — it is a transient handoff. */
   pendingActivationSpawn?: boolean | number
+  /** Transient recovery ledger for this tab. Never persisted — it describes a
+   *  mounted pane's in-flight heal, and a stale one would refuse the first
+   *  legitimate recovery after restart. Stripped exactly like
+   *  `pendingActivationSpawn` (buildSanitizedTabsByWorktree). */
+  recovery?: TerminalTabRecoveryLedger
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'

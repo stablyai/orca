@@ -283,8 +283,6 @@ export const LEASED_WORKFLOWS = named([
     'operate-relay-production-rehome.yml',
     production({ leaseFiles: ['operate-relay-production-rehome-job.yml'] })
   ],
-  // The gateway applies its schema at startup, so its deploy revision is the schema step.
-  ['push-deploy.yml', production()],
   ['deploy-relay-asia-topology.yml', eitherEnvironment()],
   ['operate-relay-asia-admission.yml', eitherEnvironment()],
   ['deploy-relay-staging.yml', staging()],
@@ -300,6 +298,7 @@ export const LEASED_WORKFLOWS = named([
 ])
 
 export const NOT_A_CLOUD_SQL_CANDIDATE = named([
+  ['push-deploy.yml', 'Push uses dedicated SQL and its own production-push-rollout group and durable push-rollout lease.'],
   [
     'monitor-relay-production.yml',
     'Read-only. Its identity holds monitoring, logging, Cloud SQL and compute viewer roles only, and it runs `gcloud sql instances describe`, never a mutation. It consumes no connection budget, so the durable lease would only let monitoring block a rollout and a rollout block monitoring.'

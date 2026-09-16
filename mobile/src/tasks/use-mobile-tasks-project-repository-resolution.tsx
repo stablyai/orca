@@ -8,11 +8,11 @@ import {
 import {
   GITHUB_REPO_CONCURRENCY,
   getGitHubReviewerSeedUsers,
-  isSuccess,
   mapWithConcurrency,
   mergeGitHubAssignableUsers,
   projectRowType
 } from './mobile-tasks-legacy-foundation'
+import { githubProjectRepoSlugRead } from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectRepositoryResolution(model: ProjectProjectionModel) {
   const {
@@ -59,15 +59,13 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
     let cancelled = false
     void mapWithConcurrency(missing, GITHUB_REPO_CONCURRENCY, async (repo) => {
       try {
-        const response = await client.sendRequest(
-          'github.repoSlug',
+        const reply = await githubProjectRepoSlugRead.request(
+          client,
           { repo: `id:${repo.id}` },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as GitHubOwnerRepo | null
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectRepoSlugRead.interpret(reply) as GitHubOwnerRepo | null
         return { repoId: repo.id, entry: { path: repo.path, repository: result } }
       } catch {
         // Cached so readiness settles; `failed` marks it for retry on refresh.

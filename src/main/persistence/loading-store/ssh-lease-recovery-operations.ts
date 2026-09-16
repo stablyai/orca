@@ -245,7 +245,7 @@ export function getSshPtyLeaseOperations(owner: SshLeaseRecoveryOperations): Ssh
 }
 
 export function installSshLeaseRecoveryOperationsContext(
-  target: object,
+  target: SshLeaseRecoveryOperations,
   source: SshLeaseRecoveryOperations
 ): void {
   Object.defineProperty(target, sshLeaseRecoveryOperationsContext, {

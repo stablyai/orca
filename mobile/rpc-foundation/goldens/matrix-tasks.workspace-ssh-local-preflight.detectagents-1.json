@@ -1,0 +1,573 @@
+{
+  "operation": "tasks.workspace-ssh-local",
+  "family": "tasks.workspace-ssh-local",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "28f7ba289c188bfc121ef7b969133711189e887fbfc7b37c8a5401ea7f30b56a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "00d70c40c34c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "0846bea730cf": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "0c2cba5f3708": {
+      "name": "workspaceAgent",
+      "value": "claude",
+      "sent": 0
+    },
+    "1317fc33bdbe": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "163b91b6fe9c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "327b46fb8bef": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "6e5fcf24648d": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "70d128c20ae4": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "71225024ccf5": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "7400f4eebe66": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex", "claude"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "77b6cedadbe8": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 0
+    },
+    "87d7d24a30d2": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a88df8f43f70": {
+      "name": "workspaceDetectedAgentIds",
+      "value": [],
+      "sent": 1
+    },
+    "c56f76942e16": {
+      "name": "preflight.detectAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}",
+      "sent": 1
+    },
+    "cb93b17470e8": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
+    },
+    "d00f9527d4f2": {
+      "name": "workspaceDetectedAgentIds",
+      "value": ["codex", "claude"],
+      "sent": 1
+    },
+    "dd9d8bf76a0e": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fb640b2bca4c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "fbb9eef78275": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.workspace-ssh-local-preflight.detectagents-1",
+    "checkpoints": [
+      {
+        "id": "tw-workspace-ssh-local-agents.normal:local-agents-detected",
+        "observation": {
+          "sender": ["cb93b17470e8"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "7400f4eebe66",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "d00f9527d4f2"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.result-absent:local-agents-detected",
+        "observation": {
+          "sender": ["6e5fcf24648d"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.result-null:local-agents-detected",
+        "observation": {
+          "sender": ["1317fc33bdbe"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.inner-ok-missing:local-agents-detected",
+        "observation": {
+          "sender": ["327b46fb8bef"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.inner-false-string-error:local-agents-detected",
+        "observation": {
+          "sender": ["0846bea730cf"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.inner-false-object-error:local-agents-detected",
+        "observation": {
+          "sender": ["00d70c40c34c"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.outer-refused:local-agents-detected",
+        "observation": {
+          "sender": ["fb640b2bca4c"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.outer-refused-no-message:local-agents-detected",
+        "observation": {
+          "sender": ["163b91b6fe9c"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.method-not-found:local-agents-detected",
+        "observation": {
+          "sender": ["87d7d24a30d2"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.transport-rejection:local-agents-detected",
+        "observation": {
+          "sender": ["fbb9eef78275"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.transport-rejection-no-message:local-agents-detected",
+        "observation": {
+          "sender": ["70d128c20ae4"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
+        }
+      }
+    ]
+  }
+}

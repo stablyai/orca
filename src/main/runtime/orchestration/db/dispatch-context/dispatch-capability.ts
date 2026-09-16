@@ -38,7 +38,7 @@ export function mintDispatchCapability(
         params.processIncarnation,
         params.dispatchId
       )
-    this.fenceOutstandingMailboxDelivery(`dispatch:${params.dispatchId}`)
+    this.fenceUnacknowledgedMailboxDeliveries(`dispatch:${params.dispatchId}`)
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')

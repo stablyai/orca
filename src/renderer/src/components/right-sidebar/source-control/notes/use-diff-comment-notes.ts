@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { formatDiffComments } from '@/lib/diff-comments-format'
+import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import {
@@ -61,8 +62,16 @@ export function useSourceControlDiffCommentNotes({
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
       showDiffCommentsCopied(true)
-    } catch {
-      // Why: swallow — clipboard write can fail when unfocused; best-effort copy needs no error surface.
+    } catch (error) {
+      // Why report: the write can reject (untrusted sender, 16MiB size guard) and silence here
+      // reads as a successful copy — the user finds out on paste.
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.SourceControl.diffCommentNotesCopyFailed',
+          'Failed to copy notes'
+        ),
+        { description: describeClipboardWriteFailure(error) }
+      )
     }
   }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 

@@ -164,11 +164,11 @@ function exactFileLink(value: string, allowSpacedRelative: boolean): ParsedTermi
   if (!parsed) {
     return null
   }
-  const hasPathShape =
+  const looksLikePath =
     ROOTED_PATH_PREFIX_PATTERN.test(parsed.pathText) ||
     /[\\/]/.test(parsed.pathText) ||
     /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(parsed.pathText)
-  if (!hasPathShape) {
+  if (!looksLikePath) {
     return null
   }
   const explicitLink = {

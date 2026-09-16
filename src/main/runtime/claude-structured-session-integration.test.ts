@@ -600,6 +600,18 @@ describe('a structured Claude session over agentSession.*', () => {
       `claude:${PROVIDER_SESSION}:assistant-leaf`
     )
 
+    // A background task can wake Claude after the preceding dispatch settled.
+    // This assistant frame opens the provider-owned turn without an Orca send
+    // echo; Stop must target that frame's id rather than the settled user row.
+    claude.live().handlers.onMessage?.({
+      type: 'assistant',
+      session_id: PROVIDER_SESSION,
+      uuid: 'provider-opened-assistant',
+      parent_tool_use_id: null,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Background task update.' }] }
+    })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+
     claude.live().handlers.onMessage?.({
       type: 'system',
       subtype: 'background_tasks_changed',
@@ -672,10 +684,14 @@ describe('a structured Claude session over agentSession.*', () => {
 
     await expect(
       ok('agentSession.cancel', {
-        envelope: envelope('agentSession.cancel', { turnId: 'user-1' }, created.fence),
-        turnId: 'user-1'
+        envelope: envelope(
+          'agentSession.cancel',
+          { turnId: 'provider-opened-assistant' },
+          created.fence
+        ),
+        turnId: 'provider-opened-assistant'
       })
-    ).resolves.toMatchObject({ turnId: 'user-1', cancelled: true })
+    ).resolves.toMatchObject({ turnId: 'provider-opened-assistant', cancelled: true })
     expect(claude.live().calls.at(-1)).toMatchObject({ subtype: 'interrupt' })
 
     const host = getStructuredAgentSessionHost() as unknown as {
@@ -700,13 +716,13 @@ describe('a structured Claude session over agentSession.*', () => {
     })
     expect(claude.live().launch.options).toMatchObject({
       resume: PROVIDER_SESSION,
-      resumeSessionAt: 'assistant-leaf'
+      resumeSessionAt: 'provider-opened-assistant'
     })
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject({
       handle: {
         provider: 'claude',
         sessionId: PROVIDER_SESSION,
-        leafUuid: 'assistant-leaf'
+        leafUuid: 'provider-opened-assistant'
       },
       origin: 'resumed'
     })

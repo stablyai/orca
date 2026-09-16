@@ -8,6 +8,9 @@ import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-code
 import { RelayControlClient } from './relay-control-client'
 
 const encoder = new TextEncoder()
+
+/** A JSON control frame, including the forward-compat frames the client must ignore. */
+type ControlFrame = { type: string } & Record<string, unknown>
 const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
 const CHALLENGE_DOMAIN = 'orca-relay-host-challenge/v1'
 
@@ -221,7 +224,7 @@ describe('RelayControlClient', () => {
     expect(authorization).toBe('Bearer scoped-token')
     // Advertised on the upgrade, never in host-hello: a cell that predates the
     // capability parses host-hello strictly and would refuse the handshake.
-    expect(capabilities).toBe('pending-conn-details')
+    expect(capabilities).toBe('pending-conn-details,idle-regional-rehome-v1')
     expect(path).toBe('/v1/host/control')
     const hello = await nextJson(socket)
     expect(hello).toMatchObject({
@@ -410,7 +413,7 @@ class FakeControlSocket extends EventEmitter {
     this.close(1006)
   }
 
-  deliver(message: object): void {
+  deliver(message: ControlFrame): void {
     this.emit('message', JSON.stringify(message), false)
   }
 }

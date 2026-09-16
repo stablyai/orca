@@ -24,12 +24,13 @@ import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
-import { structuredHostStub } from './structured-agent-session-host-fixture'
+import { structuredHostStub, turnItemSkew } from './structured-agent-session-host-fixture'
 import {
   loadAgentSessionWireBuild,
   WORKING_TREE,
@@ -443,9 +444,24 @@ describe('cross-version structured agent sessions', () => {
     })
   })
 
+  describe('a client that predates the turn item', () => {
+    beforeEach(() => turnItemSkew.install(SESSION, WORKSPACE))
+    afterEach(() => setStructuredAgentSessionHost(null))
+
+    it('is published the status carrier where a capable client gets the turn item', async () => {
+      const params = paramsFor('agentSession.history')
+      for (const [clientCapabilities, item] of turnItemSkew.clients(baseline, current)) {
+        const client = { clientKind: 'runtime' as const, clientCapabilities }
+        const replies = await callBuild(current, 'agentSession.history', params, client)
+        expect(replies[0]).toMatchObject({ ok: true, result: { page: { items: [item] } } })
+      }
+    })
+  })
+
   describe('a new client against an old host', () => {
     it('registers the whole surface on the new build', () => {
       expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+      expect(current.capabilities).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
       expect(current.methodNames.filter((name) => name.startsWith('agentSession.'))).toHaveLength(
         STRUCTURED_CALLS.length
       )

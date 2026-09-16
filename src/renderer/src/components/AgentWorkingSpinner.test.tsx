@@ -183,15 +183,13 @@ describe('AgentWorkingSpinner', () => {
     }
   })
 
-  // Why: the class only spins if main.css defines it — pin the wiring across
-  // both files so neither side can be renamed or dropped alone (STA-3328
-  // regressed typing latency when rotation moved onto the input thread).
-  it('is backed by a steps(12) keyframe animation in main.css', () => {
+  it('preserves 12 steps per second without frequent iteration events', () => {
     const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
 
     const rule = css.match(/\.agent-working-spinner\s*\{[^}]*\}/)?.[0]
     expect(rule).toBeDefined()
-    expect(rule).toContain('animation: agent-spinner-rotate 1s steps(12, end) infinite')
+    expect(rule).toContain('animation: agent-spinner-rotate 86400s steps(1036800, end) infinite')
+    expect(css).toContain('transform: rotate(86400turn)')
     expect(css).toContain('@keyframes agent-spinner-rotate')
 
     const reducedMotionBlock = css.match(
