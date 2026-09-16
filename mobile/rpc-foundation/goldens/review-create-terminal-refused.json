@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
   "scenarioSha256": "af837de2e273c5f03130b51d6e1a9bff9ff99a4e8d1c9554a53134acb5924c72",
   "platform": "darwin",
@@ -58,8 +58,14 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "80f030a6d6a9": {
+    "88cd0d2b1302": {
       "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
+    "fff91a37bc65": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -94,11 +100,6 @@
           "ok": false
         }
       }
-    },
-    "af416f104f9a": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -107,8 +108,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["80f030a6d6a9"],
-          "payloads": ["af416f104f9a"],
+          "sender": ["fff91a37bc65"],
+          "payloads": ["88cd0d2b1302"],
           "settlements": {
             "create-and-send": "6e913cd7b306"
           },

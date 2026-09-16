@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "7d6099248aa6a2ef19f2e169ff917af794649d9d64d139aa9ffeea6a41355ddc",
   "platform": "darwin",
@@ -24,61 +24,14 @@
         "url": "https://review.test/9"
       }
     },
-    "3827fc206d36": {
-      "outcome": {
-        "existing": true,
-        "number": 9,
-        "ok": true,
-        "url": "https://review.test/9"
-      }
-    },
-    "9fec416f759d": {
+    "3207cb50ecc9": {
       "name": "worktree.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "main",
-            "linkedPR": 9,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":9}}"
     },
-    "e7f043ef834a": {
-      "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":9}}",
-      "sent": 2
-    },
-    "f5dea50053bb": {
+    "3525176b1e81": {
       "name": "hostedReview.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}",
-      "sent": 1
-    },
-    "fc66abdd58c9": {
-      "name": "hostedReview.create#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -121,6 +74,55 @@
           }
         }
       }
+    },
+    "38143ba8e1d0": {
+      "name": "hostedReview.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
+    },
+    "3827fc206d36": {
+      "outcome": {
+        "existing": true,
+        "number": 9,
+        "ok": true,
+        "url": "https://review.test/9"
+      }
+    },
+    "f6555cd41a78": {
+      "name": "worktree.set#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "main",
+            "linkedPR": 9,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -129,8 +131,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["fc66abdd58c9", "9fec416f759d"],
-          "payloads": ["f5dea50053bb", "e7f043ef834a"],
+          "sender": ["3525176b1e81", "f6555cd41a78"],
+          "payloads": ["38143ba8e1d0", "3207cb50ecc9"],
           "settlements": {
             "create": "2cc2895eb25e"
           },

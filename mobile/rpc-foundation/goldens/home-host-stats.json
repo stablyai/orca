@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
   "scenarioSha256": "bd5f4e5f24a29d96c4c98950691c6571918332f71ebb1f29ee97a9abc857ac29",
   "platform": "darwin",
@@ -13,8 +13,20 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0ebcc6f6a4cb": {
+    "44136fa355b3": {},
+    "94616379becc": {
+      "name": "stats",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "activeWorktrees": 1,
+          "totalWorktrees": 3
+        }
+      }
+    },
+    "9698bf4d8a23": {
       "name": "stats.summary#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -47,25 +59,15 @@
         }
       }
     },
-    "44136fa355b3": {},
-    "7836888bb6c0": {
-      "name": "stats",
-      "value": {
-        "host-1": {
-          "activeWorktrees": 1,
-          "totalWorktrees": 3
-        }
-      },
-      "sent": 1
-    },
     "9a84a7559023": {
       "host-1": {
         "activeWorktrees": 1,
         "totalWorktrees": 3
       }
     },
-    "a392ac528c2b": {
+    "cf7f6575cf73": {
       "name": "stats.summary#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -89,10 +91,10 @@
         "startedAt": 0
       }
     },
-    "dcf607ac617e": {
+    "d66672644411": {
       "name": "stats.summary#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"stats.summary\"}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"stats.summary\"}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -109,8 +111,8 @@
       {
         "id": "stats-pending",
         "observation": {
-          "sender": ["a392ac528c2b"],
-          "payloads": ["dcf607ac617e"],
+          "sender": ["cf7f6575cf73"],
+          "payloads": ["d66672644411"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -121,13 +123,13 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["0ebcc6f6a4cb"],
-          "payloads": ["dcf607ac617e"],
+          "sender": ["9698bf4d8a23"],
+          "payloads": ["d66672644411"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
           "state": "9a84a7559023",
-          "effects": ["7836888bb6c0"]
+          "effects": ["94616379becc"]
         }
       }
     ]

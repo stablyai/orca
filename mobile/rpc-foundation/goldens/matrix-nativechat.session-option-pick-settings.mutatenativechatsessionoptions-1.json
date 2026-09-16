@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "1305f50c6e838d89d0a9e65d9011d2a532a2f75f7b3aea73f9e33330214f5724",
   "platform": "darwin",
@@ -13,8 +13,52 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "087f0393107f": {
+    "0aa1124bf746": {
+      "settled": "settled"
+    },
+    "0cbee3f73306": {
       "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "23f8f4ed8c86": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -55,50 +99,9 @@
         }
       }
     },
-    "0aa1124bf746": {
-      "settled": "settled"
-    },
-    "13047e7a65a3": {
+    "2ea5c2006e3a": {
       "name": "settings.mutateNativeChatSessionOptions#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.mutateNativeChatSessionOptions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "picks": [
-              {
-                "modelId": "opus",
-                "optionId": "model",
-                "value": "opus"
-              }
-            ],
-            "type": "apply-picks"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "1963baf2c0ff": {
-      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -139,8 +142,14 @@
         }
       }
     },
-    "53eb0204a2b0": {
+    "3284376ef9b6": {
       "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.mutateNativeChatSessionOptions\",\"params\":{\"type\":\"apply-picks\",\"agent\":\"claude\",\"picks\":[{\"modelId\":\"opus\",\"optionId\":\"model\",\"value\":\"opus\"}]}}"
+    },
+    "354210cbc979": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -175,14 +184,14 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "error": "refused"
           }
         }
       }
     },
-    "6b4c03125e83": {
+    "476a2902da3e": {
       "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -223,8 +232,9 @@
         }
       }
     },
-    "6b6f06b19722": {
+    "6b20d3982d7c": {
       "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -259,59 +269,14 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "refused"
+            "$rpc": "null"
           }
         }
       }
     },
-    "71ba996139a2": {
+    "95cb95961522": {
       "name": "settings.mutateNativeChatSessionOptions#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.mutateNativeChatSessionOptions\",\"params\":{\"type\":\"apply-picks\",\"agent\":\"claude\",\"picks\":[{\"modelId\":\"opus\",\"optionId\":\"model\",\"value\":\"opus\"}]}}",
-      "sent": 1
-    },
-    "738c95d85c66": {
-      "name": "settings.mutateNativeChatSessionOptions#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.mutateNativeChatSessionOptions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "picks": [
-              {
-                "modelId": "opus",
-                "optionId": "model",
-                "value": "opus"
-              }
-            ],
-            "type": "apply-picks"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "applied": true
-          }
-        }
-      }
-    },
-    "7944fdd65c78": {
-      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -354,49 +319,9 @@
         }
       }
     },
-    "8c7187df17ee": {
+    "9964b36724f4": {
       "name": "settings.mutateNativeChatSessionOptions#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.mutateNativeChatSessionOptions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "picks": [
-              {
-                "modelId": "opus",
-                "optionId": "model",
-                "value": "opus"
-              }
-            ],
-            "type": "apply-picks"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "a2a1cfb0ec3f": {
-      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -433,8 +358,9 @@
         }
       }
     },
-    "c7e368586865": {
+    "9f7b70f2667b": {
       "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -472,6 +398,91 @@
         }
       }
     },
+    "baf33df29104": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "applied": true
+          }
+        }
+      }
+    },
+    "d97c721af8a1": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -487,8 +498,8 @@
       {
         "id": "native-chat-session-option-pick-written.normal:written",
         "observation": {
-          "sender": ["738c95d85c66"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["baf33df29104"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -499,8 +510,8 @@
       {
         "id": "native-chat-session-option-pick-written.result-absent:written",
         "observation": {
-          "sender": ["a2a1cfb0ec3f"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["9964b36724f4"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -511,8 +522,8 @@
       {
         "id": "native-chat-session-option-pick-written.result-null:written",
         "observation": {
-          "sender": ["8c7187df17ee"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["6b20d3982d7c"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -523,8 +534,8 @@
       {
         "id": "native-chat-session-option-pick-written.inner-ok-missing:written",
         "observation": {
-          "sender": ["6b6f06b19722"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["354210cbc979"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -535,8 +546,8 @@
       {
         "id": "native-chat-session-option-pick-written.inner-false-string-error:written",
         "observation": {
-          "sender": ["53eb0204a2b0"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["d97c721af8a1"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -547,8 +558,8 @@
       {
         "id": "native-chat-session-option-pick-written.inner-false-object-error:written",
         "observation": {
-          "sender": ["7944fdd65c78"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["95cb95961522"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -559,8 +570,8 @@
       {
         "id": "native-chat-session-option-pick-written.outer-refused:written",
         "observation": {
-          "sender": ["6b4c03125e83"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["476a2902da3e"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -571,8 +582,8 @@
       {
         "id": "native-chat-session-option-pick-written.outer-refused-no-message:written",
         "observation": {
-          "sender": ["1963baf2c0ff"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["2ea5c2006e3a"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -583,8 +594,8 @@
       {
         "id": "native-chat-session-option-pick-written.method-not-found:written",
         "observation": {
-          "sender": ["087f0393107f"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["23f8f4ed8c86"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -595,8 +606,8 @@
       {
         "id": "native-chat-session-option-pick-written.transport-rejection:written",
         "observation": {
-          "sender": ["13047e7a65a3"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["0cbee3f73306"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },
@@ -607,8 +618,8 @@
       {
         "id": "native-chat-session-option-pick-written.transport-rejection-no-message:written",
         "observation": {
-          "sender": ["c7e368586865"],
-          "payloads": ["71ba996139a2"],
+          "sender": ["9f7b70f2667b"],
+          "payloads": ["3284376ef9b6"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },

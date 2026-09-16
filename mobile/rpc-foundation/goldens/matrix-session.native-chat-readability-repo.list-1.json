@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "d6a0472f274d55aab584b58b67018d042ee1ba6799f42072a8a5986f45554bfc",
   "platform": "darwin",
@@ -13,8 +13,85 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "06b63e0d9986": {
+    "0b8777edb86c": {
+      "readable": false,
+      "worktreeId": "repo-1::/w"
+    },
+    "12e70439f294": {
       "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "1321b4c8c0b8": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "19b2979d7fc2": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "1b23dab83fcf": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -46,8 +123,43 @@
         }
       }
     },
-    "06fc8e7b85d5": {
+    "48c68906a98a": {
       "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "624ec4e5082c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -73,19 +185,16 @@
         "value": {
           "error": {
             "code": "refused",
-            "message": ""
+            "message": "outer refused"
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "0b8777edb86c": {
-      "readable": false,
-      "worktreeId": "repo-1::/w"
-    },
-    "0f1ed2b7a695": {
+    "70e0675ab2a9": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -124,8 +233,9 @@
         }
       }
     },
-    "2ebe4d776f9b": {
+    "747c556da67a": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -154,8 +264,9 @@
         }
       }
     },
-    "38e790fd9e9c": {
+    "8a72d3d14d44": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -182,49 +293,15 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "5730368193ee": {
+    "d68475063b62": {
       "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
-    },
-    "6e5c6593dad8": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "9d3fa0db2665": {
-      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -259,8 +336,53 @@
         }
       }
     },
-    "b9f0f1e94cd9": {
+    "dae756300589": {
       "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "dcf89ce6b4ca": {
+      "readable": true,
+      "worktreeId": "repo-1::/w"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1d579dd459c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -286,121 +408,10 @@
         "value": {
           "error": {
             "code": "refused",
-            "message": "outer refused"
+            "message": ""
           },
           "id": "frame-1",
           "ok": false
-        }
-      }
-    },
-    "cc1facdf008c": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "dcf89ce6b4ca": {
-      "readable": true,
-      "worktreeId": "repo-1::/w"
-    },
-    "e341bd05e614": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f96e83d33565": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
         }
       }
     }
@@ -411,8 +422,8 @@
       {
         "id": "native-chat-readability-local-repo.normal:readable",
         "observation": {
-          "sender": ["0f1ed2b7a695"],
-          "payloads": ["5730368193ee"],
+          "sender": ["70e0675ab2a9"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -423,8 +434,8 @@
       {
         "id": "native-chat-readability-local-repo.result-absent:readable",
         "observation": {
-          "sender": ["2ebe4d776f9b"],
-          "payloads": ["5730368193ee"],
+          "sender": ["747c556da67a"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -435,8 +446,8 @@
       {
         "id": "native-chat-readability-local-repo.result-null:readable",
         "observation": {
-          "sender": ["38e790fd9e9c"],
-          "payloads": ["5730368193ee"],
+          "sender": ["48c68906a98a"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -447,8 +458,8 @@
       {
         "id": "native-chat-readability-local-repo.inner-ok-missing:readable",
         "observation": {
-          "sender": ["06b63e0d9986"],
-          "payloads": ["5730368193ee"],
+          "sender": ["1b23dab83fcf"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -459,8 +470,8 @@
       {
         "id": "native-chat-readability-local-repo.inner-false-string-error:readable",
         "observation": {
-          "sender": ["f96e83d33565"],
-          "payloads": ["5730368193ee"],
+          "sender": ["8a72d3d14d44"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -471,8 +482,8 @@
       {
         "id": "native-chat-readability-local-repo.inner-false-object-error:readable",
         "observation": {
-          "sender": ["9d3fa0db2665"],
-          "payloads": ["5730368193ee"],
+          "sender": ["d68475063b62"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -483,8 +494,8 @@
       {
         "id": "native-chat-readability-local-repo.outer-refused:readable",
         "observation": {
-          "sender": ["b9f0f1e94cd9"],
-          "payloads": ["5730368193ee"],
+          "sender": ["624ec4e5082c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -495,8 +506,8 @@
       {
         "id": "native-chat-readability-local-repo.outer-refused-no-message:readable",
         "observation": {
-          "sender": ["06fc8e7b85d5"],
-          "payloads": ["5730368193ee"],
+          "sender": ["f1d579dd459c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -507,8 +518,8 @@
       {
         "id": "native-chat-readability-local-repo.method-not-found:readable",
         "observation": {
-          "sender": ["e341bd05e614"],
-          "payloads": ["5730368193ee"],
+          "sender": ["12e70439f294"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -519,8 +530,8 @@
       {
         "id": "native-chat-readability-local-repo.transport-rejection:readable",
         "observation": {
-          "sender": ["6e5c6593dad8"],
-          "payloads": ["5730368193ee"],
+          "sender": ["dae756300589"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -531,8 +542,8 @@
       {
         "id": "native-chat-readability-local-repo.transport-rejection-no-message:readable",
         "observation": {
-          "sender": ["cc1facdf008c"],
-          "payloads": ["5730368193ee"],
+          "sender": ["1321b4c8c0b8"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

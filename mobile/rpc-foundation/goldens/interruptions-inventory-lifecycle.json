@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "262eaad263a45aa13ec5b27c12b59946b12c202474229fff7a5727dba6d702ca",
   "scenarioSha256": "d6c57a5153d915f0a0c0fd9e305cac70b41b7eb8be226fc865227ebf1821e5d1",
   "platform": "darwin",
@@ -13,11 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "602e35a92eec": {
-      "files": []
-    },
-    "b5b30ad54c76": {
+    "13ef648b37c5": {
       "name": "files.list#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -47,13 +45,9 @@
         }
       }
     },
-    "bb65fa195d1c": {
-      "name": "files.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}",
-      "sent": 2
-    },
-    "c0821dc354d7": {
+    "32c9018052ba": {
       "name": "files.searchPaths#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -88,8 +82,62 @@
         }
       }
     },
-    "ccb16672d904": {
+    "4d27427720e9": {
       "name": "files.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 120,
+        "settledAt": 30120,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: files.list",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "602e35a92eec": {
+      "files": []
+    },
+    "8db0d1234c94": {
+      "name": "files.searchPaths#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+    },
+    "c9b9d7a9b388": {
+      "name": "files.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+    },
+    "d2ad71e601c4": {
+      "status": "fulfilled",
+      "startedAt": 120,
+      "settledAt": 120,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "d831c788243a": {
+      "name": "files.list#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -124,56 +172,12 @@
         }
       }
     },
-    "cd59dd2431e0": {
-      "name": "files.searchPaths#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}",
-      "sent": 1
-    },
-    "d2ad71e601c4": {
-      "status": "fulfilled",
-      "startedAt": 120,
-      "settledAt": 120,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "ee88659ed950": {
-      "name": "files.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:A"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 120,
-        "settledAt": 30120,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: files.list",
-          "isRpcDeliveryUnknown": true
-        }
       }
     }
   },
@@ -183,8 +187,8 @@
       {
         "id": "inventory-lifecycle.timeout:interrupted",
         "observation": {
-          "sender": ["c0821dc354d7", "ee88659ed950"],
-          "payloads": ["cd59dd2431e0", "bb65fa195d1c"],
+          "sender": ["32c9018052ba", "4d27427720e9"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a"
@@ -196,8 +200,8 @@
       {
         "id": "inventory-lifecycle.timeout:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "ee88659ed950"],
-          "payloads": ["cd59dd2431e0", "bb65fa195d1c"],
+          "sender": ["32c9018052ba", "4d27427720e9"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a"
@@ -209,8 +213,8 @@
       {
         "id": "inventory-lifecycle.disconnect:interrupted",
         "observation": {
-          "sender": ["c0821dc354d7", "b5b30ad54c76"],
-          "payloads": ["cd59dd2431e0", "bb65fa195d1c"],
+          "sender": ["32c9018052ba", "13ef648b37c5"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -223,8 +227,8 @@
       {
         "id": "inventory-lifecycle.disconnect:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "b5b30ad54c76"],
-          "payloads": ["cd59dd2431e0", "bb65fa195d1c"],
+          "sender": ["32c9018052ba", "13ef648b37c5"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -237,8 +241,8 @@
       {
         "id": "inventory-lifecycle.cutover:interrupted",
         "observation": {
-          "sender": ["c0821dc354d7", "ccb16672d904"],
-          "payloads": ["cd59dd2431e0", "bb65fa195d1c"],
+          "sender": ["32c9018052ba", "d831c788243a"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -251,8 +255,8 @@
       {
         "id": "inventory-lifecycle.cutover:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "ccb16672d904"],
-          "payloads": ["cd59dd2431e0", "bb65fa195d1c"],
+          "sender": ["32c9018052ba", "d831c788243a"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",

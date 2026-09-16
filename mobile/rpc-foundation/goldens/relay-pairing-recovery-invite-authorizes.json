@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "8dc3fd27c5720276608ca8743990e4f57d94eab84f620e9aa42702a4686fd5a9",
   "platform": "darwin",
@@ -13,18 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "09329ce738b3": {
-      "name": "host-saved",
-      "value": "host-1",
-      "sent": 4
-    },
-    "2e0a00540206": {
+    "1020838fc104": {
       "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}"
     },
-    "50f1b63c9e0d": {
-      "name": "pairing.getEndpoints#1",
+    "24d74fe4dff6": {
+      "name": "pairing.getEndpoints#2",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -33,8 +29,7 @@
         {
           "name": "params",
           "value": {
-            "installReqId": "install-fixture-1",
-            "resumeConfirmReqId": "confirm-fixture-1"
+            "installReqId": "install-fixture-1"
           }
         },
         {
@@ -49,7 +44,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "installStatus": {
@@ -70,15 +65,81 @@
         }
       }
     },
-    "6b9f1bf73e55": {
+    "26867f03990d": {
+      "name": "pairing.getEndpoints#3",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
+    },
+    "31bd50578154": {
+      "name": "pairing.provisionRelay#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "reqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "authorizationMode": "relay-basis",
+            "currentVersion": 4,
+            "reqId": "install-fixture-1",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
+    },
+    "5194e28c1a62": {
+      "name": "candidate-closed",
+      "ordinal": 3,
+      "value": "relay"
+    },
+    "6272ddc042aa": {
       "name": "bundle-written",
+      "ordinal": 11,
       "value": {
         "version": 4
-      },
-      "sent": 4
+      }
     },
-    "6f09228b201f": {
+    "6c24c57e60a8": {
+      "name": "host-saved",
+      "ordinal": 12,
+      "value": "host-1"
+    },
+    "7a3e4e5413b5": {
+      "outcome": "recovered",
+      "winner": {
+        "$rpc": "null"
+      }
+    },
+    "9da8279a9d62": {
+      "name": "pairing.provisionRelay#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}"
+    },
+    "a056f1f7787b": {
       "name": "pairing.getEndpoints#3",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -130,57 +191,19 @@
         }
       }
     },
-    "7a3e4e5413b5": {
-      "outcome": "recovered",
-      "winner": {
-        "$rpc": "null"
-      }
-    },
-    "8a13a5758a69": {
-      "name": "pairing.provisionRelay#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "pairing.provisionRelay"
-        },
-        {
-          "name": "params",
-          "value": {
-            "newResumeTokenHash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
-            "reqId": "install-fixture-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "authorizationMode": "relay-basis",
-            "currentVersion": 4,
-            "reqId": "install-fixture-1",
-            "resumeExpiresAt": 1767830400000,
-            "v": 1
-          }
-        }
-      }
-    },
-    "8ba03f7fcc7b": {
+    "ca192b794d53": {
       "name": "pairing.getEndpoints#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 2
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
     },
-    "9bb91a6d0ca7": {
-      "name": "pairing.getEndpoints#2",
+    "d407bb26c1c2": {
+      "name": "journal-cleared",
+      "ordinal": 13,
+      "value": "recovery"
+    },
+    "e46ed1a63455": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -189,7 +212,8 @@
         {
           "name": "params",
           "value": {
-            "installReqId": "install-fixture-1"
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
           }
         },
         {
@@ -204,7 +228,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-1",
           "ok": true,
           "result": {
             "installStatus": {
@@ -225,41 +249,21 @@
         }
       }
     },
-    "b1003d00d1be": {
-      "name": "pairing.provisionRelay#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}",
-      "sent": 3
-    },
-    "bcb071e85da1": {
-      "name": "journal-cleared",
-      "value": "recovery",
-      "sent": 4
-    },
-    "be67e12f6925": {
-      "name": "candidate-closed",
-      "value": "relay",
-      "sent": 1
-    },
-    "ca7cb1785a59": {
-      "name": "candidate-closed",
-      "value": "relay",
-      "sent": 4
-    },
-    "da0417cd1d5f": {
-      "name": "journal-updated",
-      "value": "relay-basis",
-      "sent": 2
-    },
     "f0723ea3ab16": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": "recovered"
     },
-    "f4a3f7deb30c": {
-      "name": "pairing.getEndpoints#3",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 4
+    "f08aa7bbec79": {
+      "name": "journal-updated",
+      "ordinal": 6,
+      "value": "relay-basis"
+    },
+    "ff8c2d545dca": {
+      "name": "candidate-closed",
+      "ordinal": 14,
+      "value": "relay"
     }
   },
   "recording": {
@@ -268,19 +272,19 @@
       {
         "id": "recovered-through-invite",
         "observation": {
-          "sender": ["50f1b63c9e0d", "9bb91a6d0ca7", "8a13a5758a69", "6f09228b201f"],
-          "payloads": ["2e0a00540206", "8ba03f7fcc7b", "b1003d00d1be", "f4a3f7deb30c"],
+          "sender": ["e46ed1a63455", "24d74fe4dff6", "31bd50578154", "a056f1f7787b"],
+          "payloads": ["1020838fc104", "ca192b794d53", "9da8279a9d62", "26867f03990d"],
           "settlements": {
             "recover": "f0723ea3ab16"
           },
           "state": "7a3e4e5413b5",
           "effects": [
-            "be67e12f6925",
-            "da0417cd1d5f",
-            "6b9f1bf73e55",
-            "09329ce738b3",
-            "bcb071e85da1",
-            "ca7cb1785a59"
+            "5194e28c1a62",
+            "f08aa7bbec79",
+            "6272ddc042aa",
+            "6c24c57e60a8",
+            "d407bb26c1c2",
+            "ff8c2d545dca"
           ]
         }
       }

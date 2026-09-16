@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "47868afdd6d593526ea6f0a0a1e19377ee8306ab70636f2dace0da9ef2454397",
   "platform": "darwin",
@@ -13,281 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0b8577f118ef": {
-      "name": "browser.mouseUp#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseUp"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "0da10b838d9e": {
+    "002a5bcbde42": {
       "name": "browser.mouseClick#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"modifiers\":[],\"radius\":14}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"modifiers\":[],\"radius\":14}}"
     },
-    "11a7e8034273": {
-      "name": "browser.mouseDown#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseDown\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}",
-      "sent": 3
-    },
-    "1961908d1da1": {
-      "name": "browser.mouseDown#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseDown"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "down": true
-          }
-        }
-      }
-    },
-    "22b944083246": {
+    "05ebe84334e1": {
       "name": "browser.mouseUp#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseUp"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "25ad8c6e489e": {
-      "name": "browser.mouseMove#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}",
-      "sent": 2
-    },
-    "41b41cc39e88": {
-      "name": "browser.mouseUp#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseUp"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "up": true
-          }
-        }
-      }
-    },
-    "50c3560a450b": {
-      "name": "browser.mouseUp#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseUp"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "55278458fd06": {
-      "name": "browser.mouseUp#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseUp"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "807c12c1fba8": {
-      "name": "browser.mouseUp#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseUp"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-4",
-          "ok": false
-        }
-      }
-    },
-    "9855d4ec3415": {
-      "busy": false,
-      "dialog": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "keyboardValue": "hello",
-      "pointerModifiers": []
-    },
-    "aa160e9b114e": {
-      "name": "browser.mouseUp#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseUp\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}",
-      "sent": 4
-    },
-    "affb8c2e1014": {
-      "name": "browser.mouseUp#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -322,20 +55,30 @@
         }
       }
     },
-    "b3273afd3ec2": {
+    "08224c934905": {
+      "name": "browser.mouseDown#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseDown\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}"
+    },
+    "125a546c8a77": {
       "name": "browser.mouseMove#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
+    },
+    "158487738d61": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
-          "value": "browser.mouseMove"
+          "value": "browser.mouseUp"
         },
         {
           "name": "params",
           "value": {
+            "button": "left",
             "page": "page-1",
-            "worktree": "id:worktree-1",
-            "x": 40,
-            "y": 80
+            "worktree": "id:worktree-1"
           }
         },
         {
@@ -350,16 +93,166 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-4",
           "ok": true,
           "result": {
-            "moved": true
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "b6e807143994": {
+    "2553a6cba38a": {
       "name": "browser.mouseUp#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "34e99afff30a": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "3ef91c6fd4ad": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "4cb8c4fe79c1": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "6cce4bd96b4a": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -394,8 +287,14 @@
         }
       }
     },
-    "c4a8ab904481": {
+    "71b83de9e4d3": {
       "name": "browser.mouseUp#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseUp\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}"
+    },
+    "82ccdef1369f": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -422,12 +321,27 @@
         "settledAt": 0,
         "value": {
           "id": "frame-4",
-          "ok": true
+          "ok": true,
+          "result": {
+            "up": true
+          }
         }
       }
     },
-    "cf9ea7b52a57": {
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
+    "d333a2a9fd72": {
       "name": "browser.mouseClick#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -466,8 +380,150 @@
         }
       }
     },
-    "e1791e2206cd": {
+    "d5b1ea216605": {
       "name": "browser.mouseUp#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "dbfbacf8be29": {
+      "name": "browser.mouseMove#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseMove"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "moved": true
+          }
+        }
+      }
+    },
+    "e3ae5f4e0dc4": {
+      "name": "browser.mouseDown#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "down": true
+          }
+        }
+      }
+    },
+    "e5894a0a39c4": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "e69f81b45b18": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -494,11 +550,7 @@
         "settledAt": 0,
         "value": {
           "id": "frame-4",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
+          "ok": true
         }
       }
     },
@@ -509,44 +561,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ef2f396492d9": {
-      "name": "browser.mouseUp#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseUp"
-        },
-        {
-          "name": "params",
-          "value": {
-            "button": "left",
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
     }
   },
   "recording": {
@@ -555,8 +569,8 @@
       {
         "id": "browser-pointer-click-fallback.normal:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "41b41cc39e88"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "82ccdef1369f"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -568,8 +582,8 @@
       {
         "id": "browser-pointer-click-fallback.result-absent:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "c4a8ab904481"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "e69f81b45b18"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -581,8 +595,8 @@
       {
         "id": "browser-pointer-click-fallback.result-null:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "55278458fd06"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "4cb8c4fe79c1"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -594,8 +608,8 @@
       {
         "id": "browser-pointer-click-fallback.inner-ok-missing:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "0b8577f118ef"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "34e99afff30a"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -607,8 +621,8 @@
       {
         "id": "browser-pointer-click-fallback.inner-false-string-error:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "e1791e2206cd"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "158487738d61"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -620,8 +634,8 @@
       {
         "id": "browser-pointer-click-fallback.inner-false-object-error:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "ef2f396492d9"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "3ef91c6fd4ad"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -633,8 +647,8 @@
       {
         "id": "browser-pointer-click-fallback.outer-refused:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "affb8c2e1014"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "05ebe84334e1"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -646,8 +660,8 @@
       {
         "id": "browser-pointer-click-fallback.outer-refused-no-message:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "807c12c1fba8"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "2553a6cba38a"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -659,8 +673,8 @@
       {
         "id": "browser-pointer-click-fallback.method-not-found:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "b6e807143994"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "6cce4bd96b4a"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -672,8 +686,8 @@
       {
         "id": "browser-pointer-click-fallback.transport-rejection:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "50c3560a450b"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "e5894a0a39c4"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"
@@ -685,8 +699,8 @@
       {
         "id": "browser-pointer-click-fallback.transport-rejection-no-message:clicked-by-fallback",
         "observation": {
-          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "22b944083246"],
-          "payloads": ["0da10b838d9e", "25ad8c6e489e", "11a7e8034273", "aa160e9b114e"],
+          "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "d5b1ea216605"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"

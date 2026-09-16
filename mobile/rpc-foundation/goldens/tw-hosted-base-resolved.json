@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "b3734c24f8a083d3efcdd995ea6a57e608d3d3ae3bbbd514db19dcf69448fa48",
   "platform": "darwin",
@@ -13,24 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "236529aa012d": {
-      "mrBase": "unresolved",
-      "prBase": {
-        "baseBranch": "main",
-        "compareBaseRef": "origin/main"
-      }
-    },
-    "3cca8119f144": {
-      "mrBase": {
-        "baseBranch": "develop"
-      },
-      "prBase": {
-        "baseBranch": "main",
-        "compareBaseRef": "origin/main"
-      }
-    },
-    "4febe923ceea": {
+    "1788fb968913": {
       "name": "worktree.resolvePrBase#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -65,6 +50,22 @@
         }
       }
     },
+    "236529aa012d": {
+      "mrBase": "unresolved",
+      "prBase": {
+        "baseBranch": "main",
+        "compareBaseRef": "origin/main"
+      }
+    },
+    "3cca8119f144": {
+      "mrBase": {
+        "baseBranch": "develop"
+      },
+      "prBase": {
+        "baseBranch": "main",
+        "compareBaseRef": "origin/main"
+      }
+    },
     "5428de0f5130": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -74,18 +75,19 @@
         "compareBaseRef": "origin/main"
       }
     },
-    "65f985665d42": {
+    "92df85b51d0c": {
       "name": "worktree.resolveMrBase#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}",
-      "sent": 2
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}"
     },
-    "95d2391d09f2": {
+    "aafcb4cd89c9": {
       "name": "worktree.resolvePrBase#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
     },
-    "aad8e7ddeea2": {
+    "d29aaf6d46d3": {
       "name": "worktree.resolveMrBase#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -134,8 +136,8 @@
       {
         "id": "pr-base-resolved",
         "observation": {
-          "sender": ["4febe923ceea"],
-          "payloads": ["95d2391d09f2"],
+          "sender": ["1788fb968913"],
+          "payloads": ["aafcb4cd89c9"],
           "settlements": {
             "pr": "5428de0f5130"
           },
@@ -146,8 +148,8 @@
       {
         "id": "mr-base-resolved",
         "observation": {
-          "sender": ["4febe923ceea", "aad8e7ddeea2"],
-          "payloads": ["95d2391d09f2", "65f985665d42"],
+          "sender": ["1788fb968913", "d29aaf6d46d3"],
+          "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "fd552ecb03da"

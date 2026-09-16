@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "4520bd54a55eabfe6ec64a4b2f824f095f98b2fffd1bf22fe4f9ec7f63cbfa3f",
   "platform": "darwin",
@@ -17,10 +17,10 @@
       "linkedPR": 7,
       "outcome": "unlinked"
     },
-    "28845c128141": {
+    "23cf25973682": {
       "name": "worktree.show#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 2
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
     "6f0c2307a94d": {
       "status": "fulfilled",
@@ -34,13 +34,45 @@
       },
       "outcome": "unlinked"
     },
-    "db5df797b7c0": {
+    "c0b049a3056b": {
       "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 1
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "linkedPR": 7
+            }
+          }
+        }
+      }
     },
-    "e29f6962cb3e": {
+    "e6131d48fd98": {
       "name": "worktree.show#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -80,40 +112,10 @@
         "$rpc": "null"
       }
     },
-    "f2580933d0e2": {
+    "fd03e9caa747": {
       "name": "worktree.show#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "linkedPR": 7
-            }
-          }
-        }
-      }
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     }
   },
   "recording": {
@@ -122,8 +124,8 @@
       {
         "id": "read-settled",
         "observation": {
-          "sender": ["f2580933d0e2"],
-          "payloads": ["db5df797b7c0"],
+          "sender": ["c0b049a3056b"],
+          "payloads": ["fd03e9caa747"],
           "settlements": {
             "read": "6f0c2307a94d"
           },
@@ -134,8 +136,8 @@
       {
         "id": "null-result-settled",
         "observation": {
-          "sender": ["f2580933d0e2", "e29f6962cb3e"],
-          "payloads": ["db5df797b7c0", "28845c128141"],
+          "sender": ["c0b049a3056b", "e6131d48fd98"],
+          "payloads": ["fd03e9caa747", "23cf25973682"],
           "settlements": {
             "read": "6f0c2307a94d",
             "read-again": "ee20a1dc39e7"

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "667a06cf9ff8129eee64327566012448abe1fe31f58c0d9b882b13e74db5a877",
   "platform": "darwin",
@@ -13,273 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "00546d51a1b2": {
+    "04de791c7267": {
       "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "067e0f525ca4": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "$rpc": "undefined"
-          }
-        }
-      },
-      "sent": 1
-    },
-    "0caf56550963": {
-      "cache": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "1b6c8cbfdc90": {
-      "cache": {
-        "repo-1": {
-          "failed": true,
-          "path": "/repo",
-          "repository": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "204880c5c7ff": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      },
-      "sent": 1
-    },
-    "436770d5f8a8": {
-      "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "4cfa99d7eefa": {
-      "cache": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "$rpc": "undefined"
-          }
-        }
-      }
-    },
-    "5330ec46fa7e": {
-      "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          }
-        }
-      }
-    },
-    "687b5a42463c": {
-      "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "6eacf14fe40e": {
-      "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "7686fc340030": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "$rpc": "null"
-          }
-        }
-      },
-      "sent": 1
-    },
-    "76be317ac0fc": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "failed": true,
-          "path": "/repo",
-          "repository": {
-            "$rpc": "null"
-          }
-        }
-      },
-      "sent": 1
-    },
-    "788ba90c1898": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      },
-      "sent": 1
-    },
-    "7de03629a406": {
-      "name": "github.repoSlug#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -309,128 +45,22 @@
         }
       }
     },
-    "81640993e00b": {
-      "name": "github.repoSlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}",
-      "sent": 1
-    },
-    "8a9b6f06911d": {
-      "cache": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "96fe094f2ea3": {
-      "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "a357afc033aa": {
+    "06e766db7462": {
       "name": "githubRepoSlugCache",
+      "ordinal": 3,
       "value": {
         "repo-1": {
           "path": "/repo",
           "repository": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          }
-        }
-      },
-      "sent": 1
-    },
-    "a4483defdd13": {
-      "cache": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "a6d3481c0eea": {
-      "name": "github.repoSlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.repoSlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
             "error": "inner refused",
             "ok": false
           }
         }
       }
     },
-    "bdec8bbb3c04": {
-      "cache": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          }
-        }
-      }
-    },
-    "dc2fd792171e": {
+    "09f0440141bc": {
       "name": "github.repoSlug#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -463,8 +93,42 @@
         }
       }
     },
-    "e933226b8b59": {
+    "0caf56550963": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "0f800c2e739d": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "1b6c8cbfdc90": {
+      "cache": {
+        "repo-1": {
+          "failed": true,
+          "path": "/repo",
+          "repository": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "34f8e6cb9199": {
       "name": "github.repoSlug#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -493,16 +157,23 @@
         }
       }
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
+    "3df58008cdfa": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
       "value": {
-        "$rpc": "undefined"
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
       }
     },
-    "efa8d7457ce2": {
+    "3e9e4ea57fa1": {
       "name": "githubRepoSlugCache",
+      "ordinal": 3,
       "value": {
         "repo-1": {
           "path": "/repo",
@@ -510,11 +181,119 @@
             "error": "refused"
           }
         }
-      },
-      "sent": 1
+      }
     },
-    "ffa0fb99ddcc": {
+    "470baf1783c9": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "49d6f5f60c9c": {
+      "name": "github.repoSlug#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "4cfa99d7eefa": {
       "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "53a39b53da01": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "failed": true,
+          "path": "/repo",
+          "repository": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "53a57abd997f": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "5849ae080719": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "5fca57506026": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
         "repo-1": {
           "path": "/repo",
           "repository": {
@@ -526,8 +305,227 @@
         }
       }
     },
-    "ffd83cd58474": {
+    "60d253ed9645": {
       "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
+      }
+    },
+    "8a9b6f06911d": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "8dd2c55e3056": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "a4483defdd13": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "bdec8bbb3c04": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
+      }
+    },
+    "bef9c740ecd1": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e092ebfbc64c": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec1ed482a1b7": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "f1cf721a882e": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -558,6 +556,19 @@
           }
         }
       }
+    },
+    "ffa0fb99ddcc": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -566,133 +577,133 @@
       {
         "id": "tk-project-repo-slugs.normal:mounted",
         "observation": {
-          "sender": ["5330ec46fa7e"],
-          "payloads": ["81640993e00b"],
+          "sender": ["60d253ed9645"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "bdec8bbb3c04",
-          "effects": ["a357afc033aa"]
+          "effects": ["3df58008cdfa"]
         }
       },
       {
         "id": "tk-project-repo-slugs.result-absent:mounted",
         "observation": {
-          "sender": ["e933226b8b59"],
-          "payloads": ["81640993e00b"],
+          "sender": ["34f8e6cb9199"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "4cfa99d7eefa",
-          "effects": ["067e0f525ca4"]
+          "effects": ["0f800c2e739d"]
         }
       },
       {
         "id": "tk-project-repo-slugs.result-null:mounted",
         "observation": {
-          "sender": ["6eacf14fe40e"],
-          "payloads": ["81640993e00b"],
+          "sender": ["ec1ed482a1b7"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "a4483defdd13",
-          "effects": ["7686fc340030"]
+          "effects": ["5849ae080719"]
         }
       },
       {
         "id": "tk-project-repo-slugs.inner-ok-missing:mounted",
         "observation": {
-          "sender": ["ffd83cd58474"],
-          "payloads": ["81640993e00b"],
+          "sender": ["f1cf721a882e"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "0caf56550963",
-          "effects": ["efa8d7457ce2"]
+          "effects": ["3e9e4ea57fa1"]
         }
       },
       {
         "id": "tk-project-repo-slugs.inner-false-string-error:mounted",
         "observation": {
-          "sender": ["a6d3481c0eea"],
-          "payloads": ["81640993e00b"],
+          "sender": ["8dd2c55e3056"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8a9b6f06911d",
-          "effects": ["204880c5c7ff"]
+          "effects": ["06e766db7462"]
         }
       },
       {
         "id": "tk-project-repo-slugs.inner-false-object-error:mounted",
         "observation": {
-          "sender": ["00546d51a1b2"],
-          "payloads": ["81640993e00b"],
+          "sender": ["e092ebfbc64c"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "ffa0fb99ddcc",
-          "effects": ["788ba90c1898"]
+          "effects": ["5fca57506026"]
         }
       },
       {
         "id": "tk-project-repo-slugs.outer-refused:mounted",
         "observation": {
-          "sender": ["dc2fd792171e"],
-          "payloads": ["81640993e00b"],
+          "sender": ["09f0440141bc"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["76be317ac0fc"]
+          "effects": ["53a39b53da01"]
         }
       },
       {
         "id": "tk-project-repo-slugs.outer-refused-no-message:mounted",
         "observation": {
-          "sender": ["436770d5f8a8"],
-          "payloads": ["81640993e00b"],
+          "sender": ["bef9c740ecd1"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["76be317ac0fc"]
+          "effects": ["53a39b53da01"]
         }
       },
       {
         "id": "tk-project-repo-slugs.method-not-found:mounted",
         "observation": {
-          "sender": ["96fe094f2ea3"],
-          "payloads": ["81640993e00b"],
+          "sender": ["53a57abd997f"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["76be317ac0fc"]
+          "effects": ["53a39b53da01"]
         }
       },
       {
         "id": "tk-project-repo-slugs.transport-rejection:mounted",
         "observation": {
-          "sender": ["7de03629a406"],
-          "payloads": ["81640993e00b"],
+          "sender": ["04de791c7267"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["76be317ac0fc"]
+          "effects": ["53a39b53da01"]
         }
       },
       {
         "id": "tk-project-repo-slugs.transport-rejection-no-message:mounted",
         "observation": {
-          "sender": ["687b5a42463c"],
-          "payloads": ["81640993e00b"],
+          "sender": ["470baf1783c9"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["76be317ac0fc"]
+          "effects": ["53a39b53da01"]
         }
       }
     ]

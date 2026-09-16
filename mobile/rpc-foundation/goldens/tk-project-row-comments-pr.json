@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "e5ff558593fd32d66e6ba1722ebf54d50992c9c2b6db41ef2435b47972fbd0fd",
   "platform": "darwin",
@@ -13,49 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02839f22d2db": {
-      "name": "projectMutating",
-      "value": false,
-      "sent": 1
-    },
-    "0fa9db1cc7c0": {
+    "25607177ea9a": {
       "name": "github.project.updatePullRequestBySlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updatePullRequestBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "number": 2,
-            "owner": "owner",
-            "repo": "repo",
-            "updates": {
-              "title": "Renamed"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updatePullRequestBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":2,\"updates\":{\"title\":\"Renamed\"}}}"
     },
     "2d1e8ede1fcf": {
       "detail": {
@@ -123,13 +84,19 @@
         "itemType": "PULL_REQUEST"
       }
     },
-    "7b2465eedefe": {
+    "5d32aa29303c": {
       "name": "projectMutating",
-      "value": true,
-      "sent": 0
+      "ordinal": 1,
+      "value": true
     },
-    "c8e3f060e5f1": {
+    "72332e237f1f": {
+      "name": "projectMutating",
+      "ordinal": 6,
+      "value": false
+    },
+    "9332b39405f1": {
       "name": "projectRowItem",
+      "ordinal": 4,
       "value": {
         "content": {
           "assignees": [],
@@ -146,11 +113,11 @@
         "fieldValuesByFieldId": {},
         "id": "item-2",
         "itemType": "PULL_REQUEST"
-      },
-      "sent": 1
+      }
     },
-    "c9abda0c6d89": {
+    "aa2ef79d4298": {
       "name": "githubProjectTable",
+      "ordinal": 5,
       "value": {
         "fields": [
           {
@@ -207,13 +174,47 @@
           "name": "Table",
           "number": 1
         }
-      },
-      "sent": 1
+      }
     },
-    "e1d50458f904": {
+    "acc111809814": {
       "name": "github.project.updatePullRequestBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updatePullRequestBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":2,\"updates\":{\"title\":\"Renamed\"}}}",
-      "sent": 1
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -230,14 +231,14 @@
       {
         "id": "update-item-settled",
         "observation": {
-          "sender": ["0fa9db1cc7c0"],
-          "payloads": ["e1d50458f904"],
+          "sender": ["acc111809814"],
+          "payloads": ["25607177ea9a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
           },
           "state": "2d1e8ede1fcf",
-          "effects": ["7b2465eedefe", "c8e3f060e5f1", "c9abda0c6d89", "02839f22d2db"]
+          "effects": ["5d32aa29303c", "9332b39405f1", "aa2ef79d4298", "72332e237f1f"]
         }
       }
     ]

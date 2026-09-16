@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "31bfa49f888b0eb3f72873bf4a3af26129e78c23126e8fc8fe45b952caa60904",
   "platform": "darwin",
@@ -13,52 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "7a73ebbabb90": {
+    "083a573d9009": {
       "name": "ui.set#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}",
-      "sent": 2
-    },
-    "a569eb8ebbdd": {
-      "name": "ui.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "taskResumeState": {
-              "githubItemsPreset": "issues"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "forbidden",
-            "message": "no access"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "ae0c8e22f430": {
-      "preset": "all"
-    },
-    "bea815de84ac": {
-      "name": "ui.set#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -98,10 +55,55 @@
         }
       }
     },
-    "e7c50b077f61": {
+    "8eac7ca88434": {
       "name": "ui.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"taskResumeState\":{\"githubItemsPreset\":\"issues\"}}}",
-      "sent": 1
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "taskResumeState": {
+              "githubItemsPreset": "issues"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": "no access"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ae0c8e22f430": {
+      "preset": "all"
+    },
+    "b10dd246ebf0": {
+      "name": "ui.set#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}"
+    },
+    "b59e9062cf46": {
+      "name": "ui.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"taskResumeState\":{\"githubItemsPreset\":\"issues\"}}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -128,8 +130,8 @@
       {
         "id": "best-effort-resume-write",
         "observation": {
-          "sender": ["a569eb8ebbdd"],
-          "payloads": ["e7c50b077f61"],
+          "sender": ["8eac7ca88434"],
+          "payloads": ["b59e9062cf46"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "resume": "eb79a9b3682a"
@@ -141,8 +143,8 @@
       {
         "id": "awaited-trust-write-refused",
         "observation": {
-          "sender": ["a569eb8ebbdd", "bea815de84ac"],
-          "payloads": ["e7c50b077f61", "7a73ebbabb90"],
+          "sender": ["8eac7ca88434", "083a573d9009"],
+          "payloads": ["b59e9062cf46", "b10dd246ebf0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "resume": "eb79a9b3682a",

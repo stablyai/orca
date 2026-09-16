@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",
   "scenarioSha256": "daf68df8840ea6872521d823cc17e1e5de3f3a74a8855465fcf40cc276e9c2ce",
   "platform": "darwin",
@@ -13,33 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "090c88478661": {
+    "1c2564f1daca": {
       "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "26accd69bc48": {
+    "35f85fe3b71c": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -64,8 +45,35 @@
       }
     },
     "44136fa355b3": {},
-    "68155c1eb584": {
+    "51d4cb56be85": {
       "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "59575239faa8": {
+      "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -98,58 +106,9 @@
         }
       }
     },
-    "7d14967a1151": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "agents disconnected",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "84ca21355dd8": {
-      "name": "preflight.detectRemoteAgents#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
-      "sent": 3
-    },
-    "8da6b504bc95": {
-      "name": "preflight.detectRemoteAgents#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectRemoteAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "agents disconnected",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "bae1ab4f96f9": {
+    "7023dde78391": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -186,15 +145,61 @@
         }
       }
     },
-    "d0694611a403": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 2
+    "7d14967a1151": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "agents disconnected",
+        "isRpcDeliveryUnknown": true
+      }
     },
-    "fd387fe4211d": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a05ac6b15c2d": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "cb07cfd92fcc": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "agents disconnected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "e0eef7c9fafe": {
       "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 2
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     }
   },
   "recording": {
@@ -203,8 +208,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["26accd69bc48", "090c88478661"],
-          "payloads": ["fd387fe4211d", "d0694611a403"],
+          "sender": ["35f85fe3b71c", "51d4cb56be85"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -215,8 +220,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "68155c1eb584", "8da6b504bc95"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "59575239faa8", "cb07cfd92fcc"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "7d14967a1151"
           },

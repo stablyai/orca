@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "28d8dfb15fec1ecaaa1c675c9c8c0cdc196e184a6884625c44dfe1f0f9fc8e7e",
   "platform": "darwin",
@@ -13,27 +13,49 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "32a3635e06a4": {
-      "name": "mutatingStatus",
-      "value": false,
-      "sent": 1
-    },
-    "772281b8af97": {
-      "name": "gitlab.mergeMR#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":\"group/project\"}}",
-      "sent": 1
-    },
-    "84465663f388": {
+    "3ea7248d382b": {
       "name": "actionItem",
+      "ordinal": 5,
       "value": {
         "$rpc": "null"
-      },
-      "sent": 1
+      }
     },
-    "9e263f5e91be": {
-      "name": "error",
-      "value": "",
-      "sent": 0
+    "af959aaccf63": {
+      "name": "gitlab.mergeMR#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.mergeMR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 7,
+            "method": "squash",
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
     },
     "b6a6630b4d40": {
       "error": "",
@@ -72,46 +94,10 @@
         "provider": "gitlab"
       }
     },
-    "c483c06533af": {
+    "c6efd8599d7e": {
       "name": "gitlab.mergeMR#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.mergeMR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 7,
-            "method": "squash",
-            "projectRef": "group/project",
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 60000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "cc96725d8f47": {
-      "name": "mutatingStatus",
-      "value": true,
-      "sent": 0
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":\"group/project\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -120,6 +106,21 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ecf9003e4ef1": {
+      "name": "mutatingStatus",
+      "ordinal": 6,
+      "value": false
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "fd2fad47bec2": {
+      "name": "mutatingStatus",
+      "ordinal": 1,
+      "value": true
     }
   },
   "recording": {
@@ -128,14 +129,14 @@
       {
         "id": "merge-settled",
         "observation": {
-          "sender": ["c483c06533af"],
-          "payloads": ["772281b8af97"],
+          "sender": ["af959aaccf63"],
+          "payloads": ["c6efd8599d7e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "merge-0": "eb79a9b3682a"
           },
           "state": "b6a6630b4d40",
-          "effects": ["cc96725d8f47", "9e263f5e91be", "84465663f388", "32a3635e06a4"]
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "3ea7248d382b", "ecf9003e4ef1"]
         }
       }
     ]

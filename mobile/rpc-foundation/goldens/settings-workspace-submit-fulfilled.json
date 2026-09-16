@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
   "scenarioSha256": "b10ff86086c134284cb0446e8857cd4b55f5ff2bd0507388ec659a95f25e2a19",
   "platform": "darwin",
@@ -13,8 +13,39 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "090c88478661": {
+    "13c996e4ec2b": {
+      "creating": true,
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "285bfcc87a38": {
+      "name": "agentOverridden",
+      "ordinal": 6,
+      "value": false
+    },
+    "37e61a793f91": {
+      "name": "selectedAgent",
+      "ordinal": 5,
+      "value": {
+        "id": "codex",
+        "label": "Codex"
+      }
+    },
+    "39f99cf479f0": {
+      "name": "error",
+      "ordinal": 1,
+      "value": ""
+    },
+    "483b4c51c982": {
+      "name": "error",
+      "ordinal": 7,
+      "value": "Selected agent is disabled. Choose an enabled agent before creating."
+    },
+    "51d4cb56be85": {
       "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -38,30 +69,16 @@
         "startedAt": 0
       }
     },
-    "13c996e4ec2b": {
-      "creating": true,
-      "error": "",
-      "settings": {
-        "disabledTuiAgents": ["claude"]
-      }
-    },
-    "3af6dc91992c": {
-      "name": "agentOverridden",
-      "value": false,
-      "sent": 1
-    },
-    "4c38e416e041": {
-      "name": "selectedAgent",
+    "58752e3dadee": {
+      "name": "runtimeSettings",
+      "ordinal": 4,
       "value": {
-        "id": "codex",
-        "label": "Codex"
-      },
-      "sent": 1
-    },
-    "5c52bc3f9e55": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 1
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      }
     },
     "5efbd884ea5a": {
       "creating": false,
@@ -74,8 +91,9 @@
         "visibleTaskProviders": ["github", "linear"]
       }
     },
-    "7ca23c4c946b": {
+    "778f05cac35e": {
       "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -117,27 +135,6 @@
       "status": "pending",
       "startedAt": 0
     },
-    "9e263f5e91be": {
-      "name": "error",
-      "value": "",
-      "sent": 0
-    },
-    "ea718cd95024": {
-      "name": "runtimeSettings",
-      "value": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": ["claude"],
-        "hostSettingOverrides": {},
-        "prBotAuthorOverrides": ["bot-user"],
-        "visibleTaskProviders": ["github", "linear"]
-      },
-      "sent": 1
-    },
-    "eaf6fe088c19": {
-      "name": "error",
-      "value": "Selected agent is disabled. Choose an enabled agent before creating.",
-      "sent": 1
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -145,6 +142,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f648b042d810": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     }
   },
   "recording": {
@@ -153,32 +155,32 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["5c52bc3f9e55"],
+          "sender": ["51d4cb56be85"],
+          "payloads": ["f648b042d810"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "13c996e4ec2b",
-          "effects": ["9e263f5e91be"]
+          "effects": ["39f99cf479f0"]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["5c52bc3f9e55"],
+          "sender": ["778f05cac35e"],
+          "payloads": ["f648b042d810"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "5efbd884ea5a",
           "effects": [
-            "9e263f5e91be",
-            "ea718cd95024",
-            "4c38e416e041",
-            "3af6dc91992c",
-            "eaf6fe088c19"
+            "39f99cf479f0",
+            "58752e3dadee",
+            "37e61a793f91",
+            "285bfcc87a38",
+            "483b4c51c982"
           ]
         }
       }

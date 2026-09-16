@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "5c2b3237a14f9df9357ab458b2e21f2df8e68ad6bf6dc5670c0ace7eeb567e80",
   "platform": "darwin",
@@ -13,8 +13,24 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "328e7f8994b4": {
+    "34f7b35ae07c": {
       "name": "terminal.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}"
+    },
+    "6aa9d70c1c82": {
+      "known": [],
+      "terminals": []
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "b499750a17bb": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -46,21 +62,6 @@
           }
         }
       }
-    },
-    "6aa9d70c1c82": {
-      "known": [],
-      "terminals": []
-    },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "c08af175e65b": {
-      "name": "terminal.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -69,8 +70,8 @@
       {
         "id": "kept",
         "observation": {
-          "sender": ["328e7f8994b4"],
-          "payloads": ["c08af175e65b"],
+          "sender": ["b499750a17bb"],
+          "payloads": ["34f7b35ae07c"],
           "settlements": {
             "no-empty": "84e5ca07cb7a"
           },

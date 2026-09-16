@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "5100bd674509d1d83b1e2594eee036af21ea14b12226185b44070555d1d43060",
   "platform": "darwin",
@@ -13,13 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "085ee12ac483": {
-      "name": "fetch-session-tabs",
-      "value": {},
-      "sent": 4
-    },
-    "0b7588536afb": {
+    "049e3dd3b1db": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -39,112 +35,19 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "0d163aa89099": {
+    "0fbf6809f292": {
       "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "134e6545bfe5": {
-      "createError": "transport failure",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "1fe9fbe7d375": {
-      "createError": "Cannot read properties of undefined (reading 'capabilities')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "39cfe991f857": {
-      "name": "toast",
-      "value": {
-        "message": "Cannot read properties of null (reading 'capabilities')"
-      },
-      "sent": 1
-    },
-    "4267c22fd1f9": {
-      "name": "files.createFile#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.createFile"
-        },
-        {
-          "name": "params",
-          "value": {
-            "expectedExecutionHostId": "local",
-            "relativePath": "untitled.md",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "created": true
-          }
-        }
-      }
-    },
-    "48e2bdc38094": {
-      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -176,113 +79,49 @@
         }
       }
     },
-    "4b0fb2833d76": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "4c5f889d4eb7": {
-      "name": "files.createFile#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}",
-      "sent": 3
-    },
-    "5216935e6a30": {
-      "name": "toast",
-      "value": {
-        "message": "Cannot read properties of undefined (reading 'capabilities')"
-      },
-      "sent": 1
-    },
-    "573973431b35": {
-      "name": "toast",
-      "value": {
-        "message": "outer refused"
-      },
-      "sent": 1
-    },
-    "6371ca02b18e": {
-      "createError": "outer refused",
+    "134e6545bfe5": {
+      "createError": "transport failure",
       "creatingBrowser": false,
       "creatingMarkdown": false,
       "pendingBrowserFocusPageId": {
         "$rpc": "null"
       }
     },
-    "67e91d4ad9ea": {
+    "1d5503a7e274": {
       "name": "toast",
+      "ordinal": 3,
       "value": {
-        "message": ""
-      },
-      "sent": 1
-    },
-    "74a9cdb3c227": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
+        "message": "Unknown method"
       }
     },
-    "753f8f2aac3b": {
-      "name": "status.get#1",
+    "1fe9fbe7d375": {
+      "createError": "Cannot read properties of undefined (reading 'capabilities')",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "32afb7dc375d": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Remote file changes require a newer Orca server. Update the HUB and try again."
+      }
+    },
+    "3e7bfd4c59c3": {
+      "name": "files.open#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
-          "value": "status.get"
+          "value": "files.open"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "undefined"
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
           }
         },
         {
@@ -297,30 +136,24 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "opened": true
+          }
         }
       }
     },
-    "7799ca596f0c": {
-      "createError": "Remote file changes require a newer Orca server. Update the HUB and try again.",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
+    "4c73134e473e": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "outer refused"
       }
     },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
-    "8bdc2aec524d": {
+    "4e53935c13ac": {
       "name": "worktree.show#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -354,236 +187,30 @@
         }
       }
     },
-    "90817e8c47cb": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "a56852d6836b": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": ["files.mutation-ownership.v1"]
-          }
-        }
-      }
-    },
-    "a7bdf95d4886": {
-      "name": "toast",
-      "value": {
-        "message": "Remote file changes require a newer Orca server. Update the HUB and try again."
-      },
-      "sent": 1
-    },
-    "a8d9f204690e": {
-      "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "c09254b8373a": {
-      "name": "toast",
-      "value": {
-        "message": "Unknown method"
-      },
-      "sent": 1
-    },
-    "ca3214963232": {
+    "4e9c5ab0de1c": {
       "name": "files.open#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}",
-      "sent": 4
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}"
     },
-    "d38c135a5752": {
-      "name": "files.open#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.open"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "untitled.md",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "opened": true
-          }
-        }
-      }
-    },
-    "d574cdcd4bef": {
-      "createError": "",
+    "6371ca02b18e": {
+      "createError": "outer refused",
       "creatingBrowser": false,
       "creatingMarkdown": false,
       "pendingBrowserFocusPageId": {
         "$rpc": "null"
       }
     },
-    "e1f916d49745": {
-      "createError": "Cannot read properties of null (reading 'capabilities')",
+    "7799ca596f0c": {
+      "createError": "Remote file changes require a newer Orca server. Update the HUB and try again.",
       "creatingBrowser": false,
       "creatingMarkdown": false,
       "pendingBrowserFocusPageId": {
         "$rpc": "null"
       }
     },
-    "e6b6cf30c6ee": {
-      "createError": "Unknown method",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
-    "e7e6fb5e264b": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
-      "sent": 2
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "ef64e4eaa635": {
-      "name": "toast",
-      "value": {
-        "message": "transport failure"
-      },
-      "sent": 1
-    },
-    "f2a2b92aa73c": {
+    "7f0419402be8": {
       "name": "status.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "f68f9c806fb2": {
-      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -617,6 +244,393 @@
           }
         }
       }
+    },
+    "9744697e6cb8": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "transport failure"
+      }
+    },
+    "a4f53f7fb1d7": {
+      "name": "fetch-session-tabs",
+      "ordinal": 9,
+      "value": {}
+    },
+    "b5476ba1aabe": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "b5ae4bb70d31": {
+      "name": "files.createFile#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.createFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedExecutionHostId": "local",
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "created": true
+          }
+        }
+      }
+    },
+    "b70aead0ffe8": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "bde3786de6f8": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Cannot read properties of null (reading 'capabilities')"
+      }
+    },
+    "bfe4c76a5071": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c371c18b9adc": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Cannot read properties of undefined (reading 'capabilities')"
+      }
+    },
+    "c924e7a5a7da": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "c98cb7e69921": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "d574cdcd4bef": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "e1f916d49745": {
+      "createError": "Cannot read properties of null (reading 'capabilities')",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "e6b6cf30c6ee": {
+      "createError": "Unknown method",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "e81d3a627ac2": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["files.mutation-ownership.v1"]
+          }
+        }
+      }
+    },
+    "e852b360bd93": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1279bf9f173": {
+      "name": "files.createFile#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}"
+    },
+    "f308f4a0d416": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": ""
+      }
+    },
+    "fa37fc8bfba3": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "fa49f7da1267": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
     }
   },
   "recording": {
@@ -625,133 +639,133 @@
       {
         "id": "session-create-markdown-note.normal:created",
         "observation": {
-          "sender": ["a56852d6836b", "8bdc2aec524d", "4267c22fd1f9", "d38c135a5752"],
-          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
+          "sender": ["e81d3a627ac2", "4e53935c13ac", "b5ae4bb70d31", "3e7bfd4c59c3"],
+          "payloads": ["d08f74d65ee6", "c924e7a5a7da", "f1279bf9f173", "4e9c5ab0de1c"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "d574cdcd4bef",
-          "effects": ["085ee12ac483"]
+          "effects": ["a4f53f7fb1d7"]
         }
       },
       {
         "id": "session-create-markdown-note.result-absent:created",
         "observation": {
-          "sender": ["90817e8c47cb"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["fa49f7da1267"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "1fe9fbe7d375",
-          "effects": ["5216935e6a30"]
+          "effects": ["c371c18b9adc"]
         }
       },
       {
         "id": "session-create-markdown-note.result-null:created",
         "observation": {
-          "sender": ["0d163aa89099"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["fa37fc8bfba3"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "e1f916d49745",
-          "effects": ["39cfe991f857"]
+          "effects": ["bde3786de6f8"]
         }
       },
       {
         "id": "session-create-markdown-note.inner-ok-missing:created",
         "observation": {
-          "sender": ["48e2bdc38094"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["0fbf6809f292"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "7799ca596f0c",
-          "effects": ["a7bdf95d4886"]
+          "effects": ["32afb7dc375d"]
         }
       },
       {
         "id": "session-create-markdown-note.inner-false-string-error:created",
         "observation": {
-          "sender": ["f2a2b92aa73c"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["b5476ba1aabe"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "7799ca596f0c",
-          "effects": ["a7bdf95d4886"]
+          "effects": ["32afb7dc375d"]
         }
       },
       {
         "id": "session-create-markdown-note.inner-false-object-error:created",
         "observation": {
-          "sender": ["f68f9c806fb2"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["7f0419402be8"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "7799ca596f0c",
-          "effects": ["a7bdf95d4886"]
+          "effects": ["32afb7dc375d"]
         }
       },
       {
         "id": "session-create-markdown-note.outer-refused:created",
         "observation": {
-          "sender": ["0b7588536afb"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["b70aead0ffe8"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "6371ca02b18e",
-          "effects": ["573973431b35"]
+          "effects": ["4c73134e473e"]
         }
       },
       {
         "id": "session-create-markdown-note.outer-refused-no-message:created",
         "observation": {
-          "sender": ["a8d9f204690e"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["bfe4c76a5071"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "d574cdcd4bef",
-          "effects": ["67e91d4ad9ea"]
+          "effects": ["f308f4a0d416"]
         }
       },
       {
         "id": "session-create-markdown-note.method-not-found:created",
         "observation": {
-          "sender": ["753f8f2aac3b"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["e852b360bd93"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "e6b6cf30c6ee",
-          "effects": ["c09254b8373a"]
+          "effects": ["1d5503a7e274"]
         }
       },
       {
         "id": "session-create-markdown-note.transport-rejection:created",
         "observation": {
-          "sender": ["4b0fb2833d76"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["c98cb7e69921"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "134e6545bfe5",
-          "effects": ["ef64e4eaa635"]
+          "effects": ["9744697e6cb8"]
         }
       },
       {
         "id": "session-create-markdown-note.transport-rejection-no-message:created",
         "observation": {
-          "sender": ["74a9cdb3c227"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["049e3dd3b1db"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
           "state": "d574cdcd4bef",
-          "effects": ["67e91d4ad9ea"]
+          "effects": ["f308f4a0d416"]
         }
       }
     ]

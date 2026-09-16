@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "16abe9e1a8d4cff17b3ea29d40277ae30a3d555a4a9efa08b2745c3a85b02740",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "06b14e4985de": {
+      "name": "worktree.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
+    },
     "240b0b1c72b2": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -21,8 +26,14 @@
         "error": ""
       }
     },
-    "43e8315bc2fe": {
+    "7d651cae8837": {
+      "outcome": {
+        "error": ""
+      }
+    },
+    "95255fcdbc28": {
       "name": "worktree.create#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -56,16 +67,6 @@
           "ok": false
         }
       }
-    },
-    "7d651cae8837": {
-      "outcome": {
-        "error": ""
-      }
-    },
-    "de75bbf6c762": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -74,8 +75,8 @@
       {
         "id": "refused-empty-message",
         "observation": {
-          "sender": ["43e8315bc2fe"],
-          "payloads": ["de75bbf6c762"],
+          "sender": ["95255fcdbc28"],
+          "payloads": ["06b14e4985de"],
           "settlements": {
             "create": "240b0b1c72b2"
           },

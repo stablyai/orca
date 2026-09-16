@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "cc8338e31b7a2dc232238281afd2e3240343bb817a652744789f58ace806325a",
   "platform": "darwin",
@@ -13,53 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0469b72b9c8a": {
-      "name": "speech.dictation.start#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}",
-      "sent": 1
-    },
-    "6b76435b6f3e": {
-      "error": {
-        "$rpc": "null"
-      },
-      "status": "idle",
-      "transcripts": []
-    },
-    "a3d4b25bf713": {
-      "name": "speech.dictation.start#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.start"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "started": true
-          }
-        }
-      }
-    },
-    "b0eeac720acc": {
+    "442ccf691b93": {
       "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -91,6 +47,57 @@
         }
       }
     },
+    "4937d7c9906d": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}"
+    },
+    "6b76435b6f3e": {
+      "error": {
+        "$rpc": "null"
+      },
+      "status": "idle",
+      "transcripts": []
+    },
+    "889eee99a041": {
+      "name": "speech.dictation.start#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}"
+    },
+    "b4ba2b410a8d": {
+      "name": "speech.dictation.start#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.start"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "started": true
+          }
+        }
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -98,11 +105,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f2afab6e5c12": {
-      "name": "speech.dictation.cancel#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}",
-      "sent": 2
     }
   },
   "recording": {
@@ -111,8 +113,8 @@
       {
         "id": "cancelled",
         "observation": {
-          "sender": ["a3d4b25bf713", "b0eeac720acc"],
-          "payloads": ["0469b72b9c8a", "f2afab6e5c12"],
+          "sender": ["b4ba2b410a8d", "442ccf691b93"],
+          "payloads": ["889eee99a041", "4937d7c9906d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",

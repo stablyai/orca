@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
   "scenarioSha256": "a927e85c3ae58cd3b017955fe28aeffec6a5471b51d782f116639a3aaf4af77d",
   "platform": "darwin",
@@ -13,8 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "18cda90904c3": {
+    "0358eb8770a0": {
       "name": "files.resolveTerminalPath#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -58,23 +59,19 @@
         }
       }
     },
-    "1d18c66a85d5": {
-      "name": "open-feedback",
-      "value": {},
-      "sent": 1
-    },
-    "52c3c247865d": {
+    "47a3b40d1640": {
       "name": "files.open#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}",
-      "sent": 2
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
     },
-    "9120b59f16ec": {
+    "561f3fedeb78": {
       "name": "files.resolveTerminalPath#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
     },
-    "9a73d7a9fdc6": {
+    "591c78d805ec": {
       "name": "files.open#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -108,6 +105,11 @@
         }
       }
     },
+    "c0978ed13409": {
+      "name": "open-feedback",
+      "ordinal": 3,
+      "value": {}
+    },
     "c7ce9c8dc60e": {
       "activeSessionTabId": "tab-source",
       "failed": 1,
@@ -130,13 +132,13 @@
       {
         "id": "open-refused",
         "observation": {
-          "sender": ["18cda90904c3", "9a73d7a9fdc6"],
-          "payloads": ["9120b59f16ec", "52c3c247865d"],
+          "sender": ["0358eb8770a0", "591c78d805ec"],
+          "payloads": ["561f3fedeb78", "47a3b40d1640"],
           "settlements": {
             "tap": "eb79a9b3682a"
           },
           "state": "c7ce9c8dc60e",
-          "effects": ["1d18c66a85d5"]
+          "effects": ["c0978ed13409"]
         }
       }
     ]

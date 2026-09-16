@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "eb2294c30af70ebc2bac092dc5105249ae8cf1941f750406622f7ff6dd70cc1b",
   "platform": "darwin",
@@ -13,25 +13,37 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1bc6d9688999": {
-      "name": "browser.keyboardInsertText#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keyboardInsertText\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"text\":\"hello\"}}",
-      "sent": 1
-    },
-    "2f4d80d09d24": {
+    "6104536ec606": {
       "name": "browser.keypress#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keypress\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"key\":\"Enter\"}}",
-      "sent": 2
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keypress\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"key\":\"Enter\"}}"
     },
-    "5fe64ef6c1f3": {
+    "8160e8872519": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "",
+      "pointerModifiers": []
+    },
+    "86b725378b3b": {
+      "name": "browser.keyboardInsertText#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keyboardInsertText\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"text\":\"hello\"}}"
+    },
+    "a5e12fd12d8a": {
       "name": "toast",
+      "ordinal": 3,
       "value": {
         "message": "Sent"
-      },
-      "sent": 1
+      }
     },
-    "770254847b6a": {
+    "d1075b8afeb6": {
       "name": "browser.keyboardInsertText#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -65,19 +77,9 @@
         }
       }
     },
-    "8160e8872519": {
-      "busy": false,
-      "dialog": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "keyboardValue": "",
-      "pointerModifiers": []
-    },
-    "c532c7fdcc69": {
+    "e6c97e728698": {
       "name": "browser.keypress#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -126,15 +128,15 @@
       {
         "id": "typed",
         "observation": {
-          "sender": ["770254847b6a", "c532c7fdcc69"],
-          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
+          "sender": ["d1075b8afeb6", "e6c97e728698"],
+          "payloads": ["86b725378b3b", "6104536ec606"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["5fe64ef6c1f3"]
+          "effects": ["a5e12fd12d8a"]
         }
       }
     ]
