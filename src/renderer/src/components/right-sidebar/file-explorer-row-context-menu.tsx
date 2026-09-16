@@ -38,6 +38,10 @@ import {
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
+import {
+  FileExplorerOpenWithSubmenu,
+  shouldShowOpenWithSubmenu
+} from './file-explorer-open-with-submenu'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -119,6 +123,9 @@ export function FileExplorerRowContextMenu({
 }: FileExplorerRowContextMenuProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
@@ -232,6 +239,9 @@ export function FileExplorerRowContextMenu({
             'Open in Orca Browser'
           )}
         </ContextMenuItem>
+      )}
+      {shouldShowOpenWithSubmenu(node, connectionId, { activeRuntimeEnvironmentId }) && (
+        <FileExplorerOpenWithSubmenu filePath={node.path} />
       )}
       {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
         <ContextMenuItem

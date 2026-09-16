@@ -64,6 +64,10 @@ import {
   SshLeaseRecoveryOperations,
   installSshLeaseRecoveryOperationsContext
 } from './ssh-lease-recovery-operations'
+import {
+  OpenWithRecentApplicationPersistence,
+  installOpenWithRecentApplicationPersistenceContext
+} from './open-with-recent-application-persistence'
 
 export type StoreDomains = {
   adaptation: LoadedStateAdaptationOperations
@@ -88,6 +92,7 @@ export type StoreDomains = {
   sshProfiles: SshProfileOperations
   retiredWorktreeNames: RetiredWorktreeNamePersistence
   sshLeases: SshLeaseRecoveryOperations
+  openWithRecentApplications: OpenWithRecentApplicationPersistence
 }
 
 export const STORE_DOMAIN_OPERATION_CLASSES = [
@@ -106,6 +111,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   SshProfileOperations,
   RetiredWorktreeNamePersistence,
   SshLeaseRecoveryOperations,
+  OpenWithRecentApplicationPersistence,
   WriteFlushBarrierOperations
 ] as const
 
@@ -125,6 +131,7 @@ export function installStoreDomainContexts(target: Store, domains: StoreDomains)
   installSshProfileOperationsContext(target, domains.sshProfiles)
   installRetiredWorktreeNamePersistenceContext(target, domains.retiredWorktreeNames)
   installSshLeaseRecoveryOperationsContext(target, domains.sshLeases)
+  installOpenWithRecentApplicationPersistenceContext(target, domains.openWithRecentApplications)
   installWriteFlushBarrierOperationsContext(target, domains.flushBarriers)
 }
 
@@ -161,6 +168,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     bindingRecovery,
     scheduling
   )
+  const openWithRecentApplications = new OpenWithRecentApplicationPersistence(runtime, scheduling)
   return {
     adaptation,
     backups,
@@ -183,6 +191,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     ptyBindings,
     sshProfiles,
     retiredWorktreeNames,
-    sshLeases
+    sshLeases,
+    openWithRecentApplications
   }
 }
