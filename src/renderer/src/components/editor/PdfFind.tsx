@@ -85,9 +85,13 @@ export default function PdfFind({
       setActiveMatch(evt.matchesCount.current)
       setTotalMatches(evt.matchesCount.total)
     }
+    // Why: 'updatefindmatchescount' only fires while pages are scanned; stepping
+    // between matches reports the new position on 'updatefindcontrolstate' (#11049).
     eventBus.on('updatefindmatchescount', handleMatchesCount)
+    eventBus.on('updatefindcontrolstate', handleMatchesCount)
     return () => {
       eventBus.off('updatefindmatchescount', handleMatchesCount)
+      eventBus.off('updatefindcontrolstate', handleMatchesCount)
     }
   }, [eventBusRef, isOpen])
 
