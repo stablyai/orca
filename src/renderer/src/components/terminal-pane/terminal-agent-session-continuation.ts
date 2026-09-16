@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 
@@ -53,6 +54,12 @@ export function prepareAgentSessionContinuationFromPane({
   const paneKey = makePaneKey(tabId, pane.leafId)
   const status = state.agentStatusByPaneKey[paneKey]
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
+  // Why: the tab label is what the user named this work, so the continuation
+  // dialog can seed a branch name from it instead of asking twice.
+  const tab = state.tabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
+  const sourceTitle = tab
+    ? resolveTerminalTabTitle(tab, state.settings?.tabAutoGenerateTitle === true, tab.title)
+    : null
   const transcriptPath = status?.providerSession?.transcriptPath?.trim() || null
   const capturedText = transcriptPath ? '' : pane.serializeAddon.serialize({ scrollback: 800 })
   const source = {
@@ -63,7 +70,8 @@ export function prepareAgentSessionContinuationFromPane({
     sourceWorkingDirectory: initialCwd || workspacePath,
     transcriptPath,
     lastPrompt: status?.prompt,
-    lastAssistantMessage: status?.lastAssistantMessage
+    lastAssistantMessage: status?.lastAssistantMessage,
+    sourceTitle
   }
   if (!buildAgentSessionContinuationPrompt(source, 'focused')) {
     toast.error(
