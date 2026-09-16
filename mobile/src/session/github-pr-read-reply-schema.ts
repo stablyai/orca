@@ -6,16 +6,13 @@ import type {
   GitHubWorkItemDetails
 } from '../../../src/shared/github/work-item-types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
-import type { PRRefreshOutcome } from '../../../src/shared/github/pull-request-refresh-types'
 import {
   CHECK_STATUS,
   MERGEABLE_STATE,
   PR_STATE,
   REVIEW_DECISION,
-  assignableUsersSchema,
   prCheckList,
   prCheckSummary,
-  prChecksSchema,
   prCommentList,
   prCount,
   prFlag,
@@ -158,6 +155,17 @@ const pullRequestSchema = z
   )
 
 /**
+ * What the branch lookup answers, which is not what the host's own refresh type carries.
+ *
+ * `PRRefreshOutcome` has an `errorType` and a `fetchedAt` this reply never contains, and the only
+ * consumer (github-pr-rpc.ts) reads neither — so the reader declares the two members it does read
+ * rather than fabricating the other two to satisfy a type it is not producing.
+ */
+export type GitHubPrForBranchOutcome =
+  | { kind: 'upstream-error'; message: string }
+  | { kind: 'found'; pr: PRInfo }
+
+/**
  * The branch lookup's whole answer, outcome classification included.
  *
  * Legacy hosts answer a bare PR or `null`; current hosts answer a classified refresh outcome. Both
@@ -166,33 +174,37 @@ const pullRequestSchema = z
  * decode failure could not carry it. Which arm becomes an error is the call site's decision, not
  * the reader's: an error the host reported in-band is not a reply this app could not read.
  */
-export const githubPrForBranchSchema: z.ZodType<PRRefreshOutcome | null, unknown> = z.union([
-  z
-    .looseObject({ kind: z.literal('upstream-error'), message: prText('message') })
-    .transform((outcome) => ({
-      kind: 'upstream-error' as const,
-      errorType: 'unknown' as const,
-      message: outcome.message ?? '',
-      fetchedAt: 0
-    })),
-  z.looseObject({ kind: z.literal('no-pr') }).transform(() => null),
-  z.looseObject({ kind: z.literal('found'), pr: pullRequestSchema }).transform((outcome, ctx) => {
-    if (!outcome.pr) {
-      ctx.addIssue({ code: 'custom', message: 'found outcome has no readable pr', input: outcome })
-      return z.NEVER
-    }
-    return { kind: 'found' as const, pr: outcome.pr, fetchedAt: 0 }
-  }),
-  // The legacy arm: a bare PRInfo, or `null` for no pull request.
-  pullRequestSchema.transform((pr, ctx) => {
-    if (!pr) {
-      ctx.addIssue({ code: 'custom', message: 'pull request has no number or state', input: pr })
-      return z.NEVER
-    }
-    return { kind: 'found' as const, pr, fetchedAt: 0 }
-  }),
-  z.null().transform(() => null)
-])
+export const githubPrForBranchSchema: z.ZodType<GitHubPrForBranchOutcome | null, unknown> = z.union(
+  [
+    z
+      .looseObject({ kind: z.literal('upstream-error'), message: prText('message') })
+      .transform((outcome) => ({
+        kind: 'upstream-error' as const,
+        message: outcome.message ?? ''
+      })),
+    z.looseObject({ kind: z.literal('no-pr') }).transform(() => null),
+    z.looseObject({ kind: z.literal('found'), pr: pullRequestSchema }).transform((outcome, ctx) => {
+      if (!outcome.pr) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'found outcome has no readable pr',
+          input: outcome
+        })
+        return z.NEVER
+      }
+      return { kind: 'found' as const, pr: outcome.pr }
+    }),
+    // The legacy arm: a bare PRInfo, or `null` for no pull request.
+    pullRequestSchema.transform((pr, ctx) => {
+      if (!pr) {
+        ctx.addIssue({ code: 'custom', message: 'pull request has no number or state', input: pr })
+        return z.NEVER
+      }
+      return { kind: 'found' as const, pr }
+    }),
+    z.null().transform(() => null)
+  ]
+)
 
 const workItemSchema = z
   .looseObject({
@@ -284,11 +296,5 @@ export const githubWorkItemDetailsSchema = z
         }
   )
   .nullable()
-
-/** The check rows the panel lists. A salvaging array, so one unreadable row is not the whole list. */
-export const githubPrChecksSchema = prChecksSchema
-
-/** The reviewer picker's candidates. */
-export const githubPrAssignableUsersSchema = assignableUsersSchema
 
 export type GitHubPrRepoSlugReply = z.output<typeof githubPrRepoSlugSchema>

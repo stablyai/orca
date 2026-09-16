@@ -1,11 +1,11 @@
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
 import type { GitHubAssignableUser, PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
-import type { PRRefreshOutcome } from '../../../src/shared/github/pull-request-refresh-types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
+import type { GitHubPrForBranchOutcome } from './github-pr-read-reply-schema'
 import {
   githubPrAssignableUsersRead,
   githubPrCheckDetailsRead,
@@ -125,7 +125,7 @@ export function fetchPRForBranch(
   )
 }
 
-function resolveGithubPrForBranchOutcome(outcome: PRRefreshOutcome | null): PRInfo | null {
+function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | null): PRInfo | null {
   if (outcome === null) {
     return null
   }

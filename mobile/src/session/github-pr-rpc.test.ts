@@ -13,9 +13,8 @@ import {
   fetchPRForBranch
 } from './github-pr-rpc'
 import { githubPrCheckDetailsSchema } from './github-pr-check-reply-schema'
+import { assignableUsersSchema, prChecksSchema } from './github-pr-entity-reply-schema'
 import {
-  githubPrAssignableUsersSchema,
-  githubPrChecksSchema,
   githubPrForBranchSchema,
   githubWorkItemDetailsSchema,
   hostedReviewForBranchSchema
@@ -35,9 +34,9 @@ function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
 
 const readForBranch = (value: unknown) => parsed(hostedReviewForBranchSchema, value)
 const readWorkItemDetails = (value: unknown) => parsed(githubWorkItemDetailsSchema, value)
-const readPRChecks = (value: unknown) => parsed(githubPrChecksSchema, value) ?? []
+const readPRChecks = (value: unknown) => parsed(prChecksSchema, value) ?? []
 const readPRCheckDetails = (value: unknown) => parsed(githubPrCheckDetailsSchema, value)
-const readAssignableUsers = (value: unknown) => parsed(githubPrAssignableUsersSchema, value) ?? []
+const readAssignableUsers = (value: unknown) => parsed(assignableUsersSchema, value) ?? []
 
 function readPRForBranch(value: unknown): PRInfo | null {
   const outcome = parsed(githubPrForBranchSchema, value)
@@ -243,8 +242,8 @@ describe('readPRChecks', () => {
   })
 
   it('refuses a non-array where main answered an empty check list', () => {
-    expect(refuses(githubPrChecksSchema, null)).toBe(true)
-    expect(refuses(githubPrChecksSchema, {})).toBe(true)
+    expect(refuses(prChecksSchema, null)).toBe(true)
+    expect(refuses(prChecksSchema, {})).toBe(true)
   })
 
   it('skips bad entries instead of throwing', () => {
@@ -299,7 +298,7 @@ describe('readAssignableUsers', () => {
 
   it('reads an empty list, and refuses the absent one main read as empty', () => {
     expect(readAssignableUsers([])).toEqual([])
-    expect(refuses(githubPrAssignableUsersSchema, undefined)).toBe(true)
+    expect(refuses(assignableUsersSchema, undefined)).toBe(true)
   })
 })
 

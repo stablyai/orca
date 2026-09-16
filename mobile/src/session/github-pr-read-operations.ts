@@ -1,9 +1,8 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { githubPrCheckDetailsSchema } from './github-pr-check-reply-schema'
+import { assignableUsersSchema, prChecksSchema } from './github-pr-entity-reply-schema'
 import {
-  githubPrAssignableUsersSchema,
-  githubPrChecksSchema,
   githubPrForBranchSchema,
   githubPrRepoSlugSchema,
   githubWorkItemDetailsSchema,
@@ -74,7 +73,7 @@ export const githubPrChecksRead = bindDeferredRpcOperation(
     method: 'github.prChecks',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('pr-checks', githubPrChecksSchema)
+    read: rpcResultVariant('pr-checks', prChecksSchema)
   })
 )
 
@@ -94,6 +93,6 @@ export const githubPrAssignableUsersRead = bindDeferredRpcOperation(
     method: 'github.listAssignableUsers',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('pr-assignable-users', githubPrAssignableUsersSchema)
+    read: rpcResultVariant('pr-assignable-users', assignableUsersSchema)
   })
 )

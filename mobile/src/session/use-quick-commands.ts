@@ -15,10 +15,6 @@ import {
   type TerminalQuickCommandMutation
 } from '../terminal/quick-commands'
 
-function readQuickCommands(list: unknown): TerminalQuickCommand[] | null {
-  return parseNormalizedTerminalQuickCommands(list)
-}
-
 type Args = {
   client: RpcClient | null
   // Fetch only while the sheet is open — quick commands are settings data we
@@ -136,7 +132,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         }
         let next
         try {
-          next = readQuickCommands(quickCommandsRead.interpret(response))
+          next = parseNormalizedTerminalQuickCommands(quickCommandsRead.interpret(response))
         } catch (err) {
           setError(refusedRpcMessageOrFallback(err, 'Failed to load quick commands'))
           return
@@ -201,7 +197,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
           })
           let confirmed
           confirmed = interpretOrThrowRefusalMessage(
-            () => readQuickCommands(quickCommandsWrite.interpret(response)),
+            () => parseNormalizedTerminalQuickCommands(quickCommandsWrite.interpret(response)),
             'Failed to save quick command'
           )
           if (!confirmed) {

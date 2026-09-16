@@ -20,6 +20,7 @@ import {
   githubPrRepoSlugSchema,
   hostedReviewForBranchSchema
 } from './github-pr-read-reply-schema'
+import { prChecksSchema } from './github-pr-entity-reply-schema'
 import {
   reviewCreatedTerminalSchema,
   reviewTerminalSendAcceptedSchema,
@@ -252,6 +253,30 @@ describe('degrading arm sets', () => {
     expect(reads(hostedReviewForBranchSchema, null)).toBeNull()
   })
 
+  // Why these three degrade on a NON-STRING too: `openEnum` is `z.enum(...).or(z.string()...)`,
+  // so it refuses a number where main mapped it to the conservative arm. Swapping these to
+  // `openEnum(..., fallback).optional()` keeps every other test green and flips exactly these.
+  it('degrades a non-string check status to pending rather than refusing the review', () => {
+    const review = { provider: 'github', number: 7 }
+    expect(reads(hostedReviewForBranchSchema, { ...review, status: 3 })?.status).toBe('pending')
+    expect(reads(hostedReviewForBranchSchema, { ...review, status: null })?.status).toBe('pending')
+  })
+
+  it('degrades a non-string mergeable state to UNKNOWN rather than refusing the review', () => {
+    const review = { provider: 'github', number: 7 }
+    expect(reads(hostedReviewForBranchSchema, { ...review, mergeable: 3 })?.mergeable).toBe(
+      'UNKNOWN'
+    )
+  })
+
+  it('degrades a non-string PR checksStatus to pending rather than refusing the PR', () => {
+    const found = reads(githubPrForBranchSchema, {
+      kind: 'found',
+      pr: { number: 4, state: 'open', checksStatus: 3 }
+    })
+    expect(found?.kind === 'found' && found.pr.checksStatus).toBe('pending')
+  })
+
   it('reads a known compare status, degrades one it does not know, and defaults absence', () => {
     const base = { baseRef: 'origin/main', compareRef: 'feature', changedFiles: 0 }
     const read = (status?: unknown) =>
@@ -262,6 +287,35 @@ describe('degrading arm sets', () => {
     expect(read('ready')).toBe('ready')
     expect(read('shallow-base')).toBe('error')
     expect(read()).toBe('error')
+  })
+})
+
+// The other half of the same decision: where main DROPPED the row or block rather than mapping it
+// to an arm, the arm set stays closed and required. Defaulting these would invent a status the host
+// never sent, so the row leaving is the honest answer.
+describe('closed arm sets drop rather than default', () => {
+  it('drops a check row whose status is an arm the icon cannot draw', () => {
+    const rows = reads(prChecksSchema, [
+      { name: 'ci', status: 'completed', conclusion: 'success' },
+      { name: 'drift', status: 'paused' },
+      { name: 'lint', status: 'in_progress' }
+    ])
+    expect(rows.map((row) => row.name)).toEqual(['ci', 'lint'])
+  })
+
+  it('drops a committed change whose status is an arm no badge covers', () => {
+    const projection = reads(branchCompareProjectionSchema, {
+      summary: { baseRef: 'origin/main', compareRef: 'feature', changedFiles: 2 },
+      entries: [
+        { path: 'a.ts', status: 'modified' },
+        { path: 'b.ts', status: 'teleported' }
+      ]
+    })
+    expect(projection.entries.map((entry) => entry.path)).toEqual(['a.ts'])
+  })
+
+  it('refuses a diff whose kind names no arm the screen can render', () => {
+    expect(refuses(reviewGitDiffSchema, { kind: 'lfs-pointer' })).toBe(true)
   })
 })
 

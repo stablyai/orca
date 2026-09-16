@@ -1,10 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import type {
-  GitHubReaction,
-  GitHubReactionContent,
-  PRComment
-} from '../../../src/shared/github/comment-types'
+import type { GitHubReaction, PRComment } from '../../../src/shared/github/comment-types'
 import type {
   GitHubAssignableUser,
   GitHubPRMergeMethodSettings,
@@ -276,5 +272,3 @@ export const prChecksSchema = salvagingArray(checkDetailSchema)
 export function prCheckList(name: string) {
   return salvagedOptional(name, prChecksSchema)
 }
-
-export type GitHubReactionContentToken = GitHubReactionContent

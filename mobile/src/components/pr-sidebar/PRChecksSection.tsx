@@ -30,6 +30,8 @@ export type PrChecksTriage = {
 
 type Props = {
   checks: PRCheckDetail[]
+  // Set when the checks read failed; the section shows it in place of the rows.
+  checksError?: string | null
   client: RpcClient | null
   worktreeId: string
   prRepo?: GitHubPrRepoSlug | null
@@ -41,7 +43,15 @@ type Props = {
 // Checks summary (counts) + sorted per-check rows. Each row expands to lazily
 // fetch github.prCheckDetails, cached per check key (U5). Display-only; the
 // rerun action is U6.
-export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, triage }: Props) {
+export function PRChecksSection({
+  checks,
+  checksError,
+  client,
+  worktreeId,
+  prRepo,
+  actions,
+  triage
+}: Props) {
   const sorted = sortPRChecks(checks)
   const summary = summarizePRChecks(checks)
   const rerunBusy = actions?.isBusy({ kind: 'rerun' }) ?? false
@@ -192,6 +202,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
         </View>
       ) : null}
       {triage?.error ? <Text style={triageStyles.triageError}>{triage.error}</Text> : null}
+      {checksError ? <Text style={triageStyles.triageError}>{checksError}</Text> : null}
       {sorted.map((check) => {
         const key = prCheckKey(check)
         const isOpen = expanded.has(key)
