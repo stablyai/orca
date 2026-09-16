@@ -5,8 +5,7 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import { getTuiAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 
 export function mergeTerminalEnvDeletionKeys(
