@@ -3,180 +3,27 @@
   "family": "session.create-terminal",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "d0220444947210a7ee1b1212595303cab5b3137c35723e1ef3d081c2ae3e0f61",
-  "scenarioSha256": "dae5cb4e6a61a9842b378bd56dad2fdc5d15ad7621026f57c3dfd582beefe7c4",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "f0cc9511c5e878b6dd78e2911b5c14351b41b7bb944e5e03c2fa1ddbcdc7ea10",
+  "scenarioSha256": "ae1572c1670073d0ac3d2d3abd0e7bee9910cbe4a0b09ecd941e887eeb1db165",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1c847dd30654": {
-      "name": "default-live-input",
-      "value": {
-        "handles": ["terminal-1"]
-      },
-      "sent": 1
-    },
-    "21558adc9176": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "236dd84713b8": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "28112ec44d7c": {
+    "239453513aa9": {
       "name": "toast",
+      "ordinal": 4,
       "value": {
         "durationMs": 1800,
         "message": "Couldn't run Notes"
-      },
-      "sent": 1
-    },
-    "365b37d1f834": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "Cannot read properties of undefined (reading 'tab')",
-      "creating": false,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "37024426b62f": {
-      "name": "subscribe-terminal",
-      "value": {
-        "handle": "terminal-1"
-      },
-      "sent": 1
-    },
-    "4301fd620304": {
-      "name": "fetch-session-tabs",
-      "value": {},
-      "sent": 2
-    },
-    "4c528a84c114": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "",
-      "creating": true,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "4cdbced3c669": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
       }
     },
-    "4d65bc43b196": {
+    "2977cbddd89f": {
       "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -219,64 +66,10 @@
         }
       }
     },
-    "534a9aa60b5f": {
+    "365b37d1f834": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
-      "createError": "Cannot read properties of undefined (reading 'id')",
-      "creating": false,
-      "initializedHandles": [],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "593c3b7f109b": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "66fb424500fb": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "Couldn't run Notes",
+      "createError": "Cannot read properties of undefined (reading 'tab')",
       "creating": false,
       "initializedHandles": ["terminal-0"],
       "pendingActiveSessionTabId": {
@@ -288,287 +81,9 @@
       "sessionTabs": [],
       "terminals": []
     },
-    "670957538747": {
-      "name": "terminal.send#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": true,
-            "terminal": "terminal-1",
-            "text": "review these notes"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "7b00a14ea8c6": {
-      "name": "unsubscribe-terminal",
-      "value": {
-        "handle": "terminal-0"
-      },
-      "sent": 1
-    },
-    "7ebb3e8559ff": {
+    "4694ea73188a": {
       "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "80b4f6cd8f72": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "transport failure",
-      "creating": false,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "82f962f68412": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "outer refused",
-      "creating": false,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "889d790a5cd9": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "9139d1a82787": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "990a90b8755e": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "Unknown method",
-      "creating": false,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "99fccc472bff": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "9ad123b21583": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"review these notes\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 2
-    },
-    "a3ffe46b65fb": {
-      "name": "session.tabs.createTerminal#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "c54931b52f18": {
-      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -605,8 +120,61 @@
         }
       }
     },
-    "c754bd068979": {
+    "4941ab88308b": {
       "name": "terminal.send#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"review these notes\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "4c528a84c114": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "4d318de3b635": {
+      "name": "unsubscribe-terminal",
+      "ordinal": 3,
+      "value": {
+        "handle": "terminal-0"
+      }
+    },
+    "52c96555f2b3": {
+      "name": "toast",
+      "ordinal": 9,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Notes sent"
+      }
+    },
+    "534a9aa60b5f": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "Cannot read properties of undefined (reading 'id')",
+      "creating": false,
+      "initializedHandles": [],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "58bef0d5522c": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -646,22 +214,10 @@
         }
       }
     },
-    "c885d2f2b61b": {
-      "name": "schedule-delayed-action",
-      "value": {
-        "delayMs": 500
-      },
-      "sent": 2
-    },
-    "d39dd99e13fd": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:wt-1\",\"afterTabId\":\"tab-0\",\"clientMutationId\":\"mobile-create:mjuohs00-8ig2hens\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
-    },
-    "dbe4d9f596c2": {
+    "66fb424500fb": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
-      "createError": "Cannot read properties of null (reading 'tab')",
+      "createError": "Couldn't run Notes",
       "creating": false,
       "initializedHandles": ["terminal-0"],
       "pendingActiveSessionTabId": {
@@ -673,18 +229,214 @@
       "sessionTabs": [],
       "terminals": []
     },
-    "dfe7a97faf57": {
-      "name": "toast",
-      "value": {
-        "durationMs": {
-          "$rpc": "null"
-        },
-        "message": "Notes sent"
-      },
-      "sent": 2
-    },
-    "e027db2251f9": {
+    "6fa87a2b13b0": {
       "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7a456c263146": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "80b4f6cd8f72": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "transport failure",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "82f962f68412": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "outer refused",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "8b3dd0429232": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "8f0866d24e4b": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "95bcf41e673e": {
+      "name": "schedule-delayed-action",
+      "ordinal": 7,
+      "value": {
+        "delayMs": 500
+      }
+    },
+    "990a90b8755e": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "Unknown method",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "a25f5365fc53": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -719,6 +471,269 @@
         }
       }
     },
+    "b1152db10a02": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 1800,
+        "message": "Couldn't run Notes"
+      }
+    },
+    "b1d637072fc8": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c13357779299": {
+      "name": "subscribe-terminal",
+      "ordinal": 5,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "c782be200006": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "c7d566363ba2": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "cce8a731064a": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:wt-1\",\"afterTabId\":\"tab-0\",\"clientMutationId\":\"mobile-create:mjuohs00-8ig2hens\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
+    "dbe4d9f596c2": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "Cannot read properties of null (reading 'tab')",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "e247d725ee7d": {
+      "name": "fetch-session-tabs",
+      "ordinal": 10,
+      "value": {}
+    },
+    "e2d79cdd3808": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "e5f7b12b349b": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "e85ea9e4c04a": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -727,19 +742,9 @@
         "$rpc": "undefined"
       }
     },
-    "f30a8fc69921": {
-      "activeHandle": "terminal-1",
-      "activeSessionTabId": "tab-1",
-      "createError": "",
-      "creating": false,
-      "initializedHandles": [],
-      "pendingActiveSessionTabId": "tab-1",
-      "pendingActiveTerminalHandle": "terminal-1",
-      "sessionTabs": ["tab-1"],
-      "terminals": ["terminal-1"]
-    },
-    "fa7560e57eb0": {
+    "ecb376c867f9": {
       "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -778,6 +783,24 @@
           }
         }
       }
+    },
+    "f30a8fc69921": {
+      "activeHandle": "terminal-1",
+      "activeSessionTabId": "tab-1",
+      "createError": "",
+      "creating": false,
+      "initializedHandles": [],
+      "pendingActiveSessionTabId": "tab-1",
+      "pendingActiveTerminalHandle": "terminal-1",
+      "sessionTabs": ["tab-1"],
+      "terminals": ["terminal-1"]
+    },
+    "fb6329365e0b": {
+      "name": "default-live-input",
+      "ordinal": 4,
+      "value": {
+        "handles": ["terminal-1"]
+      }
     }
   },
   "recording": {
@@ -786,9 +809,10 @@
       {
         "id": "session-create-terminal-with-prompt.prelude:creating",
         "observation": {
-          "sender": ["4cdbced3c669"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["b1d637072fc8"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
           },
           "state": "4c528a84c114",
@@ -798,422 +822,456 @@
       {
         "id": "session-create-terminal-with-prompt.prelude:cleanup",
         "observation": {
-          "sender": ["e027db2251f9"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["a25f5365fc53"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "4c528a84c114",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.normal:created",
         "observation": {
-          "sender": ["4d65bc43b196", "670957538747"],
-          "payloads": ["d39dd99e13fd", "9ad123b21583"],
+          "sender": ["2977cbddd89f", "7a456c263146"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "f30a8fc69921",
-          "effects": ["7b00a14ea8c6", "1c847dd30654", "37024426b62f", "c885d2f2b61b"]
+          "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "95bcf41e673e"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.normal:prompt-sent",
         "observation": {
-          "sender": ["4d65bc43b196", "c754bd068979"],
-          "payloads": ["d39dd99e13fd", "9ad123b21583"],
+          "sender": ["2977cbddd89f", "58bef0d5522c"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "f30a8fc69921",
           "effects": [
-            "7b00a14ea8c6",
-            "1c847dd30654",
-            "37024426b62f",
-            "c885d2f2b61b",
-            "dfe7a97faf57"
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3"
           ]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.normal:tabs-refreshed",
         "observation": {
-          "sender": ["4d65bc43b196", "c754bd068979"],
-          "payloads": ["d39dd99e13fd", "9ad123b21583"],
+          "sender": ["2977cbddd89f", "58bef0d5522c"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "f30a8fc69921",
           "effects": [
-            "7b00a14ea8c6",
-            "1c847dd30654",
-            "37024426b62f",
-            "c885d2f2b61b",
-            "dfe7a97faf57",
-            "4301fd620304"
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3",
+            "e247d725ee7d"
           ]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.result-absent:created",
         "observation": {
-          "sender": ["889d790a5cd9"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e5f7b12b349b"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "365b37d1f834",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.result-absent:prompt-sent",
         "observation": {
-          "sender": ["889d790a5cd9"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e5f7b12b349b"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "365b37d1f834",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.result-absent:tabs-refreshed",
         "observation": {
-          "sender": ["889d790a5cd9"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e5f7b12b349b"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "365b37d1f834",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.result-null:created",
         "observation": {
-          "sender": ["a3ffe46b65fb"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["c782be200006"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "dbe4d9f596c2",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.result-null:prompt-sent",
         "observation": {
-          "sender": ["a3ffe46b65fb"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["c782be200006"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "dbe4d9f596c2",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.result-null:tabs-refreshed",
         "observation": {
-          "sender": ["a3ffe46b65fb"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["c782be200006"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "dbe4d9f596c2",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-ok-missing:created",
         "observation": {
-          "sender": ["c54931b52f18"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["4694ea73188a"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-ok-missing:prompt-sent",
         "observation": {
-          "sender": ["c54931b52f18"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["4694ea73188a"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-ok-missing:tabs-refreshed",
         "observation": {
-          "sender": ["c54931b52f18"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["4694ea73188a"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-false-string-error:created",
         "observation": {
-          "sender": ["236dd84713b8"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["8f0866d24e4b"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-false-string-error:prompt-sent",
         "observation": {
-          "sender": ["236dd84713b8"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["8f0866d24e4b"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-false-string-error:tabs-refreshed",
         "observation": {
-          "sender": ["236dd84713b8"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["8f0866d24e4b"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-false-object-error:created",
         "observation": {
-          "sender": ["fa7560e57eb0"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["ecb376c867f9"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-false-object-error:prompt-sent",
         "observation": {
-          "sender": ["fa7560e57eb0"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["ecb376c867f9"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.inner-false-object-error:tabs-refreshed",
         "observation": {
-          "sender": ["fa7560e57eb0"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["ecb376c867f9"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "534a9aa60b5f",
-          "effects": ["7b00a14ea8c6", "28112ec44d7c"]
+          "effects": ["4d318de3b635", "239453513aa9"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.outer-refused:created",
         "observation": {
-          "sender": ["7ebb3e8559ff"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e85ea9e4c04a"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "82f962f68412",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.outer-refused:prompt-sent",
         "observation": {
-          "sender": ["7ebb3e8559ff"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e85ea9e4c04a"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "82f962f68412",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.outer-refused:tabs-refreshed",
         "observation": {
-          "sender": ["7ebb3e8559ff"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e85ea9e4c04a"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "82f962f68412",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.outer-refused-no-message:created",
         "observation": {
-          "sender": ["9139d1a82787"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["c7d566363ba2"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "66fb424500fb",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.outer-refused-no-message:prompt-sent",
         "observation": {
-          "sender": ["9139d1a82787"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["c7d566363ba2"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "66fb424500fb",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.outer-refused-no-message:tabs-refreshed",
         "observation": {
-          "sender": ["9139d1a82787"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["c7d566363ba2"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "66fb424500fb",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.method-not-found:created",
         "observation": {
-          "sender": ["593c3b7f109b"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["8b3dd0429232"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "990a90b8755e",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.method-not-found:prompt-sent",
         "observation": {
-          "sender": ["593c3b7f109b"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["8b3dd0429232"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "990a90b8755e",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.method-not-found:tabs-refreshed",
         "observation": {
-          "sender": ["593c3b7f109b"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["8b3dd0429232"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "990a90b8755e",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.transport-rejection:created",
         "observation": {
-          "sender": ["99fccc472bff"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e2d79cdd3808"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "80b4f6cd8f72",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.transport-rejection:prompt-sent",
         "observation": {
-          "sender": ["99fccc472bff"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e2d79cdd3808"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "80b4f6cd8f72",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.transport-rejection:tabs-refreshed",
         "observation": {
-          "sender": ["99fccc472bff"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["e2d79cdd3808"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "80b4f6cd8f72",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.transport-rejection-no-message:created",
         "observation": {
-          "sender": ["21558adc9176"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["6fa87a2b13b0"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "66fb424500fb",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.transport-rejection-no-message:prompt-sent",
         "observation": {
-          "sender": ["21558adc9176"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["6fa87a2b13b0"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "66fb424500fb",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       },
       {
         "id": "session-create-terminal-with-prompt.transport-rejection-no-message:tabs-refreshed",
         "observation": {
-          "sender": ["21558adc9176"],
-          "payloads": ["d39dd99e13fd"],
+          "sender": ["6fa87a2b13b0"],
+          "payloads": ["cce8a731064a"],
           "settlements": {
+            "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "66fb424500fb",
-          "effects": ["28112ec44d7c"]
+          "effects": ["b1152db10a02"]
         }
       }
     ]

@@ -3,9 +3,9 @@
   "family": "session.startup",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "6b08c394e37fd572cf63a4c11934247d379008f11117aa5af33b2926fbd32d1e",
   "scenarioSha256": "82ff29efaa6ee0bf49ce41bfe7dff2083d0f942c10cc9d8bab48925354d17519",
   "platform": "darwin",
@@ -13,39 +13,51 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "4dd212bdb9a9": {
+    "4f4cd2a4f041": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 4,
+      "value": {}
+    },
+    "5bd54a356841": {
       "name": "fetch-terminals",
-      "value": {
-        "allowEmptyLoaded": true
-      },
-      "sent": 0
-    },
-    "7a307264749f": {
-      "name": "clear-delayed-action-timers",
-      "value": {},
-      "sent": 0
-    },
-    "7fb9bbe379fd": {
-      "name": "diagnostics-reset-route",
-      "value": {},
-      "sent": 0
-    },
-    "8df3790f6752": {
-      "name": "reset-drafts",
-      "value": {},
-      "sent": 0
-    },
-    "a1f3ce2a4b94": {
-      "name": "clear-pending-restorations",
-      "value": {},
-      "sent": 0
-    },
-    "a8636fe05a8c": {
-      "name": "fetch-terminals",
+      "ordinal": 8,
       "value": {
         "allowEmptyLoaded": false
-      },
-      "sent": 0
+      }
+    },
+    "6419a011f13b": {
+      "name": "clear-terminal-cache",
+      "ordinal": 1,
+      "value": {}
+    },
+    "817acfcc1646": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 12,
+      "value": {}
+    },
+    "83de0c92427d": {
+      "name": "fetch-terminals",
+      "ordinal": 9,
+      "value": {
+        "allowEmptyLoaded": true
+      }
+    },
+    "99a213805fa0": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 5,
+      "value": {}
+    },
+    "a193ad4304cb": {
+      "name": "fetch-terminals",
+      "ordinal": 7,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
+      "value": {}
     },
     "acf0370bfacc": {
       "actionSheetRequestSeq": 1,
@@ -62,20 +74,10 @@
       "initializedHandles": [],
       "terminalsLoaded": false
     },
-    "afd287d365c0": {
-      "name": "ensure-session-tabs",
-      "value": {},
-      "sent": 0
-    },
-    "d064b45517da": {
-      "name": "clear-terminal-cache",
-      "value": {},
-      "sent": 0
-    },
-    "d3eb1fee66e3": {
-      "name": "clear-pending-live-input-commit",
-      "value": {},
-      "sent": 0
+    "dd4d898535bd": {
+      "name": "clear-pending-restorations",
+      "ordinal": 10,
+      "value": {}
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -84,6 +86,21 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ed8838ca9a14": {
+      "name": "ensure-session-tabs",
+      "ordinal": 6,
+      "value": {}
+    },
+    "ef975183a3b7": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 11,
+      "value": {}
+    },
+    "f880d7742773": {
+      "name": "reset-drafts",
+      "ordinal": 3,
+      "value": {}
     }
   },
   "recording": {
@@ -99,13 +116,13 @@
           },
           "state": "acf0370bfacc",
           "effects": [
-            "d064b45517da",
-            "7fb9bbe379fd",
-            "8df3790f6752",
-            "d3eb1fee66e3",
-            "7a307264749f",
-            "afd287d365c0",
-            "a8636fe05a8c"
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "ed8838ca9a14",
+            "a193ad4304cb"
           ]
         }
       },
@@ -119,15 +136,15 @@
           },
           "state": "acf0370bfacc",
           "effects": [
-            "d064b45517da",
-            "7fb9bbe379fd",
-            "8df3790f6752",
-            "d3eb1fee66e3",
-            "7a307264749f",
-            "afd287d365c0",
-            "a8636fe05a8c",
-            "a8636fe05a8c",
-            "4dd212bdb9a9"
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "ed8838ca9a14",
+            "a193ad4304cb",
+            "5bd54a356841",
+            "83de0c92427d"
           ]
         }
       },
@@ -141,18 +158,18 @@
           },
           "state": "acf0370bfacc",
           "effects": [
-            "d064b45517da",
-            "7fb9bbe379fd",
-            "8df3790f6752",
-            "d3eb1fee66e3",
-            "7a307264749f",
-            "afd287d365c0",
-            "a8636fe05a8c",
-            "a8636fe05a8c",
-            "4dd212bdb9a9",
-            "a1f3ce2a4b94",
-            "d3eb1fee66e3",
-            "7a307264749f"
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "ed8838ca9a14",
+            "a193ad4304cb",
+            "5bd54a356841",
+            "83de0c92427d",
+            "dd4d898535bd",
+            "ef975183a3b7",
+            "817acfcc1646"
           ]
         }
       }

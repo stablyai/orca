@@ -183,7 +183,7 @@ off the context `client-context.tsx` keeps module-private, and each used to carr
 `exports.recorderHostClientContext = Ctx;`. That string names a local no type checker follows, so
 five spellings were five independent ways to reach a `ReferenceError` seconds into a recording.
 `hostClientContextExposure` is the one copy; the trade is that it sits inside `recorderSha256`, so
-editing it re-records all 705 goldens rather than the five families. A rename of the local is still
+editing it re-records all 727 goldens rather than the five families. A rename of the local is still
 invisible to `tsc` — nothing short of editing the product module makes a private local checkable —
 so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a sixth
 inline copy.
@@ -379,7 +379,7 @@ families because no reference states are defined for them.
 ## What this oracle does and does not see
 
 It replays 368 manifest scenarios against frozen goldens and fails on any divergence: 727 goldens
-over 882 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
+over 888 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
 the change they describe and are not restatements of this one. For a migration it answers one
 question — does the rewritten call site produce the same sender calls, settlements, state and
 effects as main did?

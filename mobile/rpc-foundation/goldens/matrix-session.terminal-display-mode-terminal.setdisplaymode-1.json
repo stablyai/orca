@@ -3,9 +3,9 @@
   "family": "session.terminal-display-mode",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "9e90ad39a8d4257adf30166757a6364c4710dc3ae9f06365f80a3dd8f1c94d89",
   "scenarioSha256": "2ae1839ae5f4fb98c2ef250fb5e071508ec1376e737dab28ac589c08f1a42b0e",
   "platform": "darwin",
@@ -13,321 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "036e9acdd386": {
+    "0adddb41fd5b": {
       "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "1105fd7f393f": {
-      "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "2bc03f7b8050": {
-      "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "mode": "auto"
-          }
-        }
-      }
-    },
-    "2ccaf47d47a0": {
-      "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "346b0e2c9aaf": {
-      "name": "subscribe-terminal",
-      "value": {
-        "handle": "terminal-1"
-      },
-      "sent": 0
-    },
-    "36826ee8adb0": {
-      "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "61b1eb90a019": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "inFlight": ["terminal-1"],
-      "viewport": {
-        "cols": 100,
-        "rows": 30
-      }
-    },
-    "8b7c62150ff3": {
-      "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "906e53d733e5": {
-      "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "954160128398": {
-      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -371,8 +59,50 @@
         }
       }
     },
-    "a5c251abb365": {
+    "0d03920ac024": {
       "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "176c3eaa9e0e": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -410,90 +140,9 @@
         }
       }
     },
-    "beb91f1cc07c": {
+    "29a7d2e51554": {
       "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "c39cd92cf805": {
-      "name": "terminal.setDisplayMode#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.setDisplayMode"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "mode": "auto",
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "c80971fc147e": {
-      "name": "terminal.setDisplayMode#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"auto\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"viewport\":{\"cols\":100,\"rows\":30}}}",
-      "sent": 1
-    },
-    "c9aeab1a99ed": {
-      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -535,6 +184,369 @@
         }
       }
     },
+    "2d1ddad4130d": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "39066dc373ed": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"auto\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"viewport\":{\"cols\":100,\"rows\":30}}}"
+    },
+    "43fc954fe2af": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "61b1eb90a019": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": ["terminal-1"],
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9b94c2f54b94": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ad499ab069a7": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "b66d765b8e17": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b83268a0bf2d": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "bdf4e2bcbe22": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c21196ef3035": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "mode": "auto"
+          }
+        }
+      }
+    },
+    "e27323f28d10": {
+      "name": "subscribe-terminal",
+      "ordinal": 1,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -560,157 +572,157 @@
       {
         "id": "session-terminal-display-mode-auto-take-floor.prelude:in-flight",
         "observation": {
-          "sender": ["beb91f1cc07c"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["ad499ab069a7"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "9270aeb7d9c6"
           },
           "state": "61b1eb90a019",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.normal:settled",
         "observation": {
-          "sender": ["2bc03f7b8050"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["c21196ef3035"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.result-absent:settled",
         "observation": {
-          "sender": ["a5c251abb365"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["176c3eaa9e0e"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.result-null:settled",
         "observation": {
-          "sender": ["36826ee8adb0"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["b83268a0bf2d"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.inner-ok-missing:settled",
         "observation": {
-          "sender": ["1105fd7f393f"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["bdf4e2bcbe22"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.inner-false-string-error:settled",
         "observation": {
-          "sender": ["c39cd92cf805"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["2d1ddad4130d"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.inner-false-object-error:settled",
         "observation": {
-          "sender": ["954160128398"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["0adddb41fd5b"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.outer-refused:settled",
         "observation": {
-          "sender": ["036e9acdd386"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["43fc954fe2af"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["8b7c62150ff3"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["9b94c2f54b94"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.method-not-found:settled",
         "observation": {
-          "sender": ["c9aeab1a99ed"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["29a7d2e51554"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.transport-rejection:settled",
         "observation": {
-          "sender": ["906e53d733e5"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["b66d765b8e17"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       },
       {
         "id": "session-terminal-display-mode-auto-take-floor.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["2ccaf47d47a0"],
-          "payloads": ["c80971fc147e"],
+          "sender": ["0d03920ac024"],
+          "payloads": ["39066dc373ed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle": "eb79a9b3682a"
           },
           "state": "fa46c84fb0ab",
-          "effects": ["346b0e2c9aaf"]
+          "effects": ["e27323f28d10"]
         }
       }
     ]
