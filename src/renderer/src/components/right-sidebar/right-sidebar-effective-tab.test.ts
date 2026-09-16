@@ -83,6 +83,17 @@ describe('resolveRightSidebarEffectiveTab', () => {
     ).toBe('plugin:orca-samples.my-plugin/dashboard')
   })
 
+  it('keeps the built-in Notes tab active when it is visible', () => {
+    expect(
+      resolveRightSidebarEffectiveTab({
+        normalizedActiveTab: 'notes',
+        visibleItems: [...gitVisibleItems, { id: 'notes' }],
+        activeFolderWorkspaceKey: null,
+        rememberedFolderTab: null
+      })
+    ).toBe('notes')
+  })
+
   it('falls back to the first visible item when a plugin tab was uninstalled', () => {
     expect(
       resolveRightSidebarEffectiveTab({
