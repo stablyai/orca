@@ -7,6 +7,7 @@ import { createNativeChatMerger, replaceList } from '../../../src/shared/native-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
+import { nativeChatSessionPageRead } from './mobile-native-chat-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
@@ -239,17 +240,19 @@ export function useMobileNativeChatSession(args: {
     setLoadingEarlier(true)
     void (async () => {
       try {
-        const response = await client.sendRequest('nativeChat.readSession', {
+        const response = await nativeChatSessionPageRead.request(client, {
           agent,
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,
           ...(beforeOffset === null ? {} : { beforeOffset }),
           ...(transcriptPath ? { transcriptPath } : {})
         })
-        if (!response.ok) {
+        const accepted = nativeChatSessionPageRead.interpret(response)
+        if (!accepted.accepted) {
           return
         }
-        const result = response.result as ReadSessionResult
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this payload unread; the reader hands back the same result.
+        const result = accepted.value as ReadSessionResult
         if ('error' in result) {
           return
         }

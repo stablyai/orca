@@ -1,4 +1,5 @@
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
+import { desktopNotificationStreamUnsubscribe } from './desktop-notification-stream-operations'
 import { dismissHostPushNotification } from './push-socket-dismissal'
 import type { DismissNotificationEvent } from './desktop-notification-events'
 import type { RpcClient } from '../transport/rpc-client'
@@ -20,7 +21,8 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
 
   function unsubscribeServer(id: string) {
     if (client.getState() === 'connected') {
-      client.sendRequest('notifications.unsubscribe', { subscriptionId: id }).catch(() => {})
+      // The reply is never read: the stream is already gone locally either way.
+      desktopNotificationStreamUnsubscribe.request(client, { subscriptionId: id }).catch(() => {})
     }
   }
 

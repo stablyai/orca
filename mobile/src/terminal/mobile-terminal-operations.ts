@@ -4,8 +4,8 @@ import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-re
 import { isTerminalSendResultAccepted } from './terminal-send-rpc-response'
 import type { TerminalViewportUpdateOutcome } from './terminal-viewport-refit-state'
 
-// Terminal input and the in-place viewport update. The `subscribe` and `sendUnsubscribe` ports
-// these files also reach are a separate boundary and are untouched.
+// Terminal input, the in-place viewport update and the buffer clear. The `subscribe` and
+// `sendUnsubscribe` ports these files also reach are a separate boundary and are untouched.
 
 /**
  * Whether the runtime took the bytes, which is the whole of what a terminal send means to mobile:
@@ -73,5 +73,21 @@ export const workerTerminalTakeoverReport = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcUncheckedPayloadReader('worker-terminal-input-reported')
+  })
+)
+
+/**
+ * The terminal menu's buffer clear. A skip rather than a throw because main never looked at the
+ * envelope: it reported success on any fulfilled reply and only a transport rejection reached the
+ * failure toast, so a refusal telling the user the buffer was cleared is behaviour this preserves
+ * rather than repairs.
+ */
+export const terminalBufferClear = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.clear-buffer-or-skip',
+    method: 'terminal.clearBuffer',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('terminal-buffer-cleared')
   })
 )

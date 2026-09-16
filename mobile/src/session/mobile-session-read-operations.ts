@@ -146,21 +146,26 @@ export const quickCommandsRead = bindDeferredRpcOperation(
 )
 
 /**
- * The review notes as they sit on the worktree record, and the fourth reader on `worktree.show`.
- * Two of the other three project a narrower value and would answer this screen with no notes: the
- * summary keeps `{ baseRef, linkedPR }`, the review screen keeps `{ diffComments, mobileDiffReview }`.
- * The third, `fileOwnershipWorktreeRead`, reads the same `worktree` member whole with the same
- * reader shape, so acceptance is the only thing separating them: a file mutation throws the host's
- * message rather than write to the wrong host, where a session screen missing its notes just shows
- * none and keeps working.
+ * The worktree record as the host holds it, and the fourth reader on `worktree.show`. Two consumers
+ * share it and project their own field off the member: the diff-comment loader reads
+ * `diffComments`, and the session header's live title reads `displayName` through
+ * `getLiveWorktreeDisplayName`. Widening either into its own family would be a second name for the
+ * same wire, so the member is read whole here and narrowed at each call site.
+ *
+ * Two of the other three readers project a narrower value and would answer both consumers with
+ * nothing: the summary keeps `{ baseRef, linkedPR }`, the review screen keeps
+ * `{ diffComments, mobileDiffReview }`. The third, `fileOwnershipWorktreeRead`, reads the same
+ * `worktree` member whole with the same reader shape, so acceptance is the only thing separating
+ * them: a file mutation throws the host's message rather than write to the wrong host, where a
+ * session screen missing its notes shows none, and a header missing a name keeps the route hint.
  */
-export const sessionWorktreeNotesRead = bindDeferredRpcOperation(
+export const sessionWorktreeRecordRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'worktree.show-review-notes',
+    name: 'worktree.show-record-or-skip',
     method: 'worktree.show',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('worktree-review-notes', 'worktree')
+    read: rpcUncheckedMemberReader('worktree-record', 'worktree')
   })
 )
 

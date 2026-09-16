@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import * as Clipboard from 'expo-clipboard'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { sessionWorktreeNotesRead } from './mobile-session-read-operations'
+import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
 import { sessionWorktreeNotesWrite } from './mobile-session-write-operations'
 import { triggerSelection, triggerSuccess, triggerError } from '../platform/haptics'
 import {
@@ -32,8 +32,8 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       setDiffComments([])
       return
     }
-    const response = sessionWorktreeNotesRead.interpret(
-      await sessionWorktreeNotesRead.request(client, { worktree: `id:${worktreeId}` })
+    const response = sessionWorktreeRecordRead.interpret(
+      await sessionWorktreeRecordRead.request(client, { worktree: `id:${worktreeId}` })
     )
     if (!response.accepted) {
       return
