@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithWaitForSessionTabsInventoryPublication } from './orca-runtime-wait-for-session-tabs-inventory-publication'
+import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
@@ -26,6 +27,31 @@ import {
   collectBrowserGroupAssignment
 } from './mobile-session-browser-group-projection'
 import { headlessMobileSnapshotContentUnchanged } from './mobile-session-snapshot-equality'
+
+/**
+ * Why: the hydrate skip path is first-wins, so a rename persisted into
+ * workspaceSession after the snapshot was built would never surface. Detect
+ * any divergence (rename added OR cleared to null while the snapshot still
+ * carries one) and let the caller fall through to a full rebuild.
+ */
+export function persistedCustomTitleMissingFromSnapshot(
+  persistedTabs: readonly TerminalTab[],
+  snapshotTabs: readonly RuntimeMobileSessionSnapshotTab[]
+): boolean {
+  const snapshotCustomTitleByParentTabId = new Map<string, string | null>()
+  for (const tab of snapshotTabs) {
+    if (tab.type === 'terminal' && !snapshotCustomTitleByParentTabId.has(tab.parentTabId)) {
+      snapshotCustomTitleByParentTabId.set(tab.parentTabId, tab.customTitle ?? null)
+    }
+  }
+  return persistedTabs.some((tab) => {
+    const persisted = tab.customTitle ?? null
+    return (
+      snapshotCustomTitleByParentTabId.has(tab.id) &&
+      snapshotCustomTitleByParentTabId.get(tab.id) !== persisted
+    )
+  })
+}
 
 export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession extends OrcaRuntimeWithWaitForSessionTabsInventoryPublication {
   protected hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -101,7 +127,10 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
         existing &&
         existing.tabs.length > 0 &&
         options.force !== true &&
-        options.onlyRuntimeOwnedTerminals !== true
+        options.onlyRuntimeOwnedTerminals !== true &&
+        // Why: a persisted manual rename must win over the first-wins snapshot
+        // merge; skip only when the existing snapshot already carries it.
+        !persistedCustomTitleMissingFromSnapshot(persistedTabs, existing.tabs)
       ) {
         // Why: terminals are stable/persisted so we normally skip a rebuild, but
         // offscreen browser tabs are live and may have been created/closed since.
