@@ -23,7 +23,9 @@ export const fileDirectoryRead = bindDeferredRpcOperation(
 /**
  * The legacy capped list. A second reader on `files.list`: the native-chat inventory's
  * `files.list-or-skip` reads the `files` member alone, and the explorer also needs `truncated` to
- * keep the "Showing first 5000" note, so the member reader rejects this consumer's input.
+ * keep the "Showing first 5000" note. Widening that one to a payload reader would split the
+ * `workspace-files` variant it shares with `files.searchPaths`, whose caller feeds both through one
+ * `extractPaths`, and only move the member read into that hook — so the explorer declares its own.
  */
 export const legacyFileListRead = bindDeferredRpcOperation(
   defineRpcOperation({
