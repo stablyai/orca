@@ -14,6 +14,8 @@ export type PluginHostPanel = {
   title: string
   /** Lucide icon name declared in the plugin manifest. */
   icon?: string
+  /** Omitted by older hosts and interpreted as right-sidebar. */
+  location?: 'right-sidebar' | 'workspace'
   tabKey: `plugin:${string}`
 }
 
