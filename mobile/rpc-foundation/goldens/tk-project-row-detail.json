@@ -3,9 +3,9 @@
   "family": "tasks.project-row-detail",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "f572b37cfd15f41f283e5f96b772a1055670f80e68064ac81477d9b768fc971a",
   "platform": "darwin",
@@ -13,90 +13,91 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "049372f27933": {
-      "name": "prFileContents",
-      "value": {},
-      "sent": 0
-    },
-    "0e6d17a72b48": {
-      "name": "projectEditingCommentDraft",
-      "value": "",
-      "sent": 0
-    },
-    "1948869d1aab": {
+    "0216abb9c43b": {
       "name": "projectTitleDraft",
+      "ordinal": 1,
       "value": {
         "$rpc": "undefined"
-      },
-      "sent": 0
+      }
     },
-    "1ab0db6f980d": {
-      "name": "projectCommentDraft",
-      "value": "",
-      "sent": 0
-    },
-    "1e04ae13b692": {
-      "name": "expandedPrFilePath",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 0
-    },
-    "228957b08ee5": {
-      "name": "projectReviewersDraft",
-      "value": "",
-      "sent": 0
-    },
-    "3690e3603bc7": {
-      "name": "projectEditingCommentId",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 0
-    },
-    "3a8d8b837c22": {
-      "name": "projectRowDetailLoading",
-      "value": false,
-      "sent": 1
-    },
-    "4331036690d4": {
-      "name": "prFileLoadingPath",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 0
-    },
-    "62fee54ba0b2": {
-      "name": "projectBodyDraft",
-      "value": "",
-      "sent": 0
-    },
-    "73fd5eb0550e": {
-      "name": "projectRowDetailLoading",
-      "value": true,
-      "sent": 0
-    },
-    "80d38ca65a5d": {
-      "name": "projectRowDetailError",
-      "value": "",
-      "sent": 0
-    },
-    "8441059da147": {
-      "name": "github.project.workItemDetailsBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}",
-      "sent": 1
-    },
-    "8e5298b22c5f": {
-      "name": "projectRowDetail",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 0
-    },
-    "9b91f921fbb2": {
+    "0679b27a119b": {
       "name": "projectFieldDrafts",
-      "value": {},
-      "sent": 0
+      "ordinal": 11,
+      "value": {}
+    },
+    "0ad63b01155a": {
+      "name": "prFileContents",
+      "ordinal": 8,
+      "value": {}
+    },
+    "118d9662d37f": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "ordinal": 16,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
+    },
+    "1e161db29c89": {
+      "name": "projectRowDetail",
+      "ordinal": 17,
+      "value": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      }
+    },
+    "2e6edf535ef3": {
+      "name": "prFileLoadingPath",
+      "ordinal": 9,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "2ee1c7329449": {
+      "name": "projectRowDetail",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "4ad8bb2f6308": {
+      "name": "projectReviewersDraft",
+      "ordinal": 6,
+      "value": ""
+    },
+    "561861a537bb": {
+      "name": "projectRowDetailLoading",
+      "ordinal": 18,
+      "value": false
+    },
+    "6545686833e4": {
+      "name": "expandedPrFilePath",
+      "ordinal": 7,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "742985d99709": {
+      "name": "projectEditingCommentDraft",
+      "ordinal": 5,
+      "value": ""
+    },
+    "9f0108368fff": {
+      "name": "projectEditingCommentId",
+      "ordinal": 4,
+      "value": {
+        "$rpc": "null"
+      }
     },
     "b2a01ad6d4fe": {
       "detail": {
@@ -119,34 +120,9 @@
       "error": "",
       "loading": false
     },
-    "c3e75b813157": {
-      "name": "projectRowDetail",
-      "value": {
-        "assignees": [],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [],
-        "files": [],
-        "headSha": "head-sha",
-        "labels": [],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "undefined"
-        },
-        "reviewRequests": []
-      },
-      "sent": 1
-    },
-    "ce991ff5560d": {
-      "name": "prFileCommentDrafts",
-      "value": {},
-      "sent": 0
-    },
-    "d1f95449bb04": {
+    "b4e65ea8b72c": {
       "name": "github.project.workItemDetailsBySlug#1",
+      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -195,6 +171,16 @@
         }
       }
     },
+    "b63d5911050c": {
+      "name": "projectRowDetailError",
+      "ordinal": 13,
+      "value": ""
+    },
+    "da1a7926872e": {
+      "name": "projectBodyDraft",
+      "ordinal": 2,
+      "value": ""
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -202,6 +188,21 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "eec8081f6290": {
+      "name": "projectCommentDraft",
+      "ordinal": 3,
+      "value": ""
+    },
+    "f6a5085dd8e9": {
+      "name": "projectRowDetailLoading",
+      "ordinal": 14,
+      "value": true
+    },
+    "fdcd0ea3f000": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 10,
+      "value": {}
     }
   },
   "recording": {
@@ -210,29 +211,29 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["d1f95449bb04"],
-          "payloads": ["8441059da147"],
+          "sender": ["b4e65ea8b72c"],
+          "payloads": ["118d9662d37f"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "b2a01ad6d4fe",
           "effects": [
-            "1948869d1aab",
-            "62fee54ba0b2",
-            "1ab0db6f980d",
-            "3690e3603bc7",
-            "0e6d17a72b48",
-            "228957b08ee5",
-            "1e04ae13b692",
-            "049372f27933",
-            "4331036690d4",
-            "ce991ff5560d",
-            "9b91f921fbb2",
-            "8e5298b22c5f",
-            "80d38ca65a5d",
-            "73fd5eb0550e",
-            "c3e75b813157",
-            "3a8d8b837c22"
+            "0216abb9c43b",
+            "da1a7926872e",
+            "eec8081f6290",
+            "9f0108368fff",
+            "742985d99709",
+            "4ad8bb2f6308",
+            "6545686833e4",
+            "0ad63b01155a",
+            "2e6edf535ef3",
+            "fdcd0ea3f000",
+            "0679b27a119b",
+            "2ee1c7329449",
+            "b63d5911050c",
+            "f6a5085dd8e9",
+            "1e161db29c89",
+            "561861a537bb"
           ]
         }
       }

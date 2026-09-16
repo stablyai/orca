@@ -283,6 +283,7 @@ describe('Claude turn ownership', () => {
           clientMessageId: 'client-2',
           sentUuid: 'uncertain',
           dispatchSequence: 1,
+          requestedAt: null,
           replayContentKey: 'ship-it',
           resolve: vi.fn(),
           retired: true

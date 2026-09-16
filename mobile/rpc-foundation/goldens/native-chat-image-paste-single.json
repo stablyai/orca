@@ -3,9 +3,9 @@
   "family": "nativeChat.image-paste",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "a330bd18a22c002ac04d0fa043561740c5cea627516bbf965fc1bd52533c2e35",
   "platform": "darwin",
@@ -13,19 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "213d2dbb9be4": {
-      "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 2
+    "098c51e345e3": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "47a22f9d0047": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "pasted": true
-    },
-    "518651fd2840": {
+    "1846c2972b5d": {
       "name": "terminal.send#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -66,8 +61,15 @@
         }
       }
     },
-    "52ae659a3d36": {
+    "47a22f9d0047": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "pasted": true
+    },
+    "7e7356ce5972": {
       "name": "terminal.send#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -114,10 +116,10 @@
       "settledAt": 0,
       "value": true
     },
-    "df3ce4768fd3": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
+    "a02ea7e47c8e": {
+      "name": "terminal.send#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     }
   },
   "recording": {
@@ -126,8 +128,8 @@
       {
         "id": "pasted",
         "observation": {
-          "sender": ["52ae659a3d36", "518651fd2840"],
-          "payloads": ["df3ce4768fd3", "213d2dbb9be4"],
+          "sender": ["7e7356ce5972", "1846c2972b5d"],
+          "payloads": ["098c51e345e3", "a02ea7e47c8e"],
           "settlements": {
             "one": "84e5ca07cb7a"
           },

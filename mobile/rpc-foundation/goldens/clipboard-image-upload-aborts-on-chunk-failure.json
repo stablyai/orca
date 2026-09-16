@@ -3,9 +3,9 @@
   "family": "clipboard.image-upload",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "195c2f15d81c70012ea88750ab3f84bfe512f7e422f7d2d09fb7919bd9cfd85a",
   "platform": "darwin",
@@ -13,8 +13,23 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3de611958398": {
+    "8e6c4f65042a": {
       "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-2\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "b49be31d506e": {
+      "failure": "Upload slot expired",
+      "path": "unsaved"
+    },
+    "bdd08542c5fc": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":null}}"
+    },
+    "c81557ea67fa": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -49,70 +64,9 @@
         }
       }
     },
-    "48054ee45c76": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-2\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
-      "sent": 2
-    },
-    "63762ba12023": {
+    "ca96681f306d": {
       "name": "clipboard.startImageUpload#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":null}}",
-      "sent": 1
-    },
-    "9cfc668f592b": {
-      "name": "clipboard.abortImageUpload#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.abortImageUpload"
-        },
-        {
-          "name": "params",
-          "value": {
-            "uploadId": "upload-2"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "aborted": true
-          }
-        }
-      }
-    },
-    "b49be31d506e": {
-      "failure": "Upload slot expired",
-      "path": "unsaved"
-    },
-    "bf6d0aeb2281": {
-      "name": "clipboard.abortImageUpload#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.abortImageUpload\",\"params\":{\"uploadId\":\"upload-2\"}}",
-      "sent": 3
-    },
-    "ead0111942f4": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Upload slot expired",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "eddc5bc46b9b": {
-      "name": "clipboard.startImageUpload#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -146,6 +100,55 @@
           }
         }
       }
+    },
+    "cd036aabcfa0": {
+      "name": "clipboard.abortImageUpload#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.abortImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "aborted": true
+          }
+        }
+      }
+    },
+    "e6cb8187ff0a": {
+      "name": "clipboard.abortImageUpload#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.abortImageUpload\",\"params\":{\"uploadId\":\"upload-2\"}}"
+    },
+    "ead0111942f4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Upload slot expired",
+        "isRpcDeliveryUnknown": false
+      }
     }
   },
   "recording": {
@@ -154,8 +157,8 @@
       {
         "id": "aborted",
         "observation": {
-          "sender": ["eddc5bc46b9b", "3de611958398", "9cfc668f592b"],
-          "payloads": ["63762ba12023", "48054ee45c76", "bf6d0aeb2281"],
+          "sender": ["ca96681f306d", "c81557ea67fa", "cd036aabcfa0"],
+          "payloads": ["bdd08542c5fc", "8e6c4f65042a", "e6cb8187ff0a"],
           "settlements": {
             "local": "ead0111942f4"
           },

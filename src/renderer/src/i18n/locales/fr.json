@@ -6559,7 +6559,12 @@
           "8a9b784c60": "périmé",
           "d363e5929b": "Vérification de l'enregistrement de la CLI…",
           "cliSkillTerminalTitle": "Configuration de la skill CLI",
-          "cliSkillTerminalAria": "Terminal d'installation de la skill CLI"
+          "cliSkillTerminalAria": "Terminal d'installation de la skill CLI",
+          "6f894ef9c2": "Afficher dans le Finder",
+          "cbe55e4d48": "Afficher dans l'Explorateur",
+          "9fd4023db0": "Afficher dans le Gestionnaire de fichiers",
+          "installFailureUnknownReason": "Orca n'a pas pu terminer l'enregistrement de l'interface CLI et n'a signalé aucune raison.",
+          "installFailureConflictRemedy": "Supprimez {{value0}} s'il n'est plus nécessaire, puis réenregistrez la CLI."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",

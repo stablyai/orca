@@ -3,9 +3,9 @@
   "family": "relay.direct-upgrade",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
   "scenarioSha256": "a92bccd183127829b6dfd85add28e42370d54990f63214940b1c584f7fde56a9",
   "platform": "darwin",
@@ -13,13 +13,19 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "002b5db3666b": {
+    "10098087f961": {
       "name": "pairing.getEndpoints#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 3
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
     },
-    "157eaa06961f": {
+    "161baaed4df3": {
+      "name": "host-saved",
+      "ordinal": 8,
+      "value": "host-1"
+    },
+    "240d8ec7e573": {
       "name": "pairing.getEndpoints#2",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -71,15 +77,44 @@
         }
       }
     },
-    "4683b84a57a2": {
-      "name": "host-saved",
-      "value": "host-1",
-      "sent": 3
-    },
-    "4a4993ef4038": {
+    "2fce658b56a1": {
       "name": "pairing.provisionRelay#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}",
-      "sent": 2
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "reqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "authorizationMode": "authenticated-direct",
+            "currentVersion": 4,
+            "reqId": "install-fixture-1",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
     },
     "590b3311b0c4": {
       "status": "fulfilled",
@@ -128,69 +163,14 @@
         }
       }
     },
-    "723e3af65fac": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
-      "sent": 1
-    },
-    "7d023da12fdb": {
+    "691df8767d71": {
       "name": "journal-cleared",
-      "value": "upgrade",
-      "sent": 3
+      "ordinal": 9,
+      "value": "upgrade"
     },
-    "980bbba0b617": {
-      "journal": {
-        "$rpc": "null"
-      },
-      "outcome": "relay-host-0001x"
-    },
-    "a3865c87e54b": {
-      "name": "pairing.provisionRelay#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "pairing.provisionRelay"
-        },
-        {
-          "name": "params",
-          "value": {
-            "newResumeTokenHash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
-            "reqId": "install-fixture-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "authorizationMode": "authenticated-direct",
-            "currentVersion": 4,
-            "reqId": "install-fixture-1",
-            "resumeExpiresAt": 1767830400000,
-            "v": 1
-          }
-        }
-      }
-    },
-    "b991b2c7609f": {
-      "name": "bundle-written",
-      "value": {
-        "version": 4
-      },
-      "sent": 3
-    },
-    "ba95b28e3a94": {
+    "6e14239ef339": {
       "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -234,6 +214,29 @@
           }
         }
       }
+    },
+    "980bbba0b617": {
+      "journal": {
+        "$rpc": "null"
+      },
+      "outcome": "relay-host-0001x"
+    },
+    "aaef09eec3f3": {
+      "name": "bundle-written",
+      "ordinal": 7,
+      "value": {
+        "version": 4
+      }
+    },
+    "c5d28dd067e4": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
+    },
+    "f41ffc93936f": {
+      "name": "pairing.provisionRelay#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}"
     }
   },
   "recording": {
@@ -242,13 +245,13 @@
       {
         "id": "direct-upgrade-committed",
         "observation": {
-          "sender": ["ba95b28e3a94", "a3865c87e54b", "157eaa06961f"],
-          "payloads": ["723e3af65fac", "4a4993ef4038", "002b5db3666b"],
+          "sender": ["6e14239ef339", "2fce658b56a1", "240d8ec7e573"],
+          "payloads": ["c5d28dd067e4", "f41ffc93936f", "10098087f961"],
           "settlements": {
             "upgrade": "590b3311b0c4"
           },
           "state": "980bbba0b617",
-          "effects": ["b991b2c7609f", "4683b84a57a2", "7d023da12fdb"]
+          "effects": ["aaef09eec3f3", "161baaed4df3", "691df8767d71"]
         }
       }
     ]

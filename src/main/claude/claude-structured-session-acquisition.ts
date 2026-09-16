@@ -8,7 +8,7 @@ import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/envir
 import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
-import { resolveClaudeReplayWaiter } from './claude-structured-dispatch'
+import { resolveClaudeReplayTurn } from './claude-structured-dispatch'
 import {
   claudeAuthDiagnostic,
   readClaudeCapabilities,
@@ -117,20 +117,23 @@ export async function acquireClaudeSession({
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
     }
-    const startsTurn = liveSession
-      ? resolveClaudeReplayWaiter(liveSession, message, (settlement) =>
+    const turnOrigin = liveSession
+      ? resolveClaudeReplayTurn(liveSession, message, (settlement) =>
           deps.onDispatchSettledLate?.({ sessionId, ...settlement })
         )
-      : false
+      : null
+    const startsTurn = turnOrigin !== null
     // Turn endpoints are stamped on the host clock, never the frame's own timestamp.
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
+    const requestedAt = turnOrigin?.requestedAt
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'message',
         sessionId,
         message,
         ...(startsTurn ? { startsTurn: true } : {}),
+        ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
         ...observedAt
       })
     )

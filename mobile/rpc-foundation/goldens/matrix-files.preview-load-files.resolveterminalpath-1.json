@@ -3,9 +3,9 @@
   "family": "files.preview-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "ecdeff2713e454925158dde09782713d76f39455729bb25688a6ffcfff154f30",
   "platform": "darwin",
@@ -13,13 +13,44 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "044dee71a9cd": {
+    "022b6743e9ed": {
       "name": "files.resolveTerminalPath#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"run.txt\",\"cwd\":\"/logs\",\"terminal\":\"terminal-1\"}}",
-      "sent": 2
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "cwd": "/logs",
+            "pathText": "run.txt",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
     },
-    "05c972dfc190": {
+    "09ce12d7b4ef": {
       "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -47,22 +78,16 @@
         "settledAt": 0,
         "value": {
           "id": "frame-2",
-          "ok": true
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
     },
-    "15467bba2d60": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "message": "Unable to load preview",
-        "reconnect": false,
-        "status": "error"
-      }
-    },
-    "25b0d1737c71": {
+    "0ea42bf424ad": {
       "name": "files.readTerminalArtifact#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -97,8 +122,9 @@
         }
       }
     },
-    "30954e0c83e6": {
+    "102f111a0163": {
       "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -134,8 +160,19 @@
         }
       }
     },
-    "3c5492779d85": {
+    "15467bba2d60": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "message": "Unable to load preview",
+        "reconnect": false,
+        "status": "error"
+      }
+    },
+    "29e625f367a7": {
       "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -176,177 +213,9 @@
         }
       }
     },
-    "500d95d47092": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "byteLength": 5,
-        "content": "hello",
-        "kind": "text",
-        "status": "ready",
-        "truncated": false
-      }
-    },
-    "5824e53bc730": {
-      "name": "files.readTerminalArtifact#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-2\"}}",
-      "sent": 3
-    },
-    "5f446c109a9a": {
-      "name": "files.readTerminalArtifact#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readTerminalArtifact"
-        },
-        {
-          "name": "params",
-          "value": {
-            "absolutePath": "/logs/run.txt",
-            "grantId": "grant-2",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "byteLength": 5,
-            "content": "hello",
-            "truncated": false
-          }
-        }
-      }
-    },
-    "63abc54b3e87": {
-      "name": "artifact-source-refreshed",
-      "value": {
-        "absolutePath": "/logs/run.txt",
-        "cwd": "/logs",
-        "grantId": "grant-2",
-        "pathText": "run.txt",
-        "source": "terminalArtifact",
-        "terminalHandle": "terminal-1",
-        "worktreeId": "workspace-1"
-      },
-      "sent": 2
-    },
-    "645c5754be42": {
-      "preview": "unloaded"
-    },
-    "784ea351e5b2": {
-      "preview": {
-        "byteLength": 5,
-        "content": "hello",
-        "kind": "text",
-        "status": "ready",
-        "truncated": false
-      }
-    },
-    "7f321cd7152f": {
+    "3123bd46d591": {
       "name": "files.resolveTerminalPath#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.resolveTerminalPath"
-        },
-        {
-          "name": "params",
-          "value": {
-            "cwd": "/logs",
-            "pathText": "run.txt",
-            "terminal": "terminal-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "8ce900375525": {
-      "name": "files.resolveTerminalPath#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.resolveTerminalPath"
-        },
-        {
-          "name": "params",
-          "value": {
-            "cwd": "/logs",
-            "pathText": "run.txt",
-            "terminal": "terminal-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "a3bce9470bbb": {
-      "name": "files.readTerminalArtifact#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}",
-      "sent": 1
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "ad2583c82bfe": {
-      "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -382,44 +251,9 @@
         }
       }
     },
-    "c469c3b9bfe7": {
+    "3d8acd2ead95": {
       "name": "files.resolveTerminalPath#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.resolveTerminalPath"
-        },
-        {
-          "name": "params",
-          "value": {
-            "cwd": "/logs",
-            "pathText": "run.txt",
-            "terminal": "terminal-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "c657a3f0e02b": {
-      "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -454,6 +288,242 @@
         }
       }
     },
+    "3dd41220ecbf": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "cwd": "/logs",
+            "pathText": "run.txt",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "3fa46af4bb15": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"run.txt\",\"cwd\":\"/logs\",\"terminal\":\"terminal-1\"}}"
+    },
+    "500d95d47092": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "5beb3ae90517": {
+      "name": "files.readTerminalArtifact#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}"
+    },
+    "645c5754be42": {
+      "preview": "unloaded"
+    },
+    "679de887534f": {
+      "name": "files.readTerminalArtifact#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-2\"}}"
+    },
+    "784ea351e5b2": {
+      "preview": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "7e162e008509": {
+      "name": "files.readTerminalArtifact#2",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifact"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/run.txt",
+            "grantId": "grant-2",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "byteLength": 5,
+            "content": "hello",
+            "truncated": false
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a4921cff402d": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "cwd": "/logs",
+            "pathText": "run.txt",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ad1560697ac8": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "cwd": "/logs",
+            "pathText": "run.txt",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "b0c7ef6de282": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "cwd": "/logs",
+            "pathText": "run.txt",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
@@ -464,8 +534,9 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "d9baab0b6b3c": {
+    "d8fa9582d6de": {
       "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -503,42 +574,9 @@
         }
       }
     },
-    "de1ef0907023": {
-      "name": "files.resolveTerminalPath#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.resolveTerminalPath"
-        },
-        {
-          "name": "params",
-          "value": {
-            "cwd": "/logs",
-            "pathText": "run.txt",
-            "terminal": "terminal-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "e81d5596c201": {
+    "d9e395f8cbf2": {
       "name": "files.readTerminalArtifact#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -564,41 +602,17 @@
         "startedAt": 0
       }
     },
-    "efd7ff51072f": {
-      "name": "files.resolveTerminalPath#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.resolveTerminalPath"
-        },
-        {
-          "name": "params",
-          "value": {
-            "cwd": "/logs",
-            "pathText": "run.txt",
-            "terminal": "terminal-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
+    "ddb7adf79b98": {
+      "name": "artifact-source-refreshed",
+      "ordinal": 5,
+      "value": {
+        "absolutePath": "/logs/run.txt",
+        "cwd": "/logs",
+        "grantId": "grant-2",
+        "pathText": "run.txt",
+        "source": "terminalArtifact",
+        "terminalHandle": "terminal-1",
+        "worktreeId": "workspace-1"
       }
     },
     "fba5e3c89244": {
@@ -615,8 +629,8 @@
       {
         "id": "files-preview-grant-refresh.prelude:read-pending",
         "observation": {
-          "sender": ["e81d5596c201"],
-          "payloads": ["a3bce9470bbb"],
+          "sender": ["d9e395f8cbf2"],
+          "payloads": ["5beb3ae90517"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -627,20 +641,20 @@
       {
         "id": "files-preview-grant-refresh.normal:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "3c5492779d85", "5f446c109a9a"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd", "5824e53bc730"],
+          "sender": ["0ea42bf424ad", "29e625f367a7", "7e162e008509"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15", "679de887534f"],
           "settlements": {
             "load": "500d95d47092"
           },
           "state": "784ea351e5b2",
-          "effects": ["63abc54b3e87"]
+          "effects": ["ddb7adf79b98"]
         }
       },
       {
         "id": "files-preview-grant-refresh.result-absent:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "05c972dfc190"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "ad1560697ac8"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -651,8 +665,8 @@
       {
         "id": "files-preview-grant-refresh.result-null:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "c469c3b9bfe7"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "09ce12d7b4ef"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -663,8 +677,8 @@
       {
         "id": "files-preview-grant-refresh.inner-ok-missing:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "c657a3f0e02b"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "3d8acd2ead95"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -675,8 +689,8 @@
       {
         "id": "files-preview-grant-refresh.inner-false-string-error:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "8ce900375525"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "3dd41220ecbf"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -687,8 +701,8 @@
       {
         "id": "files-preview-grant-refresh.inner-false-object-error:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "d9baab0b6b3c"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "d8fa9582d6de"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -699,8 +713,8 @@
       {
         "id": "files-preview-grant-refresh.outer-refused:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "ad2583c82bfe"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "3123bd46d591"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -711,8 +725,8 @@
       {
         "id": "files-preview-grant-refresh.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "30954e0c83e6"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "102f111a0163"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -723,8 +737,8 @@
       {
         "id": "files-preview-grant-refresh.method-not-found:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "efd7ff51072f"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "a4921cff402d"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "15467bba2d60"
           },
@@ -735,8 +749,8 @@
       {
         "id": "files-preview-grant-refresh.transport-rejection:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "7f321cd7152f"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "b0c7ef6de282"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "a947768bc0ed"
           },
@@ -747,8 +761,8 @@
       {
         "id": "files-preview-grant-refresh.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["25b0d1737c71", "de1ef0907023"],
-          "payloads": ["a3bce9470bbb", "044dee71a9cd"],
+          "sender": ["0ea42bf424ad", "022b6743e9ed"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15"],
           "settlements": {
             "load": "c7584e82c72f"
           },

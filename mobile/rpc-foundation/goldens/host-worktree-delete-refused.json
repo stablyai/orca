@@ -3,9 +3,9 @@
   "family": "host.worktree-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "92c29bd78ca0c0d5917e9386fc447bb9a1698b1d1ffaba0db7546eaac60da639",
   "scenarioSha256": "5dd5e7eabaabba1e471b13958f59891c3b28f553087c96315598c83a14ded7e7",
   "platform": "darwin",
@@ -13,8 +13,77 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3eaa2fc6fe33": {
+    "145530c614fb": {
+      "name": "worktree.rm#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.rm"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "worktree_busy",
+            "message": "Worktree is busy"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "192bfc4c6eac": {
+      "name": "worktree.rm#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
+    },
+    "4da755eea670": {
+      "name": "worktree.rm#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.rm"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "50378a292ce7": {
       "name": "worktrees",
+      "ordinal": 5,
       "value": [
         {
           "branch": "feature/pin",
@@ -32,23 +101,34 @@
           "unread": false,
           "worktreeId": "wt-1"
         }
-      ],
-      "sent": 1
+      ]
     },
-    "4390dbd60885": {
+    "753a3ae9bdd7": {
       "name": "lastKnownWorktrees",
-      "value": [],
-      "sent": 0
+      "ordinal": 6,
+      "value": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": false,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ]
     },
-    "6f5a073918ed": {
-      "name": "worktree.rm#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}",
-      "sent": 1
-    },
-    "77c8169fffce": {
-      "name": "worktrees",
-      "value": [],
-      "sent": 0
+    "7a68c6ea2c44": {
+      "name": "lastKnownWorktrees",
+      "ordinal": 2,
+      "value": []
     },
     "8056533b940f": {
       "confirmRemoveHost": false,
@@ -60,31 +140,14 @@
       "routeActionState": {},
       "worktrees": []
     },
+    "8f27c443230b": {
+      "name": "worktrees",
+      "ordinal": 1,
+      "value": []
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "ad493faf0d61": {
-      "name": "lastKnownWorktrees",
-      "value": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": false,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ],
-      "sent": 1
     },
     "bcb66b345fcd": {
       "confirmRemoveHost": false,
@@ -130,67 +193,6 @@
         }
       ]
     },
-    "e3e3c397a66a": {
-      "name": "worktree.rm#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.rm"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "e97d1f006b72": {
-      "name": "worktree.rm#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.rm"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "worktree_busy",
-            "message": "Worktree is busy"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -206,27 +208,27 @@
       {
         "id": "delete-optimistic",
         "observation": {
-          "sender": ["e3e3c397a66a"],
-          "payloads": ["6f5a073918ed"],
+          "sender": ["4da755eea670"],
+          "payloads": ["192bfc4c6eac"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
           "state": "8056533b940f",
-          "effects": ["77c8169fffce", "4390dbd60885"]
+          "effects": ["8f27c443230b", "7a68c6ea2c44"]
         }
       },
       {
         "id": "restored",
         "observation": {
-          "sender": ["e97d1f006b72"],
-          "payloads": ["6f5a073918ed"],
+          "sender": ["145530c614fb"],
+          "payloads": ["192bfc4c6eac"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
           "state": "bcb66b345fcd",
-          "effects": ["77c8169fffce", "4390dbd60885", "3eaa2fc6fe33", "ad493faf0d61"]
+          "effects": ["8f27c443230b", "7a68c6ea2c44", "50378a292ce7", "753a3ae9bdd7"]
         }
       }
     ]

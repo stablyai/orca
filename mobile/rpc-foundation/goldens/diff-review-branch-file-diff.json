@@ -3,9 +3,9 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "6c71b0f217a464dffbc6f5736605b840edac74ebaf0664edc0ab85984bb64328",
   "platform": "darwin",
@@ -40,13 +40,14 @@
       },
       "snapshot": "unloaded"
     },
-    "67cae2e16a3b": {
+    "551c785629a1": {
       "name": "git.branchDiff#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}"
     },
-    "ce89618d90b4": {
+    "714ef7b515d2": {
       "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -92,8 +93,8 @@
       {
         "id": "branch",
         "observation": {
-          "sender": ["ce89618d90b4"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["714ef7b515d2"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "365c17523d76"
           },
@@ -104,8 +105,8 @@
       {
         "id": "no-compare",
         "observation": {
-          "sender": ["ce89618d90b4"],
-          "payloads": ["67cae2e16a3b"],
+          "sender": ["714ef7b515d2"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "365c17523d76",
             "no-compare": "38fb361f406c"

@@ -5869,7 +5869,12 @@
           "14444243ba": "从路径中删除`{{value0}}`？",
           "5d432fe44d": "已安装",
           "8a9b784c60": "陈旧",
-          "d363e5929b": "正在检查 CLI 注册..."
+          "d363e5929b": "正在检查 CLI 注册...",
+          "6f894ef9c2": "在 Finder 中显示",
+          "cbe55e4d48": "在资源管理器中显示",
+          "9fd4023db0": "在文件管理器中显示",
+          "installFailureUnknownReason": "Orca 无法完成 CLI 注册，且未报告任何原因。",
+          "installFailureConflictRemedy": "删除 {{value0}} 并在不再需要时重新注册。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",

@@ -3,9 +3,9 @@
   "family": "aiVault.resume-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "dc9926f95475413627315e1f1c96740ececa697c6a0a5e3c42e18cfd4d58448a",
   "platform": "darwin",
@@ -23,8 +23,9 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "3a299ed75c3d": {
+    "6f601b6d009a": {
       "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -60,14 +61,14 @@
         }
       }
     },
-    "770627dbd25d": {
-      "name": "aiVault.prepareSessionResume#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}",
-      "sent": 1
-    },
     "7e4864f4412b": {
       "failure": "codex home is locked",
       "prepared": "unprepared"
+    },
+    "88c8bb20eb6f": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}"
     }
   },
   "recording": {
@@ -76,8 +77,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["3a299ed75c3d"],
-          "payloads": ["770627dbd25d"],
+          "sender": ["6f601b6d009a"],
+          "payloads": ["88c8bb20eb6f"],
           "settlements": {
             "prepare": "1c21b98bedb1"
           },

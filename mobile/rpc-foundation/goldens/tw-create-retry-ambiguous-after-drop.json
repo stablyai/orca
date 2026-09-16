@@ -3,9 +3,9 @@
   "family": "worktree.create-retry",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "a99bb80a5826af1df8d74114fcc5654aa42c9208747b512cea9bd5ca65b64ccb",
   "platform": "darwin",
@@ -13,8 +13,21 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3b42c7d5a39b": {
+    "06b14e4985de": {
       "name": "worktree.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
+    },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "aa5c4cf32f96": {
+      "name": "worktree.create#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -46,18 +59,6 @@
         }
       }
     },
-    "3f946ad0279c": {
-      "outcome": "uncreated"
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "de75bbf6c762": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}",
-      "sent": 1
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -83,8 +84,8 @@
       {
         "id": "waiting-for-reconnect",
         "observation": {
-          "sender": ["3b42c7d5a39b"],
-          "payloads": ["de75bbf6c762"],
+          "sender": ["aa5c4cf32f96"],
+          "payloads": ["06b14e4985de"],
           "settlements": {
             "create": "9270aeb7d9c6",
             "drop": "eb79a9b3682a"
@@ -96,8 +97,8 @@
       {
         "id": "replay-window-abandoned",
         "observation": {
-          "sender": ["3b42c7d5a39b"],
-          "payloads": ["de75bbf6c762"],
+          "sender": ["aa5c4cf32f96"],
+          "payloads": ["06b14e4985de"],
           "settlements": {
             "create": "f0d75436c3f2",
             "drop": "eb79a9b3682a"

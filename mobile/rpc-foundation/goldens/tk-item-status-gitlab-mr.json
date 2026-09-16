@@ -3,9 +3,9 @@
   "family": "tasks.item-status-gitlab-mr",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
   "scenarioSha256": "5de4936aed0efd0d8bd5bc5ce893d561f6bc3d0fdf4a76c9e33e7cbefd6ec362",
   "platform": "darwin",
@@ -13,58 +13,17 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1380dafff177": {
-      "name": "gitlab.updateMRState#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.updateMRState"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 7,
-            "projectRef": "group/project",
-            "repo": "id:repo-1",
-            "state": "closed"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "32a3635e06a4": {
-      "name": "mutatingStatus",
-      "value": false,
-      "sent": 1
-    },
-    "84465663f388": {
+    "3ea7248d382b": {
       "name": "actionItem",
+      "ordinal": 5,
       "value": {
         "$rpc": "null"
-      },
-      "sent": 1
+      }
     },
-    "9e263f5e91be": {
-      "name": "error",
-      "value": "",
-      "sent": 0
+    "a768a7cc2f33": {
+      "name": "gitlab.updateMRState#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateMRState\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"state\":\"closed\",\"projectRef\":\"group/project\"}}"
     },
     "b6a6630b4d40": {
       "error": "",
@@ -103,10 +62,42 @@
         "provider": "gitlab"
       }
     },
-    "cc96725d8f47": {
-      "name": "mutatingStatus",
-      "value": true,
-      "sent": 0
+    "da71c86a0c81": {
+      "name": "gitlab.updateMRState#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.updateMRState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1",
+            "state": "closed"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -116,10 +107,20 @@
         "$rpc": "undefined"
       }
     },
-    "eef11f4ec3f3": {
-      "name": "gitlab.updateMRState#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateMRState\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"state\":\"closed\",\"projectRef\":\"group/project\"}}",
-      "sent": 1
+    "ecf9003e4ef1": {
+      "name": "mutatingStatus",
+      "ordinal": 6,
+      "value": false
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "fd2fad47bec2": {
+      "name": "mutatingStatus",
+      "ordinal": 1,
+      "value": true
     }
   },
   "recording": {
@@ -128,14 +129,14 @@
       {
         "id": "gitlab-status-settled",
         "observation": {
-          "sender": ["1380dafff177"],
-          "payloads": ["eef11f4ec3f3"],
+          "sender": ["da71c86a0c81"],
+          "payloads": ["a768a7cc2f33"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gitlab-status-0": "eb79a9b3682a"
           },
           "state": "b6a6630b4d40",
-          "effects": ["cc96725d8f47", "9e263f5e91be", "84465663f388", "32a3635e06a4"]
+          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "3ea7248d382b", "ecf9003e4ef1"]
         }
       }
     ]

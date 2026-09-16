@@ -3,9 +3,9 @@
   "family": "browser.dialog",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "5071188ee492a4ced5be793b2dab32baa9750ee6535128635f274fd79198e2f1",
   "platform": "darwin",
@@ -13,24 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "786423f11435": {
+    "44cc0151aab3": {
       "name": "browser.dialogDismiss#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.dialogDismiss\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\"}}",
-      "sent": 1
-    },
-    "9855d4ec3415": {
-      "busy": false,
-      "dialog": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "keyboardValue": "hello",
-      "pointerModifiers": []
-    },
-    "be3e7ad116a5": {
-      "name": "browser.dialogDismiss#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -63,6 +48,17 @@
         }
       }
     },
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -70,6 +66,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f27b7eb2da31": {
+      "name": "browser.dialogDismiss#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.dialogDismiss\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\"}}"
     }
   },
   "recording": {
@@ -78,8 +79,8 @@
       {
         "id": "dismissed",
         "observation": {
-          "sender": ["be3e7ad116a5"],
-          "payloads": ["786423f11435"],
+          "sender": ["44cc0151aab3"],
+          "payloads": ["f27b7eb2da31"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"

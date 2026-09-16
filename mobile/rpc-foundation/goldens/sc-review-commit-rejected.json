@@ -3,9 +3,9 @@
   "family": "git.review-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "de079de9cc21bfb40da6e1431273b10c3e2a5b5402b91b2b8a85c8d7ac41bc97",
   "platform": "darwin",
@@ -13,8 +13,30 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "01bab795ab1e": {
+    "342343f97688": {
       "name": "git.commit#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
+    },
+    "465d78c22406": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "connection lost",
+        "ok": false
+      }
+    },
+    "7c923ba16626": {
+      "committed": {
+        "error": "connection lost",
+        "ok": false
+      },
+      "status": "unread"
+    },
+    "b5383f4d86af": {
+      "name": "git.commit#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -44,27 +66,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "19cb7a56ca95": {
-      "name": "git.commit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}",
-      "sent": 1
-    },
-    "465d78c22406": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "connection lost",
-        "ok": false
-      }
-    },
-    "7c923ba16626": {
-      "committed": {
-        "error": "connection lost",
-        "ok": false
-      },
-      "status": "unread"
     }
   },
   "recording": {
@@ -73,8 +74,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["01bab795ab1e"],
-          "payloads": ["19cb7a56ca95"],
+          "sender": ["b5383f4d86af"],
+          "payloads": ["342343f97688"],
           "settlements": {
             "commit": "465d78c22406"
           },

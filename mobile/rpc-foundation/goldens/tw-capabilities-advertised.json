@@ -3,9 +3,9 @@
   "family": "worktree.runtime-capabilities",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "9d79bcfd6957d11d5ce8c3296f1038a3cfab81eedad7f990b44071104dfd0f91",
   "platform": "darwin",
@@ -13,8 +13,21 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "5242fad3532f": {
+    "120979f40a68": {
+      "capabilities": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "216adda2100c": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -50,27 +63,12 @@
         }
       }
     },
-    "62aaf19f0b16": {
-      "capabilities": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
-    "852980e2efc0": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
-    "b33d34bddc4e": {
+    "3a7704ccec26": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
+        "agentLaunch": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -79,6 +77,11 @@
           "dedupeTtlMs": 45000
         }
       }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -87,12 +90,12 @@
       {
         "id": "probed",
         "observation": {
-          "sender": ["5242fad3532f"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["216adda2100c"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "b33d34bddc4e"
+            "probe": "3a7704ccec26"
           },
-          "state": "62aaf19f0b16",
+          "state": "120979f40a68",
           "effects": []
         }
       }

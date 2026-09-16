@@ -3,9 +3,9 @@
   "family": "settings-agent-read",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",
   "scenarioSha256": "2726d71130f623e3ad02c168c13269979ca6f84703bf1c5aaf36bd4432dfb516",
   "platform": "darwin",
@@ -13,132 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "06eff8247d02": {
+    "02188f091419": {
       "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "LogicalClientCutoverError",
-          "message": "RPC interrupted by connection migration",
-          "isRpcDeliveryUnknown": true,
-          "cause": {
-            "category": "Error",
-            "message": "Connection closed",
-            "isRpcDeliveryUnknown": true
-          }
-        }
-      }
-    },
-    "090c88478661": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "27b09a2898b9": {
-      "name": "preflight.detectRemoteAgents#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectRemoteAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection lost",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "430eff79721f": {
-      "name": "preflight.detectRemoteAgents#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectRemoteAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "preflight.detectRemoteAgents#1 rejected",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "44136fa355b3": {},
-    "554718767f5a": {
-      "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -173,78 +50,14 @@
         }
       }
     },
-    "6d0209806267": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Connection lost",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "7e9a4c0e6082": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "settings.get#1 rejected",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "7fc945a92540": {
+    "1c2564f1daca": {
       "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 30000,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: settings.get",
-          "isRpcDeliveryUnknown": true
-        }
-      }
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "8277c8a13a15": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 30000,
-      "error": {
-        "category": "Error",
-        "message": "Request timed out: settings.get",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "84ca21355dd8": {
+    "3cac466cd7ee": {
       "name": "preflight.detectRemoteAgents#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
-      "sent": 3
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9c4be43625f0": {
-      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -254,37 +67,6 @@
           "name": "params",
           "value": {
             "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": ["codex", "claude"]
-        }
-      }
-    },
-    "af6903aed166": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
           }
         },
         {
@@ -305,23 +87,46 @@
         }
       }
     },
-    "b27c85677730": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": [
+    "44136fa355b3": {},
+    "51d4cb56be85": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
         {
-          "agent": "codex",
-          "label": "Codex"
+          "name": "method",
+          "value": "settings.get"
         },
         {
-          "agent": "claude",
-          "label": "Claude"
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
         }
-      ]
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "bae1ab4f96f9": {
+    "6d0209806267": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Connection lost",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "7023dde78391": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -358,75 +163,19 @@
         }
       }
     },
-    "c9c9e154c7a4": {
-      "name": "preflight.detectRemoteAgents#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectRemoteAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 30000,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: preflight.detectRemoteAgents",
-          "isRpcDeliveryUnknown": true
-        }
+    "7e9a4c0e6082": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "settings.get#1 rejected",
+        "isRpcDeliveryUnknown": true
       }
     },
-    "d041d5155ed5": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "settings.get#1 rejected",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "d0694611a403": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 2
-    },
-    "d0ea965edca4": {
+    "7e9eedbb267f": {
       "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -461,41 +210,139 @@
         }
       }
     },
-    "d58a51553d50": {
+    "8277c8a13a15": {
       "status": "rejected",
       "startedAt": 0,
-      "settledAt": 0,
+      "settledAt": 30000,
       "error": {
-        "category": "LogicalClientCutoverError",
-        "message": "RPC interrupted by connection migration",
-        "isRpcDeliveryUnknown": true,
-        "cause": {
+        "category": "Error",
+        "message": "Request timed out: settings.get",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "9058971b9337": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 30000,
+        "error": {
           "category": "Error",
-          "message": "Connection closed",
+          "message": "Request timed out: preflight.detectRemoteAgents",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "e465a7e0746d": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "preflight.detectRemoteAgents#1 rejected",
-        "isRpcDeliveryUnknown": true
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "95a3d59bc187": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
       }
     },
-    "eb79a9b3682a": {
+    "a05ac6b15c2d": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "adabd410f1bc": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "settings.get#1 rejected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b27c85677730": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
+      "value": [
+        {
+          "agent": "codex",
+          "label": "Codex"
+        },
+        {
+          "agent": "claude",
+          "label": "Claude"
+        }
+      ]
     },
-    "f03117831a8e": {
+    "be0c6d8ba1f9": {
       "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -519,10 +366,176 @@
         "startedAt": 0
       }
     },
-    "fd387fe4211d": {
+    "c5b670e82bb4": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d58a51553d50": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "LogicalClientCutoverError",
+        "message": "RPC interrupted by connection migration",
+        "isRpcDeliveryUnknown": true,
+        "cause": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "e0eef7c9fafe": {
       "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 2
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "e465a7e0746d": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "preflight.detectRemoteAgents#1 rejected",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "e56f41c68af0": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "preflight.detectRemoteAgents#1 rejected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f6928aa5b0ba": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 30000,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: settings.get",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "fdf6a3099c89": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -531,8 +544,8 @@
       {
         "id": "settings-new-tab-ssh.forward:sibling-pending",
         "observation": {
-          "sender": ["bae1ab4f96f9", "554718767f5a", "f03117831a8e"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "02188f091419", "be0c6d8ba1f9"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -543,8 +556,8 @@
       {
         "id": "settings-new-tab-ssh.forward:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "554718767f5a", "9c4be43625f0"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "02188f091419", "95a3d59bc187"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "b27c85677730"
           },
@@ -555,8 +568,8 @@
       {
         "id": "settings-new-tab-ssh.reverse:sibling-pending",
         "observation": {
-          "sender": ["bae1ab4f96f9", "090c88478661", "9c4be43625f0"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "51d4cb56be85", "95a3d59bc187"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -567,8 +580,8 @@
       {
         "id": "settings-new-tab-ssh.reverse:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "554718767f5a", "9c4be43625f0"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "02188f091419", "95a3d59bc187"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "b27c85677730"
           },
@@ -579,8 +592,8 @@
       {
         "id": "settings-new-tab-ssh.both-reject-forward:sibling-pending",
         "observation": {
-          "sender": ["bae1ab4f96f9", "d041d5155ed5", "f03117831a8e"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "adabd410f1bc", "be0c6d8ba1f9"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "7e9a4c0e6082"
           },
@@ -591,8 +604,8 @@
       {
         "id": "settings-new-tab-ssh.both-reject-forward:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "d041d5155ed5", "430eff79721f"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "adabd410f1bc", "e56f41c68af0"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "7e9a4c0e6082"
           },
@@ -603,8 +616,8 @@
       {
         "id": "settings-new-tab-ssh.both-reject-reverse:sibling-pending",
         "observation": {
-          "sender": ["bae1ab4f96f9", "090c88478661", "430eff79721f"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "51d4cb56be85", "e56f41c68af0"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "e465a7e0746d"
           },
@@ -615,8 +628,8 @@
       {
         "id": "settings-new-tab-ssh.both-reject-reverse:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "d041d5155ed5", "430eff79721f"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "adabd410f1bc", "e56f41c68af0"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "e465a7e0746d"
           },
@@ -627,8 +640,8 @@
       {
         "id": "settings-new-tab-ssh.reject-peer-pending:sibling-pending",
         "observation": {
-          "sender": ["bae1ab4f96f9", "d041d5155ed5", "f03117831a8e"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "adabd410f1bc", "be0c6d8ba1f9"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "7e9a4c0e6082"
           },
@@ -639,8 +652,8 @@
       {
         "id": "settings-new-tab-ssh.reject-peer-pending:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "d041d5155ed5", "f03117831a8e"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "adabd410f1bc", "be0c6d8ba1f9"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "7e9a4c0e6082"
           },
@@ -651,8 +664,8 @@
       {
         "id": "settings-new-tab-ssh.timeout:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "7fc945a92540", "c9c9e154c7a4"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "f6928aa5b0ba", "9058971b9337"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "8277c8a13a15"
           },
@@ -663,8 +676,8 @@
       {
         "id": "settings-new-tab-ssh.disconnect:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "af6903aed166", "27b09a2898b9"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "c5b670e82bb4", "3cac466cd7ee"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "6d0209806267",
             "disconnect": "eb79a9b3682a"
@@ -676,8 +689,8 @@
       {
         "id": "settings-new-tab-ssh.client-cutover:settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "06eff8247d02", "d0ea965edca4"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "fdf6a3099c89", "7e9eedbb267f"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "d58a51553d50",
             "cutover": "eb79a9b3682a"

@@ -3,9 +3,9 @@
   "family": "worktree.create-retry",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "61097c13b262a4454510936fa9c9554a07865b610f18407f1b67bdd74476df08",
   "platform": "darwin",
@@ -13,10 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "08a8f26d375e": {
+    "0de4a94be472": {
       "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\"}}"
     },
     "3f946ad0279c": {
       "outcome": "uncreated"
@@ -31,8 +31,9 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "a179866627c5": {
+    "d69f3c59fb67": {
       "name": "worktree.create#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -70,8 +71,8 @@
       {
         "id": "unstamped-create-is-not-replayed",
         "observation": {
-          "sender": ["a179866627c5"],
-          "payloads": ["08a8f26d375e"],
+          "sender": ["d69f3c59fb67"],
+          "payloads": ["0de4a94be472"],
           "settlements": {
             "create": "6d0209806267"
           },

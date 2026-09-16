@@ -3,9 +3,9 @@
   "family": "speech.dictation-start",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "35fadd03f2c98344e22d6aec2dc85ad15ca5ac8e092fc1c29a20366db5d46628",
   "platform": "darwin",
@@ -13,26 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "6db9a10e2b00": {
-      "activeId": "dictation-1",
-      "idle": false,
-      "started": true
-    },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "a0128a3c7e10": {
-      "name": "keep-awake-acquire",
-      "value": {
-        "id": "dictation-1"
-      },
-      "sent": 1
-    },
-    "bbe508ab7f95": {
+    "3b5708754539": {
       "name": "speech.dictation.start#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -64,10 +47,28 @@
         }
       }
     },
-    "cbb6c5c8ae91": {
+    "6db9a10e2b00": {
+      "activeId": "dictation-1",
+      "idle": false,
+      "started": true
+    },
+    "7bf099852710": {
+      "name": "keep-awake-acquire",
+      "ordinal": 3,
+      "value": {
+        "id": "dictation-1"
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "a7ddd021010a": {
       "name": "speech.dictation.start#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}"
     }
   },
   "recording": {
@@ -76,13 +77,13 @@
       {
         "id": "recording",
         "observation": {
-          "sender": ["bbe508ab7f95"],
-          "payloads": ["cbb6c5c8ae91"],
+          "sender": ["3b5708754539"],
+          "payloads": ["a7ddd021010a"],
           "settlements": {
             "start": "84e5ca07cb7a"
           },
           "state": "6db9a10e2b00",
-          "effects": ["a0128a3c7e10"]
+          "effects": ["7bf099852710"]
         }
       }
     ]

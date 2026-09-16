@@ -3,9 +3,9 @@
   "family": "session.markdown-save",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
   "scenarioSha256": "76bccdabb78dc3f16b36987f6b7cefbe41e08167fe39612620e27ad476089f93",
   "platform": "darwin",
@@ -13,8 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0d00673cd931": {
+    "48e7060a8031": {
       "name": "markdown.saveTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}"
+    },
+    "52c1632d410d": {
+      "name": "markdown.saveTab#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -71,11 +77,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f7fe2c70c07e": {
-      "name": "markdown.saveTab#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -84,8 +85,8 @@
       {
         "id": "conflicted",
         "observation": {
-          "sender": ["0d00673cd931"],
-          "payloads": ["f7fe2c70c07e"],
+          "sender": ["52c1632d410d"],
+          "payloads": ["48e7060a8031"],
           "settlements": {
             "save": "eb79a9b3682a"
           },

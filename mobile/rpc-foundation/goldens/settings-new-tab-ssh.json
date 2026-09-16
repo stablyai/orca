@@ -3,9 +3,9 @@
   "family": "settings-agent-read",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",
   "scenarioSha256": "31f8a348322551738b14207b3477bae492d48d45c5d51be4d97ffaca2fe2b6e1",
   "platform": "darwin",
@@ -13,59 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "090c88478661": {
+    "02188f091419": {
       "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "26accd69bc48": {
-      "name": "repo.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "44136fa355b3": {},
-    "554718767f5a": {
-      "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -100,26 +50,23 @@
         }
       }
     },
-    "84ca21355dd8": {
-      "name": "preflight.detectRemoteAgents#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
-      "sent": 3
+    "1c2564f1daca": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9c4be43625f0": {
-      "name": "preflight.detectRemoteAgents#1",
+    "35f85fe3b71c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "preflight.detectRemoteAgents"
+          "value": "repo.list"
         },
         {
           "name": "params",
           "value": {
-            "connectionId": "ssh-1"
+            "$rpc": "absent"
           }
         },
         {
@@ -130,33 +77,40 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": ["codex", "claude"]
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "b27c85677730": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": [
+    "44136fa355b3": {},
+    "51d4cb56be85": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
         {
-          "agent": "codex",
-          "label": "Codex"
+          "name": "method",
+          "value": "settings.get"
         },
         {
-          "agent": "claude",
-          "label": "Claude"
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
         }
-      ]
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "bae1ab4f96f9": {
+    "7023dde78391": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -193,15 +147,66 @@
         }
       }
     },
-    "d0694611a403": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 2
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
     },
-    "fd387fe4211d": {
+    "95a3d59bc187": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
+    },
+    "a05ac6b15c2d": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "b27c85677730": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "agent": "codex",
+          "label": "Codex"
+        },
+        {
+          "agent": "claude",
+          "label": "Claude"
+        }
+      ]
+    },
+    "e0eef7c9fafe": {
       "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 2
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     }
   },
   "recording": {
@@ -210,8 +215,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["26accd69bc48", "090c88478661"],
-          "payloads": ["fd387fe4211d", "d0694611a403"],
+          "sender": ["35f85fe3b71c", "51d4cb56be85"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -222,8 +227,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["bae1ab4f96f9", "554718767f5a", "9c4be43625f0"],
-          "payloads": ["fd387fe4211d", "d0694611a403", "84ca21355dd8"],
+          "sender": ["7023dde78391", "02188f091419", "95a3d59bc187"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
           "settlements": {
             "load": "b27c85677730"
           },

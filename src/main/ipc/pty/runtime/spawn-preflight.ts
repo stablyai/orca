@@ -85,7 +85,14 @@ export async function prepareRuntimePtySpawn(
           projectRuntime: resolveLocalProjectRuntimeForWorktreeId(ctx.deps.store, args.worktreeId),
           fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
         })
-      : { shellOverride: undefined, terminalWindowsWslDistro: null }
+      : {
+          shellOverride:
+            args.shellOverride ??
+            (process.platform === 'win32'
+              ? undefined
+              : ctx.deps.getSettings?.()?.terminalDefaultShell || undefined),
+          terminalWindowsWslDistro: null
+        }
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.isDaemonHostSpawn =
     !args.connectionId &&

@@ -3,9 +3,9 @@
   "family": "settings.resume-metadata",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "def0640be601a8013f9537f161b60d8c14ac9551931e5ee4d4cc2acd3c2baf2a",
   "platform": "darwin",
@@ -13,192 +13,20 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "127f5062fa38": {
-      "name": "projectGroup.list#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"projectGroup.list\"}",
-      "sent": 5
-    },
-    "1e08ef8dfeae": {
+    "1bfeba989b20": {
       "name": "worktree.ps#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
     },
-    "3f303df2ad9f": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+    "20ff2d8b6392": {
+      "name": "folderWorkspace.list#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"folderWorkspace.list\"}"
     },
     "44136fa355b3": {},
-    "57dd11722848": {
+    "4b3691552a21": {
       "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 5
-    },
-    "658e0bc6b0fc": {
-      "name": "folderWorkspace.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "folderWorkspace.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "folderWorkspaces": []
-          }
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "96b29793602c": {
-      "name": "projectGroup.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "projectGroup.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "groups": []
-          }
-        }
-      }
-    },
-    "bef8ec25072d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "folderWorkspaces": [],
-        "projectGroups": [],
-        "repos": [],
-        "settings": {
-          "$rpc": "null"
-        },
-        "worktrees": []
-      }
-    },
-    "bfa9008c3994": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "settings refused"
-          },
-          "id": "frame-4",
-          "ok": false
-        }
-      }
-    },
-    "ca3245195c36": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 5
-    },
-    "cde27afd4f31": {
-      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -230,13 +58,14 @@
         }
       }
     },
-    "da3f602d00fc": {
-      "name": "folderWorkspace.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"folderWorkspace.list\"}",
-      "sent": 5
+    "5f7f820e4ca2": {
+      "name": "projectGroup.list#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"projectGroup.list\"}"
     },
-    "f11be1e3e504": {
+    "6af91c1da122": {
       "name": "worktree.ps#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -268,10 +97,188 @@
         }
       }
     },
-    "f7d94a4630ce": {
+    "6d1553471555": {
       "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}",
-      "sent": 5
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "77912b6e2cc6": {
+      "name": "folderWorkspace.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "folderWorkspace.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "folderWorkspaces": []
+          }
+        }
+      }
+    },
+    "82132b79b8f7": {
+      "name": "settings.get#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "8805a8a4242e": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "bef8ec25072d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "folderWorkspaces": [],
+        "projectGroups": [],
+        "repos": [],
+        "settings": {
+          "$rpc": "null"
+        },
+        "worktrees": []
+      }
+    },
+    "cabca99619ed": {
+      "name": "repo.list#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "eb0dfe06bed8": {
+      "name": "projectGroup.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "groups": []
+          }
+        }
+      }
+    },
+    "fcfec5b9626b": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "settings refused"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
     }
   },
   "recording": {
@@ -281,18 +288,18 @@
         "id": "settings-pending",
         "observation": {
           "sender": [
-            "cde27afd4f31",
-            "658e0bc6b0fc",
-            "96b29793602c",
-            "3f303df2ad9f",
-            "1e08ef8dfeae"
+            "4b3691552a21",
+            "77912b6e2cc6",
+            "eb0dfe06bed8",
+            "8805a8a4242e",
+            "6d1553471555"
           ],
           "payloads": [
-            "57dd11722848",
-            "da3f602d00fc",
-            "127f5062fa38",
-            "ca3245195c36",
-            "f7d94a4630ce"
+            "cabca99619ed",
+            "20ff2d8b6392",
+            "5f7f820e4ca2",
+            "82132b79b8f7",
+            "1bfeba989b20"
           ],
           "settlements": {
             "load": "9270aeb7d9c6"
@@ -305,18 +312,18 @@
         "id": "settled",
         "observation": {
           "sender": [
-            "cde27afd4f31",
-            "658e0bc6b0fc",
-            "96b29793602c",
-            "bfa9008c3994",
-            "f11be1e3e504"
+            "4b3691552a21",
+            "77912b6e2cc6",
+            "eb0dfe06bed8",
+            "fcfec5b9626b",
+            "6af91c1da122"
           ],
           "payloads": [
-            "57dd11722848",
-            "da3f602d00fc",
-            "127f5062fa38",
-            "ca3245195c36",
-            "f7d94a4630ce"
+            "cabca99619ed",
+            "20ff2d8b6392",
+            "5f7f820e4ca2",
+            "82132b79b8f7",
+            "1bfeba989b20"
           ],
           "settlements": {
             "load": "bef8ec25072d"

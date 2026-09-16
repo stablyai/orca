@@ -35,6 +35,8 @@ export type CodexStructuredSessionEvent =
       params: unknown
       /** Host receipt time of a turn boundary; survives retry and deferral so a replay is not re-stamped. */
       observedAt?: number
+      /** Highest dispatch sequence armed when this turn-start was first received. */
+      dispatchSequenceAtReceipt?: number
     }
   | { type: 'server-request'; sessionId: string; threadId: string; method: string; params: unknown }
   | { type: 'provider-frame'; sessionId: string; threadId: string; kind: string; payload: unknown }

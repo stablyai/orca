@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
@@ -55,6 +56,22 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     ).resolves.toEqual({
       tasksSupported: true,
       worktreeCreateIdempotency: { dedupeTtlMs: 20_000 },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it('reads agent.launch support from the same status.get probe', async () => {
+    // Why: mobile must not send `agent.launch` to a host that never advertised it, and one probe
+    // has to answer that alongside create idempotency so a create cannot straddle two answers.
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([{ capabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY] }])
+      )
+    ).resolves.toEqual({
+      tasksSupported: false,
+      worktreeCreateIdempotency: false,
+      agentLaunch: true,
       hostPlatform: 'darwin'
     })
   })
@@ -65,6 +82,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     ).resolves.toEqual({
       tasksSupported: false,
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS },
+      agentLaunch: false,
       hostPlatform: 'darwin'
     })
   })
@@ -82,6 +100,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     ).resolves.toEqual({
       tasksSupported: false,
       worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+      agentLaunch: false,
       hostPlatform: 'darwin'
     })
   })
@@ -106,6 +125,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
       ).resolves.toEqual({
         tasksSupported: false,
         worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+        agentLaunch: false,
         hostPlatform: 'darwin'
       })
     }
@@ -124,6 +144,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     ).resolves.toEqual({
       tasksSupported: false,
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS },
+      agentLaunch: false,
       hostPlatform: 'darwin'
     })
   })
@@ -143,6 +164,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
       ).resolves.toEqual({
         tasksSupported: false,
         worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+        agentLaunch: false,
         hostPlatform: 'darwin'
       })
     }
@@ -162,6 +184,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     ).resolves.toEqual({
       tasksSupported: false,
       worktreeCreateIdempotency: { dedupeTtlMs: 30_000 },
+      agentLaunch: false,
       hostPlatform: 'darwin'
     })
   })
@@ -170,6 +193,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     await expect(readNewWorktreeRuntimeCapabilities(statusClient(['error']))).resolves.toEqual({
       tasksSupported: false,
       worktreeCreateIdempotency: false,
+      agentLaunch: false,
       hostPlatform: null
     })
   })

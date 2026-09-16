@@ -35,6 +35,7 @@ export function configureLocalPtyProvider(args: {
   localProvider.configure({
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
+    getDefaultShell: () => getSettings?.()?.terminalDefaultShell,
     getWindowsPowerShellImplementation: () =>
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),

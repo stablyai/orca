@@ -76,7 +76,10 @@ export function agentLaunchWorkspaceFactory(
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         return {
           worktreeId: result.worktree.id,
-          startupTerminalHandle: result.startupTerminal?.handle
+          startupTerminalHandle: result.startupTerminal?.handle,
+          // Carried, not dropped: `createManagedWorktree` reports a failed startup terminal or an
+          // uncopied working tree here, and it is the only place the host says so.
+          ...(result.warning ? { warning: result.warning } : {})
         }
       } catch (error) {
         releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)

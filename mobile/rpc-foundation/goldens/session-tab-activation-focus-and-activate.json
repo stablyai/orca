@@ -3,9 +3,9 @@
   "family": "session.tab-activation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
   "scenarioSha256": "72a972996461cc58bda2b1c11dbb4ecdbdecd5ff2f977c3d61e40d635f63c1b9",
   "platform": "darwin",
@@ -13,32 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "11b4a1934825": {
+    "36e84700f75b": {
       "name": "terminal.focus#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}"
     },
-    "4e4394afbcef": {
-      "activate": {
-        "id": "frame-2",
-        "ok": true,
-        "result": {
-          "activated": true
-        }
-      },
-      "failure": {
-        "$rpc": "null"
-      },
-      "focus": {
-        "id": "frame-1",
-        "ok": true,
-        "result": {
-          "focused": true
-        }
-      }
-    },
-    "7118e8aeaaae": {
+    "3db95ed7902c": {
       "name": "terminal.focus#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -71,25 +53,28 @@
         }
       }
     },
-    "7cd4f4dc7a60": {
-      "name": "session.tabs.activate#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}",
-      "sent": 2
-    },
-    "84d74a6de2ca": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
+    "4e4394afbcef": {
+      "activate": {
         "id": "frame-2",
         "ok": true,
         "result": {
           "activated": true
         }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
       }
     },
-    "e495a9a84cf0": {
+    "795aac33fef6": {
       "name": "session.tabs.activate#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -125,6 +110,23 @@
         }
       }
     },
+    "84d74a6de2ca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      }
+    },
+    "9fd53197e14f": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
+    },
     "ecc5d1639f16": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -144,8 +146,8 @@
       {
         "id": "activated",
         "observation": {
-          "sender": ["7118e8aeaaae", "e495a9a84cf0"],
-          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "sender": ["3db95ed7902c", "795aac33fef6"],
+          "payloads": ["36e84700f75b", "9fd53197e14f"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "84d74a6de2ca"

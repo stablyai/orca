@@ -3,9 +3,9 @@
   "family": "git.remote-prerequisite",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "ec2847b4af357d8564d8e0a9a1072713c1afd7ff86ba69e9c83c056a6841ee39",
   "platform": "darwin",
@@ -28,8 +28,19 @@
         "ran": true
       }
     },
-    "3d5bc718d103": {
+    "4299ad7b940b": {
+      "name": "progress",
+      "ordinal": 1,
+      "value": "force_pushing"
+    },
+    "cc960da45357": {
       "name": "git.push#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"forceWithLease\":true}}"
+    },
+    "f2c25f0a16f9": {
+      "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -61,16 +72,6 @@
           }
         }
       }
-    },
-    "3e471b70b788": {
-      "name": "progress",
-      "value": "force_pushing",
-      "sent": 0
-    },
-    "7e7e568336cc": {
-      "name": "git.push#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"forceWithLease\":true}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -79,13 +80,13 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["3d5bc718d103"],
-          "payloads": ["7e7e568336cc"],
+          "sender": ["f2c25f0a16f9"],
+          "payloads": ["cc960da45357"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["3e471b70b788"]
+          "effects": ["4299ad7b940b"]
         }
       }
     ]

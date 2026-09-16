@@ -3,9 +3,9 @@
   "family": "tasks.project-repo-slugs",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "a83d5768892764af2dd6866f03d51c09aef63d1c5d3e0645bd5e1c16454b201f",
   "platform": "darwin",
@@ -13,8 +13,28 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "5330ec46fa7e": {
+    "3df58008cdfa": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
+      }
+    },
+    "49d6f5f60c9c": {
       "name": "github.repoSlug#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "60d253ed9645": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -48,25 +68,6 @@
         }
       }
     },
-    "81640993e00b": {
-      "name": "github.repoSlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}",
-      "sent": 1
-    },
-    "a357afc033aa": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          }
-        }
-      },
-      "sent": 1
-    },
     "bdec8bbb3c04": {
       "cache": {
         "repo-1": {
@@ -94,13 +95,13 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["5330ec46fa7e"],
-          "payloads": ["81640993e00b"],
+          "sender": ["60d253ed9645"],
+          "payloads": ["49d6f5f60c9c"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "bdec8bbb3c04",
-          "effects": ["a357afc033aa"]
+          "effects": ["3df58008cdfa"]
         }
       }
     ]

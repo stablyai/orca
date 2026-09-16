@@ -3,9 +3,9 @@
   "family": "git.base-ref-chain",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "97a8b8f5b9a7c7467745666becee07f5dfc57fb283d4e80dcbe7941509177598",
   "platform": "darwin",
@@ -13,24 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "281aabb80148": {
+    "0fa683226c0a": {
       "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 2
-    },
-    "74dda17aff6f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": "origin/rel"
-    },
-    "ad49fec56c14": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 2
-    },
-    "b2161cb8d5b5": {
-      "name": "worktree.show#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -63,11 +48,28 @@
         }
       }
     },
+    "74dda17aff6f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "origin/rel"
+    },
+    "d64700b9de3b": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
     "dc11f1ff4a3d": {
       "baseRef": "origin/rel"
     },
-    "f6f2870a1e9d": {
+    "dfcd2e1792cb": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "dff5c38c64e4": {
       "name": "repo.list#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -111,8 +113,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["b2161cb8d5b5", "f6f2870a1e9d"],
-          "payloads": ["281aabb80148", "ad49fec56c14"],
+          "sender": ["0fa683226c0a", "dff5c38c64e4"],
+          "payloads": ["dfcd2e1792cb", "d64700b9de3b"],
           "settlements": {
             "resolve": "74dda17aff6f"
           },

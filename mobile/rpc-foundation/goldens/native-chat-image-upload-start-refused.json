@@ -3,9 +3,9 @@
   "family": "nativeChat.image-upload",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "09fd9bf97a4da7313e24f8c333b66c7c1af927bbea0a6d9fef9803856a608c78",
   "platform": "darwin",
@@ -13,32 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "5f71b4d3d25c": {
-      "name": "upload-start",
-      "value": {},
-      "sent": 0
-    },
-    "765ab192e1a5": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Image is too large",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "8dfd1f053efc": {
+    "3c402c915494": {
       "name": "clipboard.startImageUpload#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
-      "sent": 1
-    },
-    "b2b1a4389f58": {
-      "failure": "Image is too large",
-      "uploaded": "unuploaded"
-    },
-    "ec6fd7f06461": {
-      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -71,6 +48,30 @@
           "ok": false
         }
       }
+    },
+    "6696a47819e1": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "765ab192e1a5": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Image is too large",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "994fccf9b305": {
+      "name": "upload-start",
+      "ordinal": 1,
+      "value": {}
+    },
+    "b2b1a4389f58": {
+      "failure": "Image is too large",
+      "uploaded": "unuploaded"
     }
   },
   "recording": {
@@ -79,13 +80,13 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["ec6fd7f06461"],
-          "payloads": ["8dfd1f053efc"],
+          "sender": ["3c402c915494"],
+          "payloads": ["6696a47819e1"],
           "settlements": {
             "normal": "765ab192e1a5"
           },
           "state": "b2b1a4389f58",
-          "effects": ["5f71b4d3d25c"]
+          "effects": ["994fccf9b305"]
         }
       }
     ]

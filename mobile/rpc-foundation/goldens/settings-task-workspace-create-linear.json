@@ -3,48 +3,31 @@
   "family": "settings.task-workspace-create",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
   "scenarioSha256": "662c3e04e31bce5757f09f91e3e3739fb9d57767b7443be4dc936705b64b1432",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "05ed43b996fb": {
+    "0e0c27425410": {
       "name": "navigation",
-      "value": "/h/host-1/session/wt-1?name=ORC-1+Recorded+issue&created=1",
-      "sent": 2
+      "ordinal": 11,
+      "value": "/h/host-1/session/wt-1?name=ORC-1+Recorded+issue&created=1"
     },
-    "090c88478661": {
-      "name": "settings.get#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
+    "15a350feeedb": {
+      "name": "creatingKey",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
       }
     },
-    "0f72e7ee78c9": {
+    "2142af96648c": {
       "name": "worktree.create#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -87,15 +70,59 @@
         }
       }
     },
-    "1847f1d16cc3": {
-      "name": "workspaceCreateDraft",
-      "value": {
+    "33e3b949d4c5": {
+      "creating": {
         "$rpc": "null"
       },
-      "sent": 2
+      "error": "",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
     },
-    "2473f12c7cdd": {
+    "41a2214deb19": {
       "name": "settings.get#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "7abdfe20af50": {
+      "creating": "linear:1",
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "85b99a2ca439": {
+      "name": "workspaceCreateDraft",
+      "ordinal": 9,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "8ac371cf7234": {
+      "name": "settings.get#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -130,75 +157,46 @@
         }
       }
     },
-    "2a3409305e35": {
-      "name": "creatingKey",
-      "value": "linear:1",
-      "sent": 0
-    },
-    "33e3b949d4c5": {
-      "creating": {
-        "$rpc": "null"
-      },
-      "error": "",
-      "settings": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": []
-      }
-    },
-    "5c52bc3f9e55": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
-      "sent": 1
-    },
-    "7abdfe20af50": {
-      "creating": "linear:1",
-      "error": "",
-      "settings": {
-        "disabledTuiAgents": ["claude"]
-      }
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "92e24c796e40": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"orc-1\",\"displayName\":\"ORC-1 Recorded issue\",\"displayNameKind\":\"generated\",\"linkedLinearIssue\":\"ORC-1\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://linear.app/orca/issue/ORC-1\",\"createdWithAgent\":\"claude\"}}",
-      "sent": 2
+    "975f2ff9a730": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "94d10e7369a8": {
-      "name": "setupPrompt",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 2
-    },
-    "9e263f5e91be": {
-      "name": "error",
-      "value": "",
-      "sent": 0
-    },
-    "a1c21422795e": {
-      "name": "creatingKey",
-      "value": {
-        "$rpc": "null"
-      },
-      "sent": 2
-    },
-    "b3786fd78eba": {
+    "ce455f0c9a54": {
       "name": "actionItem",
+      "ordinal": 8,
       "value": {
         "$rpc": "null"
-      },
-      "sent": 2
+      }
     },
-    "d78d24fff8fb": {
+    "e0423a9e6995": {
+      "name": "worktree.create#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"orc-1\",\"displayName\":\"ORC-1 Recorded issue\",\"displayNameKind\":\"generated\",\"linkedLinearIssue\":\"ORC-1\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://linear.app/orca/issue/ORC-1\",\"createdWithAgent\":\"claude\"}}"
+    },
+    "e0a8ee1f3c00": {
+      "name": "creatingKey",
+      "ordinal": 1,
+      "value": "linear:1"
+    },
+    "e445683fd6a5": {
       "name": "runtimeTaskSettings",
+      "ordinal": 5,
       "value": {
         "defaultTuiAgent": "codex",
         "disabledTuiAgents": []
-      },
-      "sent": 1
+      }
+    },
+    "e969ced16929": {
+      "name": "setupPrompt",
+      "ordinal": 10,
+      "value": {
+        "$rpc": "null"
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -207,6 +205,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
     }
   },
   "recording": {
@@ -215,35 +218,35 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["5c52bc3f9e55"],
+          "sender": ["41a2214deb19"],
+          "payloads": ["975f2ff9a730"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "7abdfe20af50",
-          "effects": ["2a3409305e35", "9e263f5e91be"]
+          "effects": ["e0a8ee1f3c00", "ed3a7d6bc894"]
         }
       },
       {
         "id": "created",
         "observation": {
-          "sender": ["2473f12c7cdd", "0f72e7ee78c9"],
-          "payloads": ["5c52bc3f9e55", "92e24c796e40"],
+          "sender": ["8ac371cf7234", "2142af96648c"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "33e3b949d4c5",
           "effects": [
-            "2a3409305e35",
-            "9e263f5e91be",
-            "d78d24fff8fb",
-            "b3786fd78eba",
-            "1847f1d16cc3",
-            "94d10e7369a8",
-            "05ed43b996fb",
-            "a1c21422795e"
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "ce455f0c9a54",
+            "85b99a2ca439",
+            "e969ced16929",
+            "0e0c27425410",
+            "15a350feeedb"
           ]
         }
       }
