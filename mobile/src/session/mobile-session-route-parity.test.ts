@@ -72,16 +72,23 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // whose accepted-check became that operation's own verdict, then again when that check was spelled
 // `=== true` to match the other four sites reading the same verdict. Refreshed in step 7 for the
 // reply casts the checked readers made unnecessary — the markdown tab doc, the worktree record's
-// `diffComments` and the browser tab's page id are typed by their schemas now.
-const HEAD_CALLBACK_BODY_SHA256 = 'a17a7a1818f81aec263dcb98c2bc8b944a566da82e67c3b1ffd3425fc689848c'
-const HEAD_EFFECT_SHA256 = '73d80845e0a4b6363cfb4bb55551af97965b1f676b97adf0b2a8504219b9a501'
+// `diffComments` and the browser tab's page id are typed by their schemas now. Refreshed once more
+// on the merge, for the display-mode toggle whose send became `terminalDisplayModeSet`.
+const HEAD_CALLBACK_BODY_SHA256 = 'e3b41d4ab755be2ac2b8c268f3b94a5ec91f620233b5761707bbd1791d106f95'
+// Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
+// the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
+// again when the reporter took the reply and interpreted it itself, retiring the hand-built
+// refusal the timer site passed when it had no reply at all.
+const HEAD_EFFECT_SHA256 = '812aaa9f5abf25dd5229f65231900825b2fd38d5d238b511f3fc2edf4ae31a47'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
 // rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for
-// `handleClearTerminal`, whose send became `terminalBufferClear`, and in step 7 for the browser
-// tab create, whose `{ browserPageId?: string }` cast its schema now carries.
+// `handleClearTerminal`, whose send became `terminalBufferClear`, in step 7 for the browser tab
+// create, whose `{ browserPageId?: string }` cast its schema now carries, and once more for
+// `handleCreateTerminal`, whose send became `sessionTabCreateTerminal` and whose `response.ok`
+// branch became that operation's own throw-the-host-message acceptance.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '4161c70ba1dbfddefd81e6418faf123adad1fc9732576dcd627b2fc1f7f7c62f'
+  'e77614fd8ae98cce4009636520f0f3acb17e583d7395f954385a779b1decb7d1'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -89,10 +96,12 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
 const HEAD_TIMER_CREATION_SHA256 =
   '1a31b625e2174c3db77272249843196d2b6b06ab1e654a96d8f7858e3082e66b'
 const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
-// Two method literals fewer: `terminal.send` and `terminal.clearBuffer` are now fixed at their
-// operation's definition instead of being spelled at the call site.
+// Six method literals fewer than before step 6: `terminal.send` and `terminal.clearBuffer` went
+// first, then `worktree.activate` twice, `session.tabs.createTerminal` and
+// `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
+// spelled at the call site.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '418c490447eb65b5900408c0c6b971dc9b814f04d8034c6caf53124e7f948c8c'
+  'a5496f14589916b027334a236630720b39eb0360d91538d212b408c1f61bb523'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
 const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
 const HEAD_STYLE_REFERENCE_SHA256 =
@@ -530,7 +539,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(535)
+    expect(strings).toHaveLength(531)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

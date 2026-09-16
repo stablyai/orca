@@ -6,7 +6,7 @@ import { operationModuleLoader } from './operation-module-loader'
 const root = resolve(import.meta.dirname, '../../../..')
 
 /**
- * The observation fires on no golden in the corpus — every checked read in all 705 decodes its
+ * The observation fires on no golden in the corpus — every checked read in all 727 decodes its
  * reply whole — so this is what pins it. Without it a refactor could stop reporting salvaged reads
  * and every golden would still compare clean, the same reason `unhandled-recording.test.ts` exists.
  */

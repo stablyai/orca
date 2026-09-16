@@ -16,7 +16,8 @@
  * A merge is the one case where a line goes up without a migration undoing itself: main can land an
  * operation the branch never saw. Raise the line then, and name the PR that brought it, so the next
  * reader can tell an import from a regression. #20954 brought three
- * (`notification-stream-closed`, `native-chat-session-page`, `terminal-buffer-cleared`).
+ * (`notification-stream-closed`, `native-chat-session-page`, `terminal-buffer-cleared`) and step 6's
+ * second migration brought two (`created-terminal-tab`, `terminal-display-mode-set`).
  *
  * A file leaves the list by deletion, not by reaching zero: an entry asserts the file still holds
  * at least one unchecked reader, so a `readers: 0` line is itself a failure. Migrating a domain
@@ -67,6 +68,9 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   { file: 'src/notifications/mobile-push-delivery-test-operations.ts', readers: 1 },
   { file: 'src/notifications/mobile-push-registration-operations.ts', readers: 2 },
   { file: 'src/notifications/push-dismissal-operations.ts', readers: 1 },
+  // session — #21083 landed these two after this branch emptied the block; the next commit converts
+  // them and the line goes away again.
+  { file: 'src/session/mobile-session-write-operations.ts', readers: 2 },
   // tasks
   { file: 'src/tasks/mobile-task-item-comment-operations.ts', readers: 7 },
   { file: 'src/tasks/mobile-task-item-detail-operations.ts', readers: 8 },

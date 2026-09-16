@@ -3,7 +3,7 @@
   "family": "aiVault.resume-launch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "d8d8dddea59a7d38bca35f43d9e4c74cdf18bc3e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
@@ -17,16 +17,6 @@
       "name": "session.tabs.createTerminal#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
-    },
-    "1953443d1eef": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "The host sent a reply this app could not read (terminal.send)",
-        "isRpcDeliveryUnknown": false
-      }
     },
     "21981de13ba2": {
       "name": "terminal.send#1",
@@ -321,10 +311,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "aae8857ab586": {
-      "failure": "The host sent a reply this app could not read (terminal.send)",
-      "launched": "unlaunched"
-    },
     "aaec35c3c986": {
       "name": "terminal.send#1",
       "ordinal": 3,
@@ -595,9 +581,9 @@
           "sender": ["a67829619e64", "f4b97a58af06"],
           "payloads": ["0bce25f5646d", "7d9e7036f3d0"],
           "settlements": {
-            "full": "1953443d1eef"
+            "full": "6e79da536ca9"
           },
-          "state": "aae8857ab586",
+          "state": "400d946a183d",
           "effects": []
         }
       },
@@ -607,9 +593,9 @@
           "sender": ["a67829619e64", "96a8247b729c"],
           "payloads": ["0bce25f5646d", "7d9e7036f3d0"],
           "settlements": {
-            "full": "1953443d1eef"
+            "full": "6e79da536ca9"
           },
-          "state": "aae8857ab586",
+          "state": "400d946a183d",
           "effects": []
         }
       },

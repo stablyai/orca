@@ -154,16 +154,18 @@ describe('mobile session startup', () => {
       startupSource
     )
 
-    expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    // Both sends migrated to the typed `worktreeActivate` operation in step 6; what these pin is
+    // unchanged — the plain activation is fired and not awaited, and it goes out before the tab load.
+    expect(startupEffect).toContain('void worktreeActivate\n          .request(client, {')
     expect(startupEffect).toContain("if (client && created !== '1' && !isFloatingWorkspaceRoute)")
     expect(startupEffect).toContain("if (client && created === '1' && !isFloatingWorkspaceRoute)")
     expect(startupEffect).toContain('notifyClients: false')
     expect(startupEffect).toContain("navigation: 'caller'")
-    expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
-    expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
+    expect(startupEffect).not.toContain('await worktreeActivate\n          .request(client, {')
+    expect(startupEffect.indexOf('worktreeActivate\n          .request(client, {')).toBeLessThan(
       startupEffect.indexOf('await ensureSessionTabs()')
     )
-    expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
+    expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(activation.value)')
     expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
   })
 

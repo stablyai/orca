@@ -48,18 +48,6 @@ export type AgentLaunchTarget =
  *  terminal agent: a running PTY keeps its execution transport. */
 export type AgentLaunchReusedTerminal = { handle: string }
 
-/**
- * Facts that only the calling surface knows and that the route has to see. These are inputs to the
- * decision, not requests: a caller states that it is passing custom agent arguments, and the host
- * concludes that a terminal is required.
- */
-export type AgentLaunchCustomization = {
-  /** Explicit per-launch agent argv. Only a TUI applies these. */
-  agentArgs?: string
-  /** A subdirectory the agent should start in. Only a TUI applies this. */
-  cwd?: string
-}
-
 export type AgentLaunchIntent = {
   agent: TuiAgent
   target: AgentLaunchTarget
@@ -67,19 +55,35 @@ export type AgentLaunchIntent = {
   /** Seeded launch options, narrowed by the host to what a structured create accepts. */
   sessionOptions?: Readonly<Record<string, unknown>>
   reuseTerminal?: AgentLaunchReusedTerminal
-  customization?: AgentLaunchCustomization
 }
 
 /** The surface the host actually created. */
 export type AgentLaunchOutcome =
   | { kind: 'structured'; sessionId: string; handle: string }
   | { kind: 'terminal'; handle: string }
+/**
+ * What became of the launch text.
+ *
+ * An enum rather than a boolean because "not delivered" and "handed to a surface that delivers it
+ * out of band" are different answers, and a caller deciding whether to resend needs to tell them
+ * apart. A receipt may under-claim — reporting a delivery it cannot vouch for as `not-delivered` is
+ * a wasted resend, while over-claiming loses the text silently.
+ */
+export type AgentLaunchPromptOutcome = AgentLaunchPromptDisposal['outcome']
 
-/** Whether the launch text was delivered, for a caller that needs to report or retry it. */
+/** `messageId` hangs off the `journaled` arm rather than sitting optional beside all three: a
+ *  producer must not be able to claim the text was committed and then not say where. */
+type AgentLaunchPromptDisposal =
+  /** Committed to the session's transcript, which `messageId` names. */
+  | { outcome: 'journaled'; messageId: string }
+  /** Written to a PTY, whose consumption only the pane's owner observes. */
+  | { outcome: 'handed-to-terminal' }
+  /** Not delivered by this call; the caller still owns the text. */
+  | { outcome: 'not-delivered' }
+
 export type AgentLaunchPromptReceipt = {
   delivery: AgentLaunchPromptDelivery
-  delivered: boolean
-}
+} & AgentLaunchPromptDisposal
 
 export type AgentLaunchResult = {
   outcome: AgentLaunchOutcome
@@ -102,14 +106,31 @@ export type AgentLaunchResult = {
   prompt?: AgentLaunchPromptReceipt
 }
 
+export type AgentLaunchMode = 'structured' | 'terminal'
+
+/** Why a launch ran in the mode it did. `user_default` is the preference being honoured; every
+ *  other member is a reason the preference could not be applied to this launch. */
+export type AgentLaunchModeReason =
+  | 'user_default'
+  | 'remote_execution_host'
+  | 'reused_terminal'
+  | 'agent_without_structured_session'
+  | 'tui_launch_command'
+  | 'structured_sessions_unavailable'
+  | 'structured_support_unknown'
+  | 'wsl_execution_runtime'
+  | 'codex_on_windows'
+  | 'structured_unsupported_on_host'
+
 /** Restates `WorkerStartModeReceipt` in surface-neutral terms so orchestration's receipt and a
  *  mobile or renderer launch report the same vocabulary. */
 export type AgentLaunchModeReceipt = {
-  mode: 'structured' | 'terminal'
+  /** The mode the launch actually ran in. */
+  mode: AgentLaunchMode
   /** The user's settings default for a new agent tab. */
-  preferred: 'structured' | 'terminal'
-  reason: string
-  /** One sentence, always present. */
+  preferred: AgentLaunchMode
+  reason: AgentLaunchModeReason
+  /** One sentence, always present, so a fallback is never silent. */
   detail: string
 }
 

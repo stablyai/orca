@@ -191,6 +191,19 @@ describe('who may call agent.launch', () => {
     expect(runtime.createManagedWorktree).toHaveBeenCalled()
   })
 
+  it('refuses the prior wire contract after the result shape changed', async () => {
+    const runtime = runtimeStub()
+    await expect(
+      launch(CREATE_LAUNCH, runtime, {
+        clientKind: 'mobile',
+        pairedDeviceId: 'device-1',
+        clientCapabilities: ['agent.launch.v1']
+      })
+    ).rejects.toThrow('agent_launch_unsupported')
+    expect(AGENT_LAUNCH_RUNTIME_CAPABILITY).toBe('agent.launch.v2')
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
   it('admits an in-process caller, which negotiates nothing', async () => {
     const runtime = runtimeStub()
     await launch(CREATE_LAUNCH, runtime, {})

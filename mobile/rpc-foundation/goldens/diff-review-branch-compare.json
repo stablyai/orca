@@ -3,7 +3,7 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "d8d8dddea59a7d38bca35f43d9e4c74cdf18bc3e",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
@@ -13,6 +13,17 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "229fc359ecb7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Committed changes response was invalid",
+        "result": {
+          "$rpc": "null"
+        }
+      }
+    },
     "284ce622e74a": {
       "name": "worktree.show#2",
       "ordinal": 7,
@@ -49,16 +60,6 @@
           }
         }
       }
-    },
-    "347ad3543d28": {
-      "branchCompare": {
-        "error": "The host sent a reply this app could not read (git.branchCompare)",
-        "result": {
-          "$rpc": "null"
-        }
-      },
-      "diff": "unloaded",
-      "snapshot": "unloaded"
     },
     "412402e093cc": {
       "name": "git.branchCompare#2",
@@ -179,17 +180,6 @@
         }
       }
     },
-    "75328af2b182": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "The host sent a reply this app could not read (git.branchCompare)",
-        "result": {
-          "$rpc": "null"
-        }
-      }
-    },
     "80d0ff3c81e8": {
       "name": "worktree.show#1",
       "ordinal": 3,
@@ -234,6 +224,16 @@
     },
     "9f5d0ac26269": {
       "branchCompare": {
+        "result": {
+          "$rpc": "null"
+        }
+      },
+      "diff": "unloaded",
+      "snapshot": "unloaded"
+    },
+    "a3e1aa9bf7e3": {
+      "branchCompare": {
+        "error": "Committed changes response was invalid",
         "result": {
           "$rpc": "null"
         }
@@ -344,9 +344,9 @@
           ],
           "settlements": {
             "unavailable": "ef9013648cfb",
-            "invalid": "75328af2b182"
+            "invalid": "229fc359ecb7"
           },
-          "state": "347ad3543d28",
+          "state": "a3e1aa9bf7e3",
           "effects": []
         }
       }
