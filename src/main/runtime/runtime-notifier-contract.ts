@@ -21,6 +21,7 @@ import type {
 type DriverState = RuntimeTerminalDriverState
 
 export type RuntimeNotifier = {
+  graphPublicationAccepted?: (windowId: number) => void
   automationsChanged?(payload: {
     selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
     reason?: 'definition' | 'run' | 'usage'
