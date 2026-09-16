@@ -45,6 +45,30 @@ export function hasActivityThreadWorkspace(
   )
 }
 
+// Why: the sidebar badge no longer counts worktree.isUnread, but the worktree-card unread
+// emphasis still reads it; clear it after an ack unless another attention item in the
+// worktree (agent completion or unread terminal tab) would re-light it.
+export function clearWorktreeUnreadIfNoOtherAttention(worktreeId: string): void {
+  const state = useAppStore.getState()
+  const tabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id))
+  if (tabIds.size === 0) {
+    state.clearWorktreeUnread(worktreeId)
+    return
+  }
+  const hasOtherUnreadAgentCompletion = Object.keys(state.unreadAgentCompletionPanes).some(
+    (paneKey) => {
+      const parsed = parsePaneKey(paneKey)
+      return parsed !== null && tabIds.has(parsed.tabId)
+    }
+  )
+  const hasUnreadTerminalTabs = Object.keys(state.unreadTerminalTabs).some((tabId) =>
+    tabIds.has(tabId)
+  )
+  if (!hasOtherUnreadAgentCompletion && !hasUnreadTerminalTabs) {
+    state.clearWorktreeUnread(worktreeId)
+  }
+}
+
 export function createActivityThreadActions({
   getMarkAllReadThreads,
   acknowledgeAgents,
@@ -68,6 +92,7 @@ export function createActivityThreadActions({
 } {
   const markThreadRead = (thread: AgentPaneThread): void => {
     acknowledgeAgents([thread.paneKey])
+    clearWorktreeUnreadIfNoOtherAttention(thread.worktree.id)
   }
 
   const markThreadUnread = (thread: AgentPaneThread): void => {
@@ -131,13 +156,15 @@ export function createActivityThreadActions({
   }
 
   const markAllThreadsRead = (): void => {
-    const unreadKeys = getMarkAllReadThreads()
-      .filter((t) => t.unread)
-      .map((t) => t.paneKey)
+    const unreadThreads = getMarkAllReadThreads().filter((t) => t.unread)
+    const unreadKeys = unreadThreads.map((t) => t.paneKey)
     if (unreadKeys.length === 0) {
       return
     }
     acknowledgeAgents(unreadKeys)
+    for (const worktreeId of new Set(unreadThreads.map((t) => t.worktree.id))) {
+      clearWorktreeUnreadIfNoOtherAttention(worktreeId)
+    }
   }
 
   return {
