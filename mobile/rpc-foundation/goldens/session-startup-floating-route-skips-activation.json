@@ -1,0 +1,161 @@
+{
+  "operation": "session.startup",
+  "family": "session.startup",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "7bad4b5445734a444831ff81247f2aebafd48bd6aebbedb3a733fdfcba89bef9",
+  "scenarioSha256": "82ff29efaa6ee0bf49ce41bfe7dff2083d0f942c10cc9d8bab48925354d17519",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4dd212bdb9a9": {
+      "name": "fetch-terminals",
+      "value": {
+        "allowEmptyLoaded": true
+      },
+      "sent": 0
+    },
+    "7a307264749f": {
+      "name": "clear-delayed-action-timers",
+      "value": {},
+      "sent": 0
+    },
+    "7fb9bbe379fd": {
+      "name": "diagnostics-reset-route",
+      "value": {},
+      "sent": 0
+    },
+    "8df3790f6752": {
+      "name": "reset-drafts",
+      "value": {},
+      "sent": 0
+    },
+    "a1f3ce2a4b94": {
+      "name": "clear-pending-restorations",
+      "value": {},
+      "sent": 0
+    },
+    "a8636fe05a8c": {
+      "name": "fetch-terminals",
+      "value": {
+        "allowEmptyLoaded": false
+      },
+      "sent": 0
+    },
+    "acf0370bfacc": {
+      "actionSheetRequestSeq": 1,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "terminalsLoaded": false
+    },
+    "afd287d365c0": {
+      "name": "ensure-session-tabs",
+      "value": {},
+      "sent": 0
+    },
+    "d064b45517da": {
+      "name": "clear-terminal-cache",
+      "value": {},
+      "sent": 0
+    },
+    "d3eb1fee66e3": {
+      "name": "clear-pending-live-input-commit",
+      "value": {},
+      "sent": 0
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-startup-floating-route-skips-activation",
+    "checkpoints": [
+      {
+        "id": "loading",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "d064b45517da",
+            "7fb9bbe379fd",
+            "8df3790f6752",
+            "d3eb1fee66e3",
+            "7a307264749f",
+            "afd287d365c0",
+            "a8636fe05a8c"
+          ]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "d064b45517da",
+            "7fb9bbe379fd",
+            "8df3790f6752",
+            "d3eb1fee66e3",
+            "7a307264749f",
+            "afd287d365c0",
+            "a8636fe05a8c",
+            "a8636fe05a8c",
+            "4dd212bdb9a9"
+          ]
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "d064b45517da",
+            "7fb9bbe379fd",
+            "8df3790f6752",
+            "d3eb1fee66e3",
+            "7a307264749f",
+            "afd287d365c0",
+            "a8636fe05a8c",
+            "a8636fe05a8c",
+            "4dd212bdb9a9",
+            "a1f3ce2a4b94",
+            "d3eb1fee66e3",
+            "7a307264749f"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -46,7 +46,10 @@ import { relayCredentialMountAdapters } from './relay-credential-mount-adapters'
 import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
 import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
 import { sessionScreenTabMountAdapters } from './session-screen-tab-mount-adapters'
+import { sessionStartupMountAdapters } from './session-startup-mount-adapters'
 import { sessionTabMountAdapters } from './session-tab-mount-adapters'
+import { sessionTerminalCreateMountAdapters } from './session-terminal-create-mount-adapters'
+import { sessionTerminalDisplayModeMountAdapters } from './session-terminal-display-mode-mount-adapters'
 import { sessionTerminalGestureMountAdapters } from './session-terminal-gesture-mount-adapters'
 import { sessionTerminalInputMountAdapters } from './session-terminal-input-mount-adapters'
 import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
@@ -152,7 +155,16 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: sessionScreenReadMountAdapters
   },
   { source: 'session-screen-tab-mount-adapters.ts', mounts: sessionScreenTabMountAdapters },
+  { source: 'session-startup-mount-adapters.ts', mounts: sessionStartupMountAdapters },
   { source: 'session-tab-mount-adapters.ts', mounts: sessionTabMountAdapters },
+  {
+    source: 'session-terminal-create-mount-adapters.ts',
+    mounts: sessionTerminalCreateMountAdapters
+  },
+  {
+    source: 'session-terminal-display-mode-mount-adapters.ts',
+    mounts: sessionTerminalDisplayModeMountAdapters
+  },
   {
     source: 'session-terminal-gesture-mount-adapters.ts',
     mounts: sessionTerminalGestureMountAdapters

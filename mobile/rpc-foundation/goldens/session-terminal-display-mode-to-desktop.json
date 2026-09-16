@@ -1,0 +1,160 @@
+{
+  "operation": "session.terminal-display-mode",
+  "family": "session.terminal-display-mode",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "a9c92f2cc7b10e230b441a3a6b7a4856ec6a6d3f4b1c1cc3ad485f3732a59040",
+  "scenarioSha256": "ddbc10b828e5e2c021d78d3a745c4c7a0799a79bbe4870046214ff1b043bd45a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "346b0e2c9aaf": {
+      "name": "subscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 0
+    },
+    "5037de8d8171": {
+      "name": "terminal.setDisplayMode#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"desktop\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
+    },
+    "61b1eb90a019": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": ["terminal-1"],
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "944ba19ad4cc": {
+      "name": "terminal.setDisplayMode#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "desktop",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "mode": "desktop"
+          }
+        }
+      }
+    },
+    "df0cbb8511ff": {
+      "name": "terminal.setDisplayMode#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "desktop",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fa46c84fb0ab": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": [],
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-terminal-display-mode-to-desktop",
+    "checkpoints": [
+      {
+        "id": "in-flight",
+        "observation": {
+          "sender": ["df0cbb8511ff"],
+          "payloads": ["5037de8d8171"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "9270aeb7d9c6"
+          },
+          "state": "61b1eb90a019",
+          "effects": ["346b0e2c9aaf"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["944ba19ad4cc"],
+          "payloads": ["5037de8d8171"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "eb79a9b3682a"
+          },
+          "state": "fa46c84fb0ab",
+          "effects": ["346b0e2c9aaf"]
+        }
+      }
+    ]
+  }
+}

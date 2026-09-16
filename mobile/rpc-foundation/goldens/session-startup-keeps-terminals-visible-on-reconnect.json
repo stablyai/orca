@@ -1,0 +1,260 @@
+{
+  "operation": "session.startup",
+  "family": "session.startup",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "7bad4b5445734a444831ff81247f2aebafd48bd6aebbedb3a733fdfcba89bef9",
+  "scenarioSha256": "f540e4a06380a6a5d82d670230c76b7afc2c60302bc27dda13156b620095c5cc",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0e6e845429b9": {
+      "name": "clear-delayed-action-timers",
+      "value": {},
+      "sent": 1
+    },
+    "4a26ad970dfb": {
+      "name": "clear-pending-live-input-commit",
+      "value": {},
+      "sent": 1
+    },
+    "7257b231e8a8": {
+      "name": "ensure-session-tabs",
+      "value": {},
+      "sent": 1
+    },
+    "7a307264749f": {
+      "name": "clear-delayed-action-timers",
+      "value": {},
+      "sent": 0
+    },
+    "7fb9bbe379fd": {
+      "name": "diagnostics-reset-route",
+      "value": {},
+      "sent": 0
+    },
+    "83ed906e3d41": {
+      "actionSheetRequestSeq": 1,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "terminalsLoaded": true
+    },
+    "8df3790f6752": {
+      "name": "reset-drafts",
+      "value": {},
+      "sent": 0
+    },
+    "aa6511b23729": {
+      "status": "fulfilled",
+      "startedAt": 1500,
+      "settledAt": 1500,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "c3086bdcf337": {
+      "name": "fetch-terminals",
+      "value": {
+        "allowEmptyLoaded": true
+      },
+      "sent": 1
+    },
+    "c7629ea302b3": {
+      "name": "worktree.activate#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}",
+      "sent": 1
+    },
+    "c7e9a0eef4ce": {
+      "actionSheetRequestSeq": 2,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "terminalsLoaded": true
+    },
+    "cc2919113064": {
+      "name": "fetch-terminals",
+      "value": {
+        "allowEmptyLoaded": false
+      },
+      "sent": 1
+    },
+    "d064b45517da": {
+      "name": "clear-terminal-cache",
+      "value": {},
+      "sent": 0
+    },
+    "d3eb1fee66e3": {
+      "name": "clear-pending-live-input-commit",
+      "value": {},
+      "sent": 0
+    },
+    "dd31dd4ce7ef": {
+      "name": "worktree.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "caller",
+            "notifyClients": false,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {}
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec0b7647964f": {
+      "name": "worktree.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "caller",
+            "notifyClients": false,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "f48213e7bf49": {
+      "name": "clear-pending-restorations",
+      "value": {},
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "session-startup-keeps-terminals-visible-on-reconnect",
+    "checkpoints": [
+      {
+        "id": "loading",
+        "observation": {
+          "sender": ["ec0b7647964f"],
+          "payloads": ["c7629ea302b3"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "83ed906e3d41",
+          "effects": [
+            "d064b45517da",
+            "7fb9bbe379fd",
+            "8df3790f6752",
+            "d3eb1fee66e3",
+            "7a307264749f",
+            "7257b231e8a8",
+            "cc2919113064"
+          ]
+        }
+      },
+      {
+        "id": "refreshed",
+        "observation": {
+          "sender": ["dd31dd4ce7ef"],
+          "payloads": ["c7629ea302b3"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "83ed906e3d41",
+          "effects": [
+            "d064b45517da",
+            "7fb9bbe379fd",
+            "8df3790f6752",
+            "d3eb1fee66e3",
+            "7a307264749f",
+            "7257b231e8a8",
+            "cc2919113064",
+            "cc2919113064",
+            "c3086bdcf337"
+          ]
+        }
+      },
+      {
+        "id": "unmounted",
+        "observation": {
+          "sender": ["dd31dd4ce7ef"],
+          "payloads": ["c7629ea302b3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "unmount": "aa6511b23729"
+          },
+          "state": "c7e9a0eef4ce",
+          "effects": [
+            "d064b45517da",
+            "7fb9bbe379fd",
+            "8df3790f6752",
+            "d3eb1fee66e3",
+            "7a307264749f",
+            "7257b231e8a8",
+            "cc2919113064",
+            "cc2919113064",
+            "c3086bdcf337",
+            "f48213e7bf49",
+            "4a26ad970dfb",
+            "0e6e845429b9"
+          ]
+        }
+      }
+    ]
+  }
+}

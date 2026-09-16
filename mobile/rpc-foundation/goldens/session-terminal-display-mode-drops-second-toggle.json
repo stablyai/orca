@@ -1,0 +1,212 @@
+{
+  "operation": "session.terminal-display-mode",
+  "family": "session.terminal-display-mode",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "a9c92f2cc7b10e230b441a3a6b7a4856ec6a6d3f4b1c1cc3ad485f3732a59040",
+  "scenarioSha256": "bbe680db3edc19b419e327318bea18258e86ec11dbd73f8d6ea40798d4043b3c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "10ec242cfb5e": {
+      "name": "terminal.setDisplayMode#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "desktop",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "346b0e2c9aaf": {
+      "name": "subscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 0
+    },
+    "5037de8d8171": {
+      "name": "terminal.setDisplayMode#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"desktop\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
+    },
+    "61b1eb90a019": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": ["terminal-1"],
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "87495bd3c52b": {
+      "name": "terminal.setDisplayMode#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"desktop\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 2
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "944ba19ad4cc": {
+      "name": "terminal.setDisplayMode#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "desktop",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "mode": "desktop"
+          }
+        }
+      }
+    },
+    "df0cbb8511ff": {
+      "name": "terminal.setDisplayMode#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "desktop",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fa46c84fb0ab": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": [],
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-terminal-display-mode-drops-second-toggle",
+    "checkpoints": [
+      {
+        "id": "one-in-flight",
+        "observation": {
+          "sender": ["df0cbb8511ff"],
+          "payloads": ["5037de8d8171"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "first": "9270aeb7d9c6",
+            "second": "eb79a9b3682a"
+          },
+          "state": "61b1eb90a019",
+          "effects": ["346b0e2c9aaf"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["944ba19ad4cc"],
+          "payloads": ["5037de8d8171"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "first": "eb79a9b3682a",
+            "second": "eb79a9b3682a"
+          },
+          "state": "fa46c84fb0ab",
+          "effects": ["346b0e2c9aaf"]
+        }
+      },
+      {
+        "id": "retoggled",
+        "observation": {
+          "sender": ["944ba19ad4cc", "10ec242cfb5e"],
+          "payloads": ["5037de8d8171", "87495bd3c52b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "first": "eb79a9b3682a",
+            "second": "eb79a9b3682a",
+            "third": "9270aeb7d9c6"
+          },
+          "state": "61b1eb90a019",
+          "effects": ["346b0e2c9aaf"]
+        }
+      }
+    ]
+  }
+}
