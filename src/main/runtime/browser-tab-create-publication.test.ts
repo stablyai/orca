@@ -50,7 +50,6 @@ function createCommandHost(
 ): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
   return {
-    resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAgentBrowserBridge: () =>

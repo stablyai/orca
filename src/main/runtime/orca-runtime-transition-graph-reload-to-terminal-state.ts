@@ -132,11 +132,22 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
     return workspace
   }
 
-  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
+  /**
+   * A CLI workspace selector as a resolved workspace, Folder Workspaces included.
+   *
+   * Why not `resolveBrowserWorkspace`: that one also proves the folder path is usable, which a
+   * listing must not depend on, and its await would move git-only resolution off the caller's
+   * tick — terminal listing fences itself on the graph epoch and needs that tick unchanged.
+   */
+  protected resolveWorkspaceSelector(selector: string): Promise<ResolvedWorktree> {
     const folderWorkspace = this.resolveFolderWorkspaceSelector(selector)
     return folderWorkspace
-      ? folderWorkspaceKey(folderWorkspace.id)
-      : (await this.resolveWorktreeSelector(selector)).id
+      ? Promise.resolve(this.folderWorkspaceToResolvedWorktree(folderWorkspace))
+      : this.resolveWorktreeSelector(selector)
+  }
+
+  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
+    return (await this.resolveWorkspaceSelector(selector)).id
   }
 
   protected async resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {

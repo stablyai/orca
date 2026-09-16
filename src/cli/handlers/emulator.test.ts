@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { callMock, remoteMock } = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -26,11 +26,11 @@ vi.mock('../runtime-client', async () => {
 })
 
 import { main } from '../index'
+import { useOrcaTerminalWorkspaceEnvironment } from '../index-test-harness'
 import { okFixture, queueFixtures } from '../test-fixtures'
 
 describe('orca emulator CLI handlers', () => {
-  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
-  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+  useOrcaTerminalWorkspaceEnvironment()
 
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -39,19 +39,6 @@ describe('orca emulator CLI handlers', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     process.exitCode = undefined
-  })
-
-  afterEach(() => {
-    if (originalWorkspaceId === undefined) {
-      delete process.env.ORCA_WORKSPACE_ID
-    } else {
-      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
-    }
-    if (originalWorktreeId === undefined) {
-      delete process.env.ORCA_WORKTREE_ID
-    } else {
-      process.env.ORCA_WORKTREE_ID = originalWorktreeId
-    }
   })
 
   it('resolves relative APK paths before calling the runtime', async () => {
@@ -111,7 +98,7 @@ describe('orca emulator CLI handlers', () => {
 
   it('uses the current git worktree exported by the Orca terminal', async () => {
     process.env.ORCA_WORKSPACE_ID = 'folder:stale-parent'
-    process.env.ORCA_WORKTREE_ID = 'repo-1::/repo/project '
+    process.env.ORCA_WORKTREE_ID = 'repo-1::/repo/project'
     callMock.mockResolvedValue(
       okFixture('req_attach', {
         attached: true,
@@ -124,7 +111,7 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledOnce()
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
-      { device: 'device-1', worktree: 'repo-1::/repo/project ', focus: false },
+      { device: 'device-1', worktree: 'id:repo-1::/repo/project', focus: false },
       { timeoutMs: 180_000 }
     )
   })
