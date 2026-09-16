@@ -124,6 +124,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'openai-gpt-transcribe',
+    label: 'GPT Transcribe',
+    description:
+      'High-accuracy cloud transcription with multilingual language detection. Requires an OpenAI API key.',
+    type: 'openai',
+    provider: 'openai',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
     description:
