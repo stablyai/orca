@@ -30,6 +30,10 @@ warmUpdaterModule()
 
 describe('updater', () => {
   beforeEach(() => {
+    // Why: resetUpdaterMocks() uninstalls fake timers, which discards every timer the previous test
+    // armed; re-faking here keeps this test's timers discardable too. On real timers a stale
+    // `vi.resetModules()`-orphaned updater instance survived to re-arm its 24h check inside a later
+    // fake-timer test, adding a phantom checkForUpdates at fake offset 24h.
     resetUpdaterMocks()
     vi.useFakeTimers()
   })
