@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -36,12 +36,11 @@ describe('TerminalAdvancedSection scrollback rows', () => {
     act(() => {
       root.render(
         <TerminalAdvancedSection
-          settings={
-            {
-              terminalScrollbackRows: 5000,
-              terminalScopeHistoryByWorktree: true
-            } as GlobalSettings
-          }
+          settings={{
+            ...getDefaultSettings('/tmp'),
+            terminalScrollbackRows: 5000,
+            terminalScopeHistoryByWorktree: true
+          }}
           updateSettings={updateSettings}
           scrollbackMode="custom"
           setScrollbackMode={vi.fn()}

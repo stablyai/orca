@@ -3,7 +3,6 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { TerminalShellHistorySetting } from './TerminalShellHistorySetting'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -39,7 +38,7 @@ describe('TerminalShellHistorySetting', () => {
     act(() => {
       root.render(
         <TerminalShellHistorySetting
-          settings={{ terminalScopeHistoryByWorktree } as GlobalSettings}
+          settings={{ terminalScopeHistoryByWorktree }}
           updateSettings={updateSettings}
         />
       )

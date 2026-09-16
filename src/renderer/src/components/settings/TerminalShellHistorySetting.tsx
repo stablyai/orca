@@ -5,7 +5,7 @@ import { SettingsSwitchRow } from './SettingsFormControls'
 import { getTerminalShellHistorySearchEntry } from './terminal-shell-history-search'
 
 type TerminalShellHistorySettingProps = {
-  settings: GlobalSettings
+  settings: Pick<GlobalSettings, 'terminalScopeHistoryByWorktree'>
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
