@@ -189,7 +189,8 @@ const gitHubForgeProvider = {
       {
         ...executionArgs[0],
         ...(fallbackReviewNumber !== null ? { acceptMergedFallbackPR: true } : {}),
-        currentHeadOid: input.githubCurrentHeadOid ?? null
+        currentHeadOid: input.githubCurrentHeadOid ?? null,
+        includeUnresolvedReviewCommentCount: true
       }
     )
     return unwrapGitHubPRForBranchOutcome(outcome)
@@ -197,17 +198,14 @@ const gitHubForgeProvider = {
   async getReviewByNumber(input) {
     await assertGitHubReviewRateLimitBudget(input)
     const executionArgs = hostedReviewExecutionArgs(input)
-    const outcome =
-      executionArgs.length > 0
-        ? await getPRForBranchOutcome(
-            input.repoPath,
-            '',
-            input.number,
-            forgeConnectionId(input),
-            null,
-            ...executionArgs
-          )
-        : await getPRForBranchOutcome(input.repoPath, '', input.number, forgeConnectionId(input))
+    const outcome = await getPRForBranchOutcome(
+      input.repoPath,
+      '',
+      input.number,
+      forgeConnectionId(input),
+      null,
+      { ...executionArgs[0], includeUnresolvedReviewCommentCount: true }
+    )
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   createReview: createGitHubPullRequest

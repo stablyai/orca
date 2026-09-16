@@ -72,6 +72,8 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
   // Why: compare merged implicit PRs against the worktree HEAD, not main repo HEAD, without a worktree-scoped git call.
   currentHeadOid?: string | null
+  // Why: one extra GraphQL call per open PR; only the sidebar's hosted-review path opts in.
+  includeUnresolvedReviewCommentCount?: boolean
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

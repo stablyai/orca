@@ -35,6 +35,8 @@ export type WorktreeCardMetaBadgesProps = {
   linearIssue: WorktreeCardLinearIssueDisplay | null
   jiraIssue?: WorktreeCardJiraIssueDisplay | null
   review: WorktreeCardPrDisplay | null
+  /** Passed separately from `review` because the new card style moves the glyph to the status lane. */
+  unresolvedReviewCommentCount?: number
   comment: string | null
   automationProvenance?: AutomationWorkspaceProvenance | null
   cliProvenance?: CliWorkspaceProvenance | null
