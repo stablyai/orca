@@ -168,7 +168,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  snapshot                  Accessibility snapshot with element refs (e.g. @e1, @e2)',
   '  goto                      Navigate the active tab to --url',
   '  click                     Click element by --element ref',
-  '  fill                      Clear and fill input by --element ref with --value',
+  '  fill                      Clear and fill input by --element ref with --value or --secret-ref',
   '  type                      Type --input text at the current focus (no element needed)',
   '  select                    Select dropdown option by --element ref and --value',
   '  hover                     Hover element by --element ref',

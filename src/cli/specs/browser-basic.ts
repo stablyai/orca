@@ -29,8 +29,9 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['fill'],
     summary: 'Clear and fill a browser input by ref',
-    usage: 'orca fill --element <ref> --value <text> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'worktree']
+    usage:
+      'orca fill --element <ref> (--value <text> | --secret-ref <op://…|bw://…>) [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'secret-ref', 'worktree']
   },
   {
     path: ['type'],

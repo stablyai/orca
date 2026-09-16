@@ -94,6 +94,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   element: '--element <ref>        Element ref from snapshot (e.g. e3)',
   url: '--url <url>            URL to navigate to',
   value: '--value <text>         Value to fill or select',
+  'secret-ref':
+    '--secret-ref <ref>     Password-manager ref to fill from: op://<vault>/<item>/<field> or bw://<item>[/<field>]',
   input: '--input <text>         Text to type at current focus',
   expression: '--expression <js>     JavaScript expression to evaluate',
   amount: '--amount <pixels>      Scroll distance in pixels',

@@ -21,6 +21,8 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { getBrowserCommandTarget } from '../selectors'
+import { resolveSecretRef } from '../password-manager-secret-ref'
+import { RuntimeClientError } from '../runtime/types'
 
 const checkHandler =
   (checked: boolean): CommandHandler =>
@@ -50,14 +52,24 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   fill: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlag(flags, 'value')
+    const secretRef = getOptionalStringFlag(flags, 'secret-ref')
+    if (secretRef !== undefined && flags.has('value')) {
+      throw new RuntimeClientError('invalid_argument', 'Use either --value or --secret-ref')
+    }
+    const value =
+      secretRef === undefined
+        ? getRequiredStringFlag(flags, 'value')
+        : await resolveSecretRef(secretRef)
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserFillResult>('browser.fill', {
       element,
       value,
       ...target
     })
-    printResult(result, json, (v) => `Filled ${v.filled}`)
+    // Never echoes the value: the ref is safe to print, the secret is not.
+    printResult(result, json, (v) =>
+      secretRef === undefined ? `Filled ${v.filled}` : `Filled ${v.filled} from ${secretRef}`
+    )
   },
   type: async ({ flags, client, cwd, json }) => {
     const input = getRequiredStringFlag(flags, 'input')
