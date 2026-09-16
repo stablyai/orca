@@ -52,6 +52,15 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
   }
 
   switch (method) {
+    case 'permissionsStatus': {
+      if ('permissionsStatus' in provider) {
+        return await provider.permissionsStatus()
+      }
+      throw new RuntimeClientError(
+        'unsupported_capability',
+        'This computer provider does not support permission status checks'
+      )
+    }
     case 'capabilities': {
       return await provider.capabilities()
     }

@@ -2,6 +2,11 @@ export type ComputerUsePermissionId = 'accessibility' | 'screenshots'
 
 export type ComputerUsePermissionStatus = 'granted' | 'not-granted' | 'unsupported'
 
+export type ComputerUsePermissionStatusSnapshot = Record<
+  ComputerUsePermissionId,
+  ComputerUsePermissionStatus
+>
+
 export type ComputerUsePermissionState = {
   id: ComputerUsePermissionId
   status: ComputerUsePermissionStatus

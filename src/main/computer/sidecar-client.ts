@@ -1,3 +1,4 @@
+import type { ComputerUsePermissionStatusSnapshot } from '../../shared/computer-use-permissions-types'
 import { fork, type ChildProcess } from 'node:child_process'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
@@ -14,6 +15,7 @@ import { validateComputerSidecarPasteText } from './computer-sidecar-paste-valid
 import { RuntimeClientError } from './runtime-client-error'
 
 type ComputerSidecarMethod =
+  | 'permissionsStatus'
   | 'capabilities'
   | 'listApps'
   | 'listWindows'
@@ -51,6 +53,13 @@ let sidecar: ComputerSidecarProcess | null = null
 // stale children keep a no-op listener that does not retain the sidecar owner.
 function ignoreStaleChildError(): void {}
 
+export async function callComputerSidecarPermissionStatus(): Promise<ComputerUsePermissionStatusSnapshot> {
+  return (await getComputerSidecar().call(
+    'permissionsStatus',
+    {}
+  )) as ComputerUsePermissionStatusSnapshot
+}
+
 export async function callComputerSidecarListApps(): Promise<ComputerListAppsResult> {
   return (await getComputerSidecar().call('listApps', {})) as ComputerListAppsResult
 }
@@ -74,7 +83,7 @@ export async function callComputerSidecarSnapshot(
 export async function callComputerSidecarAction(
   method: Exclude<
     ComputerSidecarMethod,
-    'capabilities' | 'listApps' | 'listWindows' | 'getAppState'
+    'permissionsStatus' | 'capabilities' | 'listApps' | 'listWindows' | 'getAppState'
   >,
   params: unknown
 ): Promise<ComputerActionResult> {

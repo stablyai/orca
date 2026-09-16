@@ -211,6 +211,12 @@ final class Provider {
 
     func handle(method: String, params: [String: JSONValue]) throws -> Any {
         switch method {
+        case "permissionsStatus":
+            let status = permissionStatusSnapshotSettled()
+            return [
+                "accessibility": status.accessibilityGranted ? "granted" : "not-granted",
+                "screenshots": status.screenshotsGranted ? "granted" : "not-granted",
+            ]
         case "handshake":
             return providerHandshake()
         case "listApps":
@@ -495,6 +501,7 @@ final class Provider {
                     "moveResize": false,
                 ],
                 "observation": [
+                    "permissionStatus": true,
                     "screenshot": true,
                     "annotatedScreenshot": false,
                     "elementFrames": true,
@@ -606,7 +613,7 @@ final class Provider {
             // should open macOS privacy prompts/settings; runtime calls stay quiet.
             throw ProviderError.coded(
                 "permission_denied",
-                "Accessibility permission is required for Orca Computer Use. Run `orca computer permissions` or open Settings > Computer Use, grant Accessibility to Orca Computer Use, then retry."
+                "Accessibility permission is denied for the computer-use execution process. Run `orca computer permissions`. If Orca Computer Use is already allowed, check Accessibility for the app that runs computer use (usually Orca), then retry."
             )
         }
         let appElement = AXUIElementCreateApplication(app.pid)

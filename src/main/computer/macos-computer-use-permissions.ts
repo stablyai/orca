@@ -171,5 +171,5 @@ function nextPermissionStep(
   if (!missing) {
     return null
   }
-  return `Grant ${missing.id === 'accessibility' ? 'Accessibility' : 'Screen Recording'} to Orca Computer Use, then retry get-app-state.`
+  return `Grant ${missing.id === 'accessibility' ? 'Accessibility' : 'Screen Recording'} to Orca Computer Use. If it is already allowed, check the app that runs computer use (usually Orca), then retry get-app-state.`
 }
