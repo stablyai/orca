@@ -83,7 +83,11 @@ import type {
   RemoteForegroundEvidence
 } from '../shared/foreground-process-evidence'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
-import { pruneRetiredPtyIncarnations } from '../shared/retired-pty-incarnations'
+import {
+  pruneRetiredPtyIncarnations,
+  resolveRetiredPtyIncarnationCode
+} from '../shared/retired-pty-incarnations'
+import { isProvenProcessExit } from '../shared/terminal-exit-cause'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -2401,7 +2405,7 @@ export class PtyHandler {
     this.agentSessionOwners.release(managed.id)
     this.retiredIncarnations.set(managed.id, {
       id: managed.id,
-      code: 0,
+      code: resolveRetiredPtyIncarnationCode(evidence),
       incarnationId: managed.incarnationId,
       expiresAt: Date.now() + 5_000
     })
@@ -2630,18 +2634,21 @@ export class PtyHandler {
         typeof params.expectedIncarnationId === 'string' &&
         params.expectedIncarnationId === tombstone.incarnationId
       ) {
+        const observation = {
+          authorityGeneration: this.ptyIdMintEpoch,
+          observationEpoch: ++this.foregroundEvidenceEpoch,
+          capturedAgeMs: 0,
+          ptyId: id,
+          ptyIncarnationId: tombstone.incarnationId
+        }
+        // A tombstone's code may be UNVERIFIED_PROCESS_EXIT_CODE (our own bookkeeping tore the
+        // record down, not proof of death) — only a proven code earns 'exited'.
         return {
           foregroundProcess: null,
           hasChildProcesses: false,
-          foregroundProcessEvidence: {
-            authorityGeneration: this.ptyIdMintEpoch,
-            observationEpoch: ++this.foregroundEvidenceEpoch,
-            capturedAgeMs: 0,
-            ptyId: id,
-            ptyIncarnationId: tombstone.incarnationId,
-            verdict: 'exited',
-            reason: `pty_exit_${tombstone.code}`
-          }
+          foregroundProcessEvidence: isProvenProcessExit(tombstone.code)
+            ? { ...observation, verdict: 'exited', reason: `pty_exit_${tombstone.code}` }
+            : { ...observation, verdict: 'unverifiable', reason: 'pty_exit_unverified' }
         }
       }
       throw new Error('terminal_gone')
