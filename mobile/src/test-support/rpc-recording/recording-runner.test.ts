@@ -579,7 +579,6 @@ describe('recording boundaries', () => {
     // value alone, so the compare has to ask whether a listener crashed at all.
     const handleResponse = RpcClientStreamRegistry.prototype.handleResponse
     RpcClientStreamRegistry.prototype.handleResponse = () => {
-      // oxlint-disable-next-line no-throw-literal -- SAFETY: the thrown value is the case under test.
       throw undefined
     }
     try {
