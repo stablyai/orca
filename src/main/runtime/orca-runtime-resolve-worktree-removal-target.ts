@@ -5,6 +5,7 @@ import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './runtime-worktree-removal-target'
 import type { RuntimeStore } from './runtime-store-contract'
 import { splitWorktreeId } from '../../shared/worktree/id'
+import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../worktree-removal-repo-owner'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
@@ -13,9 +14,11 @@ import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/crea
 import type { RuntimeTerminalRename } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
+import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import {
@@ -52,15 +55,36 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       ((persistedHostId && persistedHostId !== hostId) ||
         (repoId && hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId)))
     )
+    const acceptedRendererSnapshot = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
+    const storedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (hostId) {
       store.removeWorktreeMeta(worktreeId, hostId)
     } else {
       store.removeWorktreeMeta(worktreeId)
     }
     if (!preservesSameIdOwner) {
+      // A paired PTY can outlive the delete acknowledgement; it must not be
+      // rescued into a newly-created occupant of the same path-derived ID.
+      for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
+        const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
+        if (ptyWorktreeId && runtimeWorktreeIdsEqual(ptyWorktreeId, worktreeId)) {
+          this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
+        }
+      }
+      const removedPublicationEpoch =
+        acceptedRendererSnapshot?.publicationEpoch ??
+        storedSnapshot?.publicationEpoch ??
+        this.rendererGeneration ??
+        undefined
+      this.removedMobileSessionWorktreeIds.set(
+        worktreeId,
+        removedPublicationEpoch ? { removedPublicationEpoch } : {}
+      )
       this.mobileSessionTabsByWorktree.delete(worktreeId)
       this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
+      this.cancelScheduledMobileSessionTabsChanged(worktreeId)
+      this.notifyMobileSessionTabsRemoved(worktreeId)
       advertisedUrlWatcher.forgetWorktree(worktreeId)
       deleteWorktreeHistoryDir(worktreeId)
       this.closeHeadlessBrowserPagesForWorktree(worktreeId)
@@ -113,7 +137,13 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
           return { handle, tabId: leaf.tabId, title }
         }
       }
-      return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, title }
+      const tabId = pty.pty.tabId ?? pty.record.tabId
+      // A notifier can exist before its pane graph; retain the rename on the known tab.
+      if (this.notifier?.renameTerminal && tabId) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
+        this.notifier.renameTerminal(tabId, title)
+      }
+      return { handle, tabId, title }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -125,6 +155,23 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     workspace: TerminalWorkspaceLaunchScope,
     opts: TerminalCreateOptions
   ): Promise<TerminalCreateOptions> {
+    // Before any early return: every create lane funnels through here, and a host that cannot
+    // apply the requested shell must refuse rather than spawn its default one.
+    const shellRefusal = terminalShellOverrideRefusal({
+      shellOverride: opts.shellOverride,
+      connectionId: workspace.connectionId,
+      platform: process.platform,
+      projectRuntime:
+        opts.shellOverride && this.store
+          ? resolveLocalProjectRuntimeForWorktreeId(this.store, workspace.id)
+          : undefined,
+      // Same resolution as the spawn lanes below, so the refusal judges the cwd the PTY gets.
+      cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+      workspacePath: workspace.path
+    })
+    if (shellRefusal) {
+      throw shellRefusal
+    }
     // Why: raw shell commands like `codex exec` must remain user-authored shell.
     // Only unmanaged, repo-backed, bare agent launches get Settings defaults.
     const callerSuppliedLaunch =
@@ -153,11 +200,14 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
 
     const settings = store.getSettings()
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
+    // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
+    // shape must match the PTY route this scope already resolved.
+    const isRemote = Boolean(workspace.connectionId)
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
+      // A requested shell is the one this PTY will actually be, so it owns the quoting family.
+      terminalWindowsShell: opts.shellOverride ?? settings.terminalWindowsShell
     })
     if (opts.startupAgent && !isTuiAgentEnabled(opts.startupAgent, settings.disabledTuiAgents)) {
       throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)

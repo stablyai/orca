@@ -277,6 +277,31 @@ Run summary: monitor automation completed successfully.
     expect(fakePrepareSqls.some((sql) => sql.includes('FROM messages'))).toBe(false)
   })
 
+  it('skips date sorting for counts while keeping paginated runs newest first', async () => {
+    const home = await createHermesHome()
+    await writeFile(join(home, 'state.db'), '')
+    fakeDbRows.sessions = [
+      { id: 'cron_job-1_older', started_at: 1000 },
+      { id: 'cron_job-1_newer', started_at: 2000 }
+    ]
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const parse = vi.spyOn(Date, 'parse')
+    try {
+      await expect(
+        readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 0 })
+      ).resolves.toEqual({
+        total: 2,
+        runs: []
+      })
+      expect(parse).not.toHaveBeenCalled()
+    } finally {
+      parse.mockRestore()
+    }
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 1 })
+    expect(page.total).toBe(2)
+    expect(page.runs).toMatchObject([{ id: 'cron_job-1_newer' }])
+  })
+
   it('caches count-only reads until the cache is cleared', async () => {
     const home = await createHermesHome()
     const outputDir = join(home, 'cron', 'output', 'job-1')

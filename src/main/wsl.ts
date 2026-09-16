@@ -7,6 +7,7 @@ import {
   _setWslAvailabilityCacheForTests,
   dropStaleWslAvailabilityFailure
 } from './wsl-availability'
+import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
@@ -76,7 +77,8 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
     const stdout = execFileSync('wsl.exe', getWslDirectoryProbeArgs(info), {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000,
-      encoding: 'utf8'
+      encoding: 'utf8',
+      cwd: resolveWslInteropSpawnCwd()
     })
     return parseWslDirectoryProbeOutput(stdout)
   } catch {
@@ -93,7 +95,8 @@ export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | n
     return Promise.resolve(null)
   }
   return new Promise((resolve) => {
-    execFile('wsl.exe', getWslDirectoryProbeArgs(info), { timeout: 5000 }, (_error, stdout) => {
+    const probeOpts = { timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
+    execFile('wsl.exe', getWslDirectoryProbeArgs(info), probeOpts, (_error, stdout) => {
       // Why: wsl.exe uses numeric exits for both guest results and host failures; only the guest marker is authoritative.
       resolve(parseWslDirectoryProbeOutput(stdout))
     })
@@ -181,7 +184,8 @@ export function listWslDistros(): string[] {
     const output = execFileSync('wsl.exe', ['--list', '--quiet'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000
+      timeout: 5000,
+      cwd: resolveWslInteropSpawnCwd()
     })
     return cacheWslDistroList(parseWslDistros(output), probeSequence)
   } catch {
@@ -283,7 +287,8 @@ export function getWslHome(distro: string): string | null {
     const home = execFileSync('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000
+      timeout: 5000,
+      cwd: resolveWslInteropSpawnCwd()
     }).trim()
 
     if (!home || !home.startsWith('/')) {
@@ -382,7 +387,13 @@ function execFileUtf8(command: string, args: string[], env?: NodeJS.ProcessEnv):
     execFile(
       command,
       args,
-      { encoding: 'utf-8', env, timeout: 5000, windowsHide: true },
+      {
+        encoding: 'utf-8',
+        env,
+        timeout: 5000,
+        windowsHide: true,
+        cwd: resolveWslInteropSpawnCwd()
+      },
       (error, stdout) => {
         if (error) {
           reject(error)

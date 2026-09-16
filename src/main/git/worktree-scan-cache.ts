@@ -1,16 +1,18 @@
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
+  annotateSparseCheckoutStatus,
   listWorktreeGraph as listWorktreeGraphUnshared,
   listWorktreesStrict as listWorktreesStrictUnshared,
-  listWorktreesUnshared
+  listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared
 } from './worktree-listing'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
+import { resolveGitAdmissionTier } from './command-runner/git-operation-executor'
 
 // Why: share concurrent `git worktree list` scans, which are expensive on Windows.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-type WorktreeScanKind = 'graph' | 'lenient' | 'strict'
+type WorktreeScanKind = 'graph' | 'lenient' | 'strict' | 'strict-true-empty'
 
 // Why: mutation generations prevent listings from joining stale scans.
 const worktreeScanGenerations = new Map<string, number>()
@@ -75,7 +77,8 @@ function shareWorktreeScan(
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   // Why: callers with different deadlines cannot safely share which timeout wins the scan.
   // Why `kind`: a strict joiner must never receive a softened `[]` from a lenient scan.
-  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}`
+  // Why the tier: an interactive listing joining a queued status scan inherits its wait.
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}\0${resolveGitAdmissionTier(options.admissionTier)}`
   const inFlight = inFlightWorktreeScans.get(key)
   if (inFlight) {
     return inFlight
@@ -91,6 +94,22 @@ function shareWorktreeScan(
 }
 
 /**
+ * Sparse annotation layered over the shared graph scan rather than its own `git worktree list`.
+ *
+ * Both paths soften a Git failure to `[]`, so they can share one listing; only this one pays the
+ * per-worktree sparse probe. That lets a caller which reads just `worktree.path` skip the probes
+ * without costing a second subprocess when it overlaps a badge reader — the two ran Git twice
+ * before. Strict stays on its own scan because it must be able to reject.
+ */
+async function runAnnotatedWorktreeScan(
+  repoPath: string,
+  options: GitWorktreeExecOptions
+): Promise<GitWorktreeInfo[]> {
+  const worktrees = await listWorktreeGraph(repoPath, options)
+  return annotateSparseCheckoutStatus(repoPath, worktrees, options)
+}
+
+/**
  * List all worktrees for a git repo at the given path. Concurrent calls for
  * the same repo share one scan (unless the caller passes an AbortSignal,
  * which must only cancel its own scan). Git failures soften to `[]`.
@@ -99,7 +118,7 @@ export function listWorktrees(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  return shareWorktreeScan(repoPath, options, 'lenient', listWorktreesUnshared)
+  return shareWorktreeScan(repoPath, options, 'lenient', runAnnotatedWorktreeScan)
 }
 
 /**
@@ -122,4 +141,21 @@ export function listWorktreesSharedStrict(
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   return shareWorktreeScan(repoPath, options, 'strict', listWorktreesStrictUnshared)
+}
+
+/**
+ * The detected scan's discipline: reject a Git/host failure so it cannot publish as an
+ * authoritative empty listing, but still answer `[]` for a repo that is gone or not a repo.
+ * Its own kind because neither a strict nor a lenient joiner may inherit that middle contract.
+ */
+export function listWorktreesSharedStrictAllowingTrueEmpty(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return shareWorktreeScan(
+    repoPath,
+    options,
+    'strict-true-empty',
+    listWorktreesStrictAllowingTrueEmptyUnshared
+  )
 }

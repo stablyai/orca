@@ -12,7 +12,7 @@ import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import {
   resolveModelDiscoveryLocalPath,
   getLocalAgentRuntimeTarget
-} from './filesystem-worktree-helpers'
+} from './filesystem-source-control-ai-targets'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 

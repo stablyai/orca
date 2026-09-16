@@ -1,4 +1,10 @@
-import { paneHasStateClaims } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  admitLegacyAgentStatus,
+  deleteLegacyAgentStatus,
+  paneHasStateClaims
+} from '../../../shared/agent-hook-listener/listener-state'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 
@@ -21,18 +27,81 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   }
 
   /** Drop only the status row (user dismissal); do NOT wipe prompt/tool caches since the pane's agent may still be alive. Use clearPaneState for PTY-teardown. */
-  dropStatusEntry(paneKey: string): void {
+  dropStatusEntry(
+    paneKey: string,
+    /** Defaults to true: a dismissed pane can still be resumed in place. A structured session has
+     *  no pane to resume into and its record store owns resume identity, so it passes false. */
+    options?: { preserveResumeIdentity?: boolean }
+  ): void {
     const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
     if (!deleted) {
       return
     }
-    const retained = this.toRetainedProviderSessionRow(deleted)
+    const retained =
+      options?.preserveResumeIdentity === false ? null : this.toRetainedProviderSessionRow(deleted)
     if (retained) {
-      this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
+      admitLegacyAgentStatus(
+        this.state,
+        'main-status-cleanup',
+        retained,
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
     }
+    this.commitStatusRowMutation(deleted, retained)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitStatusDropped(deleted.paneKey)
+  }
+
+  /** Evict a UI-cleared status only if no newer status has replaced it. */
+  dropPersistedStatusEntry(identity: AgentStatusCacheIdentity): boolean {
+    return this.dropPersistedStatusEntries([identity]).length > 0
+  }
+
+  /** Batch form: one persist and one listener notification for the whole set. Returns the
+   *  pane keys that were actually evicted. */
+  dropPersistedStatusEntries(identities: readonly AgentStatusCacheIdentity[]): string[] {
+    const evicted: string[] = []
+    for (const identity of identities) {
+      const resolvedPaneKey = this.resolvePaneKeyAlias(identity.paneKey)
+      const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      // Why: stateStartedAt pins the turn; the renderer's updatedAt is stamped at or after this
+      // receivedAt (runtime-sync and recovery paths use Date.now()/capturedAt), so a strictly
+      // newer cached event is the only replacement worth protecting.
+      if (
+        !existing ||
+        existing.stateStartedAt !== identity.stateStartedAt ||
+        existing.receivedAt > identity.receivedAt
+      ) {
+        continue
+      }
+      const deleted = this.deleteStatusEntry(resolvedPaneKey, { preserveAuthority: true })
+      if (!deleted) {
+        continue
+      }
+      const retained = this.toRetainedProviderSessionRow(deleted)
+      if (retained) {
+        admitLegacyAgentStatus(
+          this.state,
+          'main-status-cleanup',
+          retained,
+          AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+        )
+      }
+      this.commitStatusRowMutation(deleted, retained)
+      evicted.push(deleted.paneKey)
+    }
+    if (evicted.length === 0) {
+      return evicted
+    }
+    this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
+    for (const paneKey of evicted) {
+      this.emitStatusDropped(paneKey)
+    }
+    return evicted
   }
 
   /** Retire panes whose owning process is certifiably dead.
@@ -67,12 +136,21 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
               | undefined
           )
         : null
-      this.clearPaneState(resolvedPaneKey)
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
       if (retained) {
-        this.state.lastStatusByPaneKey.set(resolvedPaneKey, retained)
+        admitLegacyAgentStatus(
+          this.state,
+          'main-status-cleanup',
+          retained,
+          AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+        )
         this.scheduleStatusPersist()
         this.notifyStatusChangeListeners()
       }
+      this.commitStatusRowMutation(previous, retained)
       cleared += 1
     }
     return cleared
@@ -107,6 +185,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
       if (deleted) {
         statusChanged = true
+        this.commitStatusRowMutation(deleted, undefined)
         if (deleted.payload.agentType === 'codex') {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -149,7 +228,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     if (!existing) {
       return null
     }
-    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    deleteLegacyAgentStatus(this.state, resolvedPaneKey)
     this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)

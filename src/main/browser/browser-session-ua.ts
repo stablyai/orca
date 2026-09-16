@@ -9,9 +9,9 @@ import {
 } from './browser-google-auth-ua'
 
 // Why: Electron's default UA includes "Electron/X.X.X" and the app name
-// (e.g. "orca/1.2.3"), which Cloudflare Turnstile and other bot detectors
-// flag as non-human traffic. Strip those tokens so the webview's UA and
-// sec-ch-ua Client Hints look like standard Chrome.
+// (e.g. "orca/1.2.3"), an impossible identity for sessions imported from Chrome.
+// This focused revocation fix strips only those tokens; it does not attempt full Chrome
+// impersonation, and Chromium's client-hint identity remains browser-owned.
 export function cleanElectronUserAgent(ua: string): string {
   return (
     ua
@@ -22,25 +22,15 @@ export function cleanElectronUserAgent(ua: string): string {
   )
 }
 
-// Why: Electron emits sec-ch-ua brands like "Not A(Brand" without a
-// "Google Chrome" entry, which disagrees with the Chrome-shaped UA the session
-// presents. Rewrite the hint headers to the brand set Chrome ships for the same
-// engine version so the two surfaces tell one story. Also owns the Google
-// auth-host Firefox switch, which must install even for a non-Chrome-shaped UA.
-export function setupClientHintsOverride(
-  sess: Session,
-  ua: string,
-  options: { googleAuthOverride?: boolean } = {}
-): void {
-  // Why: only Chrome-shaped base UAs carry sec-ch-ua hints to rewrite, but the
-  // Google-auth Firefox switch below must install regardless, so keep the hints
-  // optional rather than bailing out of the whole handler.
-  const chromeHints = buildChromeClientHints(ua)
+// Why: Chromium already publishes one internally consistent client-hint identity through both
+// request headers and navigator.userAgentData. This handler only owns the host-scoped Firefox
+// exception; synthesizing Chrome brands here would make those two browser-owned surfaces disagree.
+export function setupGoogleAuthUserAgentOverride(sess: Session): void {
   const firefoxUa = googleAuthUserAgent()
 
   sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders
-    if (options.googleAuthOverride !== false && isGoogleAuthUrl(details.url)) {
+    if (isGoogleAuthUrl(details.url)) {
       // Why: present a Firefox identity on Google's sign-in hosts so the user logs
       // in inside the app and Google issues self-refreshing bound cookies. Strip
       // sec-ch-ua* because real Firefox sends none.
@@ -49,7 +39,7 @@ export function setupClientHintsOverride(
       callback({ requestHeaders: headers })
       return
     }
-    if (options.googleAuthOverride !== false && currentUserAgent(headers) === firefoxUa) {
+    if (currentUserAgent(headers) === firefoxUa) {
       // Why: while the auth document is on screen the WebContents UA is Firefox,
       // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
       // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
@@ -61,40 +51,6 @@ export function setupClientHintsOverride(
       callback({ requestHeaders: headers })
       return
     }
-    if (chromeHints) {
-      for (const key of Object.keys(headers)) {
-        const lower = key.toLowerCase()
-        if (lower === 'sec-ch-ua') {
-          headers[key] = chromeHints.secChUa
-        } else if (lower === 'sec-ch-ua-full-version-list') {
-          headers[key] = chromeHints.secChUaFull
-        }
-      }
-    }
     callback({ requestHeaders: headers })
   })
-}
-
-function buildChromeClientHints(ua: string): { secChUa: string; secChUaFull: string } | null {
-  const chromeMatch = ua.match(/Chrome\/([\d.]+)/)
-  if (!chromeMatch) {
-    return null
-  }
-  const fullChromeVersion = chromeMatch[1]
-  const majorVersion = fullChromeVersion.split('.')[0]
-
-  let brand = 'Google Chrome'
-  let brandFullVersion = fullChromeVersion
-
-  const edgeMatch = ua.match(/Edg\/([\d.]+)/)
-  if (edgeMatch) {
-    brand = 'Microsoft Edge'
-    brandFullVersion = edgeMatch[1]
-  }
-  const brandMajor = brandFullVersion.split('.')[0]
-
-  return {
-    secChUa: `"${brand}";v="${brandMajor}", "Chromium";v="${majorVersion}", "Not/A)Brand";v="24"`,
-    secChUaFull: `"${brand}";v="${brandFullVersion}", "Chromium";v="${fullChromeVersion}", "Not/A)Brand";v="24.0.0.0"`
-  }
 }

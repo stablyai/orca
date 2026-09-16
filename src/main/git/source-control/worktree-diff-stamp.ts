@@ -81,7 +81,9 @@ export async function readWorktreeDiffStamp(
       // Only an empty worktree path lands here, and nothing about it is provably unchanged.
       return null
     }
-    const gitDir = await resolveGitDir(hostWorktreePath)
+    // Why still pass options: the host spelling above only encodes the distro when it lands on a
+    // UNC share, so a drvfs-spelled worktree needs it again to resolve a non-drvfs gitdir pointer.
+    const gitDir = await resolveGitDir(hostWorktreePath, options)
     const [head, index, gitmodules, workingTree] = await Promise.all([
       readHeadComponent(gitDir),
       // Over-invalidates on purpose: git run outside Orca (a terminal `git status`/`git add`)

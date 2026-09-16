@@ -1,4 +1,8 @@
 import { ipcRenderer } from 'electron'
+import {
+  RUNTIME_HOST_STATUS_CHANNEL,
+  type RuntimeHostStatusSnapshot
+} from '../../shared/runtime-host-status'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
@@ -9,8 +13,19 @@ import {
   subscribeRuntimeEnvironmentFromPreload,
   type RuntimeEnvironmentSubscriptionHandle
 } from '../runtime-environment-subscriptions'
+import type { PreloadApi } from '../api-types'
 
 export const runtimeEnvironmentsApi = {
+  getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
+    ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
+  onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      snapshot: RuntimeHostStatusSnapshot
+    ): void => callback(snapshot)
+    ipcRenderer.on(RUNTIME_HOST_STATUS_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(RUNTIME_HOST_STATUS_CHANNEL, listener)
+  },
   list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
     ipcRenderer.invoke('runtimeEnvironments:list'),
   addFromPairingCode: (args: {
@@ -73,6 +88,7 @@ export const runtimeEnvironmentsApi = {
     params?: unknown
     timeoutMs?: number
     expectedEnvironmentPairingRevision?: number
+    expectedEnvironmentRuntimeId?: string
   }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   subscribe: async (
     args: {
@@ -81,6 +97,7 @@ export const runtimeEnvironmentsApi = {
       params?: unknown
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
+      expectedEnvironmentRuntimeId?: string
     },
     callbacks: {
       onResponse: (response: RuntimeRpcResponse<unknown>) => void
@@ -90,4 +107,4 @@ export const runtimeEnvironmentsApi = {
     }
   ): Promise<RuntimeEnvironmentSubscriptionHandle> =>
     subscribeRuntimeEnvironmentFromPreload(ipcRenderer, args, callbacks)
-}
+} satisfies PreloadApi['runtimeEnvironments']

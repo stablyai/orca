@@ -3,6 +3,7 @@ import type {
   RuntimeMobileSessionAgentTab
 } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
@@ -20,6 +21,7 @@ import type {
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
 export function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
@@ -59,22 +61,73 @@ export function buildMirroredAgentTabs(
   currentUnifiedTabs: readonly Tab[],
   now: number
 ): MirroredAgentTab[] {
-  return snapshot.tabs.filter(isAgentSessionTab).map((tab, index) => {
-    const localId = structuredAgentSessionTabId(tab.sessionId)
-    const existing = currentUnifiedTabs.find(
-      (candidate) => candidate.contentType === 'agent-session' && candidate.id === localId
+  const agentTabs = snapshot.tabs
+    .filter(isAgentSessionTab)
+    .filter(
+      (tab) =>
+        !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     )
+  const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
+  const assignedIds = new Set<string>()
+  const replacementTabs = new Map<string, Tab>()
+  const replacementIds = new Set<string>()
+  for (const tab of agentTabs) {
+    if (!tab.replacesSessionId) {
+      continue
+    }
+    const existing =
+      currentUnifiedTabs.find(
+        (candidate) =>
+          candidate.contentType === 'agent-session' && candidate.entityId === tab.sessionId
+      ) ??
+      currentUnifiedTabs.find(
+        (candidate) =>
+          !replacementIds.has(candidate.id) &&
+          (candidate.structuredSessionId === tab.replacesSessionId ||
+            (candidate.contentType === 'agent-session' &&
+              candidate.entityId === tab.replacesSessionId))
+      )
+    if (existing) {
+      replacementTabs.set(tab.sessionId, existing)
+      replacementIds.add(existing.id)
+    }
+  }
+  return agentTabs.map((tab, index) => {
+    const existing =
+      replacementTabs.get(tab.sessionId) ??
+      currentUnifiedTabs.find(
+        (candidate) =>
+          !replacementIds.has(candidate.id) &&
+          candidate.contentType === 'agent-session' &&
+          candidate.entityId === tab.sessionId
+      )
+    const baseId = structuredAgentSessionTabId(tab.sessionId)
+    let localId = existing?.id ?? baseId
+    if (!existing || assignedIds.has(localId)) {
+      let suffix = 0
+      while (occupiedIds.has(localId)) {
+        localId = `${baseId}:history-${++suffix}`
+      }
+    }
+    occupiedIds.add(localId)
+    assignedIds.add(localId)
     return {
       hostTabId: tab.id,
       unifiedTab: {
         id: localId,
         entityId: tab.sessionId,
-        groupId: hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
+        // Keep the local group while a provisional tab is promoted; host placement can lag the
+        // user's split choice and must not move the mounted pane during adoption.
+        groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
-        label: tab.title.trim() || 'Codex Chat',
-        customLabel: null,
+        // Why: `title` is wire data typed `string`; a host that violates that must
+        // degrade to the placeholder, not throw inside the snapshot patch.
+        label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),
+        // Why: a manual rename lives only on the client; re-nulling it here made
+        // every host snapshot silently discard the user's title.
+        customLabel: existing?.customLabel ?? null,
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,

@@ -71,3 +71,11 @@ export function validateGitRelativeFilePath(worktreePath: string, filePath: stri
 
   return normalizedRelativePath
 }
+
+export function validateFullGitObjectId(value: string, label: string): string {
+  const pattern = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
+  if (!pattern.test(value)) {
+    throw new Error(`${label} must be a full git object id`)
+  }
+  return value
+}

@@ -4,45 +4,9 @@ import { app } from 'electron'
 import { resolveAdvertisedPairingEndpoint } from '../runtime/pairing-endpoint'
 import { notifyServeSupervisorReady } from '../serve-update-handoff'
 import { mainProcessState as state } from './main-process-state'
+import { getServeOptions, type ServeOptions } from './serve-options'
 
-export type ServeOptions = {
-  json: boolean
-  wsPort?: number
-  pairingAddress: string | null
-  noPairing: boolean
-  mobilePairing: boolean
-  recipeJson: boolean
-  projectRoot: string | null
-}
-
-export function getServeOptions(argv = process.argv): ServeOptions {
-  const valueAfter = (flag: string): string | null => {
-    const index = argv.indexOf(flag)
-    if (index === -1) {
-      return null
-    }
-    const value = argv[index + 1]
-    return value && !value.startsWith('--') ? value : null
-  }
-  const rawPort = valueAfter('--serve-port')
-  let wsPort: number | undefined
-  if (rawPort) {
-    const parsedPort = Number(rawPort)
-    if (!Number.isInteger(parsedPort) || parsedPort < 0 || parsedPort > 65535) {
-      throw new Error(`Invalid --serve-port value: ${rawPort}`)
-    }
-    wsPort = parsedPort
-  }
-  return {
-    json: argv.includes('--serve-json'),
-    ...(wsPort !== undefined ? { wsPort } : {}),
-    pairingAddress: valueAfter('--serve-pairing-address'),
-    noPairing: argv.includes('--serve-no-pairing'),
-    mobilePairing: argv.includes('--serve-mobile-pairing'),
-    recipeJson: argv.includes('--serve-recipe-json'),
-    projectRoot: valueAfter('--serve-project-root')
-  }
-}
+export { getServeOptions, type ServeOptions }
 
 export function getBundledWebClientRoot(): string | undefined {
   const appPath = app.getAppPath()

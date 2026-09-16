@@ -15,7 +15,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
-import { isWebOnlyMirroredTerminalTab } from './mobile-session-tab-helpers'
+import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import {
   collectAmbiguousTerminalTabIds,
@@ -177,6 +177,7 @@ export async function syncRuntimeGraph(): Promise<void> {
           leafId,
           paneRuntimeId: parkedPaneId ?? index + 1,
           ptyId,
+          parked: true,
           paneTitle: (parkedPaneId === undefined ? null : parkedPaneTitles[parkedPaneId]) ?? null,
           title
         })

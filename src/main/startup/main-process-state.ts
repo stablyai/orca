@@ -13,6 +13,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
@@ -24,7 +25,6 @@ import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-i
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { AgentHookProviderSessionIdentity } from '../agent-hooks/server'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
@@ -36,6 +36,7 @@ import type { ServeOptions } from './main-process-serve'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { SkillShareDeepLinkState } from './skill-share-deep-link-state'
+import { OsOpenedMarkdownFileState } from './os-opened-markdown-files'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
@@ -64,17 +65,18 @@ export const mainProcessState = {
   runtimeRpc: null as OrcaRuntimeRpcServer | null,
   serveReadinessPublisher: new ServeReadinessPublisher(),
   desktopRelayService: null as DesktopRelayService | null,
+  desktopPushService: null as DesktopPushService | null,
   desktopRelayStatus: 'offline' as RelayBrokerStatus,
+  desktopRelayCellUrl: undefined as string | undefined,
   pendingUnpairedDeviceAuthFailure: false,
   // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
   headlessBrowserDisplayAvailable: false,
   starNag: null as StarNagService | null,
   agentAwakeService: null as AgentAwakeService | null,
+  uninstallRepoMaintenanceIdleGate: null as (() => Promise<void>) | null,
+  repoMaintenanceShutdown: Promise.resolve() as Promise<void>,
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
-  publishProviderSessionChanges: null as
-    | ((identities: AgentHookProviderSessionIdentity[]) => void)
-    | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
   watcherShutdownPromise: null as Promise<void> | null,
   watcherShutdownDone: false,
@@ -90,7 +92,20 @@ export const mainProcessState = {
   // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
+  // Why: a Finder/Explorer "Open With" can land before any window exists; the renderer pulls this buffer on mount.
+  osOpenedMarkdownFiles: new OsOpenedMarkdownFileState(),
+  // Why a latch and not just "a window exists": a window can be up while its renderer has not
+  // attached the ui:openMarkdownFiles listener yet, and a push into that gap is dropped by
+  // Electron with no error. Only the renderer's own pull proves the listener is live.
+  markdownFileOpenListenerReady: false,
   firstWindowStartupServicesReady: Promise.resolve(),
+  // Why published: the default-session proxy must be applied before the first app-owned fetcher,
+  // but window creation has no reason to queue behind it (the request guard already fences it).
+  initialProxyApplicationReady: Promise.resolve(),
+  // Why published: i18n/menu init no longer precedes the launch phase, so the one launch-phase
+  // path that reads a translated string (the runtime-RPC startup failure dialog) waits on this.
+  // Never rejects: the phase's own failure is surfaced by initializeMainProcessReady.
+  mainProcessI18nReady: Promise.resolve(),
   managedWslCliReconciliationReady: Promise.resolve(),
   managedWslCliStartupBarrierReady: Promise.resolve(),
   // Why: the serve barrier fails open, so this state tells headless clients a WSL PTY launch may still race an un-migrated registration ('settled' = off-Windows no-op).

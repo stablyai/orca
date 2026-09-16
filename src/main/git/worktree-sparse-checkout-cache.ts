@@ -1,3 +1,4 @@
+import type { GitRuntimeOptions } from './git-runtime-options'
 import { canonicalWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckout } from './worktree-sparse-state'
 
@@ -24,6 +25,15 @@ import { detectSparseCheckout } from './worktree-sparse-state'
 //  - App cold start: the map starts empty, so the first read is always a fresh detect.
 const SPARSE_CHECKOUT_CACHE_RECONCILE_INTERVAL_MS = 5 * 60_000
 
+// Part of the cache key, not just a probe argument. A distro-less read of a WSL-hosted repo
+// resolves the gitdir pointer against a fabricated Win32 path and reports "not sparse"; several
+// callers (filesystem-auth root rebuild, worktree ownership checks) list a repo with no options at
+// all and would otherwise publish that wrong answer onto the entry the distro-carrying listing
+// reads. Keying on it also pins each entry's revalidation to the options that produced it, so the
+// background probe can never re-derive a warm entry under weaker options and flip it. Every field
+// here must be in the key; widening this type means widening `cacheKey`.
+type SparseCheckoutProbeOptions = Pick<GitRuntimeOptions, 'wslDistro'>
+
 type SparseCheckoutCacheEntry = {
   isSparse: boolean
   cachedAt: number
@@ -39,8 +49,25 @@ export type SparseCheckoutChangeListener = (
 const sparseCheckoutStateCache = new Map<string, SparseCheckoutCacheEntry>()
 let changeListener: SparseCheckoutChangeListener | undefined
 
-function cacheKey(repoPath: string, worktreePath: string): string {
-  return `${canonicalWorktreePath(repoPath)}\0${canonicalWorktreePath(worktreePath)}`
+// Distro last so the repo- and worktree-scoped prefix deletes below still match every variant.
+function cacheKey(
+  repoPath: string,
+  worktreePath: string,
+  options: SparseCheckoutProbeOptions
+): string {
+  return `${worktreeKeyPrefix(repoPath, worktreePath)}${options.wslDistro?.trim().toLowerCase() ?? ''}`
+}
+
+function worktreeKeyPrefix(repoPath: string, worktreePath: string): string {
+  return `${canonicalWorktreePath(repoPath)}\0${canonicalWorktreePath(worktreePath)}\0`
+}
+
+function deleteKeysWithPrefix(prefix: string): void {
+  for (const key of sparseCheckoutStateCache.keys()) {
+    if (key.startsWith(prefix)) {
+      sparseCheckoutStateCache.delete(key)
+    }
+  }
 }
 
 /** Wired by the ipc/ layer to the shared worktrees-changed notification; last registration wins. */
@@ -53,12 +80,13 @@ export function onSparseCheckoutStateChanged(
 /** Cached wrapper around {@link detectSparseCheckout}; see module doc for invalidation coverage. */
 export async function detectSparseCheckoutCached(
   repoPath: string,
-  worktreePath: string
+  worktreePath: string,
+  options: SparseCheckoutProbeOptions = {}
 ): Promise<boolean> {
-  const key = cacheKey(repoPath, worktreePath)
+  const key = cacheKey(repoPath, worktreePath, options)
   const cached = sparseCheckoutStateCache.get(key)
   if (!cached) {
-    const isSparse = await detectSparseCheckout(worktreePath)
+    const isSparse = await detectSparseCheckout(worktreePath, options)
     sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
     return isSparse
   }
@@ -66,8 +94,10 @@ export async function detectSparseCheckoutCached(
     return cached.isSparse
   }
   // Stale-while-revalidate: serve the still-cached value now and correct it in the background,
-  // deduplicated so concurrent readers past the window don't each start their own probe.
-  cached.revalidating ??= revalidateInBackground(key, repoPath, worktreePath, cached)
+  // deduplicated so concurrent readers past the window don't each start their own probe. Whichever
+  // reader wins the dedupe re-probes with the entry's own distro, because that distro is what
+  // routed it to this key.
+  cached.revalidating ??= revalidateInBackground(key, repoPath, worktreePath, cached, options)
   return cached.isSparse
 }
 
@@ -75,10 +105,11 @@ async function revalidateInBackground(
   key: string,
   repoPath: string,
   worktreePath: string,
-  startingEntry: SparseCheckoutCacheEntry
+  startingEntry: SparseCheckoutCacheEntry,
+  options: SparseCheckoutProbeOptions
 ): Promise<void> {
   try {
-    const isSparse = await detectSparseCheckout(worktreePath)
+    const isSparse = await detectSparseCheckout(worktreePath, options)
     // Identity guard against a race with an explicit invalidate/clear -- or a remove+recreate at
     // the same path that repopulates the key with a fresh cold read -- while this was in flight.
     // A `has()`/presence check can't tell "still mine" from "someone else's fresh value" sharing
@@ -99,17 +130,12 @@ async function revalidateInBackground(
 
 /** Drop one worktree's cached state; call when Orca itself removes or moves a worktree path. */
 export function invalidateSparseCheckoutState(repoPath: string, worktreePath: string): void {
-  sparseCheckoutStateCache.delete(cacheKey(repoPath, worktreePath))
+  deleteKeysWithPrefix(worktreeKeyPrefix(repoPath, worktreePath))
 }
 
 /** Clear one repo's cached entries; wired to the shared worktree-change invalidator registry in ipc/. */
 export function clearSparseCheckoutStateCacheForRepo(repoPath: string): void {
-  const prefix = `${canonicalWorktreePath(repoPath)}\0`
-  for (const key of sparseCheckoutStateCache.keys()) {
-    if (key.startsWith(prefix)) {
-      sparseCheckoutStateCache.delete(key)
-    }
-  }
+  deleteKeysWithPrefix(`${canonicalWorktreePath(repoPath)}\0`)
 }
 
 /** Clear every cached entry; fallback for a change notification whose repo can't be resolved to a path. */

@@ -5,7 +5,7 @@ import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-se
 
 export async function runSettledAgentSessionMutation<TValue>(input: {
   store: AgentSessionRecordStore
-  callerKey: string
+  operationCallerKey: string
   envelope: AgentSessionMutationEnvelope
   plan: MutationPlan<TValue>
   context: AgentSessionTurnContext
@@ -14,16 +14,27 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
     outcome: Parameters<AgentSessionRecordStore['recordOperationOutcome']>[0]['outcome']
   ) =>
     input.store.recordOperationOutcome({
-      callerKey: input.callerKey,
+      callerKey: input.operationCallerKey,
       operationId: input.envelope.clientOperationId,
       outcome
     })
   try {
+    if (input.plan.markUnknownBeforeRun) {
+      await settle({ status: 'unknown' })
+    }
+    input.plan.beforeRun?.()
     const outcome = await input.plan.run(input.context)
     await settle(
       outcome.ok
-        ? { status: 'succeeded', sessionId: input.envelope.sessionId }
-        : { status: 'failed', code: outcome.refusal.code }
+        ? (input.plan.settledOutcome?.(outcome.value) ?? {
+            status: 'succeeded',
+            sessionId: input.envelope.sessionId
+          })
+        : {
+            status: 'failed',
+            code: outcome.refusal.code,
+            ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})
+          }
     )
     return outcome
   } catch (error) {

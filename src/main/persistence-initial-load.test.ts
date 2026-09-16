@@ -150,6 +150,8 @@ describe('Store', () => {
 
   it('does not restore a terminal tab after its durable close flush returns', async () => {
     const store = await createStore()
+    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
     const worktreeId = 'repo-1::/tmp/worktree-1'
     const tabId = 'terminal-1'
     const session: WorkspaceSessionState = {

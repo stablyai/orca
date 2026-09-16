@@ -50,7 +50,7 @@ describe('repos:getGitUsername', () => {
     mockWindow.webContents.send.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('uses explicit SSH username config instead of remote author identity', async () => {

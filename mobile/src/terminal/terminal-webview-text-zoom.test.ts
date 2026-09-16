@@ -11,8 +11,8 @@ const terminalHtmlModuleSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
 )
-const terminalHtmlFragmentSource = readFileSync(
-  new URL('./terminal-webview-html/fragment-01.ts', import.meta.url),
+const terminalHtmlDocumentShellSource = readFileSync(
+  new URL('./terminal-webview-html/document-shell.ts', import.meta.url),
   'utf8'
 )
 // Read behavior from the assembled document; the module source only contains
@@ -150,7 +150,7 @@ describe('TerminalWebView text zoom', () => {
   })
 
   it('loads Unicode 11 before replaying mobile terminal bytes', () => {
-    expect(terminalHtmlFragmentSource).toContain('XTERM_ENGINE_JS')
+    expect(terminalHtmlDocumentShellSource).toContain('XTERM_ENGINE_JS')
     expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
     const open = terminalHtmlSource.indexOf('term.open(surface)')
     const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")

@@ -5,8 +5,8 @@ import { getLineageRenderInfo } from './worktree-lineage-projection'
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-parent-content]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
 
-const LINEAGE_DROP_ZONE_RATIO = 0.4
-const LINEAGE_DROP_ZONE_MAX_HEIGHT_PX = 44
+const REORDER_GUTTER_RATIO = 0.2
+const REORDER_GUTTER_MAX_HEIGHT_PX = 8
 
 type VerticalRect = Pick<DOMRect, 'top' | 'bottom'>
 
@@ -19,9 +19,9 @@ export function isWorktreeLineageDropZoneHit(args: {
     return false
   }
 
-  const zoneHeight = Math.min(height * LINEAGE_DROP_ZONE_RATIO, LINEAGE_DROP_ZONE_MAX_HEIGHT_PX)
-  const zoneTop = args.rect.top + (height - zoneHeight) / 2
-  const zoneBottom = args.rect.bottom - (height - zoneHeight) / 2
+  const gutterHeight = Math.min(height * REORDER_GUTTER_RATIO, REORDER_GUTTER_MAX_HEIGHT_PX)
+  const zoneTop = args.rect.top + gutterHeight
+  const zoneBottom = args.rect.bottom - gutterHeight
   return args.pointerY >= zoneTop && args.pointerY <= zoneBottom
 }
 
@@ -30,26 +30,31 @@ export function getWorktreeLineageDropTargetId(args: {
   target: Element
   pointerY: number
 }): string | null {
-  const contentTarget = args.target.closest<HTMLElement>(WORKTREE_CARD_CONTENT_TARGET_SELECTOR)
-  if (!contentTarget || !args.container.contains(contentTarget)) {
+  const rowTarget = args.target.closest<HTMLElement>(WORKTREE_DRAG_ROW_SELECTOR)
+  if (!rowTarget || !args.container.contains(rowTarget)) {
     return null
   }
 
-  // Why: nesting should be deliberate; the top/bottom of a card stays available
-  // for reorder drops instead of treating the whole card as a parent target.
+  const contentTarget = rowTarget.querySelector<HTMLElement>(WORKTREE_CARD_CONTENT_TARGET_SELECTOR)
+  if (!contentTarget || contentTarget.closest(WORKTREE_DRAG_ROW_SELECTOR) !== rowTarget) {
+    return null
+  }
+
+  const rect = contentTarget.getBoundingClientRect()
+  // Legacy cards include descendants inside parent content; keep their rows out of its hit zone.
+  const firstChildRow = contentTarget.querySelector<HTMLElement>(WORKTREE_DRAG_ROW_SELECTOR)
+  const bottom = firstChildRow
+    ? Math.min(rect.bottom, firstChildRow.getBoundingClientRect().top)
+    : rect.bottom
   if (
     !isWorktreeLineageDropZoneHit({
       pointerY: args.pointerY,
-      rect: contentTarget.getBoundingClientRect()
+      rect: { top: rect.top, bottom }
     })
   ) {
     return null
   }
 
-  const rowTarget = contentTarget.closest<HTMLElement>(WORKTREE_DRAG_ROW_SELECTOR)
-  if (!rowTarget || !args.container.contains(rowTarget)) {
-    return null
-  }
   return rowTarget.getAttribute('data-worktree-drag-id')
 }
 

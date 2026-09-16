@@ -1,3 +1,4 @@
+import type { AgentSessionStoreState } from './agent-session-record-store-file'
 export function parseVisibleSessionIds(
   raw: unknown,
   schemaVersion: number,
@@ -18,4 +19,20 @@ export function parseVisibleSessionIds(
     }
   }
   return { ids, present: true, valid: true }
+}
+
+export function setVisibleSessionId(
+  state: AgentSessionStoreState,
+  sessionId: string,
+  visible: boolean
+): void {
+  if (visible) {
+    if (!state.records.has(sessionId)) {
+      throw new Error('agent_session_identity_required')
+    }
+    state.visibleSessionIds.add(sessionId)
+  } else {
+    state.visibleSessionIds.delete(sessionId)
+  }
+  state.visibleSessionIdsIndexPresent = true
 }

@@ -29,8 +29,7 @@ import {
 } from './history-manager'
 import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 
 export type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
@@ -97,19 +96,8 @@ export abstract class DaemonPtyRuntimeState {
   protected staleBundleReplacementPromise: Promise<void> | null = null
   protected writeRecoveryPromise: Promise<void> | null = null
   protected writeRecoveryAttempted = false
-  protected dataListeners: ((payload: {
-    id: string
-    data: string
-    sequenceChars?: number
-    transformed?: boolean
-    seq?: number
-  }) => void)[] = []
-  protected exitListeners: ((payload: {
-    id: string
-    code: number
-    incarnationId?: PtyIncarnationId
-    cause?: TerminalExitCause
-  }) => void)[] = []
+  protected dataListeners: ((payload: DaemonPtyRouterDataEvent) => void)[] = []
+  protected exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
   protected backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   protected writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
   protected removeEventListener: (() => void) | null = null

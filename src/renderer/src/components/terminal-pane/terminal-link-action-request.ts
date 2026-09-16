@@ -1,24 +1,17 @@
 import type { TerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { isTerminalLinkActionActivation } from './terminal-link-activation'
+import {
+  closeLinkActionRequest,
+  type LinkAction,
+  type LinkActionKind,
+  type LinkActionRequest
+} from '@/components/link-actions/link-action-request'
 
-export type TerminalLinkActionKind = 'url' | 'file' | 'workspace' | 'terminal' | 'task'
+export type TerminalLinkActionKind = LinkActionKind
 
-export type TerminalLinkAction = {
-  external?: boolean
-  label: string
-  run: () => void | Promise<void>
-}
+export type TerminalLinkAction = LinkAction
 
-export type TerminalLinkActionRequest = {
-  paneId: number
-  anchorX: number
-  anchorY: number
-  destination: string
-  kind: TerminalLinkActionKind
-  primary: TerminalLinkAction
-  alternate?: TerminalLinkAction
-  focusTerminal: () => void
-}
+export type TerminalLinkActionRequest = LinkActionRequest & { paneId: number }
 
 export type TerminalLinkActionRequester = (request: TerminalLinkActionRequest) => void
 
@@ -34,7 +27,7 @@ export function closeTerminalLinkActionRequest(
   current: TerminalLinkActionRequest | null,
   dismissed?: TerminalLinkActionRequest
 ): TerminalLinkActionRequest | null {
-  return dismissed && current !== dismissed ? current : null
+  return closeLinkActionRequest(current, dismissed)
 }
 
 type LinkActionDetails = Pick<
@@ -65,7 +58,7 @@ export function requestTerminalLinkAction(
     paneId: context.paneId,
     anchorX: event.clientX,
     anchorY: event.clientY,
-    focusTerminal: context.focusTerminal
+    restoreFocus: context.focusTerminal
   })
   return true
 }

@@ -27,6 +27,11 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
+      // Why: the session journal is the durable truth for a structured row and the host republishes
+      // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
+      if (enrichedPayload.structuredHost) {
+        continue
+      }
       const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
       const {
         claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
@@ -37,6 +42,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         observation: _observation,
         // Replay provenance is runtime-only and must not survive another restart.
         isReplay: _isReplay,
+        // A terminal handle belongs to the runtime that issued it; a hydrated one could only
+        // rejoin a row to somebody else's terminal.
+        terminalHandle: _terminalHandle,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

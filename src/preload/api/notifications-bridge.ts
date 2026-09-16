@@ -8,6 +8,7 @@ import type {
   NotificationSoundPathResult,
   NotificationSoundResult
 } from '../../shared/notification-settings-types'
+import type { PreloadApi } from '../api-types'
 
 // Why: cache one shared Audio + blob URL per sound path so notifications do not re-read large files.
 let cachedNotificationSound: {
@@ -36,6 +37,8 @@ function disposeCachedNotificationSound(): void {
 }
 
 export const notificationsApi = {
+  getDesktopAwayState: (): Promise<boolean | undefined> =>
+    ipcRenderer.invoke('notifications:getDesktopAwayState'),
   dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
     ipcRenderer.invoke('notifications:dispatch', args),
   dismiss: (ids: string[]): Promise<NotificationDismissResult> =>
@@ -117,4 +120,4 @@ export const notificationsApi = {
       return { played: false, reason: 'playback-failed' }
     }
   }
-}
+} satisfies PreloadApi['notifications']

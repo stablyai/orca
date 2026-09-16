@@ -704,7 +704,7 @@ describe('DaemonClient', () => {
 
       await expect(
         client.notifyWithSettlement('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })
-      ).resolves.toBe(false)
+      ).resolves.toEqual({ outcome: 'refused', reason: 'encode_failed' })
       expect(writeSpy).not.toHaveBeenCalled()
       expect(client.isConnected()).toBe(true)
     })
@@ -737,7 +737,11 @@ describe('DaemonClient', () => {
 
       await expect(
         client.notifyWithSettlement('write', { sessionId: 'session-1', data: 'hello' })
-      ).resolves.toBe(false)
+      ).resolves.toEqual({
+        outcome: 'unverifiable',
+        reason: 'transport_settlement_lost',
+        bytesHandedToTransport: true
+      })
       expect(client.isConnected()).toBe(false)
     })
 
@@ -754,9 +758,14 @@ describe('DaemonClient', () => {
         { sessionId: 'session-1', data: 'hello' },
         5000
       )
+      const settled = expect(pending).resolves.toEqual({
+        outcome: 'unverifiable',
+        reason: 'settlement_timeout',
+        bytesHandedToTransport: true
+      })
       await vi.advanceTimersByTimeAsync(5000)
 
-      await expect(pending).resolves.toBe(false)
+      await settled
       expect(client.isConnected()).toBe(false)
     })
   })

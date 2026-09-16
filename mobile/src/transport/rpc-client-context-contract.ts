@@ -18,11 +18,13 @@ export type RpcClientContextValue = {
   disconnectHostClient: (hostId: string) => void
   getState: (hostId: string) => ConnectionState
   getKnownState: (hostId: string) => ConnectionState | null
+  getClientId: (hostId: string) => string | null
   getReconnectAttempt: (hostId: string) => number
   getLastConnectedAt: (hostId: string) => number | null
   getActivePath: (hostId: string) => MobileConnectionPath
   getPendingPath: (hostId: string) => MobileConnectionPath | null
   isPairingRejected: (hostId: string) => boolean
+  isHostSignedOut: (hostId: string) => boolean
   subscribeHostState: (hostId: string, listener: (state: ConnectionState) => void) => () => void
   getAllClients: () => { hostId: string; client: RpcClient }[]
   subscribeAllHosts: (listener: () => void) => () => void

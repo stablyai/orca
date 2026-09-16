@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
+import type { ReactCommitCascadeWriteBoundary } from '@/lib/react-commit-cascade-store-write-samples'
 
 const { probe, noteWrite } = vi.hoisted(() => ({
   probe: { armed: false },
@@ -8,7 +9,7 @@ const { probe, noteWrite } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/react-commit-cascade-store-write-samples', () => ({
   reactCommitCascadeWriteProbe: probe,
-  noteReactCommitCascadeStoreWrite: (boundary: object, partial: unknown) =>
+  noteReactCommitCascadeStoreWrite: (boundary: ReactCommitCascadeWriteBoundary, partial: unknown) =>
     noteWrite(boundary, partial)
 }))
 

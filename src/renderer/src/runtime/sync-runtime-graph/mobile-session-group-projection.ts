@@ -6,7 +6,7 @@ import {
   type VisibleTabRef
 } from '../../components/tab-bar/group-tab-order'
 import type { MobileSessionWorktreeInputs } from './types'
-import { isEditorSurfaceTab } from './mobile-session-tab-helpers'
+import { isEditorSurfaceTab } from './mobile-session-surfaces'
 
 export function getEditorUnifiedTabsForWorktree(
   inputs: Pick<MobileSessionWorktreeInputs, 'unifiedTabs'>

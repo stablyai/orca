@@ -18,7 +18,7 @@
     "fumadocs-mdx": "^14.3.1",
     "fumadocs-ui": "^16.8.4",
     "lucide-react": "^1.6.0",
-    "next": "16.2.1",
+    "next": "16.3.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.5.0",
@@ -32,10 +32,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.1",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vercel": "50.37.0"
+    "vercel": "59.11.1"
   },
   "engines": {
     "node": "22.x"
@@ -46,6 +46,13 @@
       "esbuild",
       "sharp",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "@vercel/fun>tar": "7.5.22",
+      "@vercel/fun>@tootallnate/once": "2.0.1",
+      "@vercel/node>undici": "5.29.0",
+      "@vercel/python-analysis>js-yaml": "4.3.2",
+      "@vercel/python-analysis>minimatch": "10.2.6"
+    }
   }
 }

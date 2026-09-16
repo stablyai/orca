@@ -3,6 +3,25 @@ import { e2eConfig } from '@/lib/e2e-config'
 export const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 export const pendingSpawnGenerationByPaneKey = new Map<string, number>()
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
+
+/**
+ * True only when the host answered that this pane's PTY is gone, which is the one thing that
+ * licenses retiring the binding and cold-restoring the agent into a fresh shell.
+ *
+ * The mismatch suffix is excluded because it means the opposite: the relay found a LIVE PTY under
+ * that id owned by another pane, and says nothing about this pane's process. Respawning there puts
+ * a second agent on one transcript (docs/reference/ssh-execution-boundary.md). Main already refuses
+ * to respawn on it — `isPtyAlreadyGoneError` takes the class, not the message — so a bare substring
+ * test here silently disagreed with the gate one process over.
+ */
+export function isSshSessionGoneError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    message.includes(SSH_SESSION_EXPIRED_ERROR) &&
+    !message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR)
+  )
+}
 // Why: relay requests expire at 30s; leave one second for their fallback before re-arming locally.
 export const DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS = 31_000
 export const REMOTE_PTY_ID_PREFIX = 'remote:'

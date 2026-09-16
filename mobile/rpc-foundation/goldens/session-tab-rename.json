@@ -1,0 +1,105 @@
+{
+  "operation": "session.tab-close",
+  "family": "session.tab-close",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "9e877af8539e5425f65edd6b3ff8af73e719aae2033980411a8e8a3b508dcd9e",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "42b6d6d7fdf9": {
+      "activeHandle": "terminal-1",
+      "sessionTabs": [
+        {
+          "id": "tab-1",
+          "isActive": true,
+          "terminal": "terminal-1",
+          "title": "Terminal",
+          "type": "terminal"
+        }
+      ],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "build"
+        }
+      ]
+    },
+    "5a5a35e0f4ab": {
+      "name": "terminal.rename#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}",
+      "sent": 1
+    },
+    "5d179ad4af0c": {
+      "name": "fetch-terminals",
+      "value": {},
+      "sent": 1
+    },
+    "986504944223": {
+      "name": "terminal.rename#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "renamed": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-tab-rename",
+    "checkpoints": [
+      {
+        "id": "renamed",
+        "observation": {
+          "sender": ["986504944223"],
+          "payloads": ["5a5a35e0f4ab"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["5d179ad4af0c"]
+        }
+      }
+    ]
+  }
+}

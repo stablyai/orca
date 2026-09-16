@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { readTaskPageSource } from './task-page-source-family.test-support'
 
-const CONTENT_SOURCE = readTaskPageSource('TaskPageContent.tsx')
-const SOURCE_BAR_SOURCE = readTaskPageSource('TaskPageSourceBar.tsx')
+const CONTENT_SOURCE = readTaskPageSource('task-page/Content.tsx')
+const SOURCE_BAR_SOURCE = readTaskPageSource('task-page/SourceBar.tsx')
 const SOURCE_CONTEXT_SOURCE = readTaskPageSource('task-page-source-context.tsx')
 const RUNTIME_HOSTS_SOURCE = readTaskPageSource('use-task-page-runtime-hosts.ts')
 const GITHUB_DETAIL_SOURCE = readTaskPageSource('use-task-page-github-detail.ts')

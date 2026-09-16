@@ -105,8 +105,8 @@ export async function runSourceControlAgentActionStart({
       launchSource
     })
     launched = Boolean(result)
-    if (result?.tabId) {
-      focusTerminalTabSurface(result.tabId)
+    if (result?.surface.kind === 'local-terminal') {
+      focusTerminalTabSurface(result.surface.tabId)
     }
     // Why: lets callers park launch-scoped state before submit-after-ready finishes
     // (can take tens of seconds); host mutations still wait for delivery below.

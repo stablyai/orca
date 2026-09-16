@@ -207,6 +207,42 @@ describe('status bar Codex sign-in action', () => {
     cleanup()
   })
 
+  it.each([null, 'Enterprise'])(
+    'selects the exact same-email account when workspace labels collide: %s',
+    async (workspaceLabel) => {
+      storeSettings.codexManagedAccounts = storeSettings.codexManagedAccounts.map((account) => ({
+        ...account,
+        email: 'same@example.com',
+        workspaceLabel
+      }))
+      const { selectCodexProviderAccount } =
+        await import('@/runtime/runtime-provider-accounts-client')
+      vi.mocked(selectCodexProviderAccount).mockResolvedValueOnce({
+        accounts: storeSettings.codexManagedAccounts,
+        activeAccountId: 'account-2',
+        activeAccountIdsByRuntime: { host: 'account-2', wsl: {} }
+      })
+
+      await renderSwitcherAndOpenAccounts('System default')
+      const detail = workspaceLabel ? `${workspaceLabel} · ` : ''
+      expect(screen.getByText(`same@example.com (${detail}account-1)`)).toBeTruthy()
+      fireEvent.click(screen.getByText(`same@example.com (${detail}account-2)`))
+
+      await waitFor(() =>
+        expect(selectCodexProviderAccount).toHaveBeenCalledWith(storeSettings, {
+          accountId: 'account-2',
+          runtime: 'host',
+          wslDistro: null
+        })
+      )
+      expect(markLiveCodexSessionsForRestart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nextAccountId: 'account-2'
+        })
+      )
+    }
+  )
+
   it('activates the signed-in account and runs the same restart workflow a switch runs', async () => {
     reauthenticate.mockResolvedValue(codexSnapshot('account-2'))
 

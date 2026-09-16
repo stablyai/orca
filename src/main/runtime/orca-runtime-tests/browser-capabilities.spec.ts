@@ -501,6 +501,23 @@ describe('OrcaRuntimeService', () => {
     expect(closeTab).toHaveBeenCalledTimes(2)
   })
 
+  it('does not rescue a paired renderer PTY into a recreated worktree', () => {
+    const runtime = createRuntime()
+    const ptyId = 'paired-pty-deleted-worktree'
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+      tabId: 'tab-deleted-worktree',
+      leafId: 'leaf-deleted-worktree'
+    })
+    const internals = runtime as unknown as {
+      pairedRendererSessionOwnedPtyIds: Set<string>
+    }
+    internals.pairedRendererSessionOwnedPtyIds.add(ptyId)
+
+    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
+
+    expect(internals.pairedRendererSessionOwnedPtyIds.has(ptyId)).toBe(false)
+  })
+
   it('closes a worktree’s client-hosted browser pages when its metadata is removed (leak fix)', async () => {
     const runtime = createRuntime()
     const host = attachClientBrowserHost(runtime)

@@ -5,16 +5,54 @@ import {
   canWatcherCoverParkedTerminalTab,
   disposeAllParkedTerminalWatchers,
   pruneParkedTerminalWatchers,
-  syncParkedTerminalTabWatchers,
-  terminalWatcherLiveWorkspaceIds
+  syncParkedTerminalTabWatchersForWorkspaces,
+  terminalWatcherLiveWorkspaceIds,
+  type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
+import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 
-export function useTerminalWatcherEffects(controller: TerminalColdActivationController): void {
+// Why shared: surfaces without watchable live tabs need no per-pass allocation.
+const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
+
+type TerminalWatcherController = Pick<
+  TerminalColdActivationController,
+  | 'activationDeferredMountTabIdsByWorktreeRef'
+  | 'activeTabId'
+  | 'activeTabIdByWorktree'
+  | 'activeView'
+  | 'activeWorktreeId'
+  | 'activityTerminalPortals'
+  | 'anyMountedWorktreeHasLayout'
+  | 'backgroundMountRevision'
+  | 'createTab'
+  | 'effectiveParkedTerminalWorktreeIds'
+  | 'evictionExemptTerminalTabIds'
+  | 'getEffectiveLayoutForWorktree'
+  | 'groupsByWorktree'
+  | 'hydrationSucceeded'
+  | 'measurableBackgroundWorktreeIdsRef'
+  | 'mountedWorktreeIdsRef'
+  | 'pairedRuntimeParkingEnvironmentIds'
+  | 'pendingStartupByTabId'
+  | 'reconcileWorktreeTabModel'
+  | 'renderedActiveWorktreeId'
+  | 'tabsByWorktree'
+  | 'terminalParkingEnabled'
+  | 'terminalProviderSnapshotCapabilityRevision'
+  | 'terminalSshParkingEnabled'
+  | 'terminalStartupRestorationReady'
+  | 'terminalTitleSnapshotAuthorityEnabled'
+  | 'workspaceSessionReady'
+  | 'workspaceSurfaceIds'
+>
+
+export function useTerminalWatcherEffects(controller: TerminalWatcherController): void {
   const {
     activationDeferredMountTabIdsByWorktreeRef,
     activeTabId,
@@ -32,74 +70,94 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
     hydrationSucceeded,
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
+    pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     reconcileWorktreeTabModel,
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
+    terminalProviderSnapshotCapabilityRevision,
+    terminalSshParkingEnabled,
     terminalStartupRestorationReady,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
-    workspaceSurfaces
+    workspaceSurfaceIds
   } = controller
 
   useEffect(() => {
-    pruneParkedTerminalWatchers(
-      terminalWatcherLiveWorkspaceIds(workspaceSurfaces.map((workspace) => workspace.id))
-    )
-    for (const workspace of workspaceSurfaces) {
+    pruneParkedTerminalWatchers(terminalWatcherLiveWorkspaceIds(workspaceSurfaceIds))
+    const syncEntriesByWorktreeId = new Map<string, ParkedTerminalTabWatcherSyncEntry>()
+    for (const workspaceId of workspaceSurfaceIds) {
       if (
         anyMountedWorktreeHasLayout &&
-        mountedWorktreeIdsRef.current.has(workspace.id) &&
-        getEffectiveLayoutForWorktree(workspace.id)
+        mountedWorktreeIdsRef.current.has(workspaceId) &&
+        getEffectiveLayoutForWorktree(workspaceId)
       ) {
         continue
       }
-      const tabs = tabsByWorktree[workspace.id] ?? []
-      const parkedTabIds = new Set<string>()
+      const tabs = tabsByWorktree[workspaceId] ?? []
+      let parkedTabIds: ReadonlySet<string> = NO_PARKED_TAB_IDS
       let deferredTabIds: ReadonlySet<string> | null = null
-      if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspace.id)) {
-        const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+      if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspaceId)) {
+        const mountedParkedTabIds = new Set<string>()
+        parkedTabIds = mountedParkedTabIds
+        const isVisible = activeView === 'terminal' && workspaceId === renderedActiveWorktreeId
         const shouldMeasureHiddenWorktree =
-          !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
+          !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspaceId)
         const parked =
           !isVisible &&
           !shouldMeasureHiddenWorktree &&
-          effectiveParkedTerminalWorktreeIds.has(workspace.id)
+          effectiveParkedTerminalWorktreeIds.has(workspaceId)
         if (parked) {
           for (const tab of tabs) {
             const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-              worktreeId: workspace.id,
+              worktreeId: workspaceId,
               tabId: tab.id
             })
             if (!activityTerminalPortal && !evictionExemptTerminalTabIds.has(tab.id)) {
-              parkedTabIds.add(tab.id)
+              mountedParkedTabIds.add(tab.id)
             }
           }
         }
-        deferredTabIds =
-          activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+        deferredTabIds = activationDeferredMountTabIdsByWorktreeRef.current.get(workspaceId) ?? null
         for (const tab of tabs) {
           if (
             deferredTabIds?.has(tab.id) &&
-            !parkedTabIds.has(tab.id) &&
-            canWatcherCoverParkedTerminalTab(workspace.id, tab) &&
+            !mountedParkedTabIds.has(tab.id) &&
+            canWatcherCoverParkedTerminalTab(workspaceId, tab) &&
             !findActivityTerminalPortal(activityTerminalPortals, {
-              worktreeId: workspace.id,
+              worktreeId: workspaceId,
               tabId: tab.id
             })
           ) {
-            parkedTabIds.add(tab.id)
+            mountedParkedTabIds.add(tab.id)
           }
         }
       }
-      syncParkedTerminalTabWatchers({
-        worktreeId: workspace.id,
+      if (tabs.length > 0 && !mountedWorktreeIdsRef.current.has(workspaceId)) {
+        const backgroundTabIds = tabs
+          .filter(
+            (tab) =>
+              canWatcherCoverParkedTerminalTab(workspaceId, tab) &&
+              !findActivityTerminalPortal(activityTerminalPortals, {
+                worktreeId: workspaceId,
+                tabId: tab.id
+              })
+          )
+          .map((tab) => tab.id)
+        if (backgroundTabIds.length > 0) {
+          // CLI-created live terminals have never mounted a pane to consume host title facts.
+          parkedTabIds = new Set(backgroundTabIds)
+          deferredTabIds = parkedTabIds
+        }
+      }
+      syncEntriesByWorktreeId.set(workspaceId, {
         tabs,
         parkedTabIds,
         ...(deferredTabIds ? { restoreTitleOnStartTabIds: deferredTabIds } : {})
       })
     }
+    syncParkedTerminalTabWatchersForWorkspaces(syncEntriesByWorktreeId)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
     activeTabId,
@@ -112,13 +170,16 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
     effectiveParkedTerminalWorktreeIds,
+    pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
+    terminalProviderSnapshotCapabilityRevision,
+    terminalSshParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
-    workspaceSurfaces
+    workspaceSurfaceIds
   ])
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
 
@@ -157,6 +218,14 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
         cancelled ||
         outcome !== 'empty' ||
         useAppStore.getState().activeWorktreeId !== activeWorktreeId
+      ) {
+        return
+      }
+      // A pending or unanswered chat create owns the surface even before its tab is published.
+      if (
+        AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS.some(
+          (agent) => getStructuredAgentLaunchStatus(activeWorktreeId, agent) !== 'idle'
+        )
       ) {
         return
       }

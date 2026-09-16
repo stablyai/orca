@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import { normalizeSetupHookTrust } from '../tasks/setup-hook-trust'
+import { newWorkspaceSetupHooksRead } from './new-workspace-operations'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import type {
   MobileWorkspaceRepo,
@@ -39,13 +39,15 @@ export function useNewWorkspaceSetupScript(args: {
       return
     }
     let stale = false
-    void client
-      .sendRequest('repo.hooks', { repo: `id:${selectedRepo.id}` })
-      .then((response) => {
-        if (stale || !response.ok) {
+    void newWorkspaceSetupHooksRead
+      .request(client, { repo: `id:${selectedRepo.id}` })
+      .then((reply) => {
+        const hooks = newWorkspaceSetupHooksRead.interpret(reply)
+        if (stale || !hooks.accepted) {
           return
         }
-        const result = (response as RpcSuccess).result as RepoHooksResponse
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = hooks.value as RepoHooksResponse
         const command = result.hooks?.scripts?.setup?.trim() || null
         const runPolicy = result.setupRunPolicy ?? 'run-by-default'
         setDetails({

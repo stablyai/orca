@@ -1,5 +1,6 @@
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusEvidenceObservedAt,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
@@ -64,10 +65,18 @@ export function agentStatusEntryEqual(
 }
 
 export function isAgentStatusFresh(
-  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed'>,
+  entry: Pick<
+    AgentStatusEntry,
+    'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt' | 'restoredUnconfirmed'
+  >,
   now: number
 ): boolean {
-  return entry.restoredUnconfirmed !== true && now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+  // Why the shared accessor: a mirrored row's own stamps are the host's clock, so this must
+  // read the same reader-clock observation time the display gate does or the two disagree.
+  return (
+    entry.restoredUnconfirmed !== true &&
+    now - agentStatusEvidenceObservedAt(entry) <= AGENT_STATUS_STALE_AFTER_MS
+  )
 }
 
 export function isMirroredCommandCodeTurnBump(

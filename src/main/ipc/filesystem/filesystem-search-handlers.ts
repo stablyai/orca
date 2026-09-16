@@ -1,3 +1,4 @@
+import { SearchSubprocessLineAccumulator } from '../../../shared/search-subprocess-lines'
 import { ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import type { SearchOptions, SearchResult } from '../../../shared/code-search-types'
@@ -27,7 +28,9 @@ import { searchWithGitGrep } from '../filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { QuickOpenPathRanker } from '../../../shared/quick-open-path-search'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
-import { QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT } from './filesystem-file-helpers'
+
+// 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.
+const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
 
 export function registerFilesystemSearchHandlers(context: FilesystemHandlerContext): void {
   const { store, activeTextSearches } = context
@@ -66,7 +69,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         }
 
         const acc = createAccumulator()
-        let stdoutBuffer = ''
+        const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
         let resolved = false
         let processErrorObserved = false
         let unavailableExitObserved = false
@@ -86,6 +89,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           if (activeTextSearches.get(searchKey) === child) {
             activeTextSearches.delete(searchKey)
           }
+          lines.clear()
           clearTimeout(killTimeout)
           // Why: child.kill() is advisory; detach our closures so repeated searches don't retain old scans if rg ignores it.
           child?.stdout?.off('data', handleStdoutData)
@@ -119,12 +123,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         activeTextSearches.set(searchKey, nextChild)
 
         const handleStdoutData = (chunk: string): void => {
-          stdoutBuffer += chunk
-          const lines = stdoutBuffer.split('\n')
-          stdoutBuffer = lines.pop() ?? ''
-          for (const line of lines) {
-            processLine(line)
-          }
+          lines.push(chunk, processLine)
         }
         const handleStderrData = (): void => {
           // Drain stderr so rg cannot block on a full pipe.
@@ -148,8 +147,9 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             resolveWithoutRipgrep()
             return
           }
-          if (stdoutBuffer) {
-            processLine(stdoutBuffer)
+          const tail = lines.finish()
+          if (tail !== null) {
+            processLine(tail)
           }
           resolveOnce()
         }
@@ -221,7 +221,13 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             signal: controller?.signal
           })
         }
-        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
+        return await listQuickOpenFiles(
+          args.rootPath,
+          store,
+          args.excludePaths,
+          controller?.signal,
+          args.maxResults
+        )
       } finally {
         listFilesCancellations.finish(event, args.requestToken, controller)
       }

@@ -58,7 +58,7 @@ describe('Store native-chat tab viewMode persistence', () => {
     const WORKTREE = 'repo1::/worktree'
     writeDataFile({
       schemaVersion: 1,
-      repos: [makeRepo()],
+      repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
       worktreeMeta: {},
       settings: {},
       ui: {},

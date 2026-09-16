@@ -56,8 +56,10 @@ export function useWorktreeJumpPaletteQuickActions({
   sshConnectionStates,
   activeGroupIdByWorktree,
   groupsByWorktree,
+  unifiedTabsByWorktree,
   isLoading,
   settings,
+  runtimeStatusByEnvironmentId,
   deferredQuery,
   settingsResults
 }: WorktreeJumpPaletteQuickActionsInput) {
@@ -117,6 +119,9 @@ export function useWorktreeJumpPaletteQuickActions({
       openNewTerminalTabInActiveWorkspace
     ]
   )
+  // Why: buildQuickActionContext() reads the store imperatively, so these voided values are the
+  // memo's real inputs — each one is read (some transitively, e.g. runtimeStatusByEnvironmentId
+  // via the managed-browser creation policy) while availability is computed.
   const availableActionResults = useMemo(() => {
     void activeView
     void activeWorktreeId
@@ -125,8 +130,10 @@ export function useWorktreeJumpPaletteQuickActions({
     void sshConnectionStates
     void activeGroupIdByWorktree
     void groupsByWorktree
+    void unifiedTabsByWorktree
     void isLoading
     void settings?.activeRuntimeEnvironmentId
+    void runtimeStatusByEnvironmentId
     const context = buildQuickActionContext()
     return actionResults.filter((action) => action.isAvailable(context).available)
   }, [
@@ -139,8 +146,10 @@ export function useWorktreeJumpPaletteQuickActions({
     sshConnectionStates,
     activeGroupIdByWorktree,
     groupsByWorktree,
+    unifiedTabsByWorktree,
     isLoading,
-    settings?.activeRuntimeEnvironmentId
+    settings?.activeRuntimeEnvironmentId,
+    runtimeStatusByEnvironmentId
   ])
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(
     () =>

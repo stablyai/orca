@@ -23,6 +23,21 @@ export function hasUnsupportedTuiAgentArgs(agent: TuiAgent, value: unknown): boo
   return (UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? []).some((arg) => argPattern(arg).test(value))
 }
 
+/**
+ * Whether the configured arguments carry this agent's permission-bypass flag.
+ *
+ * The Agent Permissions toggle has no storage of its own — it writes and reads this flag inside
+ * the arguments string — so presence at a token boundary, not whole-string equality, is what
+ * "Yolo" means. A terminal launch applies the flag wherever else the user has written in the field.
+ */
+export function tuiAgentArgsBypassPermissions(
+  agent: TuiAgent,
+  value: string | null | undefined
+): boolean {
+  const bypassArg = YOLO_TUI_AGENT_ARGS[agent]
+  return typeof value === 'string' && bypassArg !== undefined && argPattern(bypassArg).test(value)
+}
+
 function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
   const unsupportedArgs = UNSUPPORTED_TUI_AGENT_ARGS[agent]
   if (!unsupportedArgs) {
@@ -91,6 +106,20 @@ export function resolveTuiAgentLaunchArgs(
     return configuredArgs[agent] ?? ''
   }
   return getTuiAgentDefaultArgs(agent)
+}
+
+/**
+ * Whether this agent's *resolved* launch arguments ask for a permission bypass.
+ *
+ * Resolved, not configured: an untouched Arguments field falls back to the default Orca ships,
+ * which is the bypass flag, so bypass is the posture a user gets until they choose otherwise.
+ * Choosing Manual stores an empty string, which owns the key and so beats that default.
+ */
+export function resolvedTuiAgentArgsBypassPermissions(
+  agent: TuiAgent,
+  configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
+): boolean {
+  return tuiAgentArgsBypassPermissions(agent, resolveTuiAgentLaunchArgs(agent, configuredArgs))
 }
 
 export function resolveTuiAgentLaunchEnv(

@@ -206,7 +206,6 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       cleanup()
     }
     this.policyCleanupByGuestId.clear()
-    this.clickedLinkFrameNameByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.popupOwnerContextByGuestId.clear()
     this.pageInitiatedTabBudgetByRootGuestId.clear()

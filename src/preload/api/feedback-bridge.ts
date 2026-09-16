@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const feedbackApi = {
   submit: (args: {
@@ -10,4 +11,4 @@ export const feedbackApi = {
   }): Promise<
     { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
   > => ipcRenderer.invoke('feedback:submit', args)
-}
+} satisfies PreloadApi['feedback']

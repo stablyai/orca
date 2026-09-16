@@ -152,7 +152,9 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         config: this.miniMaxConfigResolver?.() ?? {
           sessionCookie: '',
           groupId: '',
-          models: 'general'
+          models: 'general',
+          endpoint: 'overseas',
+          apiKey: ''
         },
         error: null
       }
@@ -162,7 +164,9 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         config: {
           sessionCookie: '',
           groupId: '',
-          models: 'general'
+          models: 'general',
+          endpoint: 'overseas',
+          apiKey: ''
         },
         error: toErrorMessage(error)
       }

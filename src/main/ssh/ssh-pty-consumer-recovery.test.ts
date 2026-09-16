@@ -8,6 +8,21 @@ import {
 } from './ssh-pty-consumer-recovery'
 
 describe('SSH PTY consumer recovery', () => {
+  it('says out loud when it mints a new identity, because the sweep goes quiet after', () => {
+    // The id the host attests on every PTY it holds for us. Minting a new one is fail-safe — it
+    // can only under-sweep — but it makes the reaper silently stop working, so it must be visible.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = {
+      getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
+      upsertSshPtyConsumerRecovery: vi.fn()
+    } as unknown as Store
+
+    claimSshPtyConsumerRecovery('mint-logs-the-loss', store)
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('minting a new consumer identity'))
+    warn.mockRestore()
+  })
+
   it('keeps a detached identity when a concurrent open finishes late', async () => {
     const targetId = 'remember-detach-race'
     const store = {

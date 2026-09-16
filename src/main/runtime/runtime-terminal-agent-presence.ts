@@ -20,6 +20,8 @@ const WRAPPER_RETRY_INTERVAL_MS = 150
 const WRAPPER_RETRY_TIMEOUT_MS = 6_500
 
 type RuntimeTerminalAgentPresenceDependencies = {
+  /** A structured agent session of this runtime; it has no pane, so no PTY probe can see it. */
+  isLiveStructuredAgent?(handle: string): boolean
   getLivePty(handle: string): RuntimePtyWorktreeRecord | null
   getLiveLeaf(handle: string): RuntimeLeafRecord
   getPrimaryLeaf(ptyId: string): RuntimeLeafRecord | null
@@ -30,6 +32,8 @@ type RuntimeTerminalAgentPresenceDependencies = {
 
 export type RuntimeTerminalAgentPresenceOptions = {
   retryForegroundWrappers?: boolean
+  /** Foreground identity the caller already confirmed; skips the provider's cached read. */
+  foregroundProcess?: string | null
 }
 
 export class RuntimeTerminalAgentPresence {
@@ -39,6 +43,13 @@ export class RuntimeTerminalAgentPresence {
     handle: string,
     options: RuntimeTerminalAgentPresenceOptions = {}
   ): Promise<boolean> {
+    // Before every PTY probe below, because none of them can answer for a session that has no
+    // pane: `getLiveLeaf` threw, the catch turned that into `false`, and a coordinator running
+    // `dispatch --inject` concluded its structured worker was a bare shell — `no_agent_detected`.
+    // A structured session IS the agent; there is no foreground process to recognise.
+    if (this.deps.isLiveStructuredAgent?.(handle)) {
+      return true
+    }
     try {
       const pty = this.deps.getLivePty(handle)
       if (pty) {
@@ -75,7 +86,7 @@ export class RuntimeTerminalAgentPresence {
       if (!leaf.ptyId) {
         return false
       }
-      const foreground = await this.deps.getForegroundProcess(leaf.ptyId)
+      const foreground = await this.readForegroundProcess(leaf.ptyId, options)
       if (!foreground) {
         return false
       }
@@ -138,7 +149,7 @@ export class RuntimeTerminalAgentPresence {
     ) {
       return true
     }
-    const foreground = await this.deps.getForegroundProcess(pty.ptyId)
+    const foreground = await this.readForegroundProcess(pty.ptyId, options)
     if (!foreground) {
       return false
     }
@@ -155,6 +166,16 @@ export class RuntimeTerminalAgentPresence {
       suppressClaude,
       options.retryForegroundWrappers !== false
     )
+  }
+
+  private async readForegroundProcess(
+    ptyId: string,
+    options: RuntimeTerminalAgentPresenceOptions
+  ): Promise<string | null> {
+    if (options.foregroundProcess !== undefined) {
+      return options.foregroundProcess
+    }
+    return await this.deps.getForegroundProcess(ptyId)
   }
 
   private async isRecognizedForegroundAgentProcess(

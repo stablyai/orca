@@ -103,7 +103,9 @@ describe('worktree-palette-search', () => {
       hostRanges: [],
       supportingText: null,
       qualityClass: null,
-      rank: null
+      rank: null,
+      lastActiveAt: null,
+      activity: { ageBucket: null, timestamp: 0 }
     })
   })
 
@@ -519,7 +521,7 @@ describe('worktree-palette-search', () => {
     expect(results.map((result) => result.worktreeId)).toEqual(['wt-linear'])
   })
 
-  it('matches workspace ports by port number before issue and PR numbers', () => {
+  it('promotes an exact sigilled issue number above an ordinary port number', () => {
     const results = searchWorktrees(
       [makeWorktree({ id: 'wt-port', linkedIssue: 3000 })],
       '3000',
@@ -528,12 +530,12 @@ describe('worktree-palette-search', () => {
     )
 
     expect(results).toHaveLength(1)
-    expect(results[0].matchedFields).toEqual(['port'])
+    expect(results[0].matchedFields).toEqual(['issue'])
     expect(results[0].supportingText).toEqual({
-      labelKind: 'port',
-      text: '3000 · vite',
-      matchRanges: [{ start: 0, end: 4 }],
-      accessibilityLabel: 'Listening port'
+      labelKind: 'issue',
+      text: '#3000',
+      matchRanges: [{ start: 1, end: 5 }],
+      accessibilityLabel: 'Linked issue'
     })
   })
 

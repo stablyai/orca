@@ -9,6 +9,7 @@ import type {
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
 
@@ -245,6 +246,11 @@ class ComputerSidecarProcess {
   }
 
   private handleMessage(message: unknown): void {
+    // The sidecar's stdio is piped and unread, so its warnings arrive here.
+    if (isComputerSidecarDiagnostic(message)) {
+      logComputerDiagnostic(message.message)
+      return
+    }
     if (!isSidecarResponse(message)) {
       return
     }

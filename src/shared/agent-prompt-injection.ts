@@ -41,6 +41,19 @@ export function getTerminalPasteIngestMs(platform: NodeJS.Platform, byteLength: 
   )
 }
 
+/** Largest paste whose host-ingest floor fits in `budgetMs`. */
+export function getMaxTerminalPasteBytesForIngestMs(
+  platform: NodeJS.Platform,
+  budgetMs: number
+): number {
+  if (!Number.isFinite(budgetMs) || budgetMs <= 0) {
+    return 0
+  }
+  const bytesPerMs =
+    platform === 'win32' ? WINDOWS_CONPTY_INGEST_BYTES_PER_MS : DEFAULT_PASTE_INGEST_BYTES_PER_MS
+  return Math.floor(budgetMs * bytesPerMs)
+}
+
 /** Open-loop wait before Enter for agents with no settlement signal: the paste cannot have
  *  landed before it is ingested, and the child needs a settle window after that. Never
  *  capped -- a cap silently reintroduces the mid-paste Enter it exists to prevent. */

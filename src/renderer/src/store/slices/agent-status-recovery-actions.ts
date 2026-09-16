@@ -5,13 +5,13 @@ import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-re
 import {
   removeSleepingRecordsReplacedByManualWorktreeSleep,
   sleepingRecordFromEntry
-} from './agent-status-recovery-helpers'
+} from './agent-status-sleeping-records'
 import {
   recoveryRecordTargetsSameSession,
   sleepingRecordsEquivalentIgnoringCaptureTime
 } from './agent-status-recovery-equivalence'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
-import { findAgentPaneWorktreeId } from './agent-status-pane-helpers'
+import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
 
 export function createAgentStatusRecoveryActions(
@@ -22,7 +22,6 @@ export function createAgentStatusRecoveryActions(
   | 'captureAllSleepingAgentSessions'
   | 'clearSleepingAgentSession'
   | 'clearSleepingAgentSessionsByPaneKey'
-  | 'setSleepingAgentAutomaticResumeBlocked'
   | 'clearSleepingAgentSessionsByWorktree'
   | 'pruneSleepingAgentSessions'
 > {
@@ -108,32 +107,6 @@ export function createAgentStatusRecoveryActions(
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
     clearSleepingAgentSessionsByPaneKey,
-
-    setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
-      set((s) => {
-        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
-        if (
-          !current ||
-          (blocked
-            ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            : current.automaticResumeBlockedBy === undefined)
-        ) {
-          return s
-        }
-        const next = { ...current }
-        if (blocked) {
-          next.automaticResumeBlockedBy = 'legacy-orchestration-worker'
-        } else {
-          delete next.automaticResumeBlockedBy
-        }
-        return {
-          sleepingAgentSessionsByPaneKey: {
-            ...s.sleepingAgentSessionsByPaneKey,
-            [paneKey]: next
-          }
-        }
-      })
-    },
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {

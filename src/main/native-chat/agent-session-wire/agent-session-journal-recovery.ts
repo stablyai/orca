@@ -14,6 +14,7 @@ import {
   type AgentSessionJournalIdentity,
   type AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/journal-legacy-import'
 import { loadJournal } from '../agent-session-journal/journal-open'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -25,7 +26,8 @@ export type AgentSessionJournalRecovery = {
   reset: AgentJournalResetReason
   epoch: string
   imported: number
-  /** Set when provider history could not be read; the intact journal prefix remains live. */
+  /** Set when provider history could not be read, or held nothing to restore; the
+   *  intact journal prefix remains live. */
   error?: string
 }
 
@@ -55,16 +57,13 @@ export async function openAgentSessionJournalWithRecovery(input: {
   /** Resolve directly to a transcript instead of discovering it by session id. */
   historyFilePath?: string | null
 }): Promise<AgentSessionJournalOpened> {
-  const probe = await loadJournal(input.journalDir, input.identity.sessionId)
+  const probe = loadJournal(input.journalDir, input.identity.sessionId)
   if (probe?.readOnly) {
     const journal = await openAgentSessionJournal({
       identity: input.identity,
       journalDir: recoveryJournalDir(input.journalDir)
     })
-    return {
-      journal,
-      recovery: await rehydrate({ ...input, journal, trigger: 'schema_unreadable' })
-    }
+    return { journal, recovery: await rehydrateOrClose(input, journal, 'schema_unreadable') }
   }
   const journal = await openAgentSessionJournal({
     identity: input.identity,
@@ -73,9 +72,30 @@ export async function openAgentSessionJournalWithRecovery(input: {
   if (!probe?.corrupt) {
     return { journal, recovery: null }
   }
-  // `open()` quarantines the unusable suffix; a successful import rolls once
-  // more so the rebuilt timeline is the only content of its epoch.
-  return { journal, recovery: await rehydrate({ ...input, journal, trigger: 'journal_corrupt' }) }
+  // `open()` drops the unusable suffix; a successful import rolls once more so
+  // the rebuilt timeline is the only content of its epoch.
+  return { journal, recovery: await rehydrateOrClose(input, journal, 'journal_corrupt') }
+}
+
+/** `importLegacyTranscriptIntoJournal` can THROW rather than report `ok: false`
+ *  — a journal write failure, for instance — and nothing else holds a reference
+ *  to the journal this function just opened. A close that rejects is retryable,
+ *  so the journal is retained rather than dropped with its handle still open. */
+async function rehydrateOrClose(
+  input: {
+    identity: AgentSessionJournalIdentity
+    fence: number
+    historyFilePath?: string | null
+  },
+  journal: AgentSessionJournal,
+  trigger: AgentSessionJournalRecovery['trigger']
+): Promise<AgentSessionJournalRecovery> {
+  try {
+    return await rehydrate({ ...input, journal, trigger })
+  } catch (error) {
+    await agentSessionJournalCloseRetries.closeOrRetain(journal)
+    throw error
+  }
 }
 
 async function rehydrate(input: {
@@ -94,13 +114,16 @@ async function rehydrate(input: {
     fence: input.fence,
     ...(input.historyFilePath ? { options: { filePath: input.historyFilePath } } : {})
   })
-  if (!result.ok) {
+  // A transcript that held nothing is the same outcome as one that could not be
+  // read: nothing was restored, so the repair's marker has to stand and be
+  // retried on a later attach rather than being retired as a completed recovery.
+  if (!result.ok || !result.replaced) {
     return {
       trigger: input.trigger,
       reset,
       epoch: input.journal.epoch,
       imported: 0,
-      error: result.error
+      error: result.ok ? 'Provider history held no messages to restore' : result.error
     }
   }
   return {

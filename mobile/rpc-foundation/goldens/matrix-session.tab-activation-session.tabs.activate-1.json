@@ -1,0 +1,955 @@
+{
+  "operation": "session.tab-activation",
+  "family": "session.tab-activation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
+  "scenarioSha256": "d25fc19d4e3e9b12f2a60a076ea10741e13fc45dcd9a76bd3a9d88432c3e6fbe",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02648396b3a2": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "11b4a1934825": {
+      "name": "terminal.focus#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}",
+      "sent": 1
+    },
+    "12726a31e046": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "204d99558abd": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "23857f5f3255": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      }
+    },
+    "2a882f2e8b6b": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "3b8731983e55": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "43044100d546": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "refused",
+          "message": ""
+        },
+        "id": "frame-2",
+        "ok": false
+      }
+    },
+    "45c1af849de7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "method_not_found",
+          "message": "Unknown method"
+        },
+        "id": "frame-2",
+        "ok": false
+      }
+    },
+    "4e4394afbcef": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "5134763ef050": {
+      "activate": {
+        "error": {
+          "code": "refused",
+          "message": "outer refused"
+        },
+        "id": "frame-2",
+        "ok": false
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "5a867a59d359": {
+      "failure": "",
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "5f3ba1cd76e0": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "error": "inner refused",
+          "ok": false
+        }
+      }
+    },
+    "6edda552e76b": {
+      "activate": {
+        "error": {
+          "code": "method_not_found",
+          "message": "Unknown method"
+        },
+        "id": "frame-2",
+        "ok": false
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "7118e8aeaaae": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "focused": true
+          }
+        }
+      }
+    },
+    "799e842efb06": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "79d93399ca0a": {
+      "failure": "transport failure",
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "7cd4f4dc7a60": {
+      "name": "session.tabs.activate#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}",
+      "sent": 2
+    },
+    "7d4b7965217b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "error": "refused"
+        }
+      }
+    },
+    "84d74a6de2ca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      }
+    },
+    "86832c8db827": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true
+      }
+    },
+    "8a96ab8caedf": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "aa61e32f6fc2": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "b7d3873d1f62": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "bb654f2bdea7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "c9ffa22c6b1c": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "ccf7770577df": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "refused",
+          "message": "outer refused"
+        },
+        "id": "frame-2",
+        "ok": false
+      }
+    },
+    "d53e4b22b23e": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "e300d58f5c29": {
+      "activate": {
+        "error": {
+          "code": "refused",
+          "message": ""
+        },
+        "id": "frame-2",
+        "ok": false
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "e495a9a84cf0": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "activated": true
+          }
+        }
+      }
+    },
+    "e972c0a27347": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ea28b62907bf": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "error": "inner refused",
+          "ok": false
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "ecc5d1639f16": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "eec55f34d6d8": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "f626e8d2889c": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "error": "refused"
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.tab-activation-session.tabs.activate-1",
+    "checkpoints": [
+      {
+        "id": "session-tab-activation-focus-and-activate.normal:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "4e4394afbcef",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.result-absent:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "c9ffa22c6b1c"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "86832c8db827"
+          },
+          "state": "b7d3873d1f62",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.result-null:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "02648396b3a2"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "bb654f2bdea7"
+          },
+          "state": "204d99558abd",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.inner-ok-missing:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "12726a31e046"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "7d4b7965217b"
+          },
+          "state": "f626e8d2889c",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.inner-false-string-error:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "2a882f2e8b6b"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "5f3ba1cd76e0"
+          },
+          "state": "ea28b62907bf",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.inner-false-object-error:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "aa61e32f6fc2"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "23857f5f3255"
+          },
+          "state": "eec55f34d6d8",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.outer-refused:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "3b8731983e55"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "ccf7770577df"
+          },
+          "state": "5134763ef050",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.outer-refused-no-message:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "799e842efb06"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "43044100d546"
+          },
+          "state": "e300d58f5c29",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.method-not-found:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "d53e4b22b23e"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "45c1af849de7"
+          },
+          "state": "6edda552e76b",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.transport-rejection:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "8a96ab8caedf"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "a947768bc0ed"
+          },
+          "state": "79d93399ca0a",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.transport-rejection-no-message:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "e972c0a27347"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "c7584e82c72f"
+          },
+          "state": "5a867a59d359",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

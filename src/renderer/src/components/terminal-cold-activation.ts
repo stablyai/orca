@@ -16,6 +16,7 @@ import type { TerminalParkingFoundation } from './use-terminal-parking-foundatio
 
 export function applyTerminalColdActivation(controller: TerminalParkingFoundation) {
   const {
+    activationDeferralPlanRevisionRef,
     activationDeferredMountTabIdsByWorktreeRef,
     activeGroupIdByWorktree,
     activeTabId,
@@ -36,7 +37,8 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     terminalParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
-    workspaceSurfaces
+    workspaceSurfaceIds,
+    workspaceSurfaceIdSet
   } = controller
   if (
     renderedActiveWorktreeId &&
@@ -95,7 +97,7 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
-      planColdActivationTabDeferral({
+      const installedDeferralPlan = planColdActivationTabDeferral({
         restrictions: backgroundMountTabIdsByWorktreeRef.current,
         deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
         worktreeId: renderedActiveWorktreeId,
@@ -117,6 +119,11 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
         },
         immediateTabIds
       })
+      // Why: the install mutates only refs, so without a returned revision the
+      // admission drain's effect deps never change and the plan strands.
+      if (installedDeferralPlan) {
+        activationDeferralPlanRevisionRef.current += 1
+      }
     } else if (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) {
       backgroundMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
       activationDeferredMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
@@ -150,22 +157,24 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     tabsByWorktree,
     activationDeferredMountTabIdsByWorktreeRef.current
   )
-  const allWorktreeIds = new Set(workspaceSurfaces.map((workspace) => workspace.id))
   for (const id of mountedWorktreeIdsRef.current) {
-    if (!allWorktreeIds.has(id)) {
+    if (!workspaceSurfaceIdSet.has(id)) {
       mountedWorktreeIdsRef.current.delete(id)
       backgroundMountTabIdsByWorktreeRef.current.delete(id)
       activationDeferredMountTabIdsByWorktreeRef.current.delete(id)
     }
   }
   const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
-    workspaceSurfaces.map((workspace) => workspace.id),
+    workspaceSurfaceIds,
     mountedWorktreeIdsRef.current,
     layoutByWorktree,
     groupsByWorktree,
     activeGroupIdByWorktree
   )
-  return { anyMountedWorktreeHasLayout }
+  return {
+    anyMountedWorktreeHasLayout,
+    activationDeferralPlanRevision: activationDeferralPlanRevisionRef.current
+  }
 }
 
 export type TerminalColdActivationController = TerminalParkingFoundation &

@@ -64,6 +64,9 @@ export class Store {
     )
     const adaptedProjectGroups = this.domains.adaptation.adaptFlatFolderScanProjectGroups()
     this.domains.adaptation.hydrateFolderWorkspaceDiffComments()
+    // Load is the only place an orphaned repo id can be swept: every removal path needs the repo to
+    // still be registered, so rows outlive their owner without one (#17776).
+    const sweptRepoIds = this.domains.repos.sweepDeregisteredRepoResidue()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
@@ -78,7 +81,12 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       scheduleSave(this.domains.scheduling)
     })
-    if (normalized.changed || this.runtime.loadNeedsSave || adaptedProjectGroups) {
+    if (
+      normalized.changed ||
+      this.runtime.loadNeedsSave ||
+      adaptedProjectGroups ||
+      sweptRepoIds.length > 0
+    ) {
       scheduleSave(this.domains.scheduling)
     }
   }

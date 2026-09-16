@@ -7,13 +7,22 @@ import {
   type SshPendingPtyKill,
   type SshPendingPtyKillEntry
 } from '../../../shared/ssh-pending-pty-kill'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import { sshRemotePtyLeaseAllowsReattach, type SshRemotePtyLease } from '../../../shared/ssh-types'
 import type { SshPtyLeaseOperations } from './ssh-pty-lease-operations'
 
+/** A row whose only content was the kill order: no pane identity, and a state that names a route
+ *  nothing can reattach.
+ *
+ *  `expired` alone is not that. It records that this CLIENT lost its handle, never that the shell
+ *  died, and the row is the client's last route back to it — dropping it takes the id out of the
+ *  bulk reattach set (`reattachKnownPtys`) and out of the orphan sweep's leave-alone list in the
+ *  same write, turning a process left running on purpose into a sweepable one. Only a lease
+ *  carrying `supersededBy` or `relayIdRecycled` has a route that died for good, which is exactly
+ *  what `sshRemotePtyLeaseAllowsReattach` already distinguishes. */
 function isDisposableKillOnlyLease(lease: SshRemotePtyLease): boolean {
   return (
     lease.pendingKill === undefined &&
-    (lease.state === 'terminated' || lease.state === 'expired') &&
+    !sshRemotePtyLeaseAllowsReattach(lease) &&
     lease.worktreeId === undefined &&
     lease.tabId === undefined &&
     lease.leafId === undefined

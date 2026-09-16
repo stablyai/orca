@@ -7,6 +7,7 @@ import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shar
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
 
 export function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
@@ -61,9 +62,7 @@ export function worktreeUsesWslPath(
     )
     return folderWorkspace ? isWslUncPath(folderWorkspace.folderPath) : false
   }
-  const worktree = Object.values(state.worktreesByRepo)
-    .flat()
-    .find((entry) => entry.id === worktreeId)
+  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
   return worktree ? isWslUncPath(worktree.path) : false
 }
 
@@ -75,15 +74,13 @@ export function worktreeUsesRemoteConnection(
   if (parsedWorkspaceKey?.type === 'folder') {
     return Boolean(getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId))
   }
-  const directRepoId = getRepoIdFromWorktreeId(worktreeId)
-  const directRepo = state.repos.find((repo) => repo.id === directRepoId)
+  const repoMap = getIndexedRepoMap(state.repos)
+  const directRepo = repoMap.get(getRepoIdFromWorktreeId(worktreeId))
   if (directRepo) {
     return Boolean(directRepo.connectionId)
   }
-  const worktree = Object.values(state.worktreesByRepo)
-    .flat()
-    .find((entry) => entry.id === worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
+  const repo = worktree ? repoMap.get(worktree.repoId) : null
   return Boolean(repo?.connectionId)
 }
 
@@ -95,15 +92,13 @@ export function getRemoteConnectionIdForWorktree(
   if (parsedWorkspaceKey?.type === 'folder') {
     return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId) ?? null
   }
-  const directRepoId = getRepoIdFromWorktreeId(worktreeId)
-  const directRepo = state.repos.find((repo) => repo.id === directRepoId)
+  const repoMap = getIndexedRepoMap(state.repos)
+  const directRepo = repoMap.get(getRepoIdFromWorktreeId(worktreeId))
   if (directRepo) {
     return directRepo.connectionId?.trim() || null
   }
-  const worktree = Object.values(state.worktreesByRepo)
-    .flat()
-    .find((entry) => entry.id === worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
+  const repo = worktree ? repoMap.get(worktree.repoId) : null
   return repo?.connectionId?.trim() || null
 }
 

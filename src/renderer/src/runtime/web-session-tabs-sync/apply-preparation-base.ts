@@ -134,18 +134,35 @@ export function prepareWebSessionTabsSnapshotBase(
     }
   }
   const exactProvisionalHandoffs = new Set(provisionalHandoffHostTabIds.keys())
-  const retainedTerminalTabs = reconcilesNonAgentTabs
-    ? currentTerminalTabs.filter(
+  const replacedConversations = new Set(
+    snapshot.tabs.flatMap((tab) =>
+      tab.type === 'agent-session' && tab.replacesSessionId ? [tab.replacesSessionId] : []
+    )
+  )
+  const replacedTerminalIds = new Set(
+    (state.unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter(
         (tab) =>
-          !shouldReplaceTerminalTab(
-            tab,
-            environmentId,
-            nextRemotePtyIds,
-            nextMirroredTerminalIds,
-            exactProvisionalHandoffs
-          )
+          tab.contentType === 'terminal' &&
+          tab.structuredSessionId &&
+          replacedConversations.has(tab.structuredSessionId)
       )
-    : currentTerminalTabs
+      .map((tab) => tab.entityId)
+  )
+  const retainedTerminalTabs = (
+    reconcilesNonAgentTabs
+      ? currentTerminalTabs.filter(
+          (tab) =>
+            !shouldReplaceTerminalTab(
+              tab,
+              environmentId,
+              nextRemotePtyIds,
+              nextMirroredTerminalIds,
+              exactProvisionalHandoffs
+            )
+        )
+      : currentTerminalTabs
+  ).filter((tab) => !replacedTerminalIds.has(tab.id))
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
     snapshot,
     environmentId,

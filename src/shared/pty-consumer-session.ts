@@ -153,6 +153,15 @@ export class PtyConsumerSession {
     return client?.state === 'active' ? client.grant : null
   }
 
+  /** The authenticated client identity behind an active connection, or null.
+   *
+   *  Why the host reads it here instead of taking a spawn parameter: this is what makes a later
+   *  "this PTY belongs to you" attestation evidence rather than an echo of what a caller claimed. */
+  activeClientInstanceId(connectionId: string): string | null {
+    const client = this.clients.get(connectionId)
+    return client?.state === 'active' ? client.clientInstanceId : null
+  }
+
   private admissionFor(
     client: ClientRecord,
     displacedOwner?: Readonly<PtyConsumerDisplacedOwner>

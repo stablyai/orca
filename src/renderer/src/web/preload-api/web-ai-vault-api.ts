@@ -1,3 +1,7 @@
+import {
+  createSessionSearchClient,
+  unavailableSessionSearchStatus
+} from '../../../../shared/ai-vault-search-client'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -10,6 +14,7 @@ import type {
 } from '../../../../shared/ai-vault-session-title'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
 import {
+  normalizeExecutionHostId,
   normalizeExecutionHostScope,
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
@@ -20,7 +25,20 @@ import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'
 
 export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  const search = createSessionSearchClient(
+    (method, params) => callRuntimeResult(method, params),
+    'relay'
+  )
   return {
+    // A browser searches only its selected paired runtime.
+    searchSessions: (request, executionHostScope) =>
+      addressesOwnRuntime(executionHostScope)
+        ? search.searchSessions(request)
+        : Promise.resolve({ kind: 'unavailable', reason: 'no-service' }),
+    searchStatus: (executionHostScope) =>
+      addressesOwnRuntime(executionHostScope)
+        ? search.searchStatus()
+        : Promise.resolve(unavailableSessionSearchStatus()),
     listSessions: (args?: AiVaultListArgs) => {
       const environment = requireActiveEnvironment()
       const executionHostId = toRuntimeExecutionHostId(environment.id)
@@ -72,6 +90,15 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       }),
     onWindowFocused: () => noopUnsubscribe
   }
+}
+
+// An unparseable id must not normalize into the everything-scope and answer anyway.
+function addressesOwnRuntime(executionHostScope: ExecutionHostId | undefined): boolean {
+  const ownRuntimeId = toRuntimeExecutionHostId(requireActiveEnvironment().id)
+  return (
+    executionHostScope === undefined ||
+    normalizeExecutionHostId(executionHostScope) === ownRuntimeId
+  )
 }
 
 export function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultListResult {

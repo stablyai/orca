@@ -30,14 +30,16 @@ export function useConnectionPathStatus(hostId: string | undefined): {
 export function useRelayRecoveryStatus(hostId: string | undefined): {
   pendingPath: MobileConnectionPath | null
   pairingRejected: boolean
+  hostSignedOut: boolean
 } {
   return useHostMetric(
     hostId,
     (context, id) => ({
       pendingPath: context.getPendingPath(id),
-      pairingRejected: context.isPairingRejected(id)
+      pairingRejected: context.isPairingRejected(id),
+      hostSignedOut: context.isHostSignedOut(id)
     }),
-    { pendingPath: null, pairingRejected: false }
+    { pendingPath: null, pairingRejected: false, hostSignedOut: false }
   )
 }
 

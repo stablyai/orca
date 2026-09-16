@@ -229,6 +229,11 @@ Get-NetFirewallRule -Name ${quotePowerShell(FIREWALL_RULE_NAME)} -ErrorAction Si
 New-NetFirewallRule -Name ${quotePowerShell(FIREWALL_RULE_NAME)} -DisplayName ${quotePowerShell(FIREWALL_RULE_DISPLAY_NAME)} -Description 'Allows Orca Mobile to connect to this Orca desktop on private networks.' -Direction Inbound -Action Allow -Enabled True -Profile Private -Protocol TCP -LocalPort ${port} -Program ${quotePowerShell(executablePath)} -EdgeTraversalPolicy Block | Out-Null`
 }
 
+// Why the elevated child keeps `-EncodedCommand` while the local runner does not: `Start-Process
+// -ArgumentList` joins its array into one ShellExecuteEx parameter string without quoting, and
+// PowerShell then re-splits it on whitespace — measured to collapse `C:\My  App\...` to
+// `C:\My App\...`, which would silently write the firewall rule for the wrong program. Node's
+// argv path (createPowerShellRunner) preserves runs of spaces, so only this hop needs base64.
 function buildElevationScript(powershellPath: string, encodedRepairScript: string): string {
   return `$ErrorActionPreference = 'Stop'
 try {
@@ -257,7 +262,9 @@ function createPowerShellRunner(systemRoot?: string): PowerShellRunner {
     new Promise((resolve, reject) => {
       execFile(
         powershellPath,
-        ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodePowerShell(script)],
+        // Why: argv reaches CreateProcess with no shell in between, so the script needs no base64
+        // armouring — and plain `-Command` keeps this off EDR's encoded-PowerShell heuristics.
+        ['-NoProfile', '-NonInteractive', '-Command', script],
         { encoding: 'utf8', timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 },
         (error, stdout) => {
           if (error) {

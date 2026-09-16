@@ -217,7 +217,7 @@ describe('invalidateSparseCheckoutState', () => {
     await detectSparseCheckoutCached('/repo', '/repo/wt-a')
     await detectSparseCheckoutCached('/repo', '/repo/wt-b')
     expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
-    expect(detectSparseCheckoutMock).toHaveBeenCalledWith('/repo/wt-a')
+    expect(detectSparseCheckoutMock).toHaveBeenCalledWith('/repo/wt-a', {})
   })
 })
 
@@ -248,5 +248,109 @@ describe('clearSparseCheckoutStateCache', () => {
     clearSparseCheckoutStateCache()
 
     expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(0)
+  })
+})
+
+// Regression coverage for the live Windows+WSL sequence: a distro-less listing (filesystem-auth
+// root rebuild, worktree ownership checks) racing the real distro-carrying listing for the same
+// repo. Before the distro joined the cache key they shared one entry, so whichever ran first
+// decided the sparse badge for the whole reconcile window.
+describe('detectSparseCheckoutCached with a WSL distro', () => {
+  // Mirrors the real probe: without the distro the gitdir pointer resolves to a fabricated Win32
+  // path, the sparse-checkout stat misses, and the worktree reads as non-sparse.
+  function detectOnlyWithDistro(distro: string): void {
+    detectSparseCheckoutMock.mockImplementation(
+      async (_worktreePath: string, options?: { wslDistro?: string }) =>
+        options?.wslDistro === distro
+    )
+  }
+
+  it('does not serve a distro-carrying read an answer derived without that distro', async () => {
+    detectOnlyWithDistro('Ubuntu')
+
+    expect(await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt')).toBe(false)
+    expect(
+      await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
+    ).toBe(true)
+
+    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a distro-carrying answer correct when a distro-less read follows it', async () => {
+    detectOnlyWithDistro('Ubuntu')
+
+    expect(
+      await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
+    ).toBe(true)
+    expect(await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt')).toBe(false)
+    expect(
+      await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
+    ).toBe(true)
+
+    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats distro spellings that name the same distro as one entry', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+
+    expect(
+      await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
+    ).toBe(true)
+    expect(
+      await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: ' ubuntu ' })
+    ).toBe(true)
+
+    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let a distro-less reader past the window revalidate a distro-carrying entry', async () => {
+    const listener = vi.fn()
+    onSparseCheckoutStateChanged(listener)
+    const nowSpy = vi.spyOn(Date, 'now')
+    try {
+      detectOnlyWithDistro('Ubuntu')
+      nowSpy.mockReturnValue(1_000)
+      await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
+      await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt')
+
+      // Past the window the distro-less caller re-probes its own entry, not the sparse one, so the
+      // badge cannot blink off and fire the change listener that clears the whole repo's cache.
+      nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
+      expect(await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt')).toBe(false)
+      await flushBackgroundRevalidation()
+
+      expect(listener).not.toHaveBeenCalled()
+      expect(
+        await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
+      ).toBe(true)
+    } finally {
+      nowSpy.mockRestore()
+      onSparseCheckoutStateChanged(undefined)
+    }
+  })
+
+  it('drops every distro variant of a path on invalidate, so a removed worktree leaves nothing behind', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+    await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt')
+    await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
+    await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\other')
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(3)
+
+    invalidateSparseCheckoutState('C:\\repo', 'C:\\repo\\wt')
+
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(1)
+  })
+
+  it('still caches normally with no distro anywhere, as on macOS/Linux and native Windows', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a', {})).toBe(true)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a', { wslDistro: undefined })).toBe(
+      true
+    )
+
+    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(1)
   })
 })

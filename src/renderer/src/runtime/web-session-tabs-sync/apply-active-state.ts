@@ -6,7 +6,7 @@ import {
   appendTabGroupLayout,
   pruneTabGroupLayout,
   tabGroupLayoutEqual
-} from './layout-helpers'
+} from './tab-group-layout-tree'
 
 type ActiveStateContext = ReturnType<typeof applyWorktreeRecordUpdates>
 

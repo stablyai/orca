@@ -142,14 +142,14 @@ export function describeObservedSkillFile(
       normalized = null
     }
   }
-  const classification = normalized ? 'text' : 'binary'
   const exactSha256 = sha256(bytes)
-  const textNormalizedSha256 = normalized ? sha256(normalized) : null
+  const textNormalizedSha256 =
+    normalized && (normalized.equals(bytes) ? exactSha256 : sha256(normalized))
   return {
     path,
     size: bytes.length,
     executable,
-    classification,
+    classification: normalized ? 'text' : 'binary',
     exactSha256,
     textNormalizedSha256,
     identitySha256:

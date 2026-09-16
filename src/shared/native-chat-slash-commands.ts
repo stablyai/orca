@@ -4,6 +4,7 @@
 // mirrored copy to drift, unlike the agent-specific parsers in src/shared that
 // Metro forces us to duplicate.
 
+import type { AgentSessionSlashCommand } from './agent-session-wire'
 import type { AgentType } from './agent-status-types'
 
 export type SlashCommandSuggestion = {
@@ -11,6 +12,9 @@ export type SlashCommandSuggestion = {
   name: string
   /** Optional one-line description for the suggestion row. */
   description?: string
+  /** Provider-authored argument sketch, e.g. `<objective>`. */
+  argumentHint?: string
+  kindUnspecified?: true
 }
 
 // Best-effort, curated per-agent catalogs. The CLIs ship no machine-readable
@@ -88,6 +92,38 @@ const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggesti
  *  `/` menu is never empty for a recognized agent. */
 export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return COMMANDS_BY_AGENT[agent] ?? COMMON_COMMANDS
+}
+
+/** The command rows for a session that reports its own `/` surface. The report
+ *  is the authority on WHICH commands exist and, when it carries one, on how a
+ *  command is described; the curated catalog above only covers the names whose
+ *  report is text-free. Skills are excluded — they render in the picker's own
+ *  skills group. */
+export function sessionSlashCommandSuggestions(
+  agent: AgentType,
+  reported: readonly AgentSessionSlashCommand[]
+): readonly SlashCommandSuggestion[] {
+  const described = new Map(
+    getAgentSlashCommands(agent).map((command) => [command.name, command.description])
+  )
+  return reported
+    .filter((entry) => entry.kind === 'command')
+    .map((entry) => {
+      const description = entry.description ?? described.get(entry.name)
+      return {
+        name: entry.name,
+        ...(description ? { description } : {}),
+        ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
+        ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {})
+      }
+    })
+}
+
+/** Names the session reported as skills, in the order it reported them. */
+export function sessionReportedSkillNames(
+  reported: readonly AgentSessionSlashCommand[]
+): readonly string[] {
+  return reported.filter((entry) => entry.kind === 'skill').map((entry) => entry.name)
 }
 
 /** Whether the draft is a slash command (leading `/`, ignoring leading space).

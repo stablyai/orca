@@ -1,0 +1,90 @@
+name: Deploy Relay Fence Broker
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-digest:
+        description: Immutable broker image digest built from this main commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  deploy:
+    if: >-
+      ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' &&
+      github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      SERVICE_NAME: orca-cloud-relay-fence
+      IMAGE_REPOSITORY: us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay-fence-broker
+      IMAGE_DIGEST: ${{ inputs.image-digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+
+      - name: Resolve exact-commit broker image
+        run: |
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          IMAGE="${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
+          SERVED_DIGEST="$(gcloud artifacts docker images describe "${IMAGE}" \
+            --format='value(image_summary.digest)')"
+          test "${SERVED_DIGEST}" = "${IMAGE_DIGEST}"
+          TAGS="$(gcloud artifacts docker tags list "${IMAGE_REPOSITORY}" \
+            --filter="version:${IMAGE_DIGEST}" \
+            --format=json)"
+          jq -e --arg tag "/tags/sha-${GITHUB_SHA}" \
+            'any(.[]; .tag | endswith($tag))' <<< "${TAGS}"
+          echo "IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+
+      - name: Deploy broker image only
+        run: |
+          gcloud run services update "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --image "${IMAGE}" \
+            --quiet
+
+      - name: Verify ready singleton revision
+        run: |
+          SERVICE="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format=json)"
+          jq -e '.status.conditions[] | select(.type == "Ready" and .status == "True")' \
+            <<< "${SERVICE}"
+          REVISION="$(jq -r \
+            '[.status.traffic[] | select((.percent // 0) == 100)] |
+            if length == 1 then .[0].revisionName // empty else empty end' \
+            <<< "${SERVICE}")"
+          test -n "${REVISION}"
+          SERVED_IMAGE="$(gcloud run revisions describe "${REVISION}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+          test "${SERVED_IMAGE}" = "${IMAGE}"

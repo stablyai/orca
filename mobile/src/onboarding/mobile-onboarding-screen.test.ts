@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   animatedTiming: vi.fn(),
   ensureNotificationPermissions: vi.fn(),
   saveDefaultSessionView: vi.fn(),
-  savePushNotificationsEnabled: vi.fn()
+  setRemotePushEnabled: vi.fn()
 }))
 
 vi.mock('react-native', () => ({
@@ -48,8 +48,8 @@ vi.mock('../notifications/mobile-notifications', () => ({
 vi.mock('../storage/session-view-preferences', () => ({
   saveDefaultSessionView: mocks.saveDefaultSessionView
 }))
-vi.mock('../storage/preferences', () => ({
-  savePushNotificationsEnabled: mocks.savePushNotificationsEnabled
+vi.mock('../notifications/push-registration', () => ({
+  setRemotePushEnabled: mocks.setRemotePushEnabled
 }))
 
 describe('MobileOnboardingScreen', () => {
@@ -64,7 +64,7 @@ describe('MobileOnboardingScreen', () => {
     })
     mocks.ensureNotificationPermissions.mockReset().mockResolvedValue(true)
     mocks.saveDefaultSessionView.mockReset().mockResolvedValue(undefined)
-    mocks.savePushNotificationsEnabled.mockReset().mockResolvedValue(undefined)
+    mocks.setRemotePushEnabled.mockReset().mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -100,7 +100,32 @@ describe('MobileOnboardingScreen', () => {
 
     await act(async () => pages()[1].props.onNotificationChoice('skip'))
     expect(mocks.ensureNotificationPermissions).not.toHaveBeenCalled()
-    expect(mocks.savePushNotificationsEnabled).toHaveBeenCalledWith(false)
+    expect(mocks.setRemotePushEnabled).toHaveBeenCalledWith(false)
+    expect(mocks.replace).toHaveBeenCalledWith('/h/paired-host')
+  })
+
+  it.each([true, false])(
+    'saves permission result %s through the consent owner once',
+    async (granted) => {
+      mocks.params = { hostId: 'paired-host', steps: 'notifications' }
+      mocks.ensureNotificationPermissions.mockResolvedValue(granted)
+      await renderScreen()
+      await act(async () => pages()[0].props.onNotificationChoice('enable'))
+      expect(mocks.setRemotePushEnabled).toHaveBeenCalledExactlyOnceWith(granted)
+      expect(mocks.replace).toHaveBeenCalledWith('/h/paired-host')
+    }
+  )
+
+  it('keeps notification consent retryable when its local write fails', async () => {
+    mocks.params = { hostId: 'paired-host', steps: 'notifications' }
+    mocks.setRemotePushEnabled.mockRejectedValueOnce(new Error('disk full'))
+    await renderScreen()
+    await act(async () => pages()[0].props.onNotificationChoice('enable'))
+    expect(pages()[0].props.error).toBe('Notification settings could not be updated. Try again.')
+    expect(mocks.replace).not.toHaveBeenCalled()
+    await act(async () => pages()[0].props.onNotificationChoice('enable'))
+    expect(mocks.setRemotePushEnabled).toHaveBeenCalledTimes(2)
+    expect(mocks.setRemotePushEnabled).toHaveBeenLastCalledWith(true)
     expect(mocks.replace).toHaveBeenCalledWith('/h/paired-host')
   })
 

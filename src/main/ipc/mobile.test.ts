@@ -742,9 +742,26 @@ describe('registerMobileHandlers', () => {
   })
 
   it('reports the current relay broker status without exposing a toggle', () => {
-    registerMobileHandlers({} as never, { getRelayStatus: () => 'registered' })
+    registerMobileHandlers({} as never, { getRelayStatus: () => ({ status: 'registered' }) })
 
     expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
+  })
+
+  it('reports the assigned relay cell alongside the status', () => {
+    registerMobileHandlers({} as never, {
+      getRelayStatus: () => ({ status: 'registered', cellUrl: 'https://c27.relay.example.com' })
+    })
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({
+      status: 'registered',
+      cellUrl: 'https://c27.relay.example.com'
+    })
+  })
+
+  it('falls back to offline with no cell when no relay status provider is wired', () => {
+    registerMobileHandlers({} as never, {})
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'offline' })
   })
 
   it('consumes a pending auth-failure notification only from a window renderer', () => {

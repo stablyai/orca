@@ -8,8 +8,9 @@
  * the host a navigation named — so those, and only those, are the key.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
@@ -75,6 +76,14 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
           navigationHostId(input.navigation, automationId) ?? ''
         ].join('|')
       : ''
+  const captured = input.selected
+    ? capturedAutomationOwner(input.context.capturedOwners, input.selected.key).owner
+    : null
+  const authority = captured?.authority ?? input.context.authority
+  const rowAuthority = useMemo<AutomationAuthorityRef>(
+    () => (authority?.kind === 'runtime' ? authority : { kind: 'desktop' }),
+    [authority]
+  )
 
   useEffect(() => {
     const { selected, context, legacyTarget, navigation, onSettled } = inputRef.current
@@ -90,8 +99,11 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     const target = navigationHost
       ? getAutomationTargetFromHostId(navigationHost)
       : (legacyTarget(selected) ?? { kind: 'local' })
-    void dispatchAutomationRunHistory(context, { rowKey, automationId }, () =>
-      listAutomationRunsForTarget(target, automationId)
+    void dispatchAutomationRunHistory(
+      context,
+      { rowKey, automationId },
+      () => listAutomationRunsForTarget(target, automationId),
+      rowAuthority
     ).then((result) => {
       if (cancelled) {
         return
@@ -107,5 +119,5 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     return () => {
       cancelled = true
     }
-  }, [automationId, rowKey, fetchKey, reloadToken])
+  }, [automationId, rowAuthority, rowKey, fetchKey, reloadToken])
 }

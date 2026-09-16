@@ -4,6 +4,7 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -81,7 +82,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       let createCalls = 0
       runtimeCall.mockImplementation(async (args: { method: string }) => {
         if (args.method === 'status.get') {
-          vi.setSystemTime(startedAt + 59_000)
+          vi.setSystemTime(startedAt + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS - 1_000)
           return {
             ok: true,
             result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
@@ -163,7 +164,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     transport.destroy?.()
   })
 
-  it('stops unknown terminal-create recovery after one minute and remains manually retryable', async () => {
+  it('stops unknown terminal-create recovery at the cutoff and remains manually retryable', async () => {
     vi.useFakeTimers()
     try {
       let reachable = false
@@ -205,7 +206,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           onRecoveryStateChange: (state) => recoveryStates.push(state.phase)
         }
       })
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       await connect
       const callsAtCutoff = runtimeCall.mock.calls.length
 
@@ -218,7 +219,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       statusTimesOut = true
       expect(transport.retryRecovery?.()).toBe(true)
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       const callsAtManualCutoff = runtimeCall.mock.calls.length
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       await vi.advanceTimersByTimeAsync(5 * 60_000)
@@ -278,7 +279,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
 
       const connect = transport.connect({ url: '', callbacks: {} })
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       await connect
 
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')

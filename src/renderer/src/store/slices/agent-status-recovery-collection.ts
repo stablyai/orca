@@ -8,16 +8,15 @@ import {
   normalizePaneKeySet,
   paneKeyMatchesAnyTabPrefix,
   retainedAgentEntryFromLive
-} from './agent-status-pane-helpers'
+} from './agent-status-pane-key-tab-binding'
 import {
-  carryOverAutomaticResumeBlock,
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,
   markManualSleepLazyRestore,
   normalizeSleepingAgentSessionCollectOptions,
   sleepingRecordFromEntry,
   type CollectSleepingAgentSessionRecordsOptions
-} from './agent-status-recovery-helpers'
+} from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
 
@@ -96,10 +95,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(
-          record,
-          state.sleepingAgentSessionsByPaneKey[retained.entry.paneKey]
-        )
       }
       records[record.paneKey] = record
     }
@@ -133,7 +128,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(record, state.sleepingAgentSessionsByPaneKey[paneKey])
       }
       records[record.paneKey] = record
     }

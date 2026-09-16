@@ -47,11 +47,10 @@ export function useCombinedDiffSectionLoadRegistry(
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
   const requestSectionReloadRef = useRef<(index: number) => void>(() => {})
-  const loadSchedulerRef = useRef(
-    createCombinedDiffLoadScheduler({
-      loadSection: (index) => loadSectionRef.current(index)
-    })
-  )
+  const loadSchedulerRef = useRef<ReturnType<typeof createCombinedDiffLoadScheduler>>(undefined!)
+  loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
+    loadSection: (index) => loadSectionRef.current(index)
+  })
   sectionsRef.current = sections
 
   useEffect(() => {

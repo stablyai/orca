@@ -40,12 +40,12 @@ export function tryMakePaneKey(tabId: string, leafId: string): string | null {
 export function applyResolvedAgentTerminalTitleToTab(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string,
-  previousTitle: string | undefined,
+  currentTabTitle: string | undefined,
   nextTitle: string | undefined
 ): void {
   if (
     !nextTitle ||
-    !shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, previousTitle, nextTitle)
+    !shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, currentTabTitle, nextTitle)
   ) {
     return
   }
@@ -57,13 +57,22 @@ export function applyResolvedAgentTerminalTitleToTab(
   store.updateTabTitle(parsed.tabId, nextTitle)
 }
 
+/**
+ * `currentTabTitle` must be the TAB record's title, not the pane's layout slot. This path writes
+ * `tab.title` and nothing else, so comparing against `titlesByLeafId` — which only a mounted pane
+ * updates — skipped the write whenever the two slots had diverged, stranding a self-authored
+ * "<Agent> - action required" label on the tab after the agent had already reported done.
+ *
+ * Inside a batch, pass the staged `tabTitlesByTabId` value when one exists: the batch flushes tab
+ * titles at the end, so an earlier event's staged write is what a later event actually overwrites.
+ */
 export function shouldApplyResolvedAgentTerminalTitleToTab(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string,
-  previousTitle: string | undefined,
+  currentTabTitle: string | undefined,
   nextTitle: string | undefined
 ): boolean {
-  if (!nextTitle || nextTitle === previousTitle) {
+  if (!nextTitle || nextTitle === currentTabTitle) {
     return false
   }
   const parsed = parsePaneKey(paneKey)
@@ -92,6 +101,8 @@ export function resolvePaneKey(
   repoConnectionResolved: boolean
   owningWorktreeId: string | undefined
   titleUsesTabTitle: boolean
+  /** The tab record's own title, which is the slot the hook-driven tab write actually overwrites. */
+  tabTitle: string | undefined
 } {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
@@ -102,7 +113,8 @@ export function resolvePaneKey(
       repoConnectionId: null,
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      tabTitle: undefined
     }
   }
   const { tabId, leafId } = parsed
@@ -149,7 +161,8 @@ export function resolvePaneKey(
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      tabTitle: undefined
     }
   }
   // Why: an empty layout snapshot from a worktree switch (tab/PTY still live) counts as missing metadata; a non-empty layout lacking the leaf still means closed.
@@ -162,7 +175,8 @@ export function resolvePaneKey(
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      tabTitle: undefined
     }
   }
   // Why: inactive worktrees can have a durable tab and live PTY while the layout is unmounted; hook state must still land there.
@@ -177,7 +191,8 @@ export function resolvePaneKey(
     repoConnectionId,
     repoConnectionResolved,
     owningWorktreeId,
-    titleUsesTabTitle: paneTitle === undefined
+    titleUsesTabTitle: paneTitle === undefined,
+    tabTitle
   }
 }
 

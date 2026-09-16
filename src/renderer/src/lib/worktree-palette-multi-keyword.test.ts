@@ -108,14 +108,14 @@ describe('evidence and ranking', () => {
 
   it('prefers visible identity over supporting evidence', () => {
     const [result] = search('docs')
-    expect(result.rank?.usesSupportingEvidence).toBe(0)
+    expect(result.rank?.coverage).toBeLessThan(3)
     expect(result.qualityClass).toBe('exact-visible')
   })
 
   it('ranks an exact identifier above an incidental numeric substring', () => {
     const [exact] = search('#4123')
     expect(exact.supportingText?.labelKind).toBe('pr')
-    expect(exact.qualityClass).toBe('exact-evidence')
+    expect(exact.qualityClass).toBe('exact-intent')
     // A port prefix is the only reading of `412`, and it ranks below the exact hit.
     const [partial] = search('412')
     expect(partial.supportingText?.labelKind).toBe('port')
@@ -126,7 +126,7 @@ describe('evidence and ranking', () => {
     const [result] = search('reconect')
     expect(result.worktreeId).toBe('wt-reconnect')
     expect(result.qualityClass).toBe('fuzzy-evidence')
-    expect(result.rank?.fuzzyTokenCount).toBe(1)
+    expect(result.rank?.recovery).toBe(1)
   })
 })
 

@@ -10,9 +10,12 @@ import type {
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
-import { findAgentPaneWorktreeId, isAgentCompletionState } from './agent-status-pane-helpers'
-import { pruneMigrationUnsupportedEntries } from './agent-status-map-helpers'
-import { sleepingRecordFromEntry } from './agent-status-recovery-helpers'
+import {
+  findAgentPaneWorktreeId,
+  isAgentCompletionState
+} from './agent-status-pane-key-tab-binding'
+import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
+import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
 
 export type AgentStatusLiveFacts = {
   existingSleepingRecord: SleepingAgentSessionRecord | undefined

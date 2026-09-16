@@ -56,6 +56,30 @@ function refspecSource(refspec: string): string {
 }
 
 /**
+ * True if `branchName`'s remote-tracking ref already exists locally under `remoteName`.
+ * Used to skip a redundant fetch on the common repeat-materialize case (the ref was
+ * already pulled in by an earlier mint/fetch) while still fetching it on demand the
+ * first time a sibling worktree widens an existing remote onto a new branch -- a bare
+ * refspec-config widen never itself imports anything (see `ensureRemoteTracksBranchNarrowly`).
+ */
+export async function forkRemoteTrackingRefExists(
+  execGit: GitExecFn,
+  repoPath: string,
+  remoteName: string,
+  branchName: string
+): Promise<boolean> {
+  try {
+    await execGit(
+      ['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteName}/${branchName}`],
+      repoPath
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * True only if `remote.<name>.url` is actually set. Deliberately plumbing (`config --get`),
  * not porcelain `git remote get-url` -- the latter falls back to echoing the remote *name*
  * as a bogus "URL" when the section exists but has no url key (verified against real git),

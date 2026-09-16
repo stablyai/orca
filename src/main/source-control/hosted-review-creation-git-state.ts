@@ -13,7 +13,12 @@ import { parsePorcelainV1Records, type PorcelainV1Record } from '../git/porcelai
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import { getUpstreamStatus } from '../git/upstream'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktree-symlink-detection'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  ExecutionHostNotDispatchableError,
+  resolveGitRouteForHost,
+  type ExecutionHostGitRoute
+} from '../providers/execution-host-provider-dispatch'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -117,20 +122,38 @@ async function listSuffixRemoteBaseRefs(
   }
 }
 
+/**
+ * Why not a `connectionId` check: `null` used to mean "local", "runtime host" and "unresolved"
+ * alike, so a worktree whose owner is named only by `executionHostId` had its preflight git run
+ * against this machine's copy of a remote path. `runtime:` is a routing mistake here rather than a
+ * fallback — that environment's server runs its own git.
+ */
+function requireHostedReviewGitRoute(executionHostId: ExecutionHostId): ExecutionHostGitRoute {
+  const route = resolveGitRouteForHost(executionHostId)
+  if (route.kind === 'runtime') {
+    throw new ExecutionHostNotDispatchableError(route.hostId)
+  }
+  return route
+}
+
+/** Loss of contact is not locality: an SSH host with no provider refuses, it does not run here. */
+function requireHostedReviewSshProvider(route: ExecutionHostGitRoute) {
+  if (route.kind !== 'ssh' || !route.provider) {
+    throw new Error('Remote connection dropped. Click Reconnect on the SSH target before retrying.')
+  }
+  return route.provider
+}
+
 async function runGitForHostedReview(
   repoPath: string,
   args: string[],
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {},
   commandOptions: HostedReviewGitRunOptions = {}
 ): Promise<{ stdout: string; stderr?: string }> {
-  if (connectionId) {
-    const provider = getSshGitProvider(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
+  const route = requireHostedReviewGitRoute(executionHostId)
+  if (route.kind === 'ssh') {
+    const provider = requireHostedReviewSshProvider(route)
     return commandOptions.timeoutMs === undefined
       ? provider.exec(args, repoPath)
       : provider.exec(args, repoPath, { timeoutMs: commandOptions.timeoutMs })
@@ -145,11 +168,11 @@ async function runGitForHostedReview(
 
 export async function getDefaultBaseRef(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<string | null> {
   return resolveDefaultBaseRefViaExec((argv) =>
-    runGitForHostedReview(repoPath, argv, connectionId, options)
+    runGitForHostedReview(repoPath, argv, executionHostId, options)
   )
 }
 
@@ -162,7 +185,7 @@ export async function getDefaultBaseRef(
 export async function baseRefExistsOnRemote(
   candidate: string,
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
   const base = normalizeHostedReviewBaseRef(candidate).trim()
@@ -170,7 +193,7 @@ export async function baseRefExistsOnRemote(
     return false
   }
   const run: HostedReviewGitRun = (argv, commandOptions) =>
-    runGitForHostedReview(repoPath, argv, connectionId, options, commandOptions)
+    runGitForHostedReview(repoPath, argv, executionHostId, options, commandOptions)
 
   // Validate the complete tracking ref before interpolating user/repo metadata
   // into Git arguments. In particular, never let `*`, `?`, or control bytes
@@ -227,13 +250,13 @@ export async function baseRefExistsOnRemote(
 
 export async function getCurrentBranch(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<string> {
   const { stdout } = await runGitForHostedReview(
     repoPath,
     ['rev-parse', '--abbrev-ref', 'HEAD'],
-    connectionId,
+    executionHostId,
     options
   )
   return stripRefPrefix(stdout.trim())
@@ -241,20 +264,15 @@ export async function getCurrentBranch(
 
 export async function hasUncommittedChanges(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
-  if (connectionId) {
-    const provider = getSshGitProvider(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
+  const route = requireHostedReviewGitRoute(executionHostId)
+  if (route.kind === 'ssh') {
     // Why: the relay restricts generic git.exec, so use the structured status RPC for SSH dirty checks.
     // No shared-link exclusion here: remote worktree creation skips the symlink
     // and shared-directory passes entirely, so a remote worktree never has one.
-    return (await provider.getStatus(repoPath)).entries.length > 0
+    return (await requireHostedReviewSshProvider(route).getStatus(repoPath)).entries.length > 0
   }
   // Why: `-z` keeps paths raw so the shared-link comparison below can't be
   // defeated by Git quoting a path with spaces or non-ASCII bytes.
@@ -300,16 +318,14 @@ async function anyRecordIsUserDirt(
 
 export async function getHostedReviewUpstreamStatus(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<GitUpstreamStatus> {
-  if (!connectionId) {
+  const route = requireHostedReviewGitRoute(executionHostId)
+  if (route.kind !== 'ssh') {
     return getUpstreamStatus(repoPath, undefined, getHostedReviewLocalGitOptions(options))
   }
-  const provider = getSshGitProvider(connectionId)
-  if (!provider) {
-    throw new Error('Remote connection dropped. Click Reconnect on the SSH target before retrying.')
-  }
+  const provider = requireHostedReviewSshProvider(route)
   try {
     // Why: the relay blocks generic git.exec, so use its dedicated upstream RPC for SSH divergence.
     return await provider.getUpstreamStatus(repoPath)

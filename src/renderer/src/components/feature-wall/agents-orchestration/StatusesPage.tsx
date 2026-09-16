@@ -5,6 +5,7 @@ import { Wrench } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -48,18 +49,25 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
     schedule(() => setRevealed((r) => ({ ...r, codex: true })), 1900)
 
     let idx = 0
-    const cycleId = window.setInterval(() => {
-      setClaudeFading(true)
-      const swap = window.setTimeout(() => {
-        idx = (idx + 1) % CLAUDE_ACTIVITIES.length
-        setClaudeIdx(idx)
-        setClaudeFading(false)
-      }, 280)
-      timeouts.push(swap)
-    }, 2400)
+    // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
+    // no-op so revealing the window resumes the cycle instead of skipping an
+    // activity; `idx` lives outside the timer, so the reveal picks up where it left off.
+    const stopCycle = installWindowVisibilityInterval({
+      run: () => {
+        setClaudeFading(true)
+        const swap = window.setTimeout(() => {
+          idx = (idx + 1) % CLAUDE_ACTIVITIES.length
+          setClaudeIdx(idx)
+          setClaudeFading(false)
+        }, 280)
+        timeouts.push(swap)
+      },
+      runOnVisible: () => {},
+      intervalMs: 2400
+    })
     return () => {
       timeouts.forEach((id) => window.clearTimeout(id))
-      window.clearInterval(cycleId)
+      stopCycle()
     }
   }, [active, reducedMotion])
 

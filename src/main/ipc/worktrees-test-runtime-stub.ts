@@ -12,6 +12,7 @@ export type WorktreeRuntimeStub = {
   clearOptimisticReconcileToken: ReturnType<typeof vi.fn>
   resolveManagedMrBase: ReturnType<typeof vi.fn>
   createTerminal: ReturnType<typeof vi.fn>
+  invalidateWorktreeCatalog: ReturnType<typeof vi.fn>
   splitTerminal: ReturnType<typeof vi.fn>
   notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
   closeFileWatchersForRemoval: ReturnType<typeof vi.fn>
@@ -38,6 +39,7 @@ export function createWorktreeRuntimeStub(): WorktreeRuntimeStub {
       title: null,
       surface: 'visible'
     }),
+    invalidateWorktreeCatalog: vi.fn(),
     splitTerminal: vi.fn().mockResolvedValue({
       handle: 'term-setup',
       tabId: 'tab-startup',

@@ -41,11 +41,11 @@ export function PRFilesCombinedDiffBody({
   openFilesOnGitHub,
   renderViewedCheckbox,
   handleAddLineComment,
-  fileByPath,
   setSectionHeights,
   setSections,
   modifiedEditorsRef,
-  handleSectionSaveRef
+  handleSectionSaveRef,
+  getCommentableLineNumbers
 }: {
   files: GitHubPRFile[]
   repoPath: string
@@ -78,7 +78,8 @@ export function PRFilesCombinedDiffBody({
     section: DiffSection,
     args: { lineNumber: number; startLine?: number; body: string }
   ) => Promise<boolean>
-  fileByPath: Map<string, GitHubPRFile>
+  // Why: a stable callback, not an inline arrow — this re-keys every mounted row's comment decorator.
+  getCommentableLineNumbers: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   modifiedEditorsRef: React.RefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
@@ -150,9 +151,7 @@ export function PRFilesCombinedDiffBody({
                       'auto.components.GitHubItemDialog.86d84a17ca',
                       'Add a review comment'
                     )}
-                    getCommentableLineNumbers={(section) =>
-                      fileByPath.get(section.path)?.reviewCommentLineNumbers
-                    }
+                    getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
                     setSections={setSections}
                     modifiedEditorsRef={modifiedEditorsRef}

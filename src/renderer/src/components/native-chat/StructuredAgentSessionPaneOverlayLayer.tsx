@@ -3,12 +3,9 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { useAppStore } from '@/store'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
 
 type StructuredAgentSessionTab = Tab & {
@@ -23,59 +20,35 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   tab,
   groupId,
   isActive,
+  isFocusedGroup,
   target,
-  allowFileUriLinks,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
+  isFocusedGroup: boolean
   target: RuntimeClientTarget
-  allowFileUriLinks: boolean
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element {
-  const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
-  const style = useMemo<React.CSSProperties>(
-    () =>
-      anchorName
-        ? {
-            position: 'absolute',
-            positionAnchor: anchorName,
-            top: `anchor(${anchorName} top)`,
-            left: `anchor(${anchorName} left)`,
-            width: `anchor-size(${anchorName} width)`,
-            height: `anchor-size(${anchorName} height)`,
-            display: isActive ? 'flex' : 'none',
-            pointerEvents: isActive ? 'auto' : 'none'
-          }
-        : { display: 'none' },
-    [anchorName, isActive]
-  )
-  const focusOwningGroup = useCallback(() => {
-    if (groupId !== undefined && onFocusOwningGroup) {
-      onFocusOwningGroup(groupId)
-    }
-  }, [groupId, onFocusOwningGroup])
-
   return (
-    <div
-      style={style}
-      className="native-chat-pane-shell z-10 min-h-0 min-w-0"
+    <RetainedPaneHost
+      groupId={groupId}
+      isVisible={isActive}
       data-structured-agent-session-overlay-tab-id={tab.id}
-      aria-hidden={!isActive}
-      onPointerDown={focusOwningGroup}
-      onFocusCapture={focusOwningGroup}
+      onFocusOwningGroup={onFocusOwningGroup}
     >
       <NativeChatView
         mode="structured"
         tabId={tab.id}
+        groupId={groupId}
         sessionId={tab.entityId}
         agent={tab.agentSessionAgent}
         isVisible={isActive}
+        isFocusedGroup={isFocusedGroup}
         target={target}
-        allowFileUriLinks={allowFileUriLinks}
       />
-    </div>
+    </RetainedPaneHost>
   )
 })
 
@@ -87,12 +60,12 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     worktreeId: string
     isWorktreeActive: boolean
   }): React.JSX.Element {
-    const { unifiedTabs, groups, runtimeEnvironmentId, allowFileUriLinks } = useAppStore(
+    const { unifiedTabs, groups, runtimeEnvironmentId, activeGroupId } = useAppStore(
       useShallow((state) => ({
         unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
         groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
         runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
-        allowFileUriLinks: getExecutionHostIdForWorktree(state, worktreeId) === 'local'
+        activeGroupId: state.activeGroupIdByWorktree[worktreeId]
       }))
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
@@ -126,8 +99,12 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             tab={tab}
             groupId={tab.groupId}
             isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
+            isFocusedGroup={Boolean(
+              isWorktreeActive &&
+              groupActiveTabById.get(tab.groupId) === tab.id &&
+              tab.groupId === activeGroupId
+            )}
             target={target}
-            allowFileUriLinks={allowFileUriLinks}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

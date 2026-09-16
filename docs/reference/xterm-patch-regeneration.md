@@ -24,11 +24,11 @@ truth. Everything else is derived from it by
 `config/scripts/regenerate-xterm-patches.mjs`, which is pinned to the exact
 upstream commit the published tarball was built from.
 
-`@xterm/addon-webgl` and `@xterm/addon-serialize` are generated the same way,
-from their own source patches under `config/patches/xterm-src/`. Their entries
-differ only in `packageDir` and build steps; everything below applies to all
-three. `@xterm/addon-ligatures` is the one patch still written by hand — see
-[Known Gaps](#known-gaps).
+`@xterm/addon-webgl`, `@xterm/addon-search` and `@xterm/addon-serialize` are
+generated the same way, from their own source patches under
+`config/patches/xterm-src/`. Their entries differ only in `packageDir` and build
+steps; everything below applies to all four. `@xterm/addon-ligatures` is the one
+patch still written by hand — see [Known Gaps](#known-gaps).
 
 ## Rules
 

@@ -269,7 +269,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
 
     const expectedRecovery = {
       origin: 'live',
-      state: 'working',
+      state: 'done',
       providerSessionId: PROVIDER_SESSION_ID
     }
     await expect

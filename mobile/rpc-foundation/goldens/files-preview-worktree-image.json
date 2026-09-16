@@ -1,0 +1,93 @@
+{
+  "operation": "files.preview-load",
+  "family": "files.preview-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "0ffaffb472b663e08a42317d799a2a000211dda5b127fb21cc64f04f73800130",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "146931cb2534": {
+      "name": "files.readPreview#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/logo.png\"}}",
+      "sent": 1
+    },
+    "7659b8b575da": {
+      "preview": {
+        "dataUri": "data:image/png;base64,aGk=",
+        "kind": "image",
+        "status": "ready"
+      }
+    },
+    "eee847a9d90d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "dataUri": "data:image/png;base64,aGk=",
+        "kind": "image",
+        "status": "ready"
+      }
+    },
+    "f6564bdb4e19": {
+      "name": "files.readPreview#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/logo.png",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "content": "aGk=",
+            "isBinary": true,
+            "isImage": true,
+            "mimeType": "image/png"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "files-preview-worktree-image",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["f6564bdb4e19"],
+          "payloads": ["146931cb2534"],
+          "settlements": {
+            "load": "eee847a9d90d"
+          },
+          "state": "7659b8b575da",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

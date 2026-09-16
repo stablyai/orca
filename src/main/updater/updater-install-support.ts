@@ -35,6 +35,12 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     if (this.currentStatus.state === 'downloading' || this.currentStatus.state === 'downloaded') {
       return this.currentStatus.version
     }
+    if (
+      this.currentStatus.state === 'error' &&
+      this.currentStatus.recovery?.kind === 'linux-package-install'
+    ) {
+      return this.currentStatus.recovery.version
+    }
     return ''
   }
 
@@ -70,7 +76,6 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     this.quittingForUpdate = false
     this.updateInstallCommitted = false
     this.quitAndInstallNativeInvoked = false
-    this.lastInstallAttemptDiagnostic = null
     disarmUpdateInstallExitWatchdog()
     resetMacInstallState()
   }

@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { MobileSessionWorktreeInputs } from './types'
-import { isUnifiedTabActiveInActiveGroup } from './mobile-session-tab-helpers'
+import { isUnifiedTabActiveInActiveGroup } from './mobile-session-surfaces'
 
 export function buildMobileBrowserTab(
   inputs: MobileSessionWorktreeInputs,

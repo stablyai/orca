@@ -1,7 +1,9 @@
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type { ManagedPane, ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
 import type { PaneManagerHost } from './pane-manager-host'
 import { applyPaneOpacity } from './pane-divider'
 import { createPaneDOM, openTerminal } from './pane-lifecycle'
+import { suspendTerminalCursorBlink } from './pane-cursor-blink-suspension'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import { toPublicPane } from './pane-public-view'
 
@@ -17,12 +19,12 @@ export function createInitialManagedPane(
     overflow: 'hidden'
   })
   host.root.appendChild(pane.container)
-  openTerminal(pane)
+  openTerminal(pane, host.options.terminalLigaturesEnabled?.())
   host.setActivePaneId(pane.id)
   applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions())
 
   if (opts?.focus !== false) {
-    pane.terminal.focus()
+    focusPanePreservingOverlays(pane)
   }
 
   host.publishPaneCreated(pane)
@@ -53,6 +55,10 @@ export function createManagedPaneInternal(
     }
   )
   pane.webglAttachmentDeferred = host.isRenderingSuspended()
+  if (host.isRenderingSuspended()) {
+    // A pane that mounts behind a hidden surface never sees suspendPaneRendering().
+    suspendTerminalCursorBlink(pane.terminal)
+  }
   host.panes.set(id, pane)
   host.identities.register(id, leafId)
   return pane

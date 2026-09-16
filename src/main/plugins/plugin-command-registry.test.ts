@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
@@ -37,6 +37,91 @@ function commandPlugin(
 }
 
 describe('PluginCommandRegistry', () => {
+  it('reads binding command IDs once while preserving declaration and binding order', () => {
+    const commands = Array.from({ length: 256 }, (_, index) => ({
+      id: `command-${index}`,
+      title: `Command ${index}`,
+      action: 'view.tasks'
+    }))
+    const keys = Array.from(
+      { length: 104 },
+      (_, index) =>
+        `Mod+${Math.floor(index / 26) & 1 ? 'Alt+' : ''}${Math.floor(index / 26) & 2 ? 'Shift+' : ''}${String.fromCharCode(65 + (index % 26))}`
+    )
+    // Distinct physical chords, with two bindings belonging to the same command.
+    const uniqueKeys = [...new Set(keys)]
+    const plugin = commandPlugin('many-commands', {
+      commands,
+      keybindings: uniqueKeys.map((key, index) => ({ command: `command-${index % 32}`, key }))
+    })
+    let reads = 0
+    for (const binding of plugin.manifest.contributes.keybindings) {
+      const command = binding.command
+      Object.defineProperty(binding, 'command', {
+        get: () => {
+          reads++
+          return command
+        }
+      })
+    }
+    const registry = new PluginCommandRegistry()
+    registry.reconcile([plugin], () => false)
+    const preview = registry.preview(plugin.pluginKey)
+    expect(preview.map((command) => command.id)).toEqual(commands.map((command) => command.id))
+    expect(preview[0].keybindings.map((binding) => binding.key)).toEqual(
+      plugin.manifest.contributes.keybindings
+        .filter((_, index) => index % 32 === 0)
+        .map((binding) => binding.key)
+    )
+    expect(preview[255].keybindings).toEqual([])
+    expect(registry.list()).toEqual([])
+    expect(reads).toBe(uniqueKeys.length)
+  })
+
+  it('records each conflicting owner once instead of every pair', () => {
+    const plugins = Array.from({ length: 128 }, (_, index) =>
+      commandPlugin(`plugin-${index}`, {
+        commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }],
+        keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
+      })
+    )
+    const registry = new PluginCommandRegistry()
+    const errors = (registry as unknown as { errors: Map<string, string> }).errors
+    const writes = vi.spyOn(errors, 'set')
+    registry.reconcile(plugins, () => true)
+    expect(registry.list()).toEqual([])
+    for (const plugin of plugins) {
+      expect(registry.preview(plugin.pluginKey)).toHaveLength(1)
+      expect(registry.error(plugin.pluginKey)).toBe(
+        'plugin keybinding Mod+Alt+T conflicts with another plugin'
+      )
+    }
+    expect(writes).toHaveBeenCalledTimes(plugins.length)
+  })
+
+  it('preserves the last conflicting spelling for repeated owners and chord groups', () => {
+    const plugin = commandPlugin('repeat', {
+      commands: [
+        { id: 'one', title: 'One', action: 'view.tasks' },
+        { id: 'two', title: 'Two', action: 'view.tasks', context: 'worktree' }
+      ]
+    })
+    const registry = new PluginCommandRegistry()
+    registry.reconcile(
+      [plugin],
+      () => true,
+      {
+        'plugin:orca-samples.repeat/one': ['Mod+Alt+T', 'Mod+Alt+Y'],
+        'plugin:orca-samples.repeat/two': ['Ctrl+Alt+T', 'Ctrl+Alt+Y']
+      },
+      'linux'
+    )
+    expect(registry.list()).toEqual([])
+    expect(registry.error(plugin.pluginKey)).toBe(
+      'plugin keybinding Ctrl+Alt+Y conflicts with another plugin'
+    )
+  })
+
   it('retains pending previews and exposes only approved commands', () => {
     const plugin = commandPlugin('aliases', {
       commands: [{ id: 'tasks', title: 'Open Tasks', action: 'view.tasks' }],

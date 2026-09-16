@@ -105,6 +105,25 @@ describe('automation RPC methods', () => {
     expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1', undefined)
   })
 
+  it('returns a cursor page when the caller requests a bounded run history', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listAutomationRunsPage: vi.fn().mockReturnValue({
+        runs: [{ id: 'run-100', automationId: 'auto-1' }],
+        nextCursor: '100'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    await expect(
+      dispatcher.dispatch(makeRequest('automation.runs', { automationId: 'auto-1', limit: 100 }))
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { nextCursor: '100' }
+    })
+    expect(runtime.listAutomationRunsPage).toHaveBeenCalledWith('auto-1', undefined, 100, undefined)
+  })
+
   it('rejects unknown providers and invalid schedules', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

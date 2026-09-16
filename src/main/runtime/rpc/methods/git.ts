@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-generation-methods'
 import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
@@ -21,7 +21,7 @@ import {
   WorktreeSelector
 } from './git-params'
 
-export const GIT_METHODS: RpcMethod[] = [
+export const GIT_METHODS = [
   defineMethod({
     name: 'git.status',
     params: GitStatusParams,

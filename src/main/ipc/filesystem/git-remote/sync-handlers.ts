@@ -15,8 +15,12 @@ import {
 } from '../../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { assertGitPushTargetShape } from '../../../../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../../../../shared/git-push-target-validation'
 import { validateGitForkSyncExpectedUpstream } from '../../../../shared/git-fork-sync'
+import {
+  materializeWorktreePushTargetRemote,
+  materializeWorktreePushTargetRemoteSsh
+} from '../../worktree-remote'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 
 export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext): void {
@@ -30,7 +34,7 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
     ): Promise<GitUpstreamStatus> => {
       if (args.connectionId) {
         if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
+          assertValidGitPushTarget(args.pushTarget)
         }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -52,17 +56,32 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
     'git:fetch',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+      args: {
+        worktreePath: string
+        worktreeId?: string
+        connectionId?: string
+        pushTarget?: GitPushTarget
+      }
     ): Promise<void> => {
       if (args.connectionId) {
         if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
+          assertValidGitPushTarget(args.pushTarget)
         }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.fetchRemote(args.worktreePath, args.pushTarget)
+        const materializedPushTarget = args.pushTarget
+          ? await materializeWorktreePushTargetRemoteSsh(
+              provider,
+              args.worktreePath,
+              args.pushTarget,
+              store,
+              undefined,
+              args.worktreeId
+            )
+          : undefined
+        return provider.fetchRemote(args.worktreePath, materializedPushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -70,13 +89,23 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
         args.worktreePath,
         worktreePath
       )
-      if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget, {
+      const materializedPushTarget = args.pushTarget
+        ? await materializeWorktreePushTargetRemote(
+            worktreePath,
+            args.pushTarget,
+            store,
+            undefined,
+            gitOptions,
+            args.worktreeId
+          )
+        : undefined
+      if (materializedPushTarget) {
+        await validateGitPushTarget(worktreePath, materializedPushTarget, {
           ...gitOptions,
           admissionTier: 'interactive'
         })
       }
-      await gitFetch(worktreePath, args.pushTarget, {
+      await gitFetch(worktreePath, materializedPushTarget, {
         ...gitOptions,
         admissionTier: 'interactive'
       })

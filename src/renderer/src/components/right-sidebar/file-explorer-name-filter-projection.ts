@@ -100,7 +100,8 @@ function relativePathMatchesNameFilter(relativePath: string, tokens: readonly st
   if (tokens.length === 0) {
     return true
   }
-  const haystack = normalizeRelativePath(relativePath).toLocaleLowerCase()
+  // Why: callers pass already-normalized paths — lowercasing only, no second normalize per path per keystroke.
+  const haystack = relativePath.toLocaleLowerCase()
   return tokens.every((token) => haystack.includes(token))
 }
 

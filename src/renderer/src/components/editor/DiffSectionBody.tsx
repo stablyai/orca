@@ -11,8 +11,10 @@ import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
+import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
+import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -39,6 +41,7 @@ type DiffSectionBodyProps = {
   isEditable: boolean
   diffEditorFontSize: number
   diffWordWrap?: boolean
+  diffShowWhitespace?: boolean
   editorFontFamily?: string
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
@@ -65,6 +68,7 @@ export function DiffSectionBody({
   isEditable,
   diffEditorFontSize,
   diffWordWrap,
+  diffShowWhitespace,
   editorFontFamily,
   onCancelComment,
   onSubmitComment,
@@ -74,6 +78,11 @@ export function DiffSectionBody({
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
+  const handleEditorMount: DiffOnMount = (editor, monaco) => {
+    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(editor)
+    editor.onDidDispose(cleanupShiftWheelScroll)
+    onMount(editor, monaco)
+  }
 
   return (
     <div
@@ -187,7 +196,7 @@ export function DiffSectionBody({
           original={section.originalContent}
           modified={section.modifiedContent}
           theme={isDark ? 'vs-dark' : 'vs'}
-          onMount={onMount}
+          onMount={handleEditorMount}
           // Why: @monaco-editor/react can dispose models before widget teardown.
           // Keep them through unmount and dispose unattached models next tick.
           originalModelPath={`${modelPathBase}:original`}
@@ -204,6 +213,7 @@ export function DiffSectionBody({
             fontFamily: editorFontFamily || 'monospace',
             lineNumbers: 'on',
             ...buildDiffEditorWordWrapOptions(diffWordWrap),
+            ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
             automaticLayout: true,
             renderOverviewRuler: false,
             scrollbar: combinedDiffSectionScrollbarOptions,

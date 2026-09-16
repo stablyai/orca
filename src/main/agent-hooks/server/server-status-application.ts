@@ -13,10 +13,16 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
 
+/** Bounds the retained observation clock; eviction only degrades a replay to `now`. */
+const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
+
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
+  /** `observedAt` is the producer's own clock for evidence that has one (a session journal); it
+   *  stamps the evidence and state-start times while `receivedAt` keeps delivery order. */
   protected attachStatusTiming(
     payload: AgentHookEventPayload,
-    now = Date.now()
+    now = Date.now(),
+    observedAt?: number
   ): EnrichedAgentHookEventPayload {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
@@ -36,13 +42,41 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
-        : now
+        : (observedAt ?? now)
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
       receivedAt: now,
+      evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt
     }
+  }
+
+  /**
+   * A replay restates evidence already observed; it is not a new observation. Keeping
+   * `receivedAt` at `now` preserves delivery order (the connection-clear watermark and the
+   * renderer's four `<` drops all depend on it), while this clock records when the evidence
+   * was actually seen — so the staleness window measures age, not reconnect count.
+   * Without a remembered time the honest answer is `now`, which is today's behaviour.
+   */
+  private resolveEvidenceObservedAt(
+    payload: AgentHookEventPayload,
+    previous: EnrichedAgentHookEventPayload | undefined,
+    now: number
+  ): number {
+    const remembered =
+      previous?.evidenceObservedAt ?? this.evidenceObservedAtByPaneKey.get(payload.paneKey)
+    const observedAt = payload.isReplay === true && remembered !== undefined ? remembered : now
+    this.evidenceObservedAtByPaneKey.delete(payload.paneKey)
+    this.evidenceObservedAtByPaneKey.set(payload.paneKey, observedAt)
+    while (this.evidenceObservedAtByPaneKey.size > MAX_REMEMBERED_EVIDENCE_OBSERVATIONS) {
+      const oldest = this.evidenceObservedAtByPaneKey.keys().next().value
+      if (typeof oldest !== 'string') {
+        break
+      }
+      this.evidenceObservedAtByPaneKey.delete(oldest)
+    }
+    return observedAt
   }
 
   protected hashPromptForTelemetryDedupe(prompt: string): string {

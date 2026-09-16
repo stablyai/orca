@@ -1,0 +1,925 @@
+{
+  "operation": "session.tab-activation",
+  "family": "session.tab-activation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
+  "scenarioSha256": "5b050af6f02aa90f66340838cb5cc53c8fc0d5693d313b653c23881150384874",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0590b758ddc1": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "error": "inner refused",
+          "ok": false
+        }
+      }
+    },
+    "11b4a1934825": {
+      "name": "terminal.focus#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}",
+      "sent": 1
+    },
+    "159084d9517c": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "1fe60797f615": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": ""
+    },
+    "2502744f8808": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "error": "refused"
+        }
+      }
+    },
+    "25e79f9d5740": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "266e5da2cd10": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "error": {
+          "code": "refused",
+          "message": ""
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    },
+    "36ee2d642745": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "484fd4423b44": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "method_not_found",
+          "message": "Unknown method"
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    },
+    "4e4394afbcef": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "57ccbda9fde1": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "error": "inner refused",
+          "ok": false
+        }
+      }
+    },
+    "5f1a9d73474f": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "error": {
+          "code": "method_not_found",
+          "message": "Unknown method"
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    },
+    "62fdb01f5b5c": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true
+      }
+    },
+    "7118e8aeaaae": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "focused": true
+          }
+        }
+      }
+    },
+    "7cd4f4dc7a60": {
+      "name": "session.tabs.activate#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}",
+      "sent": 2
+    },
+    "84d74a6de2ca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      }
+    },
+    "893f5a2f4823": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "97219c38288c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      }
+    },
+    "9e6f70ca7163": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "a0e45ce9a66b": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "a8af1cd1c301": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b2c03b71f10a": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": "transport failure"
+    },
+    "b5031b4cc6e6": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "b8115959f9d6": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      }
+    },
+    "ba98adc95c80": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "bbb05c902ae9": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "error": {
+          "code": "refused",
+          "message": "outer refused"
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    },
+    "bbc6fbe00a97": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c43f43ee2e4c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "refused",
+          "message": "outer refused"
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "c76b51daf336": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "d563a507f706": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e495a9a84cf0": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "activated": true
+          }
+        }
+      }
+    },
+    "ecc5d1639f16": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "efc5111f9e33": {
+      "activate": {
+        "id": "frame-2",
+        "ok": true,
+        "result": {
+          "activated": true
+        }
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "error": "refused"
+        }
+      }
+    },
+    "fdc16c91d99d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "frame-1",
+        "ok": true
+      }
+    },
+    "fe7233635ac5": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "refused",
+          "message": ""
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.tab-activation-terminal.focus-1",
+    "checkpoints": [
+      {
+        "id": "session-tab-activation-focus-and-activate.normal:activated",
+        "observation": {
+          "sender": ["7118e8aeaaae", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "ecc5d1639f16",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "4e4394afbcef",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.result-absent:activated",
+        "observation": {
+          "sender": ["25e79f9d5740", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "fdc16c91d99d",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "62fdb01f5b5c",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.result-null:activated",
+        "observation": {
+          "sender": ["a8af1cd1c301", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "c76b51daf336",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "9e6f70ca7163",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.inner-ok-missing:activated",
+        "observation": {
+          "sender": ["a0e45ce9a66b", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "2502744f8808",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "efc5111f9e33",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.inner-false-string-error:activated",
+        "observation": {
+          "sender": ["d563a507f706", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "57ccbda9fde1",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "0590b758ddc1",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.inner-false-object-error:activated",
+        "observation": {
+          "sender": ["b5031b4cc6e6", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "97219c38288c",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "b8115959f9d6",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.outer-refused:activated",
+        "observation": {
+          "sender": ["bbc6fbe00a97", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "c43f43ee2e4c",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "bbb05c902ae9",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.outer-refused-no-message:activated",
+        "observation": {
+          "sender": ["ba98adc95c80", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "fe7233635ac5",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "266e5da2cd10",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.method-not-found:activated",
+        "observation": {
+          "sender": ["893f5a2f4823", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "484fd4423b44",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "5f1a9d73474f",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.transport-rejection:activated",
+        "observation": {
+          "sender": ["159084d9517c", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "a947768bc0ed",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "b2c03b71f10a",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-activation-focus-and-activate.transport-rejection-no-message:activated",
+        "observation": {
+          "sender": ["36ee2d642745", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
+          "settlements": {
+            "focus": "c7584e82c72f",
+            "activate": "84d74a6de2ca"
+          },
+          "state": "1fe60797f615",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

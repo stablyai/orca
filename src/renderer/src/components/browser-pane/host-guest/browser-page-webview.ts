@@ -1,3 +1,4 @@
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
 import {
   destroyPersistentWebview,
@@ -59,16 +60,29 @@ export function ensureBrowserPageWebview({
   webview.setAttribute('allowpopups', '')
   // Why: Electron spreads the webpreferences keys verbatim, so the shared
   // camelCase attribute must stay intact for fullscreen containment to work.
-  webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
+  // Keep Chromium's normal page canvas opaque while the host underneath follows Orca's theme.
+  webview.setAttribute(
+    'webpreferences',
+    `${ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE},transparent=false`
+  )
   webview.style.display = 'flex'
   webview.style.flex = '1'
   webview.style.width = '100%'
   webview.style.height = '100%'
   webview.style.border = 'none'
   setBrowserPageWebviewInputLock(webview, inputLocked)
-  // Why: some pages never paint a background, and a white viewport matches
-  // normal browser behavior instead of leaking Orca chrome through the guest.
-  webview.style.background = '#ffffff'
+  webview.style.background = 'var(--background)'
+  const guest = webview
+  // A committed synthetic blank document belongs to New Tab, including while its first URL waits.
+  guest.addEventListener('load-commit', (event) => {
+    if (event.isMainFrame) {
+      guest.style.visibility =
+        event.url === 'about:blank' || event.url === ORCA_BROWSER_BLANK_URL ? 'hidden' : 'visible'
+    }
+  })
+  guest.addEventListener('render-process-gone', () => {
+    guest.style.visibility = 'hidden'
+  })
   registerPersistentWebview(browserTabId, webview)
   activeContainer.appendChild(webview)
   created = true

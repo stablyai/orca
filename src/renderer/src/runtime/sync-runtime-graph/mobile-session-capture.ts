@@ -157,6 +157,7 @@ export function canReuseMobileSessionSnapshot(
 ): boolean {
   return (
     previous.worktreeId === next.worktreeId &&
+    previous.worktreeInstanceId === next.worktreeInstanceId &&
     previous.terminalTabs === next.terminalTabs &&
     previous.browserWorkspaces === next.browserWorkspaces &&
     previous.unifiedTabs === next.unifiedTabs &&

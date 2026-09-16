@@ -19,7 +19,7 @@ import {
   sortWorkspaceSpaceRows
 } from './workspace-space-presentation'
 import { getWorkspaceSpaceGitStatusRefreshCandidates } from './workspace-space-git-status-order'
-import { getWorkspaceDecisionDetails } from './WorkspaceSpaceManagerPanel'
+import { getWorkspaceDecisionDetails } from './workspace-space-decision-details'
 import {
   getWorkspaceSpaceDeleteState,
   getWorkspaceSpaceGitStatusForScan
@@ -452,6 +452,117 @@ describe('workspace space presentation helpers', () => {
     expect(details.reviewLabel).toBeNull()
   })
 
+  it('hides only a matching suppressed GitHub review from workspace decisions', () => {
+    const matching = getWorkspaceDecisionDetails(
+      row({ branch: 'refs/heads/feature/local' }),
+      decisionInputs({
+        hostedReviewCache: {
+          'local::repo::feature/local': {
+            data: {
+              provider: 'github',
+              number: 12,
+              state: 'open',
+              status: 'success',
+              title: 'Suppressed PR'
+            }
+          }
+        },
+        worktreeMap: new Map([
+          [
+            'wt',
+            worktreeRecord({
+              branch: 'refs/heads/feature/local',
+              linkedPR: null,
+              suppressedGitHubPR: 12
+            })
+          ]
+        ])
+      })
+    )
+    const different = getWorkspaceDecisionDetails(
+      row({ branch: 'refs/heads/feature/local' }),
+      decisionInputs({
+        hostedReviewCache: {
+          'local::repo::feature/local': {
+            data: {
+              provider: 'github',
+              number: 13,
+              state: 'open',
+              status: 'success',
+              title: 'Different PR'
+            }
+          }
+        },
+        worktreeMap: new Map([
+          [
+            'wt',
+            worktreeRecord({
+              branch: 'refs/heads/feature/local',
+              linkedPR: null,
+              suppressedGitHubPR: 12
+            })
+          ]
+        ])
+      })
+    )
+
+    expect(matching.reviewLabel).toBeNull()
+    expect(different.reviewLabel).toBe('PR #13 Open, success')
+  })
+
+  it('preserves explicit links and non-GitHub reviews in workspace decisions', () => {
+    const cachedReview = {
+      number: 12,
+      state: 'open',
+      status: 'success',
+      title: 'Review'
+    }
+    const explicit = getWorkspaceDecisionDetails(
+      row({ branch: 'refs/heads/feature/local' }),
+      decisionInputs({
+        hostedReviewCache: {
+          'local::repo::feature/local': {
+            data: { ...cachedReview, provider: 'github' }
+          }
+        },
+        worktreeMap: new Map([
+          [
+            'wt',
+            worktreeRecord({
+              branch: 'refs/heads/feature/local',
+              linkedPR: 12,
+              suppressedGitHubPR: 12
+            })
+          ]
+        ])
+      })
+    )
+    const gitLab = getWorkspaceDecisionDetails(
+      row({ branch: 'refs/heads/feature/local' }),
+      decisionInputs({
+        hostedReviewCache: {
+          'local::repo::feature/local': {
+            data: { ...cachedReview, provider: 'gitlab' }
+          }
+        },
+        worktreeMap: new Map([
+          [
+            'wt',
+            worktreeRecord({
+              branch: 'refs/heads/feature/local',
+              linkedPR: null,
+              suppressedGitHubPR: 12,
+              linkedGitLabMR: 12
+            })
+          ]
+        ])
+      })
+    )
+
+    expect(explicit.reviewLabel).toBe('PR #12 Open, success')
+    expect(gitLab.reviewLabel).toBe('PR #12 Open, success')
+  })
+
   it('counts migration-unsupported agent entries by worktree id', () => {
     const count = countWorkspaceSpaceActiveAgents({
       worktreeId: 'wt',
@@ -482,6 +593,27 @@ describe('workspace space presentation helpers', () => {
     expect(
       getWorkspaceSpaceGitStatusRefreshCandidates(rows).map((item) => item.worktreeId)
     ).toEqual(rows.map((item) => item.worktreeId))
+  })
+
+  it('orders git-status refreshes active first, then visible, then the rest', () => {
+    const rows = [
+      row({ worktreeId: 'rest-a', executionHostId: 'local' }),
+      row({ worktreeId: 'visible-a', executionHostId: 'local' }),
+      row({ worktreeId: 'active', executionHostId: 'ssh:builder' }),
+      row({ worktreeId: 'visible-b', executionHostId: 'local' }),
+      row({ worktreeId: 'rest-b', executionHostId: 'local' })
+    ]
+    const visibleWorktreeIdentities = new Set(
+      [rows[1], rows[3]].map(getWorkspaceSpaceWorktreeIdentity)
+    )
+
+    expect(
+      getWorkspaceSpaceGitStatusRefreshCandidates(rows, {
+        activeWorktreeId: 'active',
+        activeExecutionHostId: 'ssh:builder',
+        visibleWorktreeIdentities
+      }).map((item) => item.worktreeId)
+    ).toEqual(['active', 'visible-a', 'visible-b', 'rest-a', 'rest-b'])
   })
 
   it('resolves inspected worktree ids from the current scan rows', () => {

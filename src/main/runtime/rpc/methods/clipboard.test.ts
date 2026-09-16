@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
+import type { RpcRequest, RpcResponse } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
@@ -21,6 +21,10 @@ import {
   CLIPBOARD_METHODS,
   resetClipboardImageUploadsForTest
 } from './clipboard'
+import {
+  hasMobileClipboardImagePath,
+  resetMobileClipboardImageProvenanceForTest
+} from '../mobile-clipboard-image-provenance'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -31,15 +35,36 @@ function makeDispatcher(): RpcDispatcher {
   return new RpcDispatcher({ runtime, methods: CLIPBOARD_METHODS })
 }
 
+async function callMobile(
+  dispatcher: RpcDispatcher,
+  method: string,
+  params: unknown,
+  clientId = 'device-a'
+): Promise<RpcResponse> {
+  const replies: RpcResponse[] = []
+  await dispatcher.dispatchStreaming(
+    makeRequest(method, params),
+    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+    { clientKind: 'mobile', clientId }
+  )
+  const response = replies[0]
+  if (!response) {
+    throw new Error(`no reply for ${method}`)
+  }
+  return response
+}
+
 describe('clipboard RPC methods', () => {
   beforeEach(() => {
     saveClipboardImageBufferAsTempFile.mockReset()
     resetClipboardImageUploadsForTest()
+    resetMobileClipboardImageProvenanceForTest()
   })
 
   afterEach(() => {
     vi.useRealTimers()
     resetClipboardImageUploadsForTest()
+    resetMobileClipboardImageProvenanceForTest()
   })
 
   it('saves browser-provided clipboard image bytes on the runtime host', async () => {
@@ -62,6 +87,37 @@ describe('clipboard RPC methods', () => {
     expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-bytes'), {
       connectionId: null
     })
+  })
+
+  it('records a successful direct mobile upload for only the authenticated client', async () => {
+    const path = '/tmp/orca-paste-image.png'
+    saveClipboardImageBufferAsTempFile.mockResolvedValue(path)
+    const dispatcher = makeDispatcher()
+
+    await expect(
+      callMobile(dispatcher, 'clipboard.saveImageAsTempFile', {
+        contentBase64: Buffer.from('png-bytes').toString('base64'),
+        connectionId: null
+      })
+    ).resolves.toMatchObject({ ok: true, result: path })
+
+    expect(hasMobileClipboardImagePath('device-a', path)).toBe(true)
+    expect(hasMobileClipboardImagePath('device-b', path)).toBe(false)
+  })
+
+  it('does not authorize a remote-host clipboard path for local structured delivery', async () => {
+    const path = '/tmp/orca-paste-image.png'
+    saveClipboardImageBufferAsTempFile.mockResolvedValue(path)
+    const dispatcher = makeDispatcher()
+
+    await expect(
+      callMobile(dispatcher, 'clipboard.saveImageAsTempFile', {
+        contentBase64: Buffer.from('png-bytes').toString('base64'),
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toMatchObject({ ok: true, result: path })
+
+    expect(hasMobileClipboardImagePath('device-a', path)).toBe(false)
   })
 
   it('rejects non-base64 clipboard image payloads', async () => {
@@ -140,6 +196,48 @@ describe('clipboard RPC methods', () => {
     expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-bytes'), {
       connectionId: 'ssh-1'
     })
+    expect(hasMobileClipboardImagePath('device-a', '/tmp/orca-paste-image.png')).toBe(false)
+  })
+
+  it('binds chunk mutation and provenance to the mobile client that started the upload', async () => {
+    saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/orca-paste-image.png')
+    const dispatcher = makeDispatcher()
+    const contentBase64 = Buffer.from('png-bytes').toString('base64')
+    const start = await callMobile(dispatcher, 'clipboard.startImageUpload', {
+      expectedBase64Length: contentBase64.length,
+      connectionId: null
+    })
+    const uploadId = (start.ok ? start.result : null) as { uploadId: string }
+
+    for (const method of [
+      'clipboard.appendImageUploadChunk',
+      'clipboard.commitImageUpload',
+      'clipboard.abortImageUpload'
+    ]) {
+      const params =
+        method === 'clipboard.appendImageUploadChunk'
+          ? { uploadId: uploadId.uploadId, offset: 0, contentBase64 }
+          : { uploadId: uploadId.uploadId }
+      await expect(callMobile(dispatcher, method, params, 'device-b')).resolves.toMatchObject({
+        ok: false
+      })
+    }
+
+    await expect(
+      callMobile(dispatcher, 'clipboard.appendImageUploadChunk', {
+        uploadId: uploadId.uploadId,
+        offset: 0,
+        contentBase64
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { receivedBase64Length: contentBase64.length }
+    })
+    await expect(
+      callMobile(dispatcher, 'clipboard.commitImageUpload', { uploadId: uploadId.uploadId })
+    ).resolves.toMatchObject({ ok: true, result: '/tmp/orca-paste-image.png' })
+    expect(hasMobileClipboardImagePath('device-a', '/tmp/orca-paste-image.png')).toBe(true)
+    expect(hasMobileClipboardImagePath('device-b', '/tmp/orca-paste-image.png')).toBe(false)
   })
 
   it('rejects out-of-order chunk offsets', async () => {

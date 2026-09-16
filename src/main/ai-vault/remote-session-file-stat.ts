@@ -13,7 +13,13 @@ export async function statRemoteSessionFile(
   agent: AiVaultAgent,
   executionHostId: ExecutionHostId,
   issues: AiVaultScanIssue[],
-  options?: { missingIsExpected?: boolean; signal?: AbortSignal }
+  options?: {
+    missingIsExpected?: boolean
+    signal?: AbortSignal
+    // Lets a caller tell a missing path from a failed stat, which both report
+    // as null; the issue is recorded either way before this rethrows.
+    rethrowFailures?: boolean
+  }
 ): Promise<FileWithMtime | null> {
   try {
     throwIfAiVaultScanCancelled(options?.signal)
@@ -31,13 +37,17 @@ export async function statRemoteSessionFile(
     }
   } catch (error) {
     throwIfAiVaultScanCancelled(options?.signal)
-    if (!options?.missingIsExpected || !isMissingRemoteSessionPathError(error)) {
+    const missing = isMissingRemoteSessionPathError(error)
+    if (!options?.missingIsExpected || !missing) {
       recordSessionScanIssue(issues, {
         executionHostId,
         agent,
         path,
         message: errorMessage(error)
       })
+    }
+    if (options?.rethrowFailures && !missing) {
+      throw error
     }
     return null
   }

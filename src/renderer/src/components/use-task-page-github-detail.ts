@@ -11,6 +11,7 @@ import {
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../shared/gitlab-types'
 import { getTaskPageRepoCacheInput, getTaskPageRepoSourceContext } from './task-page-source-context'
+import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(
   scrollRef: React.RefObject<HTMLElement | null>,
@@ -38,6 +39,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     githubListScrollRef,
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef,
+    githubListRestoreWriteRef,
     taskListPositionRef
   } = model
   // Why: the dialog's "Use" button routes through the same direct-launch flow as the row-level "Use" CTA so behavior is consistent regardless of entry point.
@@ -73,67 +75,28 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
   useLayoutEffect(() => {
-    const scrollTop = pendingGithubScrollRestoreRef.current
-    const scrollElement = githubListScrollRef.current
-    if (scrollTop === null || !scrollElement || !pages[currentPage]) {
+    const target = pendingGithubScrollRestoreRef.current
+    if (target === null || !githubListScrollRef.current || !pages[currentPage]) {
       return
     }
-    let frame: number | null = null
-    let timeout: number | null = null
-    let observer: ResizeObserver | null = null
-    const clearScheduledRestore = (): void => {
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame)
-        frame = null
-      }
-      if (timeout !== null) {
-        window.clearTimeout(timeout)
-        timeout = null
-      }
-      observer?.disconnect()
-    }
-    const restore = (): void => {
-      const committedScrollElement = githubListScrollRef.current
-      if (!committedScrollElement || pendingGithubScrollRestoreRef.current !== scrollTop) {
-        return
-      }
-      committedScrollElement.scrollTop = scrollTop
-      githubListScrollTopRef.current = scrollTop
-      taskListPositionRef.current = {
-        contextKey: githubResumeContextKey,
-        page: currentPage,
-        scrollTop
-      }
-      if (Math.abs(committedScrollElement.scrollTop - scrollTop) < 1) {
-        pendingGithubScrollRestoreRef.current = null
-        clearScheduledRestore()
-      }
-    }
-    observer = new ResizeObserver(restore)
-    for (const child of scrollElement.children) {
-      observer.observe(child)
-    }
-    restore()
-    if (pendingGithubScrollRestoreRef.current === scrollTop) {
-      frame = window.requestAnimationFrame(restore)
-      timeout = window.setTimeout(() => {
-        if (pendingGithubScrollRestoreRef.current === scrollTop) {
-          const committedScrollTop = getTaskPageScrollTop(githubListScrollRef, 0)
-          githubListScrollTopRef.current = committedScrollTop
-          taskListPositionRef.current = {
-            contextKey: githubResumeContextKey,
-            page: currentPage,
-            scrollTop: committedScrollTop
-          }
-          pendingGithubScrollRestoreRef.current = null
+    return startGitHubListScrollRestore({
+      target,
+      scrollElementRef: githubListScrollRef,
+      pendingRestoreRef: pendingGithubScrollRestoreRef,
+      restoreWriteRef: githubListRestoreWriteRef,
+      onScrollTopApplied: (scrollTop) => {
+        githubListScrollTopRef.current = scrollTop
+        taskListPositionRef.current = {
+          contextKey: githubResumeContextKey,
+          page: currentPage,
+          scrollTop
         }
-        clearScheduledRestore()
-      }, 5_000)
-    }
-    return clearScheduledRestore
+      }
+    })
   }, [
     currentPage,
     dialogWorkItem,
+    githubListRestoreWriteRef,
     githubListScrollRef,
     githubListScrollTopRef,
     githubResumeContextKey,

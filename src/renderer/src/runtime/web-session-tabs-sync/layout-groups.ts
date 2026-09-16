@@ -11,7 +11,7 @@ import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import { clearHostSessionTabIdMappings, setHostSessionTabIdMapping } from './tracking-mappings'
 import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
 import { resolveWebSessionReorderedOrder } from '../web-session-reorder-intent'
-import { mapHostRecentTabIds } from './layout-helpers'
+import { mapHostRecentTabIds } from './tab-group-layout-tree'
 import { pushRecentTabId, sanitizeRecentTabIds } from './state-equality-core'
 
 export function buildHostToLocalTabIdMap({

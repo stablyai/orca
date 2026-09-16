@@ -1,35 +1,20 @@
+import type { DaemonPtyRouterDataEvent } from './daemon-pty-router-events'
+import { removeDaemonListener } from './daemon-listener-registry'
+import { emitPtyListeners } from './daemon-pty-listener-emission'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
-  onData(
-    callback: (payload: {
-      id: string
-      data: string
-      sequenceChars?: number
-      transformed?: boolean
-      seq?: number
-    }) => void
-  ): () => void {
+  onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
     this.dataListeners.push(callback)
-    return () => {
-      const idx = this.dataListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.dataListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.dataListeners, callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
     this.backgroundStreamListeners.push(callback)
-    return () => {
-      const idx = this.backgroundStreamListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.backgroundStreamListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.backgroundStreamListeners, callback)
   }
 
   onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {
@@ -40,29 +25,23 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
   ): () => void {
     this.exitListeners.push(callback)
-    return () => {
-      const idx = this.exitListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.exitListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.exitListeners, callback)
   }
 
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     this.writeUnavailableListeners.push(callback)
-    return () => {
-      const idx = this.writeUnavailableListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.writeUnavailableListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.writeUnavailableListeners, callback)
   }
 
   protected emitWriteUnavailable(id: string): void {
-    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-    for (const listener of [...this.writeUnavailableListeners]) {
-      listener({ id })
-    }
+    emitPtyListeners(this.writeUnavailableListeners, (listener) => {
+      try {
+        listener({ id })
+      } catch (error) {
+        // Renderer notification failure must not cancel recovery or erase write evidence.
+        console.warn('[daemon] Write unavailable listener failed:', error)
+      }
+    })
   }
 
   dispose(): void {

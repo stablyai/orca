@@ -20,8 +20,11 @@ export type RuntimeBrowserUnavailableReason =
  */
 export type RuntimeTerminalUnavailableReason =
   | 'dependency_missing'
+  | 'toolchain_missing'
   | 'libc_floor'
+  | 'shared_library_missing'
   | 'abi_mismatch'
+  | 'arch_mismatch'
   | 'load_failed'
   | 'load_crashed'
   | 'spawn_helper_missing'
@@ -43,10 +46,16 @@ export type RuntimeDegradation = {
 const TERMINAL_UNAVAILABLE_MESSAGES: Record<RuntimeTerminalUnavailableReason, string> = {
   dependency_missing:
     'Terminals are unavailable on this host: node-pty has no native binary for this platform. Install or rebuild it, or deploy a build that ships a prebuilt binary for this platform.',
+  toolchain_missing:
+    'Terminals are unavailable on this host: node-pty has no prebuilt binary for Linux and this host is missing the C/C++ build tools needed to compile one. Install them, then reconnect.',
   libc_floor:
     "This host's node-pty binary was built against a newer C library than the host provides, so the dynamic loader refuses it. Rebuild node-pty on this host, or deploy a build whose prebuilt binary matches this platform's libc.",
+  shared_library_missing:
+    'Terminals are unavailable on this host: a shared library that node-pty links against is not installed, so the dynamic loader cannot open the binary. Install the named library, then reconnect.',
   abi_mismatch:
     "This host's node-pty binary was built for a different Node ABI than the running Node, so it cannot be loaded. Rebuild node-pty against this Node version.",
+  arch_mismatch:
+    "This host's node-pty binary was built for a different CPU architecture than the running Node, so the dynamic loader refuses it. Rebuild node-pty on this host, or deploy a build for this architecture.",
   load_failed: 'Terminals are unavailable on this host: node-pty failed to load.',
   load_crashed:
     'Terminals are unavailable on this host: loading node-pty terminated the probe process, which means the binary is incompatible with this host rather than merely missing.',

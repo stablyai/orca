@@ -27,16 +27,20 @@ import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
+import type { PaletteSearchContext } from '@/lib/palette-match/palette-ranking'
 
 type WorktreeJumpPaletteWorktreesInput = WorktreeJumpPaletteStoreState &
   Pick<
     WorktreeJumpPaletteFilter,
     'filterPredicate' | 'repoMap' | 'repoByHostIdentity' | 'hostOptions' | 'hostFilterActive'
   > &
-  Pick<WorktreeJumpPaletteLocalState, 'paletteSearchQuery'>
+  Pick<WorktreeJumpPaletteLocalState, 'paletteSearchQuery'> & {
+    paletteSearchContext: PaletteSearchContext
+  }
 
 export function useWorktreeJumpPaletteWorktrees({
   paletteSearchQuery,
+  paletteSearchContext,
   repos,
   worktreesByRepo,
   agentStatusByPaneKey,
@@ -266,11 +270,13 @@ export function useWorktreeJumpPaletteWorktrees({
         documents: worktreeDocuments,
         repoMap,
         repoMapByHostIdentity: repoByHostIdentity,
-        checksReviewByWorktree
+        checksReviewByWorktree,
+        context: paletteSearchContext
       }),
     [
       checksReviewByWorktree,
       paletteSearchQuery,
+      paletteSearchContext,
       repoByHostIdentity,
       repoMap,
       sortedWorktrees,

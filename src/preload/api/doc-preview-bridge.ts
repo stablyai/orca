@@ -8,6 +8,7 @@ import {
   type DocPreviewFailure
 } from '../../shared/doc-preview-scheme'
 import type { DocPreviewGrantRequest } from '../api/doc-preview-api'
+import type { PreloadApi } from '../api-types'
 
 export const docPreviewApi = {
   mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
@@ -28,4 +29,4 @@ export const docPreviewApi = {
     ipcRenderer.on(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
     return () => ipcRenderer.removeListener(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
   }
-}
+} satisfies PreloadApi['docPreview']

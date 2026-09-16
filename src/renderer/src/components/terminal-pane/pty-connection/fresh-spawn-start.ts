@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
+import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
 import { STARTUP_CWD_FALLBACK_NOTICE } from './startup-cwd-fallback-notice'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pty-connect-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
@@ -14,7 +15,7 @@ import type {
 } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { resolveTerminalTabId } from './terminal-tab-id'
+import { findTerminalTabForPane } from './terminal-tab-id'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -33,10 +34,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         }
       }
     }
-    if (session.isLegacyWorkerAutomaticResumeBlocked()) {
-      releaseDeferredCwdFence()
-      return Promise.resolve(null)
-    }
+
     if (useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]?.isDeleting) {
       // Why: the worktree is being deleted; its PTYs were just killed for the
       // filesystem teardown. A fresh shell must not spawn into a directory the
@@ -46,6 +44,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       return Promise.resolve(null)
     }
     session.authoritativeReattachGeneration += 1
+    // Every fresh connect creates or rebinds a PTY. Do not let a legacy
+    // response that omits `incarnationId` inherit the predecessor's fence.
+    session.remotePtyIncarnationId = null
     session.clearPaneMode2031State()
     session.clearHiddenOutputRestoreState()
     // Why: a canceled old replay clear can preserve xterm's native
@@ -110,51 +111,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
-      shouldContinue: () => {
-        const state = useAppStore.getState()
-        const unifiedTab = state.getTab?.(session.deps.tabId)
-        const initialOwnerWorktreeId =
-          state.getTerminalTabOwnerWorktreeId?.(session.deps.tabId) ??
-          (unifiedTab?.contentType === 'terminal'
-            ? state.getTerminalTabOwnerWorktreeId?.(unifiedTab.entityId)
-            : null)
-        const terminalTabId = resolveTerminalTabId(
-          {
-            getTab: state.getTab,
-            hasTerminalTab: (candidateId) =>
-              Boolean(
-                state.tabsByWorktree[session.deps.worktreeId]?.some(
-                  (candidate) => candidate.id === candidateId
-                ) ||
-                (initialOwnerWorktreeId
-                  ? state.tabsByWorktree[initialOwnerWorktreeId]?.some(
-                      (candidate) => candidate.id === candidateId
-                    )
-                  : false)
-              )
-          },
-          session.deps.tabId
-        )
-        const ownerWorktreeId =
-          state.getTerminalTabOwnerWorktreeId?.(terminalTabId) ?? initialOwnerWorktreeId
-        const terminalTab =
-          state.tabsByWorktree[session.deps.worktreeId]?.find(
-            (candidate) => candidate.id === terminalTabId
-          ) ??
-          (ownerWorktreeId
-            ? state.tabsByWorktree[ownerWorktreeId]?.find(
-                (candidate) => candidate.id === terminalTabId
-              )
-            : undefined)
-        const fallbackTab = Object.values(state.tabsByWorktree)
-          .find((tabs) => tabs.some((candidate) => candidate.id === terminalTabId))
-          ?.find((candidate) => candidate.id === terminalTabId)
-        const currentTab =
-          terminalTab ??
-          fallbackTab ??
-          (unifiedTab && 'generation' in unifiedTab ? unifiedTab : null)
-        return !session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration
-      },
+      shouldContinue: () =>
+        !session.disposed &&
+        (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
+          ?.generation ?? 0) === session.tabGeneration,
       callbacks: outputCallbacks.callbacks
     })
 
@@ -188,6 +148,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId
             : null
+        // Old hosts may return a string or an object without the optional
+        // field; either way remote evidence must remain client-only
+        // unverifiable until a stamped attach result arrives.
+        session.remotePtyIncarnationId = connectResult?.incarnationId ?? null
         if (connectResult?.isReattach) {
           session.pendingStartupCommand = null
           const accepted = await session.handleReattachResult(
@@ -314,6 +278,14 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.armDirectSshPaneRetryTimeout(trackedPromise, session.directSshRetryAttempt)
     void trackedPromise.then((spawnedPtyId) => {
       if (spawnedPtyId) {
+        // The dual of settleSpawnThatLeftPaneUnbound below, and the only place a
+        // FRESH spawn can report an outcome: the pane it heals has no PTY to
+        // reattach to, so it never reaches the reattach handler that settles
+        // every other recovery reason. Without this the healed attempt sits
+        // 'pending' for the whole settlement bound and blocks the tab's next
+        // recovery. Generation-gated in the store, so a spawn with no recovery
+        // attempt in flight writes nothing.
+        session.settlePaneAttachAttempt?.(undefined, 'success')
         return
       }
       queueMicrotask(() => {
@@ -324,7 +296,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         ) {
           return
         }
-        session.settleDirectSshPaneRetryAttempt(session.directSshRetryAttempt, 'failed')
+        settleSpawnThatLeftPaneUnbound(session)
       })
     })
     // Why: split panes in the same tab can spawn concurrently. Key by pane

@@ -1,5 +1,5 @@
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
-import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
+import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
 import {
   finalizeFromAgentOutput,
@@ -25,7 +25,7 @@ export async function runRemoteSourceControlPlan(input: {
     result = await target.execute(plan, target.cwd, SOURCE_CONTROL_GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
-    if (isSshMuxRequestTimeoutError(error)) {
+    if (isSshRequestOutcomeUnverifiable(error)) {
       return {
         success: false,
         error: `${plan.label} took longer than ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s to respond and may still be running on the remote host.`

@@ -11,7 +11,7 @@ import {
 import {
   mergeCurrentOrchestrationContext,
   orchestrationMapsEqual
-} from './agent-status-map-helpers'
+} from './agent-status-orchestration-context'
 
 export function createAgentStatusOrchestrationActions(
   runtime: AgentStatusRuntime

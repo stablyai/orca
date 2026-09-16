@@ -231,6 +231,41 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
+  it.each([
+    { kind: 'covered backlog', snapshot: 'startup\r\n', seq: 9, count: 1 },
+    { kind: 'legacy unsequenced snapshot', snapshot: 'startup\r\n', seq: undefined, count: 2 },
+    { kind: 'blank snapshot', snapshot: '\x1b[2J', seq: 9, count: 1 }
+  ])(
+    'preserves output while reconciling $kind on daemon adoption',
+    async ({ snapshot, seq, count }) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('tab-pty')
+      transport.connect.mockImplementation(
+        async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+          callbacks?.onData?.('startup\r\n', { seq: 9, rawLength: 9 })
+          callbacks?.onData?.('new output\r\n', { seq: 21, rawLength: 12 })
+          return { id: sessionId, snapshot, snapshotSeq: seq }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const pane = createPane(1)
+      const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+      const deps = createDeps({
+        isVisibleRef: { current: true },
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(20)
+      for (let step = 0; step < 40; step += 1) {
+        parseCallbacks.shift()?.()
+        await flushAsyncTicks(2)
+      }
+      expect(writes.join('').match(/startup/g)).toHaveLength(count)
+      expect(writes.join('')).toContain('new output')
+    }
+  )
+
   it('drains live bytes after transport confirms an explicit reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { deliverTerminalDataWithDeferredCredit } =

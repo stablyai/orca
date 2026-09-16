@@ -107,7 +107,10 @@ describe('prefetchManagedWorktreeCreateBase (orca-runtime-get-worktree-terminal-
   it('prepares the checkout the prefetch resolved', async () => {
     _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
     setPlatform('win32')
-    mocks.prefetchWorktreeCreateBase.mockResolvedValue('origin/main')
+    mocks.prefetchWorktreeCreateBase.mockImplementation(async ({ prepareCheckout }) => {
+      await prepareCheckout('origin/main')
+      return 'origin/main'
+    })
     const runtime = new OrcaRuntimeService(makeStore() as never)
 
     await runtime.prefetchManagedWorktreeCreateBase({ repoSelector: 'repo-1' })

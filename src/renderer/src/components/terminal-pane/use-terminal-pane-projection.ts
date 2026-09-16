@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -16,14 +16,19 @@ import {
 } from '../native-chat/native-chat-leaf-routing'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
+import { useAppStore } from '@/store'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
     applyNativeChatLeafRoute,
+    canToggleChatForLeaf,
     chatLeafId,
-    chatPaneDispatchStatus,
     contextMenu,
     contextMenuLeafId,
+    effectiveChatViewMode,
+    getContextMenuLeafId,
     getNativeChatLeafIds,
     getTabWideAgentHintLeafId,
     isActive,
@@ -31,6 +36,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     isChatViewMode,
     isVisible,
     managerRef,
+    toggleNativeChatForLeaf,
     paneTitles,
     paneTransportsRef,
     resolveTitleAgentForLeaf,
@@ -40,6 +46,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     shouldMeasureHiddenStartup,
     structuredSessionAgent,
     structuredSessionId,
+    tabId,
     sshReconnectOwnsTerminalErrors,
     systemPrefersDark,
     tabAgentTypeByLeaf,
@@ -100,6 +107,11 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   )
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
+  const menuAgentSessionId = useAppStore((state) =>
+    contextMenu.open && contextMenuLeafId
+      ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
+      : null
+  )
   const chatLeafStillMounted = chatLeafId
     ? managedPanes.some((pane) => pane.leafId === chatLeafId)
     : false
@@ -168,6 +180,17 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(contextMenuLeafId)
   )
+  // Each switcher gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
+  const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
+  const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
+  const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
+  const handleContextMenuToggleNativeChat = useCallback(() => {
+    const leafId = getContextMenuLeafId()
+    if (!leafId) {
+      return
+    }
+    toggleNativeChatForLeaf(leafId)
+  }, [getContextMenuLeafId, toggleNativeChatForLeaf])
   return {
     effectiveAppearance,
     terminalBackground,
@@ -181,6 +204,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     showSshReconnectOverlay,
     visibleTerminalError,
     menuPaneHasCustomTitle,
+    menuAgentSessionId,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,
@@ -189,12 +213,15 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     structuredChatAgent,
     structuredChatTarget,
     structuredSessionId,
-    chatPaneDispatchStatus,
     chatPaneOwnsTabWideLaunchDraft,
     activePaneIsChatLeaf,
     resolveAgentForLeaf,
     activePaneCanContinueInNewSession,
-    contextMenuCanContinueInNewSession
+    contextMenuCanContinueInNewSession,
+    activePaneCanToggleChat,
+    contextMenuCanToggleChat,
+    contextMenuIsChatView,
+    handleContextMenuToggleNativeChat
   }
 }
 

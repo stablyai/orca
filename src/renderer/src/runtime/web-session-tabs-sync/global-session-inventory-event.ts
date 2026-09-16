@@ -78,6 +78,7 @@ export function handleGlobalSessionInventoryEvent({
     visibilityGeneration,
     inventoryFrame,
     event.snapshots,
+    event.authoritative === true,
     runtimeId
   )
   const finishRecoveries = event.snapshots.map((snapshot, index) =>
@@ -100,6 +101,7 @@ export function handleGlobalSessionInventoryEvent({
             environmentId,
             {
               expectedEnvironmentPairingRevision,
+              expectedRuntimeId: runtimeId,
               getCurrentState: () => useAppStore.getState()
             }
           )

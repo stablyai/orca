@@ -33,6 +33,13 @@ function resolveQuickCommandGroupId(
   )
 }
 
+function resolveQuickCommandLaunchGroupId(
+  worktreeId: string,
+  requestedGroupId: string | null | undefined
+): string | null {
+  return requestedGroupId ?? useAppStore.getState().activeGroupIdByWorktree[worktreeId] ?? null
+}
+
 /**
  * Spawn a fresh terminal tab in the given group and queue the quick-command
  * text as the startup command. The PTY connection layer writes the command
@@ -64,12 +71,21 @@ export function runQuickCommandInNewTab({
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
-    if (result?.tabId) {
-      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
+    if (
+      result?.surface.kind === 'local-terminal' ||
+      result?.surface.kind === 'local-agent-session'
+    ) {
+      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.surface.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
-      return { tabId: result.tabId }
+      return { tabId: result.surface.tabId }
+    }
+    if (result?.surface.kind === 'host-published') {
+      const launchedGroupId = resolveQuickCommandLaunchGroupId(worktreeId, groupId)
+      if (launchedGroupId) {
+        useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
+      }
     }
     if (result) {
       return null
