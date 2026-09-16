@@ -195,7 +195,13 @@ moved none of the 520 goldens before `sent` existed and moves two now, `codex-re
 and its reply matrix, where the write's `sent` goes from 0 to 1. What `sent` cannot see is a defer
 shorter than the product's own await chain: dropping that `await`, or deferring the write by one
 microtask, still lands it before the send, because resolving the journal's promise chain costs more
-microtask ticks than the defer saved. Sender args have three
+microtask ticks than the defer saved. Nor can it see anything in a family that sends no requests:
+`host-worktree-refresh` sends none, so every `sent` in its goldens is `0` across all eight
+checkpoints, and moving that file's two initial snapshot reads from after `client.subscribe` to
+before it moves no golden. A request count orders payloads and effects against sends, not against
+each other, so subscribe-vs-effect order in a request-free family is unpinned. The fix is one
+monotonic write ordinal shared by requests, payloads and effects, which forces a full refresh and is
+not done here. Sender args have three
 positional slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing
 `$rpc` are escaped. Only object keys are sorted; array/effect order, options, budgets, settlement
 times and errors stay observable. Errors contain category, message and `isRpcDeliveryUnknown`, never
@@ -385,9 +391,10 @@ mentions any of their methods: `notifications.subscribe`, `agentSession.subscrib
 `session.tabs.subscribe`, `nativeChat.subscribe`, `terminal.subscribe`, `browser.screencast` and
 `accounts.subscribe`. The frame plumbing is method-agnostic, so what stops each of the seven is its
 consumer, not the runner. `terminal.subscribe` and `browser.screencast` write to a webview terminal
-ref this runner has no substitute for. `accounts.subscribe` sits behind a snapshot decoder
-re-exported through a React Native screen module the loader cannot reach, the same wall the accounts
-read has always been behind. The remaining four are unwritten scenarios, not walls. Blur is
+ref this runner has no substitute for. `accounts.subscribe` is wired on a per-host client from
+`useAllHostClients`, and the runner hands an adapter one client rather than the multi-host context
+that hook reads. Its snapshot decoder is not the wall: the loader reaches
+`decodeAccountsSnapshot` and it throws its own domain error on a bad snapshot. The remaining four are unwritten scenarios, not walls. Blur is
 unrecorded across all of them: `useFocusEffect` is substituted as `useEffect`, so a route's focus
 cleanup is recorded at unmount and an unsubscribe only a blur would reach is not — driving focus
 needs a substitute, and no recording reads one yet. Four of the nine
@@ -445,7 +452,10 @@ need a real `.git`, so an archive tree fails as `Product sources or lockfile dif
 main baseline` — a product mismatch that is not there. Format the recorder before recording: an
 `oxfmt` pass afterwards moves `recorderSha256` again. A recorder-only branch that has merged main
 is not the awkward case: its product tree is main's, so repin `baseline` to main's tip and record
-in place — there is no migrated source for the goldens to be recorded against. Adding or editing
+in place — there is no migrated source for the goldens to be recorded against. That repin is the
+whole of it, though. Where a branch is told not to repin, `--record` refuses on any product tree
+that is not the pinned one, merged or not, and the detached-pin worktree above is the only recipe
+that runs. Adding or editing
 one domain's module under `adapters/` no longer needs any of this: only that domain's goldens move,
 and they re-record from its own branch like any other behaviour change. Adding a mutant, a probe or
 a suite that does not record needs none of it either, and moves no golden at all.
