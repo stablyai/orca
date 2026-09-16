@@ -778,17 +778,9 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
   })
 
   it('uses the Linux-side directory for WSL UNC source homes', () => {
-    const sourceDir = resolveCodexConfigMirrorSourceDirectory(
-      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
-    )
-
-    expect(sourceDir).toBe('/home/alice/.codex')
     expect(
-      prepareSystemConfigForFreshRuntimeMirror(
-        'model_instructions_file = "instructions.md"\n',
-        sourceDir
-      )
-    ).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
+      resolveCodexConfigMirrorSourceDirectory('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex')
+    ).toBe('/home/alice/.codex')
   })
 
   it('rewrites relative paths against a Linux-side home and strips hook trust', () => {
@@ -806,7 +798,10 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
         'trust_level = "trusted"',
         ''
       ].join('\r\n'),
-      '/home/alice/.codex'
+      '/home/alice/.codex',
+      // This case is about relative-path anchoring and the hook-trust strip;
+      // there is no home pair to re-root against, and `null` says so.
+      null
     )
 
     // Why: WSL configs are consumed inside the distro, so rewrites must use
