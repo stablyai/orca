@@ -28,7 +28,7 @@ import path from 'node:path'
 /** `detectAgentStatusFromTitle` reads these as agent-name + strong keyword. */
 export const CODEX_IDLE_TITLE = 'Codex done'
 export const CODEX_WORKING_TITLE = 'Codex working'
-/** Also satisfies `isCursorAgentTitle`, which suppresses the synthesized Enter. */
+/** Cursor Agent idle title (`isCursorAgentTitle`). */
 export const CURSOR_IDLE_TITLE = 'Cursor Ready'
 
 export type AgentLedgerEntry = {
