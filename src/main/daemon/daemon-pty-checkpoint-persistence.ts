@@ -46,6 +46,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     }
     if (take.overflowed) {
       // Why: overflow dropped records (log has a hole); only a full snapshot can re-anchor it.
+      this.sessionsNeedingLiveCheckpoint.add(sessionId)
       if (this.isFullCheckpointCoolingDown(sessionId)) {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
@@ -71,15 +72,18 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       take.seq,
       take.records
     )
-    if (appendResult === 'needs-checkpoint') {
-      // Why dropping take.records is lossless: applied to the emulator before the take, so the snapshot below contains them.
-      if (this.isFullCheckpointCoolingDown(sessionId)) {
+    if (appendResult !== 'ok') {
+      const rejectedBatch = appendResult === 'needs-checkpoint'
+      this.sessionsNeedingContinuityCheckpoint.add(sessionId)
+      // A pre-upgrade log can already be full; compact now while its rejected batch is still available.
+      if (!rejectedBatch && this.isFullCheckpointCoolingDown(sessionId)) {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
         teardown: false,
-        forceLiveSnapshot: true
+        requireContinuityProof: true,
+        ...(rejectedBatch ? { precedingTake: take } : {})
       })
       if (checkpoint.checkpoint === 'retryable') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
@@ -95,6 +99,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       teardown: boolean
       forceLiveSnapshot?: boolean
       requireContinuityProof?: boolean
+      precedingTake?: Pick<TakePendingOutputResult, 'seq' | 'records'>
     }
   ): Promise<SnapshotCheckpointResult> {
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
@@ -103,20 +108,24 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       teardownSnapshot: opts.teardown
     })
     if (take?.snapshot && this.historyManager) {
+      const firstSeq = opts.precedingTake?.seq ?? take.seq
       // Why require drainedRecords: an older daemon still empties the pending
       // queue on includeSnapshot but omits the field. Treating absence as []
       // would compact stale disk history and reset the log.
       const snapshot =
-        take.drainedRecords === undefined || opts.forceLiveSnapshot === true || take.overflowed
+        take.drainedRecords === undefined ||
+        opts.forceLiveSnapshot === true ||
+        take.overflowed ||
+        (opts.precedingTake !== undefined && take.seq !== firstSeq + 1)
           ? take.snapshot
           : await this.buildDurableHistorySnapshot(
               sessionId,
               take.snapshot,
-              [...take.drainedRecords, ...take.records],
+              [...(opts.precedingTake?.records ?? []), ...take.drainedRecords, ...take.records],
               {
-                pendingRecordsAreComplete: take.seq === 1,
+                pendingRecordsAreComplete: firstSeq === 1,
                 ...(opts.requireContinuityProof === true
-                  ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
+                  ? { requiredPreviousPendingOutputSeq: firstSeq - 1 }
                   : {})
               }
             )

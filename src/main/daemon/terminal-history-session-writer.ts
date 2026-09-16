@@ -16,13 +16,18 @@ import {
 import type { SessionMeta } from './terminal-history-metadata'
 import { clearTerminalHistoryRecoveryProtection } from './terminal-history-recovery-quarantine'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
-import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
+import {
+  TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+  TERMINAL_HISTORY_LOG_MAX_BYTES
+} from './terminal-history-file-limits'
 import { serializeTerminalCheckpointWithinLimit } from './terminal-checkpoint-serializer'
 import { PRIVATE_FILE_MODE, tightenPathMode } from './daemon-private-file-modes'
 import { tightenTerminalHistorySessionDirMode } from './terminal-history-session-files'
 
-// Why 5MB: bounds cold-restore replay time and per-session disk; hitting the cap triggers one checkpoint that resets the log.
-const LOG_MAX_BYTES = 5 * 1024 * 1024
+// Leave headroom for the daemon's next 2MiB batch before the hard reader/writer cap.
+const LOG_CHECKPOINT_BYTES = TERMINAL_HISTORY_LOG_MAX_BYTES / 2
+
+export type TerminalHistoryAppendResult = 'ok' | 'checkpoint-needed' | 'needs-checkpoint'
 
 export class TerminalHistorySessionWriter {
   readonly checkpointPath: string
@@ -46,11 +51,11 @@ export class TerminalHistorySessionWriter {
   async appendIncrements(
     seq: number,
     records: PendingOutputRecord[]
-  ): Promise<'ok' | 'needs-checkpoint'> {
+  ): Promise<TerminalHistoryAppendResult> {
     this.resolveLogState()
     const batch = encodeLogBatch(seq, records)
     const projectedBytes = Math.max(this.logBytes ?? 0, LOG_HEADER_BYTES) + batch.length
-    if (projectedBytes > LOG_MAX_BYTES) {
+    if (projectedBytes > TERMINAL_HISTORY_LOG_MAX_BYTES) {
       return 'needs-checkpoint'
     }
     if (this.logBytes === 0) {
@@ -61,7 +66,7 @@ export class TerminalHistorySessionWriter {
     }
     await fsPromises.appendFile(this.logPath, batch, { mode: PRIVATE_FILE_MODE })
     this.logBytes = (this.logBytes ?? LOG_HEADER_BYTES) + batch.length
-    return 'ok'
+    return this.logBytes >= LOG_CHECKPOINT_BYTES ? 'checkpoint-needed' : 'ok'
   }
 
   async checkpoint(

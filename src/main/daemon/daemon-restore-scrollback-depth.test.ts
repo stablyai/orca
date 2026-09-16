@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
+import {
+  DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
+  DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX
+} from '../../shared/terminal-scrollback-policy'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
@@ -156,7 +159,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         expect(text).toContain(NEWEST_WRITTEN_LINE)
         expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
         expect(text).toContain(OLDEST_WRITTEN_LINE)
-        expect(DAEMON_RESTORE_SCROLLBACK_ROWS).toBe(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT)
+        expect(DAEMON_RESTORE_SCROLLBACK_ROWS).toBe(DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX)
       } finally {
         live.dispose()
       }
@@ -305,22 +308,25 @@ describe('STA-4091 previously recoverable restore depth', () => {
       rmSync(dir, { recursive: true, force: true })
     })
 
-    it('restores the previously recoverable depth on remount snapshot', async () => {
-      const { id } = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'remount-depth',
-        cwd: '/tmp'
-      })
-      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+    it.each([DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT, DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX])(
+      'restores the previously recoverable depth on remount snapshot (%i rows)',
+      async (depth) => {
+        const { id } = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'remount-depth',
+          cwd: '/tmp'
+        })
+        lastSubprocess.emitData(numberedOutput(depth))
 
-      const snapshot = await adapter.getBufferSnapshot(id)
-      const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`
-      expect(text).toContain(NEWEST_WRITTEN_LINE)
-      expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
-      expect(text).toContain(OLDEST_WRITTEN_LINE)
-      expect(text.split(OLDEST_WRITTEN_LINE)).toHaveLength(2)
-    })
+        const snapshot = await adapter.getBufferSnapshot(id)
+        const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`
+        expect(text).toContain(NEWEST_WRITTEN_LINE)
+        expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+        expect(text).toContain(OLDEST_WRITTEN_LINE)
+        expect(text.split(OLDEST_WRITTEN_LINE)).toHaveLength(2)
+      }
+    )
 
     it('honors a bounded remount snapshot depth', async () => {
       const { id } = await adapter.spawn({
@@ -338,74 +344,83 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(text).not.toContain(OLDEST_WRITTEN_LINE)
     })
 
-    it('restores that depth after a keepHistory restart compact', async () => {
-      const { id } = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'restart-depth',
-        cwd: '/tmp'
-      })
-      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+    it.each([DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT, DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX])(
+      'restores that depth after a keepHistory restart compact (%i rows)',
+      async (depth) => {
+        const { id } = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'restart-depth',
+          cwd: '/tmp'
+        })
+        lastSubprocess.emitData(numberedOutput(depth))
 
-      await adapter.shutdown(id, { immediate: true, keepHistory: true })
+        await adapter.shutdown(id, { immediate: true, keepHistory: true })
 
-      const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
-        ignoreCleanEnd: true
-      })
-      const text = snapshotText(restore ?? {})
-      expect(text).toContain(NEWEST_WRITTEN_LINE)
-      expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
-      expect(text).toContain(OLDEST_WRITTEN_LINE)
-    })
+        const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
+          ignoreCleanEnd: true
+        })
+        const text = snapshotText(restore ?? {})
+        expect(text).toContain(NEWEST_WRITTEN_LINE)
+        expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+        expect(text).toContain(OLDEST_WRITTEN_LINE)
+      }
+    )
 
-    it('restores that depth on warm reattach', async () => {
-      const { id } = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'reattach-depth',
-        cwd: '/tmp'
-      })
-      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+    it.each([DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT, DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX])(
+      'restores that depth on warm reattach (%i rows)',
+      async (depth) => {
+        const { id } = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'reattach-depth',
+          cwd: '/tmp'
+        })
+        lastSubprocess.emitData(numberedOutput(depth))
 
-      const reattach = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: id,
-        cwd: '/tmp'
-      })
-      expect(reattach.isReattach).toBe(true)
-      expect(reattach.snapshot).toContain(NEWEST_WRITTEN_LINE)
-      expect(reattach.snapshot).toContain(PREVIOUSLY_RECOVERABLE_LINE)
-      expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
-    })
+        const reattach = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: id,
+          cwd: '/tmp'
+        })
+        expect(reattach.isReattach).toBe(true)
+        expect(reattach.snapshot).toContain(NEWEST_WRITTEN_LINE)
+        expect(reattach.snapshot).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+        expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
+      }
+    )
 
-    it('preserves durable depth across an adapter reconnect', async () => {
-      const { id } = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'adapter-reconnect-depth',
-        cwd: '/tmp'
-      })
-      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+    it.each([DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT, DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX])(
+      'preserves durable depth across an adapter reconnect (%i rows)',
+      async (depth) => {
+        const { id } = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'adapter-reconnect-depth',
+          cwd: '/tmp'
+        })
+        lastSubprocess.emitData(numberedOutput(depth))
 
-      await adapter.disconnectOnly()
-      adapter = new DaemonPtyAdapter({
-        socketPath: getDaemonSocketPath(dir),
-        tokenPath: join(dir, 'test.token'),
-        historyPath: historyDir
-      })
+        await adapter.disconnectOnly()
+        adapter = new DaemonPtyAdapter({
+          socketPath: getDaemonSocketPath(dir),
+          tokenPath: join(dir, 'test.token'),
+          historyPath: historyDir
+        })
 
-      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
-      expect(reattach.isReattach).toBe(true)
-      expect(reattach.snapshot).toContain(NEWEST_WRITTEN_LINE)
-      expect(reattach.snapshot).toContain(PREVIOUSLY_RECOVERABLE_LINE)
-      expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
+        const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
+        expect(reattach.isReattach).toBe(true)
+        expect(reattach.snapshot).toContain(NEWEST_WRITTEN_LINE)
+        expect(reattach.snapshot).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+        expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
 
-      const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
-        ignoreCleanEnd: true
-      })
-      expect(snapshotText(restore ?? {})).toContain(OLDEST_WRITTEN_LINE)
-    })
+        const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
+          ignoreCleanEnd: true
+        })
+        expect(snapshotText(restore ?? {})).toContain(OLDEST_WRITTEN_LINE)
+      }
+    )
 
     it('uses the live window when durable history disappears after a prior drain', async () => {
       const { id } = await adapter.spawn({
