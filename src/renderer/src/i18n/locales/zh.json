@@ -4735,7 +4735,7 @@
           "deleteWorktree": "删除工作树"
         },
         "WorktreeList": {
-          "standaloneGroupDescription": "创建一个空分组,稍后可将项目移入其中。",
+          "standaloneGroupDescription": "创建一个空分组，稍后可将项目移入其中。",
           "d880ea0744": "创建一个组并将该项目移入其中。",
           "bc1460beb3": "更新侧栏中显示的组名称。",
           "13757c053c": "新项目组",

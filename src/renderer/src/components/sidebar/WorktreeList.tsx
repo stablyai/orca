@@ -268,31 +268,41 @@ const WorktreeList = React.memo(function WorktreeList({
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
+  // Why: the create request can arrive while the empty state shows (the header
+  // menu outlives row filtering), so the dialog host mounts above the split.
+  const projectGroupDialogHost = (
+    <SidebarWorktreeListDialogs
+      dialogs={projectGroupDialogs}
+      repos={repos}
+      settings={settings}
+      suppressExternalWorktreeInboxRepoId={
+        externalWorktreeCards.suppressExternalWorktreeInboxRepoId
+      }
+      setSuppressExternalWorktreeInboxRepoId={
+        externalWorktreeCards.setSuppressExternalWorktreeInboxRepoId
+      }
+      newExternalWorktreeInboxActionState={
+        externalWorktreeCards.newExternalWorktreeInboxActionState
+      }
+      onConfirmSuppressExternalWorktreeInbox={() => {
+        void externalWorktreeCards.handleConfirmSuppressExternalWorktreeInbox()
+      }}
+      onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+    />
+  )
   // Why: when active filters hide every row, the Clear Filters empty state must win over Project Group headers.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
-    return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+    return (
+      <>
+        {projectGroupDialogHost}
+        <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+      </>
+    )
   }
 
   return (
     <>
-      <SidebarWorktreeListDialogs
-        dialogs={projectGroupDialogs}
-        repos={repos}
-        settings={settings}
-        suppressExternalWorktreeInboxRepoId={
-          externalWorktreeCards.suppressExternalWorktreeInboxRepoId
-        }
-        setSuppressExternalWorktreeInboxRepoId={
-          externalWorktreeCards.setSuppressExternalWorktreeInboxRepoId
-        }
-        newExternalWorktreeInboxActionState={
-          externalWorktreeCards.newExternalWorktreeInboxActionState
-        }
-        onConfirmSuppressExternalWorktreeInbox={() => {
-          void externalWorktreeCards.handleConfirmSuppressExternalWorktreeInbox()
-        }}
-        onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
-      />
+      {projectGroupDialogHost}
       <VirtualizedWorktreeViewport
         // Why: status headers move during wake (inactive -> active); key only on grouping mode so row identity survives.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
