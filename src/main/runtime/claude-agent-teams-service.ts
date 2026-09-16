@@ -24,6 +24,7 @@ export class ClaudeAgentTeamsService {
 
   createLaunchEnv(args: {
     leaderHandle: string
+    leaderPaneKey?: string
     baseEnv: Record<string, string | undefined>
     shimDir: string
     /** Absolute path only; null leaves the var unset so the shim refuses to guess a cwd-relative CLI. */
@@ -60,7 +61,12 @@ export class ClaudeAgentTeamsService {
       env.ORCA_ENVIRONMENT = args.baseEnv.ORCA_ENVIRONMENT
     }
 
-    const leader: TeamPane = { fakePaneId: leaderPane, handle: args.leaderHandle, index: 0 }
+    const leader: TeamPane = {
+      fakePaneId: leaderPane,
+      handle: args.leaderHandle,
+      paneKey: args.leaderPaneKey,
+      index: 0
+    }
     this.teams.set(teamId, {
       teamId,
       token,

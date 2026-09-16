@@ -92,6 +92,10 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             createTeamEnv: (shimDir, shimBin) =>
               this.claudeAgentTeams.createLaunchEnv({
                 leaderHandle: preAllocatedHandle,
+                // Why: only an adopted pane identity is final here — a random one can be
+                // replaced by the canonical surface after spawn, and a wrong key would
+                // remint the leader onto the wrong pane.
+                leaderPaneKey: canAdoptPaneIdentity ? paneKey : undefined,
                 baseEnv: { ...process.env, ...baseEnv },
                 shimDir,
                 shimBin
