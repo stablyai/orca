@@ -11,7 +11,7 @@ import type { RecordedValue } from './recording-values'
 describe('subscription recordings', () => {
   it('delivers each frame through the session that published its subscribe', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     const events: unknown[] = []
     try {
@@ -51,7 +51,7 @@ describe('subscription recordings', () => {
 
   it('routes a whole host response at a stream id, and asserts the subscribe params', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     const events: unknown[] = []
     const changed = { ok: true, streaming: true, result: { type: 'worktreesChanged' } }
@@ -177,7 +177,7 @@ describe('subscription recordings', () => {
 
   it('files only a subscribe as an open stream, not the unsubscribe it publishes later', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const dispose = transport.client.subscribe(CLIENT_EVENTS, null, () => {})

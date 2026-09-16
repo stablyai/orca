@@ -47,7 +47,7 @@ describe('recording boundaries', () => {
 
   it('runs the actual stable-client projection and physical serialization', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const result = transport.client.sendRequest(
@@ -80,7 +80,7 @@ describe('recording boundaries', () => {
 
   it('requires logical bindings plus matching params for concurrent same-method calls', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const left = transport.client.sendRequest('files.list', { worktree: 'A' })
@@ -106,7 +106,7 @@ describe('recording boundaries', () => {
 
   it('records actual deadline ambiguity and leaves peers pending before their deadlines', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
@@ -529,7 +529,7 @@ async function payloadsFrom(
   drive: (client: ScriptedRpcTransport['client']) => void
 ): Promise<ScriptedRpcTransport['payloads']> {
   const clock = vitestRecordingScheduler()
-  clock.start()
+  await clock.start()
   const transport = new ScriptedRpcTransport(clock.elapsed)
   try {
     drive(transport.client)

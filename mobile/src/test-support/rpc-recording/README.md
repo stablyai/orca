@@ -85,7 +85,10 @@ absence remains absence. Completion params are asserted against projected sender
 Concurrent requests of one method require a logical binding and asserted params; random
 wire ids never identify completions. Timers only advance explicitly, and zero-time drains
 flush due timers, promise continuations, and React work after every step. Date, performance,
-Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic.
+Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic. React draws one
+Math.random of its own the first time a process awaits `act`, and memoizes what it resolves, so the
+scheduler pays that draw before it installs the seeded generator: every recording starts at the
+same seeded value whether it runs alone or after another family.
 
 A `frame` names the subscribe payload it arrives on — `<method>#<n>`, the same per-method
 occurrence a request is named by — and carries a whole host response, which the real registry

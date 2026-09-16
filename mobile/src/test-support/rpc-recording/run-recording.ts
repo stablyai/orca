@@ -22,7 +22,7 @@ export async function runRecording(
   mount: MountAdapter,
   scheduler: RecordingScheduler
 ): Promise<Recording> {
-  scheduler.start()
+  await scheduler.start()
   // One counter per recording, shared by requests, payloads and effects. Each list is append-only
   // and independent of the other two, so without a shared ordinal a send reordered ahead of a
   // device write, or ahead of a subscribe, moves no list and no golden notices. The request count
