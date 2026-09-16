@@ -1,8 +1,8 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { githubPrCheckDetailsSchema } from './github-pr-check-reply-schema'
 import {
   githubPrAssignableUsersSchema,
-  githubPrCheckDetailsSchema,
   githubPrChecksSchema,
   githubPrForBranchSchema,
   githubPrRepoSlugSchema,

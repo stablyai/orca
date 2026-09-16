@@ -12,9 +12,9 @@ import {
   fetchPRChecks,
   fetchPRForBranch
 } from './github-pr-rpc'
+import { githubPrCheckDetailsSchema } from './github-pr-check-reply-schema'
 import {
   githubPrAssignableUsersSchema,
-  githubPrCheckDetailsSchema,
   githubPrChecksSchema,
   githubPrForBranchSchema,
   githubWorkItemDetailsSchema,
