@@ -151,6 +151,20 @@
           "statusItem": "status item",
           "activity": "activity"
         }
+      },
+      "fileIcons": {
+        "title": "File Icons",
+        "description": "Choose monochrome or colored file-type icons.",
+        "monochrome": "Monochrome",
+        "colored": "Colored",
+        "fileType": "file type",
+        "explorer": "file explorer",
+        "pdf": "PDF",
+        "word": "Word",
+        "markdown": "Markdown",
+        "jupyter": "Jupyter",
+        "excel": "Excel",
+        "csv": "CSV"
       }
     },
     "browser": {

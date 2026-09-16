@@ -1,3 +1,4 @@
+import { FileIconSetting } from './FileIconSetting'
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -112,6 +113,12 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      <FileIconSetting
+        settings={settings}
+        updateSettings={updateSettings}
+        forceVisible={forceVisiblePrimary}
+      />
 
       {SHOW_UI_LANGUAGE_SETTING ? (
         <SearchableSetting
