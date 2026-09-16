@@ -17,6 +17,13 @@ type SearchOptions = Parameters<SearchAddon['findNext']>[1]
  * specific decoration failure keeps search functional and merely drops the
  * highlight on the pathological frame instead of taking down the terminal. The
  * next find (after a reflow/fit widens the viewport) highlights normally.
+ *
+ * Why (invalid regex): in regex mode the addon compiles the raw query with
+ * `RegExp(term, ...)` and no guard, so every keystroke on the way to a complete
+ * pattern — `[` before `[abc]`, `(` before `(a|b)` — throws SyntaxError straight
+ * out of findNext into the same boundary and kills the terminal surface
+ * (STA-6256). A pattern the user has not finished typing is not an app fault, so
+ * it is reported as "no match" until it compiles.
  */
 export function safeFind(
   search: (term: string, options?: SearchOptions) => boolean,
@@ -26,7 +33,7 @@ export function safeFind(
   try {
     return search(term, options)
   } catch (error) {
-    if (isDecorationPositiveIntegerError(error)) {
+    if (isDecorationPositiveIntegerError(error) || isInvalidRegexError(error)) {
       return false
     }
     throw error
@@ -35,4 +42,8 @@ export function safeFind(
 
 function isDecorationPositiveIntegerError(error: unknown): boolean {
   return error instanceof Error && /only accepts positive integers/i.test(error.message)
+}
+
+function isInvalidRegexError(error: unknown): boolean {
+  return error instanceof SyntaxError && /invalid regular expression/i.test(error.message)
 }
