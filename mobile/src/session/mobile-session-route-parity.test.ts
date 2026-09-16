@@ -74,8 +74,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // display-mode toggle, whose send became `terminalDisplayModeSet`.
 const HEAD_CALLBACK_BODY_SHA256 = '02fae7c4072064af7595eb42dc20565af568553946e26fa0a1dc835eb78f92a8'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
-// the sleeping-agent check reads that operation's verdict instead of the reply envelope.
-const HEAD_EFFECT_SHA256 = 'a5467ef1453c8f13f48dd99a07474ccb1187651cbc501ec7f00247946e18852e'
+// the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
+// again when the reporter took the reply and interpreted it itself, retiring the hand-built
+// refusal the timer site passed when it had no reply at all.
+const HEAD_EFFECT_SHA256 = '812aaa9f5abf25dd5229f65231900825b2fd38d5d238b511f3fc2edf4ae31a47'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
 // rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for

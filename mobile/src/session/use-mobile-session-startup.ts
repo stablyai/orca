@@ -3,6 +3,7 @@ import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import type { RpcResponse } from '../transport/types'
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
   const {
@@ -116,12 +117,14 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       timers.push(setTimeout(fn, ms))
     }
     void (async () => {
-      const reportActivationOutcome = (
-        activation: ReturnType<typeof worktreeActivate.interpret>
-      ): void => {
+      // Why the reply rather than a verdict: both activations report through here, and only one of
+      // them can fail to get a reply at all. Interpreting inside keeps the absent case spelled
+      // `null` instead of a hand-built refusal that has to stay in step with the operation.
+      const reportActivationOutcome = (response: RpcResponse | null): void => {
+        const activation = response === null ? null : worktreeActivate.interpret(response)
         if (
           !disposed &&
-          activation.accepted &&
+          activation?.accepted === true &&
           headlessActivationNeedsHostRenderer(activation.value)
         ) {
           showToast('Open Orca on the host to wake sleeping agents.', 3000)
@@ -135,7 +138,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
             notifyClients: false,
             navigation: 'caller'
           })
-          .then((response) => reportActivationOutcome(worktreeActivate.interpret(response)))
+          .then(reportActivationOutcome)
           .catch(() => null)
       }
       if (disposed) {
@@ -164,11 +167,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
                 navigation: 'caller'
               })
               .catch(() => null)
-            reportActivationOutcome(
-              activationResponse
-                ? worktreeActivate.interpret(activationResponse)
-                : { accepted: false }
-            )
+            reportActivationOutcome(activationResponse)
             if (disposed) {
               return
             }
