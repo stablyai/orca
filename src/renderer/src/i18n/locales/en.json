@@ -124,6 +124,7 @@
         "description": "Choose the language used by the Orca interface.",
         "system": "System",
         "english": "English",
+        "galician": "Galego",
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
