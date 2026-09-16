@@ -164,6 +164,14 @@ describe('AutomationsPage list rendering', () => {
     // first row and the user's edit appears to open someone else's automation.
     expect(api.automations.updateExternalForOwner).toHaveBeenCalled()
     expect(mocks.listPanel?.selectedExternal?.key).toBe(entry.key)
+    expect(mocks.editorDialog?.draft).toMatchObject({
+      name: 'Hermes job',
+      prompt: 'Sweep',
+      agentId: 'hermes',
+      preset: 'custom',
+      customSchedule: '0 9 * * *',
+      scheduleWarning: null
+    })
   })
 
   it('routes each authority’s action to its own host when both report hermes:local', async () => {
@@ -373,6 +381,18 @@ describe('AutomationsPage mutations', () => {
     // Step 6: hydration re-reads the row's own scope; the ambient list is untouched.
     expect(api.automations.list).not.toHaveBeenCalled()
     expect(api.automations.listScoped).toHaveBeenCalledWith({ selector: { kind: 'self' } })
+    expect(mocks.editorDialog?.open).toBe(true)
+    expect(mocks.editorDialog?.isEditing).toBe(true)
+  })
+
+  it('opens the editor for a legacy row without a captured owner', async () => {
+    api.automations.listScoped.mockRejectedValue(new Error('offline'))
+
+    await renderPage()
+    await act(async () => {
+      mocks.listPanel?.openEditDialog(listedRow('a-1'))
+    })
+
     expect(mocks.editorDialog?.open).toBe(true)
     expect(mocks.editorDialog?.isEditing).toBe(true)
   })
