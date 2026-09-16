@@ -127,6 +127,31 @@ export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.antigravityTitle', 'Antigravity'),
+    description: translate(
+      'auto.components.settings.accounts.search.antigravityDescription',
+      'Shows the Google sign-in from your Antigravity CLI session.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.antigravityKeyword',
+        'antigravity'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.agyKeyword', 'agy'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.8630464352', 'cli'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.933deaf732', 'oauth'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -221,6 +246,7 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
+  ...getAccountsAntigravitySearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries()

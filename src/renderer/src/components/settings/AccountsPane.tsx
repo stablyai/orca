@@ -15,6 +15,7 @@ import {
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
 import {
+  getAccountsAntigravitySearchEntries,
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
@@ -35,6 +36,7 @@ import {
   providerAccountMatchesView
 } from './provider-account-visibility'
 import { Separator } from '../ui/separator'
+import { AntigravityAccountsSection } from './AntigravityAccountsSection'
 import { GrokAccountsSection } from './GrokAccountsSection'
 import type {
   AccountsPaneProps,
@@ -369,6 +371,9 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
       ? renderGeminiAccountsSection(model)
       : null,
+    matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
+      <AntigravityAccountsSection key="antigravity" />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model)
       : null,

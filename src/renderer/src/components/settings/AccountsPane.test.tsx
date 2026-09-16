@@ -167,4 +167,12 @@ describe('AccountsPane', () => {
       markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)
     ).not.toContain('disabled=""')
   })
+
+  it('shows the Antigravity CLI session section', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain('id="accounts-antigravity"')
+    expect(markup).toContain('Antigravity CLI docs')
+    expect(markup).toContain('~/.gemini/antigravity-cli')
+  })
 })
