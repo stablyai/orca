@@ -119,9 +119,7 @@ describe('worktree path comparison across path syntaxes', () => {
   })
 
   it('collapses dot segments in both case-sensitive syntaxes', () => {
-    expect(areWorktreePathsEqual(`${UNC}\\.\\feature`, `${UNC}\\x\\..\\feature`, 'win32')).toBe(
-      true
-    )
+    expect(areWorktreePathsEqual(`${UNC}\\.\\feature`, `${UNC}\\x\\..\\feature`, 'win32')).toBe(true)
     expect(
       areWorktreePathsEqual('/home/alice/ws/./feature', '/home/alice/ws/x/../feature', 'win32')
     ).toBe(true)
@@ -182,9 +180,12 @@ branch refs/heads/feature
       'git worktree list --porcelain': { stdout: listing }
     })
 
-    await removeWorktree('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo', `${UNC}\\feature`, true, {
-      wslDistro: 'Ubuntu'
-    })
+    await removeWorktree(
+      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
+      `${UNC}\\feature`,
+      true,
+      { wslDistro: 'Ubuntu' }
+    )
 
     const calls = getGitCalls()
     expect(calls).toContain('git branch -d -- feature')
