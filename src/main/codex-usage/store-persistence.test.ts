@@ -26,7 +26,7 @@ describe('CodexUsageStore', () => {
 
   it('adapts Codex scans to compact cache persistence', async () => {
     const store = createStoreWithState({
-      schemaVersion: 5,
+      schemaVersion: 6,
       scanState: {
         enabled: true,
         lastScanStartedAt: null,
@@ -81,7 +81,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 5,
+      schemaVersion: 6,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],
