@@ -32,6 +32,7 @@ import { parseMessageGraphSessionFile } from './session-scanner-graph-parsers'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { clearKimiSessionIndexCache } from './session-scanner-kimi-paths'
+import { parseQwenSessionFile } from './session-scanner-qwen-parser'
 
 const PARSE_FAILURE = 'parser failed mid-transcript'
 
@@ -122,6 +123,14 @@ describe('session parsers that stop consuming a gated transcript early', () => {
     ).resolves.toBeTruthy()
 
     expect(lastOpened().path).toContain('wire.jsonl')
+    expectStreamTornDown()
+  })
+
+  it('destroys the stream when the Qwen parse swallows the failure', async () => {
+    await expect(
+      parseQwenSessionFile(file('/w/.qwen/projects/p/chats/ses-1.jsonl'), 'linux')
+    ).resolves.toBeTruthy()
+
     expectStreamTornDown()
   })
 })
