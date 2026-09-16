@@ -1,7 +1,8 @@
-import { createElement, type Context } from 'react'
+import { createElement } from 'react'
 import { performHookAction } from '../hook-mount'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
+import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
@@ -13,7 +14,7 @@ const HOST = 'host-1'
  * `client-context.tsx`, so exposing it mounts the real acquire/release cycle over a scripted client.
  */
 export const notificationTestScreenMountExposures: readonly OperationExposure[] = [
-  ['client-context.tsx', '\nexports.recorderHostClientContext = Ctx;']
+  hostClientContextExposure
 ]
 
 /** The settings push probe: one `notifications.testPush` per connected desktop. */
@@ -25,9 +26,7 @@ export function notificationTestScreenMountAdapters(
       const Probe = modules.load<typeof import('../../../settings/notification-display-test')>(
         'mobile/src/settings/notification-display-test.tsx'
       ).NotificationDisplayTest
-      const { recorderHostClientContext } = modules.load<{
-        recorderHostClientContext: Context<RpcClientContextValue | null>
-      }>('mobile/src/transport/client-context.tsx')
+      const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({
         acquire: () => client,
         release: () => {},
@@ -45,7 +44,7 @@ export function notificationTestScreenMountAdapters(
       const screen = screenMount(
         () =>
           createElement(
-            recorderHostClientContext.Provider,
+            hostClientContext.Provider,
             { value: context },
             createElement(Probe, { onTroubleshoot: () => effect('screen.troubleshoot', {}) })
           ),

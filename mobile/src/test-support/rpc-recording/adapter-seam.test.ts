@@ -7,6 +7,10 @@ import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
 import { operationModuleLoader } from './operation-module-loader'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { ADAPTER_DIRECTORY, RECORDER_DIRECTORY } from './recorder-digest'
+import {
+  HOST_CLIENT_CONTEXT_LOCAL,
+  hostClientContextExposure
+} from './host-client-context-exposure'
 import { readScenarios } from './scenario-input'
 
 const root = resolve(import.meta.dirname, '../../../..')
@@ -165,6 +169,20 @@ describe('the engine/adapter seam', () => {
       })
     })
     expect(carried).toEqual([])
+  })
+
+  it('keeps the host-client context exposure in one place, still anchored on the product source', () => {
+    // The exposure reaches for a module-private local by name, which no type checker follows: a
+    // rename lands as a `ReferenceError` several seconds into a recording. One copy, asserted
+    // against the declaration it names, turns that into one failure that says what moved.
+    const [, source] = hostClientContextExposure
+    const declaration = `const ${HOST_CLIENT_CONTEXT_LOCAL} = createContext`
+    const context = readFileSync(join(root, 'mobile/src/transport/client-context.tsx'), 'utf8')
+    expect(context.split(declaration).length - 1).toBe(1)
+    const copies = readdirSync(directory)
+      .filter((file) => read(file).includes(source.trim()))
+      .sort()
+    expect(copies).toEqual([])
   })
 
   it('mounts nothing outside a registered module', () => {
