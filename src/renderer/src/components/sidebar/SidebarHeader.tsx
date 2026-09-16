@@ -6,6 +6,7 @@ import { SidebarHeaderActions } from './sidebar-header-actions'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Sparkles, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -24,6 +25,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const groupBy = useAppStore((s) => s.groupBy)
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const sidebarViewMode = useAppStore((s) => s.sidebarViewMode)
+  const setSidebarViewMode = useAppStore((s) => s.setSidebarViewMode)
   const agentsViewActive = sidebarBody === 'agents'
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
@@ -36,10 +39,6 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const acknowledgeIntro = React.useCallback(() => {
     void updateSettings?.({ agentsSidebarIntroShown: true })
   }, [updateSettings])
-  const sidebarTitle =
-    groupBy === 'repo'
-      ? translate('dashboard.sidebar.projects', 'Projects')
-      : translate('dashboard.sidebar.workspaces', 'Workspaces')
   const activityLabel = translate(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
@@ -48,14 +47,32 @@ const SidebarHeader = React.memo(function SidebarHeader({
   return (
     <div className="mt-2 flex h-8 min-w-0 items-center justify-between gap-1.5 px-2">
       <div className="flex min-w-0 items-center gap-1">
-        <span
-          // Why truncate: the action cluster is shrink-0, so a long localized title
-          // (es "Espacios de trabajo") otherwise wraps out of the h-8 row.
-          className="min-w-0 truncate select-none pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80"
+        <ToggleGroup
+          type="single"
+          value={sidebarViewMode}
+          onValueChange={(value) => {
+            if (value === 'project' || value === 'current') {
+              setSidebarViewMode(value)
+            }
+          }}
+          variant="outline"
+          size="sm"
+          className="h-6"
           data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
         >
-          {sidebarTitle}
-        </span>
+          <ToggleGroupItem
+            value="project"
+            className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+          >
+            {translate('auto.components.sidebar.SidebarHeader.viewMode.project', 'Project')}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="current"
+            className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+          >
+            {translate('auto.components.sidebar.SidebarHeader.viewMode.current', 'Current')}
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Popover

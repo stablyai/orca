@@ -32,6 +32,7 @@ export function useVisibleSidebarWorktrees(args: {
    *  423-workspace scan on every unrelated settings write. */
   defaultHostId: ExecutionHostId
   agentSendTargetWorktreeId: string | null
+  forcedVisibleWorktreeId?: string | null
 }) {
   const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, defaultHostId } = args
   const {
@@ -101,12 +102,14 @@ export function useVisibleSidebarWorktrees(args: {
       visibleWorkspaceHostIds,
       defaultHostId,
       worktreeLineageById,
-      forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
-        ? [args.agentSendTargetWorktreeId]
-        : undefined
+      forcedVisibleWorktreeIds: [
+        args.agentSendTargetWorktreeId,
+        args.forcedVisibleWorktreeId
+      ].filter((id): id is string => Boolean(id))
     })
   }, [
     args.agentSendTargetWorktreeId,
+    args.forcedVisibleWorktreeId,
     agentStatusEpoch,
     agentStatusNow,
     filterRepoIds,

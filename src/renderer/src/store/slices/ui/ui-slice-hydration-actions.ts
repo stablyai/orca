@@ -1,6 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
 import {
   applyManualRepoOrder,
@@ -38,7 +37,6 @@ import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-us
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
 import { isReleaseChannel } from '../../../../../shared/release-channel'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
@@ -61,40 +59,16 @@ import {
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   hydratedUIPartialMatchesState,
-  migrateStatusBarItems,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
-import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import {
+  hydrateAgentReadState,
+  hydrateStatusBarItems,
+  sanitizeTaskResumeState
+} from './ui-slice-hydration-values'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
-
-function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
-  let items = migrateStatusBarItems(ui.statusBarItems)
-  const defaults = [
-    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
-    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
-    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
-    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
-    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
-  ] as const
-  for (const [flag, item] of defaults) {
-    if (!ui[flag] && !items.includes(item)) {
-      items = [...items, item]
-    }
-  }
-  if (typeof window !== 'undefined' && defaults.some(([flag]) => !ui[flag])) {
-    window.api.ui
-      .set({ statusBarItems: items, ...Object.fromEntries(defaults.map(([flag]) => [flag, true])) })
-      .catch(console.error)
-  }
-  return items
-}
 
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -146,6 +120,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           rightSidebarTab: rightSidebarRoute.rightSidebarTab,
           rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
+          sidebarViewMode: ui.sidebarViewMode === 'current' ? 'current' : 'project',
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,

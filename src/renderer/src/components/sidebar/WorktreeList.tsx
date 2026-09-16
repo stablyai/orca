@@ -70,6 +70,7 @@ const WorktreeList = React.memo(function WorktreeList({
     () => getActiveSidebarWorkspaceId(activeWorkspaceKey, activeWorktreeId),
     [activeWorkspaceKey, activeWorktreeId]
   )
+  const sidebarViewMode = useAppStore((s) => s.sidebarViewMode)
   const groupBy = useAppStore((s) => s.groupBy)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -110,15 +111,26 @@ const WorktreeList = React.memo(function WorktreeList({
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
   )
-  const { visibleWorktrees, pairedDeviceIdsByEnvironment } = useVisibleSidebarWorktrees({
-    filterState,
-    sortBy,
-    sortedIds,
-    repoMap,
-    worktreeLineageById,
-    defaultHostId,
-    agentSendTargetWorktreeId
-  })
+  const { visibleWorktrees: allVisibleWorktrees, pairedDeviceIdsByEnvironment } =
+    useVisibleSidebarWorktrees({
+      filterState,
+      sortBy,
+      sortedIds,
+      repoMap,
+      worktreeLineageById,
+      defaultHostId,
+      agentSendTargetWorktreeId,
+      forcedVisibleWorktreeId: sidebarViewMode === 'current' ? currentSidebarWorktreeId : undefined
+    })
+  // Why: Current mode narrows the list to the active workspace; keep it in the
+  // forced-visible set so filters can't hide the one row the mode is about.
+  const visibleWorktrees = useMemo(
+    () =>
+      sidebarViewMode === 'current'
+        ? allVisibleWorktrees.filter((w) => w.id === currentSidebarWorktreeId)
+        : allVisibleWorktrees,
+    [sidebarViewMode, allVisibleWorktrees, currentSidebarWorktreeId]
+  )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
     collapsedGroups,
     agentSendTargetWorktreeId,
