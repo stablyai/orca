@@ -44,6 +44,27 @@ function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
 }
 
+// Points the homedir-derived Claude root at a fixture so the resolver (which
+// reads homedir() internally) finds the transcript. os.homedir() reads
+// USERPROFILE on Windows and HOME on POSIX, so both have to be overridden.
+function redirectHome(root: string): () => void {
+  const previous: Record<string, string | undefined> = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE
+  }
+  process.env.HOME = root
+  process.env.USERPROFILE = root
+  return () => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+  }
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now()
   while (!predicate()) {
@@ -104,10 +125,7 @@ describe('nativeChat:readSession handler', () => {
       ])
     )
 
-    // Point homedir-derived Claude root at our fixture via HOME so the resolver
-    // (which reads homedir() internally) finds the transcript.
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = redirectHome(root)
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'sess-ipc' })) as {
         messages?: unknown[]
@@ -116,11 +134,7 @@ describe('nativeChat:readSession handler', () => {
       expect(result.error).toBeUndefined()
       expect(result.messages).toHaveLength(2)
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -139,8 +153,7 @@ describe('nativeChat:readSession handler', () => {
     }))
     await writeFile(join(projectDir, 'sess-limit.jsonl'), jsonLines(records))
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = redirectHome(root)
     try {
       const windowed = (await invokeReadSession({
         agent: 'claude',
@@ -156,11 +169,7 @@ describe('nativeChat:readSession handler', () => {
       })) as { messages: { id: string }[] }
       expect(wider.messages.map((m) => m.id)).toEqual(['u-2', 'u-3', 'u-4', 'u-5'])
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -200,8 +209,7 @@ describe('nativeChat:readSession handler', () => {
       send: (channel: string, payload: unknown) => sent.push({ channel, payload })
     }
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = redirectHome(root)
     try {
       subscribe!(
         { sender },
@@ -244,11 +252,7 @@ describe('nativeChat:readSession handler', () => {
       expect(destroyedCb).toBeDefined()
       destroyedCb!()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -334,8 +338,7 @@ describe('nativeChat:readSession handler', () => {
       send: vi.fn()
     }
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = redirectHome(root)
     try {
       subscribe!(
         { sender },
@@ -353,30 +356,21 @@ describe('nativeChat:readSession handler', () => {
       await waitFor(() => _getNativeChatSenderCleanupCountForTest() === 0)
       expect(sender.send).not.toHaveBeenCalled()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
   it('returns an error for an unknown session without throwing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-missing-'))
     tempRoots.push(root)
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = redirectHome(root)
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'nope' })) as {
         error?: string
       }
       expect(result.error).toBeTruthy()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 })
