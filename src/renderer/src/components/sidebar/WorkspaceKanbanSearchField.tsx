@@ -104,11 +104,11 @@ export default function WorkspaceKanbanSearchField({
         value={query}
         aria-label={translate(
           'auto.components.sidebar.WorkspaceKanbanSearchField.c0cd6bdf6c',
-          'Search workspaces'
+          'Search for workspaces...'
         )}
         placeholder={translate(
           'auto.components.sidebar.WorkspaceKanbanSearchField.c0cd6bdf6c',
-          'Search workspaces'
+          'Search for workspaces...'
         )}
         aria-invalid={isTooLarge || undefined}
         className="h-7 border-worktree-sidebar-border bg-background pl-7 text-xs"

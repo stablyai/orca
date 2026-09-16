@@ -124,10 +124,10 @@ export default function SidebarAgentsList({
               }
             }}
             placeholder={translate(
-              'auto.components.activity.ActivityPrototypePage.795cbf26e2',
-              'Filter...'
+              'auto.components.activity.ActivityPrototypePage.searchAgent',
+              'Search for agents...'
             )}
-            className="h-7 w-full text-[11px] shadow-none focus-visible:ring-0"
+            className="h-7 w-full border border-border/80 bg-background text-xs shadow-none placeholder:text-xs focus-visible:border-ring/70 focus-visible:ring-0 dark:border-white/15 dark:bg-white/[0.04]"
             aria-label={translate(
               'auto.components.activity.ActivityPrototypePage.search',
               'Search'

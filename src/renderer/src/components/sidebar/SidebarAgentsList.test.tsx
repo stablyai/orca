@@ -42,7 +42,9 @@ it('preserves workspace focus on mount and focuses search only when explicitly e
     </TooltipProvider>
   )
 
-  expect(view.getByRole('textbox', { name: 'Search' })).toBeTruthy()
+  const searchInput = view.getByRole('textbox', { name: 'Search' })
+  expect(searchInput).toBeTruthy()
+  expect(searchInput.getAttribute('placeholder')).toBe('Search for agents...')
   expect(document.activeElement).toBe(workspaceInput)
 
   fireEvent.keyDown(view.getByRole('textbox', { name: 'Search' }), { key: 'Escape' })

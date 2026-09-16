@@ -357,7 +357,7 @@ export function WorktreeParentPickerPopover({
             wrapperClassName="shrink-0"
             placeholder={translate(
               'auto.components.sidebar.WorktreeParentPickerPopover.searchPlaceholder',
-              'Search worktrees...'
+              'Search for worktrees...'
             )}
           />
           <CommandList ref={listRef} className="max-h-72 min-h-0 flex-1">

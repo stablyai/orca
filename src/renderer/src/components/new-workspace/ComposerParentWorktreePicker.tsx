@@ -358,7 +358,7 @@ function ParentWorktreeCandidateList({
         wrapperClassName="shrink-0"
         placeholder={translate(
           'auto.components.ComposerParentWorktreePicker.searchPlaceholder',
-          'Search workspaces...'
+          'Search for worktrees...'
         )}
       />
       <CommandList ref={listRef} className="max-h-72 min-h-0 flex-1">

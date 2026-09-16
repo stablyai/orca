@@ -300,7 +300,7 @@ describe('Agent Map workspace context menu', () => {
     fireEvent.click(setParent)
     // Candidate rows are virtualized and measure 0 in happy-dom; the mounted
     // search input is the picker's lifecycle signal.
-    expect(await screen.findByPlaceholderText('Search worktrees...')).toBeInTheDocument()
+    expect(await screen.findByPlaceholderText('Search for worktrees...')).toBeInTheDocument()
   })
 
   it('opens the existing worktree composer from a project ring', async () => {
