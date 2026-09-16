@@ -303,7 +303,10 @@ describe('terminal multiplex RPC', () => {
       expect(results).toContainEqual({
         type: 'error',
         streamId: TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION + 1,
-        message: 'terminal_stream_limit_exceeded'
+        message: 'terminal_stream_limit_exceeded',
+        active_stream_count: TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION,
+        pending_pty_wait_count: 0,
+        max_stream_count: TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION
       })
       expect(results).toContainEqual({
         type: 'end',
@@ -426,7 +429,10 @@ describe('terminal multiplex RPC', () => {
       expect(results).toContainEqual({
         type: 'error',
         streamId: rejectedStreamId,
-        message: 'terminal_stream_limit_exceeded'
+        message: 'terminal_stream_limit_exceeded',
+        active_stream_count: activeStreamCount,
+        pending_pty_wait_count: TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
+        max_stream_count: TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION
       })
       expect(results).toContainEqual({ type: 'end', streamId: rejectedStreamId })
     })
