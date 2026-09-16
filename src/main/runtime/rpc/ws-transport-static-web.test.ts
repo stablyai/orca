@@ -88,4 +88,33 @@ describe('WebSocketTransport static web client', () => {
     )
     expect(response.status).toBe(400)
   })
+
+  it('serves favicon.ico and favicon.png with the correct content-type', async () => {
+    const staticRoot = mkdtempSync(join(tmpdir(), 'ws-transport-static-'))
+    writeFileSync(join(staticRoot, 'web-index.html'), '<html>web</html>')
+    writeFileSync(join(staticRoot, 'favicon.ico'), Buffer.from([0, 0, 1, 0, 0]))
+    writeFileSync(join(staticRoot, 'favicon.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    const transport = createStaticTransport(staticRoot)
+
+    await transport.start()
+
+    const icoResponse = await fetch(`http://127.0.0.1:${transport.resolvedPort}/favicon.ico`)
+    expect(icoResponse.status).toBe(200)
+    expect(icoResponse.headers.get('content-type')).toBe('image/x-icon')
+
+    const pngResponse = await fetch(`http://127.0.0.1:${transport.resolvedPort}/favicon.png`)
+    expect(pngResponse.status).toBe(200)
+    expect(pngResponse.headers.get('content-type')).toBe('image/png')
+  })
+
+  it('404s when favicon.ico is missing so browsers stop retrying', async () => {
+    const staticRoot = mkdtempSync(join(tmpdir(), 'ws-transport-static-'))
+    writeFileSync(join(staticRoot, 'web-index.html'), '<html>web</html>')
+    const transport = createStaticTransport(staticRoot)
+
+    await transport.start()
+
+    const response = await fetch(`http://127.0.0.1:${transport.resolvedPort}/favicon.ico`)
+    expect(response.status).toBe(404)
+  })
 })
