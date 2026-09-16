@@ -6,6 +6,7 @@ import {
   getMobileWorkspaceStatusGroupKey
 } from './mobile-workspace-statuses'
 import { applyMobileWorkspaceLineage } from './mobile-workspace-lineage'
+import { getPinnedSectionWorktrees } from './pinned-section-worktrees'
 import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-status-groups'
 import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
@@ -134,14 +135,18 @@ export function buildSections(
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
 
-  const pinned = sorted.filter((w) => isWorktreePinned(w, pinnedIds))
+  // Why: pinning a parent carries its visible children into the Pinned section
+  // (#20674), matching desktop; the overlay also keeps every row in its canonical group.
+  const pinned = getPinnedSectionWorktrees(worktrees, sorted, (candidate) =>
+    isWorktreePinned(candidate, pinnedIds)
+  )
   // Why: desktop treats Pinned as an overlay. Keeping pinned rows in canonical
   // groups preserves exact cross-surface order and literal section counts.
   const canonicalGroupWorktrees = sorted
 
   const sections: Section[] = []
   if (pinned.length > 0) {
-    sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
+    sections.push(makeSection('pinned', 'Pinned', pinned, 'pin', collapsedGroups))
   }
 
   if (groupMode === 'none') {
