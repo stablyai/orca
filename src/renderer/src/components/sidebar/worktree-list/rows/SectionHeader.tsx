@@ -2,19 +2,12 @@ import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
-import type { AppState } from '@/store/types'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
-import type {
-  WorkspaceStatus,
-  WorkspaceStatusDefinition
-} from '../../../../../../shared/worktree/types'
-import type { GroupHeaderRow, WorktreeGroupBy } from '../grouping/row-types'
+import type { GroupHeaderRow } from '../grouping/row-types'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
@@ -27,47 +20,19 @@ import {
 } from './indentation'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
-import {
-  ProjectGroupCreateWorkspaceButton,
-  ProjectGroupHeaderMenu
-} from './project-group-header-actions'
+import { ProjectGroupHeaderTrailingActions } from './project-group-header-actions'
 import {
   RepoHeaderCreateWorkspaceButton,
-  RepoHeaderProjectActionsMenu,
-  type RepoHeaderProjectActions
+  RepoHeaderProjectActionsMenu
 } from './repo-header-project-actions'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
   shouldIgnoreRepoHeaderToggle
 } from './header-event-guards'
-import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
+import type { SectionHeaderRowContext } from './section-header-row-context'
 
-export type SectionHeaderRowContext = {
-  groupBy: WorktreeGroupBy
-  collapsedGroups: Set<string>
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  projectGroups: readonly ProjectGroup[]
-  sshConnectionStates: AppState['sshConnectionStates']
-  highlightedRevealRowKey: string | null
-  dragOverStatus: WorkspaceStatus | null
-  pinDragOver: boolean
-  headerDrag: WorktreeSidebarHeaderDrag
-  getCachedFolderWorkspacePathStatus: (request: {
-    scope: 'project-group'
-    projectGroupId: string
-  }) => FolderWorkspacePathStatus | null
-  toggleGroupWithScrollAnchor: (groupKey: string) => void
-  projectActions: RepoHeaderProjectActions
-  onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
-  onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
-  onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
-  onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
-  onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
-  onWorkspacePinDragOver: (event: React.DragEvent) => void
-  onWorkspacePinDragLeave: (event: React.DragEvent) => void
-  onWorkspaceStatusDrop: (event: React.DragEvent, status: WorkspaceStatus) => void
-}
+export type { SectionHeaderRowContext } from './section-header-row-context'
 
 // The folder-scan project group whose parent path is gone can't create new workspaces.
 function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
@@ -161,8 +126,18 @@ export function renderWorktreeSectionHeaderRow(args: {
     isProjectGroupHeader &&
     !row.repo &&
     row.projectGroup &&
+    typeof row.projectGroup.id === 'string' &&
     'parentPath' in row.projectGroup &&
     row.projectGroup.parentPath
+      ? row.projectGroup
+      : null
+  // Why: only real client folders get Add Project; the Ungrouped sentinel is not a ProjectGroup.
+  const manualProjectGroup =
+    isProjectGroupHeader &&
+    !row.repo &&
+    row.projectGroup &&
+    typeof row.projectGroup.id === 'string' &&
+    !folderBackedProjectGroup
       ? row.projectGroup
       : null
   const projectGroupPathStatus = folderBackedProjectGroup
@@ -360,22 +335,24 @@ export function renderWorktreeSectionHeaderRow(args: {
           ) : null}
 
           {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
-            <ProjectGroupHeaderMenu
+            <ProjectGroupHeaderTrailingActions
               groupId={projectGroupIdForHeader}
               hostId={projectGroupHostIdForHeader}
               label={row.label}
+              projectGroups={ctx.projectGroups}
+              isFocused={ctx.focusedProjectGroupId === projectGroupIdForHeader}
+              manualProjectGroup={manualProjectGroup}
+              folderBackedProjectGroup={folderBackedProjectGroup}
+              pathStatus={projectGroupPathStatus}
+              folderCreateDisabled={isFolderWorkspaceCreateDisabled(projectGroupPathStatus)}
               onRename={ctx.onRenameProjectGroup}
               onDelete={ctx.onDeleteProjectGroup}
-            />
-          ) : null}
-
-          {folderBackedProjectGroup ? (
-            <ProjectGroupCreateWorkspaceButton
-              projectGroup={folderBackedProjectGroup}
-              label={row.label}
-              pathStatus={projectGroupPathStatus}
-              disabled={isFolderWorkspaceCreateDisabled(projectGroupPathStatus)}
-              onCreate={ctx.onCreateFolderWorkspace}
+              onFocus={ctx.onFocusProjectGroup}
+              onClearFocus={ctx.onClearFocusedProjectGroup}
+              onCreateNestedClient={ctx.onCreateNestedClient}
+              onMoveInto={ctx.onMoveClientInto}
+              onAddProject={ctx.onAddProjectToClient}
+              onCreateFolderWorkspace={ctx.onCreateFolderWorkspace}
             />
           ) : null}
 

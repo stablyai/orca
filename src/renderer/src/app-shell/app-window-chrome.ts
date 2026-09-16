@@ -2,6 +2,8 @@ import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
+import type { WindowControlsPosition } from '../../../shared/window-controls-position'
+import { resolveWindowControlsSide } from '../../../shared/window-controls-position'
 
 export const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -20,3 +22,28 @@ export const WINDOW_CONTROLS_HEIGHT = hasCustomTitleBar ? '36px' : '0px'
 // Why: macOS paints traffic lights on the window's top-left edge. Windows and Linux paint their
 // controls on the right, so only macOS needs a surface to keep the left edge uncovered.
 export const MAC_TRAFFIC_LIGHTS_WIDTH = isMac ? '80px' : '0px'
+
+export function resolveCustomWindowControlsSide(
+  preference: WindowControlsPosition | undefined
+): WindowControlsPosition {
+  if (!hasCustomTitleBar) {
+    return 'right'
+  }
+  return resolveWindowControlsSide({
+    platform: shortcutPlatform,
+    preference
+  })
+}
+
+export function windowControlsSideInsets(side: WindowControlsPosition): {
+  left: string
+  right: string
+  rightEdgeHeight: string
+} {
+  if (!hasCustomTitleBar) {
+    return { left: '0px', right: '0px', rightEdgeHeight: '0px' }
+  }
+  return side === 'left'
+    ? { left: WINDOW_CONTROLS_WIDTH, right: '0px', rightEdgeHeight: '0px' }
+    : { left: '0px', right: WINDOW_CONTROLS_WIDTH, rightEdgeHeight: WINDOW_CONTROLS_HEIGHT }
+}

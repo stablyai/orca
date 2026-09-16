@@ -222,6 +222,31 @@ describe('Store', () => {
     expect(group.tabOrder).toBe(projectGroups.length)
   })
 
+  it('nests and reparents project groups without creating cycles', async () => {
+    const store = await createStore()
+    const akira = store.createProjectGroup({ name: 'Akira', createdFrom: 'manual' })
+    const clientA = store.createProjectGroup({
+      name: 'Client A',
+      parentGroupId: akira.id,
+      createdFrom: 'manual'
+    })
+    const clientB = store.createProjectGroup({ name: 'Client B', createdFrom: 'manual' })
+
+    expect(clientA.parentGroupId).toBe(akira.id)
+    expect(clientA.tabOrder).toBe(0)
+
+    const moved = store.updateProjectGroup(clientB.id, { parentGroupId: akira.id })
+    expect(moved?.parentGroupId).toBe(akira.id)
+    expect(moved?.tabOrder).toBe(1)
+
+    // Why: nesting a parent under its own child must be ignored so the tree stays acyclic.
+    const cycleAttempt = store.updateProjectGroup(akira.id, { parentGroupId: clientA.id })
+    expect(cycleAttempt?.parentGroupId).toBeNull()
+
+    const topLevel = store.updateProjectGroup(clientA.id, { parentGroupId: null })
+    expect(topLevel?.parentGroupId).toBeNull()
+  })
+
   it('sanitizes invalid project group updates before persisting a repo', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })

@@ -156,7 +156,9 @@ describe('ArtifactsPage', () => {
     expect(
       screen
         .getByRole('button', { name: 'Close' })
-        .closest('.pr-\\[max\\(1rem\\,var\\(--window-controls-width\\,0px\\)\\)\\]')
+        .closest(
+          '.pr-\\[max\\(1rem\\,var\\(--window-controls-right\\,var\\(--window-controls-width\\,0px\\)\\)\\)\\]'
+        )
     ).not.toBeNull()
     const copyButton = screen.getByRole('button', { name: 'Copy link' })
     expect(copyButton).toHaveAttribute('data-variant', 'default')

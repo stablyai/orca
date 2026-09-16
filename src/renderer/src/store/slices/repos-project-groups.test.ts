@@ -134,6 +134,25 @@ describe('project group store routing', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('creates nested local project groups with a parent client id', async () => {
+    const nestedGroup = { ...projectGroup, id: 'group-nested', parentGroupId: 'group-parent' }
+    projectGroupsCreate.mockResolvedValue(nestedGroup)
+    const store = createTestStore()
+
+    await expect(
+      store.getState().createProjectGroup('Nested', { parentGroupId: 'group-parent' })
+    ).resolves.toEqual({
+      ...nestedGroup,
+      executionHostId: 'local'
+    })
+
+    expect(projectGroupsCreate).toHaveBeenCalledWith({
+      name: 'Nested',
+      createdFrom: 'manual',
+      parentGroupId: 'group-parent'
+    })
+  })
+
   it('stamps local fetched folder groups with the local owner', async () => {
     const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
     projectGroupsList.mockResolvedValue([folderGroup])

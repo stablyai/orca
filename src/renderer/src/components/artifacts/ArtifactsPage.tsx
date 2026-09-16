@@ -174,7 +174,9 @@ export default function ArtifactsPage(): React.JSX.Element {
         // Why: no stacked center titlebar on this page; keep the title clear of Windows/Linux window controls.
         style={
           {
-            paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))'
+            paddingRight:
+              'max(0.75rem, var(--window-controls-right, var(--window-controls-width, 0px)))',
+            paddingLeft: 'max(0.75rem, var(--window-controls-left, 0px))'
           } as React.CSSProperties
         }
       >
