@@ -6,6 +6,10 @@ import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
+import {
+  TERMINAL_SEARCH_HIGHLIGHT_LIMIT,
+  buildTerminalSearchOptions
+} from './terminal-search-options'
 
 type TerminalSearchProps = {
   isOpen: boolean
@@ -14,6 +18,35 @@ type TerminalSearchProps = {
   searchStateRef: React.RefObject<SearchState>
 }
 
+type MatchCount = { addon: SearchAddon; query: string | null; index: number; count: number }
+
+/**
+ * Renders the find bar's match counter.
+ *
+ * The addon reports index -1 when the selected match is not among the tracked
+ * results — past `highlightLimit`, or before a match is selected — so a position
+ * is unknowable there and only the (capped) total can be shown.
+ *
+ * @param matches The position and total last reported by `onDidChangeResults`.
+ * @returns `3/47`, `0/0`, a bare total, or `1000+` once the total is truncated.
+ */
+function formatMatchCount(matches: { index: number; count: number }): string {
+  if (matches.count === 0) {
+    return '0/0'
+  }
+  if (matches.index < 0) {
+    return matches.count >= TERMINAL_SEARCH_HIGHLIGHT_LIMIT
+      ? `${matches.count}+`
+      : `${matches.count}`
+  }
+  return `${matches.index + 1}/${matches.count}`
+}
+
+/**
+ * Drops every trace of the current search from a pane's addon.
+ *
+ * @param searchAddon The pane's addon, or null when no pane is attached.
+ */
 function clearTerminalSearch(searchAddon: SearchAddon | null): void {
   if (!searchAddon) {
     return
@@ -23,6 +56,17 @@ function clearTerminalSearch(searchAddon: SearchAddon | null): void {
   searchAddon.findNext('')
 }
 
+/**
+ * The terminal find bar: query input, case/regex toggles, match navigation, and
+ * a counter spanning the whole scrollback.
+ *
+ * @param props.isOpen Whether the bar is showing; closing clears the search.
+ * @param props.onClose Invoked on Escape and on the close button.
+ * @param props.searchAddon The focused pane's addon; changes on a pane switch.
+ * @param props.searchStateRef Written on every change so the Cmd+G / Ctrl+G
+ * handler can navigate without this state being lifted to the parent.
+ * @returns The find bar, or null while closed.
+ */
 export default function TerminalSearch({
   isOpen,
   onClose,
@@ -32,28 +76,18 @@ export default function TerminalSearch({
   const [query, setQuery] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)
+  // Why surfaced: the count spans the whole scrollback, so it is the only signal
+  // that matches exist above the visible screen. Tagged with the addon and query
+  // it was reported for, so a pane switch or an edited query invalidates it in
+  // render rather than through a state reset the user would see one frame late.
+  const [matches, setMatches] = useState<MatchCount | null>(null)
   const requestQuery = getFindRequestQuery(query)
+  const currentMatches =
+    matches && matches.addon === searchAddon && matches.query === requestQuery ? matches : null
 
-  // Why: the default xterm SearchAddon highlights blend into common
-  // terminal backgrounds (see orca#612). Providing explicit decoration
-  // colors gives all matches a visible yellow background and the
-  // current match a brighter orange, matching the contrast VS Code and
-  // iTerm2 use for terminal search. xterm requires #RRGGBB format for
-  // the background colors.
   const searchOptions = useCallback(
-    (incremental: boolean = false) => ({
-      caseSensitive,
-      regex,
-      incremental,
-      decorations: {
-        matchBackground: '#5c4a00',
-        matchBorder: '#5c4a00',
-        matchOverviewRuler: '#ffcc00',
-        activeMatchBackground: '#c4580e',
-        activeMatchBorder: '#ffcf6b',
-        activeMatchColorOverviewRuler: '#ff9900'
-      }
-    }),
+    (incremental: boolean = false) =>
+      buildTerminalSearchOptions({ caseSensitive, regex, incremental }),
     [caseSensitive, regex]
   )
 
@@ -88,16 +122,30 @@ export default function TerminalSearch({
     [searchAddon]
   )
 
+  // Declared before the search effect so a pane switch or an edited query is
+  // subscribed before that effect issues its first find, and so the listener
+  // closes over the query its results belong to.
+  useEffect(() => {
+    if (!searchAddon) {
+      return
+    }
+    const subscription = searchAddon.onDidChangeResults(({ resultIndex, resultCount }) => {
+      setMatches({
+        addon: searchAddon,
+        query: requestQuery,
+        index: resultIndex,
+        count: resultCount
+      })
+    })
+    return () => subscription.dispose()
+  }, [searchAddon, requestQuery])
+
   useEffect(() => {
     // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
     // can read the current search state without lifting it to parent state.
     searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex }
 
-    if (!isOpen) {
-      clearTerminalSearch(searchAddon)
-      return
-    }
-    if (!requestQuery) {
+    if (!isOpen || !requestQuery) {
       clearTerminalSearch(searchAddon)
       return
     }
@@ -144,6 +192,17 @@ export default function TerminalSearch({
         placeholder={translate('auto.components.TerminalSearch.e07012f26e', 'Search...')}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
       />
+
+      {requestQuery && currentMatches ? (
+        <span
+          data-terminal-search-match-count
+          className={`shrink-0 text-xs tabular-nums ${
+            currentMatches.count === 0 ? 'text-red-400' : 'text-zinc-400'
+          }`}
+        >
+          {formatMatchCount(currentMatches)}
+        </span>
+      ) : null}
 
       <Button
         type="button"
