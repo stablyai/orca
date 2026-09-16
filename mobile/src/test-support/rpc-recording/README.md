@@ -359,8 +359,8 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 342 manifest scenarios against frozen goldens and fails on any divergence: 679 goldens
-over 796 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
+It replays 346 manifest scenarios against frozen goldens and fails on any divergence: 693 goldens
+over 810 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
 the change they describe and are not restatements of this one. For a migration it answers one
 question — does the rewritten call site produce the same sender calls, settlements, state and
 effects as main did?
@@ -393,17 +393,19 @@ lingering.
 
 What is still not covered: what the count-based raw-port inventory covers instead (which files
 reach `sendRequest`, and how often), native storage, transport skew, and the two mutations under
-_Known-open holes_ below. The `subscribe` / `sendUnsubscribe` ports are covered for
-`runtime.clientEvents.subscribe` only — the two client-event families are the whole of it. Nine
-product call sites call `client.subscribe`; those two are recorded and seven are not, and no golden
-mentions any of their methods: `notifications.subscribe`, `agentSession.subscribe`,
-`session.tabs.subscribe`, `nativeChat.subscribe`, `terminal.subscribe`, `browser.screencast` and
-`accounts.subscribe`. The frame plumbing is method-agnostic, so what stops each of the seven is its
-consumer, not the runner. `terminal.subscribe` and `browser.screencast` write to a webview terminal
-ref this runner has no substitute for. `accounts.subscribe` is wired on a per-host client from
-`useAllHostClients`, and the runner hands an adapter one client rather than the multi-host context
-that hook reads. Its snapshot decoder is not the wall: the loader reaches
-`decodeAccountsSnapshot` and it throws its own domain error on a bad snapshot. The remaining four are unwritten scenarios, not walls. Blur is
+_Known-open holes_ below.
+
+Which subscriptions are covered is no longer stated here. It is held as data in
+`mobile/src/transport/rpc-subscription-inventory.ts`, where every product `client.subscribe` is
+classified as recorded, an unwritten scenario, or walled with the wall named, and
+`rpc-subscription-boundary.test.ts` fails on a new site, a stale entry, a wrong method and a
+`recorded` entry naming a family this manifest does not have. This paragraph is why: it said nine
+sites when there were ten — the count was taken over `mobile/src`, and the host screen's
+`accounts.subscribe` lives under `app/`. A count in prose cannot fail. Today four of the ten are
+recorded, two are unwritten scenarios and four are walled, and the list is what says so.
+
+The frame plumbing is method-agnostic, so what stops a site is its consumer rather than the runner.
+Blur is
 unrecorded across all of them: `useFocusEffect` is substituted as `useEffect`, so a route's focus
 cleanup is recorded at unmount and an unsubscribe only a blur would reach is not — driving focus
 needs a substitute, and no recording reads one yet. Four of the nine
