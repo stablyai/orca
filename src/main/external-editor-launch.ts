@@ -2,7 +2,10 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../shared/wsl-paths'
-import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
+import {
+  isRemoteSshCapableLauncherExecutable,
+  isVsCodeLauncherExecutable
+} from '../shared/vscode-remote-ssh-launcher'
 import { resolveCliCommand } from './codex-cli/command'
 import {
   getLauncherBaseName,
@@ -235,7 +238,9 @@ export function resolveVsCodeRemoteSshLaunchSpec(
     editorCommand = resolveCliCommand(trimmed, { platform })
   }
 
-  if (!isVsCodeLauncherExecutable(editorCommand)) {
+  // Why: VS Code forks (Cursor) accept the same Remote-SSH argv, so gate on the
+  // capability set rather than on "is this literally VS Code".
+  if (!isRemoteSshCapableLauncherExecutable(editorCommand)) {
     return null
   }
   return {

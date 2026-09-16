@@ -231,7 +231,8 @@ describe('WorktreeOpenInMenu', () => {
     const entries = getWorktreeOpenInEntries(
       [
         { id: 'renamed', label: 'My Remote Editor', command: 'code-insiders' },
-        { id: 'fake', label: 'VS Code', command: 'cursor' },
+        { id: 'cursor', label: 'Cursor', command: 'cursor' },
+        { id: 'fake', label: 'VS Code', command: 'zed' },
         { id: 'compound', label: 'VS Code Reuse', command: 'code --reuse-window' }
       ],
       'Finder'
@@ -242,14 +243,18 @@ describe('WorktreeOpenInMenu', () => {
       metadata: 'Remote SSH'
     })
     expect(getOpenInEntryAvailability(entries[1], mockState.settings, 'ssh-1')).toEqual({
-      disabled: true,
-      metadata: 'Local only'
+      disabled: false,
+      metadata: 'Remote SSH'
     })
     expect(getOpenInEntryAvailability(entries[2], mockState.settings, 'ssh-1')).toEqual({
       disabled: true,
       metadata: 'Local only'
     })
     expect(getOpenInEntryAvailability(entries[3], mockState.settings, 'ssh-1')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+    expect(getOpenInEntryAvailability(entries[4], mockState.settings, 'ssh-1')).toEqual({
       disabled: true,
       metadata: 'Local only'
     })
@@ -275,12 +280,12 @@ describe('WorktreeOpenInMenu', () => {
       target: 'external-editor',
       worktreePath: '/home/ada/project',
       connectionId: 'ssh-1',
-      command: 'cursor'
+      command: 'zed'
     })
 
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledWith('This app cannot open SSH workspaces.', {
-      description: 'Choose VS Code or use the app locally.'
+      description: 'Choose VS Code or Cursor, or use the app locally.'
     })
   })
 
@@ -300,7 +305,7 @@ describe('WorktreeOpenInMenu', () => {
     })
 
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'VS Code needs an SSH config alias for this host.',
+      'Your editor needs an SSH config alias for this host.',
       {
         description:
           'Add a Host alias for builder.example.com:2222 to your local SSH config, reconnect the workspace, then try again.'
