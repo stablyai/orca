@@ -174,6 +174,13 @@ export class ScriptedRpcTransport {
     }
   }
 
+  /** Reads the stash through the declared type, which assigning it in `frame` would narrow away. */
+  private takeListenerCrash(): FrameListenerCrash | null {
+    const crash = this.listenerCrash
+    this.listenerCrash = null
+    return crash
+  }
+
   /** One occurrence counter per method, so a subscribe payload is named the way a request is. */
   private occurrence(method: string): string {
     const next = (this.counts.get(method) ?? 0) + 1
@@ -208,7 +215,7 @@ export class ScriptedRpcTransport {
     if (JSON.stringify(captureValue(stream.params)) !== JSON.stringify(captureValue(params))) {
       throw new Error(`Subscribe params mismatch: ${name}`)
     }
-    this.listenerCrash = null
+    this.takeListenerCrash()
     let routed = false
     try {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the response as JSON; the wire id is the transport’s.
@@ -216,12 +223,13 @@ export class ScriptedRpcTransport {
     } catch (error) {
       // Only the product listener's own throw is a recording; anything the registry raised on its
       // way to the listener is the scenario no longer matching, and stays loud.
-      if (this.listenerCrash?.error !== error) {
+      const crashed = this.takeListenerCrash()
+      if (crashed?.error !== error) {
         throw error
       }
+      return crashed
     }
-    const crash = this.listenerCrash
-    this.listenerCrash = null
+    const crash = this.takeListenerCrash()
     if (crash) {
       return crash
     }
