@@ -13,6 +13,9 @@ import {
 type FileParameters = { readonly query: string }
 
 declare const scope: RequestScope
+declare const host: object
+declare const epoch: bigint
+declare const label: symbol
 declare const paths: GenerationScopedRequestOwner<FileParameters, string[]>
 declare const counts: GenerationScopedRequestOwner<FileParameters, number>
 declare const pathLease: RequestLease<string[]>
@@ -38,6 +41,14 @@ export function fenceParametersAreOwnerTyped(): void {
   // @ts-expect-error a missing declared parameter is not a key the owner can build
   paths.read(scope, {})
   paths.read(scope, { query: 'a' })
+}
+
+export function fenceScopeMembersAreEncodable(): void {
+  // @ts-expect-error a symbol has no encoding here that is both stable and collision-free
+  void paths.read([host, label], { query: 'a' })
+  // @ts-expect-error a bigint is not serialisable, so it cannot identify a scope
+  void paths.read([host, epoch], { query: 'a' })
+  void paths.read([host, 'w1', 2], { query: 'a' })
 }
 
 export function fenceLoaderOnlyReturns(): void {
