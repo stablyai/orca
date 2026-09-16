@@ -28,7 +28,6 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./profile-cloud-session-refresh', () => ({
-  runWithFreshOrcaCloudSessionMock,
   runWithFreshOrcaCloudSession: runWithFreshOrcaCloudSessionMock
 }))
 

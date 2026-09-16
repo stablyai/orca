@@ -83,8 +83,6 @@ vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
   installRemoteManagedAgentHooks: vi.fn()
 }))
 vi.mock('../providers/ssh-pty-provider', () => ({
-  isSshPtyNotFoundError: (error: unknown) => String(error).includes('not found'),
-  isSshPtyIdentityMismatchError: (error: unknown) => String(error).includes('identity mismatch'),
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockReturnValue(() => {})
     onReplay = vi.fn().mockReturnValue(() => {})
@@ -112,8 +110,7 @@ vi.mock('../ipc/pty', () => ({
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
   restorePtyIncarnation: vi.fn(),
-  isCurrentPtyExit: vi.fn(() => true),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
+  isCurrentPtyExit: vi.fn(() => true)
 }))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
