@@ -1,5 +1,5 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
-import { Platform, View } from 'react-native'
+import { Platform, View, PixelRatio } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
@@ -316,7 +316,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
             resolve(result)
           }
           measureResolveRef.current = finish
-          sendToWebView({ type: 'measure', containerHeight })
+          sendToWebView({ type: 'measure', containerHeight, rnPixelRatio: PixelRatio.get() })
           // Why: if the WebView doesn't respond within 2s (e.g., xterm
           // failed to load), resolve null so the caller can disable
           // Fit to Phone rather than hanging indefinitely.

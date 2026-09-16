@@ -49,7 +49,7 @@ export const TERMINAL_HTML_HOST_MESSAGE_ROUTER = `  ${TERMINAL_REFLOW_JS}
     reportEngineError('terminal runtime error', err || msg);
   };
 
-  function measureFitDimensions(containerHeightPx, retriesLeft) {
+  function measureFitDimensions(containerHeightPx, rnPixelRatioInjected, retriesLeft) {
     if (typeof retriesLeft !== 'number') retriesLeft = 30;
     // Why: init and measure are posted back-to-back from React, but
     // init has an async rAF chain. A measure that runs synchronously
@@ -68,7 +68,7 @@ export const TERMINAL_HTML_HOST_MESSAGE_ROUTER = `  ${TERMINAL_REFLOW_JS}
     if (notReady || cellWidth <= 0 || cellHeight <= 0) {
       if (retriesLeft > 0) {
         requestAnimationFrame(function() {
-          measureFitDimensions(containerHeightPx, retriesLeft - 1);
+          measureFitDimensions(containerHeightPx, rnPixelRatioInjected, retriesLeft - 1);
         });
         return;
       }
@@ -90,6 +90,16 @@ export const TERMINAL_HTML_HOST_MESSAGE_ROUTER = `  ${TERMINAL_REFLOW_JS}
     var vpHeight = (typeof containerHeightPx === 'number' && containerHeightPx > 0)
       ? containerHeightPx
       : window.innerHeight;
+    // Why: containerHeightPx arrives in RN dp units; this document's CSS px
+    // runs on the WebView display-lock density (its devicePixelRatio), which
+    // diverges from the window density on One UI split panes (321 vs 420).
+    // Convert the passed height into this document's own CSS px so
+    // rows = vpHeight / cellHeight stays in-domain; otherwise xterm
+    // overallocates rows by the density ratio and the bottom lines sit
+    // below the visible viewport (multi-window scroll stuck).
+    if (typeof rnPixelRatioInjected === 'number' && rnPixelRatioInjected > 0 && containerHeightPx > 0 && window.devicePixelRatio > 0) {
+      vpHeight = containerHeightPx * (rnPixelRatioInjected / window.devicePixelRatio);
+    }
     var cols = Math.floor(vpWidth / cellWidth);
     if (cols < MIN_FIT_COLS) {
       flog('measure-skip-small-width', {
@@ -158,7 +168,7 @@ export const TERMINAL_HTML_HOST_MESSAGE_ROUTER = `  ${TERMINAL_REFLOW_JS}
         cancelSelect();
       }
     } else if (msg.type === 'measure') {
-      measureFitDimensions(msg.containerHeight);
+      measureFitDimensions(msg.containerHeight, msg.rnPixelRatio);
     } else if (msg.type === 'reset-zoom') {
       applyFitScale('reset-zoom-msg');
     } else if (msg.type === 'set-theme') {

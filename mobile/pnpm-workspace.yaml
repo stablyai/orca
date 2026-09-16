@@ -7,6 +7,11 @@ overrides:
   xcode>uuid: 11.1.1
 
 patchedDependencies:
+  # WHY exact pin + patch: 4.26.2 is the first density-fix line (#4159/#4160)
+  # RN 0.83.10 codegen accepts; 4.27+ (and current 4.28) emit React.ComponentRef
+  # command args the 0.83 parser rejects — do not bump without an RN codegen bump.
+
   expo-notifications@55.0.27: patches/expo-notifications@55.0.27.patch
+  react-native-screens@4.26.2: patches/react-native-screens@4.26.2.patch
   react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
   react-native@0.83.10: patches/react-native@0.83.10.patch
