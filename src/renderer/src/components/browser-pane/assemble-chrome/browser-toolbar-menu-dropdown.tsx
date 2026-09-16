@@ -16,7 +16,7 @@ import {
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useAppStore } from '@/store'
-import { BROWSER_FAMILY_LABELS } from '../../../../../shared/constants'
+import { browserSourceLabel } from '../../../../../shared/browser-source-label'
 import type {
   BrowserSessionProfile,
   BrowserViewportPresetId
@@ -91,8 +91,7 @@ export function BrowserToolbarMenuDropdown({
               <span className="truncate">{profile.label}</span>
               {profile.source?.browserFamily && (
                 <span className="ml-auto pl-2 text-[11px] text-muted-foreground">
-                  {BROWSER_FAMILY_LABELS[profile.source.browserFamily] ??
-                    profile.source.browserFamily}
+                  {browserSourceLabel(profile.source)}
                 </span>
               )}
             </DropdownMenuItem>

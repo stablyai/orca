@@ -153,6 +153,7 @@ export function createBrowserProfileImportActions(
           label: string
           profiles: { name: string; directory: string }[]
           selectedProfile: string
+          customBrowserId?: string
         }[]
         set((s) =>
           getBrowserSettingsHostId(s) === hostId

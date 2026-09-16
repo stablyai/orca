@@ -6,7 +6,7 @@ import type {
 } from '../../shared/runtime-types'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
-  detectInstalledBrowsers,
+  detectAllBrowsers,
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
@@ -16,6 +16,7 @@ export class RuntimeBrowserCommandsWithBrowserProfileImportFromBrowser extends R
     profileId: string
     browserFamily: string
     browserProfile?: string
+    customBrowserId?: string
     supportsPartitionSkippedCookies?: true
   }): Promise<BrowserProfileImportFromBrowserResult> {
     const profile = browserSessionRegistry.getProfile(params.profileId)
@@ -29,8 +30,20 @@ export class RuntimeBrowserCommandsWithBrowserProfileImportFromBrowser extends R
       return { ok: false, reason: 'Invalid browser profile name.' }
     }
 
-    const browsers = detectInstalledBrowsers()
-    let browser = browsers.find((candidate) => candidate.family === params.browserFamily)
+    const browsers = await detectAllBrowsers()
+    // Why: custom browsers all share family 'custom', so a customBrowserId request must
+    // match on that id; without one, refuse an ambiguous family match rather than importing
+    // the wrong browser. Older clients that omit it still work when exactly one matches.
+    const matches = params.customBrowserId
+      ? browsers.filter((candidate) => candidate.customBrowserId === params.customBrowserId)
+      : browsers.filter((candidate) => candidate.family === params.browserFamily)
+    if (!params.customBrowserId && params.browserFamily === 'custom' && matches.length > 1) {
+      return {
+        ok: false,
+        reason: 'Multiple custom browsers detected; customBrowserId is required.'
+      }
+    }
+    let browser = matches[0]
     if (!browser) {
       return { ok: false, reason: 'Browser not found on this system.' }
     }
@@ -58,6 +71,9 @@ export class RuntimeBrowserCommandsWithBrowserProfileImportFromBrowser extends R
       browser.selectedProfile
     browserSessionRegistry.updateProfileSource(params.profileId, {
       browserFamily: browser.family,
+      // Why: custom browsers share family 'custom'; persist their real name so
+      // Settings distinguishes them (browserSourceLabel prefers sourceLabel).
+      ...(browser.family === 'custom' ? { sourceLabel: browser.label } : {}),
       profileName,
       importedAt: Date.now()
     })

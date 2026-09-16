@@ -22,6 +22,7 @@ import { summarizeCookieImportError as summarizeError } from './browser-cookie-i
 
 export type { BrowserProfile, DetectedBrowser, CookieImportOptions, ChromiumCookieColumnInfo }
 export { summarizeError as summarizeCookieImportError }
+export { detectAllBrowsers } from './browser-cookie-detection'
 
 export function detectInstalledBrowsers(): DetectedBrowser[] {
   return detectBrowsers()

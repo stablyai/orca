@@ -226,6 +226,7 @@ export type BrowserSlice = {
     label: string
     profiles: { name: string; directory: string }[]
     selectedProfile: string
+    customBrowserId?: string
   }[]
   detectedBrowsersLoaded: boolean
   // Why: which machine answered detection for a remote environment, so import menus can say where
@@ -235,7 +236,8 @@ export type BrowserSlice = {
   importCookiesFromBrowser: (
     profileId: string,
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    customBrowserId?: string
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
