@@ -105,6 +105,9 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing remote ref'), { code: 1 })
+        }
         if (args[0] === 'merge-base') {
           return { stdout: '', stderr: '' }
         }
@@ -201,6 +204,9 @@ describe('registerWorktreeHandlers', () => {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing remote ref'), { code: 1 })
         }
         if (args[0] === 'merge-base') {
           return { stdout: '', stderr: '' }
@@ -305,6 +311,9 @@ describe('registerWorktreeHandlers', () => {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing remote ref'), { code: 1 })
         }
         if (args[0] === 'merge-base' || args[0] === 'log') {
           if (!registeredRoots) {
@@ -420,6 +429,9 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing remote ref'), { code: 1 })
+        }
         if (args[0] === 'merge-base') {
           return { stdout: '', stderr: '' }
         }
@@ -493,11 +505,17 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
-        if (args[0] === 'for-each-ref' && args.at(-1) === 'refs/heads/main') {
+        if (args[0] === 'show-ref' && args.at(-1) === 'refs/heads/main') {
           if (presence === 'probe-failed') {
             throw new Error('ssh: connection closed by remote host')
           }
-          return { stdout: presence === 'present' ? 'refs/heads/main\n' : '', stderr: '' }
+          if (presence === 'present') {
+            return { stdout: '', stderr: '' }
+          }
+          throw Object.assign(new Error('missing ref'), { code: 1 })
+        }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing ref'), { code: 1 })
         }
         if (args[0] === 'rev-parse') {
           const ref = args.at(-1) ?? ''
@@ -552,7 +570,7 @@ describe('registerWorktreeHandlers', () => {
     })) as CreateWorktreeResult
 
     expect(provider.exec).toHaveBeenCalledWith(
-      ['for-each-ref', '--count=1', '--format=%(refname)', 'refs/heads/main'],
+      ['show-ref', '--verify', '--quiet', '--', 'refs/heads/main'],
       '/remote/repo'
     )
     expect(result.localBaseRefRefresh).toBeUndefined()

@@ -15,7 +15,10 @@ import {
 } from '../shell-startup-features'
 import { resolveShellWrapperRoot } from '../shell-wrapper-content-address'
 import { writeShellWrapperFiles } from '../shell-wrapper-file-writer'
-import { buildDaemonShellReadyWrapperFiles } from './daemon-shell-ready-wrapper-fileset'
+import {
+  buildDaemonShellReadyWrapperFiles,
+  getDaemonShellReadyWrapperPaths
+} from './daemon-shell-ready-wrapper-fileset'
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
@@ -50,8 +53,8 @@ export function getShellReadyWrapperRoot(): string {
   return cachedShellReadyWrapperRoot.root
 }
 
-function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
-  return buildDaemonShellReadyWrapperFiles(root).map(([path]) => path)
+function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): readonly string[] {
+  return getDaemonShellReadyWrapperPaths(root)
 }
 
 // Why non-empty and not just present: a partial write leaves a zero-byte
@@ -103,13 +106,6 @@ export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   // Why fish: markerless, its startup command is written before fish's reader owns
   // the PTY and the launch is lost under slow prompts like Starship (STA-3417).
   return shellName === 'zsh' || shellName === 'bash' || shellName === 'fish'
-}
-
-export function supportsPtyStartupBarrier(env: Record<string, string>): boolean {
-  if (process.platform === 'win32') {
-    return false
-  }
-  return shellPathSupportsPtyStartupBarrier(resolvePtyShellPath(env))
 }
 
 export type ShellLaunchConfig = {
@@ -172,6 +168,7 @@ export function getShellLaunchConfig(
       args: [
         '-NoLogo',
         '-NoExit',
+        // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],

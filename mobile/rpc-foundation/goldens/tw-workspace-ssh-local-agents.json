@@ -1,0 +1,109 @@
+{
+  "operation": "tasks.workspace-ssh-local",
+  "family": "tasks.workspace-ssh-local",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "af0623c2d106d2ed18ef9149d4990539f9ed82146ae091a872a3e1d792efeffe",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0c2cba5f3708": {
+      "name": "workspaceAgent",
+      "value": "claude",
+      "sent": 0
+    },
+    "7400f4eebe66": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex", "claude"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "77b6cedadbe8": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 0
+    },
+    "c56f76942e16": {
+      "name": "preflight.detectAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}",
+      "sent": 1
+    },
+    "cb93b17470e8": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
+    },
+    "d00f9527d4f2": {
+      "name": "workspaceDetectedAgentIds",
+      "value": ["codex", "claude"],
+      "sent": 1
+    },
+    "dd9d8bf76a0e": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-workspace-ssh-local-agents",
+    "checkpoints": [
+      {
+        "id": "local-agents-detected",
+        "observation": {
+          "sender": ["cb93b17470e8"],
+          "payloads": ["c56f76942e16"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "7400f4eebe66",
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "d00f9527d4f2"]
+        }
+      }
+    ]
+  }
+}

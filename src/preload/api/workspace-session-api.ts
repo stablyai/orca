@@ -7,8 +7,8 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
-  RemoteWorkspacePatchResult,
-  RemoteWorkspaceSnapshot
+  RemoteWorkspaceObservedPatchResult,
+  RemoteWorkspaceObservedSnapshot
 } from '../../shared/remote-workspace-types'
 
 export type WorkspaceSessionApi = {
@@ -34,11 +34,13 @@ export type WorkspaceSessionApi = {
     }) => Promise<void>
   }
   remoteWorkspace: {
-    get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
+    get: (args: { targetId: string }) => Promise<RemoteWorkspaceObservedSnapshot | null>
     setForConnectedTargets: (args: {
       session?: WorkspaceSessionState
       hydratedTargetIds?: string[]
-    }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
+      expectedRevisionsByTargetId: Record<string, number>
+      expectedHostObservationTokensByTargetId: Record<string, string>
+    }) => Promise<{ targetId: string; result: RemoteWorkspaceObservedPatchResult }[]>
     listEnabledConnectedTargets: () => Promise<string[]>
     listConnectedClients: (args?: {
       targetIds?: string[]

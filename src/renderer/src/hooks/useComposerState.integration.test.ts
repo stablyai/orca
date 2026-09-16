@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { useComposerState } from './useComposerState'
@@ -31,7 +31,7 @@ afterEach(() => {
 })
 
 describe('useComposerState integrated lifecycle', () => {
-  it('composes two live composers and releases each native drop listener on unmount', () => {
+  it('composes two live composers and exposes the parent-worktree control state', () => {
     useAppStore.setState({
       repos: [],
       projects: [],
@@ -57,6 +57,10 @@ describe('useComposerState integrated lifecycle', () => {
 
     expect(first.result.current.cardProps.name).toBe('first')
     expect(second.result.current.cardProps.name).toBe('second')
+    expect(first.result.current.cardProps.parentWorktreeId).toBeNull()
+    expect(first.result.current.cardProps.onParentWorktreeIdChange).toBeTypeOf('function')
+    act(() => first.result.current.cardProps.onParentWorktreeIdChange('repo-1::/parent'))
+    expect(first.result.current.cardProps.parentWorktreeId).toBe('repo-1::/parent')
     expect(window.api.ui.onFileDrop).toHaveBeenCalledTimes(2)
 
     second.unmount()

@@ -2,10 +2,8 @@ import React from 'react'
 import { CheckCircle2, CircleAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import {
-  describeAutomationSchedule,
-  getAutomationCronExpressionFields
-} from '../../../../shared/automation-schedules'
+import { describeAutomationSchedule } from '../../../../shared/automation-schedules'
+import { getAutomationCronExpressionFields } from '../../../../shared/automation-schedule-parsing'
 import { formatUiAutomationScheduleDescriptor } from './automation-schedule-label'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { Field } from './automation-page-parts'

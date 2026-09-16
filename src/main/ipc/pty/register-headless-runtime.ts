@@ -9,6 +9,7 @@ import type {
   PrepareCodexSessionResume
 } from './host-env/types'
 import { registerPtyHandlers } from './register-handlers'
+import { hydrateLocalPtyRegistryAtBoot } from '../../memory/hydrate-local-pty-registry'
 
 export function registerHeadlessPtyRuntime(
   runtime: OrcaRuntimeService,
@@ -21,7 +22,7 @@ export function registerHeadlessPtyRuntime(
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
   }
-): void {
+): Promise<void> {
   // Why: headless `orca serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
   // Why a fake rather than null: `registerPtyHandlers` takes a non-null BrowserWindow. `isDestroyed: () => true`
   // is what makes that safe — every renderer-liveness guard reads it and skips, so no send is ever attempted.
@@ -44,4 +45,5 @@ export function registerHeadlessPtyRuntime(
     store,
     { prepareCodexSessionResume, ...lifecycle }
   )
+  return store ? hydrateLocalPtyRegistryAtBoot(store) : Promise.resolve()
 }

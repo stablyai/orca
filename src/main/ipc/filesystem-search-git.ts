@@ -1,3 +1,4 @@
+import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import {
   buildGitGrepArgs,
@@ -32,13 +33,14 @@ export async function searchWithGitGrep(
   const gitArgs = buildGitGrepArgs(args.query, args)
   const child = await gitSpawnAfterWindowsEnvironmentReady(gitArgs, {
     cwd: rootPath,
+    admissionTier: 'interactive',
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
     stdio: ['ignore', 'pipe', 'pipe']
   })
   return new Promise((resolve) => {
     const matchRegex = buildSubmatchRegex(args.query, args)
     const acc = createAccumulator()
-    let stdoutBuffer = ''
+    const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
     let done = false
 
     let killTimeout: ReturnType<typeof setTimeout>
@@ -48,6 +50,7 @@ export async function searchWithGitGrep(
         return
       }
       done = true
+      lines.clear()
       clearTimeout(killTimeout)
       // Why: child.kill() is advisory. If git ignores it, detach our
       // closures so repeated fallback searches do not retain old scans.
@@ -66,12 +69,7 @@ export async function searchWithGitGrep(
     }
 
     function handleStdoutData(chunk: string): void {
-      stdoutBuffer += chunk
-      const lines = stdoutBuffer.split('\n')
-      stdoutBuffer = lines.pop() ?? ''
-      for (const l of lines) {
-        processLine(l)
-      }
+      lines.push(chunk, processLine)
     }
 
     function handleStderrData(): void {
@@ -83,8 +81,9 @@ export async function searchWithGitGrep(
     }
 
     function handleClose(): void {
-      if (stdoutBuffer) {
-        processLine(stdoutBuffer)
+      const tail = lines.finish()
+      if (tail !== null) {
+        processLine(tail)
       }
       resolveOnce()
     }

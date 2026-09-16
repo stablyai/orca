@@ -1,21 +1,18 @@
-import { open, stat } from 'node:fs/promises'
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
-import {
-  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  nativeChatLineDecoderForAgent,
-  readNativeChatTranscriptTailFile,
-  type NativeChatLineDecoder
-} from '../../native-chat/transcript-tail-reader'
-import { transcriptFallbackId } from '../../native-chat/transcript-fallback-id'
+import { nativeChatLineDecoderForAgent } from '../../native-chat/transcript-tail-reader'
+import type { IFilesystemProvider } from '../../providers/types'
 import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
-
-const MAX_FORWARD_TRANSCRIPT_SCAN_BYTES = 8 * 1024 * 1024
+import {
+  readForwardLocalWorkerTranscriptPage,
+  readInitialLocalWorkerTranscriptPage
+} from './worker-transcript-local-read'
+import { readRemoteWorkerTranscript } from './worker-transcript-remote-read'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -26,9 +23,12 @@ type WorkerTranscriptReadFailure = {
 type WorkerTranscriptReadSuccess = {
   ok: true
   filePath: string
+  sourceFingerprint: string
+  boundaryCheckpoint: string
   messages: NativeChatMessage[]
   nextOffset: number
   limited: boolean
+  clipping: string[]
   warnings: string[]
 }
 
@@ -38,9 +38,16 @@ export async function readWorkerTranscript(args: {
   agent: AgentType
   sessionId: string
   transcriptPath?: string
+  /** Attested local WSL distro. Keeps host path translation on the selected guest. */
+  wslDistro?: string
   offset?: number
-  endOffset?: number
   limit?: number
+  /** Prior file identity from the cursor owner, when it retains that evidence. */
+  expectedSourceFingerprint?: string
+  /** Hash of the bounded content immediately before a cursor offset. */
+  expectedBoundaryCheckpoint?: string
+  /** Remote execution-host provider. When present no local filesystem lookup occurs. */
+  filesystemProvider?: IFilesystemProvider
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
@@ -51,9 +58,28 @@ export async function readWorkerTranscript(args: {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
   let filePath: string | null
+  if (args.filesystemProvider) {
+    // A remote provider can only read the hook-attested path. Never search the
+    // desktop's provider roots for a remote session (same-path sentinels are a
+    // real authority boundary, not merely a portability concern).
+    filePath = args.transcriptPath?.trim() || null
+    if (!filePath) {
+      return { ok: false, reason: 'transcript_missing', warnings: [] }
+    }
+    const page = await readRemoteWorkerTranscript(args, filePath, decode)
+    if (
+      page.ok &&
+      args.expectedSourceFingerprint &&
+      page.sourceFingerprint !== args.expectedSourceFingerprint
+    ) {
+      return { ok: false, reason: 'source_changed', warnings: [] }
+    }
+    return page
+  }
   try {
     filePath = await resolveSessionFilePath(args.agent, args.sessionId, {
-      transcriptPath: args.transcriptPath
+      transcriptPath: args.transcriptPath,
+      wslDistro: args.wslDistro
     })
   } catch {
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
@@ -65,18 +91,36 @@ export async function readWorkerTranscript(args: {
   try {
     const page =
       args.offset === undefined
-        ? await readInitialPage(filePath, limit, decode, args.endOffset)
-        : await readForwardPage(filePath, args.offset, limit, decode, args.endOffset)
+        ? await readInitialLocalWorkerTranscriptPage(filePath, limit, decode)
+        : await readForwardLocalWorkerTranscriptPage(
+            filePath,
+            args.offset,
+            limit,
+            decode,
+            args.expectedBoundaryCheckpoint
+          )
     if (!page.ok) {
       return page
+    }
+    if (
+      args.expectedSourceFingerprint &&
+      page.sourceFingerprint !== args.expectedSourceFingerprint
+    ) {
+      return { ok: false, reason: 'source_changed', warnings: [] }
     }
     const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
     return {
       ok: true,
       filePath,
+      sourceFingerprint: page.sourceFingerprint,
+      boundaryCheckpoint: page.boundaryCheckpoint,
       messages: bounded.messages,
       nextOffset: page.nextOffset,
       limited: page.limited || bounded.limited,
+      clipping: [
+        ...(page.limited ? ['message_limit_or_scan_window'] : []),
+        ...(bounded.limited ? ['transcript_payload'] : [])
+      ],
       warnings: [...page.warnings, ...bounded.warnings]
     }
   } catch (error) {
@@ -92,182 +136,4 @@ export async function readWorkerTranscript(args: {
       warnings: []
     }
   }
-}
-
-async function readInitialPage(
-  filePath: string,
-  limit: number,
-  decode: NativeChatLineDecoder,
-  endOffset?: number
-): Promise<WorkerTranscriptReadResult> {
-  if (endOffset !== undefined && (await stat(filePath)).size < endOffset) {
-    return { ok: false, reason: 'source_changed', warnings: [] }
-  }
-  const page = await readNativeChatTranscriptTailFile(filePath, limit, decode, false, endOffset)
-  return {
-    ok: true,
-    filePath,
-    messages: page.messages,
-    nextOffset: page.consumedTo,
-    limited: page.hasMore,
-    warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount)
-  }
-}
-
-async function readForwardPage(
-  filePath: string,
-  startOffset: number,
-  limit: number,
-  decode: NativeChatLineDecoder,
-  endOffset?: number
-): Promise<WorkerTranscriptReadResult> {
-  const currentFileSize = (await stat(filePath)).size
-  if (endOffset !== undefined && currentFileSize < endOffset) {
-    return { ok: false, reason: 'source_changed', warnings: [] }
-  }
-  const fileSize = Math.min(currentFileSize, endOffset ?? Number.MAX_SAFE_INTEGER)
-  if (startOffset > fileSize) {
-    return { ok: false, reason: 'source_changed', warnings: [] }
-  }
-  if (startOffset === fileSize) {
-    return {
-      ok: true,
-      filePath,
-      messages: [],
-      nextOffset: startOffset,
-      limited: false,
-      warnings: []
-    }
-  }
-  const scanEnd = Math.min(fileSize, startOffset + MAX_FORWARD_TRANSCRIPT_SCAN_BYTES)
-  const handle = await open(filePath, 'r')
-  const messages: NativeChatMessage[] = []
-  let pendingChunks: Buffer[] = []
-  let pendingBytes = 0
-  let pendingStart = startOffset
-  let droppingOversizedRecord = await startsInsideRecord(handle, startOffset)
-  let malformedRecordCount = 0
-  let oversizedRecordCount = 0
-  let nextOffset = startOffset
-  try {
-    const stream = handle.createReadStream({
-      start: startOffset,
-      end: scanEnd - 1,
-      autoClose: false
-    })
-    let absoluteOffset = startOffset
-    for await (const rawChunk of stream) {
-      const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
-      let segmentStart = 0
-      let newline = chunk.indexOf(0x0a)
-      while (newline >= 0) {
-        retainPart(chunk.subarray(segmentStart, newline))
-        const lineEnd = absoluteOffset + newline + 1
-        if (!droppingOversizedRecord) {
-          decodeLine()
-        }
-        resetLine(lineEnd)
-        nextOffset = lineEnd
-        if (messages.length >= limit) {
-          return successfulPage(lineEnd < fileSize)
-        }
-        segmentStart = newline + 1
-        newline = chunk.indexOf(0x0a, segmentStart)
-      }
-      if (segmentStart < chunk.length) {
-        retainPart(chunk.subarray(segmentStart))
-      }
-      absoluteOffset += chunk.length
-    }
-    if (droppingOversizedRecord) {
-      nextOffset = scanEnd
-    }
-    return successfulPage(scanEnd < fileSize, scanEnd < fileSize)
-  } finally {
-    await handle.close()
-  }
-
-  function retainPart(part: Buffer): void {
-    if (droppingOversizedRecord) {
-      return
-    }
-    pendingBytes += part.length
-    if (pendingBytes > MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) {
-      pendingChunks = []
-      droppingOversizedRecord = true
-      oversizedRecordCount++
-      return
-    }
-    pendingChunks.push(part)
-  }
-
-  function resetLine(nextStart: number): void {
-    pendingChunks = []
-    pendingBytes = 0
-    droppingOversizedRecord = false
-    pendingStart = nextStart
-  }
-
-  function decodeLine(): void {
-    let line = Buffer.concat(pendingChunks).toString('utf8')
-    if (line.endsWith('\r')) {
-      line = line.slice(0, -1)
-    }
-    if (!line) {
-      return
-    }
-    try {
-      JSON.parse(line)
-    } catch {
-      malformedRecordCount++
-      return
-    }
-    const message = decode(line, transcriptFallbackId(filePath, pendingStart))
-    if (message) {
-      messages.push(message)
-    }
-  }
-
-  function successfulPage(limited: boolean, scanLimited = false): WorkerTranscriptReadSuccess {
-    return {
-      ok: true,
-      filePath,
-      messages,
-      nextOffset,
-      limited,
-      warnings: recordWarnings(malformedRecordCount, oversizedRecordCount, scanLimited)
-    }
-  }
-}
-
-async function startsInsideRecord(
-  handle: Awaited<ReturnType<typeof open>>,
-  offset: number
-): Promise<boolean> {
-  if (offset === 0) {
-    return false
-  }
-  const previousByte = Buffer.allocUnsafe(1)
-  const { bytesRead } = await handle.read(previousByte, 0, 1, offset - 1)
-  return bytesRead === 1 && previousByte[0] !== 0x0a
-}
-
-function recordWarnings(
-  malformedRecordCount = 0,
-  oversizedRecordCount = 0,
-  scanLimited = false
-): string[] {
-  const warnings: string[] = []
-  if (malformedRecordCount > 0) {
-    warnings.push(`${malformedRecordCount} malformed transcript record(s) were skipped.`)
-  }
-  if (oversizedRecordCount > 0) {
-    warnings.push(`${oversizedRecordCount} oversized transcript record(s) were skipped.`)
-  }
-  if (scanLimited) {
-    warnings.push(
-      'Transcript scanning stopped at the bounded byte limit; continue with the cursor.'
-    )
-  }
-  return warnings
 }

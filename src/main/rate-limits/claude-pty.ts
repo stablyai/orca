@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: Claude PTY usage scraping keeps prompt
-driving, parser, timers, and teardown in one state machine; splitting it would
-make the lifecycle harder to audit. */
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 import { resolveClaudeCommand } from '../codex-cli/command'
 // Why: import from the shared module, not the codex-cli re-export, so a test that
@@ -11,11 +8,19 @@ import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-au
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { cleanupHiddenRateLimitPty, registerHiddenRateLimitPty } from './hidden-pty-cleanup'
-import { extractClaudePtyResetMetadata } from './claude-pty-reset-parser'
 import {
   getHiddenRateLimitWslCwdSetupCommands,
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
+import {
+  abortedClaudeUsageResult,
+  describeClaudeUsageFailure,
+  isClaude21UsagePanel,
+  parseClaudePtyUsage,
+  stripTerminalControlSequences
+} from './claude-pty-usage-parser'
+import { quoteHiddenRateLimitShellValue } from './hidden-rate-limit-shell'
+import { CLAUDE_USAGE_STOP_SUBSTRINGS } from './claude-pty-stop-markers'
 
 const PTY_TIMEOUT_MS = 25_000
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
@@ -24,148 +29,6 @@ const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
 // PTY fallback — spawn interactive `claude`, send `/usage`, parse the TUI
 // ---------------------------------------------------------------------------
 
-// Why: these patterns match the Claude CLI's /usage TUI panel output.
-// "Current session" shows a percent like "62% used" or "62% left".
-// Weekly labels have varied between "Current week" and "Weekly limits".
-const SESSION_RE = /current\s*session/i
-const WEEKLY_RE = /(?:current\s*week|weekly\s*(?:limits?|usage|rate\s*limits?)|7\s*[- ]?\s*day)/i
-const FABLE_WORD_RE = /\bfable\b/i
-const FABLE_LABEL_RE = /^\s*fable\s*$/i
-// Why: derive from WEEKLY_RE so a future weekly-wording change stays in one place
-// instead of silently reopening the Fable-weekly parsing gap this fix closed.
-const FABLE_WEEKLY_LABEL_RE = new RegExp(
-  `${WEEKLY_RE.source}\\s*(?:\\([^)]*\\bfable\\b[^)]*\\)|[-:]?\\s*\\bfable\\b)`,
-  'i'
-)
-const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|consumed|left|remaining|available)/i
-const ESC = String.fromCharCode(27)
-const BEL = String.fromCharCode(7)
-const OSC_SEQUENCE_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, 'g')
-const CSI_SEQUENCE_RE = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, 'g')
-
-function stripTerminalControlSequences(output: string): string {
-  return output.replace(OSC_SEQUENCE_RE, '').replace(CSI_SEQUENCE_RE, '')
-}
-
-/**
- * Extract percent-left from lines following a label match.
- * Scans up to 12 lines after the label to find the associated percent.
- */
-function matchesWeeklyLabel(line: string): boolean {
-  return WEEKLY_RE.test(line) && !FABLE_WORD_RE.test(line)
-}
-
-function matchesFableBoundary(line: string): boolean {
-  return FABLE_LABEL_RE.test(line) || (FABLE_WORD_RE.test(line) && WEEKLY_RE.test(line))
-}
-
-function matchesFableUsageLabel(line: string): boolean {
-  // Why: broad Fable-weekly copy should stop nearby scans, but only a real
-  // Fable usage heading should produce the distinct Fable meter.
-  return FABLE_LABEL_RE.test(line) || FABLE_WEEKLY_LABEL_RE.test(line)
-}
-
-function isSectionLabel(line: string): boolean {
-  return SESSION_RE.test(line) || matchesWeeklyLabel(line) || matchesFableBoundary(line)
-}
-
-function extractPercentAfterLabel(
-  lines: string[],
-  matchesLabel: (line: string) => boolean
-): number | null {
-  for (let i = 0; i < lines.length; i++) {
-    if (!matchesLabel(lines[i])) {
-      continue
-    }
-    // Scan next 12 lines for a percent
-    for (let j = i; j < Math.min(i + 12, lines.length); j++) {
-      if (j > i && isSectionLabel(lines[j])) {
-        break
-      }
-      const m = PERCENT_RE.exec(lines[j])
-      if (m) {
-        const pct = Number.parseFloat(m[1])
-        const word = m[2].toLowerCase()
-        const isUsed = word === 'used' || word === 'consumed'
-        return isUsed ? pct : 100 - pct
-      }
-    }
-  }
-  return null
-}
-
-function parsePtyUsage(output: string): {
-  session: RateLimitWindow | null
-  weekly: RateLimitWindow | null
-  fableWeekly: RateLimitWindow | null
-} {
-  const lines = output.split(/\r\n|\n|\r/)
-
-  const sessionPct = extractPercentAfterLabel(lines, (line) => SESSION_RE.test(line))
-  const weeklyPct = extractPercentAfterLabel(lines, matchesWeeklyLabel)
-  const fableWeeklyPct = extractPercentAfterLabel(lines, matchesFableUsageLabel)
-  const sessionReset = extractClaudePtyResetMetadata(
-    lines,
-    (line) => SESSION_RE.test(line),
-    isSectionLabel
-  )
-  const weeklyReset = extractClaudePtyResetMetadata(lines, matchesWeeklyLabel, isSectionLabel)
-  const fableWeeklyReset = extractClaudePtyResetMetadata(
-    lines,
-    matchesFableUsageLabel,
-    isSectionLabel
-  )
-
-  const session: RateLimitWindow | null =
-    sessionPct !== null
-      ? {
-          usedPercent: Math.min(100, Math.max(0, sessionPct)),
-          windowMinutes: 300,
-          resetsAt: sessionReset.resetsAt,
-          resetDescription: sessionReset.resetDescription
-        }
-      : null
-
-  const weekly: RateLimitWindow | null =
-    weeklyPct !== null
-      ? {
-          usedPercent: Math.min(100, Math.max(0, weeklyPct)),
-          windowMinutes: 10080,
-          resetsAt: weeklyReset.resetsAt,
-          resetDescription: weeklyReset.resetDescription
-        }
-      : null
-
-  const fableWeekly: RateLimitWindow | null =
-    fableWeeklyPct !== null
-      ? {
-          usedPercent: Math.min(100, Math.max(0, fableWeeklyPct)),
-          windowMinutes: 10080,
-          resetsAt: fableWeeklyReset.resetsAt,
-          resetDescription: fableWeeklyReset.resetDescription
-        }
-      : null
-
-  return { session, weekly, fableWeekly }
-}
-
-// Why: these substrings indicate the /usage TUI panel has finished
-// rendering. We stop collecting output once one appears, then allow
-// a settle period for the rest of the content to flush.
-const STOP_SUBSTRINGS = [
-  'Current week (all models)',
-  'Current week (Opus)',
-  'Current week (Sonnet only)',
-  'Current week (Sonnet)',
-  'Weekly limits',
-  'Weekly limit',
-  'Weekly usage',
-  '7-day',
-  'Current session',
-  'Failed to load usage data',
-  'failed to load usage data'
-]
-
 // Why: prompt detection is unreliable because the Claude CLI v2.x renders
 // a status bar and TUI elements that push the `❯` prompt out of any
 // reasonable detection window. Instead we wait a fixed 2s after spawning
@@ -173,47 +36,9 @@ const STOP_SUBSTRINGS = [
 // palette prompts ("Show plan usage limits") are auto-confirmed with Enter.
 const COMMAND_PALETTE_RE = /show plan|usage limits/i
 const TRUST_PROMPT_RE = /do you trust|trust the files|safety check/i
-const RATE_LIMITED_RE = /rate limited\.?\s+please try again later/i
-const LOAD_FAILED_RE = /failed to load usage data/i
-const CLAUDE_21_USAGE_TABS_RE = /settings?\s+status?\s+config\s+usage\s+stats/i
-const CLAUDE_21_SESSION_STATS_RE = /total\s*cost|total\s*duration|usage:\s*\d+\s*input/i
 const STARTUP_DELAY_MS = 2_000
 const SETTLE_AFTER_STOP_MS = 2_000
 const SETTLE_AFTER_CLAUDE_21_USAGE_MS = 8_000
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
-
-function describeClaudeUsageFailure(output: string): string {
-  if (RATE_LIMITED_RE.test(output)) {
-    return 'Claude usage is rate limited right now.'
-  }
-
-  if (LOAD_FAILED_RE.test(output)) {
-    return 'Claude usage is unavailable right now.'
-  }
-
-  if (CLAUDE_21_USAGE_TABS_RE.test(output) || CLAUDE_21_SESSION_STATS_RE.test(output)) {
-    return 'Claude plan usage is unavailable for this Claude CLI session.'
-  }
-
-  // Why: parser failures are an implementation detail of Orca's PTY fallback.
-  // The UI should explain the user-visible outcome, not leak internal parsing
-  // mechanics that the user cannot act on.
-  return 'Claude usage is unavailable right now.'
-}
-
-function abortedClaudeUsageResult(): ProviderRateLimits {
-  return {
-    provider: 'claude',
-    session: null,
-    weekly: null,
-    updatedAt: Date.now(),
-    error: 'Rate-limit fetch aborted',
-    status: 'error'
-  }
-}
 
 export async function fetchViaPty(options?: {
   authPreparation?: ClaudeRuntimeAuthPreparation
@@ -279,8 +104,10 @@ export async function fetchViaPty(options?: {
             // Why: hidden usage probes must not inherit a root-like WSL cwd;
             // keep Claude discovery bounded to a tiny temp directory.
             ...getHiddenRateLimitWslCwdSetupCommands(),
-            `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}`,
-            ...Object.entries(proxyEnv).map(([key, value]) => `export ${key}=${shellQuote(value)}`),
+            `export CLAUDE_CONFIG_DIR=${quoteHiddenRateLimitShellValue(wslConfig.linuxConfigDir)}`,
+            ...Object.entries(proxyEnv).map(
+              ([key, value]) => `export ${key}=${quoteHiddenRateLimitShellValue(value)}`
+            ),
             'exec claude'
           ].join(' && ')
         ]
@@ -352,7 +179,7 @@ export async function fetchViaPty(options?: {
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         // Even on timeout, try to parse whatever we collected
         const clean = stripTerminalControlSequences(output)
-        const { session, weekly, fableWeekly } = parsePtyUsage(clean)
+        const { session, weekly, fableWeekly } = parseClaudePtyUsage(clean)
         if (session || weekly || fableWeekly) {
           resolve({
             provider: 'claude',
@@ -370,7 +197,7 @@ export async function fetchViaPty(options?: {
             weekly: null,
             updatedAt: Date.now(),
             error: withMacTailscaleDnsHint(
-              CLAUDE_21_USAGE_TABS_RE.test(clean) || CLAUDE_21_SESSION_STATS_RE.test(clean)
+              isClaude21UsagePanel(clean)
                 ? describeClaudeUsageFailure(clean)
                 : 'PTY timeout — /usage panel did not render',
               clean
@@ -407,7 +234,7 @@ export async function fetchViaPty(options?: {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
       const clean = stripTerminalControlSequences(output)
-      const { session, weekly, fableWeekly } = parsePtyUsage(clean)
+      const { session, weekly, fableWeekly } = parseClaudePtyUsage(clean)
 
       if (!session && !weekly && !fableWeekly) {
         resolve({
@@ -469,10 +296,7 @@ export async function fetchViaPty(options?: {
       // Check if we've hit a stop substring indicating the panel rendered
       if (sentUsage && !stopDetected) {
         const clean = stripTerminalControlSequences(output)
-        if (
-          !claude21UsageDetected &&
-          (CLAUDE_21_USAGE_TABS_RE.test(clean) || CLAUDE_21_SESSION_STATS_RE.test(clean))
-        ) {
+        if (!claude21UsageDetected && isClaude21UsagePanel(clean)) {
           claude21UsageDetected = true
           if (enterInterval) {
             clearInterval(enterInterval)
@@ -483,7 +307,7 @@ export async function fetchViaPty(options?: {
           // with a user-facing unavailable state instead of a false PTY timeout.
           claude21UsageSettleTimer = setTimeout(finalize, SETTLE_AFTER_CLAUDE_21_USAGE_MS)
         }
-        for (const sub of STOP_SUBSTRINGS) {
+        for (const sub of CLAUDE_USAGE_STOP_SUBSTRINGS) {
           if (clean.includes(sub)) {
             stopDetected = true
             // Why: 2.0s settle time after detecting the stop substring
@@ -508,7 +332,7 @@ export async function fetchViaPty(options?: {
           timeout = null
         }
         const clean = stripTerminalControlSequences(output)
-        const { session, weekly, fableWeekly } = parsePtyUsage(clean)
+        const { session, weekly, fableWeekly } = parseClaudePtyUsage(clean)
         resolve({
           provider: 'claude',
           session,

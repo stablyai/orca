@@ -78,6 +78,16 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
   }
 }
 
+const SYNTHETIC_PERMISSION_TITLES: ReadonlySet<string> = new Set(
+  Object.values(SYNTHETIC_AGENT_TITLE_PROFILES)
+    .filter((profile) => profile.synthesizeTerminalTitle !== false)
+    .map((profile) => profile.permissionLabel.toLowerCase())
+)
+
+export function isSyntheticAgentPermissionTitle(title: string): boolean {
+  return SYNTHETIC_PERMISSION_TITLES.has(title.trim().toLowerCase())
+}
+
 export function getSyntheticAgentTitleProfile(
   agentType: AgentType | null | undefined
 ): SyntheticAgentTitleProfile | null {

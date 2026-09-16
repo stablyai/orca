@@ -24,9 +24,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       # Why: mirrors pr.yml so native module rebuilds do not use pnpm's
       # non-executable bundled gyp_main.py on Linux runners.
@@ -43,12 +43,9 @@ jobs:
           fi
 
       - name: Install dependencies
-        # Why: pnpm 10.24's frozen headless fast path can fail on fresh Ubuntu
-        # runners while creating the root node_modules. Use the normal resolver
-        # path, then verify package metadata stayed unchanged.
         run: |
-          pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
-          git diff --exit-code package.json pnpm-lock.yaml
+          pnpm install --frozen-lockfile
+          git diff --exit-code package.json pnpm-lock.yaml pnpm-workspace.yaml
 
       - name: Start Weston
         run: |

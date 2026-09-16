@@ -44,7 +44,10 @@ export type GithubPullRequestApi = {
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
   }) => Promise<PRInfo | null>
-  refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
+  refreshPRNow: (args: {
+    candidate: GitHubPRRefreshCandidate
+    reason?: GitHubPRRefreshReason
+  }) => Promise<PRRefreshOutcome>
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate
     reason: GitHubPRRefreshReason
@@ -152,6 +155,12 @@ export type GithubPullRequestApi = {
     args: GitHubRepoSelectorArgs & {
       prNumber: number
       updates: { state: 'open' | 'closed' }
+      prRepo?: GitHubOwnerRepo | null
+    }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  markPRReadyForReview: (
+    args: GitHubRepoSelectorArgs & {
+      prNumber: number
       prRepo?: GitHubOwnerRepo | null
     }
   ) => Promise<{ ok: true } | { ok: false; error: string }>

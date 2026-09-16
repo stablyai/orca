@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
-import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -246,55 +245,47 @@ printf 'arg=%s\\n' "$@"
     }
   )
 
-  itRunsUnixShell('runs the AppImage CLI wrapper through APPDIR at runtime', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-'))
+  // Why: registration on every Linux install method now points at this one
+  // launcher, so its env sanitation and argv passthrough are the contract the
+  // AppImage, deb, and extracted-tree commands all depend on.
+  itRunsUnixShell('sanitizes node env and forwards argv verbatim', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-env-'))
     try {
-      const appDir = join(root, 'Orca.AppDir')
-      const cliDir = join(appDir, 'resources', 'app.asar.unpacked', 'out', 'cli')
+      const appDir = join(root, 'Orca')
+      const resourcesDir = join(appDir, 'resources')
+      const launcherDir = join(resourcesDir, 'bin')
+      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+      const launcherPath = join(launcherDir, 'orca-ide')
       const cliPath = join(cliDir, 'index.js')
-      const appImagePath = join(root, "Orca's AppImage.AppImage")
-      const commandPath = join(root, 'orca-ide')
+
+      await mkdir(launcherDir, { recursive: true })
       await mkdir(cliDir, { recursive: true })
+      await copyFile(linuxLauncherAsset, launcherPath)
+      await writeFile(cliPath, '', 'utf8')
       await writeFile(
-        cliPath,
-        `exports.main = (argv) => {
-  console.log(JSON.stringify({
-    argv,
-    appDir: process.env.APPDIR,
-    runAsNode: process.env.ELECTRON_RUN_AS_NODE,
-    nodeOptions: process.env.NODE_OPTIONS ?? null,
-    orcaNodeOptions: process.env.ORCA_NODE_OPTIONS ?? null,
-    nodeReplExternalModule: process.env.NODE_REPL_EXTERNAL_MODULE ?? null,
-    orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
-  }))
-}
-`,
-        'utf8'
-      )
-      await writeFile(
-        appImagePath,
+        join(appDir, 'orca-ide'),
         `#!/usr/bin/env bash
-export APPDIR="$FAKE_APPDIR"
-exec node "$@"
+node -e 'console.log(JSON.stringify({
+  argv: process.argv.slice(1),
+  runAsNode: process.env.ELECTRON_RUN_AS_NODE,
+  nodeOptions: process.env.NODE_OPTIONS ?? null,
+  orcaNodeOptions: process.env.ORCA_NODE_OPTIONS ?? null,
+  nodeReplExternalModule: process.env.NODE_REPL_EXTERNAL_MODULE ?? null,
+  orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
+}))' -- "$@"
 `,
         { encoding: 'utf8', mode: 0o755 }
       )
-      await writeFile(commandPath, buildAppImageCliWrapper(appImagePath), {
-        encoding: 'utf8',
-        mode: 0o755
-      })
 
-      const result = await execFileAsync(commandPath, ['--help', 'two words'], {
+      const result = await execFileAsync(launcherPath, ['--help', 'two words'], {
         env: {
           ...process.env,
-          FAKE_APPDIR: appDir,
           NODE_OPTIONS: '--trace-warnings',
           NODE_REPL_EXTERNAL_MODULE: 'external-loader'
         }
       })
       const payload = JSON.parse(result.stdout) as {
         argv: string[]
-        appDir: string
         runAsNode: string
         nodeOptions: string | null
         orcaNodeOptions: string | null
@@ -302,13 +293,71 @@ exec node "$@"
         orcaNodeReplExternalModule: string | null
       }
 
-      expect(payload.argv).toEqual(['--help', 'two words'])
-      expect(payload.appDir).toBe(appDir)
+      expect(payload.argv).toEqual([cliPath, '--help', 'two words'])
       expect(payload.runAsNode).toBe('1')
+      // Why: Electron's node bootstrap must not inherit these, but the CLI
+      // still needs to see what the user set.
       expect(payload.nodeOptions).toBeNull()
       expect(payload.orcaNodeOptions).toBe('--trace-warnings')
       expect(payload.nodeReplExternalModule).toBeNull()
       expect(payload.orcaNodeReplExternalModule).toBe('external-loader')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  itRunsUnixShell('keeps Linux serve on the CLI entrypoint in node mode', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-serve-'))
+    try {
+      const appDir = join(root, 'Orca')
+      const resourcesDir = join(appDir, 'resources')
+      const launcherDir = join(resourcesDir, 'bin')
+      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+      const launcherPath = join(launcherDir, 'orca-ide')
+      const appRunPath = join(appDir, 'AppRun')
+      const electronPath = join(appDir, 'orca-ide')
+      const cliPath = join(cliDir, 'index.js')
+      const statePath = join(root, 'launch-state.json')
+
+      await mkdir(launcherDir, { recursive: true })
+      await mkdir(cliDir, { recursive: true })
+      await copyFile(linuxLauncherAsset, launcherPath)
+      await writeFile(cliPath, '', 'utf8')
+      // An accidental AppRun handoff would skip CLI validation and fail this contract.
+      await writeFile(
+        appRunPath,
+        `#!/usr/bin/env bash
+printf 'unexpected AppRun handoff\n' >&2
+exit 97
+`,
+        { encoding: 'utf8', mode: 0o755 }
+      )
+      await writeFile(
+        electronPath,
+        `#!/usr/bin/env node
+require('node:fs').writeFileSync(process.env.ORCA_TEST_LAUNCH_STATE, JSON.stringify({
+  argv: process.argv.slice(2),
+  runAsNode: process.env.ELECTRON_RUN_AS_NODE ?? null
+}))
+`,
+        { encoding: 'utf8', mode: 0o755 }
+      )
+
+      await execFileAsync(launcherPath, ['serve', '--recipe-json', '--project-root', '/tmp/repo'], {
+        env: { ...process.env, ORCA_TEST_LAUNCH_STATE: statePath }
+      })
+      const payload = JSON.parse(await readFile(statePath, 'utf8')) as {
+        argv: string[]
+        runAsNode: string | null
+      }
+      expect(payload.argv).toEqual([
+        cliPath,
+        'serve',
+        '--recipe-json',
+        '--project-root',
+        '/tmp/repo'
+      ])
+      expect(payload.runAsNode).toBe('1')
     } finally {
       await rm(root, { recursive: true, force: true })
     }

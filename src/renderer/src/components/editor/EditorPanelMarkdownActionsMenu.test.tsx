@@ -54,12 +54,14 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isMarkdown: false,
         isDiffSurface: false,
         diffWordWrap: false,
+        diffShowWhitespace: false,
         editorWordWrap: true,
         shouldShowMarkdownExportAction: false,
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
         onToggleDiffWordWrap,
+        onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap,
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
@@ -81,22 +83,54 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isMarkdown: false,
         isDiffSurface: true,
         diffWordWrap: true,
+        diffShowWhitespace: false,
         editorWordWrap: false,
         shouldShowMarkdownExportAction: false,
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
         onToggleDiffWordWrap,
+        onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap,
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
       })
     )
 
-    expect(checkboxItems.list).toHaveLength(1)
+    expect(checkboxItems.list).toHaveLength(2)
     expect(checkboxItems.list[0]).toMatchObject({ checked: true, label: 'Word Wrap' })
     checkboxItems.list[0]?.onCheckedChange?.(false)
     expect(onToggleDiffWordWrap).toHaveBeenCalledOnce()
     expect(onToggleEditorWordWrap).not.toHaveBeenCalled()
+  })
+
+  it('shows and binds Show Whitespace on diff surfaces', () => {
+    const onToggleDiffWhitespace = vi.fn()
+    renderToStaticMarkup(
+      React.createElement(EditorPanelMarkdownActionsMenu, {
+        isMarkdown: false,
+        isDiffSurface: true,
+        diffWordWrap: false,
+        diffShowWhitespace: true,
+        editorWordWrap: false,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleDiffWhitespace,
+        onToggleEditorWordWrap: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {}
+      })
+    )
+
+    expect(checkboxItems.list).toHaveLength(2)
+    expect(checkboxItems.list[1]).toMatchObject({
+      checked: true,
+      label: 'Show Whitespace'
+    })
+    checkboxItems.list[1]?.onCheckedChange?.(false)
+    expect(onToggleDiffWhitespace).toHaveBeenCalledOnce()
   })
 })

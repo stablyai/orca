@@ -37,4 +37,16 @@ describe('client-hosted browser package coverage', () => {
       expect(windowsStep.run).toContain(file)
     }
   })
+
+  // Why pinned: each of those files launches a full Electron stack twice under its own in-process
+  // deadline. Letting the runner interleave four of them starved the probes past those deadlines,
+  // which is the only way this step has ever failed.
+  it('gives each Linux Electron probe the runner to itself', () => {
+    const parsedWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+    const linuxStep = parsedWorkflow.jobs.package.steps.find(
+      (step) => step.name === 'Test Linux Electron lifecycle boundary'
+    )
+
+    expect(linuxStep.run).toContain('--no-file-parallelism')
+  })
 })

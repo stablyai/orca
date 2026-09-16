@@ -5,10 +5,13 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
 import { isAgentStatusHooksEnabled } from './managed-agent-hook-controls'
+import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { agentHookServer } from './server'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { getOpenCodePluginSource } from '../opencode/hook-service'
+import { codexHookService } from '../codex/hook-service'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { PluginSources } from '../../relay/plugin-overlay'
 import {
   isWslDistroRunning,
@@ -61,6 +64,7 @@ export type WslHookRelayManagerDeps = {
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
   installHooks: typeof installRemoteManagedAgentHooks
+  installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
   managedHookSettings: () => ManagedHookDetectionSettings
   /** Plugin source strings shipped to the guest relay so an Orca update needn't redeploy the relay bundle. */
   pluginSources: () => PluginSources
@@ -96,12 +100,23 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,
-  ingest: (envelope, connectionId) =>
-    agentHookServer.ingestRemote(
-      envelope as Parameters<typeof agentHookServer.ingestRemote>[0],
-      connectionId
-    ),
+  // Why: the WSL relay protocol advertises no run-serving capability; stamped onto a copy so the
+  // wire-deserialized notification object itself is never mutated.
+  ingest: (envelope, connectionId) => {
+    const capped = {
+      ...envelope,
+      advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES
+    }
+    type IngestEnvelope = Parameters<typeof agentHookServer.ingestRemote>[0]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: envelope is the wire-deserialized notification; ingestRemote independently re-validates paneKey's type before trusting anything here.
+    return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
+  },
   installHooks: installRemoteManagedAgentHooks,
+  installCodex: (runtimeHomePath, distro) =>
+    codexHookService.installForRuntimeHomeSerialized(runtimeHomePath, {
+      runtime: 'wsl',
+      wslDistro: distro
+    }),
   managedHookSettings: () => null,
   // Why: only OpenCode is in scope for WSL now; the payload shape stays identical to SSH so Pi/OMP are additive later.
   pluginSources: () => ({ opencodePluginSource: getOpenCodePluginSource() }),

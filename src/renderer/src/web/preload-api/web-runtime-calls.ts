@@ -78,7 +78,9 @@ export async function callRuntimeResult<TResult>(
 ): Promise<TResult> {
   const response = await callRuntimeEnvelope(method, params, timeoutMs)
   if (!response.ok) {
-    throw new Error(response.error.message)
+    // Why keep the code: callers classify recoverable host failures by token, and the message alone
+    // (e.g. "Parent selector was not found.") carries none.
+    throw Object.assign(new Error(response.error.message), { code: response.error.code })
   }
   return response.result as TResult
 }

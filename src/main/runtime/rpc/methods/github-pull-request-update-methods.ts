@@ -1,77 +1,18 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalString, requiredString } from '../schemas'
-import { RepoSelector, SlugRepo } from './github-repo-target-schemas'
+import { defineMethod } from '../core'
+import {
+  MarkPrReadyForReview,
+  MergePr,
+  PRReviewComment,
+  PRReviewCommentReply,
+  RemovePrReviewers,
+  RequestPrReviewers,
+  SetPrAutoMerge,
+  UpdatePr,
+  UpdatePrState,
+  UpdatePrTitle
+} from '../../../../shared/rpc-contract/github-pull-request-update-params'
 
-const UpdatePrTitle = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  title: requiredString('Missing title'),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-const UpdatePr = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  updates: z.object({
-    title: OptionalString,
-    body: z.string().optional()
-  }),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-const MergePr = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  method: z.enum(['merge', 'squash', 'rebase']).optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-const SetPrAutoMerge = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  enabled: z.boolean(),
-  method: z.enum(['merge', 'squash', 'rebase']).optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-const UpdatePrState = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  prRepo: SlugRepo.nullable().optional(),
-  updates: z.object({
-    state: z.enum(['open', 'closed'])
-  })
-})
-
-const RequestPrReviewers = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  prRepo: SlugRepo.nullable().optional(),
-  reviewers: z.array(z.string()).min(1)
-})
-
-const RemovePrReviewers = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  prRepo: SlugRepo.nullable().optional(),
-  reviewers: z.array(z.string()).min(1)
-})
-
-const PRReviewComment = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  prRepo: SlugRepo.nullable().optional(),
-  commitId: requiredString('Missing PR head SHA'),
-  path: requiredString('File path required'),
-  line: z.number().int().positive(),
-  startLine: z.number().int().positive().optional(),
-  body: requiredString('Comment body required')
-})
-
-const PRReviewCommentReply = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  commentId: z.number().int().positive(),
-  body: requiredString('Comment body required'),
-  threadId: OptionalString,
-  path: OptionalString,
-  line: z.number().int().positive().optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-export const GITHUB_PULL_REQUEST_UPDATE_METHODS: RpcMethod[] = [
+export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.updatePRTitle',
     params: UpdatePrTitle,
@@ -112,6 +53,12 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS: RpcMethod[] = [
     params: UpdatePrState,
     handler: async (params, { runtime }) =>
       runtime.updateRepoPRState(params.repo, params.prNumber, params.updates, params.prRepo ?? null)
+  }),
+  defineMethod({
+    name: 'github.markPRReadyForReview',
+    params: MarkPrReadyForReview,
+    handler: async (params, { runtime }) =>
+      runtime.markRepoPRReadyForReview(params.repo, params.prNumber, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.requestPRReviewers',

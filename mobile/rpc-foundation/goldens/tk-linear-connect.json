@@ -1,0 +1,137 @@
+{
+  "operation": "tasks.linear-connect",
+  "family": "tasks.linear-connect",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "d1bd7ad9b647a50403953ba01d3a4bcccc5f4020c2aefa6146cca8c7688612c1",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0c51558ed744": {
+      "name": "provider",
+      "value": "linear",
+      "sent": 1
+    },
+    "2f8d5603d8c0": {
+      "connected": true,
+      "error": "",
+      "provider": "linear",
+      "providers": ["github", "linear"],
+      "state": "idle"
+    },
+    "4870152af5d4": {
+      "name": "linearConnectState",
+      "value": "connecting",
+      "sent": 0
+    },
+    "6469c8226ac8": {
+      "name": "linear.connect#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.connect\",\"params\":{\"apiKey\":\"lin_api_key\"}}",
+      "sent": 1
+    },
+    "69d74e72326c": {
+      "name": "linearConnected",
+      "value": true,
+      "sent": 1
+    },
+    "9ea73b6d4ce4": {
+      "name": "linearConnectError",
+      "value": "",
+      "sent": 0
+    },
+    "b314de624efa": {
+      "name": "linearApiKeyDraft",
+      "value": "",
+      "sent": 1
+    },
+    "b7f1fad8d45f": {
+      "name": "linear.connect#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f06f609ce6b4": {
+      "name": "linearConnectState",
+      "value": "idle",
+      "sent": 1
+    },
+    "f4cec40b7d42": {
+      "name": "visibleProviders",
+      "value": ["github", "linear"],
+      "sent": 1
+    },
+    "fe581ce5541b": {
+      "name": "showLinearConnect",
+      "value": false,
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "tk-linear-connect",
+    "checkpoints": [
+      {
+        "id": "connect-settled",
+        "observation": {
+          "sender": ["b7f1fad8d45f"],
+          "payloads": ["6469c8226ac8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "2f8d5603d8c0",
+          "effects": [
+            "4870152af5d4",
+            "9ea73b6d4ce4",
+            "b314de624efa",
+            "f06f609ce6b4",
+            "fe581ce5541b",
+            "69d74e72326c",
+            "f4cec40b7d42",
+            "0c51558ed744"
+          ]
+        }
+      }
+    ]
+  }
+}

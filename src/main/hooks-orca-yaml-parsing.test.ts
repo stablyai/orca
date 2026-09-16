@@ -22,6 +22,19 @@ describe('parseOrcaYaml', () => {
     })
   })
 
+  it('parses a project requirement to finish setup before agent startup', () => {
+    const yaml = [
+      'setupAgentStartupPolicy: wait-for-setup',
+      'scripts:',
+      '  setup: node install-project-skills.mjs'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: { setup: 'node install-project-skills.mjs' },
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
+  })
+
   it('parses YAML with archive script only', () => {
     const yaml = `scripts:\n  archive: |\n    echo "archiving"\n`
     const result = parseOrcaYaml(yaml)

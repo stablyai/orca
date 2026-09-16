@@ -3,6 +3,7 @@ import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
 const mocks = vi.hoisted(() => ({
   canOpenWithSystemDefault: true,
+  downloadAndOpen: vi.fn(),
   openDetectedFilePath: vi.fn(),
   worktreeRoot: false
 }))
@@ -17,6 +18,10 @@ vi.mock('./terminal-file-open-routing', () => ({
 
 vi.mock('./terminal-worktree-path-link', () => ({
   resolveKnownWorktreeRootPathLink: () => (mocks.worktreeRoot ? { id: 'wt-2' } : null)
+}))
+
+vi.mock('./terminal-remote-file-download-open', () => ({
+  downloadAndOpenRemoteTerminalFile: mocks.downloadAndOpen
 }))
 
 import { handleTerminalFileLink } from './terminal-file-link-actions'
@@ -94,5 +99,62 @@ describe('terminal file link actions', () => {
       })
     )
     expect(actionRequest).not.toHaveProperty('alternate')
+  })
+
+  it('offers the same rows for a remote previewable file, downloading before the OS opens it', () => {
+    mocks.canOpenWithSystemDefault = false
+    const request = vi.fn()
+    handleTerminalFileLink(
+      '/repo/docs/report.html',
+      null,
+      null,
+      plainEvent(),
+      deps,
+      context(request)
+    )
+
+    const actionRequest = request.mock.calls[0][0]
+    expect(actionRequest.primary.label).toBe('Open file')
+    expect(actionRequest.alternate.label).toBe('Download & open with default app')
+
+    actionRequest.alternate.run()
+    expect(mocks.downloadAndOpen).toHaveBeenCalledWith({}, '/repo/docs/report.html')
+    expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+  })
+
+  it('keeps row parity between local and remote previewable files', () => {
+    const localRequest = vi.fn()
+    handleTerminalFileLink(
+      '/repo/docs/report.html',
+      null,
+      null,
+      plainEvent(),
+      deps,
+      context(localRequest)
+    )
+    mocks.canOpenWithSystemDefault = false
+    const remoteRequest = vi.fn()
+    handleTerminalFileLink(
+      '/repo/docs/report.html',
+      null,
+      null,
+      plainEvent(),
+      deps,
+      context(remoteRequest)
+    )
+
+    const rowCount = (call: { alternate?: unknown }): number => 1 + (call.alternate ? 1 : 0)
+    expect(rowCount(remoteRequest.mock.calls[0][0])).toBe(rowCount(localRequest.mock.calls[0][0]))
+  })
+
+  // Why: a directory has nothing to hand the OS, and the download row would offer a transfer that
+  // can only fail. The popover is built on hover, so the path shape decides rather than a stat.
+  it('drops the remote download row for a path that announces itself as a directory', () => {
+    mocks.canOpenWithSystemDefault = false
+    const request = vi.fn()
+
+    handleTerminalFileLink('/repo/docs/', null, null, plainEvent(), deps, context(request))
+
+    expect(request.mock.calls[0][0]).not.toHaveProperty('alternate')
   })
 })

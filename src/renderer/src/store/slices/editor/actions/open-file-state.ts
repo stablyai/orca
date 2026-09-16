@@ -21,11 +21,11 @@ export function createOpenFileState(
     activeTabTypeByWorktree: {},
     activeTabType: 'terminal',
     recentlyClosedEditorTabsByWorktree: {},
-    setActiveTabType: (type) =>
+    setActiveTabType: (type, targetWorktreeId) =>
       set((s) => {
-        const worktreeId = s.activeWorktreeId
+        const worktreeId = targetWorktreeId ?? s.activeWorktreeId
         return {
-          activeTabType: type,
+          ...(worktreeId === s.activeWorktreeId ? { activeTabType: type } : {}),
           activeTabTypeByWorktree: worktreeId
             ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
             : s.activeTabTypeByWorktree

@@ -23,6 +23,10 @@ import type {
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
+import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from './helpers/fake-agent-command-override'
 
 type SpawnEvent = { args: string[]; pid: number }
 type TerminalIdentity = Pick<
@@ -69,6 +73,10 @@ if (process.platform === 'win32') {
   writeFileSync(executable, `#!/usr/bin/env node\n${fakeCodexSource}`)
   chmodSync(executable, 0o755)
 }
+
+const fakeCodexCommand = buildFakeAgentCommandOverride(
+  path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+)
 
 const test = base.extend({
   launchEnv: [
@@ -535,23 +543,28 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   const repoId = added.result.repo.id
   await expect
     .poll(() =>
-      orcaPage.evaluate(async (repoId) => {
-        const state = window.__store?.getState()
-        await state?.fetchRepos()
-        const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
-        if (!repo) {
-          return false
-        }
-        await window.__store?.getState().updateRepo(repoId, {
-          hookSettings: { ...repo.hookSettings, setupAgentStartupPolicy: 'start-immediately' }
-        })
-        await window.__store?.getState().updateSettings({
-          disabledTuiAgents: [],
-          setupScriptLaunchMode: 'new-tab',
-          terminalHiddenViewParking: false
-        })
-        return true
-      }, repoId)
+      orcaPage.evaluate(
+        async ({ repoId, command, windowsShell }) => {
+          const state = window.__store?.getState()
+          await state?.fetchRepos()
+          const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
+          if (!repo) {
+            return false
+          }
+          await window.__store?.getState().updateRepo(repoId, {
+            hookSettings: { ...repo.hookSettings, setupAgentStartupPolicy: 'start-immediately' }
+          })
+          await window.__store?.getState().updateSettings({
+            agentCmdOverrides: { codex: command },
+            terminalWindowsShell: windowsShell,
+            disabledTuiAgents: [],
+            setupScriptLaunchMode: 'new-tab',
+            terminalHiddenViewParking: false
+          })
+          return true
+        },
+        { repoId, command: fakeCodexCommand, windowsShell: FAKE_AGENT_WINDOWS_SHELL }
+      )
     )
     .toBe(true)
 

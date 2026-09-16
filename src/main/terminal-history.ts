@@ -1,5 +1,6 @@
 import { join, basename } from 'node:path'
 import { mkdirSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import {
   dropInheritedOrcaFishHistory,
   fishHistorySessionName,
@@ -131,7 +132,29 @@ export function readHistoryMeta(dir: string): HistoryDirMeta | null {
     if (statSync(metaPath).size > MAX_HISTORY_META_BYTES) {
       return null
     }
-    const raw: unknown = JSON.parse(readFileSync(metaPath, 'utf-8'))
+    return parseHistoryMeta(dir, readFileSync(metaPath, 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+/** `readHistoryMeta` off the main thread, for scans that walk thousands of directories. */
+export async function readHistoryMetaAsync(dir: string): Promise<HistoryDirMeta | null> {
+  try {
+    const metaPath = join(dir, 'meta.json')
+    // Why stat before read: the cap must reject an oversized meta.json without loading it.
+    if ((await stat(metaPath)).size > MAX_HISTORY_META_BYTES) {
+      return null
+    }
+    return parseHistoryMeta(dir, await readFile(metaPath, 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+function parseHistoryMeta(dir: string, contents: string): HistoryDirMeta | null {
+  try {
+    const raw: unknown = JSON.parse(contents)
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
       return null
     }

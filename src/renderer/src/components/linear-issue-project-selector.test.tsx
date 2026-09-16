@@ -20,7 +20,12 @@ const storeMocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-linear-client', () => runtimeMocks)
+vi.mock('@/runtime/runtime-linear-project-client', () => ({
+  linearListProjects: runtimeMocks.linearListProjects
+}))
+vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
+  linearUpdateIssue: runtimeMocks.linearUpdateIssue
+}))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof storeMocks.state) => unknown) => selector(storeMocks.state)
 }))

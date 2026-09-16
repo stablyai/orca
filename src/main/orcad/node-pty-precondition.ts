@@ -19,19 +19,15 @@ import { existsSync, accessSync, constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { runProcessSync, type ProcessResult } from '../../shared/child-process/run-process'
+import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
 import type { RuntimeTerminalUnavailableReason } from '../../shared/runtime-types'
 import {
   buildToolchainProbeCommand,
   parseBuildToolchainProbe,
   toolchainInstallHintLines
 } from '../ssh/build-toolchain-diagnosis'
-import {
-  detectNativeHostAbi,
-  nativeSlotName,
-  parseNodeAbiMismatch,
-  parseUnmetGlibcVersion,
-  type NativeHostAbi
-} from './native-host-abi'
+import { detectNativeHostAbi, nativeSlotName, type NativeHostAbi } from './native-host-abi'
+import { classifyNodePtyLoaderMessage, firstErrorLine } from './node-pty-loader-diagnosis'
 import { installPrebuiltSlot, type PrebuiltSlotOutcome } from './node-pty-prebuilt-slot'
 
 // Why every verdict travels on STDOUT: node echoes the whole `-e` source into stderr
@@ -72,21 +68,35 @@ export type NodePtyProbeFailure = {
 }
 
 /**
- * Read the child's exit into a cause. Pure, so every failure shape is testable from a
- * host that cannot reproduce it — the whole point, since the shapes that matter belong
- * to Alpine and Ubuntu 20.04.
+ * What the child actually reported, before any judgement is made about it.
+ *
+ * Split from the classification so callers that need the loader's own words — the relay,
+ * which quotes them back when nothing recognizes the shape — do not have to re-derive
+ * them from a formatted verdict.
  */
-export function classifyNodePtyProbeResult(
+export type NodePtyProbeOutcome =
+  | { kind: 'loaded'; loadedDir: string | null }
+  | { kind: 'noBinary' }
+  | { kind: 'loaderError'; message: string }
+  | { kind: 'signalled'; signal: NodeJS.Signals }
+  /** The probe never answered. Not evidence about node-pty either way. */
+  | { kind: 'unanswered'; detail: string }
+  /** It answered, but with nothing that names a cause. */
+  | { kind: 'unexplained'; detail: string }
+
+export function readNodePtyProbeOutcome(
   result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
-): NodePtyProbeFailure | null {
+): NodePtyProbeOutcome {
   const stdout = result.stdout
   if (result.code === 0 && stdout.includes(PROBE_OK_TOKEN)) {
-    return null
+    return {
+      kind: 'loaded',
+      loadedDir: stdout.split(PROBE_OK_TOKEN)[1]?.trim().split('\n')[0]?.trim() || null
+    }
   }
   if (result.timedOut) {
     return {
-      status: 'unverifiable',
-      reason: 'unknown',
+      kind: 'unanswered',
       detail: 'the node-pty load probe did not finish in time, so nothing was established'
     }
   }
@@ -94,27 +104,51 @@ export function classifyNodePtyProbeResult(
   // the loader never reaches the catch, and often prints nothing at all. That silence is
   // exactly the uncatchable case this probe is a separate process for.
   if (result.signal) {
-    return {
-      status: 'blocked',
-      reason: 'load_crashed',
-      detail: `the load probe was killed by ${result.signal}`
-    }
+    return { kind: 'signalled', signal: result.signal }
   }
   if (stdout.includes(NO_BINARY_TOKEN)) {
-    return {
-      status: 'blocked',
-      reason: 'dependency_missing',
-      detail: 'node-pty is installed but has no compiled binary for this platform'
-    }
+    return { kind: 'noBinary' }
   }
   const reported = readReportedLoadError(stdout)
   if (reported !== null) {
-    return classifyLoaderMessage(reported)
+    return { kind: 'loaderError', message: reported }
   }
   return {
-    status: 'blocked',
-    reason: 'load_failed',
-    detail: firstLine(result.stderr) || `the load probe exited with code ${result.code}`
+    kind: 'unexplained',
+    detail: firstErrorLine(result.stderr) || `the load probe exited with code ${result.code}`
+  }
+}
+
+/**
+ * Read the child's exit into a cause. Pure, so every failure shape is testable from a
+ * host that cannot reproduce it — the whole point, since the shapes that matter belong
+ * to Alpine and Ubuntu 20.04.
+ */
+export function classifyNodePtyProbeResult(
+  result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
+): NodePtyProbeFailure | null {
+  const outcome = readNodePtyProbeOutcome(result)
+  switch (outcome.kind) {
+    case 'loaded':
+      return null
+    case 'unanswered':
+      return { status: 'unverifiable', reason: 'unknown', detail: outcome.detail }
+    case 'signalled':
+      return {
+        status: 'blocked',
+        reason: 'load_crashed',
+        detail: `the load probe was killed by ${outcome.signal}`
+      }
+    case 'noBinary':
+      return {
+        status: 'blocked',
+        reason: 'dependency_missing',
+        detail: 'node-pty is installed but has no compiled binary for this platform'
+      }
+    case 'loaderError':
+      return classifyLoaderMessage(outcome.message)
+    case 'unexplained':
+      return { status: 'blocked', reason: 'load_failed', detail: outcome.detail }
   }
 }
 
@@ -133,40 +167,7 @@ function readReportedLoadError(stdout: string): string | null {
 
 /** Read a dynamic-loader message. Pure, so shapes this host cannot reproduce are testable. */
 export function classifyLoaderMessage(message: string): NodePtyProbeFailure {
-  const abiMismatch = parseNodeAbiMismatch(message)
-  if (abiMismatch) {
-    return {
-      status: 'blocked',
-      reason: 'abi_mismatch',
-      detail: `built for Node ABI ${abiMismatch.built}, this host runs ABI ${abiMismatch.host}`
-    }
-  }
-  const unmetGlibc = parseUnmetGlibcVersion(message)
-  if (unmetGlibc) {
-    return {
-      status: 'blocked',
-      reason: 'libc_floor',
-      detail: `the binary requires GLIBC_${unmetGlibc}`
-    }
-  }
-  if (/(GLIBCXX_|CXXABI_)[0-9.]+'? not found/.test(message)) {
-    return { status: 'blocked', reason: 'libc_floor', detail: firstLine(message) }
-  }
-  if (/MODULE_NOT_FOUND|Cannot find module/.test(message)) {
-    return { status: 'blocked', reason: 'dependency_missing', detail: firstLine(message) }
-  }
-  return { status: 'blocked', reason: 'load_failed', detail: firstLine(message) }
-}
-
-/**
- * Why not simply the first non-empty line: when the child dies without catching, node
- * prints the offending source line and a caret before the error, so line one is the
- * script rather than the diagnosis. Prefer the first line that reads as an error.
- */
-function firstLine(text: string): string {
-  const lines = text.split('\n').filter((candidate) => candidate.trim().length > 0)
-  const errorLine = lines.find((candidate) => /^[A-Za-z]*(Error|Exception):/.test(candidate.trim()))
-  return (errorLine ?? lines[0] ?? text).trim().slice(0, 400)
+  return { status: 'blocked', ...classifyNodePtyLoaderMessage(message) }
 }
 
 /**
@@ -302,11 +303,12 @@ export function checkNodePtyPrecondition(
     }
   }
 
-  // Loaded. The remaining way terminals fail is spawn-time: node-pty posix_spawns
+  // Loaded. The remaining way terminals fail is spawn-time: on macOS node-pty posix_spawns
   // build/Release/spawn-helper, and a missing one turns every terminal.create into ENOENT
   // on a host that otherwise looks healthy. That is a degradation, not a boot blocker.
-  const loadedDir = result.stdout.split(PROBE_OK_TOKEN)[1]?.trim().split('\n')[0]?.trim()
-  if (abi.platform !== 'win32') {
+  const outcome = readNodePtyProbeOutcome(result)
+  const loadedDir = outcome.kind === 'loaded' ? outcome.loadedDir : null
+  if (usesNodePtySpawnHelper(abi.platform)) {
     const helper = join(loadedDir || join(nodePtyDir, 'build', 'Release'), 'spawn-helper')
     if (!isExecutableFile(helper)) {
       return {

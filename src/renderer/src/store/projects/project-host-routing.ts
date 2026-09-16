@@ -10,6 +10,11 @@ import {
   type ProjectHostSetupProjection
 } from '../../../../shared/project-host-setup-projection'
 import {
+  normalizeProjectHostSetupRow,
+  normalizeProjectHostSetupRows,
+  normalizeProjectRows
+} from '../../../../shared/project-catalog-row-normalization'
+import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -51,18 +56,30 @@ export function setupWithFetchedOwner(
   setup: ProjectHostSetup,
   target: RuntimeClientTarget
 ): ProjectHostSetup {
+  // Why here: every setup row crossing IPC or RPC into the renderer passes through this
+  // adoption step, so it is where the declared field types stop being aspirational.
+  const adopted = normalizeProjectHostSetupRow(setup)
   const hostId = getRuntimeTargetHostId(target)
   if (target.kind !== 'environment') {
-    return setup
+    return adopted
   }
-  const executionHostId = setup.executionHostId ?? setup.hostId
+  const executionHostId = adopted.executionHostId ?? adopted.hostId
   return {
-    ...setup,
+    ...adopted,
     hostId,
     executionHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? hostId : executionHostId,
     runtimeOwnerEnvironmentId: target.environmentId,
     // Why: paired clients route through the HUB and must not treat its private SSH target as client-local configuration.
     connectionId: null
+  }
+}
+
+function normalizeProjectCatalogProjection(
+  projection: ProjectHostSetupProjection
+): ProjectHostSetupProjection {
+  return {
+    projects: normalizeProjectRows([...projection.projects]),
+    setups: normalizeProjectHostSetupRows([...projection.setups])
   }
 }
 
@@ -95,10 +112,10 @@ export async function fetchProjectHostSetupCompatibility(
       if (!projectsApi?.list || !projectsApi.listHostSetups) {
         throw new Error('projects_api_unavailable')
       }
-      return {
+      return normalizeProjectCatalogProjection({
         projects: await projectsApi.list(),
         setups: await projectsApi.listHostSetups()
-      }
+      })
     }
     await assertProjectHostSetupRuntimeCapability(target)
     const [projectResponse, setupResponse] = await Promise.all([
@@ -110,7 +127,9 @@ export async function fetchProjectHostSetupCompatibility(
       })
     ])
     return {
-      projects: projectResponse.projects,
+      // Why projects too: the same wire response carries them, and a remote host on another
+      // Orca version can publish a row whose declared field types do not hold.
+      projects: normalizeProjectRows([...projectResponse.projects]),
       setups: setupResponse.setups.map((setup) => setupWithFetchedOwner(setup, target))
     }
   } catch {

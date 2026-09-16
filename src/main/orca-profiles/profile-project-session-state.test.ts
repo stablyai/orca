@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
   mergeWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -82,6 +83,57 @@ describe('profile project session state', () => {
     expect(result.terminalSurfaceTombstonesByPaneKey?.['retired-tab:leaf']?.worktreeId).toBe(
       transferredWorktreeId
     )
+  })
+
+  it('rekeys document-preview ownership during project transfer', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      browserTabsByWorktree: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            id: 'browser-1',
+            worktreeId: REMOVED_WORKTREE_ID,
+            docLocation: {
+              kind: 'workspace-doc',
+              worktreeId: REMOVED_WORKTREE_ID,
+              filePath: '/removed/docs/report.html'
+            }
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        'browser-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'browser-1',
+            worktreeId: REMOVED_WORKTREE_ID,
+            docLocation: {
+              kind: 'workspace-doc',
+              worktreeId: REMOVED_WORKTREE_ID,
+              filePath: '/removed/docs/report.html'
+            }
+          }
+        ]
+      }
+    }
+
+    const result = extractSessionForTransfer(
+      session as unknown as WorkspaceSessionState,
+      REMOVED_REPO_ID,
+      'repo-c'
+    )
+    const transferredWorktreeId = 'repo-c::/removed'
+
+    expect(result.browserTabsByWorktree?.[transferredWorktreeId]?.[0]?.docLocation).toEqual({
+      kind: 'workspace-doc',
+      worktreeId: transferredWorktreeId,
+      filePath: '/removed/docs/report.html'
+    })
+    expect(result.browserPagesByWorkspace?.['browser-1']?.[0]?.docLocation).toEqual({
+      kind: 'workspace-doc',
+      worktreeId: transferredWorktreeId,
+      filePath: '/removed/docs/report.html'
+    })
   })
 
   it('prunes terminal membership authority records with a removed repo', () => {

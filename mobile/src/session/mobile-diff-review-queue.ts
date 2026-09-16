@@ -233,26 +233,25 @@ function branchEntryToQueueItem(
   }
 }
 
-function compareQueueItems(
-  first: MobileDiffReviewQueueItem,
-  second: MobileDiffReviewQueueItem
-): number {
-  return (
-    SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
-    Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
-    first.filePath.localeCompare(second.filePath, undefined, { numeric: true })
-  )
-}
-
 export function buildMobileDiffReviewQueue(
   input: BuildMobileDiffReviewQueueInput
 ): MobileDiffReviewQueueItem[] {
-  return [
+  const queue = [
     ...input.statusEntries.map((entry) =>
       statusEntryToQueueItem(entry, input.comments, input.reviewState)
     ),
     ...input.branchEntries.map((entry) => branchEntryToQueueItem(entry, input))
-  ].sort(compareQueueItems)
+  ]
+  if (queue.length > 1) {
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    queue.sort(
+      (first, second) =>
+        SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
+        Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
+        collator.compare(first.filePath, second.filePath)
+    )
+  }
+  return queue
 }
 
 export function filterMobileDiffReviewQueue(
@@ -271,4 +270,26 @@ export function filterMobileDiffReviewQueue(
     case 'all':
       return [...queue]
   }
+}
+
+export type MobileDiffReviewQueueSummary = {
+  reviewedCount: number
+  reviewedUnstagedCount: number
+}
+
+export function summarizeMobileDiffReviewQueue(
+  queue: readonly MobileDiffReviewQueueItem[]
+): MobileDiffReviewQueueSummary {
+  let reviewedCount = 0
+  let reviewedUnstagedCount = 0
+  for (const item of queue) {
+    if (!item.isReviewed) {
+      continue
+    }
+    reviewedCount += 1
+    if (item.scope === 'unstaged' && item.canStage) {
+      reviewedUnstagedCount += 1
+    }
+  }
+  return { reviewedCount, reviewedUnstagedCount }
 }

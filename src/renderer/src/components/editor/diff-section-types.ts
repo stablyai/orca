@@ -14,6 +14,7 @@ export type DiffSection = {
   modifiedContent: string
   collapsed: boolean
   loading: boolean
+  loadOnDemand?: boolean
   error?: string
   dirty: boolean
   diffResult: GitDiffResult | null

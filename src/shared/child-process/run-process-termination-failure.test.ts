@@ -38,6 +38,34 @@ describe('runProcess termination failure', () => {
     vi.clearAllMocks()
   })
 
+  it('reports ordinary child close exactly once', async () => {
+    const child = mockChild()
+    const onChildTerminated = vi.fn()
+    spawnMock.mockReturnValue(child)
+    const pending = runProcess({ program: 'git', timeoutMs: null, onChildTerminated })
+
+    child.emit('close', 0, null)
+    child.emit('close', 0, null)
+
+    await expect(pending).resolves.toMatchObject({ code: 0 })
+    expect(onChildTerminated).toHaveBeenCalledOnce()
+  })
+
+  it('does not report a live-child error before its eventual close', async () => {
+    const child = mockChild()
+    const onChildTerminated = vi.fn()
+    spawnMock.mockReturnValue(child)
+    const pending = runProcess({ program: 'git', timeoutMs: null, onChildTerminated })
+    const rejection = expect(pending).rejects.toThrow('delivery failed')
+
+    child.emit('error', new Error('delivery failed'))
+    expect(onChildTerminated).not.toHaveBeenCalled()
+    child.emit('close', null, 'SIGKILL')
+
+    await rejection
+    expect(onChildTerminated).toHaveBeenCalledOnce()
+  })
+
   it('holds the result until the barrier deadline when tree termination cannot be verified', async () => {
     const child = mockChild()
     spawnMock.mockReturnValue(child)
@@ -63,17 +91,31 @@ describe('runProcess termination failure', () => {
     async () => {
       forceTerminateProcessTreeMock.mockResolvedValue(true)
       spawnMock.mockReturnValue(mockChild())
-      const pending = runProcess({ program: 'git', timeoutMs: 10, terminationBarrier: true })
+      const onChildTerminated = vi.fn()
+      const pending = runProcess({
+        program: 'git',
+        timeoutMs: 10,
+        terminationBarrier: true,
+        onChildTerminated
+      })
 
       await vi.advanceTimersByTimeAsync(2_010)
 
       await expect(pending).resolves.toMatchObject({ timedOut: true })
+      expect(onChildTerminated).toHaveBeenCalledOnce()
     }
   )
 
   it('settles on the barrier deadline when the root never reports', async () => {
-    spawnMock.mockReturnValue(mockChild())
-    const pending = runProcess({ program: 'git', timeoutMs: 10, terminationBarrier: true })
+    const onChildTerminated = vi.fn()
+    const child = mockChild()
+    spawnMock.mockReturnValue(child)
+    const pending = runProcess({
+      program: 'git',
+      timeoutMs: 10,
+      terminationBarrier: true,
+      onChildTerminated
+    })
     let settled = false
     void pending.then(() => {
       settled = true
@@ -81,9 +123,13 @@ describe('runProcess termination failure', () => {
 
     await vi.advanceTimersByTimeAsync(2_010)
     expect(settled).toBe(false)
+    expect(onChildTerminated).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(10_000)
 
     await expect(pending).resolves.toMatchObject({ code: null, timedOut: true })
+    expect(onChildTerminated).not.toHaveBeenCalled()
+    child.emit('close', null, 'SIGKILL')
+    expect(onChildTerminated).toHaveBeenCalledOnce()
   })
 
   it('retains a root exit observed before barrier shutdown', async () => {

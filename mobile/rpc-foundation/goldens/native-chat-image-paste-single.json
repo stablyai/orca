@@ -1,0 +1,140 @@
+{
+  "operation": "nativeChat.image-paste",
+  "family": "nativeChat.image-paste",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "a330bd18a22c002ac04d0fa043561740c5cea627516bbf965fc1bd52533c2e35",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "213d2dbb9be4": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 2
+    },
+    "47a22f9d0047": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "pasted": true
+    },
+    "518651fd2840": {
+      "name": "terminal.send#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/a.png\u001b[201~ "
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "52ae659a3d36": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u0015"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "df3ce4768fd3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-image-paste-single",
+    "checkpoints": [
+      {
+        "id": "pasted",
+        "observation": {
+          "sender": ["52ae659a3d36", "518651fd2840"],
+          "payloads": ["df3ce4768fd3", "213d2dbb9be4"],
+          "settlements": {
+            "one": "84e5ca07cb7a"
+          },
+          "state": "47a22f9d0047",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

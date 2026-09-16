@@ -75,8 +75,8 @@ export function parseWindowsCimProcessRows(stdout: string): WindowsProcessRow[] 
       return []
     }
     const name = fieldAsString(row.Name)
-    // memoryBytes stays undefined: Win32_Process reports WorkingSetSize, but no
-    // caller reads it off this table and asking widens an already costly scan.
+    // No working set: Win32_Process reports one, but nothing reads memory off
+    // this table and asking widens an already costly scan.
     return [{ pid, ppid, name, command: fieldAsString(row.CommandLine) || name }]
   })
 }

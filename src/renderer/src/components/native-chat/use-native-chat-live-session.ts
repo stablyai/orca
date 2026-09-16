@@ -3,7 +3,8 @@ import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
   type NativeChatMessage,
-  type NativeChatSession
+  type NativeChatSession,
+  type NativeChatTurnLifecycle
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
@@ -39,6 +40,8 @@ export type UseNativeChatLiveSessionArgs = {
 
 /** A live session plus the older-history pagination controls the view needs. */
 export type NativeChatLiveSession = NativeChatSession & {
+  /** Latest provider turn boundary, used to settle orphaned running tool rows. */
+  transcriptLifecycle?: NativeChatTurnLifecycle
   /** True when an older page may still exist (the last read filled the window). */
   hasMore: boolean
   /** Whether an older-history page is currently loading. */
@@ -114,7 +117,8 @@ export function useNativeChatLiveSession(
   // Appended messages accumulate separately from the snapshot so pagination doesn't lose in-flight appends; merged by id and capped to the read window (#6).
   const [appended, setAppended] = useState<NativeChatMessage[]>([])
   // Id-dedup merger backing `appended`; caches the id→index map so each live frame costs O(incoming), not O(existing) (#18).
-  const appendMergerRef = useRef(createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY))
+  const appendMergerRef = useRef<ReturnType<typeof createNativeChatMerger>>(undefined!)
+  appendMergerRef.current ??= createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
 
   const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 

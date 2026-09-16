@@ -15,24 +15,36 @@ export type BrowserAddressBarSubmission =
  * Kagi session link and the invalid-input failure cannot drift between backends.
  * Callers stay responsible for routing the two outcomes into their own chrome.
  */
-export function resolveBrowserAddressBarSubmission(rawValue: string): BrowserAddressBarSubmission {
+export function resolveBrowserAddressBarSubmission(
+  rawValue: string,
+  options?: { allowFileUrls?: boolean }
+): BrowserAddressBarSubmission {
   const { browserDefaultSearchEngine, browserKagiSessionLink } = useAppStore.getState()
   // Why: the search-engine argument opts into search fallback; without it typed
   // queries parse as hosts ("google maps" -> https://google%20maps/).
   const url = normalizeBrowserNavigationUrl(rawValue, browserDefaultSearchEngine, {
     kagiSessionLink: browserKagiSessionLink
   })
-  if (url) {
+  // Why: client-hosted guests refuse file: by design (a remote page must not probe
+  // this machine's disk). Saying so beats the blank tab that refusal used to produce.
+  const fileUrlUnsupported =
+    options?.allowFileUrls === false && Boolean(url) && url!.startsWith('file:')
+  if (url && !fileUrlUnsupported) {
     return { status: 'navigate', url }
   }
   return {
     status: 'invalid',
     loadError: {
       code: 0,
-      description: translate(
-        'auto.components.browser.pane.BrowserPane.87eb75f7d2',
-        'Enter a valid http(s) or localhost URL.'
-      ),
+      description: fileUrlUnsupported
+        ? translate(
+            'auto.components.browser.pane.BrowserPane.fileUrlUnsupported',
+            'This browser tab cannot open local files. Use "Open Preview to the Side" on the file instead.'
+          )
+        : translate(
+            'auto.components.browser.pane.BrowserPane.87eb75f7d2',
+            'Enter a valid http(s) or localhost URL.'
+          ),
       // Why: validatedUrl is persisted, so redact a possible Kagi session token first.
       validatedUrl: redactKagiSessionToken(rawValue.trim()) || 'about:blank'
     }

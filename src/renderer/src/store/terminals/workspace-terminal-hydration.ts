@@ -23,6 +23,7 @@ import { buildWorkspaceTerminalRowPlan } from './workspace-terminal-row-plan'
 import { buildWorkspaceTerminalReconnectPlan } from './workspace-terminal-reconnect-plan'
 import { buildWorkspaceTerminalLayoutPlan } from './workspace-terminal-layout-plan'
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
+import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,
@@ -171,6 +172,14 @@ export function createWorkspaceTerminalHydrationActions(
           activeTabIdByWorktree,
           restoredRuntimeHostIdByWorkspaceSessionKey:
             options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+          // Why conditional: a mid-session re-hydration (the SSH pull merge) carries no shadow, and
+          // clearing it there would drop the co-claimant rows the next write has to put back.
+          ...(options?.contestedHostWorkspaceSessions
+            ? { contestedHostWorkspaceSessions: options.contestedHostWorkspaceSessions }
+            : {}),
+          ...(options?.contestedPrimaryHostBySessionKey
+            ? { contestedPrimaryHostBySessionKey: options.contestedPrimaryHostBySessionKey }
+            : {}),
           repos: runtimeSessionPlaceholders.repos,
           tabsByWorktree,
           worktreesByRepo,
@@ -178,12 +187,21 @@ export function createWorkspaceTerminalHydrationActions(
           lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
           defaultTerminalTabsAppliedByWorktreeId:
             session.defaultTerminalTabsAppliedByWorktreeId ?? {},
+          // Why replace and not union: both callers hand over a map they derived from this store
+          // synchronously (the pull merge) or from disk before the store had one (startup), so there
+          // is no local tombstone to lose — and a union would resurrect the ones the merge just
+          // retired on the host's acknowledgement, which is the whole bound on this map.
+          closedTerminalTabTombstonesByTabId: session.closedTerminalTabTombstonesByTabId ?? {},
           automaticAgentResumeClaimsByTabId: {},
           sleepingAgentSessionsByPaneKey,
           pendingReconnectWorktreeIds,
           pendingReconnectTabByWorktree,
           pendingReconnectPtyIdByTabId,
           everActivatedWorktreeIds: nextEverActivated,
+          unverifiedPtyLossTabIds: retainUnverifiedPtyLossTabIds(
+            s.unverifiedPtyLossTabIds,
+            validTabIds
+          ),
           // Why: seed hydrated active worktrees so the first activation has a Back target.
           worktreeNavHistory: activeWorktreeId ? [activeWorktreeId] : [],
           worktreeNavHistoryIndex: activeWorktreeId ? 0 : -1,

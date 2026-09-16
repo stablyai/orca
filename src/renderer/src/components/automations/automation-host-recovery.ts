@@ -20,10 +20,14 @@ export type AutomationHostRecoveryDeps = {
   openSettings: (target: SettingsNavigationTarget) => void
 }
 
-/** Where a host's version is managed; the app cannot update a host on its own. */
+/** The Remote Orca Servers pane owns each runtime's version status and update action. */
 function versionSettingsTarget(entry: AutomationHostCatalogEntry): SettingsNavigationTarget {
   if (entry.stableRef.authority.kind === 'runtime') {
-    return { pane: 'servers', repoId: null }
+    return {
+      pane: 'servers',
+      repoId: null,
+      sectionId: entry.stableRef.authority.environmentId
+    }
   }
   // A desktop SSH host with no registration generation is a stale registration,
   // repaired by re-adding the target rather than by updating anything.

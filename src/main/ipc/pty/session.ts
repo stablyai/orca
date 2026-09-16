@@ -149,7 +149,7 @@ export type PtyIpcSession = {
   sendPtySpawnedToRenderer: (id: string) => void
   requestSerializedBuffer: (
     ptyId: string,
-    opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+    opts?: { scrollbackRows?: number }
   ) => Promise<SerializeResult>
   shutdownProviderAndDetectExit: (
     provider: IPtyProvider,

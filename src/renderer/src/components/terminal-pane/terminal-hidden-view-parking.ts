@@ -1,4 +1,5 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -74,7 +75,7 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
   if (!ptyId) {
     return false
   }
-  if (isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (isRemoteExecutionHostPtyId(ptyId)) {
     return false
   }
   // Why: separator-less ids come from the daemon-fail-open LocalPtyProvider;

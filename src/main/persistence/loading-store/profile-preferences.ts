@@ -17,6 +17,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
+import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
@@ -155,6 +156,7 @@ export function getSettingsMutationOperations(
 ): SettingsMutationOperations {
   return {
     state: owner[profilePreferencesContext].runtime.state,
+    bumpLocalWorktreeScanGeneration,
     removeRetainedBlob: (slot) =>
       owner[profilePreferencesContext].runtime.protectedSecrets.removeRetainedBlob(slot),
     scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
@@ -187,7 +189,10 @@ export function getFeatureInteractionOperations(
   }
 }
 
-export function installProfilePreferencesContext(target: object, source: ProfilePreferences): void {
+export function installProfilePreferencesContext(
+  target: ProfilePreferences,
+  source: ProfilePreferences
+): void {
   Object.defineProperty(target, profilePreferencesContext, {
     value: source[profilePreferencesContext]
   })

@@ -10,6 +10,7 @@ import {
   onDashboardPopoutOpenChanged
 } from '../window/dashboard-popout-window'
 import { safelyRevealWindow } from '../window/focus-existing-window'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 import {
   admitDashboardSnapshot,
@@ -56,14 +57,11 @@ export function registerDashboardPopoutHandlers(
     }
   })
 
-  ipcMain.handle('dashboardPopout:open', (event, view: unknown): void => {
+  ipcMain.handle('dashboardPopout:open', (event): void => {
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    if (view !== undefined && view !== 'board' && view !== 'map') {
-      return
-    }
-    createOrFocusDashboardPopout(store, view, {
+    createOrFocusDashboardPopout(store, {
       getKeybindings: () => keybindings?.getOverrides()
     })
   })
@@ -142,10 +140,12 @@ export function registerDashboardPopoutHandlers(
     }
     safelyRevealWindow(mainWindow)
     mainWindow.webContents.send('ui:revealDashboardAgent', args)
-    try {
-      app.focus({ steal: true })
-    } catch {
-      // Best-effort; the per-window focus above may still bring it forward.
+    if (!isBackgroundLaunch()) {
+      try {
+        app.focus({ steal: true })
+      } catch {
+        // Best-effort; the per-window focus above may still bring it forward.
+      }
     }
   })
 

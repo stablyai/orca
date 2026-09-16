@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult
@@ -26,7 +28,7 @@ import { findOpenPRByHeadBase, readPullRequestTemplate } from './pull-request-te
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'github') {
@@ -36,6 +38,9 @@ export async function createGitHubPullRequest(
       error: 'Creating reviews for this provider is not supported yet.'
     }
   }
+
+  // `gh` runs on this client whatever the host; only the git reads under it are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   // Why: creation targets the origin owning the unqualified head branch; the shared resolver preserves its host (#7331, #8312).
   const ownerRepo = await getOriginGitHubApiRepository(

@@ -97,9 +97,16 @@ export function beginOrcaCloudPkceFlow(
           return
         }
         if (url.searchParams.has('error')) {
+          const cancelled = url.searchParams.get('error') === 'access_denied'
           response.writeHead(400)
-          response.end('Orca sign-in was cancelled.')
-          rejectFlow(new Error('orca_cloud_auth_denied'))
+          response.end(
+            cancelled
+              ? 'Orca sign-in was cancelled.'
+              : 'Orca sign-in failed. Return to Orca and try again.'
+          )
+          rejectFlow(
+            new Error(cancelled ? 'orca_cloud_auth_denied' : 'orca_cloud_auth_callback_failed')
+          )
           return
         }
         if (!code) {

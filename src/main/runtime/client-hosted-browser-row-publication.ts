@@ -27,7 +27,15 @@ export class ClientHostedBrowserRowPublisher {
     if (!emit) {
       return
     }
-    const rows = this.buildRows(this.host.listClientPages(worktreeId))
+    this.publishPages(worktreeId, this.host.listClientPages(worktreeId), emit)
+  }
+
+  private publishPages(
+    worktreeId: string,
+    pages: readonly RuntimeBrowserClientPage[],
+    emit: (event: ClientHostedBrowserRowsEvent) => void
+  ): void {
+    const rows = this.buildRows(pages)
     // Why: the announcement this rides on also fires on terminal and editor churn, so most calls
     // concern a workspace that has never had a client page. Only speak up when something changed.
     if (rows.length === 0 && !this.publishedWorktreeIds.has(worktreeId)) {
@@ -42,11 +50,20 @@ export class ClientHostedBrowserRowPublisher {
   }
 
   publishAll(): void {
-    for (const worktreeId of new Set([
-      ...this.publishedWorktreeIds,
-      ...this.host.listClientPages().map((page) => page.workspaceId)
-    ])) {
-      this.publish(worktreeId)
+    const pagesByWorktreeId = new Map<string, RuntimeBrowserClientPage[]>()
+    for (const page of this.host.listClientPages()) {
+      const pages = pagesByWorktreeId.get(page.workspaceId)
+      if (pages) {
+        pages.push(page)
+      } else {
+        pagesByWorktreeId.set(page.workspaceId, [page])
+      }
+    }
+    for (const worktreeId of new Set([...this.publishedWorktreeIds, ...pagesByWorktreeId.keys()])) {
+      const emit = this.host.getEmitter()
+      if (emit) {
+        this.publishPages(worktreeId, pagesByWorktreeId.get(worktreeId) ?? [], emit)
+      }
     }
   }
 

@@ -20,6 +20,9 @@ export type ActiveTerminalChromeState = {
 
 const EMPTY_TABS: NonNullable<AppState['tabsByWorktree'][string]> = []
 
+// Why: every Zustand write reruns this app-shell selector, including title-only tab updates.
+let activeTerminalChromeCache: ActiveTerminalChromeState | null = null
+
 export function selectActiveTerminalChromeState(
   state: ActiveTerminalChromeSelectorState
 ): ActiveTerminalChromeState {
@@ -27,16 +30,37 @@ export function selectActiveTerminalChromeState(
     ? (state.tabsByWorktree[state.activeWorktreeId] ?? EMPTY_TABS)
     : EMPTY_TABS
   const effectiveActiveTabId = state.activeTabId ?? tabs[0]?.id ?? null
-  return {
+  const activeTabCanExpand = effectiveActiveTabId
+    ? (state.canExpandPaneByTabId[effectiveActiveTabId] ?? false)
+    : false
+  const effectiveActiveTabExpanded = effectiveActiveTabId
+    ? (state.expandedPaneByTabId[effectiveActiveTabId] ?? false)
+    : false
+  const cached = activeTerminalChromeCache
+  if (
+    cached &&
+    cached.activeWorktreeId === state.activeWorktreeId &&
+    cached.activeTabId === state.activeTabId &&
+    cached.tabCount === tabs.length &&
+    cached.effectiveActiveTabId === effectiveActiveTabId &&
+    cached.activeTabCanExpand === activeTabCanExpand &&
+    cached.effectiveActiveTabExpanded === effectiveActiveTabExpanded
+  ) {
+    return cached
+  }
+
+  const selected: ActiveTerminalChromeState = {
     activeWorktreeId: state.activeWorktreeId,
     activeTabId: state.activeTabId,
     tabCount: tabs.length,
     effectiveActiveTabId,
-    activeTabCanExpand: effectiveActiveTabId
-      ? (state.canExpandPaneByTabId[effectiveActiveTabId] ?? false)
-      : false,
-    effectiveActiveTabExpanded: effectiveActiveTabId
-      ? (state.expandedPaneByTabId[effectiveActiveTabId] ?? false)
-      : false
+    activeTabCanExpand,
+    effectiveActiveTabExpanded
   }
+  activeTerminalChromeCache = selected
+  return selected
+}
+
+export function resetActiveTerminalChromeStateSelectorCacheForTest(): void {
+  activeTerminalChromeCache = null
 }

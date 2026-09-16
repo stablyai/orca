@@ -37,6 +37,7 @@ import { EventEmitter } from 'node:events'
 import type { Store } from '../persistence'
 import type { ChildProcess } from 'node:child_process'
 import { FileListingCancelledError } from '../../shared/file-listing-cancellation'
+import { _gitAdmissionSnapshotForTests } from '../git/command-runner/git-subprocess-admission'
 
 const SHA1 = '0123456789abcdef0123456789abcdef01234567'
 
@@ -603,6 +604,7 @@ describe('filesystem-list-files', () => {
 
       await expect(promise).resolves.toEqual(['src/kept.ts'])
       expect(primary.kill).toHaveBeenCalled()
+      primary.emit('close', null, 'SIGTERM')
     })
 
     it('git fallback applies hidden dir blocklist', async () => {
@@ -695,6 +697,15 @@ describe('filesystem-list-files', () => {
         expect(gitP2.kill).toHaveBeenCalled()
         expect((gitP1.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
         expect((gitP1.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+        // Admission retains live children after the listing listeners detach.
+        const admittedBeforeClose = _gitAdmissionSnapshotForTests().budgets.general?.baseUsed
+        expect(gitP1.listenerCount('error')).toBe(1)
+        expect(gitP1.listenerCount('close')).toBe(1)
+        gitP1.emit('close', null, 'SIGKILL')
+        gitP2.emit('close', null, 'SIGKILL')
+
+        expect(admittedBeforeClose).toBe(2)
+        expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
         expect(gitP1.listenerCount('error')).toBe(0)
         expect(gitP1.listenerCount('close')).toBe(0)
       } finally {
@@ -748,6 +759,10 @@ describe('filesystem-list-files', () => {
         )
         expect(gitP2.kill).toHaveBeenCalled()
         expect(warnSpy).toHaveBeenCalled()
+        const admittedBeforeClose = _gitAdmissionSnapshotForTests().budgets.general?.baseUsed
+        gitP2.emit('close', null, 'SIGKILL')
+        expect(admittedBeforeClose).toBe(1)
+        expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
       } finally {
         vi.useRealTimers()
         warnSpy.mockRestore()

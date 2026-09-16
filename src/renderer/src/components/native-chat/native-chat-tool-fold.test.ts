@@ -203,3 +203,52 @@ describe('splitNativeChatBlocks', () => {
     expect(tools.map((b) => b.type)).toEqual(['tool-call', 'tool-result'])
   })
 })
+
+describe('spawn-group roster rows', () => {
+  const roster = msg({
+    id: 'roster',
+    role: 'system',
+    blocks: [
+      { type: 'text', text: 'Kicked off 1 subagent — 1 working' },
+      {
+        type: 'subagent-group',
+        groupId: 'thread:turn-1',
+        agents: [{ id: 'child-1', label: 'read', state: 'working' }]
+      }
+    ]
+  })
+
+  it('does not end the assistant run the following tool messages fold into', () => {
+    const folded = foldToolMessages([
+      msg({
+        id: 'a',
+        role: 'assistant',
+        blocks: [
+          { type: 'text', text: 'working' },
+          { type: 'tool-call', name: 'Bash', input: {} }
+        ]
+      }),
+      roster,
+      msg({ id: 't', role: 'tool', blocks: [{ type: 'tool-result', output: 'done' }] })
+    ])
+
+    expect(folded.map((message) => message.id)).toEqual(['a', 'roster'])
+    expect(folded[0]?.blocks.map((block) => block.type)).toEqual([
+      'text',
+      'tool-call',
+      'tool-result'
+    ])
+  })
+
+  it('survives the noise strip so the roster still reaches the transcript', () => {
+    expect(stripNoiseMessages([roster]).map((message) => message.id)).toEqual(['roster'])
+  })
+
+  it('keeps the roster out of the tool array so mobile draws no empty tool run', () => {
+    const { prose, tools } = splitNativeChatBlocks(roster.blocks)
+
+    expect(tools).toEqual([])
+    // The plain-text twin stays in prose: a client without the block type reads it.
+    expect(prose.map((block) => block.type)).toEqual(['text', 'subagent-group'])
+  })
+})

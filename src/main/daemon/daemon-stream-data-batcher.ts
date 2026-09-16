@@ -86,7 +86,7 @@ export class DaemonStreamDataBatcher {
 
     if (
       options.flushImmediately === true &&
-      this.queuedCharsForSession(batch, sessionId) <=
+      this.queuedCharsForSession(batch, sessionId, options.flushMaxChars) <=
         (options.flushMaxChars ?? Number.POSITIVE_INFINITY)
     ) {
       this.flushSession(clientId, sessionId)
@@ -249,11 +249,18 @@ export class DaemonStreamDataBatcher {
     })
   }
 
-  private queuedCharsForSession(batch: PendingStreamDataBatch, sessionId: string): number {
+  private queuedCharsForSession(
+    batch: PendingStreamDataBatch,
+    sessionId: string,
+    stopAfter = Number.POSITIVE_INFINITY
+  ): number {
     let chars = 0
     for (const entry of batch.queue) {
       if (entry.sessionId === sessionId) {
         chars += entry.data.length
+        if (chars > stopAfter) {
+          return chars
+        }
       }
     }
     return chars

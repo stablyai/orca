@@ -11,10 +11,18 @@ import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
-const LOCALIZATION_FUNCTION_NAMES = new Set(['t', 'translate', 'translateMain'])
+const LOCALIZATION_FUNCTION_NAMES = new Set([
+  't',
+  'translate',
+  'translateMain',
+  'translateSearchKeyword'
+])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 const LOCALES_RELATIVE_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
-const SOURCE_RELATIVE_ROOTS = [path.join('src', 'renderer', 'src'), path.join('src', 'main')]
+export const LOCALIZATION_SOURCE_ROOTS = [
+  path.join('src', 'renderer', 'src'),
+  path.join('src', 'main')
+]
 
 function normalizePath(root, filePath) {
   return path.relative(root, filePath).split(path.sep).join('/')
@@ -33,7 +41,7 @@ function isSkippedFile(root, filePath) {
   return relative.split('/').some((part) => SKIP_PATH_PARTS.has(part))
 }
 
-async function collectSourceFiles(root, dir) {
+export async function collectSourceFiles(root, dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true })
   const files = []
 
@@ -453,7 +461,7 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     return 0
   }
   let catalogKeys = new Set(flattenCatalogKeys(catalog))
-  const sourceRoots = SOURCE_RELATIVE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
+  const sourceRoots = LOCALIZATION_SOURCE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
   const references = []
 
   for (const sourceRoot of sourceRoots) {

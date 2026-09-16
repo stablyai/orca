@@ -1,70 +1,17 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalString, requiredString } from '../schemas'
-import { RepoSelector, SlugRepo } from './github-repo-target-schemas'
+import { defineMethod } from '../core'
+import {
+  PRCommentReaction,
+  PrForBranch,
+  PullRequest,
+  PullRequestCheckDetails,
+  PullRequestChecks,
+  PullRequestFileContents,
+  PullRequestFileViewed,
+  RerunPullRequestChecks,
+  ReviewThread
+} from '../../../../shared/rpc-contract/github-pull-request-params'
 
-const PrForBranch = RepoSelector.extend({
-  branch: requiredString('Missing branch'),
-  linkedPRNumber: z.number().int().positive().nullable().optional(),
-  fallbackPRNumber: z.number().int().positive().nullable().optional(),
-  acceptMergedFallbackPR: z.boolean().optional(),
-  currentHeadOid: z.string().nullable().optional()
-})
-
-const PullRequest = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  noCache: z.boolean().optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-const PRCommentReaction = RepoSelector.extend({
-  reactionSubjectId: requiredString('Missing reaction subject ID'),
-  content: z.enum(['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes']),
-  reacted: z.boolean(),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString
-})
-
-const PullRequestCheckDetails = RepoSelector.extend({
-  checkRunId: z.number().int().positive().optional(),
-  workflowRunId: z.number().int().positive().optional(),
-  checkName: OptionalString,
-  url: OptionalString.nullable().optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
-
-const RerunPullRequestChecks = PullRequest.extend({
-  headSha: OptionalString,
-  failedOnly: z.boolean().optional()
-})
-
-const PullRequestFileContents = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  prRepo: SlugRepo.nullable().optional(),
-  path: requiredString('Missing file path'),
-  oldPath: OptionalString,
-  status: z.enum(['added', 'removed', 'modified', 'renamed', 'copied', 'changed', 'unchanged']),
-  headSha: requiredString('Missing head SHA'),
-  baseSha: requiredString('Missing base SHA')
-})
-
-const PullRequestFileViewed = RepoSelector.extend({
-  prRepo: SlugRepo.nullable().optional(),
-  pullRequestId: requiredString('Missing pull request ID'),
-  path: requiredString('Missing file path'),
-  viewed: z.boolean()
-})
-
-const ReviewThread = RepoSelector.extend({
-  prRepo: SlugRepo.nullable().optional(),
-  threadId: requiredString('Missing thread ID'),
-  resolve: z.boolean()
-})
-
-export const GITHUB_PULL_REQUEST_METHODS: RpcMethod[] = [
+export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prForBranch',
     params: PrForBranch,
@@ -75,7 +22,8 @@ export const GITHUB_PULL_REQUEST_METHODS: RpcMethod[] = [
         params.linkedPRNumber,
         params.fallbackPRNumber,
         params.acceptMergedFallbackPR,
-        params.currentHeadOid
+        params.currentHeadOid,
+        params.reason
       )
   }),
   defineMethod({

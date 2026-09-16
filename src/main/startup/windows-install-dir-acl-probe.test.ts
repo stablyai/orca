@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import {
@@ -7,55 +6,26 @@ import {
   WINDOWS_INSTALL_DIR_ACL_BREADCRUMB,
   type WindowsInstallDirAclProbeOptions
 } from './windows-install-dir-acl-probe'
+import {
+  ALL_PACKAGES_ACE,
+  ENGLISH_BASELINE_ACES,
+  fakeIcaclsSpawn,
+  FRENCH_BASELINE_ACES,
+  FRENCH_RESTRICTED_PACKAGES_ACE,
+  icaclsDacl,
+  ORPHAN_PACKAGE_ACE,
+  RESTRICTED_PACKAGES_ACE
+} from './windows-install-dir-acl.test-fixture'
 
 const INSTALL_DIR = 'C:\\Users\\neil\\AppData\\Local\\Programs\\orca'
-const SYSTEM_ACES = [
-  '                    NT AUTHORITY\\SYSTEM:(I)(OI)(CI)(F)',
-  '                    BUILTIN\\Administrators:(I)(OI)(CI)(F)',
-  '                    awin\\neil:(I)(OI)(CI)(F)'
-]
+const ORPHAN = ORPHAN_PACKAGE_ACE
+const RESTRICTED_GRANT = RESTRICTED_PACKAGES_ACE
 
-/** Real icacls shape: the echoed path is glued onto the first principal. */
 function dacl(target: string, firstAce: string, ...rest: string[]): string {
-  return [
-    `${target} ${firstAce}`,
-    ...rest,
-    ...SYSTEM_ACES,
-    '',
-    'Successfully processed 1 files'
-  ].join('\r\n')
+  return icaclsDacl(target, [firstAce, ...rest])
 }
 
-const ORPHAN = 'S-1-15-2-999-999-999:(OI)(CI)(RX)'
-const RESTRICTED_GRANT =
-  'APPLICATION PACKAGE AUTHORITY\\ALL RESTRICTED APPLICATION PACKAGES:(OI)(CI)(RX)'
-
-function fakeSpawn(output: (target: string) => string | null): {
-  spawnFn: WindowsInstallDirAclProbeOptions['spawnFn']
-  calls: { file: string; args: string[] }[]
-} {
-  const calls: { file: string; args: string[] }[] = []
-  const spawnFn = ((file: string, args: string[]) => {
-    calls.push({ file, args })
-    const child = new EventEmitter() as EventEmitter & {
-      stdout: EventEmitter
-      kill: () => void
-    }
-    child.stdout = new EventEmitter()
-    child.kill = () => undefined
-    const out = output(args[0])
-    setImmediate(() => {
-      if (out === null) {
-        child.emit('error', new Error('ENOENT'))
-        return
-      }
-      child.stdout.emit('data', Buffer.from(out, 'utf-8'))
-      child.emit('close', 0)
-    })
-    return child
-  }) as unknown as WindowsInstallDirAclProbeOptions['spawnFn']
-  return { spawnFn, calls }
-}
+const fakeSpawn = fakeIcaclsSpawn
 
 function probe(options: WindowsInstallDirAclProbeOptions): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
@@ -84,9 +54,7 @@ describe('probeWindowsInstallDirAcl', () => {
 
   it('reports a clean DACL as unpoisoned', async () => {
     const data = await probe({
-      spawnFn: fakeSpawn((target) =>
-        [`${target} NT AUTHORITY\\SYSTEM:(I)(OI)(CI)(F)`, ...SYSTEM_ACES.slice(1)].join('\r\n')
-      ).spawnFn
+      spawnFn: fakeSpawn((target) => icaclsDacl(target, [], ENGLISH_BASELINE_ACES)).spawnFn
     })
     expect(data.name).toBe(WINDOWS_INSTALL_DIR_ACL_BREADCRUMB)
     expect(data.status).toBe('ok')
@@ -102,10 +70,24 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(data.hasWellKnownPackageGrant).toBe(false)
   })
 
-  it('clears the signature once a well-known package ACE grants access', async () => {
+  it('clears the signature once the restricted package ACE grants access', async () => {
     const data = await probeWith(RESTRICTED_GRANT, ORPHAN)
     expect(data.hasWellKnownPackageGrant).toBe(true)
+    expect(data.hasRestrictedPackageGrant).toBe(true)
     expect(data.orphanPackageSidCount).toBe(1)
+    expect(data.matchesPoisonSignature).toBe(false)
+  })
+
+  // A Program Files install inherits ALL APPLICATION PACKAGES by default, and an
+  // orphan alongside it launched clean on win32 10.0.26200 / Electron 43.4.1 — so
+  // it is not the reproduced state, however useless -1 is to an LPAC token.
+  it.each([
+    ['the localized-safe name form', ALL_PACKAGES_ACE],
+    ['the raw SID form', 'S-1-15-2-1:(OI)(CI)(RX)']
+  ])('clears the signature when only ALL APPLICATION PACKAGES grants (%s)', async (_l, ace) => {
+    const data = await probeWith(ace, ORPHAN)
+    expect(data.hasWellKnownPackageGrant).toBe(true)
+    expect(data.hasRestrictedPackageGrant).toBe(false)
     expect(data.matchesPoisonSignature).toBe(false)
   })
 
@@ -119,6 +101,7 @@ describe('probeWindowsInstallDirAcl', () => {
   ])('does not let a %s well-known ACE satisfy an orphan', async (_label, ace) => {
     const data = await probeWith(ace, ORPHAN)
     expect(data.hasWellKnownPackageGrant).toBe(false)
+    expect(data.hasRestrictedPackageGrant).toBe(false)
     expect(data.matchesPoisonSignature).toBe(true)
   })
 
@@ -143,8 +126,10 @@ describe('probeWindowsInstallDirAcl', () => {
         platform: 'win32',
         installDir: INSTALL_DIR,
         fileExists: () => false,
-        spawnFn: fakeSpawn(
-          (target) => `${target} ${ORPHAN}\r\n                    AUTORITE NT\\Systeme:(I)(F)`
+        // fr-FR install that already carries the restricted grant: the name check
+        // cannot see it, so the signature is a false positive the flag must expose.
+        spawnFn: fakeSpawn((target) =>
+          icaclsDacl(target, [ORPHAN, FRENCH_RESTRICTED_PACKAGES_ACE], FRENCH_BASELINE_ACES)
         ).spawnFn,
         recordBreadcrumb: (_name, d) => {
           resolve(d as Record<string, unknown>)

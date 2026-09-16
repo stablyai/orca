@@ -1,28 +1,31 @@
-import { z } from 'zod'
 import {
   connectRegisteredSshTarget,
   getRegisteredSshState,
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
 } from '../../../ssh/ssh-target-registry'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
 import type { SshTargetSummary } from '../../../../shared/ssh-types'
-
-const SshTarget = z.object({
-  targetId: z.string().min(1)
-})
+import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
 
 // Why: `generation` stays optional on the wire — an old server simply omits it and its rows key on target id alone.
 function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
-  return listRegisteredSshTargets().map(({ id, label, generation }) => ({
-    id,
-    label,
-    ...(generation === undefined ? {} : { generation })
-  }))
+  return listRegisteredSshTargets().map(({ id, label, generation }) => {
+    const state = getRegisteredSshState(id)
+    const remotePlatform = state?.remotePlatform
+    return {
+      id,
+      label,
+      ...(generation === undefined ? {} : { generation }),
+      connected: state?.status === 'connected',
+      ...(state?.status === undefined ? {} : { connectionStatus: state.status }),
+      ...(remotePlatform === undefined ? {} : { remotePlatform })
+    }
+  })
 }
 
-export const SSH_METHODS: RpcMethod[] = [
+export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.getState',
     params: SshTarget,

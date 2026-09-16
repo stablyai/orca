@@ -1,0 +1,101 @@
+{
+  "operation": "session.tab-documents",
+  "family": "session.tab-documents",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "f88c39d410655b229aa740b45ccdaa10186f41f7c6cbff9fed6eaee3f0a55844",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "38b08634cae3": {
+      "name": "markdown.readTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "content": "# a",
+            "editable": true,
+            "isDirty": false,
+            "version": "v1"
+          }
+        }
+      }
+    },
+    "af5666510c34": {
+      "name": "markdown.readTab#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}",
+      "sent": 1
+    },
+    "d4cf305b17f8": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": false,
+          "localContent": "# a",
+          "readOnlyReason": {
+            "$rpc": "undefined"
+          },
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-markdown-tab-read",
+    "checkpoints": [
+      {
+        "id": "read",
+        "observation": {
+          "sender": ["38b08634cae3"],
+          "payloads": ["af5666510c34"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "d4cf305b17f8",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

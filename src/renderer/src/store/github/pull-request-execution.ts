@@ -80,6 +80,7 @@ export function startPullRequestLookup(args: {
               branch,
               linkedPRNumber,
               currentHeadOid: requestHeadOid,
+              ...(options?.reason ? { reason: options.reason } : {}),
               ...(fallbackPRNumber !== null
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
@@ -108,7 +109,10 @@ export function startPullRequestLookup(args: {
               cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
             }
             const response = window.api.gh.refreshPRNow
-              ? await window.api.gh.refreshPRNow({ candidate })
+              ? await window.api.gh.refreshPRNow({
+                  candidate,
+                  reason: options?.reason ?? 'manual'
+                })
               : await window.api.gh.prForBranch({
                   repoPath,
                   repoId,
@@ -149,7 +153,7 @@ export function startPullRequestLookup(args: {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
           if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
             skippedStaleLinkedPRLookup = true
-            return {}
+            return s
           }
           const updates = setGitHubPRResultCaches(s, {
             prCacheKey: cacheKey,
@@ -170,7 +174,7 @@ export function startPullRequestLookup(args: {
             requestStartedEntry: requestStartedHostedReviewEntry
           })
           didUpdatePRCache = updates.prCache !== undefined
-          return updates
+          return updates.prCache || updates.hostedReviewCache ? updates : s
         })
         if (skippedStaleLinkedPRLookup) {
           return null
@@ -248,7 +252,8 @@ export function startPullRequestLookup(args: {
           void get().fetchPRForBranch(repoPath, branch, {
             force: true,
             repoId,
-            worktreeId: options.worktreeId
+            worktreeId: options.worktreeId,
+            reason: options.reason
           })
         }
       }

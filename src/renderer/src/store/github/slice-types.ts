@@ -58,6 +58,7 @@ export type GitHubSlice = {
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       fallbackPRSource?: GitHubPRFallbackSource | null
+      reason?: GitHubPRRefreshReason
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (

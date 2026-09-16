@@ -16,6 +16,11 @@ import {
   isCurrentMobileDictationFinish
 } from './mobile-dictation-session-state'
 import { startMobileDictationDesktopSession } from './mobile-dictation-desktop-start'
+import {
+  dictationSessionCancel,
+  dictationSessionFinish
+} from '../dictation/mobile-dictation-operations'
+import { rpcPayloadMember } from '../transport/rpc-reader-payload'
 import type {
   DictationStatus,
   UseMobileDictationOptions,
@@ -26,7 +31,7 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   const { client, enabled, onTranscript, onError } = options
-  const keepAwakeOwner = useMemo(createMobileDictationKeepAwakeOwner, [])
+  const keepAwakeOwner = useMemo(() => createMobileDictationKeepAwakeOwner(), [])
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const activeIdRef = useRef<string | null>(null)
@@ -82,7 +87,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       activeIdRef.current = null
       closeDictationAudio(dictationId)
       if (client && dictationId) {
-        void client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+        void dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
       }
       reportError(err)
     },
@@ -210,14 +215,13 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       ) {
         return
       }
-      const response = await client.sendRequest(
-        'speech.dictation.finish',
-        { dictationId },
-        { timeoutMs: DICTATION_FINISH_TIMEOUT_MS }
+      const finished = dictationSessionFinish.interpret(
+        await dictationSessionFinish.request(
+          client,
+          { dictationId },
+          { timeoutMs: DICTATION_FINISH_TIMEOUT_MS }
+        )
       )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
       if (
         !isCurrentMobileDictationFinish(
           generationRef.current,
@@ -230,8 +234,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       ) {
         return
       }
-      const result = response.result as { text?: unknown }
-      const text = typeof result.text === 'string' ? result.text.trim() : ''
+      const transcript = rpcPayloadMember(finished, 'text')
+      const text = typeof transcript === 'string' ? transcript.trim() : ''
       activeIdRef.current = null
       finishingIdRef.current = null
       pendingChunksRef.current.clear()
@@ -262,7 +266,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     finishingIdRef.current = null
     closeDictationAudio(dictationId)
     if (client && dictationId) {
-      await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
+      await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
     }
     setStatus('idle')
     setError(null)
@@ -294,8 +298,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       closeDictationAudio(dictationId)
       void tearDown()
       if (clientRef.current && dictationId) {
-        void clientRef.current
-          .sendRequest('speech.dictation.cancel', { dictationId })
+        void dictationSessionCancel
+          .request(clientRef.current, { dictationId })
           .catch(() => undefined)
       }
     }

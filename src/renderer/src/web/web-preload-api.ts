@@ -6,14 +6,13 @@ import {
   createGrokAccountsApi,
   createMiniMaxCredentialsApi
 } from './preload-api/web-agent-accounts-api'
-import { createAgentHooksApi } from './preload-api/web-agent-hooks-api'
 import { createWebAgentStatusApi } from './preload-api/web-agent-status-api'
 import { createWebAiVaultApi } from './preload-api/web-ai-vault-api'
 import { createWebAppApi } from './preload-api/web-app-api'
 import { createBrowserApi, createEmulatorApi } from './preload-api/web-browser-api'
 import { createCliApi } from './preload-api/web-cli-api'
 import { createWebDiagnosticsApi } from './preload-api/web-diagnostics-api'
-import { createFallbackProxy, withFallback } from './preload-api/web-fallback-api'
+import { withFallback } from './preload-api/web-fallback-api'
 import { createFileApi } from './preload-api/web-filesystem-api'
 import { createGitApi } from './preload-api/web-git-api'
 import { createWebGithubCacheApi } from './preload-api/web-github-cache-api'
@@ -57,7 +56,6 @@ export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
   webWindow.__ORCA_WEB_CLIENT__ = true
-  window.electron = createFallbackProxy(['electron']) as Window['electron']
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
@@ -111,7 +109,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
-    agentHooks: createAgentHooksApi(),
     macosTccPrompts: createMacosTccPromptsApi(),
     codexConfigSync: {
       status: () =>

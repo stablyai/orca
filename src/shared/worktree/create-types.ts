@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
+import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
 import type { TaskSourceContext } from '../task-source-context'
 import type { WorkspaceKey } from '../folder-workspace-types'
@@ -31,9 +32,40 @@ export type WorktreeCreateTimingPhase = {
   durationMs: number
 }
 
+/** Closed vocabulary: these values reach span attributes, so none of them may ever
+ *  be derived from a branch name, a ref, or a path. */
+export type PreparedCheckoutMissReason =
+  | 'none_armed'
+  /** Preparations exist, but none for this repo — it was never warmed, or the pool's size cap
+   *  evicted it for another repo. Distinguished from `none_armed` because it is the signal that
+   *  the cap is thrashing for a multi-project user. */
+  | 'repo_mismatch'
+  | 'base_mismatch'
+  | 'retarget_too_divergent'
+  /** The drift check returned no answer. Distinct from `retarget_too_divergent` because that one
+   *  is the bound working as intended, while this one means a possibly cheap retarget was skipped
+   *  anyway. Deliberately a mixed bucket — a blown deadline, a cancelled create, and an ordinary
+   *  Git failure such as a missing ref all land here — so treat a rise as "look at why", not as a
+   *  direct readout of the budget being too small. */
+  | 'retarget_unverifiable'
+  | 'workspace_root_mismatch'
+  | 'wsl_distro_mismatch'
+  | 'prepare_failed'
+  | 'finalize_failed'
+  | 'checkout_existing_branch'
+  | 'sparse_checkout'
+
+/** Whether a create reused a prewarmed checkout, and when it did not, which part of
+ *  the claim key disagreed. `retargeted` marks a hit that had to reset the prepared
+ *  checkout onto a different ref in the same base family. */
+export type PreparedCheckoutOutcome =
+  | { status: 'hit'; retargeted: boolean }
+  | { status: 'miss'; reason: PreparedCheckoutMissReason }
+
 export type WorktreeCreateTiming = {
   totalDurationMs: number
   phases: WorktreeCreateTimingPhase[]
+  preparedCheckout?: PreparedCheckoutOutcome
 }
 
 export type CreateSparseCheckoutRequest = {
@@ -68,6 +100,8 @@ export type CreateWorktreeArgs = {
    *  branch/path seed. Used when a workspace is created from a GitHub or
    *  Linear artifact whose title should remain readable in the sidebar. */
   displayName?: string
+  /** Distinguishes user labels from generated artifact titles at creation time. */
+  displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   /** Source Control compare target when it differs from the checkout start point. */
   compareBaseRef?: string
@@ -174,6 +208,8 @@ export type PreservedWorktreeBranch = {
 
 export type RemoveWorktreeResult = {
   preservedBranch?: PreservedWorktreeBranch
+  /** Present only when a FAILED archive hook was explicitly waived for this removal (#19334). */
+  archiveHookOverride?: ArchiveHookOverride
 }
 
 export type ForceDeleteWorktreeBranchResult = {

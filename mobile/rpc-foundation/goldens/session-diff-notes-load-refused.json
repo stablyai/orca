@@ -1,0 +1,88 @@
+{
+  "operation": "session.diff-notes",
+  "family": "session.diff-notes",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "5ab16800f82813778078e84739e0ac72886c145d20789dedcea9428ee31b9182",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "432aeb4f1709": {
+      "busy": false,
+      "diffComments": [],
+      "pendingDelivery": {
+        "$rpc": "null"
+      }
+    },
+    "b348c9f55bf6": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 1
+    },
+    "db47451011c5": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "worktree_not_found",
+            "message": "No such workspace"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-diff-notes-load-refused",
+    "checkpoints": [
+      {
+        "id": "unchanged",
+        "observation": {
+          "sender": ["db47451011c5"],
+          "payloads": ["b348c9f55bf6"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

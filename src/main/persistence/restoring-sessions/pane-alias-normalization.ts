@@ -1,5 +1,6 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
+import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../../shared/pane-key-alias'
 import {
   isTerminalLeafId,
   parseLegacyNumericPaneKey,
@@ -13,21 +14,17 @@ export function legacyMigrationUnsupportedRowsToAliasEntries(
   const normalizedEntries = normalizeMigrationUnsupportedPtyEntries(entries).filter(
     (entry) => entry.tabId && entry.paneKey && parsePaneKey(entry.paneKey)
   )
-  const entriesByTabId = new Map<string, MigrationUnsupportedPtyEntry[]>()
+  const entriesByTabId = new Map<string, MigrationUnsupportedPtyEntry | null>()
   for (const entry of normalizedEntries) {
     const tabId = entry.tabId
     if (!tabId) {
       continue
     }
-    entriesByTabId.set(tabId, [...(entriesByTabId.get(tabId) ?? []), entry])
+    entriesByTabId.set(tabId, entriesByTabId.has(tabId) ? null : entry)
   }
   const aliasEntries: LegacyPaneKeyAliasEntry[] = []
-  for (const [tabId, tabEntries] of entriesByTabId) {
-    if (tabEntries.length !== 1) {
-      continue
-    }
-    const [entry] = tabEntries
-    if (!entry.paneKey) {
+  for (const [tabId, entry] of entriesByTabId) {
+    if (!entry?.paneKey) {
       continue
     }
     // Why: pre-stable rows lack the old numeric key; only synthesize single-pane aliases when the row is unambiguous.
@@ -113,15 +110,18 @@ export function normalizeLegacyPaneKeyAliasEntries(value: unknown): LegacyPaneKe
     ) {
       return false
     }
-    const legacy = parseLegacyNumericPaneKey(candidate.legacyPaneKey)
-    const relocatedSource = parsePaneKey(candidate.legacyPaneKey)
-    const stable = parsePaneKey(candidate.stablePaneKey)
-    return Boolean(stable && ((legacy && legacy.tabId === stable.tabId) || relocatedSource))
+    return (
+      canRegisterPaneKeyAlias(candidate.legacyPaneKey, candidate.stablePaneKey) ||
+      Boolean(parsePaneKey(candidate.legacyPaneKey) && parsePaneKey(candidate.stablePaneKey))
+    )
   })
 }
 
 export function registerPersistedPaneKeyAlias(entry: LegacyPaneKeyAliasEntry): void {
-  if (parseLegacyNumericPaneKey(entry.legacyPaneKey)) {
+  if (
+    parseLegacyNumericPaneKey(entry.legacyPaneKey) ||
+    isOpaqueRemintedPaneKey(entry.legacyPaneKey)
+  ) {
     agentHookServer.registerPaneKeyAlias(
       entry.legacyPaneKey,
       entry.stablePaneKey,

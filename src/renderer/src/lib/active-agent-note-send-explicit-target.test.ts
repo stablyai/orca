@@ -172,7 +172,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'status-unavailable' })
+    ).resolves.toEqual({ status: 'status-unavailable', code: 'status-unavailable' })
 
     expect(methods).toEqual(['terminal.list', 'terminal.agentStatus'])
     expect(testState.callRuntimeRpc).not.toHaveBeenCalledWith(
@@ -275,7 +275,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'permission' })
+    ).resolves.toEqual({ status: 'permission', code: 'agent-permission' })
 
     expect(testState.callRuntimeRpc).not.toHaveBeenCalledWith(
       expect.anything(),
@@ -359,7 +359,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'no-agent' })
+    ).resolves.toEqual({ status: 'no-agent', code: 'no-agent' })
     expect(methods).toEqual(['terminal.list', 'terminal.agentStatus', 'terminal.send'])
   })
 
@@ -401,7 +401,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'not-writable' })
+    ).resolves.toEqual({ status: 'not-writable', code: 'terminal-send-refused' })
 
     const sendCalls = testState.callRuntimeRpc.mock.calls.filter(
       (call) => call[1] === 'terminal.send'
@@ -454,7 +454,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'permission' })
+    ).resolves.toEqual({ status: 'permission', code: 'terminal-send-permission' })
 
     const sendCalls = testState.callRuntimeRpc.mock.calls.filter(
       (call) => call[1] === 'terminal.send'
@@ -508,7 +508,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'partial-submit-failed' })
+    ).resolves.toEqual({ status: 'partial-submit-failed', code: 'submit-readiness-lost' })
 
     const sendCalls = testState.callRuntimeRpc.mock.calls.filter(
       (call) => call[1] === 'terminal.send'
@@ -562,7 +562,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'partial-submit-failed' })
+    ).resolves.toEqual({ status: 'partial-submit-failed', code: 'submit-send-refused' })
   })
 
   it('maps explicit target guarded Enter permission refusal to partial-submit-failed', async () => {
@@ -620,7 +620,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'partial-submit-failed' })
+    ).resolves.toEqual({ status: 'partial-submit-failed', code: 'submit-send-refused' })
   })
 
   it('uses selected-target failure wording for explicit note targets', () => {
@@ -647,7 +647,89 @@ describe('active agent note send', () => {
     expect(activeAgentNotesSendFailureMessage('partial-submit-failed')).toBe(
       'The notes may already be pasted in the active terminal, but Orca could not submit them.'
     )
+    expect(
+      activeAgentNotesSendFailureMessage('no-active-terminal', {
+        explicitTarget: true,
+        code: 'no-inventory-match'
+      })
+    ).toBe('The selected terminal is no longer available. (no-inventory-match)')
   })
+
+  it.each(['terminal_handle_stale', 'terminal_exited', 'terminal_gone'] as const)(
+    'returns and logs the runtime terminal failure code %s without note contents',
+    async (runtimeCode) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
+        if (method === 'terminal.list') {
+          return {
+            terminals: [
+              {
+                handle: 'term-runtime-failure',
+                worktreeId: 'wt-1',
+                worktreePath: '/repo',
+                branch: 'main',
+                tabId: 'tab-9',
+                leafId: OTHER_LEAF_ID,
+                title: 'Codex',
+                connected: true,
+                writable: true,
+                lastOutputAt: 1,
+                preview: ''
+              }
+            ],
+            totalCount: 1,
+            truncated: false
+          }
+        }
+        if (method === 'terminal.agentStatus') {
+          throw new Error(runtimeCode)
+        }
+        throw new Error(`unexpected method ${method}`)
+      })
+
+      await expect(
+        sendNotesToActiveAgentSession({
+          worktreeId: 'wt-1',
+          prompt: 'private note contents',
+          noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+        })
+      ).resolves.toEqual({ status: 'no-active-terminal', code: runtimeCode })
+
+      expect(warn).toHaveBeenCalledWith('[review-notes] send failed', {
+        code: runtimeCode,
+        status: 'no-active-terminal',
+        tabId: 'tab-9',
+        leafId: OTHER_LEAF_ID
+      })
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('private note contents')
+      warn.mockRestore()
+    }
+  )
+
+  it.each([
+    ['remote connection closed at /private/workspace', 'runtime-unverifiable'],
+    ['runtime request timeout', 'runtime-timeout']
+  ] as const)(
+    'classifies terminal inventory failure without logging raw error details: %s',
+    async (message, code) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      testState.callRuntimeRpc.mockRejectedValue(new Error(message))
+
+      await expect(
+        sendNotesToActiveAgentSession({
+          worktreeId: 'wt-1',
+          prompt: 'private note contents',
+          noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+        })
+      ).resolves.toEqual({ status: 'status-unavailable', code })
+
+      const logged = JSON.stringify(warn.mock.calls)
+      expect(logged).toContain(code)
+      expect(logged).not.toContain(message)
+      expect(logged).not.toContain('private note contents')
+      warn.mockRestore()
+    }
+  )
 
   it('returns no-active-terminal when the explicit note target is absent from the runtime list', async () => {
     testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
@@ -681,7 +763,7 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-1', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'no-active-terminal' })
+    ).resolves.toEqual({ status: 'no-active-terminal', code: 'no-inventory-match' })
 
     expect(testState.callRuntimeRpc).not.toHaveBeenCalledWith(
       expect.anything(),
@@ -689,5 +771,52 @@ describe('active agent note send', () => {
       expect.anything(),
       expect.anything()
     )
+  })
+
+  it('matches mirrored renderer tab IDs to host runtime tab IDs', async () => {
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-mirrored',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-9',
+              leafId: OTHER_LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        return { agentStatus: { handle: 'term-mirrored', isRunningAgent: true, status: 'working' } }
+      }
+      if (method === 'terminal.send') {
+        return {
+          send: {
+            handle: 'term-mirrored',
+            accepted: true,
+            bytesWritten: typeof params.text === 'string' ? params.text.length : 1
+          }
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'notes',
+        noteTarget: { tabId: 'web-terminal-tab-9', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'sent' })
   })
 })

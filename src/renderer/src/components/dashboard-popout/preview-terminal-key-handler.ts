@@ -13,13 +13,14 @@ import {
   resolvePreviewShortcutAction,
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
+import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
 
 /**
  * Installs the preview terminal's ONE custom key handler (xterm allows a single
  * attachCustomKeyEventHandler) covering copy/paste chords, the IME native-text
- * bypass, and the full pane shortcut policy. Plain Mod+V is left to the
- * Edit-menu accelerator, which reaches this window as ui:appMenuPaste — matching
- * it here too would paste twice.
+ * bypass, and the full pane shortcut policy. On macOS plain Cmd+V is left to
+ * the Edit-menu accelerator, which reaches this window as an app-menu paste —
+ * matching it here too would paste twice.
  *
  * Returns a disposer for the Option-key location listeners the policy needs to
  * tell left Option from right.
@@ -109,7 +110,7 @@ export function installPreviewTerminalKeyHandler(args: {
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
-      const selection = terminal.getSelection()
+      const selection = readTerminalClipboardSelection(terminal)
       if (
         !selection &&
         platform !== 'darwin' &&
@@ -128,8 +129,13 @@ export function installPreviewTerminalKeyHandler(args: {
       }
       return consumeEvent(event)
     }
+    // Why darwin-only: only macOS has a real Edit-menu Cmd+V accelerator to
+    // defer to. Windows/Linux draw their own titlebar with the menu hidden, so
+    // a deferred Ctrl+V would never come back — handle it here, like the pane.
     const isMenuPasteChord =
-      (platform === 'darwin' ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) &&
+      platform === 'darwin' &&
+      event.metaKey &&
+      !event.ctrlKey &&
       !event.altKey &&
       !event.shiftKey &&
       event.key.toLowerCase() === 'v'

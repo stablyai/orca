@@ -218,6 +218,23 @@ describe('deliverLaunchPromptToAgentTab', () => {
     expect(mocks.markNativeChatLaunchPromptFailed).toHaveBeenCalledWith('tab-1')
   })
 
+  it('marks a seeded launch prompt failed when paste delivery rejects', async () => {
+    const error = new Error('prompt transport rejected')
+    mocks.pasteDraftWhenAgentReady.mockRejectedValue(error)
+
+    await expect(
+      deliverLaunchPromptToAgentTab({
+        tabId: 'tab-1',
+        agent: 'codex',
+        content: 'Large generated prompt',
+        submit: true,
+        forcePaste: true
+      })
+    ).rejects.toBe(error)
+
+    expect(mocks.markNativeChatLaunchPromptFailed).toHaveBeenCalledWith('tab-1')
+  })
+
   it('treats native-prefill delivery as success without flagging the seeded prompt', async () => {
     // claude delivers via `--prefill` at launch, so paste no-ops (returns false)
     // when forcePaste is false — that is a native delivery, not a failure.

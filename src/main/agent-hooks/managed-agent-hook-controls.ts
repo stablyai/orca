@@ -5,6 +5,7 @@ import {
 } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { probeClaudeCliVersion } from '../claude/claude-session-end-hook-capability'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -12,7 +13,8 @@ import {
   MANAGED_AGENT_HOOK_REMOVERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
-  type ManagedAgentHookInstaller
+  type ManagedAgentHookInstaller,
+  type ManagedAgentHookInstallOptions
 } from './managed-agent-hook-registry'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
@@ -39,6 +41,29 @@ export function isAgentStatusHooksEnabled(
   settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
 ): boolean {
   return settings?.agentStatusHooksEnabled !== false
+}
+
+export type StartupManagedHookAction = 'install' | 'skip'
+
+// Why never 'remove': this reads THIS instance's settings, but the managed hook files are
+// user-global (~/.claude/settings.json, ~/.cursor/hooks.json). A second Orca profile with the off
+// switch set would delete the hooks every other instance depends on, and Cursor — the one agent
+// with no title-derived status fallback — then goes silently idle (STA-5679). Honoring the off
+// switch only requires skipping the install; explicit removal stays on the Settings toggle.
+export function resolveStartupManagedHookAction(
+  settings: ManagedHookSettings
+): StartupManagedHookAction {
+  return isAgentStatusHooksEnabled(settings) ? 'install' : 'skip'
+}
+
+export function shouldInstallStartupManagedAgentHook(
+  settings: ManagedHookSettings,
+  agent: AgentHookTarget
+): boolean {
+  return (
+    resolveStartupManagedHookAction(settings) === 'install' &&
+    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
+  )
 }
 
 export function shouldContinueManagedHookStartup(
@@ -89,11 +114,11 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
 async function runInstaller(
   entry: ManagedAgentHookInstaller,
   onInstallError: InstallOptions['onInstallError'],
-  userInitiated?: boolean
+  options: ManagedAgentHookInstallOptions
 ): Promise<AgentHookInstallStatus> {
   const [agent, install] = entry
   try {
-    return await install({ userInitiated })
+    return await install(options)
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -177,7 +202,16 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(await runInstaller(entry, options.onInstallError, options.userInitiated))
+    const cliVersion =
+      agent === 'claude' && presence.executablePath
+        ? await probeClaudeCliVersion(presence.executablePath)
+        : null
+    results.push(
+      await runInstaller(entry, options.onInstallError, {
+        ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
+        ...(cliVersion ? { cliVersion } : {})
+      })
+    )
   }
   return results
 }

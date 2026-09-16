@@ -596,6 +596,8 @@ describe('web worktree preload API', () => {
       compareBaseRef: 'refs/remotes/origin/main',
       setupDecision: 'inherit',
       createdWithAgent: 'codex',
+      displayName: 'Review label',
+      displayNameKind: 'user',
       startup: {
         command: "codex 'summarize repo'",
         env: { ORCA_AGENT_MODE: 'direct' },
@@ -636,6 +638,8 @@ describe('web worktree preload API', () => {
           baseBranch: TEST_COMMIT_OID,
           compareBaseRef: 'refs/remotes/origin/main',
           createdWithAgent: 'codex',
+          displayName: 'Review label',
+          displayNameKind: 'user',
           startupCommand: "codex 'summarize repo'",
           startupEnv: { ORCA_AGENT_MODE: 'direct' },
           startupLaunchConfig: {
@@ -675,6 +679,49 @@ describe('web worktree preload API', () => {
     // Why: this client hand-enumerates create params, so a new optional field silently vanishes.
     // Absent must mean user-typed — the host neither skips a retired candidate nor retires it.
     expect(runtimeCalls[0]?.params).not.toHaveProperty('nameWasGenerated')
+  })
+
+  // Why: without it the host records the app's parent pick as a CLI flag, which cleans up differently.
+  it('marks a parent-picked create as a manual action', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { worktree: { id: 'repo-1::/workspace/child', path: '/workspace/child' } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'child',
+      setupDecision: 'inherit'
+    })
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'child',
+      setupDecision: 'inherit',
+      parentWorkspace: 'folder:folder-1'
+    })
+
+    expect(runtimeCalls[0]?.params).not.toHaveProperty('parentWorkspaceOrigin')
+    expect(runtimeCalls[1]?.params).toMatchObject({
+      parentWorkspace: 'folder:folder-1',
+      parentWorkspaceOrigin: 'manual'
+    })
   })
 
   it('encodes explicit push target clears for runtime worktree updates', async () => {

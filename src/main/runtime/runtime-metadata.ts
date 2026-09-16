@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { writeSecureJsonFile } from '../../shared/secure-file'
 
@@ -13,6 +14,22 @@ export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | nul
     return null
   }
   return JSON.parse(readFileSync(metadataPath, 'utf-8')) as RuntimeMetadata
+}
+
+/** Off-thread twin of {@link readRuntimeMetadata} for pollers; a missing file is not an error. */
+export async function readRuntimeMetadataAsync(
+  userDataPath: string
+): Promise<RuntimeMetadata | null> {
+  let raw: string
+  try {
+    raw = await readFile(getRuntimeMetadataPath(userDataPath), 'utf-8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
+  return JSON.parse(raw) as RuntimeMetadata
 }
 
 export function clearRuntimeMetadata(userDataPath: string): void {

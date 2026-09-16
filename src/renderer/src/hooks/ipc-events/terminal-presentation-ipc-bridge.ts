@@ -131,7 +131,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           }
           if (shouldSurfaceOwner) {
             store.revealWorktreeInSidebar(worktreeId)
-            focusTerminalInitiatedTab(tab.id, leafId)
+            focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
           }
           // Why: only stamp the runtime title on fresh tabs; reused tabs may have a user customTitle it would overwrite on focus.
           if (title && !reusedTab) {
@@ -172,6 +172,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
                   detail: {
                     tabId: tab.id,
+                    worktreeId,
                     paneRuntimeId: -1,
                     direction: splitDirection ?? 'horizontal',
                     sourceLeafId: splitFromLeafId,
@@ -259,7 +260,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           ...(ptyId ? { ptyId } : {})
         },
         {
-          isTabMounted: hasRegisteredRuntimeTerminalTab
+          isTabMounted: (tabId, targetWorktreeId) =>
+            hasRegisteredRuntimeTerminalTab(tabId, targetWorktreeId)
         }
       )
       if (mount) {

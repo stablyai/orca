@@ -11,7 +11,7 @@ import {
   PullRequestIcon
 } from './checks-panel/check-presentation'
 import { ChecksList } from './checks-panel/checks-list'
-import type { ParentPrChecksRow } from './parent-pr-checks-rows'
+import type { ParentPrChecksRow } from './parent-pr-checks-row-types'
 
 type FolderWorkspacePrChecksRowProps = {
   row: ParentPrChecksRow

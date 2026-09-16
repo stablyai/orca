@@ -95,7 +95,7 @@ describe('useMobileDictation source invariants', () => {
       /import \{[^}]*createMobileDictationKeepAwakeOwner[^}]*\} from '\.\/mobile-dictation-keep-awake'/
     )
     expect(source).toContain(
-      'const keepAwakeOwner = useMemo(createMobileDictationKeepAwakeOwner, [])'
+      'const keepAwakeOwner = useMemo(() => createMobileDictationKeepAwakeOwner(), [])'
     )
     expect(keepAwakeSource).toContain('activateKeepAwakeAsync')
     expect(keepAwakeSource).toContain('deactivateKeepAwake')
@@ -109,7 +109,7 @@ describe('useMobileDictation source invariants', () => {
       '  return true'
     )
     const desktopStartIndex = startBody.indexOf(
-      "client.sendRequest('speech.dictation.start', { dictationId })"
+      'dictationSessionStart.request(client, { dictationId })'
     )
     const acquireIndex = startBody.indexOf('.acquire(dictationId)')
     const desktopSessionIndex = hookStartBody.indexOf('await startMobileDictationDesktopSession')
@@ -154,7 +154,7 @@ describe('useMobileDictation source invariants', () => {
       'export async function startMobileDictationDesktopSession'
     )
     expect(cancelStaleStartBody).toContain(
-      "client.sendRequest('speech.dictation.cancel', { dictationId })"
+      'dictationSessionCancel.request(client, { dictationId })'
     )
     expect(cancelStaleStartBody).toContain('cleanups.push(keepAwakeOwner.release(dictationId))')
     expect(cancelStaleStartBody).toContain('await Promise.allSettled(cleanups)')

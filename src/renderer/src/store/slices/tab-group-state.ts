@@ -201,6 +201,32 @@ export function dedupeTabsById<T extends { id: string }>(tabs: T[]): T[] {
   })
 }
 
+export function dedupeEditorTabsWithinGroups(tabs: Tab[]): {
+  tabs: Tab[]
+  tabIdAliasesByGroup: Map<string, Map<string, string>>
+} {
+  const tabIdAliasesByGroup = new Map<string, Map<string, string>>()
+  const editorTabIdByGroupAndEntity = new Map<string, Map<string, string>>()
+  const dedupedTabs = dedupeTabsById(tabs).filter((tab) => {
+    if (tab.contentType !== 'editor') {
+      return true
+    }
+    const editorTabIdByEntity =
+      editorTabIdByGroupAndEntity.get(tab.groupId) ?? new Map<string, string>()
+    editorTabIdByGroupAndEntity.set(tab.groupId, editorTabIdByEntity)
+    const existingTabId = editorTabIdByEntity.get(tab.entityId)
+    if (existingTabId !== undefined) {
+      const tabIdAliases = tabIdAliasesByGroup.get(tab.groupId) ?? new Map<string, string>()
+      tabIdAliasesByGroup.set(tab.groupId, tabIdAliases)
+      tabIdAliases.set(tab.id, existingTabId)
+      return false
+    }
+    editorTabIdByEntity.set(tab.entityId, tab.id)
+    return true
+  })
+  return { tabs: dedupedTabs, tabIdAliasesByGroup }
+}
+
 export function dedupeTabOrder(tabIds: string[]): string[] {
   const seen = new Set<string>()
   const deduped: string[] = []

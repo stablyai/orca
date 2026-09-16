@@ -1,0 +1,262 @@
+{
+  "operation": "settings.home-providers",
+  "family": "settings.home-providers",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "a32b2fc99e830c58460e6f7c857aed0048738a55501e508eb236604680b9c235",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "349f2cb31004": {
+      "name": "preflight.check#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "glab": {
+              "installed": false
+            }
+          }
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "4872493b1fb7": {
+      "name": "preflight.check#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
+      "sent": 3
+    },
+    "569aea0064f4": {
+      "name": "linear.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "66bc794cca63": {
+      "name": "preflight.check#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "75ef90fdbf02": {
+      "name": "linear.status#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
+      "sent": 3
+    },
+    "79b8c1b0d1d1": {
+      "host-1": ["github"]
+    },
+    "7dadf370725c": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    },
+    "8f1426c2f53b": {
+      "name": "providers",
+      "value": {
+        "host-1": ["github"]
+      },
+      "sent": 3
+    },
+    "a3c30fa6fdda": {
+      "name": "linear.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
+    "da2c3b49481f": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ee74dff8b8a2": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 3
+    }
+  },
+  "recording": {
+    "scenario": "settings-home-providers-fulfilled",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": ["da2c3b49481f", "66bc794cca63", "569aea0064f4"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["7dadf370725c", "349f2cb31004", "a3c30fa6fdda"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "79b8c1b0d1d1",
+          "effects": ["8f1426c2f53b"]
+        }
+      }
+    ]
+  }
+}

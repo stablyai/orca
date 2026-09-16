@@ -24,10 +24,15 @@ function createFixture() {
   for (const directory of [workspace, detachedCwd]) {
     writeFileSync(join(directory, 'package.json'), '{"name":"fixture"}\n')
     writeFileSync(join(directory, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
+    writeFileSync(join(directory, 'pnpm-workspace.yaml'), 'packages: []\n')
   }
 
   expect(run('git', ['init', '-q'], { cwd: workspace }).status).toBe(0)
-  expect(run('git', ['add', 'package.json', 'pnpm-lock.yaml'], { cwd: workspace }).status).toBe(0)
+  expect(
+    run('git', ['add', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'], {
+      cwd: workspace
+    }).status
+  ).toBe(0)
 
   const pnpm = join(bin, 'pnpm')
   writeFileSync(pnpm, '#!/bin/sh\nexit 0\n')
@@ -47,9 +52,37 @@ function executeInstallScript(fixture) {
 }
 
 describe('install-node-dependencies action', () => {
+  it('skips the lockfile diff when a job container has no Git metadata', () => {
+    const fixture = createFixture()
+    try {
+      rmSync(join(fixture.workspace, '.git'), { recursive: true, force: true })
+
+      const result = executeInstallScript(fixture)
+      expect(result.status, result.stderr || result.stdout).toBe(0)
+      expect(`${result.stdout}\n${result.stderr}`).not.toMatch(/^diff --git /m)
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
+  it('skips the lockfile diff for a bare repository', () => {
+    const fixture = createFixture()
+    try {
+      rmSync(join(fixture.workspace, '.git'), { recursive: true, force: true })
+      expect(run('git', ['init', '--bare', '-q'], { cwd: fixture.workspace }).status).toBe(0)
+
+      const result = executeInstallScript(fixture)
+      expect(result.status, result.stderr || result.stdout).toBe(0)
+      expect(`${result.stdout}\n${result.stderr}`).not.toMatch(/^diff --git /m)
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
   it.each([
     ['package.json', '{"name":"changed"}\n'],
-    ['pnpm-lock.yaml', 'lockfileVersion: 9\nchanged: true\n']
+    ['pnpm-lock.yaml', 'lockfileVersion: 9\nchanged: true\n'],
+    ['pnpm-workspace.yaml', 'packages: []\nchanged: true\n']
   ])('rejects a changed %s when the composite step cwd is detached', (file, contents) => {
     const fixture = createFixture()
     try {

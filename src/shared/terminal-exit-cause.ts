@@ -35,6 +35,16 @@ export type TerminalExitUnknownReason =
 export const OPERATOR_CLOSE_EXIT_CAUSE: TerminalExitCause = { kind: 'operator_close' }
 
 /**
+ * The code every surface uses for "contact was lost before the host could vouch
+ * for this process". `resolveProcessExitCause` reads it as `stop_unverified`
+ * and {@link isProvenProcessExit} rejects it.
+ *
+ * A reader handed an *optional* status by a host must default to this, never to
+ * `0`: `exitCode ?? 0` mints a clean finish out of an absence of evidence.
+ */
+export const UNVERIFIED_PROCESS_EXIT_CODE = -1
+
+/**
  * Build a cause from what the host actually observed.
  *
  * `hostReportsChildExitStatus: false` means the number and signal below describe
@@ -100,4 +110,32 @@ export function describeTerminalExitCause(cause: TerminalExitCause): string {
 /** True when a dispatch that ended this way was torn down deliberately rather than lost. */
 export function isDeliberateTerminalExit(cause: TerminalExitCause): boolean {
   return cause.kind === 'operator_close'
+}
+
+/**
+ * Whether an exit code is positive evidence that the process ended.
+ *
+ * Negative codes are synthetic stop sentinels; they mean that the host lost
+ * contact before it could vouch for the child, so downstream cleanup must use
+ * the `unverifiable` path instead of treating the tab as exited.
+ *
+ * This asks *whether* the process ended; the cause resolvers above ask *why*.
+ * The two deliberately disagree about `0`, and that is not a defect:
+ *
+ * - `resolveUnreportedExitCause(0)` is `unknown` because a bare zero cannot
+ *   distinguish a clean finish from a signal — an unknowable **reason**.
+ * - `isProvenProcessExit(0)` is `true` because a host only forwards a
+ *   non-negative code after its provider observed the process end — a known
+ *   **fact of death**, whatever the reason.
+ *
+ * Do not route `hostReportsChildExitStatus` or `signal` through here to
+ * "narrow" the zero. `login(1)` wraps every macOS local PTY once the TCC
+ * preflight passes, so `hostReportsChildExitStatus` is false for essentially
+ * all of them (macos-tcc-login-shell.ts) — yet login forks the shell and waits,
+ * so its own exit *is* evidence the shell died. Treating those as unproven
+ * would strand every macOS pane that a user closed with `exit`, which is the
+ * mirror-image regression of reporting a lost host as exited.
+ */
+export function isProvenProcessExit(exitCode: number): boolean {
+  return resolveProcessExitCause({ exitCode }).kind !== 'unknown'
 }

@@ -20,10 +20,21 @@ function doneEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry 
   }
 }
 
+function statusEntries(entries: AgentStatusEntry[]): Record<string, AgentStatusEntry> {
+  return Object.fromEntries(entries.map((entry, index) => [`${entry.paneKey}#${index}`, entry]))
+}
+
 function setup(entries: AgentStatusEntry[]) {
   const bumpEpochs = vi.fn()
-  const scheduler = createFreshnessScheduler({ getEntries: () => entries, bumpEpochs })
+  const scheduler = createFreshnessScheduler({
+    getStatusEntries: () => statusEntries(entries),
+    bumpEpochs
+  })
   return { bumpEpochs, scheduler }
+}
+
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => queueMicrotask(resolve))
 }
 
 describe('freshness scheduler completion deadlines', () => {
@@ -134,6 +145,47 @@ describe('freshness scheduler completion deadlines', () => {
     vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
     expect(bumpEpochs).toHaveBeenCalledTimes(1)
 
+    scheduler.dispose()
+  })
+
+  it('coalesces pending deferred scans while preserving each queue slot', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const entries = [doneEntry()]
+    const getStatusEntries = vi.fn(() => statusEntries(entries))
+    const bumpEpochs = vi.fn()
+    const scheduler = createFreshnessScheduler({ getStatusEntries, bumpEpochs })
+    const queueMicrotaskSpy = vi.spyOn(globalThis, 'queueMicrotask')
+
+    scheduler.scheduleDeferred()
+    scheduler.scheduleDeferred()
+    expect(queueMicrotaskSpy).toHaveBeenCalledTimes(2)
+    expect(getStatusEntries).not.toHaveBeenCalled()
+
+    await flushMicrotasks()
+
+    expect(getStatusEntries).toHaveBeenCalledTimes(1)
+    scheduler.dispose()
+  })
+
+  it('keeps a deferred request queued while a scan is running', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    let scheduler!: ReturnType<typeof createFreshnessScheduler>
+    let firstRead = true
+    const getStatusEntries = vi.fn((): Record<string, AgentStatusEntry> => {
+      if (firstRead) {
+        firstRead = false
+        scheduler.scheduleDeferred()
+      }
+      return {}
+    })
+    scheduler = createFreshnessScheduler({ getStatusEntries, bumpEpochs: vi.fn() })
+
+    scheduler.scheduleDeferred()
+    await flushMicrotasks()
+
+    expect(getStatusEntries).toHaveBeenCalledTimes(2)
     scheduler.dispose()
   })
 })

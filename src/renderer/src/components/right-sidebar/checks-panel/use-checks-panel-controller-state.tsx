@@ -204,8 +204,6 @@ export function useChecksPanelControllerState() {
   const asyncResultKeyRef = useRef<string>('')
   const refreshRequestKeyRef = useRef<string | null>(null)
   const refreshContextKeyRef = useRef<string | null>(null)
-  const gitStatusSnapshotInFlightContextRef = useRef<string | null>(null)
-  const gitStatusSnapshotRerunContextRef = useRef<string | null>(null)
   const gitStatusSnapshotRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
@@ -374,8 +372,6 @@ export function useChecksPanelControllerState() {
     asyncResultKeyRef,
     refreshRequestKeyRef,
     refreshContextKeyRef,
-    gitStatusSnapshotInFlightContextRef,
-    gitStatusSnapshotRerunContextRef,
     gitStatusSnapshotRetryTimerRef,
     gitIdentityDisplay,
     detachedHeadDisplay,

@@ -11,6 +11,7 @@ import type {
 } from './stream-schemas'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { TerminalSourceRangeRegistry } from '../../terminal-source-range-registry'
+import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal-stream-end-verdict'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
@@ -72,7 +73,11 @@ export type TerminalMultiplexFlowControl = {
 }
 
 export type TerminalMultiplexCleanup = {
-  detachStream: (streamId: number, emitEnd: boolean, releaseRemoteDesktopDriver?: boolean) => void
+  detachStream: (
+    streamId: number,
+    endVerdict: TerminalStreamEndVerdict | null,
+    releaseRemoteDesktopDriver?: boolean
+  ) => void
   cancelPendingPtyWaits: (streamId: number) => void
   cancelAllPendingPtyWaits: () => void
   closeMultiplex: () => void

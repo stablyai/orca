@@ -178,6 +178,19 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
 
+  it('recognizes Kimi Code by the kimi-code process its launcher becomes', () => {
+    expect(recognizeAgentProcess('/home/dev/.kimi-code/bin/kimi')).toEqual({
+      agent: 'kimi',
+      processName: 'kimi'
+    })
+    expect(recognizeAgentProcess('kimi-code')).toEqual({
+      agent: 'kimi',
+      processName: 'kimi-code'
+    })
+    expect(isExpectedAgentProcess('/home/dev/.kimi-code/bin/kimi', 'kimi')).toBe(true)
+    expect(isRecognizedAgentType('kimi-code')).toBe(true)
+  })
+
   it('recognizes Qwen Code by its installed qwen executable', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
       agent: 'qwen-code',

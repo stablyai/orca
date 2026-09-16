@@ -9,6 +9,7 @@ import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-c
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
+import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-minimum-contrast-settings'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
@@ -41,6 +42,7 @@ import {
 
 export type SettingsMutationOperations = {
   state: PersistedState
+  bumpLocalWorktreeScanGeneration: (repoId: string) => void
   removeRetainedBlob: (
     slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
   ) => void
@@ -120,6 +122,13 @@ export function updateSettings(
   if ('terminalScrollbackRows' in updates) {
     sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
       updates.terminalScrollbackRows
+    )
+  }
+  // Why here: every writer (desktop IPC, web RPC, CLI) crosses this boundary, so xterm can never be
+  // handed an out-of-range floor, and undefined stays undefined to mean "automatic" (#10754).
+  if ('terminalMinimumContrastRatio' in updates) {
+    sanitizedUpdates.terminalMinimumContrastRatio = normalizeTerminalMinimumContrastRatio(
+      updates.terminalMinimumContrastRatio
     )
   }
   if (
@@ -241,6 +250,16 @@ export function updateSettings(
       ...sanitizedUpdates.notifications
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
+  }
+  if (
+    !Object.is(
+      previousSettings.localWindowsRuntimeDefault,
+      operations.state.settings.localWindowsRuntimeDefault
+    )
+  ) {
+    for (const repoId of new Set(operations.state.repos.map(({ id }) => id))) {
+      operations.bumpLocalWorktreeScanGeneration(repoId)
+    }
   }
   operations.scheduleSave()
   const changedUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>

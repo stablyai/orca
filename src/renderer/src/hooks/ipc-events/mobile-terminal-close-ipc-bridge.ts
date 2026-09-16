@@ -69,7 +69,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
   if (window.api.ui.onTerminalTabCloseRequest) {
     unsubs.push(
       window.api.ui.onTerminalTabCloseRequest(
-        ({ requestId, tabId, localPtyTeardownOwnedExternally }) => {
+        ({ requestId, tabId, localPtyTeardownOwnedExternally, force }) => {
           let responded = false
           const respond = (error?: string): void => {
             if (responded) {
@@ -80,6 +80,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
           }
           closeTerminalTab(tabId, {
             rejectPinned: true,
+            ...(force ? { force: true } : {}),
             ...(localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
             onCancel: () => respond('terminal_tab_pinned'),
             onClosed: () => {

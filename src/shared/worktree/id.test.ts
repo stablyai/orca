@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   WORKTREE_ID_SEPARATOR,
   getRepoIdFromWorktreeId,
+  getRepoMainWorktreeId,
   getWorktreePathBasenameFromId,
   splitWorktreeId,
   splitWorktreeIdForFilesystem,
@@ -11,6 +12,19 @@ import {
 describe('WORKTREE_ID_SEPARATOR', () => {
   it('is the literal "::" separator', () => {
     expect(WORKTREE_ID_SEPARATOR).toBe('::')
+  })
+})
+
+describe('getRepoMainWorktreeId', () => {
+  it('round-trips through the id parsers on posix and Windows paths', () => {
+    for (const repo of [
+      { id: 'repo-123', path: '/abs/path' },
+      { id: 'repo-123', path: 'C:\\Users\\me\\repo' }
+    ]) {
+      const worktreeId = getRepoMainWorktreeId(repo)
+      expect(worktreeId).toBe(`${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`)
+      expect(splitWorktreeId(worktreeId)).toEqual({ repoId: repo.id, worktreePath: repo.path })
+    }
   })
 })
 

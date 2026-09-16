@@ -1,4 +1,6 @@
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -6,6 +8,7 @@ import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
+import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 
 /**
  * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
@@ -35,6 +38,23 @@ export function migrateWorktreeIdentity(
   }
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
+  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+  const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
+    const renamedValue = withNewWorktreeId(value)
+    return value.docLocation?.worktreeId === oldWorktreeId
+      ? {
+          ...renamedValue,
+          docLocation: remapBrowserPageDocLocation(
+            value.docLocation,
+            oldWorktreeId,
+            newWorktreeId,
+            oldWorktreePath,
+            newWorktreePath
+          )
+        }
+      : renamedValue
+  }
   const migrateSession = (session: WorkspaceSessionState | undefined): boolean => {
     if (!session) {
       return false
@@ -72,16 +92,21 @@ export function migrateWorktreeIdentity(
     sessionChanged = moveSessionKey(session.activeFileIdByWorktree) || sessionChanged
     sessionChanged =
       moveSessionKey(session.browserTabsByWorktree, (workspaces) =>
-        workspaces.map(withNewWorktreeId)
+        workspaces.map(withNewBrowserWorktreeId)
       ) || sessionChanged
     if (session.browserPagesByWorkspace) {
       let pagesChanged = false
       const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
       for (const [workspaceId, pages] of Object.entries(nextPagesByWorkspace)) {
-        if (!pages.some((page) => page.worktreeId === oldWorktreeId)) {
+        if (
+          !pages.some(
+            (page) =>
+              page.worktreeId === oldWorktreeId || page.docLocation?.worktreeId === oldWorktreeId
+          )
+        ) {
           continue
         }
-        nextPagesByWorkspace[workspaceId] = pages.map(withNewWorktreeId)
+        nextPagesByWorkspace[workspaceId] = pages.map(withNewBrowserWorktreeId)
         pagesChanged = true
       }
       if (pagesChanged) {

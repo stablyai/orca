@@ -27,6 +27,7 @@ export async function runFolderWorkspaceTitleAutoRename(
     return stop('folder workspace path unavailable')
   }
 
+  const originalDisplayName = deps.getCurrentDisplayName(worktreeId)
   const settings = deps.getSettings()
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
   if (!resolvedParams.ok) {
@@ -49,6 +50,13 @@ export async function runFolderWorkspaceTitleAutoRename(
     resolvedParams.params,
     target
   )
+  // Generation may outlive a manual rename or workspace removal.
+  if (
+    deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true ||
+    deps.getCurrentDisplayName(worktreeId) !== originalDisplayName
+  ) {
+    return stop('folder workspace changed during generation', true)
+  }
   if (!generated.success) {
     if (!generated.canceled) {
       deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)

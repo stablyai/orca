@@ -71,7 +71,7 @@ function unfencedBlock(): AutomationActionBlock {
     reason: 'unfenced',
     message: translate(
       'auto.components.automations.capturedOwner.unfenced',
-      'This host cannot confirm which automation it is changing, so this automation is read-only here.'
+      'Orca on this host needs an update before you can view run history or manage this automation. Scheduled runs may still continue on the host.'
     ),
     recovery: 'update-server'
   }

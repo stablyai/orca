@@ -1,11 +1,10 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback } from 'react'
 import { Plug, Copy, ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   canStopWorkspacePort,
   getPortOpenBrowserTooltipLabel,
@@ -97,21 +96,18 @@ function PortAction({
   )
 }
 
+/** One port row on a sidebar worktree card, with open/copy/stop actions on its owner host. */
 function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
-  const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, port.kind === 'workspace' ? port.owner.worktreeId : null)
-  )
+
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
-  const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
-  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
+  const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
-    [runtimeEnvironmentId, settings]
+  const runtimeTarget = useWorktreeRuntimeTarget(
+    port.kind === 'workspace' ? port.owner.worktreeId : null
   )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const address = addressForPort(port)
@@ -203,8 +199,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         )
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
-          setWorkspacePortScan,
-          setWorkspacePortScanForKey,
+          replaceWorkspacePortScans,
           getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
@@ -226,8 +221,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       port,
       recordFeatureInteraction,
       runtimeTarget,
-      setWorkspacePortScan,
-      setWorkspacePortScanForKey,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing
     ]
   )

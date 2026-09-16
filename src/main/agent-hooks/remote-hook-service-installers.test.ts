@@ -284,7 +284,7 @@ describe('remote hook service installers', () => {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
     expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain(
-      '/home/dev/.orca/agent-hooks/codex-hook.sh'
+      '/home/dev/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh'
     )
     expect(fs.files.get(`${runtimeHome}/config.toml`)).toContain(
       `${runtimeHome}/hooks.json:stop:0:0`
@@ -410,6 +410,7 @@ describe('remote hook service installers', () => {
       'SessionStart',
       'UserPromptSubmit',
       'Stop',
+      'StopCancelled',
       'StopFailure',
       'SessionEnd',
       'PreToolUse',
@@ -420,7 +421,7 @@ describe('remote hook service installers', () => {
       const definition = grokConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
-      expect(command).toMatch(/^if \[ -n "\$ORCA_PANE_KEY" \] && /)
+      expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
     // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')

@@ -158,6 +158,7 @@ export function extractCopilotToolFields(
       extractToolResponseText(hookPayload.toolResponse)
     if (responseText) {
       update.lastAssistantMessage = responseText
+      update.lastAssistantMessageIsToolOutput = true
     }
   }
   if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
@@ -169,6 +170,7 @@ export function extractCopilotToolFields(
       readFirstString(hookPayload, ['error_message', 'errorMessage', 'error', 'message'])
     if (errorText) {
       update.lastAssistantMessage = errorText
+      update.lastAssistantMessageIsToolOutput = true
     }
   }
   if (eventName === 'Notification') {

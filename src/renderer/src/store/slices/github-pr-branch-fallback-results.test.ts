@@ -409,6 +409,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       pr
     )
     expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      reason: 'manual',
       candidate: expect.objectContaining({
         repoId,
         repoPath,

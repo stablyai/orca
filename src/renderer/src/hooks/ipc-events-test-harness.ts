@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 8 useIpcEvents specs, not shipped code, and it falls outside
+   the *.test / *.spec / tests glob set. Inlining these 10 stubs would duplicate them into all 8 specs and push the largest
+   past the max-lines ratchet. */
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { HarnessStoreState } from './ipc-events-harness-store-state'
@@ -46,6 +49,7 @@ export type IpcEventsHarness = {
   useIpcEvents: () => void
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
+  focusEditorTab: (request: { tabId: string; worktreeId: string }) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
   /** Fire a main-process digit chord (zero-based index). */
   jumpToWorktreeIndex: (index: number) => void
@@ -71,8 +75,7 @@ export type IpcEventsHarnessOptions = {
 }
 
 /**
- * Loads useIpcEvents against a stubbed preload API and returns a driver for the
- * create-terminal IPC, so reveal/adoption behavior is asserted through the hook.
+ * Loads useIpcEvents against a stubbed preload API so IPC behavior is asserted through the hook.
  */
 export async function loadIpcEventsHarness(
   storeState: HarnessStoreState,
@@ -82,6 +85,8 @@ export async function loadIpcEventsHarness(
   const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
+  let focusEditorTabListener: ((request: { tabId: string; worktreeId: string }) => void) | null =
+    null
   let navigationUpdateListener:
     | ((event: { browserPageId: string; url: string; title: string }) => void)
     | null = null
@@ -138,6 +143,9 @@ export async function loadIpcEventsHarness(
     dispatchEvent: vi.fn(),
     api: new Proxy(
       {
+        runtimeEnvironments: createApiNamespaceStub({
+          getStatusSnapshots: () => Promise.resolve([])
+        }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),
@@ -153,6 +161,12 @@ export async function loadIpcEventsHarness(
           },
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
+            return () => {}
+          },
+          onFocusEditorTab: (
+            listener: (request: { tabId: string; worktreeId: string }) => void
+          ) => {
+            focusEditorTabListener = listener
             return () => {}
           },
           onJumpToWorktreeIndex: (listener: (index: number) => void) => {
@@ -243,6 +257,12 @@ export async function loadIpcEventsHarness(
         throw new Error('Expected the request-terminal-create listener to be registered')
       }
       requestTerminalCreateListener(request)
+    },
+    focusEditorTab: (request) => {
+      if (typeof focusEditorTabListener !== 'function') {
+        throw new Error('Expected the focus-editor-tab listener to be registered')
+      }
+      focusEditorTabListener(request)
     },
     replyTerminalCreate,
     jumpToWorktreeIndex: (index) => fireIndexJump(indexJumpListeners, 'worktree', index),

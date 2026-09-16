@@ -504,6 +504,7 @@ describe('parseWorkspaceSession', () => {
         url: `https://example.com/${index}`,
         normalizedUrl: `https://example.com/${index}`,
         title: `Example ${index}`,
+        faviconUrl: index === 0 ? 'https://example.com/favicon.ico' : null,
         lastVisitedAt: 1_700_000_000_000 - index,
         visitCount: 1
       }))
@@ -512,6 +513,9 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+      expect(result.value.browserUrlHistory?.[0]?.faviconUrl).toBe(
+        'https://example.com/favicon.ico'
+      )
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
     }
   })
@@ -544,6 +548,45 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('chat')
+    }
+  })
+
+  it('preserves a structured agent session tab and its active projection', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'session-1',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'session-1',
+            entityId: 'session-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex',
+            structuredSessionId: 'codex-session-1',
+            label: 'Codex Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      activeTabTypeByWorktree: { wt: 'agent-session' }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex',
+        structuredSessionId: 'codex-session-1'
+      })
+      expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
     }
   })
 

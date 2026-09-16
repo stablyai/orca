@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   getTerminalLiveAccessoryBytesDecision,
   getTerminalLiveAccessoryLocalEditText,
@@ -101,6 +101,50 @@ describe('terminal live accessory bytes decision', () => {
 })
 
 describe('terminal live accessory local edit text', () => {
+  it.each([
+    ['', ''],
+    ['a', ''],
+    ['a🙂', 'a'],
+    ['🙂a', '🙂'],
+    ['🙂🙂', '🙂'],
+    ['a\ud800', 'a'],
+    ['a\udc00', 'a'],
+    ['\ud800\ud800', '\ud800'],
+    ['\udc00\ud800', '\udc00'],
+    ['e\u0301', 'e'],
+    ['👩‍💻', '👩‍'],
+    ['\r\n', '\r']
+  ])('preserves code-point deletion for %j', (fieldText, expected) => {
+    expect(getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText })).toBe(
+      expected
+    )
+    expect(getTerminalLiveAccessoryLocalEditText({ localEdit: 'delete', fieldText })).toBe(
+      fieldText
+    )
+  })
+
+  it('does not iterate the input prefix to delete the final code point', () => {
+    const fieldText = `${'a'.repeat(100_000)}🙂`
+    const originalIterator = String.prototype[Symbol.iterator]
+    let visits = 0
+    const iterator = vi
+      .spyOn(String.prototype, Symbol.iterator)
+      .mockImplementation(function* (this: string) {
+        for (const codePoint of originalIterator.call(this)) {
+          visits += 1
+          yield codePoint
+        }
+      })
+    let result: string
+    try {
+      result = getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText })
+    } finally {
+      iterator.mockRestore()
+    }
+    expect(result).toBe('a'.repeat(100_000))
+    expect(visits).toBeLessThanOrEqual(2)
+  })
+
   it('Given backspace Then drops the last code point of the field text', () => {
     expect(
       getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText: '한글' })

@@ -35,7 +35,7 @@ whichever poller arrives first afterwards pays a full-fleet `git worktree list`
 fan-out. The many high-frequency callers — `listTerminals` without a selector,
 `showTerminal`, `getWorktreePs`, `listManagedWorktrees`,
 `resolveWorktreeSelector`, orchestration authority refresh — only determine
-*who* pays, not *how often*. Steady-state subprocess volume is therefore
+_who_ pays, not _how often_. Steady-state subprocess volume is therefore
 `repos / 30 s`, independent of poll rate, which is exactly the observed
 ~1 sweep / 30.5 s.
 
@@ -86,16 +86,16 @@ common directory without a subprocess (read `.git`; if it is a `gitdir:` file,
 follow it and then its `commondir`; if `.git` is absent, treat `repoPath` as a
 bare gitdir), then records:
 
-| Input | External change it catches |
-| --- | --- |
-| sorted entry names of `<commonDir>/worktrees` | `worktree add`, `worktree remove`, `worktree prune` |
-| existence of `repoPath` | main checkout deleted |
-| `<commonDir>/packed-refs` mtime + size | a tip moved while its loose ref is packed away |
-| `<commonDir>/reftable` mtime + size | a tip moved under the reftable backend |
-| per checkout: `HEAD` contents | branch switch, detach (the detached oid is in HEAD itself) |
-| per checkout: contents of the ref HEAD names | a plain `git commit`, `reset`, or `fetch` that moves the tip |
-| per entry: `gitdir` contents | `worktree move`, `worktree repair` |
-| per entry: `locked` presence | `worktree lock` / `unlock` |
+| Input                                              | External change it catches                                    |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| sorted entry names of `<commonDir>/worktrees`      | `worktree add`, `worktree remove`, `worktree prune`           |
+| existence of `repoPath`                            | main checkout deleted                                         |
+| `<commonDir>/packed-refs` mtime + size             | a tip moved while its loose ref is packed away                |
+| `<commonDir>/reftable` mtime + size                | a tip moved under the reftable backend                        |
+| per checkout: `HEAD` contents                      | branch switch, detach (the detached oid is in HEAD itself)    |
+| per checkout: contents of the ref HEAD names       | a plain `git commit`, `reset`, or `fetch` that moves the tip  |
+| per entry: `gitdir` contents                       | `worktree move`, `worktree repair`                            |
+| per entry: `locked` presence                       | `worktree lock` / `unlock`                                    |
 | per entry: existence of the path named by `gitdir` | a worktree directory deleted with `rm -rf` (flips `prunable`) |
 
 "per checkout" covers the main worktree and each linked worktree. Reading the
@@ -159,21 +159,21 @@ rescans. Capturing after the scan would let that mutation be masked forever.
 
 Untouched. `invalidateWorktreeScanCacheForRepo` deletes the entry (fingerprint
 included) and bumps the generation, so every event-driven path still forces a
-real scan on the next read. The fingerprint only ever *extends* an entry that
+real scan on the next read. The fingerprint only ever _extends_ an entry that
 the TTL alone would have refreshed.
 
 ## Freshness budget
 
-| Change | Before | After |
-| --- | --- | --- |
-| Orca-initiated create/remove/rename/sparse/repo edit | immediate (event) | immediate (event) |
-| SSH reconnect / provider generation bump | immediate (event) | immediate (event) |
-| External `worktree add/remove/move/prune/lock` | ≤ 30 s | ≤ 30 s |
-| External `git checkout` / `commit` / `reset` in any worktree | ≤ 30 s | ≤ 30 s |
-| External `rm -rf <worktree>` | ≤ 30 s | ≤ 30 s |
-| External sparse-checkout pattern edit | ≤ 30 s | ≤ 5 min |
-| Packed/reftable tip moved within one mtime tick at an equal file size | ≤ 30 s | ≤ 5 min |
-| SSH / WSL repos, folder workspaces | unchanged | unchanged |
+| Change                                                                | Before            | After             |
+| --------------------------------------------------------------------- | ----------------- | ----------------- |
+| Orca-initiated create/remove/rename/sparse/repo edit                  | immediate (event) | immediate (event) |
+| SSH reconnect / provider generation bump                              | immediate (event) | immediate (event) |
+| External `worktree add/remove/move/prune/lock`                        | ≤ 30 s            | ≤ 30 s            |
+| External `git checkout` / `commit` / `reset` in any worktree          | ≤ 30 s            | ≤ 30 s            |
+| External `rm -rf <worktree>`                                          | ≤ 30 s            | ≤ 30 s            |
+| External sparse-checkout pattern edit                                 | ≤ 30 s            | ≤ 5 min           |
+| Packed/reftable tip moved within one mtime tick at an equal file size | ≤ 30 s            | ≤ 5 min           |
+| SSH / WSL repos, folder workspaces                                    | unchanged         | unchanged         |
 
 The two regressions are bounded by the reconciliation interval and are both
 changes Orca does not make itself.
@@ -185,10 +185,10 @@ thread" in the naive sense — but they are not equally free there. Measured on
 macOS with a 1 ms interval sampling event-loop lag while each ran 30 times
 against a repo with 20 linked worktrees:
 
-| | wall per call | main-thread stall per call | worst single stall |
-| --- | --- | --- | --- |
-| `git worktree list` | 18.66 ms | 2.69 ms | 3.02 ms |
-| fingerprint probe | 1.66 ms | 0.01 ms | 0.04 ms |
+|                     | wall per call | main-thread stall per call | worst single stall |
+| ------------------- | ------------- | -------------------------- | ------------------ |
+| `git worktree list` | 18.66 ms      | 2.69 ms                    | 3.02 ms            |
+| fingerprint probe   | 1.66 ms       | 0.01 ms                    | 0.04 ms            |
 
 `fs/promises` dispatches to libuv's threadpool, so ~99 % of the probe's latency
 is off-thread. Spawning Git does not: `uv_spawn`, fd and pipe setup, and stdout
@@ -212,10 +212,10 @@ sparse-checkout probes already do.
 reported steady state — 10 idle local repos, a caller polling at 1 Hz for 30
 simulated minutes — and counts `git worktree list` invocations:
 
-| | `git worktree list` per 30 min | per hour |
-| --- | --- | --- |
-| TTL only (before) | 600 | 1,200 |
-| fingerprint gate (after) | 60 | 120 |
+|                          | `git worktree list` per 30 min | per hour |
+| ------------------------ | ------------------------------ | -------- |
+| TTL only (before)        | 600                            | 1,200    |
+| fingerprint gate (after) | 60                             | 120      |
 
 A 90 % reduction, with the remainder being the bounded reconciliation. Repos
 with genuine external activity keep rescanning at the 30 s cadence because the
@@ -227,7 +227,7 @@ Extrapolating to the original trace's shape (10 repos, 3 h 27 min): 4,272
 ## Rejected alternatives
 
 **Raise `WORKTREE_SCAN_CACHE_TTL_MS` to 5 min.** One line, same subprocess
-reduction, but it degrades *every* external-change latency to 5 min, including
+reduction, but it degrades _every_ external-change latency to 5 min, including
 the common "I ran `git worktree add` in a terminal" case. The fingerprint buys
 the same reduction without that regression.
 

@@ -238,21 +238,32 @@ export function projectAutomationList(
   context: AutomationProjectionContext,
   scope?: AutomationListScopeSelector
 ): AutomationListResult {
-  const projected = automations.map((automation) => ({
-    automation,
-    selector: projectAutomationSelector(automation, context)
-  }))
-  const orphanCount = projected.filter((entry) => entry.selector.kind === 'orphan').length
-  const scoped = scope
-    ? projected.filter((entry) => automationSelectorMatchesScope(entry.selector, scope))
-    : projected
+  const scopedAutomations: Automation[] = []
+  const items: AutomationListItem[] = []
+  let orphanCount = 0
+  for (const automation of automations) {
+    const selector = projectAutomationSelector(automation, context)
+    if (selector.kind === 'orphan') {
+      orphanCount += 1
+    }
+    if (scope && !automationSelectorMatchesScope(selector, scope)) {
+      continue
+    }
+    scopedAutomations.push(automation)
+    items.push({
+      automationId: automation.id,
+      selector
+    })
+  }
+  // Keep usage lookups after projection, matching the previous staged pipeline's ordering.
+  if (context.usageSummary) {
+    for (const item of items) {
+      item.usageSummary = context.usageSummary(item.automationId)
+    }
+  }
   return {
-    automations: scoped.map((entry) => entry.automation),
-    items: scoped.map((entry) => ({
-      automationId: entry.automation.id,
-      selector: entry.selector,
-      ...(context.usageSummary ? { usageSummary: context.usageSummary(entry.automation.id) } : {})
-    })),
+    automations: scopedAutomations,
+    items,
     orphanCount
   }
 }

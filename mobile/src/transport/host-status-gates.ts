@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from './rpc-client'
-import type { ConnectionState, RpcSuccess } from './types'
+import type { ConnectionState } from './types'
+import { hostStatusProbe } from './host-status-probe-operations'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
+import { normalizeHostAppVersion, recordHostAppVersion } from './host-app-version-store'
 
 export type HostStatusGates = {
   hostCapabilities: string[]
   floatingWorkspaceEnabled: boolean
+  desktopAppVersion: string | null
   compatVerdict: CompatVerdict
   statusPending: boolean
 }
@@ -45,28 +48,36 @@ export function useHostStatusGates(args: {
     }
     void (async () => {
       try {
-        const response = await requestClient.sendRequest('status.get')
+        const reply = await hostStatusProbe.request(requestClient)
         if (cancelled) {
           return
         }
-        if (!response.ok) {
+        const accepted = hostStatusProbe.interpret(reply)
+        if (!accepted.accepted) {
           settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
+            desktopAppVersion: null,
             compatVerdict: { kind: 'ok' }
           })
           return
         }
-        const status = (response as RpcSuccess).result as DesktopStatus & {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const status = accepted.value as DesktopStatus & {
           capabilities?: string[]
         }
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,
           desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
         })
+        const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+        if (hostId && desktopAppVersion) {
+          void recordHostAppVersion(hostId, desktopAppVersion)
+        }
         settle({
           hostCapabilities: status.capabilities ?? [],
           floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+          desktopAppVersion,
           compatVerdict: verdict
         })
         if (verdict.kind === 'blocked') {
@@ -84,6 +95,7 @@ export function useHostStatusGates(args: {
           settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
+            desktopAppVersion: null,
             compatVerdict: { kind: 'ok' }
           })
         }
@@ -100,6 +112,7 @@ export function useHostStatusGates(args: {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,
       floatingWorkspaceEnabled: false,
+      desktopAppVersion: null,
       compatVerdict: { kind: 'ok' },
       statusPending: connState === 'connected' && client !== null
     }
@@ -107,6 +120,7 @@ export function useHostStatusGates(args: {
   return {
     hostCapabilities: proven.hostCapabilities,
     floatingWorkspaceEnabled: proven.floatingWorkspaceEnabled,
+    desktopAppVersion: proven.desktopAppVersion,
     compatVerdict: proven.compatVerdict,
     // Why (F10): unchanged pending timing — the reconnect refetch is still "unknown", it just no
     // longer blanks the capabilities this same host already proved.

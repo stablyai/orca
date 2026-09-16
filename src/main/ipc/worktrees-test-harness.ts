@@ -1,5 +1,8 @@
 import { __resetSshWorktreeCreateFetchCacheForTests } from './worktree-remote'
-import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+import {
+  __resetCreatedWorktreeRootsForTests,
+  invalidateAuthorizedRootsCache
+} from './registered-worktree-roots-cache'
 import { registerWorktreeHandlers } from './worktrees'
 import { __resetDetectedWorktreeScanCacheForTests } from './worktrees/listing/detected-worktree-scan-cache'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
@@ -7,6 +10,7 @@ import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retir
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
+import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,
@@ -15,6 +19,7 @@ import {
   handleMock,
   removeHandlerMock,
   listWorktreesMock,
+  describeCreatedWorktreeMock,
   assertWorktreeCleanForRemovalMock,
   addWorktreeMock,
   addSparseWorktreeMock,
@@ -71,14 +76,26 @@ export {
   type HandlerMap
 } from './worktrees-test-ipc-surface'
 
+/** The single repo every worktree harness test resolves; exported so a test can vary one field. */
+export const harnessRepo = {
+  id: 'repo-1',
+  path: '/workspace/repo',
+  displayName: 'repo',
+  badgeColor: '#000',
+  addedAt: 0
+}
+
 /** Registers worktree IPC handlers against freshly reset shared mocks and returns the runtime stub. */
 export function setupWorktreeHandlers(): WorktreeRuntimeStub {
+  delete (store as typeof store & { getAllWorktreeMetaForHost?: (...args: unknown[]) => unknown })
+    .getAllWorktreeMetaForHost
   setPlatform(ORIGINAL_PLATFORM)
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
   __resetSshWorktreeCreateFetchCacheForTests()
   __resetDetectedWorktreeScanCacheForTests()
   resetSshProviderAuthorities()
   invalidateAuthorizedRootsCache()
+  __resetCreatedWorktreeRootsForTests()
   for (const m of [
     handleMock,
     removeHandlerMock,
@@ -125,10 +142,14 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     store.getSparsePresets,
     store.getSettings,
     store.getWorktreeMeta,
+    store.getWorktreeMetaForHost,
     store.getAllWorktreeMeta,
+    store.captureNativeLocalWorktreeMetadataScanExpectation,
     store.setWorktreeMeta,
+    store.setWorktreeMetaForHost,
     store.getProjectHostSetups,
     store.removeWorktreeMeta,
+    store.pruneSessionlessMissingLocalWorktreeMetadataForRepo,
     store.removeWorkspaceSessionStateForWorktree,
     store.getAllWorktreeLineage,
     store.removeWorktreeLineage,
@@ -150,7 +171,8 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     pruneSpaceAnalysisSnapshotsMock,
     recordRemovalSnapshotPruneMock,
     findExistingWorktreeSymlinkPathsMock,
-    removeWorktreeLinkedPathsMock
+    removeWorktreeLinkedPathsMock,
+    describeCreatedWorktreeMock
   ]) {
     m.mockReset()
   }
@@ -172,28 +194,31 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     handlers[channel] = handler
   })
 
-  const repo = {
-    id: 'repo-1',
-    path: '/workspace/repo',
-    displayName: 'repo',
-    badgeColor: '#000',
-    addedAt: 0
-  }
-  store.getRepos.mockReturnValue([repo])
-  store.getRepo.mockReturnValue({ ...repo, worktreeBaseRef: null })
+  store.getRepos.mockReturnValue([harnessRepo])
+  store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: null })
   store.getProjects.mockReturnValue([])
   store.getSparsePresets.mockReturnValue([])
-  store.getSettings.mockReturnValue({
+  const settings = {
     branchPrefix: 'none',
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
     workspaceDir: '/workspace'
-  })
+  }
+  store.getSettings.mockReturnValue(settings)
   store.getWorktreeMeta.mockReturnValue(undefined)
+  // Host-qualified accessors delegate by default so payload assertions stay on one spy;
+  // host routing itself is covered by worktree-identity-persistence.test.ts.
+  store.getWorktreeMetaForHost.mockImplementation((...args: unknown[]) =>
+    store.getWorktreeMeta(args[0] as string)
+  )
   store.getAllWorktreeMeta.mockReturnValue({})
+  configureMetadataPruningStoreMocks(store, settings)
   store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
   resetRetirementCollisionKeyCacheForTests()
   store.setWorktreeMeta.mockReturnValue({})
+  store.setWorktreeMetaForHost.mockImplementation((...args: unknown[]) =>
+    store.setWorktreeMeta(args[0] as string, args[2] as object)
+  )
   store.getProjectHostSetups.mockReturnValue([
     {
       id: 'repo-1',
@@ -276,6 +301,8 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   )
   ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
   listWorktreesMock.mockResolvedValue([])
+  // Default: no direct-read recovery, so a listing that omits the row still fails the create.
+  describeCreatedWorktreeMock.mockResolvedValue(undefined)
   forceDeleteLocalBranchMock.mockResolvedValue(undefined)
   const runtimeStub = createWorktreeRuntimeStub()
   registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)

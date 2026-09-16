@@ -83,7 +83,8 @@ export function SourceControlVirtualFileList<TRow>({
   rows,
   getRowKey,
   renderRow,
-  scrollElement
+  scrollElement,
+  estimateRowHeightPx = SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
 }: {
   rows: readonly TRow[]
   getRowKey: (row: TRow) => string
@@ -92,6 +93,9 @@ export function SourceControlVirtualFileList<TRow>({
   // yet when this component's mount effects run, so a ref would leave the
   // virtualizer unobserved until some unrelated re-render.
   scrollElement: HTMLDivElement | null
+  // Why: callers outside source control have their own row paddings; measureElement
+  // still corrects, but a wrong estimate makes the initial scrollbar jump.
+  estimateRowHeightPx?: number
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
@@ -124,7 +128,7 @@ export function SourceControlVirtualFileList<TRow>({
     count: rows.length,
     enabled: virtualize && scrollElement !== null,
     getScrollElement: () => scrollElement,
-    estimateSize: () => SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
+    estimateSize: () => estimateRowHeightPx,
     overscan: SOURCE_CONTROL_FILE_ROW_OVERSCAN,
     scrollMargin,
     // Why: stable row keys let the virtualizer carry item identity across

@@ -2,10 +2,11 @@
 
 import '@testing-library/jest-dom/vitest'
 
+import { StrictMode, useSyncExternalStore } from 'react'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
+import type { MobileRelayStatusDetail } from '../../../../shared/mobile-relay-status'
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
 import { MobilePairingConnectionOptions } from './MobilePairingConnectionOptions'
 
@@ -17,19 +18,34 @@ type MobileRelayStoreState = {
 }
 
 const mocks = vi.hoisted(() => ({
-  state: {} as MobileRelayStoreState
+  state: {} as MobileRelayStoreState,
+  listeners: new Set<() => void>()
 }))
 
+// Why subscribable: a mid-mount auth re-read has to reach the rendered tree, which a
+// plain selector-over-a-mutable-object mock silently swallows.
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: MobileRelayStoreState) => unknown) => selector(mocks.state)
+  useAppStore: (selector: (state: MobileRelayStoreState) => unknown) =>
+    useSyncExternalStore(
+      (onStoreChange) => {
+        mocks.listeners.add(onStoreChange)
+        return () => mocks.listeners.delete(onStoreChange)
+      },
+      () => selector(mocks.state)
+    )
 }))
+
+function publishStoreState(next: MobileRelayStoreState): void {
+  mocks.state = next
+  mocks.listeners.forEach((listener) => listener())
+}
 
 vi.mock('../../i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
 describe('MobilePairingConnectionOptions', () => {
-  let statusListener: ((status: MobileRelayStatus) => void) | null
+  let statusListener: ((detail: MobileRelayStatusDetail) => void) | null
   const connect = vi.fn().mockResolvedValue(null)
   const fetchAuthStatus = vi.fn().mockResolvedValue(null)
 
@@ -42,7 +58,7 @@ describe('MobilePairingConnectionOptions', () => {
       value: {
         mobile: {
           getRelayStatus: vi.fn().mockResolvedValue({ status: 'registered' }),
-          onRelayStatusChanged: vi.fn((listener: (status: MobileRelayStatus) => void) => {
+          onRelayStatusChanged: vi.fn((listener: (detail: MobileRelayStatusDetail) => void) => {
             statusListener = listener
             return vi.fn()
           })
@@ -219,7 +235,35 @@ describe('MobilePairingConnectionOptions', () => {
 
     await user.click(screen.getByRole('radio', { name: /^LAN\b/i }))
     expect(onChange).toHaveBeenCalledWith('local-only')
-    statusListener?.('standby')
+    statusListener?.({ status: 'standby' })
+  })
+
+  it('names the assigned relay cell by host once the status carries one', async () => {
+    mocks.state = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      }
+    }
+    render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
+
+    expect(screen.queryByTestId('relay-cell-line')).toBeNull()
+
+    statusListener?.({ status: 'registered', cellUrl: 'https://c27.relay.example.test' })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('relay-cell-line')).toHaveTextContent(
+        'Relay cell: c27.relay.example.test'
+      )
+    )
+    // Why: the line is a diagnostic, not an option; it must not join the group.
+    expect(within(screen.getByRole('radiogroup')).getAllByRole('radio')).toHaveLength(2)
+
+    statusListener?.({ status: 'offline' })
+    await waitFor(() => expect(screen.queryByTestId('relay-cell-line')).toBeNull())
   })
 
   it('keeps LAN available while Relay is retrying', async () => {
@@ -250,5 +294,40 @@ describe('MobilePairingConnectionOptions', () => {
     expect(lan).toHaveAttribute('aria-disabled', 'false')
     await user.click(lan)
     expect(onChange).toHaveBeenCalledWith('local-only')
+  })
+
+  it('re-reads a session revoked since startup and offers Sign in again', async () => {
+    // Regression: the store cached "connected" at startup and the pane only
+    // fetched when it was empty, so a revoked session stayed invisible.
+    const connectedState: MobileRelayStoreState = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      }
+    }
+    mocks.state = connectedState
+    fetchAuthStatus.mockImplementation(async () => {
+      const revoked: OrcaProfileAuthStatus = {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'reconnect-required',
+        persistence: 'encrypted'
+      }
+      publishStoreState({ ...connectedState, orcaProfileAuthStatus: revoked })
+      return revoked
+    })
+
+    // StrictMode double-invokes the effect: a fetch keyed on what it writes would loop.
+    render(
+      <StrictMode>
+        <MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />
+      </StrictMode>
+    )
+
+    expect(await screen.findByRole('button', { name: 'Sign in again for Relay' })).toBeVisible()
+    expect(fetchAuthStatus).toHaveBeenCalledTimes(2)
   })
 })

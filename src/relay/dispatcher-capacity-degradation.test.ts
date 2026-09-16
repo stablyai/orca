@@ -59,6 +59,14 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
   return client
 }
 
+// Why: the sink accepts every write but never settles it, so control-lane bytes stay retained and the
+// queue fills, while the writer keeps pumping the other lanes — the shape of a peer whose socket is behind.
+function makeUnsettledWriteClient(highWaterMark: number): BoundedClient {
+  const client = makeBoundedClient(highWaterMark)
+  client.options = { ...client.options, supportsWriteCallback: true }
+  return client
+}
+
 function decodePayload(frame: Buffer): Record<string, unknown> {
   const length = frame.readUInt32BE(9)
   return JSON.parse(frame.subarray(13, 13 + length).toString('utf-8'))
@@ -460,6 +468,94 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       expect(response.id).toBe(78)
       expect(response.error.code).toBe(RelayErrorCode.ResponseOverCapacity)
       expect(response.error.message).toBe('Relay response exceeded the bounded transport capacity')
+    } finally {
+      bounded.dispose()
+    }
+  })
+
+  it('answers an over-budget response with a capacity error instead of closing the connection', async () => {
+    const primary = makeUnsettledWriteClient(65536)
+    const bounded = new RelayDispatcher(primary.write, primary.options)
+    try {
+      const clientId = bounded.activeClientIds()[0]
+      bounded.onRequest('fs.listFiles', async () => ({ paths: 'x'.repeat(700 * 1024) }))
+      bounded.onRequest('workspace.get', async () => ({ name: 'workspace' }))
+
+      bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 91, method: 'fs.listFiles' }, 1, 0))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(primary.frames).toHaveLength(1)
+
+      // The first reply still holds the shared control budget, so the second cannot fit under 1 MiB.
+      bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 92, method: 'fs.listFiles' }, 2, 0))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(primary.closes).toBe(0)
+      expect(bounded.isClientAttached(clientId)).toBe(true)
+      expect(primary.frames).toHaveLength(2)
+      const rejected = decodePayload(primary.frames[1]) as unknown as {
+        id: number
+        error: { code: number; message: string }
+      }
+      expect(rejected.id).toBe(92)
+      expect(rejected.error.code).toBe(RelayErrorCode.ResponseOverCapacity)
+      expect(rejected.error.message).toBe('Relay response exceeded the bounded transport capacity')
+
+      // Every other pane and request on this connection keeps working.
+      bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 93, method: 'workspace.get' }, 3, 0))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(decodePayload(primary.frames[2])).toMatchObject({
+        id: 93,
+        result: { name: 'workspace' }
+      })
+
+      bounded.notify('pty.data', { paneId: 'pane-1', data: 'still-live' })
+      expect(decodePayload(primary.frames[3])).toMatchObject({ method: 'pty.data' })
+      expect(primary.closes).toBe(0)
+    } finally {
+      bounded.dispose()
+    }
+  })
+
+  it('still closes the client when a protocol-critical control frame overflows', () => {
+    const primary = makeUnsettledWriteClient(65536)
+    const bounded = new RelayDispatcher(primary.write, primary.options)
+    try {
+      const clientId = bounded.activeClientIds()[0]
+      bounded.notifyClient(clientId, 'workspace.stale', { blob: 'x'.repeat(700 * 1024) })
+      expect(primary.closes).toBe(0)
+
+      // Replay is never re-sent, so an unnoticed drop strands the pane: overflow here stays fatal.
+      bounded.notify('pty.replay', { paneKey: 'tab-1:pane-1', data: 'y'.repeat(700 * 1024) })
+      expect(primary.closes).toBe(1)
+    } finally {
+      bounded.dispose()
+    }
+  })
+
+  it('drops an unsendable response without closing when even the capacity error will not fit', async () => {
+    const primary = makeUnsettledWriteClient(65536)
+    const bounded = new RelayDispatcher(primary.write, primary.options)
+    try {
+      const clientId = bounded.activeClientIds()[0]
+      const settlements: SinkWriteSettlement[] = []
+      bounded.onRequest('workspace.get', async (_params, context) => {
+        context.onResponseSettled?.((result) => settlements.push(result))
+        return { name: 'workspace' }
+      })
+      for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
+        bounded.notifyClient(clientId, `control.${index}`)
+      }
+      const framesBefore = primary.frames.length
+
+      bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 94, method: 'workspace.get' }, 1, 0))
+      await vi.advanceTimersByTimeAsync(0)
+
+      // Nothing goes out, but the connection lives and the caller's own request timeout settles it.
+      expect(primary.closes).toBe(0)
+      expect(primary.frames).toHaveLength(framesBefore)
+      expect(settlements).toEqual([
+        { ok: false, error: new Error('Relay response was not admitted') }
+      ])
     } finally {
       bounded.dispose()
     }

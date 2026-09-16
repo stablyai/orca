@@ -1,7 +1,11 @@
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import {
+  findIndexedFolderWorkspaceOwner,
+  findIndexedProjectGroupOwner,
+  getCatalogOwnerHostId
+} from '@/lib/worktree-runtime-owner-index'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 
@@ -144,74 +148,31 @@ export function isCurrentKnownPaneKey(
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !isSuppressedPtyHint(state, ptyId))
 }
 
-function hasActiveWorktreeState(state: StoreSnapshot, worktreeId: string): boolean {
-  if (hasLivePtyForWorktree(state, worktreeId)) {
-    return true
+export function getNotificationWorkspaceLabels(
+  state: StoreSnapshot,
+  workspaceId: string,
+  terminalTitle?: string
+): { repoLabel?: string; worktreeLabel: string } {
+  const scope = parseWorkspaceKey(workspaceId)
+  const fallback = terminalTitle?.trim() || 'workspace'
+  if (scope?.type === 'folder') {
+    const folder = findIndexedFolderWorkspaceOwner(state.folderWorkspaces, scope.folderWorkspaceId)
+    // The group ID is only unique per host, so qualify it with the folder's own host.
+    const group =
+      folder &&
+      findIndexedProjectGroupOwner(
+        state.projectGroups,
+        folder.projectGroupId,
+        getCatalogOwnerHostId(folder)
+      )
+    return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
   }
-
-  if ((state.browserTabsByWorktree?.[worktreeId] ?? []).length > 0) {
-    return true
+  const worktree = getWorktreeMapFromState(state).get(
+    scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+  )
+  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : undefined
+  return {
+    repoLabel: repo?.displayName,
+    worktreeLabel: worktree?.displayName || worktree?.branch || fallback
   }
-
-  const worktree = getWorktreeMapFromState(state).get(worktreeId)
-  if (worktree?.workspaceStatus === 'in-progress') {
-    return true
-  }
-
-  if (
-    Object.values(state.retainedAgentsByPaneKey ?? {}).some(
-      (agent) => agent.worktreeId === worktreeId
-    )
-  ) {
-    return true
-  }
-
-  const tabs = state.tabsByWorktree[worktreeId] ?? []
-  const tabIds = new Set(tabs.map((tab) => tab.id))
-  if (tabIds.size === 0) {
-    return false
-  }
-
-  const now = Date.now()
-  return Object.values(state.agentStatusByPaneKey ?? {}).some((entry) => {
-    const tabId = getPaneKeyTabId(entry.paneKey)
-    return (
-      tabId !== null &&
-      tabIds.has(tabId) &&
-      isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
-    )
-  })
-}
-
-function countReposWithWorktrees(state: StoreSnapshot): number {
-  let count = 0
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    if (worktrees.length > 0) {
-      count += 1
-    }
-  }
-  return count
-}
-
-export function countReposNeedingNotificationDisambiguation(state: StoreSnapshot): number {
-  const activeRepoIds = new Set<string>()
-  const worktreeMap = getWorktreeMapFromState(state)
-  for (const worktreeId of Object.keys(state.tabsByWorktree)) {
-    if (!hasActiveWorktreeState(state, worktreeId)) {
-      continue
-    }
-    const repoId = worktreeMap.get(worktreeId)?.repoId
-    if (repoId) {
-      activeRepoIds.add(repoId)
-    }
-  }
-  for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
-    if (activeRepoIds.has(repoId)) {
-      continue
-    }
-    if (worktrees.some((worktree) => hasActiveWorktreeState(state, worktree.id))) {
-      activeRepoIds.add(repoId)
-    }
-  }
-  return Math.max(activeRepoIds.size, countReposWithWorktrees(state))
 }

@@ -15,6 +15,8 @@ type EditorPanelMarkdownActionsMenuProps = {
   isDiffSurface: boolean
   /** Diff-only wrap preference; ignored for normal file tabs. */
   diffWordWrap: boolean
+  /** Diff-only whitespace preference; ignored for normal file tabs. */
+  diffShowWhitespace: boolean
   /** File editor wrap preference (`settings.editorWordWrap`). */
   editorWordWrap: boolean
   shouldShowMarkdownExportAction: boolean
@@ -22,6 +24,7 @@ type EditorPanelMarkdownActionsMenuProps = {
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
   onToggleDiffWordWrap: () => void
+  onToggleDiffWhitespace: () => void
   onToggleEditorWordWrap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
@@ -31,12 +34,14 @@ export function EditorPanelMarkdownActionsMenu({
   isMarkdown,
   isDiffSurface,
   diffWordWrap,
+  diffShowWhitespace,
   editorWordWrap,
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
   onToggleDiffWordWrap,
+  onToggleDiffWhitespace,
   onToggleEditorWordWrap,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
@@ -72,6 +77,17 @@ export function EditorPanelMarkdownActionsMenu({
             'Word Wrap'
           )}
         </DropdownMenuCheckboxItem>
+        {isDiffSurface ? (
+          <DropdownMenuCheckboxItem
+            checked={diffShowWhitespace}
+            onCheckedChange={onToggleDiffWhitespace}
+          >
+            {translate(
+              'auto.components.editor.EditorPanelMarkdownActionsMenu.4dedd55efa',
+              'Show Whitespace'
+            )}
+          </DropdownMenuCheckboxItem>
+        ) : null}
         {hasMarkdownActions ? <DropdownMenuSeparator /> : null}
         {canShowMarkdownFrontmatterToggle ? (
           <>

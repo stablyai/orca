@@ -166,6 +166,8 @@ describe('Store', () => {
   describe('mobileClientTabSelectionsByDeviceId', () => {
     it('persists device tab selections across reloads and drops malformed payloads', async () => {
       const store = await createStore()
+      // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+      store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
       store.setMobileClientTabSelections({
         'device-a': {
           'repo-1::/tmp/wt': { activeTabId: 'tab-1', activeGroupId: 'g1', activeTabIdByGroupId: {} }
@@ -188,6 +190,7 @@ describe('Store', () => {
     it('prunes selections for a removed repo worktree', async () => {
       const store = await createStore()
       store.addRepo(makeRepo())
+      store.addRepo(makeRepo({ id: 'other-repo', path: '/other-repo' }))
       store.setMobileClientTabSelections({
         'device-a': {
           'r1::/tmp/wt': {

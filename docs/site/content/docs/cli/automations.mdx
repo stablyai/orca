@@ -1,0 +1,137 @@
+---
+title: Scheduled automations
+---
+
+Orca automations run a prompt on a schedule from the CLI, so recurring triage, review, and maintenance tasks can start without you opening a worktree by hand. By the end of this page, you'll create a disabled automation, inspect it, and run it when you're ready.
+
+## Create a safe first automation
+
+Start with `--disabled` while you tune the prompt and target:
+
+```bash
+orca automations create \
+  --name "Weekday triage" \
+  --trigger weekdays \
+  --time 09:00 \
+  --prompt "Triage new issues and summarize blockers" \
+  --provider codex \
+  --repo my-repo \
+  --disabled \
+  --json
+```
+
+`--trigger` accepts presets such as `hourly`, `daily`, `weekdays`, and `weekly`, plus cron expressions or RRULE strings. Use `--timezone <tz>` when the schedule should follow a specific IANA timezone instead of the runtime default.
+
+## Choose where runs happen
+
+Use `--repo <selector>` when each run should create or select work in a repository. Use `--workspace <selector>` when the automation should run inside an existing Orca worktree instead:
+
+```bash
+orca automations create \
+  --name "Nightly status" \
+  --trigger "0 18 * * 1-5" \
+  --prompt "Summarize today's changes" \
+  --provider claude \
+  --workspace active \
+  --disabled
+```
+
+When you omit both target flags, Orca resolves the enclosing worktree from the current shell directory when it can.
+
+## Precheck before a run
+
+Skip scheduled work when a cheap shell probe fails (non-zero exit records a skipped run):
+
+```bash
+orca automations create \
+  --name "PR review" \
+  --trigger hourly \
+  --precheck "gh pr list --json number -q .[0].number" \
+  --prompt "Review requested PRs" \
+  --provider codex \
+  --repo my-repo \
+  --disabled \
+  --json
+```
+
+## Project host / setup targets
+
+When the automation should run on a specific project host setup rather than only `--repo` / `--workspace`:
+
+```bash
+orca automations create \
+  --name "Remote triage" \
+  --trigger daily \
+  --time 09:00 \
+  --prompt "Triage open issues" \
+  --provider claude \
+  --project <projectId> \
+  --host <hostId> \
+  --disabled \
+  --json
+```
+
+Use `--project-host-setup <id>` when you already have a setup id. Optional `--source-context '<json>'` pins task/provider data to a host/account (pass `null` on edit to clear).
+
+## Manage automations across hosts
+
+The desktop **Automations** page loads schedules from this computer and supported connected Orca hosts into one table. The **Host** column shows where each automation is stored and scheduled; use **Filters → Host** to show one or more hosts, or return to **All hosts**.
+
+When you create an automation in the desktop UI, **Create on** chooses its host before you choose a project. The project picker then shows projects available on that destination. Connected hosts that need a newer Orca server stay visible but disabled, with an **Update server** message, instead of disappearing from the picker.
+
+## Missed-run grace
+
+```bash
+orca automations edit <automationId> --missed-run-grace-minutes 30 --json
+```
+
+## Reuse an existing automation session
+
+For automations that target an existing worktree, add `--reuse-session` when later runs should continue in the previous live automation terminal instead of starting from a blank terminal each time:
+
+```bash
+orca automations create \
+  --name "Inbox digest" \
+  --trigger hourly \
+  --prompt "Summarize unread mail" \
+  --provider codex \
+  --workspace active \
+  --reuse-session \
+  --disabled
+```
+
+Use `orca automations edit <automationId> --fresh-session --json` to switch the automation back to a fresh terminal per run.
+
+## Review and enable
+
+List and inspect automations before enabling them:
+
+```bash
+orca automations list --json
+orca automations show <automationId> --json
+orca automations edit <automationId> --enabled --json
+```
+
+In the desktop automations list, use the search field to filter by **name**, **project**, or **prompt** text when you have many schedules. External automations that live on an SSH host still appear as jobs you can manage (including delete) when that host is disconnected — you do not need an active SSH session just to remove a schedule.
+
+Use **Filters** to narrow the list by **Host**, **Enabled** or **Paused** state, last-run outcome (**Failed**, **Succeeded**, or **Never ran**), or one or more **Agents**. Search inside the agent submenu when the list is long; active filters appear as removable pills above the table. The table shows the host, last-run result, and relative time for each automation. Click the **Name** or **Last run** column to sort; name sorts alphabetically, while last run defaults to newest first.
+
+When the automation list is open, type in the search field and press **ArrowUp** or **ArrowDown** to move the selection through the visible matching rows. The list keeps the selected row in view; modified or composing input keeps its normal cursor behavior.
+
+Use `edit` to change the name, prompt, provider, target, schedule, or enabled state. `remove` deletes an automation and its run history.
+
+## Run on demand
+
+After creating an automation, trigger it manually to check the prompt and target before waiting for the next scheduled time:
+
+```bash
+orca automations run <automationId> --json
+orca automations runs --id <automationId> --json
+```
+
+If a run fails before it opens a workspace or reconnects to its target, open that run in Orca and click **Rerun** to queue a fresh manual run for the same automation.
+
+## Next steps
+
+- [Orca CLI overview](/docs/cli/overview) — see the rest of the CLI surface for worktrees, terminals, and browser control.
+- [Skills registry & MCP](/docs/cli/skills) — install the Orca CLI skill so agents can call the same commands.

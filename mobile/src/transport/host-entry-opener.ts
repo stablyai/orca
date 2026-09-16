@@ -1,4 +1,8 @@
-import { connectionLogStore } from './connection-log-buffer'
+import { attachPushRegistration } from '../notifications/push-registration'
+import {
+  connectionLogStore,
+  recordConnectionClientSessionStart
+} from './persisted-connection-log-store'
 import { loadHosts } from './host-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
@@ -9,6 +13,7 @@ import type { ConnectionState, HostProfile } from './types'
 
 export type HostClientStoreEntry = {
   client: RpcClient
+  clientId: string
   state: ConnectionState
   refCount: number
   unsubState: () => void
@@ -65,6 +70,7 @@ export async function openHostClientEntry(
       id: `host-open-${ticket.generation}-${Date.now()}`,
       ts: Date.now(),
       level: 'error',
+      code: 'host-open-failed',
       message: 'Host client open failed',
       detail: `${category}; retry ${retry.nextDelayMs}ms (failure ${retry.failureCount})`
     })
@@ -98,6 +104,7 @@ export async function openHostClientEntry(
 
     let client: RpcClient
     try {
+      recordConnectionClientSessionStart(hostId)
       client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
     } catch {
       failCurrentOpen('client-construction')
@@ -107,11 +114,21 @@ export async function openHostClientEntry(
       client.close()
       return state.store.get(hostId) ?? null
     }
-    const unsubState = client.onStateChange((next) => {
+    let detachPushRegistration: (() => void) | null = null
+    const syncPushRegistration = (next: ConnectionState): void => {
+      if (next === 'connected') {
+        detachPushRegistration ??= attachPushRegistration(hostId, client)
+      } else {
+        detachPushRegistration?.()
+        detachPushRegistration = null
+      }
+    }
+    const unsubscribeState = client.onStateChange((next) => {
       const current = state.store.get(hostId)
       if (!current) {
         return
       }
+      syncPushRegistration(next)
       current.state = next
       state.notifyHostState(hostId, next)
     })
@@ -125,13 +142,19 @@ export async function openHostClientEntry(
       }) ?? (() => {})
     const entry: HostClientStoreEntry = {
       client,
+      clientId: host.deviceToken,
       state: client.getState(),
       refCount: state.pendingAcquisitions.get(hostId) ?? 0,
-      unsubState,
+      unsubState: () => {
+        unsubscribeState()
+        detachPushRegistration?.()
+        detachPushRegistration = null
+      },
       unsubConnectionPath
     }
     state.pendingAcquisitions.delete(hostId)
     state.store.set(hostId, entry)
+    syncPushRegistration(entry.state)
     settle()
     const priorFailureCount = state.retryScheduler.recordSuccess(hostId)
     if (priorFailureCount > 0) {

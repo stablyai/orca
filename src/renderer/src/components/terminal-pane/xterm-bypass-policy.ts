@@ -1,4 +1,5 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { isHangulJamoKeyText } from './hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 import {
   isTerminalImeCandidateDigitKeyEvent,
@@ -38,6 +39,10 @@ export type XtermBypassOptions = {
    *  Windows/Linux should only bubble to clipboard when something is selected,
    *  otherwise it must reach the shell as SIGINT. */
   hasSelection: boolean
+  /** True when the renderer runs inside iOS/iPadOS WebKit, where the system
+   *  composes CJK text by rewriting the field instead of running a composition
+   *  session. See `terminal-ios-hangul-preedit.ts`. */
+  isIosWeb?: boolean
 }
 
 export type XtermImeKeyboardOptions = {
@@ -92,6 +97,36 @@ function isSingleNonAsciiPrintableText(key: string): boolean {
 
 function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
+}
+
+/**
+ * Why: iOS/iPadOS composes CJK text by rewriting the field through
+ * `beforeinput`/`input`, with no composition session, and that only runs when
+ * the printable keydown reaches the default handler. xterm has to stay out of
+ * the way for those keys so `terminal-ios-hangul-preedit.ts` can read the
+ * resulting edits. `keypress` is included because `_keyPress` would otherwise
+ * send the glyph a second time alongside the preedit commit.
+ */
+export function shouldBypassXtermForIosTextEdit(
+  event: XtermBypassEvent,
+  isIosWeb: boolean
+): boolean {
+  if (!isIosWeb || event.ctrlKey || event.metaKey || event.altKey) {
+    return false
+  }
+  if (event.isComposing === true) {
+    // Why: input sources that do run a composition session stay with xterm's
+    // CompositionHelper, which already commits them correctly.
+    return false
+  }
+  if (!isXtermHandledKeyEvent(event.type) && event.type !== 'keypress') {
+    return false
+  }
+  // Why jamo and not every non-ASCII key: nothing downstream re-sends a key
+  // this claims. A Cyrillic or kana key would lose its keydown, its keypress,
+  // and then its `input` too — xterm drops a composed insert while a key is
+  // down — and reach the PTY as nothing at all.
+  return isHangulJamoKeyText(event.key)
 }
 
 /** Returns whether the Linux orphan-keyup window may claim this digit. */
@@ -256,6 +291,9 @@ export function shouldBypassXtermKeyboardEvent(
   event: XtermBypassEvent,
   options: XtermBypassOptions
 ): boolean {
+  if (shouldBypassXtermForIosTextEdit(event, options.isIosWeb === true)) {
+    return true
+  }
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }

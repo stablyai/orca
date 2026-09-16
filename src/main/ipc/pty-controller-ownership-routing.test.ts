@@ -12,6 +12,15 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import {
+  writeRefused,
+  writeUnverifiable,
+  type WriteSettlement
+} from '../../shared/pty-write-settlement'
+
+type SettledControllerDouble = {
+  writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+}
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -93,6 +102,61 @@ describe('registerPtyHandlers', () => {
 
     unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(ptyId)
+  })
+  it('routes settled pointer writes through the installed SSH controller and preserves uncertainty', async () => {
+    const connectionId = 'ssh-settled'
+    const ptyId = `ssh:${connectionId}@@remote-pty`
+    const provider = {
+      ...createAgentClaimProvider({}),
+      writeWithSettlement: vi
+        .fn()
+        .mockResolvedValue(writeUnverifiable('transport_settlement_lost', true))
+    }
+    registerSshPtyProvider(connectionId, provider as never)
+    setPtyOwnership(ptyId, connectionId)
+    const controller = registerAgentClaimController() as unknown as SettledControllerDouble
+    try {
+      expect(controller.writeWithSettlement).toBeTypeOf('function')
+      await expect(controller.writeWithSettlement(ptyId, 'pointer')).resolves.toEqual(
+        writeUnverifiable('transport_settlement_lost', true)
+      )
+      expect(provider.writeWithSettlement).toHaveBeenCalledWith(ptyId, 'pointer')
+      expect(provider.write).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      clearProviderPtyState(ptyId)
+    }
+  })
+
+  it('refuses a settled write before any bytes when the routed provider cannot settle', async () => {
+    const connectionId = 'ssh-unsettled'
+    const ptyId = `ssh:${connectionId}@@remote-pty`
+    const provider = createAgentClaimProvider({}) as Record<string, unknown>
+    // A provider predating the settled contract, reached through the production registry.
+    delete provider.writeWithSettlement
+    registerSshPtyProvider(connectionId, provider as never)
+    setPtyOwnership(ptyId, connectionId)
+    const controller = registerAgentClaimController() as unknown as SettledControllerDouble
+    try {
+      // Synchronous by construction: the refusal happens before any effect is attempted.
+      expect(await controller.writeWithSettlement(ptyId, 'pointer')).toEqual(
+        writeRefused('provider_cannot_settle')
+      )
+      expect(provider.write).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      clearProviderPtyState(ptyId)
+    }
+  })
+
+  it('preserves a provider write refusal for callers that gate follow-up input', () => {
+    const provider = createAgentClaimProvider({})
+    provider.write.mockReturnValue(false)
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController()
+
+    expect(controller.write('pty-refused', 'input')).toBe(false)
+    expect(provider.write).toHaveBeenCalledWith('pty-refused', 'input')
   })
   describe('controller probePtyLiveness routing', () => {
     it('proves absence for an id the in-process local provider never owned', async () => {
@@ -315,9 +379,11 @@ describe('registerPtyHandlers', () => {
     }
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     const runtime = {
       setPtyController: vi.fn(),

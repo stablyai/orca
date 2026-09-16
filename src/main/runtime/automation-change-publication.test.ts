@@ -177,4 +177,25 @@ describe('scoped automationsChanged publication', () => {
     )
     expect(published).toEqual([{ reason: 'definition', selector: { kind: 'self' } }])
   })
+
+  // Why: an unnameable destination is exactly when scoping is unsafe — a subscriber scoped
+  // elsewhere would never hear about the row it is still rendering. The publication has to
+  // degrade to one unscoped authority event rather than name only the stale source.
+  it('degrades to an unscoped event when the store cannot name the destination', async () => {
+    const { store, runtime, published } = await makeRuntime()
+    const selector = store.automationChangeSelector.bind(store)
+    let updated = false
+    vi.spyOn(store, 'automationChangeSelector').mockImplementation((id: string) =>
+      updated ? null : selector(id)
+    )
+    const update = runtime.updateAutomation(
+      'local-1',
+      { enabled: false },
+      { expectedOwner: { selector: { kind: 'self' } } }
+    )
+    updated = true
+    await update
+
+    expect(published).toEqual([{ reason: 'definition' }])
+  })
 })

@@ -2,12 +2,16 @@ export const LIVENESS_IDLE_MS = 20_000
 export const LIVENESS_PROBE_TIMEOUT_MS = 8_000
 export const MISSED_PROBE_LIMIT = 3
 
-export type RpcSessionIdentity = object
+declare const rpcSessionIdentityBrand: unique symbol
+
+/** Opaque per-session token; only ever compared by reference. */
+export type RpcSessionIdentity = object & { readonly [rpcSessionIdentityBrand]?: never }
 
 type WatchdogOptions = {
   transport: 'direct' | 'relay'
   sendProbe: (identity: RpcSessionIdentity) => boolean
   terminate: (identity: RpcSessionIdentity) => void
+  onTimeout?: (evidence: LivenessTimeoutEvidence) => void
   idleProbeMs?: number | null
   probeTimeoutMs?: number
   missedProbeLimit?: number
@@ -15,6 +19,14 @@ type WatchdogOptions = {
   now?: () => number
   setTimer?: typeof setTimeout
   clearTimer?: typeof clearTimeout
+}
+
+export type LivenessTimeoutEvidence = {
+  transport: 'direct' | 'relay'
+  reason: 'probe-send-failed' | 'probe-timeout'
+  missedProbes: number
+  missedProbeLimit: number
+  lastInboundAgeMs: number
 }
 
 export class RpcSessionLivenessWatchdog {
@@ -138,7 +150,7 @@ export class RpcSessionLivenessWatchdog {
       sent = false
     }
     if (!sent) {
-      this.terminateCurrent(identity)
+      this.terminateCurrent(identity, 'probe-send-failed')
       return
     }
     this.timer = this.setTimer(() => this.handleProbeTimeout(identity, sentAt), this.probeTimeoutMs)
@@ -161,7 +173,7 @@ export class RpcSessionLivenessWatchdog {
     }
     this.missedProbes += 1
     if (this.missedProbes >= this.missedProbeLimit) {
-      this.terminateCurrent(identity)
+      this.terminateCurrent(identity, 'probe-timeout')
       return
     }
     console.log('[net] activity-probe timeout tolerated', {
@@ -172,7 +184,10 @@ export class RpcSessionLivenessWatchdog {
     this.startProbe(identity)
   }
 
-  private terminateCurrent(identity: RpcSessionIdentity): void {
+  private terminateCurrent(
+    identity: RpcSessionIdentity,
+    reason: LivenessTimeoutEvidence['reason']
+  ): void {
     if (this.identity !== identity) {
       return
     }
@@ -183,6 +198,13 @@ export class RpcSessionLivenessWatchdog {
       transport: this.options.transport,
       missedProbes: this.missedProbes,
       missedProbeLimit: this.missedProbeLimit
+    })
+    this.options.onTimeout?.({
+      transport: this.options.transport,
+      reason,
+      missedProbes: this.missedProbes,
+      missedProbeLimit: this.missedProbeLimit,
+      lastInboundAgeMs: Math.max(0, this.now() - this.lastInboundAt)
     })
     this.options.terminate(identity)
   }

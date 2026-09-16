@@ -1,12 +1,8 @@
+export { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import type { TuiAgent } from '../../shared/tui-agent'
 
-export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 5_000
-// Why: these panes prove a turn start only through the out-of-process hook — kimi has no synthetic
-// title profile and codex suppresses the hook-driven working frame (synthesizeWorkingTitle: false),
-// so the first proof lags Enter by agent startup, not by one TUI repaint. Capped so the worst case
-// (8s render gate + this wait + chunked paste) still fits RELAY_TO_CLIENT_REQUEST_TIMEOUT_MS
-// (30s, src/relay/dispatcher.ts), the budget a paired client's submission runs under.
-export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = 15_000
+export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
 
 const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
@@ -26,17 +22,39 @@ export type AgentPromptActivity = Readonly<{
   status: 'working' | 'permission' | 'idle' | null
 }>
 
+export type AgentPromptWaitTextCache = {
+  outputSequence?: number
+  waitText?: string
+}
+
+export type AgentPromptTurnStartEvidence =
+  | { kind: 'lifecycle'; workingSequence: number }
+  | { kind: 'hook'; workingStartedAt: number }
+
 type AgentPromptVerificationOptions = {
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
-  timeoutMs?: number
+  /** Accept only a turn start reserved for this request. */
+  acceptTurnStart?: (evidence: AgentPromptTurnStartEvidence) => boolean
+  /** Hook evidence is valid only when the baseline was captured before this request's Enter. */
+  allowHookEvidence?: boolean
+  /** Existing-turn output proves legacy delivery, but not a durable new-turn receipt. */
+  allowOutputEvidence?: boolean
   signal?: AbortSignal
+  timeoutMs?: number
 }
 
 export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undefined): number {
   return agent && HOOK_OBSERVED_TURN_START_AGENTS.has(agent)
     ? AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
     : AGENT_PROMPT_EFFECT_TIMEOUT_MS
+}
+
+/** Only these providers expose a turn-start signal Orca can settle a prompt receipt against. */
+export function isTerminalSendSettlementAgent(
+  agent: TuiAgent | null | undefined
+): agent is 'claude' | 'codex' {
+  return agent === 'claude' || agent === 'codex'
 }
 
 export function isAgentPromptStalledError(error: unknown): boolean {
@@ -51,6 +69,20 @@ export function isAgentPromptStalledError(error: unknown): boolean {
   )
 }
 
+export function readAgentPromptWaitText(
+  cache: AgentPromptWaitTextCache,
+  outputSequence: number,
+  readWaitText: () => string
+): string {
+  if (cache.outputSequence === outputSequence && cache.waitText !== undefined) {
+    return cache.waitText
+  }
+  const waitText = readWaitText()
+  cache.outputSequence = outputSequence
+  cache.waitText = waitText
+  return waitText
+}
+
 export async function verifyAgentPromptSubmission(
   options: AgentPromptVerificationOptions
 ): Promise<void> {
@@ -62,7 +94,15 @@ export async function verifyAgentPromptSubmission(
     const current = options.readActivity()
     assertSamePromptGeneration(options.baseline, current)
     assertPromptNotBlocked(options.baseline, current)
-    if (agentPromptEffectObserved(options.baseline, current)) {
+    if (
+      agentPromptEffectAccepted(
+        options.baseline,
+        current,
+        options.acceptTurnStart,
+        options.allowHookEvidence,
+        options.allowOutputEvidence
+      )
+    ) {
       return
     }
     await waitForAgentPromptPoll(options.signal)
@@ -71,21 +111,44 @@ export async function verifyAgentPromptSubmission(
   const current = options.readActivity()
   assertSamePromptGeneration(options.baseline, current)
   assertPromptNotBlocked(options.baseline, current)
-  if (agentPromptEffectObserved(options.baseline, current)) {
+  if (
+    agentPromptEffectAccepted(
+      options.baseline,
+      current,
+      options.acceptTurnStart,
+      options.allowHookEvidence,
+      options.allowOutputEvidence
+    )
+  ) {
     return
   }
   throw new Error(AGENT_PROMPT_STALLED_ERROR)
 }
 
-function agentPromptEffectObserved(
+function agentPromptEffectAccepted(
   baseline: AgentPromptActivity,
-  current: AgentPromptActivity
+  current: AgentPromptActivity,
+  acceptTurnStart?: (evidence: AgentPromptTurnStartEvidence) => boolean,
+  allowHookEvidence = true,
+  allowOutputEvidence = true
 ): boolean {
-  return (
-    current.workingSequence > baseline.workingSequence ||
-    observedHookWorkingAfterBaseline(baseline, current) ||
-    observedDeliveryEvidence(baseline, current)
-  )
+  if (current.workingSequence > baseline.workingSequence) {
+    return (
+      acceptTurnStart?.({
+        kind: 'lifecycle',
+        workingSequence: current.workingSequence
+      }) ?? true
+    )
+  }
+  if (allowHookEvidence && observedHookWorkingAfterBaseline(baseline, current)) {
+    return (
+      acceptTurnStart?.({
+        kind: 'hook',
+        workingStartedAt: current.explicitWorkingStartedAt!
+      }) ?? true
+    )
+  }
+  return allowOutputEvidence && observedDeliveryEvidence(baseline, current)
 }
 
 // Why: hook status reaches the runtime directly, so it survives a hidden window and headless serve —

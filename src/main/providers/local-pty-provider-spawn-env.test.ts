@@ -191,6 +191,22 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('re-reads buildSpawnEnv after a reentrant configuration change', async () => {
+      const initialBuildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      const configuredBuildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      provider.configure({
+        get buildSpawnEnv() {
+          provider.configure({ buildSpawnEnv: configuredBuildSpawnEnv })
+          return initialBuildSpawnEnv
+        }
+      })
+
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      expect(initialBuildSpawnEnv).not.toHaveBeenCalled()
+      expect(configuredBuildSpawnEnv).toHaveBeenCalledOnce()
+    })
+
     it.each([
       // fish EXPORTS fish_history, so an Orca launched from a fish pane hands every
       // pane the LAUNCHING worktree's session — even with isolation off (STA-4682).

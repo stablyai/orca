@@ -1,6 +1,7 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import { runProcess } from '../../shared/child-process/run-process'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
 import { resolveWslExecutablePath } from './wsl-executable-path'
@@ -239,6 +240,10 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, argv),
+    // Name a Windows directory rather than inheriting one: an inherited cwd that
+    // is later deleted (the worktree Orca launched from) fails every later spawn
+    // (#16463). Never the guest cwd -- withGuestCwd still cds inside.
+    cwd: resolveWslInteropSpawnCwd(),
     env: buildHostEnv(spec.env),
     input: delivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,

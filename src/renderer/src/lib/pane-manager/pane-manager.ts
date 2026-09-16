@@ -1,13 +1,11 @@
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone,
-  PaneExternalDropHandler,
-  PaneExternalDropResolver,
-  PaneExternalDropTarget
+  DropZone
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
@@ -68,7 +66,7 @@ export type {
   PaneExternalDropTarget,
   PaneExternalDropResolver,
   PaneExternalDropHandler
-}
+} from './pane-manager-types'
 
 export class PaneManager {
   private root: HTMLElement
@@ -120,7 +118,7 @@ export class PaneManager {
       }
     }
     // Why: atlas recovery must reach every live manager — see
-    // resetAllTerminalWebglAtlases for the shared-atlas rationale.
+    // resetAndRefreshAllTerminalWebglAtlases for the shared-atlas rationale.
     registerLivePaneManager(this)
   }
 
@@ -131,7 +129,7 @@ export class PaneManager {
   splitPane(
     paneId: number,
     direction: 'vertical' | 'horizontal',
-    opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+    opts?: Parameters<typeof splitPaneOnManager>[3]
   ): ManagedPane | null {
     return splitPaneOnManager(this.host, paneId, direction, opts)
   }
@@ -235,7 +233,7 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
     if (opts?.focus !== false) {
-      pane.terminal.focus()
+      focusPanePreservingOverlays(pane)
     }
 
     if (changed) {
@@ -299,23 +297,26 @@ export class PaneManager {
   }
 
   scheduleRevealRepaint(): void {
-    // Why: the settled-frame callback can fire after destroy(); repainting
-    // disposed panes could throw in attach and latch the global WebGL
-    // attach backoff, downgrading unrelated new panes to the DOM renderer.
-    schedulePaneRevealRepaint(() => (this.destroyed ? [] : this.panes.values()))
+    // Why: the settled-frame callback can fire after hide/destroy; repainting
+    // hidden or disposed panes can revive WebGL contexts and latch attach
+    // backoff, downgrading unrelated new panes to the DOM renderer.
+    schedulePaneRevealRepaint(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
   }
 
   scheduleRevealPresent(): void {
-    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases.
-    schedulePaneRevealPresent(() => (this.destroyed ? [] : this.panes.values()))
+    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases;
+    // skip the delayed present if the surface was hidden again meanwhile.
+    schedulePaneRevealPresent(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
   }
 
   suspendRendering(): void {
     this.renderingSuspended = true
-    suspendPaneRendering(this.panes.values(), {
-      owner: this,
-      livePanes: () => (this.destroyed ? [] : this.panes.values())
-    })
+    suspendPaneRendering(
+      this.panes.values(),
+      this.options.retainHiddenWebgl === false
+        ? undefined
+        : { owner: this, livePanes: () => (this.destroyed ? [] : this.panes.values()) }
+    )
   }
 
   resumeRendering(): void {

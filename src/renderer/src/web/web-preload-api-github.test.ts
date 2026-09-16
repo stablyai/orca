@@ -44,6 +44,7 @@ describe('web GitHub preload API', () => {
         'listLabelsBySlug',
         'listProjectViews',
         'listWorkItems',
+        'markPRReadyForReview',
         'mergePR',
         'notifyWorkItemMutated',
         'onPRRefreshEvent',
@@ -468,7 +469,9 @@ describe('web GitHub preload API', () => {
     ]
 
     expect(routeCases.map((routeCase) => routeCase.key).sort()).toEqual(
-      Object.keys(GITHUB_WEB_RPC_METHODS).sort()
+      Object.keys(GITHUB_WEB_RPC_METHODS)
+        .filter((key) => key !== 'markPRReadyForReview')
+        .sort()
     )
 
     for (const routeCase of routeCases) {
@@ -509,5 +512,75 @@ describe('web GitHub preload API', () => {
         }
       }
     ])
+  })
+
+  it('gates marking a PR ready on the paired host capability', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result:
+              method === 'status.get'
+                ? { capabilities: ['github.markPRReadyForReview'] }
+                : { ok: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.gh.markPRReadyForReview({ repoPath: '/workspace/repo', prNumber: 7 })
+    ).resolves.toEqual({ ok: true })
+    expect(runtimeCalls).toEqual([
+      { method: 'status.get', params: undefined },
+      {
+        method: 'github.markPRReadyForReview',
+        params: { repoPath: '/workspace/repo', repo: '/workspace/repo', prNumber: 7 }
+      }
+    ])
+  })
+
+  it('does not call the ready RPC on an older paired host', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { capabilities: [] },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = await globals.window.api.gh.markPRReadyForReview({
+      repoPath: '/workspace/repo',
+      prNumber: 7
+    })
+
+    expect(result).toMatchObject({ ok: false })
+    expect(runtimeCalls).toEqual([{ method: 'status.get', params: undefined }])
   })
 })

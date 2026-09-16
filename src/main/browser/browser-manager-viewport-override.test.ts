@@ -849,8 +849,7 @@ describe('browserManager', () => {
 
       expect(debuggerAttach).toHaveBeenCalledWith('1.3')
       expect(debuggerSendCommand).toHaveBeenCalled()
-      // Why: detaching would clear Page.addScriptToEvaluateOnNewDocument
-      // (anti-detection). Guard regression.
+      // Why: detaching would clear every standing CDP override (viewport, auth UA). Guard regression.
       expect((guest.debugger as { detach?: unknown }).detach ?? undefined).toBeUndefined()
     })
 
@@ -881,35 +880,6 @@ describe('browserManager', () => {
       expect(ok).toBe(false)
       expect(debuggerAttach).toHaveBeenCalledWith('1.3')
       expect(debuggerSendCommand).not.toHaveBeenCalled()
-    })
-
-    it('installs annotation viewport bridge in an isolated world', async () => {
-      const { guest } = makeGuest(4646)
-      webContentsFromIdMock.mockReturnValue(guest)
-      browserManager.attachGuestPolicies(guest as never)
-      browserManager.registerGuest({
-        browserPageId: 'tab-annotations',
-        webContentsId: guest.id as number,
-        rendererWebContentsId
-      })
-
-      const ok = await browserManager.setAnnotationViewportBridge('tab-annotations', {
-        emitViewport: false,
-        enabled: true,
-        markers: [],
-        token: 'annotationviewporttoken'
-      })
-
-      expect(ok).toBe(true)
-      expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledWith(
-        expect.any(Number),
-        [
-          expect.objectContaining({
-            code: expect.stringContaining('__orcaBrowserAnnotationViewportBridge')
-          })
-        ],
-        false
-      )
     })
   })
 })

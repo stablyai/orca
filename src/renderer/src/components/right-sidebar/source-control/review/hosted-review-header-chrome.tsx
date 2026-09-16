@@ -43,7 +43,7 @@ export function HostedReviewIcon({
 }): React.JSX.Element {
   const providerIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = hostedReviewStateIcon(review) ?? providerIcon
-  return <Icon className={cn(className, hostedReviewStateClass(review))} />
+  return React.createElement(Icon, { className: cn(className, hostedReviewStateClass(review)) })
 }
 
 function hostedReviewLabel(review: HostedReviewInfo): string {

@@ -85,7 +85,9 @@ describe('daemon kill attribution', () => {
     expect(killLog.log).toHaveBeenCalledWith('session-kill-failed', {
       sessionId: 'agent-session',
       immediate: true,
-      clientId: 'control-42'
+      clientId: 'control-42',
+      errorName: 'Error',
+      error: 'kill refused'
     })
     expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
   })

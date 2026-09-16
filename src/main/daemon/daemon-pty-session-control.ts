@@ -1,21 +1,20 @@
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
+import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
-import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
-import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequence'
+import { DaemonPtySessionInput } from './daemon-pty-session-input'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
-import { SessionNotFoundError, type CreateOrAttachResult, type ListSessionsResult } from './types'
+import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/types'
-import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
 
-export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
+export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
@@ -25,31 +24,23 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
     // Why size-first: attach must ride the session's own geometry — a fixed
     // 80×24 here could resize a live agent's TUI — and a null size means the
     // daemon cannot prove the session, so refuse rather than risk a create.
-    const size = await this.getAppliedSize(id)
+    // Keep transport failures distinct from an answered "absent". Mapping a
+    // dropped SSH/daemon connection to SessionNotFound would authorize a
+    // duplicate shell or retire a live persisted owner.
+    const size = await this.readAppliedSize(id, 'preserve')
     if (!size) {
       throw new SessionNotFoundError(id)
     }
-    const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
+    const result = await this.spawn({
       sessionId: id,
       cols: size.cols,
       rows: size.rows,
       attachOnly: true
     })
-    if (result.isNew) {
-      // Why: a pre-v31 daemon ignores attachOnly; retire its accidental spawn
-      // instead of publishing a fresh shell as an attach.
-      await this.client.request('kill', { sessionId: id, immediate: true }).catch((error) => {
-        // Why surface, not swallow: a failed retire leaves an untracked orphan shell.
-        console.warn('[daemon] attach-only retire of accidental legacy spawn failed', {
-          sessionId: id,
-          error
-        })
-      })
+    if (result.exitedBeforeSpawnReply) {
       throw new SessionNotFoundError(id)
     }
-    this.clearSessionAwaitingDaemonRecovery(id)
-    const providerSequence = providerSequenceFromCreateOrAttach(result)
-    return providerSequence ? { providerSequence } : undefined
+    return result.providerSequence ? { providerSequence: result.providerSequence } : undefined
   }
 
   hasPty(id: string): boolean {
@@ -92,90 +83,6 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
     } catch {
       return null
     }
-  }
-
-  write(id: string, data: string): boolean {
-    const recoverable = this.prepareWrite(id)
-    return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
-  }
-
-  async writeWithSettlement(id: string, data: string): Promise<boolean> {
-    const recoverable = this.prepareWrite(id)
-    return this.finishWrite(
-      id,
-      await this.client.notifyWithSettlement('write', { sessionId: id, data }),
-      recoverable
-    )
-  }
-
-  protected prepareWrite(id: string): boolean {
-    this.markSessionDirty(id)
-    // Why recoverable and not just active: rejecting a write asks the pane to remount,
-    // which only helps if this endpoint can come back. A legacy adapter has no respawn,
-    // so its reattach fails and the pane rebuilds empty — losing scrollback the user
-    // could still read. Keep the pre-existing silent drop for those.
-    const recoverable =
-      this.activeSessionIds.has(id) && !this.respawnAdoptionClosed && Boolean(this.respawnFn)
-    if (
-      recoverable &&
-      (this.sessionsAwaitingDaemonRecovery.has(id) || !this.client.isConnected())
-    ) {
-      this.sessionsAwaitingDaemonRecovery.add(id)
-      this.reconnectAfterWriteFailure()
-      throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
-    }
-    return recoverable
-  }
-
-  protected finishWrite(id: string, delivered: boolean, recoverable: boolean): boolean {
-    if (!delivered && recoverable) {
-      this.sessionsAwaitingDaemonRecovery.add(id)
-      this.reconnectAfterWriteFailure()
-      throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
-    }
-    return delivered
-  }
-
-  resize(id: string, cols: number, rows: number): void {
-    this.markSessionDirty(id)
-    this.client.notify('resize', { sessionId: id, cols, rows })
-  }
-
-  pauseProducer(id: string): void {
-    if (!this.supportsProducerFlowControl) {
-      return
-    }
-    this.pausedProducerSessionIds.add(id)
-    this.client.notify('pausePty', { sessionId: id })
-  }
-
-  resumeProducer(id: string): void {
-    this.producerResumesOwedOnReconnect.delete(id)
-    if (!this.supportsProducerFlowControl) {
-      return
-    }
-    this.pausedProducerSessionIds.delete(id)
-    this.client.notify('resumePty', { sessionId: id })
-  }
-
-  // Why fire-and-forget (like pausePty): just a delivery hint for the daemon's keep-tail stream thinning.
-  setPtyBackgrounded(id: string, background: boolean): void {
-    if (!this.supportsProducerFlowControl) {
-      return
-    }
-    // Why: preserved daemons without a sequence-safe, faithful serializer cannot heal a thinned stream.
-    // Why also gate on 2031 (#9993): backgrounding is what hands transient-fact scan
-    // authority to the daemon. A pre-v29 daemon can announce a 2031 subscribe but never
-    // retract it, so a TUI exiting while hidden would strand the subscription and the
-    // next theme flip would inject CSI 997 into its replacement shell. Declining to
-    // background keeps main's scanner — which emits both facts — authoritative.
-    const safeBackground = this.canDelegateBackgroundToDaemon && background
-    if (safeBackground) {
-      this.backgroundedSessionIds.add(id)
-    } else {
-      this.backgroundedSessionIds.delete(id)
-    }
-    this.client.notify('setSessionBackground', { sessionId: id, background: safeBackground })
   }
 
   async shutdown(
@@ -344,14 +251,22 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
 
   // Why: resize() is fire-and-forget and can be dropped daemon-side; read the actually-applied size so the renderer can detect drift and re-assert.
   async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
-    try {
-      const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
-        'getSize',
-        { sessionId: id }
-      )
-      return result.size ?? null
-    } catch {
-      return null
-    }
+    return await this.readAppliedSize(id, 'suppress')
+  }
+
+  private async readAppliedSize(
+    id: string,
+    failureMode: 'preserve' | 'suppress'
+  ): Promise<DaemonAppliedPtySize | null> {
+    return await readDaemonAppliedPtySize({
+      client: this.client,
+      protocolVersion: this.protocolVersion,
+      sessionId: id,
+      failureMode,
+      getSizeUnsupported: this.getSizeUnsupported,
+      markGetSizeUnsupported: () => {
+        this.getSizeUnsupported = true
+      }
+    })
   }
 }

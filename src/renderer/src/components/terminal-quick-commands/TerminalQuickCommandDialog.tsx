@@ -22,6 +22,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isSelectAllShortcut } from '@/lib/editable-target'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
@@ -75,7 +76,10 @@ export function TerminalQuickCommandDialog({
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
   const wasOpenRef = useRef(open)
   const syncedCommandRef = useRef(command)
-  const draftMemoryRef = useRef(createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent))
+  const draftMemoryRef = useRef<ReturnType<typeof createTerminalQuickCommandDialogDraftMemory>>(
+    undefined!
+  )
+  draftMemoryRef.current ??= createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent)
   const initialScope = getTerminalQuickCommandScope(command)
   const lastRepoScopeIdRef = useRef<string | null>(
     initialScope.type === 'repo' ? initialScope.repoId : null
@@ -196,6 +200,16 @@ export function TerminalQuickCommandDialog({
         <div
           className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
           onKeyDown={(event) => {
+            if (
+              isSelectAllShortcut(event) &&
+              (event.target instanceof HTMLInputElement ||
+                event.target instanceof HTMLTextAreaElement)
+            ) {
+              event.preventDefault()
+              event.stopPropagation()
+              event.target.select()
+              return
+            }
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
               saveDraft()

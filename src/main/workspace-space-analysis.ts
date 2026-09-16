@@ -14,6 +14,7 @@ import {
 } from './workspace-space-scan-control'
 import {
   scanWorkspaceSpaceRepo,
+  summarizeWorkspaceSpaceRows,
   type WorkspaceSpaceAnalyzeOptions,
   type WorkspaceSpaceScanLimiters
 } from './workspace-space-repo-scan'
@@ -152,15 +153,20 @@ export async function analyzeWorkspaceSpace(
     .flatMap((result) => result.worktrees)
     .sort((a, b) => b.sizeBytes - a.sizeBytes || a.displayName.localeCompare(b.displayName))
   throwIfWorkspaceSpaceScanAborted(options.signal)
+  const summary = summarizeWorkspaceSpaceRows(worktrees)
+  let unavailableRepoCount = 0
+  for (const repo of repos) {
+    if (repo.error !== null) {
+      unavailableRepoCount += 1
+    }
+  }
   return {
     scannedAt,
-    totalSizeBytes: worktrees.reduce((sum, row) => sum + row.sizeBytes, 0),
-    reclaimableBytes: worktrees.reduce((sum, row) => sum + row.reclaimableBytes, 0),
+    totalSizeBytes: summary.totalSizeBytes,
+    reclaimableBytes: summary.reclaimableBytes,
     worktreeCount: worktrees.length,
-    scannedWorktreeCount: worktrees.filter((row) => row.status === 'ok').length,
-    unavailableWorktreeCount:
-      worktrees.filter((row) => row.status !== 'ok').length +
-      repos.filter((repo) => repo.error !== null).length,
+    scannedWorktreeCount: summary.scannedWorktreeCount,
+    unavailableWorktreeCount: summary.unavailableWorktreeCount + unavailableRepoCount,
     repos,
     worktrees
   }

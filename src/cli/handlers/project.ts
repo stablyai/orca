@@ -10,7 +10,7 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
 import type { RepoKind } from '../../shared/repo-types'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
@@ -111,10 +111,14 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   },
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
     const rawPath = getRequiredStringFlag(flags, 'path')
+    const hostId = getRequiredHostId(flags)
+    // An SSH host's filesystem is not the CLI's, so resolving a relative path against the client
+    // cwd would register a path that names the wrong machine.
+    const pathIsOffClient = client.isRemote || getSshTargetIdForExecutionHost(hostId) !== null
     const args: ProjectHostSetupExistingFolderArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredHostId(flags),
-      path: resolveRepoPathArgument(rawPath, cwd, client.isRemote, 'Remote project setup'),
+      hostId,
+      path: resolveRepoPathArgument(rawPath, cwd, pathIsOffClient, 'Remote project setup'),
       kind: getOptionalRepoKind(flags),
       displayName: getOptionalStringFlag(flags, 'display-name')
     }

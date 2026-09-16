@@ -31,13 +31,21 @@ function capabilitySignature(capabilities: WindowsTerminalCapabilities): string 
     capabilities.wslDistros.join('\u0000'),
     capabilities.pwshAvailable,
     capabilities.gitBashAvailable,
-    capabilities.hostPlatform ?? ''
+    capabilities.hostPlatform ?? '',
+    capabilities.windowsProcessStartTimeAvailable
   ].join('|')
 }
 
-/** The answer #11295 waits for: a usable WSL. Nothing further to watch for. */
+/** A usable WSL is settled only after Windows hosts also prove PID identity. */
 function isSettled(capabilities: WindowsTerminalCapabilities): boolean {
-  return capabilities.wslAvailable && capabilities.wslDistros.length > 0
+  if (!capabilities.wslAvailable || capabilities.wslDistros.length === 0) {
+    return false
+  }
+  if (capabilities.hostPlatform === 'win32') {
+    return capabilities.windowsProcessStartTimeAvailable === true
+  }
+  // A missing platform means the status probe may have failed; keep checking until it recovers.
+  return capabilities.hostPlatform !== null
 }
 
 function clearRunnerTimer(runner: CapabilityReprobeRunner): void {

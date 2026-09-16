@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from '../checks-entry-refresh'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { toast } from 'sonner'
 
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'

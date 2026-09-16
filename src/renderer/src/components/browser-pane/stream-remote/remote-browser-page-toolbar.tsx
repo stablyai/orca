@@ -3,7 +3,9 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { BrowserNavigationControlRow } from '../assemble-chrome/browser-navigation-control-row'
+import BrowserAddressBar from '../assemble-chrome/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/use-browser-address-bar-edit-session'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-indicator'
 import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
@@ -14,6 +16,7 @@ export function RemoteBrowserPageToolbar({
   onAddressBarChange,
   onSubmitAddressBar,
   onNavigateToUrl,
+  onOpenWorkspaceDoc,
   addressBarInputRef,
   addressBarEditSession,
   busy,
@@ -30,6 +33,8 @@ export function RemoteBrowserPageToolbar({
   onAddressBarChange: (value: string) => void
   onSubmitAddressBar: () => void
   onNavigateToUrl: (url: string) => void
+  /** A previewed-document suggestion opens on a fresh grant instead of navigating the remote guest. */
+  onOpenWorkspaceDoc: (docLocation: BrowserPageDocLocation) => void
   addressBarInputRef: React.RefObject<HTMLInputElement | null>
   addressBarEditSession: BrowserAddressBarEditSessionBinding
   busy: boolean
@@ -54,15 +59,21 @@ export function RemoteBrowserPageToolbar({
         reload: onReload,
         navigate: onNavigateToUrl
       }}
-      addressBarValue={addressBarValue}
-      onAddressBarChange={onAddressBarChange}
-      onSubmitAddressBar={onSubmitAddressBar}
-      addressBarInputRef={addressBarInputRef}
-      addressBarEditSession={addressBarEditSession}
-      addressBarLeadingIcon={
-        <RemoteRuntimeEgressIndicator
-          runtimeEnvironmentId={runtimeEnvironmentId}
-          presentation="streamed"
+      addressSlot={
+        <BrowserAddressBar
+          value={addressBarValue}
+          onChange={onAddressBarChange}
+          onSubmit={onSubmitAddressBar}
+          onNavigate={onNavigateToUrl}
+          onOpenWorkspaceDoc={onOpenWorkspaceDoc}
+          inputRef={addressBarInputRef}
+          editSession={addressBarEditSession}
+          leadingIcon={
+            <RemoteRuntimeEgressIndicator
+              runtimeEnvironmentId={runtimeEnvironmentId}
+              presentation="streamed"
+            />
+          }
         />
       }
       reloadControl={

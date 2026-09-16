@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
-import { WindowsShellPathOwnership, windowsPathSegmentKey } from './windows-shell-path-ownership'
+import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 
 // Why: GUI-launched Electron can miss PATH entries added by shell profiles.
 // Tools installed into ~/.opencode/bin, ~/.cargo/bin, pyenv/volta/fnm
@@ -80,7 +80,7 @@ export function _resetHydrateShellPathCache(): void {
   windowsPathOwnership.reset()
 }
 
-function pickShell(): string | null {
+export function resolveProfileLoadingShell(): string | null {
   if (process.platform === 'win32') {
     const family = resolveWindowsShellStartupFamily(configuredWindowsShell)
     if (family === 'cmd') {
@@ -93,11 +93,11 @@ function pickShell(): string | null {
     return basename === 'powershell.exe' || basename === 'pwsh.exe' ? configuredWindowsShell : null
   }
   const shell = process.env.SHELL
-  if (shell && shell.length > 0) {
-    return shell
-  }
-  return process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
+  return shell?.length ? shell : process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
 }
+
+export const resolveProfileLoadingFallbackShell = (): string | null =>
+  configuredWindowsFallbackShell
 
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
   const cleaned = stdout.replace(ANSI_RE, '')
@@ -289,7 +289,8 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
   }
   const platform = process.platform
   const configurationVersion = windowsShellConfigurationVersion
-  const shell = options.shellOverride !== undefined ? options.shellOverride : pickShell()
+  const shell =
+    options.shellOverride !== undefined ? options.shellOverride : resolveProfileLoadingShell()
   if (!shell) {
     cached = Promise.resolve({ segments: [], ok: false, failureReason: 'no_shell' })
     return cached
@@ -373,7 +374,7 @@ export function mergePathSegments(segments: string[]): string[] {
   const pathDelimiter = process.platform === 'win32' ? pathWin32.delimiter : delimiter
   const currentSegments = current.split(pathDelimiter).filter(Boolean)
   const pathKey =
-    process.platform === 'win32' ? windowsPathSegmentKey : (segment: string): string => segment
+    process.platform === 'win32' ? createWindowsPathKey() : (segment: string): string => segment
   const shellSegments = uniquePathSegments(segments, pathKey)
   const shellSegmentSet = new Set(shellSegments.map(pathKey))
   const existing = new Set(currentSegments.map(pathKey))

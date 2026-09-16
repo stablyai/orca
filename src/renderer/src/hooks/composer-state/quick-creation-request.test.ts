@@ -29,6 +29,7 @@ function createInput(
     linkedLinearIssueWorkspaceId: undefined,
     linkedLinearIssueOrganizationUrlKey: undefined,
     branchNameOverride: undefined,
+    parentWorktreeId: null,
     workspaceStatus: undefined,
     linkedGitLabMR: null,
     linkedGitLabIssue: null,
@@ -40,6 +41,7 @@ function createInput(
     startupPlan: null,
     quickPrompt: '',
     launchDraftPrompt: '',
+    promptDelivery: 'auto-submit',
     quickTelemetry: null,
     suppressTerminalFocusOnCompletion: false,
     ...overrides
@@ -62,6 +64,7 @@ describe('quick composer creation request', () => {
       note: '',
       startupPlan: null,
       quickPrompt: '',
+      promptDelivery: 'auto-submit',
       quickTelemetry: null
     })
     expect(request).not.toHaveProperty('baseBranch')
@@ -87,10 +90,12 @@ describe('quick composer creation request', () => {
         linkedLinearIssueWorkspaceId: 'workspace-1',
         linkedLinearIssueOrganizationUrlKey: 'orca',
         branchNameOverride: 'feature',
+        parentWorktreeId: 'repo-1::/worktrees/parent',
         workspaceStatus: 'in-progress',
         linkedGitLabMR: 9,
         linkedGitLabIssue: 8,
         launchDraftPrompt: 'draft',
+        promptDelivery: 'draft',
         suppressTerminalFocusOnCompletion: true
       })
     )
@@ -107,7 +112,9 @@ describe('quick composer creation request', () => {
       linkedGitLabMR: 9,
       linkedGitLabIssue: 8,
       branchNameOverride: 'feature',
+      parentWorktreeId: 'repo-1::/worktrees/parent',
       launchDraftPrompt: 'draft',
+      promptDelivery: 'draft',
       suppressTerminalFocusOnCompletion: true
     })
   })

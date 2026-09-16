@@ -60,6 +60,22 @@ It never edits target catalogs: missing values remain absent and use the existin
 runtime English fallback. Existing placeholder mismatches fail validation until
 a localization PR fixes or retires the target entry.
 
+Regenerate the runtime-required English subset after changing `en.json` or an
+inline default:
+
+```sh
+pnpm run sync:localization-runtime-catalog
+```
+
+`src/renderer/src/i18n/en-runtime-required.json` is the only English catalog the
+renderer bundles. Because `translate(key, fallback)` always supplies a default
+and `en` resolves that default when the key is absent, it holds just the entries
+a default cannot reproduce: plural-suffixed keys, keys whose value differs from
+the inline default, and keys no call site references with a literal default
+(dynamic keys and dynamic defaults). `en.json` remains the translator source and
+the input to the four lazy target catalogs.
+`pnpm run verify:localization-runtime-catalog` fails when the subset is stale.
+
 Run maintained source extraction without committing a second English catalog:
 
 ```sh

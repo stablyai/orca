@@ -60,6 +60,7 @@ describe('extracted orchestration worker formatting', () => {
     expect(
       formatWorkerRead({
         source: 'transcript',
+        provider: 'codex',
         transcript: {
           messages: [
             {
@@ -74,11 +75,20 @@ describe('extracted orchestration worker formatting', () => {
               timestamp: null,
               source: 'transcript'
             }
-          ]
-        }
+          ],
+          nextCursor: 'owr1_next',
+          limited: false,
+          returnedMessageCount: 1
+        },
+        cursor: 'owr1_next',
+        fallbackReason: null,
+        warnings: []
       } as never)
     ).toBe(
-      '[assistant] working\n[tool inspect] [unserializable input]\n[tool result error] failed\n[image] https://example.test/proof.png'
+      'Source: transcript (provider=codex)\n' +
+        'Archived: false\n' +
+        'Continuation cursor (opaque; pass unchanged to --cursor): owr1_next\n\n' +
+        '[assistant] working\n[tool inspect] [unserializable input]\n[tool result error] failed\n[image] https://example.test/proof.png'
     )
   })
 

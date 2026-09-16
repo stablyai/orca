@@ -141,7 +141,7 @@ describe('registerPtyHandlers', () => {
     type SerializeController = {
       serializeBuffer: (
         ptyId: string,
-        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+        opts?: { scrollbackRows?: number }
       ) => Promise<{ data: string; cols: number; rows: number; lastTitle?: string } | null>
     }
 

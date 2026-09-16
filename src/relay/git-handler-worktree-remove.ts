@@ -1,34 +1,12 @@
 import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
+import { isBranchCheckedOutInWorktreeError } from '../shared/git-branch-delete-refusal'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
 import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree/submodule-removal'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import { readRelayWorktreeList } from './git-handler-worktree-list'
-
-function getErrorText(error: unknown): string {
-  if (typeof error === 'object' && error !== null) {
-    const parts: string[] = []
-    if ('message' in error && typeof error.message === 'string') {
-      parts.push(error.message)
-    }
-    if ('stderr' in error && typeof error.stderr === 'string') {
-      parts.push(error.stderr)
-    }
-    if ('stdout' in error && typeof error.stdout === 'string') {
-      parts.push(error.stdout)
-    }
-    return parts.join('\n')
-  }
-  return String(error)
-}
-
-function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
-  return /cannot delete branch .*(?:used by worktree|checked out)|branch .*is checked out/i.test(
-    getErrorText(error)
-  )
-}
 
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')

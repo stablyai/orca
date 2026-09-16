@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
+import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -276,11 +277,12 @@ async function runFixture(): Promise<FixtureResult> {
 
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [mainPath, `--user-data-dir=${join(root, 'profile')}`]
-  const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
-  const args =
-    process.platform === 'linux'
-      ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
-      : electronArgs
+  const { executable, args } = resolveElectronProbeLaunch({
+    electronBinary,
+    electronArgs,
+    platform: process.platform,
+    display: env.DISPLAY
+  })
   const run = spawnSync(executable, args, { encoding: 'utf8', env, timeout: 60_000 })
   const rawResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()

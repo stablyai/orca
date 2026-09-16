@@ -1,19 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
-  buildAutomationCronSchedule,
-  buildAutomationRrule,
   classifyAutomationCronSchedule,
   describeAutomationSchedule,
-  formatAutomationSchedule,
+  formatAutomationSchedule
+} from './automation-schedules'
+import {
+  buildAutomationCronSchedule,
+  buildAutomationRrule,
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from './automation-schedule-occurrences'
+import {
+  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
   getAutomationCronExpressionFields,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
-  latestAutomationOccurrenceAtOrBefore,
-  nextAutomationOccurrenceAfter,
   parseAutomationRrule,
   tryParseAutomationRrule
-} from './automation-schedules'
+} from './automation-schedule-parsing'
 
 function formatTimeForTest(hour: number, minute: number): string {
   const date = new Date()
@@ -238,7 +242,9 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('0 9,17 * * MON-FRI')).toBe('Custom schedule')
   })
 
-  it('treats all-value cron day fields as unrestricted for DOM/DOW matching', () => {
+  // Restriction is lexical (#15896), but a star step is still a star: `*/1` does not
+  // restrict, so the day rule stays AND and this fires on Mondays only.
+  it('treats a stepped cron day-of-month field as unrestricted for DOM/DOW matching', () => {
     const next = nextAutomationOccurrenceAfter(
       '0 9 */1 * MON',
       new Date('2026-05-01T00:00:00').getTime(),

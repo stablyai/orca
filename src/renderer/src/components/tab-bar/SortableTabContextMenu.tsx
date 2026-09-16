@@ -107,14 +107,16 @@ type SortableTabContextMenuProps = {
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
-  /** True when this tab is an agent terminal that can switch to the native chat
-   *  view; gates the "Switch view" menu item. */
+  /** True when this tab is an agent terminal that can switch between the terminal
+   *  and native chat views; gates the "Switch view" menu item. Structured
+   *  sessions never qualify — they have no terminal underneath. */
   canToggleViewMode?: boolean
   /** True when the tab is currently showing the native chat view (drives the
    *  item's label/icon between "chat" and "terminal"). */
   isChatView?: boolean
   /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
+  canSplitTerminal?: boolean
 }
 
 export function SortableTabContextMenu({
@@ -139,7 +141,8 @@ export function SortableTabContextMenu({
   onTogglePin,
   canToggleViewMode = false,
   isChatView = false,
-  onToggleViewMode
+  onToggleViewMode,
+  canSplitTerminal = true
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -167,6 +170,7 @@ export function SortableTabContextMenu({
           onActivate={onActivate}
           splitRightShortcut={splitRightShortcut}
           splitDownShortcut={splitDownShortcut}
+          showTerminalSplit={canSplitTerminal}
         />
         {canToggleViewMode && onToggleViewMode ? (
           <>

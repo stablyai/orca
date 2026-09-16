@@ -23,16 +23,14 @@ function completed(conclusion: string): PRCheckDetail {
 
 function gitLabJobs(...statuses: string[]): PRCheckDetail[] {
   return gitLabPipelineJobsToPRChecks(
-    statuses.map(
-      (status, index): GitLabPipelineJob => ({
-        id: index,
-        name: status,
-        stage: 'deploy',
-        status,
-        webUrl: '',
-        duration: null
-      })
-    )
+    statuses.map((status, index): GitLabPipelineJob => ({
+      id: index,
+      name: status,
+      stage: 'deploy',
+      status,
+      webUrl: '',
+      duration: null
+    }))
   )
 }
 

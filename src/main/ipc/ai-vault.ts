@@ -57,15 +57,8 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
-
-const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
-// Why: a remote home with many agent roots routinely needs seconds to walk,
-// stat and parse. The old shared 3s bound emptied healthy SSH hosts in the
-// all-hosts view; the relay gets a real scan budget and the whole leg (relay
-// attempt plus any legacy crawl) stays bounded so one host can't hold the
-// merge open.
-const AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS = 15_000
-const AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS = 20_000
+import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
+import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
@@ -158,8 +151,8 @@ async function scanAiVaultSessionsByHostScope(
           scan: () =>
             scanSshAiVaultSessions(hostInfo.targetId, args, {
               signal,
-              timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
+              timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScan,
+              relayTimeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScanRelay
             })
         })
       ),
@@ -174,7 +167,7 @@ async function scanAiVaultSessionsByHostScope(
               hostInfo,
               scanner: handlerOptions.scanRuntimeAiVaultSessions,
               listArgs: args,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS }
+              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.runtimeScan }
             })
         })
       )
@@ -282,7 +275,9 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
         : undefined
     const controller = listCancellations.begin(event, requestToken)
     try {
-      return await listAiVaultSessions(args, { signal: controller?.signal })
+      await handlerOptions.ensureStructuredSessionOwnership?.()
+      const result = await listAiVaultSessions(args, { signal: controller?.signal })
+      return projectStructuredAiVaultSessions(result, true)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.
@@ -317,8 +312,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
-  // DOM focus/visibility events don't fire in the renderer on macOS app
-  // activation, so refresh-on-refocus needs this main-process signal.
+  // macOS app activation skips DOM focus events, so emit the refresh signal here.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {
       window.webContents.send('aiVault:windowFocused')

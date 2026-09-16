@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { browserManager } from '../browser/browser-manager'
+import { onDocPreviewGrantRevoked } from '../browser/doc-preview-grant-registry'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import type {
@@ -48,7 +49,25 @@ export function disposeGrabModeStateForPage(browserPageId: string): void {
   grabModeOperationByPageId.delete(browserPageId)
 }
 
+/**
+ * Why previews need their own disposal path: a browser page announces its own death on
+ * `browser:unregisterGuest`, and a preview never does — it withdraws by revoking its grant, which
+ * is also what a re-mint does. Without this, every grant leaves an intent entry behind forever.
+ */
+let disposePreviewGrantSubscription: (() => void) | null = null
+
+function subscribeToPreviewGrantRevocation(): void {
+  disposePreviewGrantSubscription?.()
+  disposePreviewGrantSubscription = onDocPreviewGrantRevoked((grant) => {
+    // Why cancel first: a grab still armed on that guest would otherwise leave the renderer's
+    // await hanging on a surface the reader has already closed.
+    browserManager.cancelGrabOp(grant.browserPageId, 'evicted')
+    disposeGrabModeStateForPage(grant.browserPageId)
+  })
+}
+
 export function registerBrowserGrabHandlers(): void {
+  subscribeToPreviewGrantRevocation()
   ipcMain.removeHandler('browser:setGrabMode')
   ipcMain.removeHandler('browser:awaitGrabSelection')
   ipcMain.removeHandler('browser:cancelGrab')

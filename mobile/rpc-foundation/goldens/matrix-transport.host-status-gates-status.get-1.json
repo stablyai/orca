@@ -1,0 +1,568 @@
+{
+  "operation": "transport.host-status-gates",
+  "family": "transport.host-status-gates",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
+  "scenarioSha256": "d6be62e5eb2737d75634c053098d06a4bb175c64ff915cec6ead79922492a068",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "16cd464bf664": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2698c9770ad3": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3494eeb65d3d": {
+      "appVersion": {
+        "$rpc": "null"
+      },
+      "capabilities": [],
+      "floatingWorkspace": false,
+      "pending": false,
+      "verdict": {
+        "desktopVersion": 0,
+        "kind": "blocked",
+        "reason": "desktop-too-old",
+        "requiredDesktopVersion": 2
+      }
+    },
+    "36d81979cef2": {
+      "appVersion": "1.4.200",
+      "capabilities": ["mobile.tasks.v1", "push.v1"],
+      "floatingWorkspace": true,
+      "pending": false,
+      "verdict": {
+        "kind": "ok"
+      }
+    },
+    "4451bb95a76e": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "7d3dd7f9381b": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "88200d49083c": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "89236e432861": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "944bf432f199": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9cdf3c107e7b": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c71b2f8a6993": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "de87f6266897": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "df2c10616b5e": {
+      "appVersion": {
+        "$rpc": "null"
+      },
+      "capabilities": [],
+      "floatingWorkspace": false,
+      "pending": false,
+      "verdict": {
+        "kind": "ok"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eed0ae8cfbd7": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "appVersion": "1.4.200",
+            "capabilities": ["mobile.tasks.v1", "push.v1"],
+            "floatingWorkspaceEnabled": true,
+            "minCompatibleMobileVersion": 1,
+            "protocolVersion": 5
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-transport.host-status-gates-status.get-1",
+    "checkpoints": [
+      {
+        "id": "transport-host-status-gates-ready.normal:gates-proven",
+        "observation": {
+          "sender": ["eed0ae8cfbd7"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "36d81979cef2",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.result-absent:gates-proven",
+        "observation": {
+          "sender": ["7d3dd7f9381b"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.result-null:gates-proven",
+        "observation": {
+          "sender": ["88200d49083c"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.inner-ok-missing:gates-proven",
+        "observation": {
+          "sender": ["4451bb95a76e"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "3494eeb65d3d",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.inner-false-string-error:gates-proven",
+        "observation": {
+          "sender": ["944bf432f199"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "3494eeb65d3d",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.inner-false-object-error:gates-proven",
+        "observation": {
+          "sender": ["89236e432861"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "3494eeb65d3d",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.outer-refused:gates-proven",
+        "observation": {
+          "sender": ["16cd464bf664"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.outer-refused-no-message:gates-proven",
+        "observation": {
+          "sender": ["9cdf3c107e7b"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.method-not-found:gates-proven",
+        "observation": {
+          "sender": ["c71b2f8a6993"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.transport-rejection:gates-proven",
+        "observation": {
+          "sender": ["de87f6266897"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      },
+      {
+        "id": "transport-host-status-gates-ready.transport-rejection-no-message:gates-proven",
+        "observation": {
+          "sender": ["2698c9770ad3"],
+          "payloads": ["852980e2efc0"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

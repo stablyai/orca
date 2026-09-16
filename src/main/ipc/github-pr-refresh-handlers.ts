@@ -106,10 +106,14 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
 
   ipcMain.handle(
     'gh:refreshPRNow',
-    async (_event, args: { candidate: GitHubPRRefreshCandidate }) => {
+    async (
+      _event,
+      args: { candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }
+    ) => {
       const repo = assertRegisteredGitHubRepo(args.candidate, store)
       const outcome = await refreshPRNow(
-        applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate)
+        applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate),
+        args.reason
       )
       recordPRIfNeeded(repo, outcome)
       return outcome

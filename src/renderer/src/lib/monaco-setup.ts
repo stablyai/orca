@@ -10,6 +10,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerNimLanguage } from './monaco-languages/register-nim'
+import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { registerThemePreviewLanguage } from './monaco-languages/register-theme-preview-language'
@@ -84,6 +85,7 @@ registerNimLanguage(monaco)
 registerJsonlLanguage(monaco)
 registerThemePreviewLanguage(monaco)
 registerFunctionCallHighlighting(monaco)
+registerShellMarkdownAliases(monaco)
 installMonacoDelayerCancellationGuard()
 installMonacoDiffEditorDisposalGuard(monaco)
 installMonacoPeekReferencesPreviewOptions()

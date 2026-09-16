@@ -1,6 +1,7 @@
 import { app, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import { getMainE2EConfig } from '../e2e-config'
+import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
+import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { MIN_HEIGHT, MIN_WIDTH, syncTrafficLightPosition } from './main-window-visual-lifecycle'
 
 export type MainWindowStateLifecycle = {
@@ -23,7 +24,7 @@ export function installMainWindowStateLifecycle(args: {
     mainWindow.webContents.setZoomLevel(level)
     // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
     if (process.platform === 'darwin') {
-      syncTrafficLightPosition(mainWindow, 1.2 ** level)
+      syncTrafficLightPosition(mainWindow, uiZoomFactorFromLevel(level))
     }
   })
 
@@ -57,15 +58,14 @@ export function installMainWindowStateLifecycle(args: {
     handledInitialReadyToShow = true
     clearInitialRevealFallbackTimer()
 
-    // Why: in E2E headless mode keep the window hidden (Playwright drives via CDP) so tests don't steal focus.
-    const e2eConfig = getMainE2EConfig()
-    if (e2eConfig.headless) {
+    // Why: headless E2E keeps the window off screen entirely (Playwright drives via CDP).
+    if (isWindowlessLaunch()) {
       return
     }
     if (savedMaximized) {
       mainWindow.maximize()
     }
-    mainWindow.show()
+    showWindowWithoutStealingFocus(mainWindow)
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
   if (revealOnDidFinishLoad === true) {

@@ -223,14 +223,14 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
   }
 }
 
-type CopyShape = {
+type DaemonActionCopy = {
   title: string
   description: React.ReactNode
   confirmLabel: string
   busyLabel: string
 }
 
-function getCopy(kind: DaemonActionKind): CopyShape {
+function getCopy(kind: DaemonActionKind): DaemonActionCopy {
   if (kind === 'restart') {
     return {
       title: translate(

@@ -19,7 +19,7 @@ import {
   type FileExplorerRow,
   type MobileDirEntry
 } from './file-tree'
-import type { RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 import { colors } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
@@ -33,6 +33,7 @@ import {
   isMobileMethodUnavailableError,
   type LegacyFilesListResult
 } from './file-list-fallback'
+import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
@@ -107,22 +108,23 @@ export function MobileFileExplorerPanel(props: {
       }))
 
       try {
-        const response = await client.sendRequest('files.readDir', {
+        const response = await fileDirectoryRead.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath
         })
-        if (!response.ok) {
+        const directory = fileDirectoryRead.interpret(response)
+        if (!directory.accepted) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+          const refusal = (response as RpcFailure).error
           // Why: desktops that predate the files.readDir mobile allowlist
           // entry still serve the capped files.list; fall back so the Files
           // tab keeps working until the desktop updates.
-          if (
-            rootLoad &&
-            isMobileMethodUnavailableError(response.error?.code, response.error?.message)
-          ) {
-            const legacy = await client.sendRequest('files.list', {
+          if (rootLoad && isMobileMethodUnavailableError(refusal?.code, refusal?.message)) {
+            const legacyReply = await legacyFileListRead.request(client, {
               worktree: `id:${worktreeId}`
             })
-            if (legacy.ok) {
+            const legacy = legacyFileListRead.interpret(legacyReply)
+            if (legacy.accepted) {
               if (
                 !isCurrentDirectoryLoad(
                   directoryLoadRevisionsRef.current,
@@ -132,7 +134,8 @@ export function MobileFileExplorerPanel(props: {
               ) {
                 return
               }
-              const legacyResult = (legacy as RpcSuccess).result as LegacyFilesListResult
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+              const legacyResult = legacy.value as LegacyFilesListResult
               setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
               // Why: the capped list silently omits files past the cap — keep
               // the legacy explorer's "Showing first 5000" note.
@@ -140,17 +143,21 @@ export function MobileFileExplorerPanel(props: {
               return
             }
             throw new Error(
-              legacy.error?.message || response.error?.message || 'Unable to load files'
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+              (legacyReply as RpcFailure).error?.message ||
+                refusal?.message ||
+                'Unable to load files'
             )
           }
-          throw new Error(response.error?.message || 'Unable to load files')
+          throw new Error(refusal?.message || 'Unable to load files')
         }
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
         ) {
           return
         }
-        const entries = (response as RpcSuccess).result as MobileDirEntry[]
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const entries = directory.value as MobileDirEntry[]
         if (rootLoad) {
           setLegacyListTruncated(false)
         }

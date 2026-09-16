@@ -29,11 +29,10 @@ import {
 } from './history-manager'
 import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 
 export type PendingDaemonSpawnOperation = {
-  exitsBySessionId: Map<string, { incarnationId?: string }[]>
+  exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
   ignoredExitIncarnationIds: Set<string>
   ignoreNextExit: boolean
 }
@@ -97,19 +96,8 @@ export abstract class DaemonPtyRuntimeState {
   protected staleBundleReplacementPromise: Promise<void> | null = null
   protected writeRecoveryPromise: Promise<void> | null = null
   protected writeRecoveryAttempted = false
-  protected dataListeners: ((payload: {
-    id: string
-    data: string
-    sequenceChars?: number
-    transformed?: boolean
-    seq?: number
-  }) => void)[] = []
-  protected exitListeners: ((payload: {
-    id: string
-    code: number
-    incarnationId?: PtyIncarnationId
-    cause?: TerminalExitCause
-  }) => void)[] = []
+  protected dataListeners: ((payload: DaemonPtyRouterDataEvent) => void)[] = []
+  protected exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
   protected backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   protected writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
   protected removeEventListener: (() => void) | null = null
@@ -161,6 +149,44 @@ export abstract class DaemonPtyRuntimeState {
     additionalEvidenceSources?: readonly DaemonEvidenceSource[],
     endpointGoneProof?: 'windows_named_pipe_missing'
   ): void
+  protected abstract clearSessionAwaitingDaemonRecovery(sessionId: string): void
+  protected abstract stopCheckpointTimerIfIdle(): void
+
+  protected clearExitedSessionState(
+    sessionId: string,
+    exitCode: number,
+    expectedIncarnationId?: string
+  ): void {
+    const currentIncarnationId = this.sessionIncarnations.get(sessionId)
+    if (currentIncarnationId !== undefined && expectedIncarnationId !== currentIncarnationId) {
+      return
+    }
+    this.activeSessionIds.delete(sessionId)
+    this.clearSessionAwaitingDaemonRecovery(sessionId)
+    this.dirtySessionVersions.delete(sessionId)
+    this.pausedProducerSessionIds.delete(sessionId)
+    this.producerResumesOwedOnReconnect.delete(sessionId)
+    this.backgroundedSessionIds.delete(sessionId)
+    if (!this.sleepRestoreSessionIds.has(sessionId)) {
+      this.coldRestoreCache.delete(sessionId)
+    }
+    this.sessionsNeedingFullCheckpoint.delete(sessionId)
+    this.sessionsNeedingLiveCheckpoint.delete(sessionId)
+    this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
+    this.overlayDeadlineWarnedSessionIds.delete(sessionId)
+    this.periodicDeadlineWarnedSessionIds.delete(sessionId)
+    this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
+    this.lastFullCheckpointAt.delete(sessionId)
+    this.stopCheckpointTimerIfIdle()
+    if (this.historyManager) {
+      void this.historyManager
+        .closeSession(sessionId, exitCode)
+        .catch((error) => console.warn('[history] closeSession failed:', sessionId, error))
+    }
+    this.initialCwds.delete(sessionId)
+    this.wslDistrosBySessionId.delete(sessionId)
+    this.sessionIncarnations.delete(sessionId)
+  }
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION

@@ -38,9 +38,17 @@ export function retainLiveSleptWorktreeIdentities(
   if (previous.size === 0) {
     return previous
   }
+  const confirmedByIdentity = new Map<string, Worktree>()
+  for (const worktree of confirmed) {
+    const identity = getWorktreeRowIdentity(worktree)
+    // The former Array#find path was first-match-wins for duplicate identities; retain that contract.
+    if (!confirmedByIdentity.has(identity)) {
+      confirmedByIdentity.set(identity, worktree)
+    }
+  }
   const still = new Set<string>()
   for (const id of previous) {
-    const wt = confirmed.find((w) => getWorktreeRowIdentity(w) === id)
+    const wt = confirmedByIdentity.get(id)
     if (wt && wt.liveTerminalCount > 0) {
       still.add(id)
     }

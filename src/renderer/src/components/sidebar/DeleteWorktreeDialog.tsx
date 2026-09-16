@@ -173,6 +173,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const gitStatusByWorktreeIdentity = useDeleteWorktreeStatusHydration({
     isOpen,
     deleteTargets,
+    visibleTargets: worktrees,
     repoMap
   })
   const dirtyChangeCountsByWorktreeId = useMemo(() => {

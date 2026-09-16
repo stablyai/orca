@@ -207,7 +207,29 @@ describe('pr-refresh-coordinator', () => {
       null,
       null,
       12,
-      { acceptMergedFallbackPR: true }
+      {
+        acceptMergedFallbackPR: true,
+        localGitExecOptions: { admissionTier: 'interactive' }
+      }
+    )
+  })
+
+  it('preserves an automatic fallback reason and keeps its git work background', async () => {
+    const { refreshPRNow } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: Date.now() })
+
+    await refreshPRNow(makeCandidate(), 'swr')
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null,
+      { localGitExecOptions: { admissionTier: 'background' } }
+    )
+    expect(sendMock.mock.calls.map(([, event]) => event.reason)).toEqual(
+      expect.arrayContaining(['swr'])
     )
   })
 })

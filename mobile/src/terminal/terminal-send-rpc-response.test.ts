@@ -1,53 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import type { RpcResponse } from '../transport/types'
-import { isTerminalSendRpcAccepted } from './terminal-send-rpc-response'
-
-const runtimeMeta = { runtimeId: 'test-runtime' } as const
+import { isTerminalSendResultAccepted } from './terminal-send-rpc-response'
 
 describe('terminal send RPC response', () => {
-  it('Given accepted terminal send response When checked Then reports success', () => {
+  it('Given accepted terminal send result When checked Then reports success', () => {
     // Given
-    const response: RpcResponse = {
-      id: '1',
-      ok: true,
-      result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } },
-      _meta: runtimeMeta
-    }
+    const result = { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } }
 
     // When / Then
-    expect(isTerminalSendRpcAccepted(response)).toBe(true)
+    expect(isTerminalSendResultAccepted(result)).toBe(true)
   })
 
-  it('Given rejected terminal send response When checked Then reports failure', () => {
+  it('Given rejected terminal send result When checked Then reports failure', () => {
     // Given
-    const response: RpcResponse = {
-      id: '1',
-      ok: true,
-      result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } },
-      _meta: runtimeMeta
-    }
+    const result = { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } }
 
     // When / Then
-    expect(isTerminalSendRpcAccepted(response)).toBe(false)
+    expect(isTerminalSendResultAccepted(result)).toBe(false)
   })
 
-  it('Given RPC failure or malformed terminal send response When checked Then reports failure', () => {
-    // Given
-    const rpcFailure: RpcResponse = {
-      id: '1',
-      ok: false,
-      error: { code: 'terminal_error', message: 'failed' },
-      _meta: runtimeMeta
-    }
-    const malformedSuccess: RpcResponse = {
-      id: '2',
-      ok: true,
-      result: {},
-      _meta: runtimeMeta
-    }
+  it('Given absent or malformed terminal send result When checked Then reports failure', () => {
+    // Given: a refusal envelope carries no result at all, and a fulfilled one may carry the
+    // wrong shape.
+    const absent = undefined
+    const malformed = {}
 
     // When / Then
-    expect(isTerminalSendRpcAccepted(rpcFailure)).toBe(false)
-    expect(isTerminalSendRpcAccepted(malformedSuccess)).toBe(false)
+    expect(isTerminalSendResultAccepted(absent)).toBe(false)
+    expect(isTerminalSendResultAccepted(malformed)).toBe(false)
   })
 })

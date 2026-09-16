@@ -13,7 +13,7 @@ Two consequences, both non-negotiable:
 
 The vocabulary is fixed: **`live` / `unverifiable` / `exited`**, taken from the incumbent `UnstoppedPtyVerdict`. Do not introduce synonyms, and never collapse `unverifiable` into either neighbour. `exited` requires positive evidence of absence from the host that owns the process; a transport failure can only ever produce `unverifiable`.
 
-Rule 1 is stated at `src/main/source-control/repo-default-branch.ts:76-78`, `src/main/repo-worktrees.ts:45-48`, `OrcaRuntimeService.probeWorktreeDrift` in `src/main/runtime/orca-runtime.ts`, and `src/renderer/src/lib/connection-context.ts:22-24`. It is enforced throughout `src/main/runtime/orca-runtime-git.ts` by the guard that throws `SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE` whenever `target.connectionId` is set and no provider is registered — grep that constant for the current call sites rather than trusting a count.
+Rule 1 is stated at `src/main/source-control/repo-default-branch.ts:76-78`, `src/main/repo-worktrees.ts:45-48`, `OrcaRuntimeService.probeWorktreeDrift` in `src/main/runtime/orca-runtime.ts`, and `src/renderer/src/lib/connection-context.ts:22-24`. It is enforced throughout `src/main/runtime/orca-runtime-git.ts` by `requireRuntimeGitProvider` in `src/main/runtime/runtime-git-command-target.ts`, and throughout the runtime filesystem commands by `requireRuntimeFileProvider` in `src/main/runtime/runtime-file-command-target.ts`. Both route on the target's resolved `executionHostId` rather than on a repo row's `connectionId`: they throw the provider-unavailable message when an SSH host has no registered provider, throw `ExecutionHostNotDispatchableError` for a `runtime:` host this process does not execute, and return `null` only for `local`. Grep those names for the current call sites rather than trusting a count.
 
 `src/main/runtime/unstopped-pty-verification.ts:12-16` is the reference implementation of rule 2: it keeps `live` / `unverifiable` / `exited` as three distinct verdicts, and treats "we could not ask" as its own answer.
 
@@ -40,6 +40,14 @@ Two ways remote work _can_ actually stop:
 
 Reconnect re-attaches to the same live PTYs and replays a bounded buffer (`REPLAY_BUFFER_MAX`, a 102,400-code-unit tail). Output beyond that while you were away is lost to the client even though the process was never interrupted: **the transcript is truncated; the work stays `live`.**
 
+## Updating Orca strands relay-backed terminals
+
+There is a third outcome that is neither of the two above, and the vocabulary matters: the work does not stop, it becomes permanently unreachable.
+
+The relay's install directory — and therefore its socket path — is namespaced by a content hash of the relay bundle (`computeRemoteRelayDir` in `src/main/ssh/ssh-relay-versioned-install.ts`, consumed by `resolveRemoteInstallState` in `src/main/ssh/ssh-relay-deploy.ts`), and the daemon refuses any client whose bundle hash differs (`handleDaemonHandshakeFrame` in `src/relay/relay-handshake.ts`, exit `EXIT_CODE_VERSION_MISMATCH` 42). Two builds whose relay protocol is byte-identical still refuse each other. So the first reconnect after an app update deploys a new relay at a path the incumbent was never listening on, and cannot reach it even in principle. Every PTY the incumbent owns is `unverifiable` — running, unreachable, and never `exited`. The client's leases are attempted against a relay that never minted their ids, expired on the not-found answer (`handlePtyReattachFailure` in `src/main/ssh/ssh-relay-session.ts`), and the pane falls back to a cold-restore agent resume — or to a bare shell when no resumable provider session was captured for it. The old relay keeps its directory pinned against GC, because its socket really is live (`hasLiveRelaySocket` in `src/main/ssh/remote-install-gc.ts`). See #13852.
+
+The peer model does not have this failure, and that is the concrete reason behind "One host, one model" below. The daemon's endpoint is namespaced by a **semantic protocol version** rather than a build (`daemon-v<N>.sock`, from `getDaemonSocketPath` in `src/main/daemon/daemon-spawner.ts`), every earlier protocol version stays attachable (`PROTOCOL_VERSION` in `src/main/daemon/daemon-protocol-version.ts`), and a daemon holding live sessions is preserved across a version change instead of replaced (`shouldPreserveDaemonWithLiveSessions` in `src/main/daemon/daemon-replacement-preflight.ts`).
+
 ## Control plane
 
 On an SSH host, `orca` is a shim (`~/.orca-relay/bin/orca`) that proxies **back to the client's runtime** over the relay socket. Your repository, processes, and files remain remote — only the control plane is on the client. This is correct for an SSH target, but it has a consequence worth stating plainly:
@@ -58,9 +66,26 @@ A verdict needs evidence from the host that owns the process. Apply these tests 
 
 **Does the termination event match the current identity?** A host-delivered exit for the live PTY incarnation and provider generation, while its siblings still report, establishes `exited`. A stale event, an event for a superseded incarnation, or one quiet terminal with no host evidence does not.
 
+**Did the answer carry its evidence, or only the same wording?** `pty.attach` refuses with `PTY "<id>" not found` both for a pid the relay probed and found gone and for an id its session map never had — which is every id minted before a relay restart, since ids carry a per-start mint epoch. Only the probed refusal carries `PTY_ATTACH_PROVEN_EXITED_MARKER` (`src/shared/pty-attach-absence-evidence.ts`) and reaches the client as `SshPtyProvenExitedOnRelayError`; the unmarked union arrives as `SshPtyAbsentFromRelayError`, which licenses retiring the client's own route to the PTY and nothing more. A missing marker is never evidence — an older relay omits it too.
+
 **Is a returned status actually a claim of success?** An operation that reports failure may have succeeded, and one that reports success may not have run — check the durable state it should have changed rather than trusting the return.
 
 Anything short of positive host evidence is `unverifiable`. Reporting it as `exited` is the error this document exists to prevent: it orphans live work and can cold-start a duplicate over the same worktree.
+
+## Deciding a remote pane is idle
+
+The orphan-PTY sweep is the one flow that turns an observation into a SIGKILL, so its idleness evidence has to be measured against the same thing the signal reaches. It is not the terminal.
+
+`forceKillPosixPtyProcessGroups` (`src/main/pty/posix-pty-process-groups.ts`) collects every process group on the pane's tty and `killpg`s each one. The blast radius is therefore _(process groups on the tty) × (members of those groups, wherever they are)_, and the second factor is not bounded by the terminal at all. Two facts make that gap reachable:
+
+- **Job control can be off.** With `set +m` a background job does not get its own process group — it keeps the shell's. `ps` then shows one process group on the tty, running a build. Nothing in a tty-shaped predicate can see it.
+- **A group member can leave the terminal.** `ioctl(TIOCNOTTY)` without `setsid` drops the controlling terminal but keeps the pgid, so the process reports `tpgid == -1`, never appears in `ps -t <tty>`, and is still killed by `killpg(shellPgid)`. A double-forked grandchild similarly keeps the pgid while reparenting to pid 1, so no walk by `ppid` from the PTY root can name it either.
+
+So `shellOwnsEveryTtyProcessGroup` (`src/main/providers/agent-foreground-process-batch.ts`) requires both measurements: every process group on the tty is the shell's own with none stopped, **and** the shell's own process group has no other member anywhere in the host's process table. The name is tty-shaped for wire-compatibility reasons only.
+
+Two residuals remain, and neither is removable here. The capture is a snapshot, so work started between the `ps` and the signal is invisible — bounded by `RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS` on the reading side, not eliminated. And a process the host's own `ps` cannot enumerate (another PID namespace, `hidepid=2`, a table truncated by a permission boundary) is unobservable while `killpg` still reaches it.
+
+The general rule this instantiates: **evidence must be measured in the unit the destructive action operates on.** Evidence in a different unit is `unverifiable` no matter how precise it looks.
 
 ## Reading artifacts instead of process state
 
@@ -74,4 +99,4 @@ A listing is only evidence about the hosts it actually covered. When a result do
 
 An SSH host and a paired runtime (`orca environment`) imply opposite boundaries: the first is a dumb execution host driven by your client, the second is a peer that owns its own control plane. Registering the same machine both ways splits its worktrees across two identities, makes `terminal list` return different sets depending on `--environment`, and reliably confuses both humans and agents. Pick one per machine.
 
-For work that must continue while you are offline, use the peer/headless-runtime model on the remote host instead of the direct-SSH model. Its control plane is host-local, and its daemon-backed PTYs stay `live` across a normal runtime restart so the runtime can reattach; an explicit daemon shutdown can still make them `exited`. Do not register the same machine through both models. A detached agent process outside Orca can also survive a control-plane outage, but it has no stdin, so its instructions cannot be amended mid-run.
+For work that must continue while you are offline, use the peer/headless-runtime model on the remote host instead of the direct-SSH model. Its control plane is host-local, and its daemon-backed PTYs can stay `live` across a PID-scoped runtime restart so the runtime can reattach. A service manager that reaps the runtime's cgroup, or an explicit daemon shutdown, makes them `exited`; see [Running orcad](./orcad-operations.md#process-scoped-and-cgroup-wide-stops). Do not register the same machine through both models. A detached agent process outside Orca can also survive a control-plane outage, but it has no stdin, so its instructions cannot be amended mid-run.

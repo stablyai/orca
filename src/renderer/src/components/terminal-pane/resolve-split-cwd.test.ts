@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import {
+  clearPaneCwdDeferredSpawn,
+  mergePaneCwdFromOsc7,
+  resolveSplitCwd,
+  type PaneCwdMap
+} from './resolve-split-cwd'
 
 function installGetCwd(fn: (id: string) => Promise<string>): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only shim for window.api.pty.getCwd
@@ -121,5 +126,53 @@ describe('resolveSplitCwd', () => {
     })
     expect(result).toBe('/remote/worktree')
     expect(getCwd).not.toHaveBeenCalled()
+  })
+})
+
+describe('mergePaneCwdFromOsc7', () => {
+  it('preserves a deferred split fence until the PTY binds', () => {
+    const pendingCwd = Promise.resolve('/resolved')
+    expect(
+      mergePaneCwdFromOsc7(
+        {
+          cwd: '/seed',
+          confirmed: false,
+          deferredSplitSpawn: true,
+          pendingCwd
+        },
+        '/live',
+        true
+      )
+    ).toEqual({ cwd: '/live', confirmed: true, deferredSplitSpawn: true, pendingCwd })
+  })
+})
+
+describe('clearPaneCwdDeferredSpawn', () => {
+  it('clears a settled deferred entry after its promise settles', () => {
+    const originalPromise = Promise.resolve('/resolved')
+    const settledEntry = {
+      cwd: '/resolved',
+      confirmed: false,
+      deferredSplitSpawn: true,
+      pendingCwd: originalPromise
+    }
+
+    expect(clearPaneCwdDeferredSpawn(settledEntry, originalPromise)).toEqual({
+      cwd: '/resolved',
+      confirmed: false
+    })
+  })
+
+  it('keeps a newer pending deferred lookup when an older callback arrives', () => {
+    const olderPromise = Promise.resolve('/older')
+    const newerPromise = new Promise<string>(() => {})
+    const newerEntry = {
+      cwd: '/newer',
+      confirmed: false,
+      deferredSplitSpawn: true,
+      pendingCwd: newerPromise
+    }
+
+    expect(clearPaneCwdDeferredSpawn(newerEntry, olderPromise)).toBe(newerEntry)
   })
 })

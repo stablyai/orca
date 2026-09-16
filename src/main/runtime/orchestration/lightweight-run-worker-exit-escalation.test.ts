@@ -171,6 +171,35 @@ async function gradeWorkerExit(
 }
 
 describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
+  // Why: every other case here uses a short single-line spec, where the derived title and the
+  // raw spec are identical — so a refactor that inlines `task.spec` stays green while the
+  // banner rots. Grade the prose the coordinator actually reads.
+  it('titles the escalation from task_title, not the raw spec', async () => {
+    const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const runId = db.createRun({
+        objective: 'escalation prose',
+        coordinatorHandle,
+        coordinatorPaneKey: COORDINATOR_PANE_KEY
+      }).id
+      const spec = `Fix the auth redirect loop\n\n${'detail '.repeat(60)}`
+      const task = db.createTask({ spec, runId, taskTitle: 'Fix auth redirect' })
+      createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
+      runtime.setOrchestrationDb(db as never)
+
+      runtime.onPtyExit(WORKER_PTY_ID, 137)
+      await settle()
+
+      const body = String(db.getUnreadRunMailbox(runId, 100, ['escalation'])[0]?.body ?? '')
+      expect(body).toContain('"Fix auth redirect"')
+      expect(body).not.toContain('detail detail')
+      expect(body.split('\n')).toHaveLength(1)
+    } finally {
+      db.close()
+    }
+  })
+
   it('delivers the escalation to a lightweight Run mailbox', async () => {
     const graded = await gradeWorkerExit('lightweight-run')
     expect(graded).toMatchObject({
@@ -383,7 +412,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     }
   })
 
-  it('falls back to the legacy gate when the dispatch owning Run row is gone', async () => {
+  it('preserves the dispatch Run when legacy coordinator routing is used', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const insertMessage = vi.fn((message: { to: string }) => ({
       ...message,
@@ -406,8 +435,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     expect(insertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ to: coordinatorHandle, type: 'escalation' })
     )
-    // An orphaned dispatch has no Run mailbox to address, so it must not invent one.
-    expect(insertMessage.mock.calls[0]?.[0]).not.toHaveProperty('runId')
+    expect(insertMessage.mock.calls[0]?.[0]).toHaveProperty('runId', 'run-that-no-longer-exists')
   })
 
   it('still reaches the Run mailbox when the Run has no bound coordinator', async () => {

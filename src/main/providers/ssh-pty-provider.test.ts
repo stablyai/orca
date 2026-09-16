@@ -184,6 +184,24 @@ describe('SshPtyProvider', () => {
     )
   })
 
+  it('shutdown forwards the expected PTY incarnation over the relay', async () => {
+    await provider.shutdown(scopedPty1, {
+      immediate: true,
+      expectedIncarnationId: 'incarnation-1'
+    })
+    expectRequest(
+      mux.request,
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: false,
+        expectedIncarnationId: 'incarnation-1'
+      },
+      undefined
+    )
+  })
+
   it('shutdown bounds the relay RPC by the teardown deadline', async () => {
     // Why: freeze Date.now() so the leaf conversion deadline -> remaining relative
     // timeout is exact and the mux receives precisely the leftover budget.
@@ -237,16 +255,41 @@ describe('SshPtyProvider', () => {
     expectRequest(mux.request, 'pty.getForegroundProcess', { id: 'pty-1' })
   })
 
-  it('preserves unavailable process inspection', async () => {
+  it('preserves client-only unverifiable process inspection', async () => {
     const inspection = {
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true as const
+      hasChildProcesses: false,
+      verdict: 'unverifiable' as const,
+      reason: 'transport_loss' as const
     }
     mux.request.mockResolvedValue(inspection)
 
     await expect(provider.inspectProcess(scopedPty1)).resolves.toEqual(inspection)
     expectRequest(mux.request, 'pty.inspectProcess', { id: 'pty-1' })
+  })
+
+  it('forwards the expected incarnation for fenced remote inspection', async () => {
+    const inspection = {
+      foregroundProcess: 'codex',
+      hasChildProcesses: true,
+      foregroundProcessEvidence: { verdict: 'live' }
+    }
+    mux.request.mockResolvedValue(inspection)
+
+    await expect(
+      provider.inspectProcess(scopedPty1, { expectedIncarnationId: 'incarnation-1' })
+    ).resolves.toEqual(inspection)
+    expectRequest(mux.request, 'pty.inspectProcess', {
+      id: 'pty-1',
+      expectedIncarnationId: 'incarnation-1'
+    })
+  })
+
+  it('probes the additive foreground-evidence capability', async () => {
+    mux.request.mockResolvedValue({ foregroundProcessEvidenceVersion: 1 })
+
+    await expect(provider.supportsForegroundProcessEvidence()).resolves.toBe(true)
+    expectRequest(mux.request, 'pty.getCapabilities', undefined, { timeoutMs: 5_000 })
   })
 
   it('serializes scoped app ids using raw relay ids', async () => {

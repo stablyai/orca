@@ -2,6 +2,7 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 
 export type GetStatusOptions = GitRuntimeOptions & {
   includeIgnored?: boolean
+  includeLineStats?: boolean
   reuseLineStats?: boolean
   /** Merge-base OID the caller wants the branch line total measured against;
    *  omitted means the chip is hidden, so no ranged diff runs at all. */

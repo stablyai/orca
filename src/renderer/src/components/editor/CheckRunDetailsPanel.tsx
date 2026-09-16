@@ -7,8 +7,10 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
 import { translate } from '@/i18n/i18n'
 import { useCheckRunDetailsFixWithAI } from './check-run-details-fix-with-ai'
+import { formatCheckRunOutputForClipboard } from './check-run-clipboard-text'
 import { CheckRunAnnotations } from './CheckRunAnnotations'
 import { CheckRunJobs } from './CheckRunJobs'
+import { CheckRunCopyButton } from './CheckRunCopyButton'
 
 function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {
@@ -124,6 +126,7 @@ export function CheckRunDetailsPanel({
   const hasOutput = Boolean(details?.title || details?.summary || details?.text)
   const hasAnnotations = (details?.annotations.length ?? 0) > 0
   const hasJobs = jobs.length > 0
+  const outputClipboardText = details ? formatCheckRunOutputForClipboard(details) : ''
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-editor-surface">
@@ -268,8 +271,17 @@ export function CheckRunDetailsPanel({
 
             {hasOutput && (
               <section className="rounded-md border border-border bg-background">
-                <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                  {translate('auto.components.editor.CheckRunDetailsPanel.d098e5529a', 'Output')}
+                <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                  <div className="text-sm font-medium">
+                    {translate('auto.components.editor.CheckRunDetailsPanel.d098e5529a', 'Output')}
+                  </div>
+                  <CheckRunCopyButton
+                    text={outputClipboardText}
+                    label={translate(
+                      'auto.components.editor.CheckRunDetailsPanel.copyOutput',
+                      'Copy output'
+                    )}
+                  />
                 </div>
                 <div className="px-3 py-3">
                   {details?.title && (

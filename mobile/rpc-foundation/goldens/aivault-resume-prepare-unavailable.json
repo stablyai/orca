@@ -1,0 +1,98 @@
+{
+  "operation": "aiVault.resume-preparation",
+  "family": "aiVault.resume-preparation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
+  "scenarioSha256": "a5eedea5f551e0ca0e143292f1d9aa8920dd7af62a02d8e8777666ab3779c019",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "770627dbd25d": {
+      "name": "aiVault.prepareSessionResume#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}",
+      "sent": 1
+    },
+    "a25c46d6c1db": {
+      "name": "aiVault.prepareSessionResume#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": "Method 'aiVault.prepareSessionResume' is not available to mobile clients"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e839ea279e77": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
+    "f9dc8bff0bbd": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "prepared": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-prepare-unavailable",
+    "checkpoints": [
+      {
+        "id": "degraded-to-legacy",
+        "observation": {
+          "sender": ["a25c46d6c1db"],
+          "payloads": ["770627dbd25d"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

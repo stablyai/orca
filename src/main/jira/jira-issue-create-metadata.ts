@@ -55,6 +55,7 @@ export async function listIssueTypes(
   }
 }
 
+/** Lists the required create fields for a project and issue type. */
 export async function listCreateFields(
   projectIdOrKey: string,
   issueTypeId: string,
@@ -104,6 +105,7 @@ export async function listCreateFields(
   }
 }
 
+/** Lists the site's issue priorities. */
 export async function listPriorities(siteId?: string | null): Promise<JiraPriority[]> {
   const entry = getClients(siteId)[0]
   if (!entry) {
@@ -119,6 +121,41 @@ export async function listPriorities(siteId?: string | null): Promise<JiraPriori
       throw error
     }
     console.warn('[jira] listPriorities failed:', error)
+    return []
+  } finally {
+    release()
+  }
+}
+
+/**
+ * Searches all users on the site. Reporter and user-picker create fields are not
+ * limited to assignable users and no issue key exists before create, so neither
+ * `/user/assignable/search` variant fits. Returns `[]` when browse-users is denied.
+ */
+export async function searchUsers(query?: string, siteId?: string | null): Promise<JiraUser[]> {
+  const entry = getClients(siteId)[0]
+  if (!entry) {
+    return []
+  }
+  const isServer = entry.site.authType === 'server'
+  const params = new URLSearchParams({ maxResults: '50' })
+  // Server/DC filters by `username`; `query` is Cloud-only. Server rejects an
+  // empty username, so fall back to the wildcard it accepts for "list everyone".
+  params.set(isServer ? 'username' : 'query', query?.trim() || (isServer ? '.' : ''))
+  await acquire()
+  try {
+    const response = await jiraRequest<JiraRecord[]>(
+      entry,
+      `${apiBasePath(entry.site)}/user/search?${params.toString()}`
+    )
+    return response.map(mapUser).filter((user): user is JiraUser => !!user)
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.site.id)
+      throw error
+    }
+    // Browse-users permission is optional; the dialog falls back to a text field.
+    console.warn('[jira] searchUsers failed:', error)
     return []
   } finally {
     release()

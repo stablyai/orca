@@ -133,6 +133,16 @@ describe('SyncDatabase statement cache', () => {
     expect(statement.get('c')).toEqual({ label: 'gamma' })
   })
 
+  it('reports whether a transaction is active', async () => {
+    const db = await createDatabase()
+
+    expect(db.isTransaction).toBe(false)
+    db.exec('BEGIN IMMEDIATE')
+    expect(db.isTransaction).toBe(true)
+    db.exec('ROLLBACK')
+    expect(db.isTransaction).toBe(false)
+  })
+
   it('preserves pragma and exec behavior', async () => {
     const db = await createDatabase()
 
@@ -194,9 +204,11 @@ describe('SyncDatabase read-only opens under contention', () => {
     const contended = await contendedDatabase(10_000)
     const startedAt = Date.now()
 
+    const reader = new SyncDatabase(contended.path, { readonly: true })
+    openDatabases.push(reader)
     let thrown: unknown
     try {
-      new SyncDatabase(contended.path, { readonly: true }).prepare('SELECT id FROM items').all()
+      reader.prepare('SELECT id FROM items').all()
     } catch (error) {
       thrown = error
     }
@@ -210,11 +222,9 @@ describe('SyncDatabase read-only opens under contention', () => {
     const contended = await contendedDatabase(10_000)
     const startedAt = Date.now()
 
-    expect(() =>
-      new SyncDatabase(contended.path, { readonly: true, timeout: 400 })
-        .prepare('SELECT id FROM items')
-        .all()
-    ).toThrow(/database is locked/)
+    const reader = new SyncDatabase(contended.path, { readonly: true, timeout: 400 })
+    openDatabases.push(reader)
+    expect(() => reader.prepare('SELECT id FROM items').all()).toThrow(/database is locked/)
 
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(350)
   })

@@ -218,7 +218,8 @@ describe('a deferred visibility-resume repair patch', () => {
       type: 'snapshots',
       snapshots: [
         { ...makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID), snapshotVersion: 2 }
-      ]
+      ],
+      authoritative: true
     })
 
     // The tombstone repair DID reach the store: the background mirror retracted,

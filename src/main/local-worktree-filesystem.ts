@@ -3,9 +3,10 @@ import { lstat, readFile } from 'node:fs/promises'
 import { buildWslExecArgs, quotePosixShell } from '../shared/wsl-login-shell-command'
 import { removeHostTree } from './host-tree-removal'
 import { toLinuxPath } from './wsl'
+import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
 
-export { toHostRemovalPath } from './host-tree-removal'
+export { toHostFilesystemPath, toHostRemovalPath } from './host-tree-removal'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
@@ -36,6 +37,10 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
   const result = await runProcess({
     program: 'wsl.exe',
     args: buildWslExecArgs(distro, ['sh', '-c', command]),
+    // Why explicit (#16463): the guest path is inside `command`, so this only
+    // decides whether CreateProcessW succeeds -- and these calls run while a
+    // worktree is being removed, which is the cwd an inherited one would be.
+    cwd: resolveWslInteropSpawnCwd(),
     timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS
   })
   if (result.timedOut) {

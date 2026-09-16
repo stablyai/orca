@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
 import { describe, expect, it } from 'vitest'
 import { buildDispatchPreamble } from './preamble'
 
@@ -23,6 +25,22 @@ function afterWorkerDoneSection(result: string) {
   return result.slice(sectionStart, sectionEnd)
 }
 
+function cliFence(result: string): string {
+  const match = result.match(/=== CLI COMMANDS ===\n\n```sh\n([\s\S]*?)\n```/)
+  expect(match).not.toBeNull()
+  return match?.[1] ?? ''
+}
+
+function markdownBlocks(result: string) {
+  const tree = unified().use(remarkParse).parse(result)
+  return {
+    headings: tree.children.filter((node) => node.type === 'heading'),
+    codeBlocks: tree.children.filter((node) => node.type === 'code')
+  }
+}
+
+const driftParams = { base: 'origin/main', behind: 3, recentSubjects: ['fix: a', 'feat: b'] }
+
 describe('buildDispatchPreamble', () => {
   it('substitutes template variables', () => {
     const result = buildDispatchPreamble(baseParams())
@@ -34,7 +52,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toContain('{{')
   })
 
-  it('includes worker_done command with --body 3-sentence summary prompt and reportPath', () => {
+  it('includes the mandatory worker_done command without fake optional metadata', () => {
     const result = buildDispatchPreamble(baseParams())
 
     expect(result).toContain('worker_done')
@@ -42,13 +60,14 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('orchestration check')
     expect(result).toContain('--body')
     expect(result).toMatch(/3-sentence summary/)
-    expect(result).toContain('reportPath')
+    expect(result).toContain('Append --files-modified only when files changed')
+    expect(result).toContain('Always pass real values')
     expect(result).toContain('--task-id task_abc123')
     expect(result).toContain('--dispatch-id ctx_def456')
     expect(result).toContain('--outcome succeeded')
     expect(result).toContain('replace it with --outcome failed')
-    expect(result).toContain('--files-modified "path/a,path/b"')
-    expect(result).toContain('--report-path "<optional: path to the full artifact>"')
+    expect(result).not.toContain('--files-modified "path/a,path/b"')
+    expect(result).not.toContain('--report-path "<optional: path to the full artifact>"')
     expect(result).toMatch(/orchestration send --from term_worker/)
     expect(result).not.toContain('orchestration send --to term_coord')
   })
@@ -58,24 +77,56 @@ describe('buildDispatchPreamble', () => {
     { timeout: 15_000 },
     () => {
       const result = buildDispatchPreamble(baseParams())
-      // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
-      // in the surrounding prose. Slice between the CLI markers and strip
-      // shell-style comment lines so we only syntax-check the commands.
-      const cliStart = result.indexOf('=== CLI COMMANDS ===')
-      const cliEnd = result.indexOf('=== AFTER YOU SEND worker_done ===')
-      expect(cliStart).toBeGreaterThan(-1)
-      expect(cliEnd).toBeGreaterThan(cliStart)
-      const block = result.slice(cliStart, cliEnd)
-      const stripped = block
-        .split('\n')
-        .filter((line) => !line.trim().startsWith('#'))
-        .filter((line) => !line.trim().startsWith('==='))
-        .join('\n')
-
-      const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
+      const check = spawnSync('bash', ['-n'], { input: cliFence(result), encoding: 'utf8' })
       expect(check.status).toBe(0)
     }
   )
+
+  it('renders every injected lifecycle command on one cross-shell-safe line', () => {
+    const result = buildDispatchPreamble(baseParams({ dispatchCapability: 'dcap_secret' }))
+    const commandLines = result
+      .split('\n')
+      .filter((line) => line.trimStart().startsWith('orca orchestration'))
+
+    expect(commandLines).toHaveLength(5)
+    expect(result).not.toContain('\\\n')
+    expect(commandLines.filter((line) => line.includes('--type worker_done'))).toHaveLength(1)
+    expect(commandLines.filter((line) => line.includes('--type heartbeat'))).toHaveLength(1)
+    expect(commandLines.filter((line) => line.includes('orchestration ask'))).toHaveLength(1)
+    expect(commandLines.filter((line) => line.includes('--type escalation'))).toHaveLength(1)
+  })
+
+  it('fences shell comments so Markdown does not promote them to headings', () => {
+    const result = buildDispatchPreamble(baseParams())
+    const { headings, codeBlocks } = markdownBlocks(result)
+
+    expect(headings).toHaveLength(0)
+    expect(codeBlocks).toHaveLength(1)
+    expect(codeBlocks[0]).toMatchObject({ lang: 'sh', value: cliFence(result) })
+  })
+
+  // Why: a `---` rule directly under a paragraph is a setext H2, so the optional
+  // sections' closing rules must not turn their last sentence into a heading.
+  it('renders no Markdown headings when the sub-dispatch and drift sections are present', () => {
+    const result = buildDispatchPreamble(
+      baseParams({ canDispatchSubWorkers: true, baseDrift: driftParams })
+    )
+    const { headings, codeBlocks } = markdownBlocks(result)
+
+    expect(headings).toHaveLength(0)
+    expect(codeBlocks).toHaveLength(2)
+    expect(codeBlocks[1]).toMatchObject({ lang: 'sh' })
+    expect(codeBlocks[1].value).toContain('orchestration worker-start --task <task_id>')
+    expect(result).toContain('able to dispatch further.\n\n---')
+    expect(result).toContain('before starting.\n\n---')
+  })
+
+  it('sub-dispatch fence passes bash -n', { timeout: 15_000 }, () => {
+    const result = buildDispatchPreamble(baseParams({ canDispatchSubWorkers: true }))
+    const { codeBlocks } = markdownBlocks(result)
+    const check = spawnSync('bash', ['-n'], { input: codeBlocks[1].value, encoding: 'utf8' })
+    expect(check.status).toBe(0)
+  })
 
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
     const result = buildDispatchPreamble(baseParams())
@@ -112,9 +163,20 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble(baseParams())
 
     expect(result).toMatch(/orchestration ask --from term_worker/)
-    expect(result).toMatch(/orchestration send --from term_worker \\\n    --type escalation/)
+    expect(result).toMatch(/orchestration send --from term_worker --type escalation/)
     expect(result).toContain('--task-id task_abc123 --dispatch-id ctx_def456')
-    expect(result).toContain('orchestration check --terminal term_worker')
+    expect(result).toContain('orchestration check --terminal term_worker --json')
+  })
+
+  it('gives the worker a concrete cadence for reading coordinator follow-ups', () => {
+    const result = buildDispatchPreamble(baseParams())
+    const checkLine = result.indexOf('orchestration check --terminal term_worker --json')
+    const cadence = result.slice(0, checkLine)
+
+    // Why: the transport is durable but never interrupts, so "you may check" produced
+    // workers that never read a single follow-up.
+    expect(cadence).toContain('before you\n  # start a new file and after a test run')
+    expect(cadence).toContain('immediately before\n  # you send worker_done')
   })
 
   it('carries the minted Dispatch capability on lifecycle and question commands', () => {
@@ -125,6 +187,20 @@ describe('buildDispatchPreamble', () => {
 
     expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(4)
     expect(result).not.toContain('"dispatchCapability"')
+  })
+
+  it('renders capability-bound worker_done and heartbeat recipes', () => {
+    const result = buildDispatchPreamble({
+      ...baseParams(),
+      dispatchCapability: 'dcap_test_secret'
+    })
+
+    expect(result).toMatch(
+      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type worker_done .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+    )
+    expect(result).toMatch(
+      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type heartbeat .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+    )
   })
 
   it('idles prompt-returning workers while preserving direct user authority', () => {

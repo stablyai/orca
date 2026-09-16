@@ -3,6 +3,7 @@ import { getHostListActionSheetActions } from './host-list-action-sheet-actions'
 import type { ConnectionState, HostProfile } from './transport/types'
 
 vi.mock('lucide-react-native', () => ({
+  Activity: vi.fn(),
   Edit3: vi.fn(),
   PowerOff: vi.fn(),
   RefreshCw: vi.fn()
@@ -22,6 +23,7 @@ function build(overrides: { state?: ConnectionState; hasEverConnected?: boolean 
     onDismiss: vi.fn(),
     onReconnect: vi.fn(),
     onDisconnect: vi.fn(),
+    onDiagnostics: vi.fn(),
     onEdit: vi.fn(),
     onRemove: vi.fn()
   }
@@ -35,14 +37,17 @@ function build(overrides: { state?: ConnectionState; hasEverConnected?: boolean 
 }
 
 describe('getHostListActionSheetActions', () => {
-  // Why: both open a second drawer. Presenting one while this sheet's native
+  // Why: these navigate or open a second drawer. Presenting while this sheet's native
   // Modal is still up freezes the whole screen on iOS — issue #8791.
-  it.each(['Edit host', 'Remove'])('defers %s until the action sheet has closed', (label) => {
-    const { actions } = build()
-    expect(actions.find((action) => action.label === label)).toMatchObject({
-      closeBeforePress: true
-    })
-  })
+  it.each(['Network diagnostics', 'Edit host', 'Remove'])(
+    'defers %s until the action sheet has closed',
+    (label) => {
+      const { actions } = build()
+      expect(actions.find((action) => action.label === label)).toMatchObject({
+        closeBeforePress: true
+      })
+    }
+  )
 
   it('leaves the in-place actions undeferred so they fire on tap', () => {
     const { actions, spies } = build()
@@ -65,15 +70,23 @@ describe('getHostListActionSheetActions', () => {
     expect(spies.onEdit).toHaveBeenCalledWith(HOST.id)
   })
 
+  it('routes Network diagnostics with the selected host', () => {
+    const { actions, spies } = build()
+    actions.find((action) => action.label === 'Network diagnostics')?.onPress()
+    expect(spies.onDiagnostics).toHaveBeenCalledWith(HOST.id)
+  })
+
   it('offers Disconnect only while the socket is live', () => {
     expect(build({ state: 'reconnecting' }).actions.map((action) => action.label)).toEqual([
       'Reconnect',
       'Disconnect',
+      'Network diagnostics',
       'Edit host',
       'Remove'
     ])
     expect(build({ state: 'disconnected' }).actions.map((action) => action.label)).toEqual([
       'Connect',
+      'Network diagnostics',
       'Edit host',
       'Remove'
     ])
@@ -93,6 +106,7 @@ describe('getHostListActionSheetActions', () => {
         onDismiss: vi.fn(),
         onReconnect: vi.fn(),
         onDisconnect: vi.fn(),
+        onDiagnostics: vi.fn(),
         onEdit: vi.fn(),
         onRemove: vi.fn()
       })

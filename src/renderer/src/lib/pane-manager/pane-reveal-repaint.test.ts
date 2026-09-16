@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
-import { resetTerminalWebglSuggestion, resetWebglTextureAtlas } from './pane-webgl-renderer'
+import {
+  primeTerminalWebglAddon,
+  resetTerminalWebglSuggestion,
+  resetWebglTextureAtlas
+} from './pane-webgl-renderer'
+import { PaneManager } from './pane-manager'
 
 type FakeWebglAddon = { clearTextureAtlas: ReturnType<typeof vi.fn> }
 type FakePaneManager = {
@@ -49,6 +54,21 @@ function createPane(options: { webglAddon?: FakeWebglAddon | null } = {}): Manag
   }
 }
 
+function createVisibilityProbeManager(onValues: () => void): PaneManager {
+  const manager = Object.create(PaneManager.prototype) as PaneManager
+  Object.assign(manager as unknown as Record<string, unknown>, {
+    destroyed: false,
+    atlasRecoveryVisible: true,
+    panes: {
+      values: () => {
+        onValues()
+        return []
+      }
+    }
+  })
+  return manager
+}
+
 describe('schedulePaneRevealRepaint', () => {
   let rafQueue: FrameRequestCallback[]
   const registeredManagers: FakePaneManager[] = []
@@ -79,7 +99,8 @@ describe('schedulePaneRevealRepaint', () => {
     }
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     resetTerminalWebglSuggestion()
     rafQueue = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -207,6 +228,28 @@ describe('schedulePaneRevealRepaint', () => {
 
     expect(webglAddon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
+  })
+
+  it('skips delayed repaint and present when the manager hides before settle', () => {
+    let repaintValuesRead = 0
+    let presentValuesRead = 0
+    const repaintManager = createVisibilityProbeManager(() => {
+      repaintValuesRead += 1
+    })
+    const presentManager = createVisibilityProbeManager(() => {
+      presentValuesRead += 1
+    })
+
+    repaintManager.scheduleRevealRepaint()
+    presentManager.scheduleRevealPresent()
+    repaintManager.setAtlasRecoveryVisible(false)
+    presentManager.setAtlasRecoveryVisible(false)
+
+    flushFrame()
+    flushFrame()
+
+    expect(repaintValuesRead).toBe(0)
+    expect(presentValuesRead).toBe(0)
   })
 
   describe('schedulePaneRevealPresent', () => {

@@ -163,11 +163,10 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
           smartGitHubResolution.kind === 'none' && smartNameMode === 'branches'
       })
 
-      const createDisplayName =
-        smartGitHubResolution.kind === 'none'
-          ? nameIsAutoManaged
-            ? submitTitleName?.displayName
-            : undefined
+      const createDisplayName = !nameIsAutoManaged
+        ? workspaceName
+        : smartGitHubResolution.kind === 'none'
+          ? submitTitleName?.displayName
           : smartGitHubCreateNames.displayName
 
       // Why: the first-work hook only renames blank, auto-generated git workspaces that launch an agent; persist that pending state for the card.

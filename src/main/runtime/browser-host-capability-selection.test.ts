@@ -19,6 +19,16 @@ describe('browser host capability selection', () => {
     expect(() => leases.select(undefined, ['mirror.v1'])).toThrow('browser_host_unavailable')
   })
 
+  it('skips a webview-only host when client automation is required', () => {
+    const leases = registry()
+    attach(leases, 'webview-only', ['webview'])
+    attach(leases, 'automation', ['webview', 'automation-v1'])
+
+    expect(leases.select(undefined, ['webview', 'automation-v1'])).toMatchObject({
+      browserHostClientId: 'host-automation'
+    })
+  })
+
   it('keeps multiple qualified hosts ambiguous without arbitrary routing', () => {
     const leases = registry()
     attach(leases, 'a', ['webview', 'commands.v1'])

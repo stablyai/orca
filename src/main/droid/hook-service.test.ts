@@ -25,7 +25,7 @@ vi.mock('os', async () => {
 import { DroidHookService } from './hook-service'
 
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -WindowStyle Hidden -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
 describe('DroidHookService', () => {
   let homeDir: string

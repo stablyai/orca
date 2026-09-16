@@ -1,4 +1,5 @@
 import { GitCapabilityCache } from '../../shared/git-capability-cache'
+import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,
@@ -14,7 +15,7 @@ type LocalGitCapabilityTarget = {
 const localCapabilitiesByExecutionHost = new Map<string, GitCapabilityCache>()
 // Why: reconnecting creates a new provider, while concurrent IPC/runtime users
 // of one SSH connection must share the same remote Git capability results.
-let sshCapabilitiesByProvider = new WeakMap<object, GitCapabilityCache>()
+let sshCapabilitiesByProvider = new WeakMap<SshGitProvider, GitCapabilityCache>()
 
 function getLocalGitExecutionHostKey(target: LocalGitCapabilityTarget): string {
   const wslDistro =
@@ -56,7 +57,7 @@ export function withLocalGitCapabilityCacheForExecution<T>(
   )
 }
 
-export function getSshGitCapabilityCache(provider: object): GitCapabilityCache {
+export function getSshGitCapabilityCache(provider: SshGitProvider): GitCapabilityCache {
   let cache = sshCapabilitiesByProvider.get(provider)
   if (!cache) {
     cache = new GitCapabilityCache()

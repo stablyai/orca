@@ -4,6 +4,7 @@ import { execFileCapture } from './exec-file-capture'
 import { resolveGitCommand } from './git-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
 import { promptGuardGitEnv } from './git-process-env'
+import { acquireGitAdmission } from './git-subprocess-admission'
 
 export type GitSshPolicyMode =
   | 'default'
@@ -131,6 +132,18 @@ export async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise
   // Why fenced: a login-shell banner here reads as a user-configured sshCommand,
   // which skips the BatchMode fallback below and disarms the no-prompt guard.
   const resolved = resolveGitCommand(['config', '--get', 'core.sshCommand'], options, true, true)
+  const probeArgs = ['config', '--get', 'core.sshCommand']
+  const grant = await acquireGitAdmission({
+    args: probeArgs,
+    cwd: options.cwd,
+    wslDistro: options.wslDistro,
+    tier: options.admissionTier,
+    signal: options.signal
+  })
+  let reportTerminated: () => void = () => {}
+  const terminated = new Promise<void>((resolve) => {
+    reportTerminated = resolve
+  })
   let configuredCommand = ''
   try {
     const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
@@ -139,12 +152,15 @@ export async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise
       maxBuffer: DEFAULT_GIT_MAX_BUFFER,
       timeout: CORE_SSH_COMMAND_PROBE_TIMEOUT_MS,
       env: promptEnv,
-      signal: options.signal
+      signal: options.signal,
+      onChildTerminated: reportTerminated
     })
     const payload = resolved.captured?.readStdout(String(stdout)) ?? String(stdout)
     configuredCommand = payload.trim()
   } catch {
     configuredCommand = ''
+  } finally {
+    void terminated.then(grant.release)
   }
 
   if (!configuredCommand) {

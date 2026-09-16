@@ -26,4 +26,6 @@ export type CodexPaneAccountRecord = {
 export type CodexPaneAccountRegistryFile = {
   version: 2
   panes: Record<string, CodexPaneAccountRecord>
+  /** Set after record loss until daemon inventory proves no unattributed pane remains. */
+  legacyWslAttributionUnknown?: true
 }

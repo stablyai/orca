@@ -2,6 +2,8 @@ export type ProcessGoneSource = 'renderer' | 'child'
 export type ExpectedTeardownScope = 'none' | 'renderer-reload' | 'app-shutdown'
 
 const WINDOWS_CONTROL_TERMINATION_EXIT_CODES = new Set([0xc000013a, 0x40010004])
+// Chromium's PID-namespace SIGTERM handler exits 241; waitpid reports 241 << 8.
+const LINUX_NAMESPACE_SIGTERM_WAIT_STATUS = 0xf100
 const RECOVERABLE_CHILD_PROCESS_TYPES = new Set(['gpu'])
 const RECOVERABLE_UTILITY_SERVICE_NAMES = new Set([
   'audio.mojom.AudioService',
@@ -49,6 +51,7 @@ function isRecoverableChromiumChildProcess({
 }
 
 export function shouldRecordProcessGoneCrash({
+  platform,
   source,
   processType,
   serviceName,
@@ -56,6 +59,7 @@ export function shouldRecordProcessGoneCrash({
   exitCode,
   expectedTeardown
 }: {
+  platform: NodeJS.Platform
   source: ProcessGoneSource
   processType?: string
   serviceName?: string
@@ -76,7 +80,11 @@ export function shouldRecordProcessGoneCrash({
   // Why: Electron reports expected Chromium teardown during reload/update as
   // `killed` + SIGTERM or Windows control termination statuses. Treat real
   // crash reasons as reportable, but skip these normal termination shapes.
-  if (exitCode === 15 || isWindowsControlTerminationExitCode(exitCode)) {
+  if (
+    exitCode === 15 ||
+    isWindowsControlTerminationExitCode(exitCode) ||
+    (platform === 'linux' && exitCode === LINUX_NAMESPACE_SIGTERM_WAIT_STATUS)
+  ) {
     return false
   }
   if (expectedTeardown === 'app-shutdown') {

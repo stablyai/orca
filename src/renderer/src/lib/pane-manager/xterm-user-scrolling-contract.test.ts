@@ -1,6 +1,6 @@
 /**
  * Contract test for xterm's native user-scrolling ownership (vendored
- * 6.1.0-beta.287; @xterm/headless shares BufferService with @xterm/xterm).
+ * 6.1.0-beta.303; @xterm/headless shares BufferService with @xterm/xterm).
  *
  * Orca's live PTY write path performs NO scroll-intent enforcement — it
  * relies on xterm core keeping a scrolled-up viewport stable and following
@@ -10,10 +10,16 @@
  *
  * If an xterm upgrade breaks any assertion here, the live write path loses
  * its follow/pin semantics silently — fix the write path before bumping.
+ *
+ * Since 6.1.0-beta.302 (upstream #6081) xterm clears isUserScrolling on a normal-buffer
+ * CSI 3 J, so the erase itself releases a pinned reader to the bottom. Orca's pin still
+ * works because its parser handler observes the erase before xterm's own handler runs,
+ * capturing the reader's offset while the old viewport is still live.
  */
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import packageJson from '../../../../../package.json'
+import headlessPackageJson from '@xterm/headless/package.json'
+import xtermPackageJson from '@xterm/xterm/package.json'
 import { clearTerminalScrollbackAndFollowOutput } from './terminal-scrollback-clear'
 import { installTerminalLiveScrollbackRestore } from './terminal-live-scrollback-restore'
 import { markTerminalFollowOutput, markTerminalPinnedViewport } from './terminal-scroll-intent'
@@ -49,11 +55,14 @@ async function pinnedScrollbackTerminal(): Promise<TerminalWithBufferService> {
   return term
 }
 
-describe('xterm native user-scrolling contract (vendored 6.1.0-beta.287)', () => {
-  it('pins headless and renderer xterm to the same version', () => {
-    expect(packageJson.dependencies['@xterm/headless']).toBe(
-      packageJson.devDependencies['@xterm/xterm']
-    )
+describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () => {
+  it('builds headless and renderer xterm from the same upstream commit', () => {
+    // The shared code is BufferService/BufferLine, so what has to match is the source
+    // both were built from, not the version string. Upstream bumps each package only
+    // when its own output changes, so headless legitimately trails core by a beta or
+    // two while carrying identical code; publish.js stamps the commit on both.
+    expect(headlessPackageJson.commit).toBe(xtermPackageJson.commit)
+    expect(xtermPackageJson.commit).toMatch(/^[0-9a-f]{40}$/)
   })
 
   it('keeps a scrolled-up viewport stable while output is written', async () => {
@@ -288,7 +297,9 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
     await write(term, `\x1b[?2026h\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(50)}\x1b[?2026l`)
-    expect(term.buffer.active.viewportY).toBe(0)
+    // xterm releases isUserScrolling on CSI 3 J, so the redraw carries the reader to
+    // the bottom. Landing them back at their offset is this module's whole job.
+    expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
     settle()
 
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY - bottomOffset)
@@ -348,7 +359,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     // Each frame lands inside the quiet period, so the pin must not fire yet.
     for (let frame = 0; frame < 5; frame += 1) {
       advance(SETTLE_MS - 60)
-      expect(term.buffer.active.viewportY).toBe(0)
+      expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
       await write(term, 'after\r\n'.repeat(40))
     }
     advance(SETTLE_MS)
@@ -428,11 +439,11 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('keeps the original pin when a second erase lands inside the settle window', async () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
-    // The first redraw regrows past a screenful, so at the second erase the
-    // reader reads as detached at line 0. Re-measuring there would capture the
-    // whole rebuilt height as the offset and strand them at the top.
+    // The first erase already released the reader to the bottom, so re-measuring at
+    // the second one would read them as follow-output and drop the pin entirely.
+    // Only the pin armed by the first erase still knows where they were.
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'first\r\n'.repeat(160)}`)
-    expect(term.buffer.active.viewportY).toBe(0)
+    expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
     expect(term.buffer.active.baseY).toBeGreaterThan(0)
 
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'second\r\n'.repeat(160)}`)
@@ -467,7 +478,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     // reach MAX_PENDING_RESTORE_MS exactly.
     for (let cycle = 0; cycle < 10; cycle += 1) {
       await write(term, `\x1b[2J\x1b[H\x1b[3J${'redraw\r\n'.repeat(140)}`)
-      expect(term.buffer.active.viewportY).toBe(0)
+      expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
       advance(100)
     }
 
@@ -658,8 +669,9 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
 
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(50)}`)
     settle()
-    // Without the pin the reader is stranded where the erase clamped them.
-    expect(term.buffer.active.viewportY).toBe(0)
+    // Without the pin the reader keeps xterm's own post-erase behaviour: the erase
+    // releases the scroll pin, so the redraw leaves them following output.
+    expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
   })
 
   it('lands the pin on the real timer when no scheduler is injected', async () => {

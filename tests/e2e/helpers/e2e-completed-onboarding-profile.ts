@@ -39,6 +39,9 @@ export function getE2ECompletedOnboardingProfile() {
       contextualToursSeenIds: [...SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS],
       contextualToursAutoEligible: false,
       projectOrderManualDefaultNoticeDismissed: true,
+      // Browser panes render this action in the toolbar. Keep it out of the
+      // pointer path for tests that create splits before exercising shortcuts.
+      browserImportHintHidden: true,
       // Why: E2E profiles model completed existing users and should not be
       // interrupted by the usage-display change toast covering the UI under test.
       usagePercentageDisplayChangeNoticeDismissed: true

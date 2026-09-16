@@ -9,6 +9,7 @@ import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
 
 export type RepoUpdateMutationOperations = {
   state: PersistedState
+  bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
   hydrateRepo: (repo: Repo) => Repo
@@ -19,6 +20,10 @@ export class RepoUpdatePersistenceOperations {
 
   private get state(): PersistedState {
     return this.operations.state
+  }
+
+  private bumpLocalWorktreeScanGeneration(repoId: string): void {
+    this.operations.bumpLocalWorktreeScanGeneration(repoId)
   }
 
   private syncProjectHostSetupCompatibilityState(): void {
@@ -47,6 +52,7 @@ export class RepoUpdatePersistenceOperations {
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
+        | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -76,6 +82,13 @@ export class RepoUpdatePersistenceOperations {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if (
+      'executionHostId' in updates &&
+      getRepoExecutionHostId({ ...repo, ...updates }) !== getRepoExecutionHostId(repo)
+    ) {
+      delete repo.folderUpgradeGitRootPath
+      delete sanitizedUpdates.folderUpgradeGitRootPath
+    }
     if (
       'agentWorktreeVisibility' in sanitizedUpdates &&
       !('worktreeVisibilitySourcePreferences' in sanitizedUpdates) &&
@@ -177,6 +190,7 @@ export class RepoUpdatePersistenceOperations {
       }
     }
     Object.assign(repo, sanitizedUpdates)
+    this.bumpLocalWorktreeScanGeneration(id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)

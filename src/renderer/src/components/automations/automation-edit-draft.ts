@@ -9,17 +9,17 @@
 import type { Automation, ExternalAutomationJob } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import {
-  isValidAutomationCronSchedule,
-  isValidAutomationSchedule,
+  isRunnableAutomationCronSchedule,
+  isRunnableAutomationSchedule,
   tryParseAutomationRrule
-} from '../../../../shared/automation-schedules'
+} from '../../../../shared/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-model'
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'
 
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
   const schedule = tryParseAutomationRrule(automation.rrule)
-  const hasCustomSchedule = !schedule && isValidAutomationSchedule(automation.rrule)
+  const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
   return {
     name: automation.name,
     prompt: automation.prompt,
@@ -39,6 +39,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : AUTOMATION_DEFAULT_TIME,
     dayOfWeek: String(schedule?.dayOfWeek ?? 1),
     customSchedule: hasCustomSchedule ? automation.rrule : '',
+    savedSchedule: automation.rrule,
     missedRunGraceMinutes: String(automation.missedRunGraceMinutes),
     scheduleWarning:
       schedule || hasCustomSchedule
@@ -52,7 +53,7 @@ export function buildExternalAutomationEditDraft(
   placement: { projectId: string; workspaceId: string }
 ): AutomationDraft {
   const rawSchedule = job.rawSchedule?.trim() ?? ''
-  const hasCustomSchedule = isValidAutomationCronSchedule(rawSchedule)
+  const hasCustomSchedule = isRunnableAutomationCronSchedule(rawSchedule)
   return {
     name: job.name,
     prompt: job.prompt ?? job.promptPreview,
@@ -69,6 +70,7 @@ export function buildExternalAutomationEditDraft(
     time: AUTOMATION_DEFAULT_TIME,
     dayOfWeek: '1',
     customSchedule: hasCustomSchedule ? rawSchedule : '',
+    savedSchedule: rawSchedule || null,
     missedRunGraceMinutes: '720',
     scheduleWarning: hasCustomSchedule
       ? null

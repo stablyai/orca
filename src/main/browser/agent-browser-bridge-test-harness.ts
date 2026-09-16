@@ -1,4 +1,5 @@
 import { vi, type Mock } from 'vitest'
+import type { AgentBrowserBridge } from './agent-browser-bridge'
 import type { BrowserManager } from './browser-manager'
 
 export type ExecFileCallback = (error: unknown, stdout?: string, stderr?: string) => void
@@ -18,6 +19,14 @@ export function mockBrowserManager(
 ): BrowserManager {
   return {
     getWebContentsIdByTabId: () => tabs,
+    getTabIdForWebContentsId: (webContentsId: number) => {
+      for (const [tabId, tabWebContentsId] of tabs) {
+        if (tabWebContentsId === webContentsId) {
+          return tabId
+        }
+      }
+      return null
+    },
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
     getBrowserPageLoadError: vi.fn(() => null),
@@ -87,15 +96,19 @@ export function mockWebContents(
 // Why: the bridge resolves webContents via dynamic require('electron').webContents.fromId
 // inside a try/catch. Override the private method to inject our mock.
 export function overrideBridgeWebContentsLookup(
-  bridgePrototype: object,
+  bridgePrototype: AgentBrowserBridge,
   webContentsFromIdMock: Mock
 ): void {
-  ;(bridgePrototype as { getWebContents: (id: number) => unknown }).getWebContents = function (
-    id: number
-  ) {
-    const target = webContentsFromIdMock(id) as { isDestroyed: () => boolean } | null
-    return target && !target.isDestroyed() ? target : null
-  }
+  // Why defineProperty: getWebContents is protected, so a typed assignment is not expressible.
+  Object.defineProperty(bridgePrototype, 'getWebContents', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: function (id: number) {
+      const target = webContentsFromIdMock(id) as { isDestroyed: () => boolean } | null
+      return target && !target.isDestroyed() ? target : null
+    }
+  })
 }
 
 export function createSucceedWith(execFileMock: Mock, stdinWrites: string[]) {

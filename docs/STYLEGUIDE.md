@@ -137,20 +137,20 @@ Browse `src/renderer/src/components/ui/` for the full list. Most wrap a Radix UI
 
 When a control has multiple plausible primitives, use this fork:
 
-| You want…                                                    | Reach for                                                            | Don't use                             |
-| ------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------- |
-| Hover-only label on an icon-only button                      | `Tooltip`                                                            | `HoverCard` (too heavy), title attr   |
-| Hover preview of richer content (avatar + summary)           | `HoverCard`                                                          | `Tooltip` (no rich content)           |
-| Click-revealed menu with actions                             | `DropdownMenu`                                                       | `Popover` with hand-rolled list       |
-| Right-click contextual actions                               | `ContextMenu`                                                        | `DropdownMenu` (different invocation) |
-| Click-revealed surface with arbitrary content (form, picker) | `Popover`                                                            | `Dialog` (it traps focus and dims)    |
-| Modal that demands a decision before you continue            | `Dialog`                                                             | `Popover`, inline overlay             |
-| Drawer / panel sliding in from an edge                       | `Sheet`                                                              | `Dialog` centered                     |
-| Single choice from a known list                              | `Select`                                                             | Custom listbox                        |
-| Single choice with search / fuzzy filtering                  | `Command` inside `Popover`                                           | `Select` (no search)                  |
-| Multi-select with search                                     | `repo-multi-combobox` (mirror its pattern)                           | Roll a new one                        |
-| Transient confirmation ("Saved", "Copied")                   | `sonner` toast                                                       | `Dialog`, inline banner               |
-| Persistent inline status ("3 errors")                        | inline text + `Badge`                                                | toast (toasts disappear)              |
+| You want…                                                    | Reach for                                  | Don't use                             |
+| ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------- |
+| Hover-only label on an icon-only button                      | `Tooltip`                                  | `HoverCard` (too heavy), title attr   |
+| Hover preview of richer content (avatar + summary)           | `HoverCard`                                | `Tooltip` (no rich content)           |
+| Click-revealed menu with actions                             | `DropdownMenu`                             | `Popover` with hand-rolled list       |
+| Right-click contextual actions                               | `ContextMenu`                              | `DropdownMenu` (different invocation) |
+| Click-revealed surface with arbitrary content (form, picker) | `Popover`                                  | `Dialog` (it traps focus and dims)    |
+| Modal that demands a decision before you continue            | `Dialog`                                   | `Popover`, inline overlay             |
+| Drawer / panel sliding in from an edge                       | `Sheet`                                    | `Dialog` centered                     |
+| Single choice from a known list                              | `Select`                                   | Custom listbox                        |
+| Single choice with search / fuzzy filtering                  | `Command` inside `Popover`                 | `Select` (no search)                  |
+| Multi-select with search                                     | `repo-multi-combobox` (mirror its pattern) | Roll a new one                        |
+| Transient confirmation ("Saved", "Copied")                   | `sonner` toast                             | `Dialog`, inline banner               |
+| Persistent inline status ("3 errors")                        | inline text + `Badge`                      | toast (toasts disappear)              |
 
 If you find yourself styling around a primitive (`<Popover>` to act like a `<Dialog>`, or vice versa), stop and reconsider — the focus-management semantics differ and a future contributor will be misled by the mismatch.
 

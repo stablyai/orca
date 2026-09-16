@@ -41,12 +41,14 @@ export function DiffNotesSendMenu({
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
   const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
-  const openRequestNonce =
-    respondToOpenRequest &&
-    openRequest?.worktreeId === worktreeId &&
-    Date.now() - openRequest.issuedAt < OPEN_REQUEST_TTL_MS
-      ? openRequest.nonce
-      : null
+  // Why: the TTL is a deadline, not a label, so it is enforced on the commit
+  // that opens the menu (see NotesSendMenu) where the clock is exact — a render
+  // clock either burns a tick per second or reads stale at the moment it matters.
+  const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
+  const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
+  const openRequestExpiresAt = hasPendingOpenRequest
+    ? (openRequest?.issuedAt ?? 0) + OPEN_REQUEST_TTL_MS
+    : null
   const handleOpenRequestHandled = useCallback(
     () => consumeOpenRequest(worktreeId),
     [consumeOpenRequest, worktreeId]
@@ -97,6 +99,7 @@ export function DiffNotesSendMenu({
       iconClassName={iconClassName}
       align={align}
       openRequestNonce={openRequestNonce}
+      openRequestExpiresAt={openRequestExpiresAt}
       onOpenRequestHandled={handleOpenRequestHandled}
       onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
     />

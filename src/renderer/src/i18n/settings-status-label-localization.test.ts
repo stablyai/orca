@@ -52,6 +52,9 @@ const REQUIRED_KEYS: Record<string, string> = {
   'auto.components.settings.ComputerUsePane.statusGranted': 'Granted',
   'auto.components.settings.ComputerUsePane.statusUnsupported': 'macOS only',
   'auto.components.settings.ComputerUsePane.statusNotEnabled': 'Not enabled',
+  // Linear setup checklist — unverifiable skill scan (Settings pane + Task Sources card)
+  'auto.components.settings.LinearAgentSkillGuide.setupUnverified': 'Cannot verify',
+  'auto.components.settings.TaskSourceProviderCard.statusUnverified': 'Cannot verify',
   // Source-control CLI integration cards
   'auto.components.settings.cli.source.control.integration.cards.statusConnected': 'Connected',
   'auto.components.settings.cli.source.control.integration.cards.statusUnavailable': 'Unavailable',

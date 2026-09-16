@@ -55,6 +55,7 @@ export type ComposerStoreActions = {
       linkedTaskSourceContext?: TaskSourceContext | null
       startupDraft?: string
       nameWasGenerated?: boolean
+      parentWorktreeId?: string
       provisionedRoot?: {
         runtimeId: string
         executionHostId: ExecutionHostId

@@ -81,7 +81,7 @@ export function registerBrowserStateIpcBridge(
     })
   )
   unsubs.push(
-    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
+    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
       const store = useAppStore.getState()
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
@@ -89,7 +89,21 @@ export function registerBrowserStateIpcBridge(
       if (!sourcePage || getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
         return
       }
-      store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
+      // Why: the link inherits the opener's cookie jar. Falling back to the default profile would let
+      // a page in an isolated session hand its links to the default one, silently crossing profiles.
+      const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
+        (tab) => tab.id === sourcePage.workspaceId
+      )
+      store.createBrowserTab(sourcePage.worktreeId, url, {
+        title: url,
+        activate: activate ?? true,
+        ...(sourceTab
+          ? {
+              sessionProfileId: sourceTab.sessionProfileId,
+              sessionPartition: sourceTab.sessionPartition
+            }
+          : {})
+      })
     })
   )
 }

@@ -4,7 +4,10 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
+import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
+  listStoredWorktreeRowsForRepo,
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
   type RepoWorktreeRowDeps
@@ -110,6 +113,70 @@ describe('host-qualified scoped worktree resolution', () => {
       hostId: 'ssh:builder',
       displayName: 'feature'
     })
+  })
+  it('uses the host-qualified metadata owner when a legacy row has another host', async () => {
+    const deps = createDeps([
+      repo('shared', '/remote/repo', {
+        connectionId: 'builder',
+        executionHostId: 'ssh:builder'
+      })
+    ])
+    const worktreeId = 'shared::/same/worktree'
+    const remoteMeta = {
+      displayName: 'remote workspace',
+      hostId: 'ssh:builder',
+      instanceId: 'remote-instance'
+    } as unknown as WorktreeMeta
+    deps.metaById[worktreeId] = {
+      displayName: 'stale local workspace',
+      hostId: 'local',
+      instanceId: 'local-instance'
+    } as unknown as WorktreeMeta
+    ;(
+      deps.store as Store & {
+        getWorktreeMetaForHost: () => WorktreeMeta
+      }
+    ).getWorktreeMetaForHost = () => remoteMeta
+
+    const rows = await resolveRepoWorktreeRows(
+      deps,
+      deps.store.getRepos()[0]!,
+      deps.metaById,
+      new Map()
+    )
+
+    expect(rows[0]).toMatchObject({
+      displayName: 'remote workspace',
+      hostId: 'ssh:builder',
+      instanceId: 'remote-instance'
+    })
+  })
+
+  it('restores canonical-only SSH rows without leaking colliding local metadata', () => {
+    const local = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const remote = repo('shared', '/remote/repo', {
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const deps = createDeps([local, remote])
+    deps.metaById['shared::/local/worktree'] = {
+      displayName: 'local workspace',
+      hostId: 'local'
+    } as WorktreeMeta
+    ;(
+      deps.store as Store & {
+        getAllWorktreeMetaForHost: () => Record<string, WorktreeMeta>
+      }
+    ).getAllWorktreeMetaForHost = () => ({
+      'shared::/remote/worktree': {
+        displayName: 'remote workspace',
+        hostId: 'ssh:builder'
+      } as unknown as WorktreeMeta
+    })
+
+    expect(listStoredWorktreeRowsForRepo(deps.store, remote, 2)).toEqual([
+      expect.objectContaining({ path: '/remote/worktree' })
+    ])
   })
 
   it.each([
@@ -284,4 +351,43 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
     await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toBeNull()
     expect(deps.scanRepo).not.toHaveBeenCalled()
   })
+})
+
+describe('folder-to-Git checkout identity', () => {
+  it.each([
+    ['C:\\projects\\draft', 'C:/projects/draft'],
+    ['C:\\projects\\draft', 'c:/projects/draft']
+  ])(
+    'preserves the live folder locator %s in desktop and runtime listings',
+    async (folderPath, gitPath) => {
+      const owner = {
+        ...repo('folder', folderPath),
+        kind: 'git' as const,
+        folderUpgradeGitRootPath: gitPath
+      }
+      const deps = createDeps([owner])
+      const oldId = `folder::${folderPath}`
+      const metadata = mergeWorktreeMetaForWrite(undefined, {
+        hostId: 'local',
+        instanceId: 'existing-omp',
+        comment: 'keep me'
+      })
+      deps.metaById[oldId] = metadata
+      Object.assign(deps.store, { getProjectHostSetups: () => [] })
+      deps.scanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree(gitPath)] })
+
+      const detected = buildDetectedGitWorktrees(deps.store, owner, [gitWorktree(gitPath)])
+      const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+      for (const result of [detected, rows]) {
+        expect(result).toHaveLength(1)
+        expect(result[0]).toMatchObject({
+          id: oldId,
+          path: folderPath,
+          instanceId: 'existing-omp',
+          comment: 'keep me'
+        })
+      }
+      expect(Object.keys(deps.metaById)).toEqual([oldId])
+    }
+  )
 })

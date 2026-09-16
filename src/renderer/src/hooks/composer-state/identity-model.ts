@@ -18,6 +18,8 @@ export type ComposerIdentityModel = {
   setCompareBaseRef: React.Dispatch<React.SetStateAction<string | undefined>>
   branchNameOverride: string | undefined
   setBranchNameOverride: React.Dispatch<React.SetStateAction<string | undefined>>
+  parentWorktreeId: string | null
+  setParentWorktreeId: React.Dispatch<React.SetStateAction<string | null>>
   branchNameOverridePreservesNameEdits: boolean
   setBranchNameOverridePreservesNameEdits: React.Dispatch<React.SetStateAction<boolean>>
   smartNameMode: SmartNameMode

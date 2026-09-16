@@ -41,14 +41,18 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { PtyHandler } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import type { PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
   createMockDispatcher,
+  createTestPtyHandler,
+  testPtyId,
   endPtyHandlerTest
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+
+const PTY_1 = testPtyId(1)
+const PTY_2 = testPtyId(2)
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -184,12 +188,12 @@ describe('PtyHandler', () => {
       expect(spawnedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
 
       const state = (await dispatcher.callRequest('pty.serialize', {
-        ids: ['pty-1']
+        ids: [PTY_1]
       })) as string
       await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
       try {
         await dispatcher.callRequest('pty.revive', { state })
@@ -498,7 +502,7 @@ describe('PtyHandler', () => {
       expect(userEnv.GIT_CONFIG_COUNT).toBe('1')
       expect(userEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
       expect(userEnv.GIT_CONFIG_KEY_1).toBeUndefined()
-      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
       expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -557,14 +561,14 @@ describe('PtyHandler', () => {
     const firstEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     const secondEnv = mockPtySpawn.mock.calls[1][2] as { env: Record<string, string> }
     expect(seenContexts[0]).toMatchObject({
-      id: 'pty-1',
+      id: PTY_1,
       paneKey: 'tab-context:0',
       launchAgent: 'pi',
       env: { ORCA_PANE_KEY: 'tab-context:0' }
     })
-    expect(seenContexts[1]).toMatchObject({ id: 'pty-2', paneKey: undefined })
+    expect(seenContexts[1]).toMatchObject({ id: PTY_2, paneKey: undefined })
     expect(firstEnv.env.OVERLAY_ID).toBe('tab-context:0')
-    expect(secondEnv.env.OVERLAY_ID).toBe('pty-2')
+    expect(secondEnv.env.OVERLAY_ID).toBe(PTY_2)
   })
 
   it('passes process and renderer env to env augmenters before augmenter overrides are applied', async () => {

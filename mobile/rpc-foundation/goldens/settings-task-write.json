@@ -1,0 +1,125 @@
+{
+  "operation": "settings.task-preferences",
+  "family": "settings-best-effort",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
+  "scenarioSha256": "bbcdefe16b07068a81f3c46ae60df01ccb0fbe5a7c1eade3f584f6f0130c23fe",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4a8219d725de": {
+      "name": "settings.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "assigned"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "write disconnected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "5db909d58c6f": {
+      "preset": "assigned"
+    },
+    "74827568abb0": {
+      "name": "settings.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "assigned"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "7f8a022ecd59": {
+      "name": "settings.update#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}",
+      "sent": 1
+    },
+    "8bdf90b8099a": {
+      "name": "defaultGitHubPreset",
+      "value": "assigned",
+      "sent": 0
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "settings-task-write",
+    "checkpoints": [
+      {
+        "id": "optimistic",
+        "observation": {
+          "sender": ["74827568abb0"],
+          "payloads": ["7f8a022ecd59"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "write": "eb79a9b3682a"
+          },
+          "state": "5db909d58c6f",
+          "effects": ["8bdf90b8099a"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["4a8219d725de"],
+          "payloads": ["7f8a022ecd59"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "write": "eb79a9b3682a"
+          },
+          "state": "5db909d58c6f",
+          "effects": ["8bdf90b8099a"]
+        }
+      }
+    ]
+  }
+}

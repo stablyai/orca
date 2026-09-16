@@ -5,6 +5,7 @@ import {
   FAKE_RUNTIME_DIR,
   FAKE_DAEMON_ENTRY_PATH
 } from './daemon-init-test-harness'
+import { DAEMON_RECOVERY_BUDGET_MS } from './daemon-recovery-budget'
 
 const {
   isPackagedMock,
@@ -16,6 +17,8 @@ const {
   killStaleDaemonMock,
   replaceDaemonPidFileMock,
   daemonClientMock,
+  netConnectMock,
+  probeSocketExistsMock,
   spawnerInstances,
   trackDaemonReplacedMock,
   importFresh,
@@ -220,6 +223,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementation(function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         request: vi.fn(async () => ({ sessions: [{ sessionId: 's1', isAlive: true }] })),
         disconnect: vi.fn()
       }
@@ -241,6 +245,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
       return {
         ensureConnected: vi.fn(async () => {
+          events.push('full-pair')
+        }),
+        ensureConnectedWithin: vi.fn(async () => {
           events.push('full-pair')
         }),
         request: vi.fn(),
@@ -279,6 +286,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         getDaemonIdentity: vi.fn(() => endpointIdentity),
         request: vi.fn(),
         disconnect: vi.fn()
@@ -337,6 +345,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         getDaemonIdentity: vi.fn(() => endpointIdentity),
         request: vi.fn(),
         disconnect: vi.fn()
@@ -385,6 +394,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         getDaemonIdentity: vi.fn(() => endpointIdentity),
         request: vi.fn(),
         disconnect: vi.fn()
@@ -456,6 +466,113 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
   })
 
+  it('rescues the endpoint owner with a full probe window after the recovery budget is spent', async () => {
+    // Why: this last-resort probe runs AFTER the budget — past the kill, the fork and the lease —
+    // so anything clamped to the remainder is a ~1ms probe that loses to its own timer against a
+    // live socket, and the rescue that saves every persistent session degrades into total loss.
+    const mod = await importFresh()
+    checkDaemonHealthMock.mockResolvedValue('unreachable')
+    await mod.initDaemonPtyProvider()
+    const clock = { now: 1_700_000_000_000 }
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock.now)
+    // The real post-deadline tail: kill, fork and lease all run after recovery has decided.
+    killStaleDaemonMock.mockImplementationOnce(async () => {
+      clock.now += DAEMON_RECOVERY_BUDGET_MS + 5_000
+      return { killed: true, liveOwnerSurvived: false }
+    })
+    function basicClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock.mockImplementationOnce(basicClient)
+    daemonClientMock.mockImplementationOnce(basicClient)
+    // The fresh child lost the endpoint to another daemon: the lease rejects on identity.
+    daemonClientMock.mockImplementationOnce(function MockPostReadyClient() {
+      return {
+        ...basicClient(),
+        getDaemonIdentity: vi.fn(() => ({
+          pid: 999,
+          startedAtMs: 900_000,
+          launchNonce: 'stale-launch'
+        }))
+      }
+    })
+    const exitHandlers: ((code?: unknown) => void)[] = []
+    const child = {
+      pid: 12345,
+      connected: true,
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      on(event: string, callback: (arg?: unknown) => void) {
+        if (event === 'exit') {
+          exitHandlers.push(callback)
+        }
+        if (event === 'message') {
+          queueMicrotask(() => callback({ type: 'ready', startedAtMs: 1_000_000 }))
+        }
+        return this
+      },
+      once(event: string, callback: (arg?: unknown) => void) {
+        return child.on(event, callback)
+      },
+      off() {
+        return child
+      },
+      kill: vi.fn(() => true),
+      disconnect: vi.fn(() => {
+        child.connected = false
+      }),
+      unref: vi.fn()
+    }
+    forkMock.mockReturnValueOnce(child)
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      queueMicrotask(() => {
+        child.exitCode = 0
+        for (const callback of exitHandlers.slice()) {
+          callback(0)
+        }
+      })
+      return true
+    })
+    probeSocketExistsMock.mockReturnValue(true)
+    // A loaded host answers late but well inside probeDaemonSocket's own 1s default.
+    netConnectMock.mockImplementation(() => ({
+      on(event: string, callback: () => void) {
+        if (event === 'connect') {
+          setTimeout(callback, 500)
+        }
+        return this
+      },
+      removeListener() {
+        return this
+      },
+      destroy() {}
+    }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string,
+      pidPath?: string,
+      launchNonce?: string
+    ) => Promise<{ mode?: string; releaseAdoptionLease?(): void }>
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'launch-new')
+
+      expect(handle.mode).toBe('degraded-new-pty-fallback')
+      handle.releaseAdoptionLease?.()
+    } finally {
+      warn.mockRestore()
+      kill.mockRestore()
+      nowSpy.mockRestore()
+      probeSocketExistsMock.mockReturnValue(false)
+    }
+  })
+
   it('disconnects every temporary client when healthy adoption fails', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
@@ -467,6 +584,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           ensureConnected: vi.fn(async () => {
             throw new Error('initial adoption failed')
           }),
+          ensureConnectedWithin: vi.fn(async () => {
+            throw new Error('initial adoption failed')
+          }),
           request: vi.fn(),
           disconnect: initialDisconnect
         }
@@ -474,6 +594,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       .mockImplementationOnce(function MockReplacementAdoptionClient() {
         return {
           ensureConnected: vi.fn(async () => {
+            throw new Error('replacement adoption failed')
+          }),
+          ensureConnectedWithin: vi.fn(async () => {
             throw new Error('replacement adoption failed')
           }),
           request: vi.fn(),

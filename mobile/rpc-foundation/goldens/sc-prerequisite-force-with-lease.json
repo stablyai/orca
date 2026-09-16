@@ -1,0 +1,93 @@
+{
+  "operation": "source-control.remote-prerequisite",
+  "family": "git.remote-prerequisite",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "ec2847b4af357d8564d8e0a9a1072713c1afd7ff86ba69e9c83c056a6841ee39",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "00e8a3bac22f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "ran": true
+      }
+    },
+    "0fe2eb2410a4": {
+      "outcome": {
+        "ok": true,
+        "ran": true
+      }
+    },
+    "3d5bc718d103": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "forceWithLease": true,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "3e471b70b788": {
+      "name": "progress",
+      "value": "force_pushing",
+      "sent": 0
+    },
+    "7e7e568336cc": {
+      "name": "git.push#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"forceWithLease\":true}}",
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "sc-prerequisite-force-with-lease",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["3d5bc718d103"],
+          "payloads": ["7e7e568336cc"],
+          "settlements": {
+            "apply": "00e8a3bac22f"
+          },
+          "state": "0fe2eb2410a4",
+          "effects": ["3e471b70b788"]
+        }
+      }
+    ]
+  }
+}

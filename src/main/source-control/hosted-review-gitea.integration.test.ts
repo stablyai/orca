@@ -84,7 +84,11 @@ describe('Gitea hosted review integration', () => {
       )
 
       await expect(
-        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/gitea' })
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/gitea'
+        })
       ).resolves.toEqual({
         provider: 'gitea',
         number: 9,

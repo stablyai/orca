@@ -10,7 +10,7 @@ import { execFile, type ExecFileException } from 'node:child_process'
 /** `unknown` means "could not be determined", never "assume quiet". */
 export type PtySlaveLineDisciplineEcho = 'echoing' | 'quiet' | 'unknown'
 
-export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown'
+export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown' | 'unavailable'
 
 export type PtySlaveLineEditorProbe = () => Promise<PtySlaveLineEditorState>
 
@@ -91,7 +91,7 @@ function createSttyProbe<T extends string>(
   ptsName: string | undefined,
   platform: NodeJS.Platform,
   parse: (output: string) => T | 'unknown'
-): (() => Promise<T | 'unknown'>) | undefined {
+): (() => Promise<T | 'unknown' | 'unavailable'>) | undefined {
   if (platform === 'win32' || !ptsName) {
     return undefined
   }
@@ -103,13 +103,17 @@ function createSttyProbe<T extends string>(
   let inFlight: Promise<SttyProbeResult> | null = null
   return async () => {
     if (unavailable) {
-      return 'unknown'
+      return 'unavailable'
     }
     inFlight ??= runStty(ptsName, platform).finally(() => {
       inFlight = null
     })
     const result = await inFlight
     unavailable = result.permanent
-    return result.stdout === null ? 'unknown' : parse(result.stdout)
+    return result.stdout === null
+      ? result.permanent
+        ? 'unavailable'
+        : 'unknown'
+      : parse(result.stdout)
   }
 }

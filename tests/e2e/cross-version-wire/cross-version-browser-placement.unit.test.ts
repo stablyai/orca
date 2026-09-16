@@ -4,7 +4,11 @@ import {
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { BrowserTabCreateParams } from '../../../src/main/runtime/rpc/methods/browser-tab-create-schema'
-import { materializeReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  type ReleaseCheckout
+} from './release-checkout'
 
 type Schema = { parse: (value: unknown) => Record<string, unknown> }
 
@@ -19,12 +23,13 @@ const BASELINE_TAB_CREATE_SOURCES = [
   ['browser-schemas.ts', 'TabCreate']
 ] as const
 
-async function importBaselineTabCreate(root: string): Promise<Schema> {
+async function importBaselineTabCreate(checkout: ReleaseCheckout): Promise<Schema> {
   const attempted: string[] = []
   for (const [file, exportName] of BASELINE_TAB_CREATE_SOURCES) {
     attempted.push(`${file}#${exportName}`)
-    const loaded = await import(
-      /* @vite-ignore */ `${root}/src/main/runtime/rpc/methods/${file}`
+    const loaded = await importReleaseCheckoutModule(
+      checkout,
+      `/src/main/runtime/rpc/methods/${file}`
     ).catch(() => null)
     const schema = loaded?.[exportName] as Schema | undefined
     if (schema?.parse) {
@@ -32,7 +37,7 @@ async function importBaselineTabCreate(root: string): Promise<Schema> {
     }
   }
   throw new Error(
-    `Baseline release at ${root} exposes no tab-create schema (tried ${attempted.join(', ')}).`
+    `Baseline release at ${checkout.root} exposes no tab-create schema (tried ${attempted.join(', ')}).`
   )
 }
 
@@ -52,11 +57,11 @@ let baselineProtocol: Record<string, unknown>
 
 beforeAll(async () => {
   baselineRef = LEGACY_BROWSER_PLACEMENT_RELEASE_REF
-  const checkout = materializeReleaseCheckout(baselineRef)
+  const checkout = await materializeReleaseCheckout(baselineRef)
   baselineRevision = checkout.commit
   const [tabCreate, protocol] = await Promise.all([
-    importBaselineTabCreate(checkout.root),
-    import(/* @vite-ignore */ `${checkout.root}/src/shared/protocol-version.ts`)
+    importBaselineTabCreate(checkout),
+    importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
   ])
   baselineTabCreate = tabCreate
   baselineProtocol = protocol

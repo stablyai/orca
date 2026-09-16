@@ -109,7 +109,8 @@ export function useSourceControlHostedReviewCreated({
             force: true,
             repoId,
             worktreeId: worktreeId ?? undefined,
-            linkedPRNumber: result.number
+            linkedPRNumber: result.number,
+            reason: 'post-push'
           })
         ])
       } catch {

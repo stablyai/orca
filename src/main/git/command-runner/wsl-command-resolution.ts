@@ -13,6 +13,7 @@ import {
   type WslProcessGroupTermination
 } from '../wsl-process-group-termination'
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
+import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
 
 // Env-assignment prefix for WSL-routed git, where spawn env can't cross the wsl.exe boundary; values are shell-safe unquoted.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
@@ -111,7 +112,7 @@ export function resolveCommand(
           ...(linuxCwd ? ['-C', linuxCwd] : []),
           ...translatedArgs
         ],
-        cwd: undefined,
+        cwd: resolveWslInteropSpawnCwd(),
         wsl,
         wslMode: 'direct-git'
       },
@@ -130,7 +131,7 @@ export function resolveCommand(
         {
           binary: 'wsl.exe',
           args: buildWslExecArgs(wsl.distro, ['sh', '-lc', captured.command]),
-          cwd: undefined,
+          cwd: resolveWslInteropSpawnCwd(),
           wsl,
           wslMode: 'login-shell',
           captured
@@ -142,7 +143,7 @@ export function resolveCommand(
       {
         binary: 'wsl.exe',
         args: buildWslExecArgs(wsl.distro, ['sh', '-lc', buildWslLoginShellCommand(shellCmd)]),
-        cwd: undefined,
+        cwd: resolveWslInteropSpawnCwd(),
         wsl,
         wslMode: 'login-shell'
       },
@@ -154,8 +155,11 @@ export function resolveCommand(
     {
       binary: 'wsl.exe',
       args: buildWslExecArgs(wsl.distro, ['bash', '-c', shellCmd]),
-      // Why: the `cd` inside bash -c handles the directory; a UNC cwd on the Node process is redundant and can break Node internals.
-      cwd: undefined,
+      // Why: the `cd` inside bash -c handles the Linux directory. This names an
+      // explicit Windows directory anyway, because `undefined` makes
+      // CreateProcessW inherit the parent's — which is a deletable WSL UNC path
+      // when Orca was launched from a worktree (#16463).
+      cwd: resolveWslInteropSpawnCwd(),
       wsl,
       wslMode: 'non-login-shell'
     },

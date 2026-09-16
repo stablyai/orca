@@ -297,7 +297,9 @@ describe('browserManager', () => {
 
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:newTerminalTab')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab', {
+      sourceId: 'browser-1'
+    })
     expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTabAcrossAllTypes', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTab', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:switchTerminalTab', 1)

@@ -9,6 +9,8 @@ import {
   recordWebSessionCloseIntent,
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
+import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
+import { toHostSessionTabId } from './web-terminal-surface-id'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
 
 const mocks = vi.hoisted(() => ({
@@ -80,6 +82,10 @@ describe('web runtime session tab actions', () => {
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      activeTabIdByWorktree: {},
+      activeGroupIdByWorktree: {},
       setActiveWorktree: mocks.setActiveWorktree
     })
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
@@ -299,6 +305,83 @@ describe('web runtime session tab actions', () => {
         reason: 'user'
       })
     ).resolves.toBe(outcome)
+  })
+
+  // #9194: a host can answer tab_not_found and still keep republishing the surface. The close
+  // intent is what hides the mirror, so letting it age out handed the user back a phantom pane
+  // whose handle is already gone -- and closing it again just restarted the same TTL loop.
+  it.each([
+    ['tab_not_found', true],
+    ['runtime_rpc_timeout', false]
+  ])('keeps a %s close suppressed past the close-intent TTL: %s', async (code, stillPending) => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'close', ok: false, error: { code, message: code } })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await closeWebRuntimeSessionTab({
+      worktreeId: WORKTREE_ID,
+      tabId: 'local-browser-unified',
+      reason: 'user'
+    })
+
+    const hostTabId = toHostSessionTabId('local-browser-unified')
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: ENVIRONMENT_ID },
+        WORKTREE_ID,
+        hostTabId,
+        Date.now() + 60_000
+      )
+    ).toBe(stillPending)
+  })
+
+  // #9194, slow host: the close RPC can answer `tab_not_found` at any point up to its own timeout,
+  // and a host that still republishes the surface keeps querying the intent in the meantime. That
+  // query is what evicts an expired entry, so a TTL under the RPC timeout leaves nothing for the
+  // durable flip to reach and the pane the user closed comes back.
+  it('keeps a tab_not_found close suppressed when the host answers slower than the old TTL', async () => {
+    const startedAt = 1_700_000_000_000
+    let clock = startedAt
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock)
+    const owner = { environmentId: ENVIRONMENT_ID }
+    const hostTabIds = [toHostSessionTabId('local-browser-unified'), 'host-browser-unified']
+    let pendingWhileHostRepublished: boolean[] = []
+    try {
+      const runtimeCall = vi
+        .fn()
+        .mockImplementationOnce(() => {
+          clock = startedAt + WEB_SESSION_TAB_RPC_TIMEOUT_MS - 1
+          pendingWhileHostRepublished = hostTabIds.map((hostTabId) =>
+            isWebSessionCloseIntentPending(owner, WORKTREE_ID, hostTabId, clock)
+          )
+          return Promise.resolve({
+            id: 'close',
+            ok: false,
+            error: { code: 'tab_not_found', message: 'tab_not_found' }
+          })
+        })
+        .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+      await expect(
+        closeWebRuntimeSessionTab({
+          worktreeId: WORKTREE_ID,
+          tabId: 'local-browser-unified',
+          reason: 'user'
+        })
+      ).resolves.toBe('unknown-tab')
+
+      expect(pendingWhileHostRepublished).toEqual([true, true])
+      expect(
+        hostTabIds.map((hostTabId) =>
+          isWebSessionCloseIntentPending(owner, WORKTREE_ID, hostTabId, clock + 60_000)
+        )
+      ).toEqual([true, true])
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 
   it('fails closed when reconnect routes a lifecycle close to an older host', async () => {

@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
@@ -164,7 +165,7 @@ vi.mock('./workspace-board-task-status-sync', async (importOriginal) => ({
 }))
 
 type UpdateWorktreesMeta = (
-  updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
+  updates: readonly WorktreeMetaBatchUpdate[] | ReadonlyMap<string, Partial<WorktreeMeta>>
 ) => Promise<void>
 
 const statuses = [
@@ -410,7 +411,13 @@ describe('WorkspaceKanbanDrawer search', () => {
       })
     })
 
-    const dropped = updateWorktreesMeta.mock.calls.at(-1)?.[0].get(omega.id)
+    const payload = updateWorktreesMeta.mock.calls.at(-1)?.[0]
+    let dropped: Partial<WorktreeMeta> | undefined
+    if (Array.isArray(payload)) {
+      dropped = payload.find((entry) => entry.worktreeId === omega.id)?.updates
+    } else if (payload && 'get' in payload) {
+      dropped = payload.get(omega.id)
+    }
     expect(dropped?.workspaceStatus).toBe('todo')
     expect(dropped?.manualOrder).toBeGreaterThan(gamma.manualOrder ?? 0)
     expect(dropped?.manualOrder).toBeLessThan(delta.manualOrder ?? 0)

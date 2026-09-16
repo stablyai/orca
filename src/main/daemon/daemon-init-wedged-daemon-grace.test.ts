@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WEDGED_DAEMON_GRACE_RETRIES } from './daemon-init'
 import { FAKE_RUNTIME_DIR } from './daemon-init-test-harness'
+import {
+  DAEMON_RECOVERY_BUDGET_MS,
+  DAEMON_RECOVERY_PROBE_MS,
+  TRANSIENT_WEDGE_DRAIN_MS
+} from './daemon-recovery-budget'
+import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../startup/first-window-startup-services'
 
 const {
   probeSocketExistsMock,
@@ -64,6 +70,121 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
   }
 
+  // The real client's own defaults, which is what an unbudgeted probe pays. Mirrored here so the
+  // simulated clock below charges a wedge exactly what production would have spent on it.
+  const CLIENT_CONNECT_TIMEOUT_MS = 5_000
+  const CLIENT_REQUEST_TIMEOUT_MS = 30_000
+  const HEALTH_CHECK_TIMEOUT_MS = 3_000
+  // What still has to fit inside the startup PTY gate once recovery decides, at each stage's own
+  // hard cap: killStaleDaemon's two identity inspections, SIGTERM wait, SIGKILL confirm and
+  // endpoint probe (daemon-stale-kill.ts, daemon-process-identity-query.ts,
+  // daemon-endpoint-probe.ts), then launchDaemonChild's readiness timeout
+  // (daemon-launched-child.ts), then the adoption lease and adapter connects — the last against a
+  // daemon that just reported ready, so an allowance rather than the client's unbudgeted 4x5s.
+  const POST_RECOVERY_KILL_MS = 3_000 + 3_000 + 3_000 + 1_000 + 500
+  const POST_RECOVERY_FORK_MS = 10_000
+  const POST_RECOVERY_LEASE_MS = 5_000
+  const POST_RECOVERY_RELAUNCH_MS =
+    POST_RECOVERY_KILL_MS + POST_RECOVERY_FORK_MS + POST_RECOVERY_LEASE_MS
+
+  /**
+   * Runs the launcher against a daemon that accepts connections and answers nothing until
+   * `drainsAfterMs` of simulated elapsed time, on a hand-driven clock: each mocked wait advances
+   * Date.now by exactly what the real call would have blocked for, or stops at the drain — the
+   * probe already in flight when the daemon comes back is the one that gets an answer. Returns
+   * how long the adopt-or-replace decision took.
+   */
+  async function runWedgedRecovery(
+    wedgeAt: 'handshake' | 'listSessions',
+    drainsAfterMs = Number.POSITIVE_INFINITY
+  ): Promise<number> {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const startedAtMs = 1_700_000_000_000
+    const drainsAtMs = startedAtMs + drainsAfterMs
+    const clock = { now: startedAtMs }
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock.now)
+    const wedge = { active: true, drained: false }
+
+    const stall = async (timeoutMs: number, message: string): Promise<void> => {
+      if (drainsAtMs > clock.now + timeoutMs) {
+        clock.now += timeoutMs
+        throw new Error(message)
+      }
+      clock.now = Math.max(clock.now, drainsAtMs)
+      wedge.active = false
+      wedge.drained = true
+    }
+    daemonClientMock.mockImplementation(function MockDaemonClient() {
+      const connect = async (timeoutMs = CLIENT_CONNECT_TIMEOUT_MS): Promise<void> => {
+        if (wedge.active && wedgeAt === 'handshake') {
+          await stall(timeoutMs, 'Hello response timed out')
+        }
+      }
+      return {
+        ensureConnected: vi.fn(() => connect()),
+        ensureConnectedWithin: vi.fn(connect),
+        getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
+        request: vi.fn(async (_type: string, _payload: unknown, timeoutMs?: number) => {
+          if (wedge.active && wedgeAt === 'listSessions') {
+            await stall(timeoutMs ?? CLIENT_REQUEST_TIMEOUT_MS, 'Request timed out')
+          }
+          // A daemon that drained still owns the sessions this grace exists to preserve.
+          return { sessions: wedge.drained ? [{ sessionId: 'wt-1@@live', isAlive: true }] : [] }
+        }),
+        disconnect: vi.fn()
+      }
+    })
+    checkDaemonHealthMock.mockImplementationOnce(async () => {
+      clock.now += HEALTH_CHECK_TIMEOUT_MS
+      return 'unreachable'
+    })
+    // Ending the wedge on the kill keeps the replacement daemon answering its adoption lease.
+    killStaleDaemonMock.mockImplementationOnce(async () => {
+      wedge.active = false
+      return { killed: true, liveOwnerSurvived: false }
+    })
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+    forkMock.mockImplementationOnce(() => ({
+      pid: 12345,
+      on(event: string, cb: (arg?: unknown) => void) {
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+        }
+        return this
+      },
+      off() {
+        return this
+      },
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    try {
+      await launcher('/fake/socket', '/fake/token')
+    } finally {
+      warnSpy.mockRestore()
+      nowSpy.mockRestore()
+      daemonClientMock.mockImplementation(function MockDaemonClient() {
+        return {
+          ensureConnected: vi.fn(async () => {}),
+          ensureConnectedWithin: vi.fn(async () => {}),
+          request: vi.fn(async () => ({ sessions: [] })),
+          disconnect: vi.fn()
+        }
+      })
+    }
+    // Nothing after the adopt-or-replace decision advances the simulated clock, so this is it.
+    return clock.now - startedAtMs
+  }
+
   it('adopts a transiently wedged daemon that drains and reports live sessions within the grace window', async () => {
     // Why: Windows update-relaunch — post-install load wedges the daemon briefly; it still owns live sessions, so grace-adopt not kill.
     const mod = await importFresh()
@@ -75,6 +196,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         ensureConnected: vi.fn(async () => {
           throw new Error('Hello response timed out')
         }),
+        ensureConnectedWithin: vi.fn(async () => {
+          throw new Error('Hello response timed out')
+        }),
         request: vi.fn(),
         disconnect: vi.fn()
       }
@@ -82,6 +206,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         request: vi.fn(async () => ({
           sessions: [{ sessionId: 'wt-1@@live', isAlive: true }]
         })),
@@ -111,6 +236,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const answeringDefault = function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         request: vi.fn(async () => ({ sessions: [] })),
         disconnect: vi.fn()
       }
@@ -121,6 +247,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       daemonClientConstructionCount++
       return {
         ensureConnected: vi.fn(async () => {
+          if (daemonClientConstructionCount <= 2 + WEDGED_DAEMON_GRACE_RETRIES) {
+            throw new Error('Hello response timed out')
+          }
+        }),
+        ensureConnectedWithin: vi.fn(async () => {
           if (daemonClientConstructionCount <= 2 + WEDGED_DAEMON_GRACE_RETRIES) {
             throw new Error('Hello response timed out')
           }
@@ -183,56 +314,70 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
   })
 
-  it('grace budget is generous enough to ride out a ~60s transient wedge', () => {
-    // Why: each probe waits the client's 5s hello timeout, so 1 + 11 probes ≈ 60s of drain grace; don't cut without telemetry.
-    expect(WEDGED_DAEMON_GRACE_RETRIES).toBeGreaterThanOrEqual(11)
+  it('bounds recovery inside the startup PTY gate without cutting into the drain grace', () => {
+    // Lower bound: #8697 bought adoption of a daemon that drains within ~20s *with* its live
+    // sessions; a budget that expires first turns that adoption back into a kill.
+    expect(DAEMON_RECOVERY_BUDGET_MS).toBeGreaterThan(TRANSIENT_WEDGE_DRAIN_MS)
+    // Upper bound: recovery is only the first phase inside the gate's fail-open cap — the kill
+    // and the relaunch that follow it run inside the same cap.
+    expect(DAEMON_RECOVERY_BUDGET_MS + POST_RECOVERY_RELAUNCH_MS).toBeLessThan(
+      LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS
+    )
+    // Why the probe outruns the health check: it is the second opinion on that check's verdict,
+    // so on the loaded machine it exists for, the same bar would just reproduce it.
+    expect(DAEMON_RECOVERY_PROBE_MS).toBeGreaterThan(HEALTH_CHECK_TIMEOUT_MS)
+    // Why: the count is a spin guard for instantly-failing probes only. If it could bind first, a
+    // wedge would again be graced for however long its probes happened to take.
+    expect(WEDGED_DAEMON_GRACE_RETRIES * DAEMON_RECOVERY_PROBE_MS).toBeGreaterThan(
+      DAEMON_RECOVERY_BUDGET_MS
+    )
   })
 
-  it('preserves a daemon that stays wedged until the LAST allowed grace retry', async () => {
-    // Why: daemon drains only on the last allowed probe (1 + WEDGED_DAEMON_GRACE_RETRIES) — must be preserved, not replaced.
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
+  it('preserves a daemon that drains on the last probe the recovery budget allows', async () => {
+    // Why rewritten onto the clock: this used to drain on probe 1 + WEDGED_DAEMON_GRACE_RETRIES
+    // with real Date.now, so its 12 probes elapsed ~0ms and the budget never bound — a grace
+    // production can no longer deliver, since each failing probe costs up to
+    // DAEMON_RECOVERY_PROBE_MS. The count's exhaustion side stays pinned by the #8689 test above.
+    const recoveryMs = await runWedgedRecovery('handshake', DAEMON_RECOVERY_BUDGET_MS - 1_000)
 
-    let probe = 0
-    const answeringDefault = function MockDaemonClient() {
-      return {
-        ensureConnected: vi.fn(async () => {}),
-        request: vi.fn(async () => ({ sessions: [] })),
-        disconnect: vi.fn()
-      }
-    }
-    daemonClientMock.mockImplementation(function MockDaemonClient() {
-      probe += 1
-      const drainsNow = probe >= 1 + WEDGED_DAEMON_GRACE_RETRIES
-      return {
-        ensureConnected: vi.fn(async () => {
-          if (!drainsNow) {
-            throw new Error('Hello response timed out')
-          }
-        }),
-        request: vi.fn(async () => ({
-          sessions: drainsNow ? [{ sessionId: 'wt-1@@live', isAlive: true }] : []
-        })),
-        disconnect: vi.fn()
-      }
-    })
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+    expect(recoveryMs).toBeLessThanOrEqual(DAEMON_RECOVERY_BUDGET_MS)
+  })
 
-    const launcher = spawnerInstances[0].launcher as (
-      socketPath: string,
-      tokenPath: string
-    ) => Promise<{ shutdown(): Promise<void> }>
-    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
-    probeSocketExistsMock.mockReturnValue(true)
-    netConnectMock.mockImplementation(stubAliveSocketConnect)
+  it('ends the grace on the recovery budget when every handshake stalls', async () => {
+    // Why: unbudgeted, this cost the client's 5s connect default once per probe across 12 probes
+    // — ~68s with the health check, past the gate's 60s fail-open cap (STA-5732).
+    expect(await runWedgedRecovery('handshake')).toBeLessThanOrEqual(DAEMON_RECOVERY_BUDGET_MS)
+    expect(killStaleDaemonMock).toHaveBeenCalled()
+  })
 
-    try {
-      await launcher('/fake/socket', '/fake/token')
+  it('ends the grace on the recovery budget when the daemon answers hello and then wedges', async () => {
+    // Why: this is the shape the ticket reported — listSessions fell back to the client's 30s
+    // request default, so 12 probes stalled startup for minutes.
+    expect(await runWedgedRecovery('listSessions')).toBeLessThanOrEqual(DAEMON_RECOVERY_BUDGET_MS)
+    expect(killStaleDaemonMock).toHaveBeenCalled()
+  })
 
-      expect(killStaleDaemonMock).not.toHaveBeenCalled()
-      expect(forkMock).not.toHaveBeenCalled()
-    } finally {
-      daemonClientMock.mockImplementation(answeringDefault)
-    }
+  it('still adopts a wedge that drains at the far edge of the documented window (#8697)', async () => {
+    // Why: the wall clock now ends the grace, so the budget is the only thing keeping the
+    // Windows update-relaunch wedge adoptable. It comes back owning live sessions well after the
+    // probes start failing; recovery has to still be probing then instead of having killed it.
+    const recoveryMs = await runWedgedRecovery('handshake', TRANSIENT_WEDGE_DRAIN_MS)
+
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+    expect(recoveryMs).toBeGreaterThanOrEqual(TRANSIENT_WEDGE_DRAIN_MS)
+  })
+
+  it('replaces a wedge that drains after the recovery budget (accepted trade vs #8697)', async () => {
+    // Why pinned rather than left implicit: #8697's merged grace was 11 retries ~= 60s, chosen to
+    // keep live-session loss near zero. Bounding it at DAEMON_RECOVERY_BUDGET_MS is a deliberate
+    // narrowing — a Windows update-relaunch wedge that drains after the budget is now replaced and
+    // its live terminal/agent sessions are destroyed. Only the window size is tunable.
+    await runWedgedRecovery('handshake', DAEMON_RECOVERY_BUDGET_MS + 5_000)
+
+    expect(killStaleDaemonMock).toHaveBeenCalled()
   })
 
   it('replaces a hello-rejected daemon even though its pipe accepts connections', async () => {
@@ -243,6 +388,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {
+          throw new Error('Hello rejected')
+        }),
+        ensureConnectedWithin: vi.fn(async () => {
           throw new Error('Hello rejected')
         }),
         request: vi.fn(),

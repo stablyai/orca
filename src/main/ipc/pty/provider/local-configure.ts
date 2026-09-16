@@ -72,7 +72,8 @@ export function configureLocalPtyProvider(args: {
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
-        networkProxySettings: ptySettings
+        networkProxySettings: ptySettings,
+        routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
       })
       // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
       const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE

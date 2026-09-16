@@ -8,7 +8,12 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
 import { getLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import { ensureBrowserPageViewport } from '../host-guest/browser-page-viewport'
+import { getBrowserViewportPreset } from '../../../../../shared/browser-viewport-presets'
+import {
+  ensureBrowserPageViewport,
+  scrollBrowserPageViewport,
+  setBrowserPageViewportPresetSize
+} from '../host-guest/browser-page-viewport'
 import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
 import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
 import { useGrabMode } from '../annotate/useGrabMode'
@@ -38,6 +43,7 @@ import { useBrowserPageWebviewLifecycle } from '../host-guest/use-browser-page-w
 import { useBrowserPageWebviewPartition } from '../host-guest/use-browser-page-webview-partition'
 import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
 import { useBrowserPageZoomFeedback } from '../host-guest/use-browser-page-zoom-feedback'
+import { useBrowserPageViewportScrollReporting } from '../host-guest/use-browser-page-viewport-scroll-reporting'
 
 export function BrowserPagePane({
   browserTab,
@@ -76,10 +82,35 @@ export function BrowserPagePane({
   })
   const pageViewport = ensureBrowserPageViewport(browserTab.id, workspaceId)
   const pageViewportContainer = pageViewport?.container ?? null
+  const pageViewportScroller = pageViewport?.scroller ?? null
   const containerRef = useRef<HTMLDivElement | null>(pageViewportContainer)
   useLayoutEffect(() => {
     containerRef.current = pageViewportContainer
   }, [pageViewportContainer])
+  useLayoutEffect(() => {
+    const preset = getBrowserViewportPreset(browserTab.viewportPresetId ?? null)
+    setBrowserPageViewportPresetSize(
+      browserTab.id,
+      preset ? { width: preset.width, height: preset.height } : null
+    )
+  }, [browserTab.id, browserTab.viewportPresetId])
+  useBrowserPageViewportScrollReporting(
+    browserTab.id,
+    pageViewportScroller,
+    browserTab.viewportPresetId ?? null
+  )
+  useEffect(() => {
+    const subscribe = window.api.ui.onScrollBrowserPage
+    if (!subscribe || !pageViewportScroller || !browserTab.viewportPresetId) {
+      return
+    }
+    return subscribe((event) => {
+      if (event.browserPageId !== browserTab.id) {
+        return
+      }
+      scrollBrowserPageViewport(browserTab.id, event.deltaX, event.deltaY)
+    })
+  }, [browserTab.id, browserTab.viewportPresetId, pageViewportScroller])
   const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -140,12 +171,14 @@ export function BrowserPagePane({
     worktreeId
   })
   const grab = useGrabMode(browserTab.id)
-  const markup = useBrowserPageMarkupCapture(webviewRef, containerRef)
+  const markup = useBrowserPageMarkupCapture(webviewRef)
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: browserTab.id,
     isActive,
     grab,
     containerRef,
+    trackingContainer: pageViewport?.container ?? null,
+    trackingScroller: pageViewport?.scroller ?? null,
     webviewRef,
     setBrowserOverlayViewport,
     browserAnnotationsLength: annotationSend.browserAnnotations.length,
@@ -171,6 +204,7 @@ export function BrowserPagePane({
   useBrowserPageWebviewLifecycle({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
+    browserTabLoading: browserTab.loading,
     browserTabLoadError: browserTab.loadError,
     workspaceId,
     worktreeId,
@@ -231,6 +265,7 @@ export function BrowserPagePane({
   const reload = useBrowserPageReloadActions({
     browserTab,
     webviewRef,
+    trackNextLoadingEventRef,
     retryGuestRecoveryRef,
     onUpdatePageStateRef
   })
@@ -361,6 +396,7 @@ export function BrowserPagePane({
               sshRouted={Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))}
               isBlankTab={isBlankTab}
               containerRef={containerRef}
+              markupPortalContainer={pageViewport?.content ?? null}
               browserOverlayViewport={browserOverlayViewport}
               worktreeId={worktreeId}
               grab={grab}

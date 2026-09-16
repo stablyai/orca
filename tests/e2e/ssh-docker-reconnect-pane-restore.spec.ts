@@ -46,8 +46,8 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
  *   slot, and the next open throws "PTY source delivery already has an upstream owner". Seen live as
  *   an error toast and a blank pane.
  * - COMPARING record.identity.clientGeneration TO THE REQUEST is not available: that value is
- *   client-supplied through pty.openClient (dispatcher.ts:1219) and RequestContext carries no
- *   generation of its own.
+ *   client-supplied through pty.openClient (see admitsPtyDataPublication in
+ *   dispatcher-capacity-signals.ts) and RequestContext carries no generation of its own.
  *
  * The real cause is now established, and it is broader than this spec: a reconnect reuses the same
  * clientId (setWrite keeps the primary client), so the relay's activate() matches on it and returns

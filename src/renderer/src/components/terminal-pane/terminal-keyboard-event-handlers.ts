@@ -46,6 +46,8 @@ type EventContext = KeyboardHandlersDeps & {
 
 export function createTerminalKeyboardEventHandlers(context: EventContext) {
   const {
+    tabId,
+    worktreeId,
     isMac,
     isWindows,
     shortcutPlatform,
@@ -263,6 +265,8 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     dispatchTerminalShortcutAction(action, e, manager, {
+      tabId,
+      worktreeId,
       fallbackCwd,
       expandedPaneIdRef,
       setExpandedPane,

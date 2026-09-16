@@ -61,6 +61,7 @@ describe('branch line total request gate on git status refreshes', () => {
     // Why: no OID on the request is the whole performance contract — the host
     // runs no ranged diff, so a background worktree costs nothing.
     expect(gitStatus).toHaveBeenCalledWith({
+      admissionTier: 'status',
       worktreePath: '/repo',
       connectionId: 'ssh-1'
     })
@@ -78,6 +79,7 @@ describe('branch line total request gate on git status refreshes', () => {
     })
 
     expect(gitStatus).toHaveBeenCalledWith({
+      admissionTier: 'status',
       worktreePath: '/repo',
       connectionId: undefined
     })
@@ -94,6 +96,7 @@ describe('branch line total request gate on git status refreshes', () => {
     })
 
     expect(gitStatus).toHaveBeenCalledWith({
+      admissionTier: 'status',
       worktreePath: '/other-repo',
       connectionId: undefined
     })
@@ -113,6 +116,7 @@ describe('branch line total request gate on git status refreshes', () => {
     })
 
     expect(gitStatus).toHaveBeenCalledWith({
+      admissionTier: 'status',
       worktreePath: '/repo',
       connectionId: 'ssh-1',
       branchLineTotalMergeBase: MERGE_BASE
@@ -131,6 +135,7 @@ describe('branch line total request gate on git status refreshes', () => {
     })
 
     expect(gitStatus).toHaveBeenCalledWith({
+      admissionTier: 'status',
       worktreePath: '/repo',
       connectionId: undefined,
       reuseLineStats: true,
@@ -175,11 +180,13 @@ describe('branch line total request gate on git status refreshes', () => {
     })
 
     expect(gitStatus).toHaveBeenNthCalledWith(1, {
+      admissionTier: 'status',
       worktreePath: '/repo',
       connectionId: undefined,
       branchLineTotalMergeBase: MERGE_BASE
     })
     expect(gitStatus).toHaveBeenNthCalledWith(2, {
+      admissionTier: 'status',
       worktreePath: '/repo',
       connectionId: undefined,
       branchLineTotalMergeBase: 'rebased-merge-base'
@@ -196,6 +203,7 @@ describe('branch line total request gate on git status refreshes', () => {
     })
 
     expect(gitStatus).toHaveBeenCalledWith({
+      admissionTier: 'interactive',
       worktreePath: '/repo',
       connectionId: undefined,
       bypassEffectiveUpstreamNegativeCache: true
@@ -215,6 +223,7 @@ describe('branch line total request gate on git status refreshes', () => {
     })
 
     expect(gitStatus).toHaveBeenCalledWith({
+      admissionTier: 'interactive',
       worktreePath: '/repo',
       connectionId: undefined,
       bypassEffectiveUpstreamNegativeCache: true,

@@ -2,6 +2,7 @@ import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import { settingsForRepoOwner } from './owner-routing'
 
 export const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
@@ -32,7 +33,7 @@ export function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Re
     const promise = syncRuntimeGitForkDefaultBranch(
       {
         settings: settingsForRepoOwner(get(), repo.id),
-        worktreeId: repo.id,
+        worktreeId: getRepoMainWorktreeId(repo),
         worktreePath: repo.path,
         connectionId: repo.connectionId ?? undefined
       },

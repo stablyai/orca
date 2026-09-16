@@ -14,6 +14,7 @@ import {
   shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from './worktree-manual-order'
+import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
 import {
   CARD_SELECTOR,
   getCardDropTarget,
@@ -221,7 +222,7 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   sortBy: string
   now: number
 }): {
-  updates: Map<string, Partial<WorktreeMeta>>
+  updates: WorktreeMetaBatchUpdate[]
   shouldSwitchToManual: boolean
 } {
   const sourceGroupKeys = args.worktreeIds.flatMap((worktreeId) => {
@@ -245,25 +246,41 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
       })
     : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 
-  const updates = new Map<string, Partial<WorktreeMeta>>()
+  const updates: WorktreeMetaBatchUpdate[] = []
   for (const worktreeId of args.worktreeIds) {
     const current = args.worktreeById.get(worktreeId)
     if (!current) {
       continue
     }
+    const next: Partial<WorktreeMeta> = {}
     if (getWorkspaceStatus(current, args.workspaceStatuses) !== args.status) {
-      updates.set(worktreeId, { workspaceStatus: args.status })
+      next.workspaceStatus = args.status
     }
+    updates.push({
+      worktreeId,
+      updates: next,
+      executionHostId: current.hostId ?? 'local'
+    })
   }
 
   if (writeManualOrder) {
     for (const [worktreeId, manualOrder] of order.updates) {
-      updates.set(worktreeId, { ...updates.get(worktreeId), ...manualOrder })
+      const current = args.worktreeById.get(worktreeId)
+      const entry = updates.find((candidate) => candidate.worktreeId === worktreeId)
+      if (entry) {
+        entry.updates = { ...entry.updates, ...manualOrder }
+      } else if (current) {
+        updates.push({
+          worktreeId,
+          updates: manualOrder,
+          executionHostId: current.hostId ?? 'local'
+        })
+      }
     }
   }
 
   return {
-    updates,
+    updates: updates.filter((entry) => Object.keys(entry.updates).length > 0),
     shouldSwitchToManual: writeManualOrder && order.changed
   }
 }

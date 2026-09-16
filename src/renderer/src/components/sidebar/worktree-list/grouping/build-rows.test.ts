@@ -31,6 +31,30 @@ describe('getPRGroupKey', () => {
     expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('done')
   })
 
+  it('treats a matching suppressed PR as in progress', () => {
+    const prCache = {
+      'repo-1::feature/super-critical': {
+        data: { number: 42, state: 'merged' }
+      }
+    }
+
+    expect(
+      getPRGroupKey({ ...worktree, linkedPR: null, suppressedGitHubPR: 42 }, repoMap, prCache)
+    ).toBe('in-progress')
+  })
+
+  it('keeps a different PR in its review-status group', () => {
+    const prCache = {
+      'repo-1::feature/super-critical': {
+        data: { number: 43, state: 'merged' }
+      }
+    }
+
+    expect(
+      getPRGroupKey({ ...worktree, linkedPR: null, suppressedGitHubPR: 42 }, repoMap, prCache)
+    ).toBe('done')
+  })
+
   it('prefers repo-scoped PR status over stale legacy path-scoped status', () => {
     const prCache = {
       '/tmp/orca::feature/super-critical': {

@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 18 remote-runtime PTY transport specs, not shipped code, and it
+   falls outside the *.test / *.spec / tests glob set. refreshWebRuntimeSessionTabsSnapshot is imported directly by several
+   renderer runtime modules, so an injected seam would have to be threaded through all of them. */
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import {

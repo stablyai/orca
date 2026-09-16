@@ -193,7 +193,7 @@ export class PRRefreshQueueDrainer {
           next.candidate.linkedPRNumber ?? null,
           next.candidate.connectionId ?? null,
           next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
-          ...hostedReviewOptionArgs(next.candidate)
+          ...hostedReviewOptionArgs(next.candidate, next.reason)
         )
         let plannedRetryAt: number | undefined
         let broadcastOutcome = outcome

@@ -1,9 +1,6 @@
 import { useEffect } from 'react'
 import { resolveChecksPanelPRRefreshRequest } from '../checks-panel-pr-refresh-request'
-import {
-  shouldCoalesceChecksPanelGitStatusSnapshotRefresh,
-  shouldPollChecksPanelRuntimeSshStatus
-} from '../checks-panel-git-status-snapshot'
+import { shouldPollChecksPanelRuntimeSshStatus } from '../checks-panel-git-status-snapshot'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
@@ -17,10 +14,7 @@ type ChecksPanelForegroundEffectsInput = Pick<
   | 'enqueueGitHubPRRefresh'
   | 'fetchHostedReviewForBranch'
   | 'foregroundedUnrenderedReviewKeyRef'
-  | 'gitStatusSnapshotInFlightContextRef'
-  | 'gitStatusSnapshotRerunContextRef'
   | 'isPanelVisible'
-  | 'panelContextKeyRef'
   | 'panelVisibleSinceRef'
   | 'repo'
   | 'repoConnectionId'
@@ -55,8 +49,6 @@ export function useChecksPanelForegroundEffects(model: ChecksPanelForegroundEffe
     fetchHostedReviewForBranch,
     foregroundReviewEvidenceKey,
     foregroundedUnrenderedReviewKeyRef,
-    gitStatusSnapshotInFlightContextRef,
-    gitStatusSnapshotRerunContextRef,
     isFolder,
     isGitHubReviewContext,
     isPanelVisible,
@@ -65,7 +57,6 @@ export function useChecksPanelForegroundEffects(model: ChecksPanelForegroundEffe
     linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
-    panelContextKeyRef,
     panelVisibleSinceRef,
     prCachedHasPR,
     prFetchedAt,
@@ -150,27 +141,10 @@ export function useChecksPanelForegroundEffects(model: ChecksPanelForegroundEffe
           skippedInitialRun = true
           return
         }
-        const currentContextKey = panelContextKeyRef.current
-        if (
-          shouldCoalesceChecksPanelGitStatusSnapshotRefresh(
-            gitStatusSnapshotInFlightContextRef.current,
-            currentContextKey
-          )
-        ) {
-          gitStatusSnapshotRerunContextRef.current = currentContextKey
-          return
-        }
         setGitStatusRefreshNonce((value) => value + 1)
       },
+      jitterOnVisible: true,
       intervalMs: RUNTIME_SSH_STATUS_REFRESH_MS
     })
-  }, [
-    isPanelVisible,
-    repoConnectionId,
-    runtimeEnvironmentId,
-    gitStatusSnapshotInFlightContextRef,
-    gitStatusSnapshotRerunContextRef,
-    setGitStatusRefreshNonce,
-    panelContextKeyRef
-  ])
+  }, [isPanelVisible, repoConnectionId, runtimeEnvironmentId, setGitStatusRefreshNonce])
 }

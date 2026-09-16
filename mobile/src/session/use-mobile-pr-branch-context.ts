@@ -5,7 +5,7 @@ import type { MobileGitBranchCompareResult } from '../source-control/mobile-bran
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { resolveMobileBranchCompareBaseRef } from '../source-control/mobile-branch-base-ref'
 import { fetchGithubRepoSlug } from './github-pr-rpc'
-import { readMobileBranchCompareResult, readMobileGitStatusResult } from './mobile-diff-review-rpc'
+import { branchContextCompareRead, branchContextStatusRead } from './mobile-diff-review-operations'
 
 export type MobilePrBranchContext = {
   branch: string | null
@@ -173,8 +173,9 @@ async function readGitStatus(
   client: RpcClient,
   worktreeId: string
 ): Promise<MobileGitStatusResult | null> {
-  const response = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
-  return response.ok ? readMobileGitStatusResult(response.result) : null
+  const reply = await branchContextStatusRead.request(client, { worktree: `id:${worktreeId}` })
+  const status = branchContextStatusRead.interpret(reply)
+  return status.accepted ? status.value : null
 }
 
 async function readBranchCompare(
@@ -187,9 +188,10 @@ async function readBranchCompare(
   if (!baseRef) {
     return null
   }
-  const response = await client.sendRequest('git.branchCompare', {
+  const reply = await branchContextCompareRead.request(client, {
     worktree: `id:${worktreeId}`,
     baseRef
   })
-  return response.ok ? readMobileBranchCompareResult(response.result) : null
+  const compared = branchContextCompareRead.interpret(reply)
+  return compared.accepted ? compared.value : null
 }

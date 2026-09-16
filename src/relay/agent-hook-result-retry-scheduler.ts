@@ -11,10 +11,19 @@ import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
+import { CodexSubagentPollScheduler } from '../shared/codex-subagent-poll-scheduler'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
 const CODEX_SUBAGENT_POLL_MS = 1_000
+
+type CodexSubagentPoll = {
+  source: AgentHookSource
+  body: unknown
+  original: AgentHookEventPayload
+  env?: string
+  version?: string
+}
 
 export type AgentHookResultRetryHost = {
   state: HookListenerState
@@ -31,11 +40,15 @@ export type AgentHookResultRetryHost = {
 
 export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private codexSubagentPollScheduler: CodexSubagentPollScheduler<CodexSubagentPoll>
   private host: AgentHookResultRetryHost
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
+    this.codexSubagentPollScheduler = new CodexSubagentPollScheduler(
+      CODEX_SUBAGENT_POLL_MS,
+      (paneKey, poll) => this.runCodexSubagentPoll(paneKey, poll)
+    )
   }
 
   clearAll(): void {
@@ -43,10 +56,7 @@ export class AgentHookResultRetryScheduler {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
-    for (const timer of this.codexSubagentPollTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.codexSubagentPollTimers.clear()
+    this.codexSubagentPollScheduler.clearAll()
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
@@ -59,12 +69,7 @@ export class AgentHookResultRetryScheduler {
   }
 
   clearCodexSubagentPoll(paneKey: string): void {
-    const timer = this.codexSubagentPollTimers.get(paneKey)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
-    this.codexSubagentPollTimers.delete(paneKey)
+    this.codexSubagentPollScheduler.clear(paneKey)
   }
 
   scheduleCodexSubagentPoll(
@@ -78,34 +83,41 @@ export class AgentHookResultRetryScheduler {
     if (source !== 'codex') {
       return
     }
-    this.clearCodexSubagentPoll(original.paneKey)
+    this.codexSubagentPollScheduler.clear(original.paneKey)
     if (!hasCodexTranscriptSubagents(this.host.state, original.paneKey)) {
       return
     }
-    const timer = setTimeout(() => {
-      this.codexSubagentPollTimers.delete(original.paneKey)
-      if (
-        !this.host.isListening() ||
-        this.host.state.lastStatusByPaneKey.get(original.paneKey) !== original
-      ) {
-        return
-      }
-      const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
-      if (!event) {
-        return
-      }
-      const subagentsChanged =
-        JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? event : original
-      if (subagentsChanged) {
-        this.host.applyEvent(event, source, env, version)
-      }
-      this.scheduleCodexSubagentPoll(source, body, next, env, version)
-    }, CODEX_SUBAGENT_POLL_MS)
-    this.codexSubagentPollTimers.set(original.paneKey, timer)
-    if (typeof timer.unref === 'function') {
-      timer.unref()
+    this.codexSubagentPollScheduler.schedule(original.paneKey, {
+      source,
+      body,
+      original,
+      env,
+      version
+    })
+  }
+
+  private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
+    const { source, body, original, env, version } = poll
+    // Keep the identity check at callback time: a newer event supersedes this
+    // payload even when its pane still has transcript children.
+    if (
+      paneKey !== original.paneKey ||
+      !this.host.isListening() ||
+      this.host.state.lastStatusByPaneKey.get(original.paneKey) !== original
+    ) {
+      return
     }
+    const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
+    if (!event) {
+      return
+    }
+    const subagentsChanged =
+      JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
+    const next = subagentsChanged ? event : original
+    if (subagentsChanged) {
+      this.host.applyEvent(event, source, env, version)
+    }
+    this.scheduleCodexSubagentPoll(source, body, next, env, version)
   }
 
   scheduleAssistantMessageRetry(

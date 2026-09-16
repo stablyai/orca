@@ -1,4 +1,9 @@
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type {
+  DocPreviewFileAccessRequest,
+  DocPreviewFileAccessResult
+} from '../../shared/doc-preview-file-access'
 import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
@@ -48,6 +53,7 @@ export class FileRangeReadUnsupportedError extends Error {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
+  readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
   /** Positional read. Optional because an older remote host cannot serve one.
    *  Strict by design: it throws `FileRangeReadUnsupportedError` rather than
    *  silently degrading, so a caller cannot accidentally pay a whole-file
@@ -81,6 +87,7 @@ export type IFilesystemProvider = {
   ): Promise<FileStat>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
   writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
+  pathsExist?(filePaths: string[]): Promise<PathExistenceResult[]>
   stat(filePath: string): Promise<FileStat>
   lstat?(filePath: string): Promise<FileStat>
   deletePath(targetPath: string, recursive?: boolean): Promise<void>

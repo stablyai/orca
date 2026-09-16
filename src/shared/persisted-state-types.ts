@@ -77,6 +77,10 @@ export type PersistedState = {
   /** Per paired device last tab selection by worktree; keeps mobile navigation across host restarts. */
   mobileClientTabSelectionsByDeviceId?: PersistedMobileClientTabSelections
   worktreeMeta: Record<string, WorktreeMeta>
+  /** Canonical host/instance metadata; optional for legacy profiles. */
+  worktreeMetaByIdentity?: Record<string, WorktreeMeta>
+  /** Host-qualified locator aliases to canonical identity keys. */
+  worktreeIdentityAliases?: Record<string, string[]>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
   settings: GlobalSettings

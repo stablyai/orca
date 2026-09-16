@@ -1,0 +1,35 @@
+---
+title: Chat UI (native chat)
+description: Optional chat surface over supported agent terminals — skills, model pickers, and transcript view.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+Chat UI is an experimental view layered on supported agent terminal sessions. The terminal remains the source of truth; Chat UI is a structured transcript + composer for the same PTY. Transcript decoding covers **Claude**, **Codex**, **Grok**, and **OMP** — OMP sessions open in Chat UI like the others instead of staying raw-terminal-only.
+
+## Enable
+
+1. Open **Settings → Experimental → Chat UI**.
+1. Turn **Chat UI** on.
+1. Optionally set **Default view** to **Chat UI** so new supported agent tabs open in chat; keep **Terminal** to open the TUI first.
+
+Toggle Chat UI ↔ terminal from the agent pane once enabled.
+
+## Composer
+
+- Type a message and send (or stop a working turn). Attach files/images when the host supports it. Unsent draft text and attachments stay with the pane across disconnect/reconnect when the host can restore them. A settled transcript also stays on screen while the same session reconnects, instead of blanking until the fresh load finishes (desktop and mobile share that retention).
+- Type `/` for slash commands and discovered **skills** (filtered per agent when possible). The slash catalog is agent-aware (Claude vs Codex command sets) and shared with mobile Chat UI.
+- Use the **model** and options pills (thought level, mode, agent-specific session options) when the agent exposes them. **Claude** model choices come from the **installed Claude CLI on that host** (not a hardcoded list), so new models show up after you update the CLI. **Codex** supports direct model selection from the pill (sends `/model <id>`), with bare `/model` still opening the agent picker. **Grok** exposes **model** (`-m` at launch, `/model` mid-session) and **reasoning effort** (`--reasoning-effort` at launch, `/effort` mid-session); the model list is probed from the signed-in Grok CLI (`grok models`) so retired ids drop out of the picker. Effort choices follow the selected model: Grok 4.6 includes **Extra high**, while Grok 4.5 stops at **High**. **Before the agent process starts**, the composer can show draft launch options that apply on first start; after the session is live, pills that only affect a running turn stay disabled or labeled until the session is ready. Live values go to the CLI in that tab.
+
+## Questions from the agent
+
+When Claude shows an **AskUserQuestion** (or similar structured permission/question card), Chat UI should render the question card in the transcript so you can answer from the composer path instead of treating it as a collapsed tool call. Confirm with **Submit** on the card. That includes agents running on a paired [Remote Orca Server](/docs/remote-servers) / headless host — not only local panes.
+
+## Availability
+
+Chat UI ships on desktop for supported local and remote (paired server) agent sessions. The [mobile companion](/docs/mobile) reuses chat-style transcript patterns for the same paired sessions.
+
+<Callout title="Experimental">
+  Transcript fidelity, streaming, and terminal parity are still under active tuning. Prefer the raw
+  TUI when you need every OSC/status detail.
+</Callout>
