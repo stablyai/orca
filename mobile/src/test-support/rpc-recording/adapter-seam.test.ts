@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { adapterSourceByOperation } from './adapter-digest'
@@ -41,8 +41,11 @@ function read(source: string): string {
 function registerImports(file: ts.SourceFile): Map<string, string> {
   const bindings = new Map<string, string>()
   for (const statement of file.statements) {
-    const clause = ts.isImportDeclaration(statement) ? statement.importClause : undefined
-    if (!clause || clause.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier!)) {
+    if (!ts.isImportDeclaration(statement)) {
+      continue
+    }
+    const clause = statement.importClause
+    if (!clause || clause.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier)) {
       continue
     }
     const named = clause.namedBindings
@@ -179,8 +182,17 @@ describe('the engine/adapter seam', () => {
     const declaration = `const ${HOST_CLIENT_CONTEXT_LOCAL} = createContext`
     const context = readFileSync(join(root, 'mobile/src/transport/client-context.tsx'), 'utf8')
     expect(context.split(declaration).length - 1).toBe(1)
-    const copies = readdirSync(directory)
-      .filter((file) => read(file).includes(source.trim()))
+    // The engine directory too: a copy there is pinned by `recorderSha256` rather than
+    // `adapterSha256`, but it is the same unchecked spelling of the same module-private local.
+    // Sources only, since the README quotes the string to document it.
+    const copies = [engine, directory]
+      .flatMap((from) =>
+        readdirSync(from, { withFileTypes: true })
+          .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+          .map((entry) => join(from, entry.name))
+      )
+      .filter((file) => readFileSync(file, 'utf8').includes(source.trim()))
+      .map((file) => relative(root, file))
       .sort()
     expect(copies).toEqual([])
   })
