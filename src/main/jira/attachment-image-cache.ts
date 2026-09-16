@@ -133,7 +133,10 @@ export async function loadAttachmentDataUrlWithCache(args: {
       }
       return loaded.dataUrl
     } finally {
-      inFlight.delete(key)
+      // A cleared generation no longer owns the current download's singleflight slot.
+      if (currentEpoch(args.siteId) === epochAtStart) {
+        inFlight.delete(key)
+      }
     }
   })()
 

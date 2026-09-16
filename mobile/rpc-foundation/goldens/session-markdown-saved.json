@@ -1,0 +1,104 @@
+{
+  "operation": "session.markdown-save",
+  "family": "session.markdown-save",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "a2b5b73b2455f9efc48361e4b96ab1d3ecc3d136459403c9c3678104604cd774",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "36de5fd645a3": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v2",
+          "content": "# b",
+          "editable": true,
+          "isDirty": false,
+          "localContent": "# b",
+          "status": "ready"
+        }
+      }
+    },
+    "976e04874a1e": {
+      "name": "toast",
+      "value": {
+        "message": "Saved"
+      },
+      "sent": 1
+    },
+    "a06e17cbe383": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "content": "# b",
+            "isDirty": false,
+            "version": "v2"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f7fe2c70c07e": {
+      "name": "markdown.saveTab#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}",
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "session-markdown-saved",
+    "checkpoints": [
+      {
+        "id": "saved",
+        "observation": {
+          "sender": ["a06e17cbe383"],
+          "payloads": ["f7fe2c70c07e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "36de5fd645a3",
+          "effects": ["976e04874a1e"]
+        }
+      }
+    ]
+  }
+}

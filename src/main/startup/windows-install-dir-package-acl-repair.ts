@@ -54,7 +54,8 @@ const TREE_GRANT_TIMEOUT_MS = 120_000
 const FAILED_PROCESSING = /Failed processing (\d+) files?/i
 
 export type WindowsInstallDirAclRepairResult =
-  | { mode: 'marker-hit' }
+  /** `alreadyRepaired`: the marker records a completed repair, not an exhausted retry budget. */
+  | { mode: 'marker-hit'; alreadyRepaired: boolean }
   | { mode: 'repaired' }
   | { mode: 'failed'; reason: string; failedFileCount: number | null }
 
@@ -62,6 +63,14 @@ export type WindowsInstallDirAclRepairOptions = {
   installDir?: string
   platform?: NodeJS.Platform
   isServeMode?: boolean
+  /**
+   * A DACL reading found this tree poisoned and nothing has read it clean since — this
+   * launch's probe, or a persisted poison marker from an earlier one. A marker claiming a
+   * completed repair therefore describes a tree that has since been re-poisoned, or an
+   * icacls run that silently no-opped: it stops outranking the reading. The attempt
+   * budget still bounds retries.
+   */
+  poisonEvidenceOutstanding?: boolean
   /** Test seams. */
   runProcessFn?: typeof runProcess
   recordBreadcrumb?: typeof recordDurableCrashBreadcrumb
@@ -81,7 +90,16 @@ type RepairMarker = {
   appVersion: string
   attemptedAt: number
   outcome: string
+  /** Absent on schemeVersion-1 markers written before the retry budget existed. */
+  attempts?: number
 }
+
+// Why bounded rather than one-and-done: the failure modes are not all permanent.
+// A Defender-locked file, a timeout or a contended volume fails one launch and
+// succeeds the next, and pinning on the first failure leaves the machine blank
+// forever for that version. Three is enough to stop a standard-user Program Files
+// install — which can never win — from re-spawning icacls on every launch.
+const MAX_REPAIR_ATTEMPTS = 3
 
 /**
  * The probe's verdict is the only trigger: an orphan package ACE with no
@@ -106,31 +124,46 @@ function markerPath(userDataPath: string): string {
   return join(userDataPath, WINDOWS_INSTALL_DIR_ACL_REPAIR_MARKER_FILE)
 }
 
-function hasMarkerFor(args: WindowsInstallDirAclRepairArgs): boolean {
+/** The marker for this exact install and version, or null. */
+function readMarkerFor(args: WindowsInstallDirAclRepairArgs): Partial<RepairMarker> | null {
   try {
     const parsed = JSON.parse(readFileSync(markerPath(args.userDataPath), 'utf-8')) as
       | Partial<RepairMarker>
       | undefined
-    return (
-      parsed?.schemeVersion === WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION &&
-      parsed.installDir === args.installDir &&
-      parsed.appVersion === args.appVersion
-    )
+    if (
+      parsed?.schemeVersion !== WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION ||
+      parsed.installDir !== args.installDir ||
+      parsed.appVersion !== args.appVersion
+    ) {
+      return null
+    }
+    return parsed
   } catch {
-    return false // missing or corrupt -> attempt again
+    return null // missing or corrupt -> attempt again
   }
 }
 
-// Why write it on failure too: a standard-user Program Files install can never
-// win, and re-spawning icacls on every launch forever buys nothing. Reinstall or
-// update changes the key and retries.
+function markerHitFor(args: WindowsInstallDirAclRepairArgs): { alreadyRepaired: boolean } | null {
+  const marker = readMarkerFor(args)
+  if (!marker) {
+    return null
+  }
+  if (marker.outcome === 'repaired' && args.poisonEvidenceOutstanding !== true) {
+    return { alreadyRepaired: true }
+  }
+  return (marker.attempts ?? 0) >= MAX_REPAIR_ATTEMPTS ? { alreadyRepaired: false } : null
+}
+
+// Why write it on failure too: re-spawning icacls on every launch forever buys
+// nothing, so failures spend the retry budget. Reinstall or update changes the key.
 function writeMarker(args: WindowsInstallDirAclRepairArgs, outcome: string): void {
   const marker: RepairMarker = {
     schemeVersion: WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION,
     installDir: args.installDir ?? '',
     appVersion: args.appVersion,
     attemptedAt: Date.now(),
-    outcome
+    outcome,
+    attempts: (readMarkerFor(args)?.attempts ?? 0) + 1
   }
   if (!existsSync(args.userDataPath)) {
     mkdirSync(args.userDataPath, { recursive: true })
@@ -185,9 +218,10 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
   let result: WindowsInstallDirAclRepairResult
   let data: CrashReportBreadcrumbData
   try {
-    if (hasMarkerFor(resolved)) {
-      result = { mode: 'marker-hit' }
-      data = { status: 'skipped', reason: 'marker-hit' }
+    const markerHit = markerHitFor(resolved)
+    if (markerHit) {
+      result = { mode: 'marker-hit', alreadyRepaired: markerHit.alreadyRepaired }
+      data = { status: 'skipped', reason: 'marker-hit', alreadyRepaired: markerHit.alreadyRepaired }
     } else {
       const runner = args.runProcessFn ?? runProcess
       const root = await runGrant(
@@ -257,13 +291,16 @@ export function resetWindowsInstallDirAclRepairForTest(): void {
  * Fire-and-forget; returns before any spawn. Call only when the probe reported
  * `matchesPoisonSignature`. win32 only, exempt in serve mode, and it must never
  * throw into window creation.
+ *
+ * Returns whether THIS call dispatched the repair. A caller that waits on `onDone`
+ * would otherwise wait forever on the once-per-process latch.
  */
-export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepairArgs): void {
+export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepairArgs): boolean {
   if ((args.platform ?? process.platform) !== 'win32' || args.isServeMode === true) {
-    return
+    return false
   }
   if (repairStarted) {
-    return
+    return false
   }
   repairStarted = true
   try {
@@ -273,4 +310,5 @@ export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepa
   } catch {
     // Nothing left to report to that would not throw again.
   }
+  return true
 }

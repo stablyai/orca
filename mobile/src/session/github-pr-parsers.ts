@@ -14,6 +14,10 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../src/shared/github/work-item-types'
+import {
+  normalizeGitHubPRForBranchOutcome,
+  type GitHubPRForBranchResponse
+} from '../../../src/shared/github/pull-request-for-branch-outcome'
 import { readPRComments } from './github-pr-comment-parsers'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import {
@@ -107,6 +111,29 @@ export function readPRForBranch(value: unknown): PRInfo | null {
     // mergeMethodSettings drives which merge methods the picker may offer.
     mergeMethodSettings: readMergeMethodSettings(value.mergeMethodSettings)
   }
+}
+
+/**
+ * The branch lookup's whole answer, outcome classification included.
+ *
+ * Throws rather than degrading, twice: a host that could not reach GitHub answers in-band with
+ * `kind: 'upstream-error'` and the sidebar has always surfaced that message, and a reply whose PR
+ * body will not parse would otherwise render as "no pull request".
+ */
+export function readPRForBranchOutcome(value: unknown): PRInfo | null {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the normalizer discriminates on `kind` before reading anything else and treats every other shape as a legacy PRInfo, which readPRForBranch then validates.
+  const outcome = normalizeGitHubPRForBranchOutcome(value as GitHubPRForBranchResponse)
+  if (outcome.kind === 'upstream-error') {
+    throw new Error(outcome.message)
+  }
+  if (outcome.kind === 'no-pr') {
+    return null
+  }
+  const pr = readPRForBranch(outcome.pr)
+  if (!pr) {
+    throw new Error('GitHub returned an invalid pull request response.')
+  }
+  return pr
 }
 
 function readWorkItem(value: unknown): Omit<GitHubWorkItem, 'repoId'> | null {

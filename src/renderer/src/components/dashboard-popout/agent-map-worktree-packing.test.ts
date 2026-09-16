@@ -145,8 +145,8 @@ describe('packAgentMapWorktrees', () => {
       if (typeof key === 'number') {
         numericMapSets += 1
       }
-      return Reflect.apply(set, this, [key, value])
-    } as typeof Map.prototype.set
+      return set.call(this, key, value)
+    }
     try {
       const packed = packAgentMapWorktrees(
         Array.from({ length: 5 }, (_, index) => ({

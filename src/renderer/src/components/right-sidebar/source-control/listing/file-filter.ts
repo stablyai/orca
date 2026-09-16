@@ -1,5 +1,4 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
-import { compareFileNames } from '../../../../../../shared/file-name-sort'
 
 export const SOURCE_CONTROL_FILE_FILTER_QUERY_MAX_BYTES = 2 * 1024
 
@@ -47,15 +46,6 @@ export function filterSourceControlPathEntries<T extends SourceControlPathEntry>
     return entries
   }
   return entries.filter((entry) => entry.path.toLowerCase().includes(filter.normalizedFilter))
-}
-
-export function filterAndSortSourceControlPathEntries<T extends SourceControlPathEntry>(
-  entries: T[],
-  filter: SourceControlFileFilterState
-): T[] {
-  return [...filterSourceControlPathEntries(entries, filter)].sort((a, b) =>
-    compareFileNames(a.path, b.path)
-  )
 }
 
 export function filterSourceControlGroupedPathEntries<T extends SourceControlPathEntry>(

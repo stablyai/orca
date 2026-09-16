@@ -1,9 +1,9 @@
 import { lstat, open, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
 import { getPersistedWorkspaceCleanupActivityAt } from '../../shared/workspace-cleanup'
+import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
 type ReadTextFile = (targetPath: string, options?: { tailBytes?: number }) => Promise<string>
@@ -23,7 +23,7 @@ export function resolvePersistedWorkspaceCleanupActivityWorktree(worktree: Workt
 export type WorkspaceCleanupFsActivityCache = Map<string, Promise<number>>
 
 export async function resolveWorkspaceCleanupActivityWorktree(
-  repo: Repo,
+  route: WorkspaceCleanupGitRoute,
   worktree: Worktree,
   statPath: StatPath = statLocalPath,
   readTextFile: ReadTextFile = readLocalTextFile,
@@ -32,7 +32,7 @@ export async function resolveWorkspaceCleanupActivityWorktree(
   fsActivityCache?: WorkspaceCleanupFsActivityCache
 ): Promise<Worktree> {
   const activityAt = await resolveWorkspaceCleanupActivityAt(
-    repo,
+    route,
     worktree,
     statPath,
     readTextFile,
@@ -74,14 +74,16 @@ async function readLocalTextFile(
 }
 
 async function resolveWorkspaceCleanupActivityAt(
-  repo: Repo,
+  route: WorkspaceCleanupGitRoute,
   worktree: Worktree,
   statPath: StatPath,
   readTextFile: ReadTextFile,
   fsActivityCache?: WorkspaceCleanupFsActivityCache
 ): Promise<number> {
   const persistedActivityAt = getPersistedWorkspaceCleanupActivityAt(worktree)
-  if (repo.connectionId) {
+  // Why: the probes below are local filesystem reads. Statting a remote path here answers
+  // about whatever this machine happens to have at that path, or nothing at all.
+  if (route.kind !== 'local') {
     return persistedActivityAt
   }
 

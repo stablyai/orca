@@ -1,3 +1,4 @@
+import { pathsExistOnRelay } from './fs-path-existence'
 import { tmpdir } from 'node:os'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
@@ -25,6 +26,7 @@ import {
   writeRelayFile
 } from './fs-path-mutation-requests'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
+import { resolveQuickOpenResultLimit } from '../shared/quick-open-listing-limits'
 import { maybeStreamRpcResponse, type GitResponseStreamRegistry } from './git-response-stream'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { readRelayFileRange } from './fs-handler-file-range'
@@ -88,6 +90,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => writeRelayFile(p))
     this.dispatcher.onRequest('fs.writeTerminalArtifact', (p) => this.writeTerminalArtifact(p))
+    this.dispatcher.onRequest('fs.pathsExist', pathsExistOnRelay)
     this.dispatcher.onRequest('fs.stat', (p) => statRelayPath(p))
     this.dispatcher.onRequest('fs.lstat', (p) => lstatRelayPath(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => deleteRelayPath(p, this.watchRegistry))
@@ -101,7 +104,8 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.getCapabilities', async () => ({
       quickOpenSearchVersion: 1,
-      rangedReadVersion: 1
+      rangedReadVersion: 1,
+      pathExistenceBatchVersion: 1
     }))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
@@ -217,11 +221,14 @@ export class FsHandler {
     context?: RequestContext
   ): Promise<unknown> {
     const rootPath = expandTilde(params.rootPath as string)
+    // Why no host-side default: #17954 made an oversized reply streamable, so a caller that names no
+    // limit gets its whole listing instead of an unannounced prefix it would report as complete.
+    // A requested limit is still clamped to the shared ceiling the scan's retention budget assumes.
     const maxResults =
       typeof params.maxResults === 'number' &&
       Number.isInteger(params.maxResults) &&
       params.maxResults > 0
-        ? Math.min(params.maxResults, 20_001)
+        ? resolveQuickOpenResultLimit(params.maxResults)
         : undefined
     const searchQuery =
       typeof params.searchQuery === 'string' && params.searchQuery.trim().length > 0

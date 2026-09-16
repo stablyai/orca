@@ -1,0 +1,289 @@
+{
+  "operation": "relay.pairing-recovery",
+  "family": "relay.pairing-recovery",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
+  "scenarioSha256": "8dc3fd27c5720276608ca8743990e4f57d94eab84f620e9aa42702a4686fd5a9",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "09329ce738b3": {
+      "name": "host-saved",
+      "value": "host-1",
+      "sent": 4
+    },
+    "2e0a00540206": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}",
+      "sent": 1
+    },
+    "50f1b63c9e0d": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-fixture-1",
+              "state": "not-found",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "6b9f1bf73e55": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 4
+    },
+    "6f09228b201f": {
+      "name": "pairing.getEndpoints#3",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-fixture-1",
+              "result": {
+                "authorizationMode": "relay-basis",
+                "currentVersion": 4,
+                "reqId": "install-fixture-1",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "7a3e4e5413b5": {
+      "outcome": "recovered",
+      "winner": {
+        "$rpc": "null"
+      }
+    },
+    "8a13a5758a69": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "reqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "authorizationMode": "relay-basis",
+            "currentVersion": 4,
+            "reqId": "install-fixture-1",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
+    },
+    "8ba03f7fcc7b": {
+      "name": "pairing.getEndpoints#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
+      "sent": 2
+    },
+    "9bb91a6d0ca7": {
+      "name": "pairing.getEndpoints#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-fixture-1",
+              "state": "not-found",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "b1003d00d1be": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}",
+      "sent": 3
+    },
+    "bcb071e85da1": {
+      "name": "journal-cleared",
+      "value": "recovery",
+      "sent": 4
+    },
+    "be67e12f6925": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 1
+    },
+    "ca7cb1785a59": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 4
+    },
+    "da0417cd1d5f": {
+      "name": "journal-updated",
+      "value": "relay-basis",
+      "sent": 2
+    },
+    "f0723ea3ab16": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "recovered"
+    },
+    "f4a3f7deb30c": {
+      "name": "pairing.getEndpoints#3",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
+      "sent": 4
+    }
+  },
+  "recording": {
+    "scenario": "relay-pairing-recovery-invite-authorizes",
+    "checkpoints": [
+      {
+        "id": "recovered-through-invite",
+        "observation": {
+          "sender": ["50f1b63c9e0d", "9bb91a6d0ca7", "8a13a5758a69", "6f09228b201f"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b", "b1003d00d1be", "f4a3f7deb30c"],
+          "settlements": {
+            "recover": "f0723ea3ab16"
+          },
+          "state": "7a3e4e5413b5",
+          "effects": [
+            "be67e12f6925",
+            "da0417cd1d5f",
+            "6b9f1bf73e55",
+            "09329ce738b3",
+            "bcb071e85da1",
+            "ca7cb1785a59"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -41,7 +41,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
-    workspaceSurfaces
+    workspaceSurfaceIds
   } = controller
 
   useEffect(() => {
@@ -182,6 +182,6 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
-    workspaceSurfaces
+    workspaceSurfaceIds
   ])
 }

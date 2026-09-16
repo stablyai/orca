@@ -10,6 +10,7 @@ export function createAgentStatusRetentionActions(
   AgentStatusSlice,
   | 'retainAgents'
   | 'dismissRetainedAgent'
+  | 'dismissRetainedAgents'
   | 'dismissRetainedAgentsByWorktree'
   | 'pruneRetainedAgents'
   | 'clearRetentionSuppressedPaneKeys'
@@ -65,6 +66,35 @@ export function createAgentStatusRetentionActions(
             ...s.retentionSuppressedPaneKeys,
             [paneKey]: true
           }
+        }
+      })
+    },
+
+    dismissRetainedAgents: (paneKeys) => {
+      set((s) => {
+        let next: Record<string, RetainedAgentEntry> | null = null
+        let nextSuppressed: Record<string, true> | null = null
+        for (const paneKey of paneKeys) {
+          if (!(paneKey in (next ?? s.retainedAgentsByPaneKey))) {
+            continue
+          }
+          if (next === null) {
+            next = { ...s.retainedAgentsByPaneKey }
+          }
+          delete next[paneKey]
+          if (paneKey in s.agentStatusByPaneKey && !(paneKey in s.retentionSuppressedPaneKeys)) {
+            if (nextSuppressed === null) {
+              nextSuppressed = { ...s.retentionSuppressedPaneKeys }
+            }
+            nextSuppressed[paneKey] = true
+          }
+        }
+        if (next === null) {
+          return s
+        }
+        return {
+          retainedAgentsByPaneKey: next,
+          ...(nextSuppressed ? { retentionSuppressedPaneKeys: nextSuppressed } : {})
         }
       })
     },

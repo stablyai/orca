@@ -57,7 +57,6 @@ src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 src/main/codex-accounts/service.ts
-src/main/codex/codex-app-server-client.ts
 src/main/codex/codex-app-server-posix-supervisor.ts
 src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-state-db-backfill-recovery.ts
@@ -176,13 +175,11 @@ src/relay/git-stdout-stream.ts
 src/relay/preflight-handler.ts
 src/relay/pty-shell-utils.ts
 src/relay/subprocess-tree-termination.ts
-src/relay/windows-port-scan.ts
 src/relay/workspace-space-scan.ts
 src/shared/ephemeral-vm-recipe-process.ts
 src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts
-src/shared/process-table-snapshot.ts
+src/shared/process-table-snapshot-reader.ts
 src/shared/pty-slave-line-discipline-echo.ts
 src/shared/ripgrep-process-availability.ts
-src/shared/secure-path-windows-acl.ts
 src/shared/shell-process-readiness.ts

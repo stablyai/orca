@@ -849,8 +849,7 @@ describe('browserManager', () => {
 
       expect(debuggerAttach).toHaveBeenCalledWith('1.3')
       expect(debuggerSendCommand).toHaveBeenCalled()
-      // Why: detaching would clear Page.addScriptToEvaluateOnNewDocument
-      // (anti-detection). Guard regression.
+      // Why: detaching would clear every standing CDP override (viewport, auth UA). Guard regression.
       expect((guest.debugger as { detach?: unknown }).detach ?? undefined).toBeUndefined()
     })
 

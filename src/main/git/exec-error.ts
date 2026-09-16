@@ -40,6 +40,19 @@ export function extractExecError(err: unknown): { stderr: string; stdout: string
   return { stderr: String(err), stdout: '' }
 }
 
+/** Recognizes spawn ENOENT; callers must separately rule out a missing cwd. */
+export function isMissingCommandBinaryError(err: unknown): boolean {
+  return Boolean(
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    err.code === 'ENOENT' &&
+    'syscall' in err &&
+    typeof err.syscall === 'string' &&
+    err.syscall.startsWith('spawn ')
+  )
+}
+
 /**
  * Detect a Retry-After hint in gh stderr and return the suggested delay in ms,
  * or null when the response includes no Retry-After.

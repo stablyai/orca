@@ -3,6 +3,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
+import { getRepoSshConnectionId } from '../../shared/execution-host'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import {
@@ -55,10 +56,13 @@ export async function buildWorktreeStartupForDraft(
       : null
   if (!agent) {
     let detected: string[] = []
+    // Why: detection has to run on the machine that will run the agent, and SSH ownership has two
+    // spellings — the raw field probes this client for an `executionHostId: 'ssh:*'`-only repo.
+    const sshConnectionId = getRepoSshConnectionId(repo)
     try {
       // Why: startup-draft fallback can run from sparse runtime launch envs too.
-      detected = repo.connectionId
-        ? await detectRemoteAgents({ connectionId: repo.connectionId })
+      detected = sshConnectionId
+        ? await detectRemoteAgents({ connectionId: sshConnectionId })
         : await detectInstalledAgentsWithShellPathHydration()
     } catch {
       detected = []

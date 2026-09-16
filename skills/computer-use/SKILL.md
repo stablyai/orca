@@ -1,24 +1,14 @@
 ---
 name: computer-use
 description: >-
-  Use Orca's computer-use CLI for OS/window-level inspection and input in visible
-  local app windows. Use when a task must read or operate a native app or an
-  external browser window (for example, Chrome, Edge, or Safari) or an app
-  webview. Do not use for Orca's embedded browser or page-only browser
-  automation. Use `orca-cli` for Orca's embedded pages and a page-automation
-  tool such as Playwright or CDP for external pages.
+  OS/window-level inspection and input in visible local app windows through `orca computer`:
+  native apps, external browser windows (Chrome, Edge, Safari), and app webviews. Not for
+  Orca's embedded browser (use `orca-cli`) or page-only automation (use Playwright or CDP).
 ---
 
 # Computer Use
 
-This file is a discovery stub, not the usage guide. The full, version-matched computer-use
-reference is served by the `orca` binary itself — kept out of this file on purpose so it can
-never drift from the binary that will actually run your commands.
-
-Engage Orca's computer-use surface when a task requires desktop-level access to a visible local
-app or window, including a native app or an external browser window/webview. Do not use for
-Orca's embedded browser or page-only browser automation. Use `orca-cli` for Orca's embedded
-pages and a page-automation tool such as Playwright or CDP for external pages.
+This discovery stub loads the version-matched guide from the Orca executable used for this session.
 
 ## Resolve the CLI for this session
 
@@ -39,34 +29,13 @@ same way in POSIX shells, PowerShell, and cmd.exe.
 If the selected executable cannot run, report its exact error and stop. Do not fall through
 to another executable, which could silently target a different Orca build.
 
-## Load the full guide before running Orca commands
+## Load the version-matched guide before running Orca commands
 
 ```text
 ORCA skills get computer-use
 ```
 
-That prints the complete, version-matched guide for the exact binary that will handle your
-next commands — listing apps/windows, reading UI, and driving clicks, typing, and other
-accessibility actions. Read it first, then run the specific command you need.
-
-Don't guess subcommands or flags from memory or from a cached copy of this stub. They
-change between Orca releases, and this file deliberately no longer lists them. Confirm the
-app is up with `ORCA status --json` (start it with `ORCA open --json` if needed), and
-prefer `--json` for agent-driven calls.
-
-## If an older Orca does not recognize `skills get`
-
-Use this fallback only when the selected binary explicitly reports that `skills get` is an
-unknown command. Another failure is not proof of an older binary; report it rather than
-guessing or changing executables. For a confirmed pre-guide binary, use only this bounded,
-read-only bootstrap to orient. Do not dead-end and do not invent commands:
-
-```text
-ORCA status --json
-ORCA computer capabilities --json
-ORCA computer list-apps --json
-```
-
-Then tell the user that updating Orca restores the full, version-matched guide via
-`ORCA skills get computer-use`. Beyond these commands, ask the user rather than guessing a
-command surface this older binary may not support.
+Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
+not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
+and retry. If `skills get` is unknown, explain that updating Orca restores the guide; use
+`--help` for read-only discovery and do not guess unsupported commands.

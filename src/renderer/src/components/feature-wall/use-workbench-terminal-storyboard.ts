@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   WORKBENCH_RUN_QUEUE,
   WORKBENCH_RUN_TICK_MS,
@@ -38,10 +39,13 @@ export function useWorkbenchTerminalStoryboard(
     if (reducedMotion || isTwoAgentsChecklist) {
       return
     }
-    const id = window.setInterval(() => {
-      setRunIdx((index) => (index + 1) % WORKBENCH_RUN_QUEUE.length)
-    }, WORKBENCH_RUN_TICK_MS)
-    return () => window.clearInterval(id)
+    // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
+    // no-op so revealing the window resumes the queue instead of skipping an entry.
+    return installWindowVisibilityInterval({
+      run: () => setRunIdx((index) => (index + 1) % WORKBENCH_RUN_QUEUE.length),
+      runOnVisible: () => {},
+      intervalMs: WORKBENCH_RUN_TICK_MS
+    })
   }, [isTwoAgentsChecklist, reducedMotion])
 
   useEffect(() => {

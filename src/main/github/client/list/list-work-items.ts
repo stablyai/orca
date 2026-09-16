@@ -58,7 +58,8 @@ export async function listWorkItems(
           limit,
           requestedPage,
           connectionId,
-          localGitOptions
+          localGitOptions,
+          noCache
         )
 
     const errors =

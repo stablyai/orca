@@ -8,6 +8,7 @@ import {
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 
 export function createAgentStatusWorktreeDropActions(
   runtime: AgentStatusRuntime
@@ -72,21 +73,23 @@ export function createAgentStatusWorktreeDropActions(
           }
         }
         const retainedEvidenceKeys = new Set(retainedEvidence.keys())
-        // Keep acknowledgement for completion evidence so a slept card does not turn bold again.
-        let nextAck = s.acknowledgedAgentsByPaneKey
-        const ackKeys = Object.keys(nextAck).filter(
-          (key) =>
-            !retainedEvidenceKeys.has(key) &&
-            (paneKeyMatchesAnyTabPrefix(key, tabPrefixes) ||
-              liveKeySet.has(key) ||
-              retainedKeySet.has(key))
+        // Completion evidence keeps its read/clear state; every fully retired pane drops all three maps.
+        const activityStateKeys = new Set(
+          [
+            ...Object.keys(s.acknowledgedAgentsByPaneKey),
+            ...Object.keys(s.activityClearedAtByPaneKey),
+            ...Object.keys(s.manuallyUnreadTurnsByPaneKey)
+          ].filter(
+            (key) =>
+              !retainedEvidenceKeys.has(key) &&
+              (paneKeyMatchesAnyTabPrefix(key, tabPrefixes) ||
+                liveKeySet.has(key) ||
+                retainedKeySet.has(key))
+          )
         )
-        if (ackKeys.length > 0) {
-          nextAck = { ...nextAck }
-          for (const key of ackKeys) {
-            delete nextAck[key]
-          }
-        }
+        const nextAck = removePaneKeys(s.acknowledgedAgentsByPaneKey, activityStateKeys)
+        const nextClearedAt = removePaneKeys(s.activityClearedAtByPaneKey, activityStateKeys)
+        const nextManualUnread = removePaneKeys(s.manuallyUnreadTurnsByPaneKey, activityStateKeys)
         if (
           liveKeys.length === 0 &&
           launchConfigKeys.length === 0 &&
@@ -94,9 +97,18 @@ export function createAgentStatusWorktreeDropActions(
           retainedEvidence.size === 0 &&
           !migrationUnsupported.changed
         ) {
-          return nextAck !== s.acknowledgedAgentsByPaneKey
-            ? { acknowledgedAgentsByPaneKey: nextAck }
-            : s
+          const cleanupPatch = {
+            ...(nextAck !== s.acknowledgedAgentsByPaneKey
+              ? { acknowledgedAgentsByPaneKey: nextAck }
+              : {}),
+            ...(nextClearedAt !== s.activityClearedAtByPaneKey
+              ? { activityClearedAtByPaneKey: nextClearedAt }
+              : {}),
+            ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
+              ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
+              : {})
+          }
+          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
         hadLive = liveKeys.length > 0
         const nextLive =
@@ -143,6 +155,12 @@ export function createAgentStatusWorktreeDropActions(
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
+          ...(nextClearedAt !== s.activityClearedAtByPaneKey
+            ? { activityClearedAtByPaneKey: nextClearedAt }
+            : {}),
+          ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
+            ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
             : {}),
           agentStatusEpoch:
             hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,

@@ -10,7 +10,7 @@ const MAX_OBSERVED_BYTES = 64 * 1024
 
 type SubscribeToData = (watcher: (data: string) => void) => Promise<() => void> | (() => void)
 
-export type ClaudeModelSwitchOutcome = 'applied' | 'rejected' | 'interaction-required' | 'unknown'
+export type ClaudeModelSwitchOutcome = 'applied' | 'rejected' | 'unknown'
 
 export type ClaudeModelSwitchConfirmationObserver = {
   ready: Promise<void>
@@ -60,22 +60,6 @@ function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolea
 
 function hasClaudeModelSwitchRejection(buffer: string): boolean {
   return compactTerminalText(buffer).includes('keptmodelas')
-}
-
-// Why: compactTerminalText only strips whitespace, so a point release keeps its
-// dot ("fable5.1uses..."). The version is optional because the CLI's own label
-// for the newest Fable carries no number at all.
-const FABLE_VERSION = String.raw`fable(?:\d+(?:\.\d+)*)?`
-const FABLE_CONSENT_RE = new RegExp(`${FABLE_VERSION}usesusagecreditsandneedsaone-timeconsent`)
-const FABLE_SWITCH_PROMPT_RE = new RegExp(`switchto${FABLE_VERSION}\\?`)
-
-function hasClaudeModelSwitchInteraction(buffer: string): boolean {
-  const text = compactTerminalText(buffer)
-  return (
-    FABLE_CONSENT_RE.test(text) ||
-    text.includes('pickfablefrom/modelinaninteractivesessiontosetitup') ||
-    (FABLE_SWITCH_PROMPT_RE.test(text) && text.includes('usagecredits'))
-  )
 }
 
 function subscribeToClaudeModelSwitchData(args: {
@@ -154,10 +138,6 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
     }
     if (hasClaudeModelSwitchRejection(observed)) {
       finish('rejected')
-      return
-    }
-    if (hasClaudeModelSwitchInteraction(observed)) {
-      finish('interaction-required')
       return
     }
     if (!confirmationSubmitted && hasClaudeModelSwitchConfirmation(observed)) {

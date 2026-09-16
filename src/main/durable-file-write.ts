@@ -187,10 +187,15 @@ export async function removeStaleDurableWriteTempFiles(
 }
 
 /** Synchronous counterpart for quit and crash paths that cannot await. */
-export function writeFileDurableSync(tmpPath: string, finalPath: string, payload: string): void {
+export function writeFileDurableSync(
+  tmpPath: string,
+  finalPath: string,
+  payload: string | Uint8Array
+): void {
   let renamed = false
   try {
-    writeFileSync(tmpPath, payload, 'utf-8')
+    // A Uint8Array payload is written verbatim; a string still defaults to UTF-8.
+    writeFileSync(tmpPath, payload)
     const fd = openSync(tmpPath, 'r+')
     try {
       fsyncSync(fd)

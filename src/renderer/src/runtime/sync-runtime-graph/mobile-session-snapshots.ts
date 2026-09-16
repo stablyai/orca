@@ -14,9 +14,9 @@ import {
 import {
   buildMobileSessionAgentStatusByWorktree,
   buildMobileSessionWorktreeInputs,
-  getEditorDraftVersionByFileId,
   getOpenFileIndexes
 } from './mobile-session-inputs'
+import { getEditorDraftVersionByFileId } from './sync-projections'
 import { getMobileTerminalTheme } from './mobile-terminal-theme'
 import {
   isMobilePublishableBrowserWorkspace,

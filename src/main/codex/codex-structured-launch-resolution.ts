@@ -13,6 +13,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
+import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -24,6 +25,8 @@ export type CodexStructuredLaunchResolverDeps = {
   /** Fresh shell/configured environment for this spawn; never written to the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveRollout?: typeof resolvePinnedCodexRolloutProof
+  /** Test seam for the host capability; production uses the native process table. */
+  isWindowsProcessStartTimeAvailable?: () => boolean
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -45,6 +48,13 @@ export function createCodexStructuredLaunchResolver(
       throw new Error(
         `codex structured sessions run on the local host, not ${location.executionHostId}`
       )
+    }
+    // Refuse before resolving launch data; a PID alone cannot prove Windows ownership.
+    if (
+      process.platform === 'win32' &&
+      !(deps.isWindowsProcessStartTimeAvailable ?? isWindowsProcessStartTimeAvailable)()
+    ) {
+      throw new Error('codex structured sessions require Windows process creation-time proof')
     }
     if (accountHome.variable !== 'CODEX_HOME') {
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)

@@ -23,18 +23,9 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
   } | null> {
-    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
-      // Why: pre-attach stream bytes only form a suffix of restored state. A
-      // sequenced provider snapshot safely reconciles live bytes; renderer is
-      // the fallback when an older provider cannot expose that boundary.
-      const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
-      if (providerSnapshot) {
-        return providerSnapshot
-      }
-      const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
-      if (rendererSnapshot) {
-        return rendererSnapshot
-      }
+    const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
+    if (restoredSnapshot) {
+      return restoredSnapshot
     }
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
@@ -56,6 +47,20 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
       (providerSnapshot.data.length > 0 || Boolean(providerSnapshot.scrollbackAnsi))
       ? providerSnapshot
       : rendererSnapshot
+  }
+
+  protected async serializePreferredRestoredTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ) {
+    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return null
+    }
+    // Pre-attach bytes are only a suffix; older providers can fall back to the renderer.
+    return (
+      (await this.serializeProviderTerminalBuffer(ptyId, opts)) ??
+      (await this.serializeRendererTerminalBuffer(ptyId, opts))
+    )
   }
 
   async serializeRendererTerminalBuffer(
@@ -87,12 +92,8 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
       kittyKeyboardFlags?: number
     } | null = null
     try {
-      // Why: recovery/read fallback wants visible alt-screen content (e.g. an
-      // active TUI), so altScreenForcesZeroRows is FALSE here. Hydration is
-      // the only path that suppresses alt-screen scrollback.
       rendererSnapshot = await (this.ptyController?.serializeBuffer?.(ptyId, {
-        scrollbackRows: opts.scrollbackRows,
-        altScreenForcesZeroRows: false
+        scrollbackRows: opts.scrollbackRows
       }) ?? Promise.resolve(null))
     } catch {
       // Why: terminal snapshots should not depend on a mounted renderer pane.

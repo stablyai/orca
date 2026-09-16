@@ -40,3 +40,10 @@ export function journalDirectoryFor(
 export function defaultJournalRoot(): Promise<string> {
   return Promise.resolve(getAppEnvironment().getPath('userData'))
 }
+
+export const JOURNAL_DATABASE_FILE = 'journal.db'
+
+/** The session's SQLite database, inside the directory `journalDirectoryFor` names. */
+export function journalDatabaseFile(journalDir: string): string {
+  return join(journalDir, JOURNAL_DATABASE_FILE)
+}

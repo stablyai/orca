@@ -1,3 +1,6 @@
+import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
+import type { AiVaultSearchRequest } from '../../shared/ai-vault-search-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { ipcRenderer } from 'electron'
 import type {
   AiVaultDeleteSessionArgs,
@@ -12,7 +15,24 @@ import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault-session-tit
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import type { PreloadApi } from '../api-types'
 
+function searchClient(
+  executionHostScope?: ExecutionHostId
+): ReturnType<typeof createSessionSearchClient> {
+  const remote = executionHostScope !== undefined && executionHostScope !== LOCAL_EXECUTION_HOST_ID
+  return createSessionSearchClient(
+    (method, params) =>
+      method === 'aiVault.searchSessions'
+        ? ipcRenderer.invoke('aiVault:searchSessions', params, executionHostScope)
+        : ipcRenderer.invoke('aiVault:searchStatus', executionHostScope),
+    remote ? 'relay' : 'ipc'
+  )
+}
+
 export const aiVaultApi = {
+  searchSessions: (request: AiVaultSearchRequest, executionHostScope?: ExecutionHostId) =>
+    searchClient(executionHostScope).searchSessions(request),
+  searchStatus: (executionHostScope?: ExecutionHostId) =>
+    searchClient(executionHostScope).searchStatus(),
   listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
     ipcRenderer.invoke('aiVault:resolveSessionTitles', args),

@@ -24,6 +24,7 @@ type MaybeWebglRenderer = {
 type MaybePausableRenderService = {
   _isPaused?: boolean
   _needsFullRefresh?: boolean
+  _pausedResizeTask?: { flush?: () => void } | null
   refreshRows?: (start: number, end: number, sync?: boolean) => void
   _renderer?: { value?: MaybeWebglRenderer | null } | MaybeWebglRenderer | null
 }
@@ -38,6 +39,29 @@ type TerminalWithRenderService = {
     _renderService?: MaybePausableRenderService
     coreService?: { decPrivateModes?: { synchronizedOutput?: boolean } }
     _coreService?: { decPrivateModes?: { synchronizedOutput?: boolean } }
+  }
+}
+
+/**
+ * Clears xterm's observer-pause latches and runs the renderer resize xterm parked
+ * while paused.
+ *
+ * Why the flush: `RenderService.handleResize` under `_isPaused` only parks the
+ * WebGL renderer's own resize on an idle task, and xterm flushes that task solely
+ * from the observer callback gated on `_needsFullRefresh`. Clearing the latch
+ * without flushing lets the present below paint the new grid through the old
+ * canvas/model geometry (misplaced fragments, stray bars until a user resize).
+ */
+function releaseRenderPause(service: PausableRenderService): void {
+  // Why: leave the latch as if the pending full refresh was serviced — we are
+  // about to service it — so the observer's next callback doesn't queue a
+  // redundant second full repaint.
+  service._isPaused = false
+  service._needsFullRefresh = false
+  try {
+    service._pausedResizeTask?.flush?.()
+  } catch {
+    // Why: a resize that throws mid-dispose must not block the present.
   }
 }
 
@@ -66,11 +90,7 @@ export function forceRepaintThroughRenderPause(terminal: unknown): boolean {
     return false
   }
 
-  // Why: leave the latch as if the pending full refresh was serviced — we are
-  // about to service it — so the observer's next callback doesn't queue a
-  // redundant second full repaint.
-  service._isPaused = false
-  service._needsFullRefresh = false
+  releaseRenderPause(service)
   try {
     service.refreshRows(0, rows - 1, true)
     return true
@@ -102,8 +122,7 @@ export function requestFullViewportPresent(terminal: unknown): boolean {
   }
 
   if (paused) {
-    service._isPaused = false
-    service._needsFullRefresh = false
+    releaseRenderPause(service)
   }
 
   try {
@@ -160,8 +179,7 @@ export function forceFullViewportPresent(terminal: unknown): boolean {
   }
 
   if (paused) {
-    service._isPaused = false
-    service._needsFullRefresh = false
+    releaseRenderPause(service)
   }
 
   const renderer = getRenderer(service)

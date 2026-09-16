@@ -6,6 +6,7 @@
  * and git grep as universal fallbacks — git is always available since this is
  * a git-focused app.
  */
+import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
 import { spawn } from 'node:child_process'
 import { fileListingCancellationError } from '../shared/file-listing-cancellation'
 import type { SearchOptions, SearchResult } from './fs-handler-utils'
@@ -277,7 +278,7 @@ export function searchWithGitGrep(
     const gitArgs = buildGitGrepArgs(query, opts)
     const matchRegex = buildSubmatchRegex(query, opts)
     const acc = createAccumulator()
-    let stdoutBuffer = ''
+    const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
     let done = false
 
     const child = spawn('git', gitArgs, {
@@ -292,6 +293,7 @@ export function searchWithGitGrep(
         return
       }
       done = true
+      lines.clear()
       clearTimeout(killTimeout)
       // Why: child.kill() is advisory. If git ignores it, detach our
       // closures so repeated relay searches do not retain old scans.
@@ -310,12 +312,7 @@ export function searchWithGitGrep(
     }
 
     function handleStdoutData(chunk: string): void {
-      stdoutBuffer += chunk
-      const lines = stdoutBuffer.split('\n')
-      stdoutBuffer = lines.pop() ?? ''
-      for (const l of lines) {
-        processLine(l)
-      }
+      lines.push(chunk, processLine)
     }
 
     function handleStderrData(): void {
@@ -327,8 +324,9 @@ export function searchWithGitGrep(
     }
 
     function handleClose(): void {
-      if (stdoutBuffer) {
-        processLine(stdoutBuffer)
+      const tail = lines.finish()
+      if (tail !== null) {
+        processLine(tail)
       }
       resolveOnce()
     }

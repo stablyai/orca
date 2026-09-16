@@ -48,6 +48,8 @@ export function useAutomationRunPageState({
     selectedExternalKey,
     selectExternalKey,
     setSelectedExternalRunPage,
+    pageView,
+    setPageView,
     isDetailOpen,
     setIsDetailOpen
   } = local
@@ -105,6 +107,9 @@ export function useAutomationRunPageState({
       setSelectedId(pending.automationId)
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
+      if (pageView === 'run') {
+        setPageView('runs')
+      }
       toast.message(
         translate(
           'auto.components.automations.AutomationsPage.pendingAutomationMissing',
@@ -123,6 +128,7 @@ export function useAutomationRunPageState({
       setActivePaneTab('overview')
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
+      setPageView('automations')
       return
     }
     if (
@@ -133,6 +139,9 @@ export function useAutomationRunPageState({
       setActivePaneTab('runs')
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
+      if (pageView === 'run') {
+        setPageView('runs')
+      }
       return
     }
     if (selectedAutomationRuns.automationId !== pending.automationId) {
@@ -144,10 +153,14 @@ export function useAutomationRunPageState({
     if (pendingRun) {
       setSelectedAutomationRunPageId(pending.runId)
       setPendingAutomationRunNavigation(null)
+      setPageView('run')
       return
     }
     setSelectedAutomationRunPageId(null)
     setPendingAutomationRunNavigation(null)
+    if (pageView === 'run') {
+      setPageView('runs')
+    }
     toast.message(
       translate(
         'auto.components.automations.AutomationsPage.pendingAutomationRunMissing',
@@ -159,6 +172,7 @@ export function useAutomationRunPageState({
     automationHostTargetKey,
     isLoading,
     pendingAutomationRunNavigation,
+    pageView,
     selectExternalKey,
     selectedAutomationRuns.automationId,
     selectedAutomationRuns.notice,
@@ -168,6 +182,7 @@ export function useAutomationRunPageState({
     setActivePaneTab,
     setIsDetailOpen,
     setPendingAutomationRunNavigation,
+    setPageView,
     setSelectedAutomationRunPageId,
     setSelectedId
   ])

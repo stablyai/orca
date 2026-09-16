@@ -34,6 +34,14 @@ function isAlive(pid: number): boolean {
   }
 }
 
+// Teardown is asynchronous; poll instead of guessing how long the job takes.
+async function waitUntilDead(pid: number, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (isAlive(pid) && Date.now() < deadline) {
+    await sleep(50)
+  }
+}
+
 describeOnWindows('ConPTY job ownership', () => {
   const spawned: IPty[] = []
 
@@ -108,7 +116,8 @@ describeOnWindows('ConPTY job ownership', () => {
     expect(isAlive(grandchildPid)).toBe(true)
 
     expect(terminatePtyJob(proc)).toBe('terminated')
-    await sleep(1_500)
+    await waitUntilDead(proc.pid)
+    await waitUntilDead(grandchildPid)
 
     expect(isAlive(proc.pid)).toBe(false)
     expect(isAlive(grandchildPid)).toBe(false)
@@ -161,7 +170,7 @@ describeOnWindows('ConPTY job ownership', () => {
 
     await vi.waitFor(() => expect(existsSync(marker)).toBe(true), { timeout: 15_000 })
     expect(output).not.toMatch(/Access is denied/i)
-    rmSync(marker, { force: true })
+    await vi.waitFor(() => rmSync(marker, { force: true }))
   }, 60_000)
 
   it('stops answering once the tree is gone, rather than claiming it is empty', async () => {

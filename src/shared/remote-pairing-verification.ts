@@ -31,7 +31,7 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0
 }
 
-function hasValidRuntimeStatusShape(status: Record<string, unknown>): boolean {
+function hasValidRuntimeStatus(status: Record<string, unknown>): boolean {
   return (
     typeof status.runtimeId === 'string' &&
     status.runtimeId.length > 0 &&
@@ -103,7 +103,7 @@ export function verifyRemotePairingRuntimeStatus(
           : 'Update Orca on the remote host before adding it.'
     }
   }
-  if (!hasValidRuntimeStatusShape(status)) {
+  if (!hasValidRuntimeStatus(status)) {
     return {
       ok: false,
       kind: 'connection-interrupted',

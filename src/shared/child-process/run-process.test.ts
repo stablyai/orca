@@ -99,6 +99,27 @@ describe('runProcessSync', () => {
   })
 })
 
+describe('bounded output', () => {
+  it('reports a clipped answer instead of passing it off as the whole one', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(64))'],
+      maxOutputBytes: 8
+    })
+    expect(result.stdout).toBe('xxxxxxxx')
+    expect(result.outputTruncated).toBe(true)
+  })
+
+  it('does not call output that exactly fills the cap truncated', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(8))'],
+      maxOutputBytes: 8
+    })
+    expect(result.outputTruncated).toBe(false)
+  })
+})
+
 describe('unkillable children', () => {
   it('settles after the grace period rather than outliving its own deadline', async () => {
     // `close` only fires once the child is gone, so a child that ignores the

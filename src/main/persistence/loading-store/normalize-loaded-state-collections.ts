@@ -41,11 +41,13 @@ export function normalizeLoadedLocalSession(
 export function normalizeLoadedHostSessions(
   parsed: PersistedState,
   defaults: PersistedState,
+  localSession: WorkspaceSessionState,
   markNeedsSave: () => void
 ): PersistedState['workspaceSessionsByHostId'] {
   const { partitions, repaired } = parseWorkspaceSessionsByHostId(
     parsed.workspaceSessionsByHostId,
-    defaults.workspaceSession
+    defaults.workspaceSession,
+    localSession
   )
   if (repaired) {
     // Why: salvage repairs only the in-memory partitions; without a save the corrupt entries stay on disk and get re-dropped every launch.

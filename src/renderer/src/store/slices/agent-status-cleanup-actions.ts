@@ -2,6 +2,7 @@ import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectWorktreeIdsForConnection } from './agent-status-connection-worktree-scope'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
+import { removePaneKeys, removePaneKeysByTabPrefix } from './agent-status-pane-keyed-records'
 
 /** Actions for removing transient rows and migration-era cache entries. */
 export function createAgentStatusCleanupActions(
@@ -50,6 +51,9 @@ export function createAgentStatusCleanupActions(
 
     removeAgentStatus: (paneKey) => {
       const current = get()
+      // Why no ack/cleared-at/manual-unread in the guard: PTY exit calls this unconditionally,
+      // including unverified exits from a lost SSH link. A retained-only pane keeps its read
+      // state (see preserveActivityClearedState); only a row that is actually here gets swept.
       if (
         !(paneKey in current.agentStatusByPaneKey) &&
         !(paneKey in current.agentLaunchConfigByPaneKey) &&
@@ -76,18 +80,22 @@ export function createAgentStatusCleanupActions(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
         )
-        // Ack entries belong to the pane lifecycle; never let a reused key inherit one.
-        let nextAck = s.acknowledgedAgentsByPaneKey
-        if (paneKey in nextAck) {
-          nextAck = { ...nextAck }
-          delete nextAck[paneKey]
-        }
+        const paneKeys = new Set([paneKey])
+        const nextAck = removePaneKeys(s.acknowledgedAgentsByPaneKey, paneKeys)
+        const nextClearedAt = removePaneKeys(s.activityClearedAtByPaneKey, paneKeys)
+        const nextManualUnread = removePaneKeys(s.manuallyUnreadTurnsByPaneKey, paneKeys)
         return {
           agentStatusByPaneKey: next,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
+          ...(nextClearedAt !== s.activityClearedAtByPaneKey
+            ? { activityClearedAtByPaneKey: nextClearedAt }
+            : {}),
+          ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
+            ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
             : {}),
           agentStatusEpoch: s.agentStatusEpoch + 1,
           sortEpoch: s.sortEpoch + 1
@@ -108,7 +116,17 @@ export function createAgentStatusCleanupActions(
       const hasMigrationUnsupported = Object.values(current.migrationUnsupportedByPtyId).some(
         (entry) => entry.paneKey?.startsWith(prefix)
       )
-      if (toRemove.length === 0 && launchConfigKeys.length === 0 && !hasMigrationUnsupported) {
+      const hasPaneActivityState = [
+        current.acknowledgedAgentsByPaneKey,
+        current.activityClearedAtByPaneKey,
+        current.manuallyUnreadTurnsByPaneKey
+      ].some((record) => Object.keys(record).some((key) => key.startsWith(prefix)))
+      if (
+        toRemove.length === 0 &&
+        launchConfigKeys.length === 0 &&
+        !hasMigrationUnsupported &&
+        !hasPaneActivityState
+      ) {
         return
       }
       set((s) => {
@@ -124,20 +142,24 @@ export function createAgentStatusCleanupActions(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey?.startsWith(prefix) ?? false
         )
-        let nextAck = s.acknowledgedAgentsByPaneKey
-        const ackKeys = Object.keys(nextAck).filter((key) => key.startsWith(prefix))
-        if (ackKeys.length > 0) {
-          nextAck = { ...nextAck }
-          for (const key of ackKeys) {
-            delete nextAck[key]
-          }
-        }
+        const nextAck = removePaneKeysByTabPrefix(s.acknowledgedAgentsByPaneKey, tabIdPrefix)
+        const nextClearedAt = removePaneKeysByTabPrefix(s.activityClearedAtByPaneKey, tabIdPrefix)
+        const nextManualUnread = removePaneKeysByTabPrefix(
+          s.manuallyUnreadTurnsByPaneKey,
+          tabIdPrefix
+        )
         return {
           agentStatusByPaneKey: next,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
+          ...(nextClearedAt !== s.activityClearedAtByPaneKey
+            ? { activityClearedAtByPaneKey: nextClearedAt }
+            : {}),
+          ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
+            ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
             : {}),
           agentStatusEpoch: s.agentStatusEpoch + 1,
           sortEpoch: s.sortEpoch + 1

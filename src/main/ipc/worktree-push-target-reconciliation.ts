@@ -13,7 +13,7 @@ import { listWorktrees } from '../git/worktree'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { WORKTREE_ID_SEPARATOR, worktreeIdComparisonKey } from '../../shared/worktree/id'
-import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
+import { parseGitRemoteFetchUrls } from '../../shared/git-remote-url-index'
 import {
   findWorktreeMetaReferencingRemote,
   hasBranchConfigUsingRemote,
@@ -44,26 +44,9 @@ async function listPrRemoteCandidates(
   } catch {
     return []
   }
-  const candidates = new Map<string, string>()
-  for (const line of iterateProcessOutputLines(stdout)) {
-    const parsed = parseRemoteVerboseLine(line)
-    if (parsed?.direction === 'fetch' && isOrcaGeneratedPrRemoteName(parsed.name)) {
-      candidates.set(parsed.name, parsed.url)
-    }
-  }
-  return [...candidates.entries()].map(([name, url]) => ({ name, url }))
-}
-
-function parseRemoteVerboseLine(
-  line: string
-): { name: string; url: string; direction: 'fetch' | 'push' } | null {
-  const tabIndex = line.indexOf('\t')
-  if (tabIndex === -1) {
-    return null
-  }
-  const name = line.slice(0, tabIndex)
-  const match = /^(.*) \((fetch|push)\)$/.exec(line.slice(tabIndex + 1).trim())
-  return match ? { name, url: match[1], direction: match[2] as 'fetch' | 'push' } : null
+  return [...parseGitRemoteFetchUrls(stdout)]
+    .filter(([name]) => isOrcaGeneratedPrRemoteName(name))
+    .map(([name, url]) => ({ name, url }))
 }
 
 async function shouldReclaimPrRemote(

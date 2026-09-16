@@ -1,0 +1,1325 @@
+{
+  "operation": "tasks.project-row-comments-pr",
+  "family": "tasks.project-row-comments-pr",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
+  "scenarioSha256": "e286edb942c338fd844ce8437ac03c872838228515ce833cfd310332354da725",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02839f22d2db": {
+      "name": "projectMutating",
+      "value": false,
+      "sent": 1
+    },
+    "0ef970845cc7": {
+      "name": "projectRowDetailError",
+      "value": "outer refused",
+      "sent": 1
+    },
+    "0fa9db1cc7c0": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "152580ec9e5a": {
+      "name": "projectRowDetailError",
+      "value": "Unknown method",
+      "sent": 1
+    },
+    "194a466e49bd": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "inner refused",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "2d1e8ede1fcf": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Renamed",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "470d3aa7b368": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "transport failure",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "49d660b9acf0": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "Cannot read properties of undefined (reading 'ok')",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "4aa5b1f0a2a8": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "4c09a53c8150": {
+      "name": "projectRowDetailError",
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 1
+    },
+    "4cc5ce7ffda2": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "6764270f0dc1": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "71fe9d50f237": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "79252b22d0fc": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "Unknown method",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "7b2465eedefe": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 0
+    },
+    "7b9270764362": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "8237b3a567bf": {
+      "name": "projectRowDetailError",
+      "value": "transport failure",
+      "sent": 1
+    },
+    "85f150b2df81": {
+      "name": "projectRowDetailError",
+      "value": "",
+      "sent": 1
+    },
+    "97094e0009d2": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "983756056f4c": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a348d735e20f": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a7b76954b136": {
+      "name": "projectRowDetailError",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 1
+    },
+    "bc87b4b6ed64": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c089d68bd230": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "outer refused",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "c8e3f060e5f1": {
+      "name": "projectRowItem",
+      "value": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Renamed",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      },
+      "sent": 1
+    },
+    "c9abda0c6d89": {
+      "name": "githubProjectTable",
+      "value": {
+        "fields": [
+          {
+            "dataType": "SINGLE_SELECT",
+            "id": "field-1",
+            "name": "Status",
+            "options": []
+          }
+        ],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 1,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "url": "https://github.com/owner/repo/issues/1"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-1",
+            "itemType": "ISSUE"
+          },
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 2,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "title": "Renamed",
+              "url": "https://github.com/owner/repo/pull/2"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-2",
+            "itemType": "PULL_REQUEST"
+          }
+        ],
+        "selectedView": {
+          "filter": "",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      },
+      "sent": 1
+    },
+    "cff93cd7b1a7": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "da0f06b573ab": {
+      "name": "projectRowDetailError",
+      "value": "Failed to update GitHub item",
+      "sent": 1
+    },
+    "e07ed1ef7289": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updatePullRequestBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 2,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "e1d50458f904": {
+      "name": "github.project.updatePullRequestBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updatePullRequestBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":2,\"updates\":{\"title\":\"Renamed\"}}}",
+      "sent": 1
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eff724250cc7": {
+      "name": "projectRowDetailError",
+      "value": "inner refused",
+      "sent": 1
+    },
+    "f7a965ae68e5": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "Cannot read properties of null (reading 'ok')",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "fce902b2381c": {
+      "detail": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "error": "Failed to update GitHub item",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.project-row-comments-pr-github.project.updatepullrequestbyslug-1",
+    "checkpoints": [
+      {
+        "id": "tk-project-row-comments-pr.normal:update-item-settled",
+        "observation": {
+          "sender": ["0fa9db1cc7c0"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "2d1e8ede1fcf",
+          "effects": ["7b2465eedefe", "c8e3f060e5f1", "c9abda0c6d89", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.result-absent:update-item-settled",
+        "observation": {
+          "sender": ["4aa5b1f0a2a8"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "49d660b9acf0",
+          "effects": ["7b2465eedefe", "4c09a53c8150", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.result-null:update-item-settled",
+        "observation": {
+          "sender": ["4cc5ce7ffda2"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "f7a965ae68e5",
+          "effects": ["7b2465eedefe", "a7b76954b136", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.inner-ok-missing:update-item-settled",
+        "observation": {
+          "sender": ["bc87b4b6ed64"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "2d1e8ede1fcf",
+          "effects": ["7b2465eedefe", "c8e3f060e5f1", "c9abda0c6d89", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.inner-false-string-error:update-item-settled",
+        "observation": {
+          "sender": ["7b9270764362"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "fce902b2381c",
+          "effects": ["7b2465eedefe", "da0f06b573ab", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.inner-false-object-error:update-item-settled",
+        "observation": {
+          "sender": ["e07ed1ef7289"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "194a466e49bd",
+          "effects": ["7b2465eedefe", "eff724250cc7", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.outer-refused:update-item-settled",
+        "observation": {
+          "sender": ["97094e0009d2"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "c089d68bd230",
+          "effects": ["7b2465eedefe", "0ef970845cc7", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.outer-refused-no-message:update-item-settled",
+        "observation": {
+          "sender": ["a348d735e20f"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "6764270f0dc1",
+          "effects": ["7b2465eedefe", "85f150b2df81", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.method-not-found:update-item-settled",
+        "observation": {
+          "sender": ["71fe9d50f237"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "79252b22d0fc",
+          "effects": ["7b2465eedefe", "152580ec9e5a", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.transport-rejection:update-item-settled",
+        "observation": {
+          "sender": ["cff93cd7b1a7"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "470d3aa7b368",
+          "effects": ["7b2465eedefe", "8237b3a567bf", "02839f22d2db"]
+        }
+      },
+      {
+        "id": "tk-project-row-comments-pr.transport-rejection-no-message:update-item-settled",
+        "observation": {
+          "sender": ["983756056f4c"],
+          "payloads": ["e1d50458f904"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "update-item-0": "eb79a9b3682a"
+          },
+          "state": "6764270f0dc1",
+          "effects": ["7b2465eedefe", "85f150b2df81", "02839f22d2db"]
+        }
+      }
+    ]
+  }
+}

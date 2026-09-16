@@ -55,7 +55,8 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const capturedChunkCountRef = useRef(0)
   const sessionIdRef = useRef('desktop')
   const trackLostCleanupRef = useRef<(() => void) | null>(null)
-  const meterAnalyzerRef = useRef(createDictationMeterAnalyzerState())
+  const meterAnalyzerRef = useRef<ReturnType<typeof createDictationMeterAnalyzerState>>(undefined!)
+  meterAnalyzerRef.current ??= createDictationMeterAnalyzerState()
   const publishedMeterRef = useRef(DEFAULT_DICTATION_METER)
   const lastMeterPublishedAtRef = useRef(Number.NEGATIVE_INFINITY)
 

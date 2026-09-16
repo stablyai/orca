@@ -46,6 +46,31 @@ function createMockChildProcess(pid: number): MockChildProcess {
   return child
 }
 
+/**
+ * Spawn stand-in for the gh/glab deadline tests: the CLI hangs, while the `ps`
+ * quiescence probe the tree termination runs answers immediately.
+ */
+function mockWedgedCliSpawn(child: MockChildProcess): void {
+  spawnMock.mockImplementation((program: string) => {
+    if (program !== 'ps') {
+      return child
+    }
+    const probe = createMockChildProcess(9100)
+    queueMicrotask(() => probe.emit('close', 0, null))
+    return probe
+  })
+}
+
+/** Signals succeed; the existence probe reports the group already gone. */
+function mockProcessGroupSignals(): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(process, 'kill').mockImplementation(((_pid: number, signal?: unknown) => {
+    if (signal === 0) {
+      throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
+    }
+    return true
+  }) as typeof process.kill)
+}
+
 function createMockTaskkillProcess(): MockChildProcess {
   const child = createMockChildProcess(9000)
   child.unref = vi.fn()
@@ -271,32 +296,46 @@ describe('runner execFile timeout handling', () => {
     }
   )
 
-  it('rejects gh executions that never call back using the default timeout', async () => {
+  // Why the group and not the child (#18234): `gh` and `glab` on PATH are often
+  // shims, so the deadline has a chain to reap. Signalling only the direct child
+  // leaves the rest of it running under init long after the deadline passed.
+  it('signals the whole gh process group when gh never calls back', async () => {
     const child = createMockChildProcess(1234)
-    execFileMock.mockReturnValue(child)
+    mockWedgedCliSpawn(child)
+    const processKill = mockProcessGroupSignals()
+    try {
+      const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+        cwd: '/repo'
+      })
+      const rejection = expect(promise).rejects.toThrow('gh timed out.')
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(spawnMock.mock.calls[0][2].detached).toBe(true)
+      await vi.advanceTimersByTimeAsync(2_000)
 
-    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
-      cwd: '/repo'
-    })
-    const rejection = expect(promise).rejects.toThrow('gh timed out.')
-    await vi.advanceTimersByTimeAsync(30_000)
-
-    await rejection
-    expect(child.kill).toHaveBeenCalled()
+      await rejection
+      expect(processKill).toHaveBeenCalledWith(-1234, undefined)
+    } finally {
+      processKill.mockRestore()
+    }
   })
 
-  it('rejects glab executions that never call back using the default timeout', async () => {
+  it('signals the whole glab process group when glab never calls back', async () => {
     const child = createMockChildProcess(1234)
-    execFileMock.mockReturnValue(child)
+    mockWedgedCliSpawn(child)
+    const processKill = mockProcessGroupSignals()
+    try {
+      const promise = glabExecFileAsync(['api', 'projects/stablyai%2Forca/issues'], {
+        cwd: '/repo'
+      })
+      const rejection = expect(promise).rejects.toThrow('glab timed out.')
+      await vi.advanceTimersByTimeAsync(30_000)
+      await vi.advanceTimersByTimeAsync(2_000)
 
-    const promise = glabExecFileAsync(['api', 'projects/stablyai%2Forca/issues'], {
-      cwd: '/repo'
-    })
-    const rejection = expect(promise).rejects.toThrow('glab timed out.')
-    await vi.advanceTimersByTimeAsync(30_000)
-
-    await rejection
-    expect(child.kill).toHaveBeenCalled()
+      await rejection
+      expect(processKill).toHaveBeenCalledWith(-1234, undefined)
+    } finally {
+      processKill.mockRestore()
+    }
   })
 
   it('aborts glab retry backoff instead of starting another attempt', async () => {
@@ -304,9 +343,14 @@ describe('runner execFile timeout handling', () => {
     const transient = Object.assign(new Error('glab failed'), {
       stderr: 'HTTP 503 Service Unavailable'
     })
-    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-      callback(transient)
-      return createMockChildProcess(1234)
+    spawnMock.mockImplementationOnce(() => {
+      const child = createMockChildProcess(1234)
+      queueMicrotask(() => {
+        child.stderr.emit('data', Buffer.from(transient.stderr))
+        child.emit('exit', 1, null)
+        child.emit('close', 1, null)
+      })
+      return child
     })
 
     const promise = glabExecFileAsync(['api', 'projects'], {
@@ -314,52 +358,68 @@ describe('runner execFile timeout handling', () => {
       signal: controller.signal
     })
     const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
-    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     controller.abort()
 
     await rejection
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
   it('kills an active gh execution when its caller aborts', async () => {
     const child = createMockChildProcess(1234)
-    execFileMock.mockReturnValue(child)
-    const controller = new AbortController()
-    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
-      cwd: '/repo',
-      signal: controller.signal
-    })
-    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    mockWedgedCliSpawn(child)
+    const processKill = mockProcessGroupSignals()
+    try {
+      const controller = new AbortController()
+      const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+        cwd: '/repo',
+        signal: controller.signal
+      })
+      const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
 
-    controller.abort()
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(2_000)
 
-    await rejection
-    expect(child.kill).toHaveBeenCalled()
+      await rejection
+      expect(processKill).toHaveBeenCalledWith(-1234, undefined)
+    } finally {
+      processKill.mockRestore()
+    }
   })
 
   it('honors explicit gh timeouts', async () => {
     const child = createMockChildProcess(1234)
-    execFileMock.mockReturnValue(child)
+    mockWedgedCliSpawn(child)
+    const processKill = mockProcessGroupSignals()
+    try {
+      const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+        cwd: '/repo',
+        timeout: 1234
+      })
+      const rejection = expect(promise).rejects.toThrow('gh timed out.')
+      await vi.advanceTimersByTimeAsync(1233)
+      expect(processKill).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(2_000)
 
-    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
-      cwd: '/repo',
-      timeout: 1234
-    })
-    const rejection = expect(promise).rejects.toThrow('gh timed out.')
-    await vi.advanceTimersByTimeAsync(1233)
-    expect(child.kill).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-
-    await rejection
-    expect(child.kill).toHaveBeenCalled()
+      await rejection
+      expect(processKill).toHaveBeenCalledWith(-1234, undefined)
+    } finally {
+      processKill.mockRestore()
+    }
   })
 
   it('runs gh non-interactively while preserving explicit env', async () => {
-    const child = createMockChildProcess(1234)
     let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
+    spawnMock.mockImplementation((_cmd, _args, opts) => {
       capturedEnv = opts.env
-      cb(null, 'ok', '')
+      const child = createMockChildProcess(1234)
+      queueMicrotask(() => {
+        child.stdout.emit('data', Buffer.from('ok'))
+        child.emit('exit', 0, null)
+        child.emit('close', 0, null)
+      })
       return child
     })
 

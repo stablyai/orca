@@ -235,12 +235,16 @@ describe('DaemonPtyAdapter history recovery', () => {
           ).id
       )
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `checkpointSessions` and `runExclusiveCheckpoint` are `protected` on the checkpoint scheduler, so they are absent from the adapter's public type; the shape below mirrors their declarations and this suite only spies on them.
     const internals = historyAdapter as unknown as {
       checkpointSessions(
         sessionIds: Iterable<string>,
         opts?: { final?: boolean; teardown?: boolean }
       ): Promise<Set<string>>
-      runExclusiveCheckpoint(operation: () => Promise<void>, options?: object): Promise<void>
+      runExclusiveCheckpoint(
+        operation: () => Promise<void>,
+        options?: { rescheduleDirty?: boolean; callerDeadlineMs?: number }
+      ): Promise<void>
     }
     const originalCheckpointSessions = internals.checkpointSessions.bind(historyAdapter)
     // Call-through spy: entering the exclusive gate is the observable "queued behind the in-flight checkpoint" moment.

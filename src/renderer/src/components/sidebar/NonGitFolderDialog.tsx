@@ -10,8 +10,10 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import {
+  resolveDismissedOnboardingFolderAgentLaunch,
+  revealOnboardingFolderWithAgentLaunch
+} from '@/lib/onboarding-folder-agent-launch'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
@@ -86,16 +88,17 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             const onboarding = await window.api.onboarding.get().catch(() => null)
             // Why: SSH users can hit this dialog from Add Project after
             // dismissing onboarding, bypassing the local addNonGitFolder path.
-            const startup = buildDismissedOnboardingFolderAgentStartup(
-              useAppStore.getState().settings,
+            const launch = resolveDismissedOnboardingFolderAgentLaunch({
+              store: useAppStore.getState(),
               onboarding,
-              hadProjectBeforeAdd,
-              isNativeChatTranscriptLocalReadable(connectionId)
-            )
-            activateAndRevealWorktree(folderWorktree.id, {
-              sidebarRevealBehavior: 'auto',
+              hasExistingProject: hadProjectBeforeAdd,
+              executionHostId: ownerOptions.executionHostId ?? connectionId,
+              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+            })
+            await revealOnboardingFolderWithAgentLaunch({
+              worktreeId: folderWorktree.id,
               executionHostId: ownerOptions.executionHostId,
-              ...(startup ? { startup } : {})
+              launch
             })
           }
         } catch (err) {

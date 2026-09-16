@@ -102,14 +102,18 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'origin/main',
-        head: 'refs/heads/feature/create-pr',
-        title: '  Create PR UI  ',
-        body: 'Body text',
-        draft: true
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'origin/main',
+          head: 'refs/heads/feature/create-pr',
+          title: '  Create PR UI  ',
+          body: 'Body text',
+          draft: true
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 42,
@@ -159,12 +163,16 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'my-branch',
-        title: 'Fork PR'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'my-branch',
+          title: 'Fork PR'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 5,
@@ -191,12 +199,16 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature/create-pr',
-        title: 'GHES PR'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/create-pr',
+          title: 'GHES PR'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 7,
@@ -232,12 +244,16 @@ describe('createGitHubPullRequest', () => {
       })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature/create-pr',
-        title: 'GHES PR'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/create-pr',
+          title: 'GHES PR'
+        },
+        'local'
+      )
     ).resolves.toMatchObject({
       ok: false,
       code: 'already_exists',
@@ -268,7 +284,7 @@ describe('createGitHubPullRequest', () => {
           head: 'feature/wsl-create-pr',
           title: 'WSL Create PR'
         },
-        null,
+        'local',
         { localGitExecOptions: { wslDistro: 'Ubuntu' } }
       )
     ).resolves.toEqual({
@@ -304,7 +320,7 @@ describe('createGitHubPullRequest', () => {
           head: 'feature/ssh-create-pr',
           title: 'SSH Create PR'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toEqual({
       ok: true,
@@ -393,7 +409,7 @@ describe('createGitHubPullRequest', () => {
             body: '',
             useTemplate: true
           },
-          'ssh-1'
+          'ssh:ssh-1'
         )
       ).resolves.toEqual({
         ok: true,
@@ -415,12 +431,16 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature/url-output',
-        title: 'URL output'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/url-output',
+          title: 'URL output'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 43,
@@ -442,12 +462,16 @@ describe('createGitHubPullRequest', () => {
       })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'refs/remotes/origin/feature/existing',
-        title: 'Existing'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'refs/remotes/origin/feature/existing',
+          title: 'Existing'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'already_exists',
@@ -485,12 +509,16 @@ describe('createGitHubPullRequest', () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'refs/heads/feature',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'refs/heads/feature',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'validation',

@@ -63,7 +63,8 @@ export function reinstallRemoteWatchersForConnection(connectionId: string): void
   reinstallRemoteWatchersForConnectionCore(connectionId, {
     install: installRemoteWatcher,
     requestResync: requestRemoteWatcherResync,
-    scheduleRetry: scheduleRemoteWatcherRetry
+    scheduleRetry: scheduleRemoteWatcherRetry,
+    scheduleDormant: scheduleDormantRemoteWatcherRearm
   })
 }
 

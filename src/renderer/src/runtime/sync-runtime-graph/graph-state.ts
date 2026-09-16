@@ -7,8 +7,12 @@ import type {
 } from '../../../../shared/runtime-types'
 import type {
   AgentStatusProjectionCache,
+  BrowserPagesProjectionCache,
+  BrowserWorkspacesProjectionCache,
+  EditorDraftHashCache,
   MobileSessionWorktreeInputs,
   OpenFileIndexes,
+  OpenFilesProjectionCache,
   RegisteredTerminalTab,
   TabsProjectionCache
 } from './types'
@@ -54,10 +58,12 @@ export const graphState = {
   publishedMobileSessionSnapshotByWorktree: new Map<string, RuntimeMobileSessionTabsSnapshot>(),
   cachedTabsProjection: null as TabsProjectionCache | null,
   cachedAgentStatusProjection: null as AgentStatusProjectionCache | null,
+  cachedOpenFilesProjection: null as OpenFilesProjectionCache | null,
+  cachedBrowserWorkspacesProjection: null as BrowserWorkspacesProjectionCache | null,
+  cachedBrowserPagesProjection: null as BrowserPagesProjectionCache | null,
   cachedOpenFileIndexesSource: null as AppState['openFiles'] | null,
   cachedOpenFileIndexes: null as OpenFileIndexes | null,
-  cachedEditorDraftsSource: null as AppState['editorDrafts'] | null,
-  cachedEditorDraftVersionByFileId: null as Map<string, string> | null,
+  cachedEditorDraftHashes: null as EditorDraftHashCache | null,
   cachedMobileTerminalThemeSettings: null as AppState['settings'] | null,
   cachedMobileTerminalThemeSystemPrefersDark: null as boolean | null,
   cachedMobileTerminalTheme: undefined as RuntimeMobileTerminalTheme | undefined,

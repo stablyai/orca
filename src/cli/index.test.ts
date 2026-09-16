@@ -135,6 +135,83 @@ describe('command aliases dispatch to the canonical handler', () => {
     }
   })
 
+  // #19334: a failed archive hook blocks removal, so the CLI must exit non-zero rather than
+  // report a delete that did not happen — and the waiver must ride its own flag, never --force.
+  it('exits non-zero when worktree removal is refused by a failed archive hook', async () => {
+    queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
+    callMock.mockRejectedValueOnce(
+      Object.assign(new Error('Archive hook failed for worktree: /tmp/wt — exited 23.'), {
+        code: 'worktree_archive_hook_failed'
+      })
+    )
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(
+        ['worktree', 'rm', '--worktree', 'id:wt-1', '--force', '--run-hooks', '--json'],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(1)
+      expect(callMock).toHaveBeenNthCalledWith(
+        2,
+        'worktree.rm',
+        expect.objectContaining({
+          runHooks: true,
+          allowFailedArchiveHook: false
+        })
+      )
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
+  // #19334 S4: the waiver only applies to a hook that ran, so alone it silently does nothing.
+  it('rejects the archive-hook waiver without --run-hooks instead of ignoring it', async () => {
+    queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(
+        ['worktree', 'rm', '--worktree', 'id:wt-1', '--allow-failed-archive-hook', '--json'],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(1)
+      // The removal must never have been attempted.
+      expect(callMock).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
+  it('forwards the explicit archive-hook waiver on worktree rm', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true })
+    )
+
+    await main(
+      [
+        'worktree',
+        'rm',
+        '--worktree',
+        'id:wt-1',
+        '--run-hooks',
+        '--allow-failed-archive-hook',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.rm',
+      expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true })
+    )
+  })
+
   it('still runs `terminal focus` after the handler de-duplication', async () => {
     queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
 
@@ -228,6 +305,29 @@ describe('unknown command surfaces a suggestion', () => {
     expect(stderr).toContain('--json')
   })
 
+  it('names the offending --worktree value and the valid forms on selector_not_found', async () => {
+    const { RuntimeRpcFailureError } = await import('./runtime/types.js')
+    callMock.mockRejectedValue(
+      new RuntimeRpcFailureError({
+        id: 'req_selector',
+        ok: false,
+        error: { code: 'selector_not_found', message: 'selector_not_found' },
+        _meta: { runtimeId: 'runtime_local' }
+      })
+    )
+
+    await main(
+      ['orchestration', 'worker-start', '--task', 't1', '--worktree', 'repo-1', '--agent', 'codex'],
+      '/tmp/repo'
+    )
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('No Orca workspace matched the worktree selector "repo-1"')
+    expect(stderr).toContain('id:repo-1::<absolute-path>')
+    expect(stderr).toContain('Valid selector forms:')
+  })
+
   it('reports a pre-command flag that belongs to another command', async () => {
     await main(['--workspace', 'worktree', 'list'], '/tmp/repo')
 
@@ -305,6 +405,23 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('labels retired coordinator scheduler commands at the root', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const output = String(logSpy.mock.calls[0]?.[0])
+    expect(output).toContain(
+      'orchestration coordinator-start Retired: load the current orchestration skill'
+    )
+    expect(output).toContain(
+      'orchestration coordinator-stop Retired: load the current orchestration skill'
+    )
+    expect(output).not.toContain('Start the legacy automatic coordinator loop')
+    expect(output).not.toContain('Stop the legacy automatic coordinator loop')
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -356,6 +473,7 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'orchestration worker-list Report worker terminal resource accounting'
     )
+    expect(logSpy.mock.calls[0][0]).not.toContain('orchestration worker-cleanup')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -438,6 +556,21 @@ describe('orca root help', () => {
     expect(help).toContain(
       '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
     )
+    expect(help).not.toContain('Line cursor from a previous read')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('describes worker-list cursors as opaque page cursors', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'worker-list', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('[--cursor <cursor>]')
+    expect(help).toContain('--cursor <cursor>      Opaque page cursor copied from page.nextCursor')
+    expect(help).toContain('Continue with the opaque page.nextCursor value unchanged.')
+    expect(help).not.toContain('--cursor <dispatch_id>')
     expect(help).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })

@@ -89,8 +89,8 @@ function postRaw(
     }
     function onResponseEnd(): void {
       const status = res?.statusCode ?? 0
-      const text = Buffer.concat(chunks).toString('utf8')
       if (status >= 200 && status < 300) {
+        const text = Buffer.concat(chunks).toString('utf8')
         try {
           resolveOnce(text.length > 0 ? JSON.parse(text) : {})
         } catch {

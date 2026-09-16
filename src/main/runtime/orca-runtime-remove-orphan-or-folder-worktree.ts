@@ -44,6 +44,9 @@ export async function removeOrphanOrFolderWorktree({
           : {}),
         localProvider: ptyProvider,
         onPtyStopped: runtime.onPtyStopped ?? undefined,
+        // A structured session is on no PTY surface, so the sweeps above leave it attached to a
+        // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
+        closeStructuredSessions: true,
         ...(externalOrphanHost
           ? {
               includeProviderInventory: orphanHost?.kind === 'ssh' && Boolean(sshPtyProvider),
@@ -91,7 +94,11 @@ export async function removeOrphanOrFolderWorktree({
   if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
-  const folderConnectionId = repo.connectionId?.trim() || null
+  // Resolved, not raw: a folder repo naming its owner only as `executionHostId: 'ssh:*'` used to
+  // tear down its PTYs and history on the client. A `runtime:` host answers null — its nested
+  // target is addressable only inside that environment, never from this client's SSH table.
+  const folderHost = parseExecutionHostId(removalHostId)
+  const folderConnectionId = folderHost?.kind === 'ssh' ? folderHost.targetId : null
   const folderSshPtyProvider = folderConnectionId
     ? runtime.getSshProviderFn?.(folderConnectionId)
     : undefined

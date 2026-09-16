@@ -15,6 +15,9 @@ import type {
   AutomationDestination
 } from '../../shared/automation-owner-precondition'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
+import { paginateAutomationRuns } from '../../shared/automation-run-cursor'
+import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import { assertAutomationRunContextMatchesTarget } from './runtime-automation-run-context'
 
 export type RuntimeAutomationCreateInput = Omit<
   AutomationCreateInput,
@@ -72,6 +75,13 @@ export class RuntimeAutomationController {
     return this.store.listAutomationRuns(automationId)
   }
 
+  listRunsPage(automationId?: string, limit?: number, cursor?: string) {
+    if (this.store?.listAutomationRunsPage) {
+      return this.store.listAutomationRunsPage(automationId, limit, cursor)
+    }
+    return paginateAutomationRuns(this.listRuns(automationId), limit, cursor)
+  }
+
   listForScope(params: AutomationListParams = {}): AutomationListResult {
     if (!this.store?.listAutomationsForScope) {
       throw new Error('runtime_unavailable')
@@ -99,7 +109,7 @@ export class RuntimeAutomationController {
       throw new Error('runtime_unavailable')
     }
     const target = await this.resolveTarget(input)
-    this.assertRunContextMatchesTarget(input.runContext, target.repo)
+    assertAutomationRunContextMatchesTarget(input.runContext, target.repo)
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
@@ -142,12 +152,12 @@ export class RuntimeAutomationController {
     const patch: AutomationUpdateInput = {}
     this.copyPatchValues(updates, patch)
     const targetChanged =
-      hasUpdateValue(updates, 'repo') ||
-      hasUpdateValue(updates, 'workspace') ||
-      hasUpdateValue(updates, 'workspaceMode')
+      hasRuntimeAutomationUpdateValue(updates, 'repo') ||
+      hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
+      hasRuntimeAutomationUpdateValue(updates, 'workspaceMode')
     if (targetChanged) {
       const target = await this.resolveTarget(updates, current)
-      this.assertRunContextMatchesTarget(updates.runContext, target.repo)
+      assertAutomationRunContextMatchesTarget(updates.runContext, target.repo)
       if (patch.reuseSession === true && target.workspaceMode !== 'existing') {
         throw new Error('Session reuse requires an existing workspace target.')
       }
@@ -158,9 +168,13 @@ export class RuntimeAutomationController {
         patch.reuseSession = false
       }
     }
-    if (!targetChanged && hasUpdateValue(updates, 'runContext') && current.projectId) {
+    if (
+      !targetChanged &&
+      hasRuntimeAutomationUpdateValue(updates, 'runContext') &&
+      current.projectId
+    ) {
       const repo = await this.resolvers.showRepo(`id:${current.projectId}`)
-      this.assertRunContextMatchesTarget(updates.runContext, repo)
+      assertAutomationRunContextMatchesTarget(updates.runContext, repo)
     }
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
@@ -225,7 +239,7 @@ export class RuntimeAutomationController {
       'missedRunGraceMinutes'
     ] as const
     for (const key of keys) {
-      if (hasUpdateValue(updates, key)) {
+      if (hasRuntimeAutomationUpdateValue(updates, key)) {
         Object.assign(patch, { [key]: updates[key] })
       }
     }
@@ -292,25 +306,4 @@ export class RuntimeAutomationController {
     }
     return { projectId, workspaceMode: 'new_per_run', workspaceId: null, repo }
   }
-
-  private assertRunContextMatchesTarget(
-    runContext:
-      | RuntimeAutomationCreateInput['runContext']
-      | RuntimeAutomationUpdateInput['runContext'],
-    repo: Repo | null
-  ): void {
-    if (!runContext || !repo) {
-      return
-    }
-    if (runContext.repoId !== repo.id || runContext.path !== repo.path) {
-      throw new Error('Automation project does not match its run context.')
-    }
-  }
-}
-
-function hasUpdateValue<K extends keyof RuntimeAutomationUpdateInput>(
-  updates: RuntimeAutomationUpdateInput,
-  key: K
-): boolean {
-  return Object.hasOwn(updates, key) && updates[key] !== undefined
 }

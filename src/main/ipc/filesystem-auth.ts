@@ -43,7 +43,24 @@ export function authorizeExternalPath(targetPath: string): void {
   } catch {}
 }
 
-export function isPathAllowed(targetPath: string, store: Store): boolean {
+/**
+ * One allowed-root list shared by every check in a single authorization.
+ *
+ * Lazy so a path already covered by an external grant still builds nothing at all, the way it did
+ * before the list was hoisted out of the individual checks.
+ */
+type AllowedRootsSnapshot = { get: () => readonly string[] }
+
+function createAllowedRootsSnapshot(store: Store): AllowedRootsSnapshot {
+  let roots: readonly string[] | undefined
+  return { get: () => (roots ??= getAllowedRoots(store)) }
+}
+
+export function isPathAllowed(
+  targetPath: string,
+  store: Store,
+  allowedRoots?: AllowedRootsSnapshot
+): boolean {
   const resolvedTarget = resolve(targetPath)
   if (authorizedExternalPaths.has(resolvedTarget)) {
     return true
@@ -53,7 +70,9 @@ export function isPathAllowed(targetPath: string, store: Store): boolean {
       return true
     }
   }
-  return getAllowedRoots(store).some((root) => isDescendantOrEqual(resolvedTarget, root))
+  return (allowedRoots?.get() ?? getAllowedRoots(store)).some((root) =>
+    isDescendantOrEqual(resolvedTarget, root)
+  )
 }
 
 export type ResolveAuthorizedPathOptions = {
@@ -69,7 +88,10 @@ export async function resolveAuthorizedPath(
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
   const resolvedTarget = resolve(targetPath)
-  if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store))) {
+  // Why: the roots depend only on store state, not on the candidate path, so one snapshot serves
+  // every authorization below; each candidate is still checked against it in full.
+  const allowedRoots = createAllowedRootsSnapshot(store)
+  if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store, { allowedRoots }))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
 
@@ -80,14 +102,15 @@ export async function resolveAuthorizedPath(
       realParent = await realpath(dirname(resolvedTarget))
     } catch (error) {
       if (isENOENT(error)) {
-        return resolveAuthorizedMissingPath(resolvedTarget, store)
+        return resolveAuthorizedMissingPath(resolvedTarget, store, allowedRoots)
       }
       throw error
     }
     const candidateTarget = resolve(realParent, basename(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
-        canonicalSourcePath: resolvedTarget
+        canonicalSourcePath: resolvedTarget,
+        allowedRoots
       }))
     ) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
@@ -100,7 +123,8 @@ export async function resolveAuthorizedPath(
     const realTarget = resolve(await realpath(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store, {
-        canonicalSourcePath: resolvedTarget
+        canonicalSourcePath: resolvedTarget,
+        allowedRoots
       }))
     ) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
@@ -110,11 +134,15 @@ export async function resolveAuthorizedPath(
     if (!isENOENT(error)) {
       throw error
     }
-    return resolveAuthorizedMissingPath(resolvedTarget, store)
+    return resolveAuthorizedMissingPath(resolvedTarget, store, allowedRoots)
   }
 }
 
-async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store): Promise<string> {
+async function resolveAuthorizedMissingPath(
+  resolvedTarget: string,
+  store: Store,
+  allowedRoots: AllowedRootsSnapshot
+): Promise<string> {
   let existingAncestor = resolvedTarget
   const missingSegments: string[] = []
 
@@ -124,7 +152,8 @@ async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store
       const candidateTarget = resolve(realAncestor, ...missingSegments)
       if (
         !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
-          canonicalSourcePath: resolvedTarget
+          canonicalSourcePath: resolvedTarget,
+          allowedRoots
         }))
       ) {
         throw new Error(PATH_ACCESS_DENIED_MESSAGE)
@@ -148,9 +177,9 @@ async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store
 async function isPathAllowedIncludingRegisteredWorktrees(
   targetPath: string,
   store: Store,
-  options: { canonicalSourcePath?: string } = {}
+  options: { canonicalSourcePath?: string; allowedRoots?: AllowedRootsSnapshot } = {}
 ): Promise<boolean> {
-  if (isPathAllowed(targetPath, store)) {
+  if (isPathAllowed(targetPath, store, options.allowedRoots)) {
     return true
   }
 
@@ -158,7 +187,14 @@ async function isPathAllowedIncludingRegisteredWorktrees(
     return true
   }
 
-  if (await isPathAllowedByCanonicalAllowedRoot(targetPath, options.canonicalSourcePath, store)) {
+  if (
+    await isPathAllowedByCanonicalAllowedRoot(
+      targetPath,
+      options.canonicalSourcePath,
+      store,
+      options.allowedRoots
+    )
+  ) {
     return true
   }
 
@@ -178,12 +214,13 @@ async function isPathAllowedIncludingRegisteredWorktrees(
 async function isPathAllowedByCanonicalAllowedRoot(
   targetPath: string,
   sourcePath: string | undefined,
-  store: Store
+  store: Store,
+  allowedRoots?: AllowedRootsSnapshot
 ): Promise<boolean> {
   if (!sourcePath) {
     return false
   }
-  for (const root of getAllowedRoots(store)) {
+  for (const root of allowedRoots?.get() ?? getAllowedRoots(store)) {
     const resolvedRoot = resolve(root)
     if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
       continue

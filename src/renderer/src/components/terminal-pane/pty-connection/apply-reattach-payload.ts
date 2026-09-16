@@ -100,6 +100,13 @@ export function createReattachPayloadHandlers(
         // Why last: re-arm the dangling mid-escape after the reset (whose ESC would abort it) so the live continuation completes it (#7329).
         session.writeReplayData(ctx.connectResult.pendingEscapeTailAnsi)
       }
+      // The initial attach backlog can contain bytes already painted by this snapshot.
+      session.setRestoredSnapshotBaseline(
+        ctx.ptyId,
+        { seq: ctx.connectResult.snapshotSeq },
+        restoredSnapshotPaintsPrintableContent({ data: daemonSnapshotReplay })
+      )
+      session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
         // Snapshot superseded the cold-restore payload; ack so the daemon doesn't redeliver it.

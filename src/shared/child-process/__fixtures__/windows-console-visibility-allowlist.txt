@@ -23,7 +23,6 @@ main/emulator/serve-sim-runtime-materializer.ts
 main/emulator/simctl-simulator-devices.ts
 main/emulator/simulator-app-visibility.ts
 main/external-editor-launch.ts
-main/hooks.ts
 main/ipc/app.ts
 main/ipc/developer-permissions.ts
 main/ipc/macos-keyboard-layout-snapshot.ts
@@ -60,10 +59,9 @@ relay/fs-list-files-fallback-chain.ts
 relay/git-handler.ts
 relay/pty-shell-utils.ts
 relay/subprocess-tree-termination.ts
-relay/windows-port-scan.ts
 relay/workspace-space-scan.ts
 shared/fish-binary-requirement.ts
-shared/process-table-snapshot.ts
+shared/process-table-snapshot-reader.ts
 shared/pty-slave-line-discipline-echo.ts
 shared/ripgrep-process-availability.ts
 shared/shell-process-readiness.ts

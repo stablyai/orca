@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { isMissingRemoteSessionPathError, statRemoteSessionFile } from './remote-session-file-stat'
 import type { FileWithMtime } from './session-scanner-types'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { errorMessage } from './session-scanner-values'
 import { mapRemoteScanBatches } from './remote-session-scan-batching'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
@@ -61,23 +62,38 @@ async function statRemoteCandidateFile(
   if (!file || !source.contentDependencyPath) {
     return file
   }
-  const dependency = await statRemoteSessionFile(
-    context.provider,
-    source.contentDependencyPath(path),
-    source.agent,
-    context.executionHostId,
-    issues,
-    { missingIsExpected: true, signal: context.signal }
-  )
-  if (!dependency) {
-    return file
-  }
-  const mtimeMs = Math.max(file.mtimeMs, dependency.mtimeMs)
-  return {
-    ...file,
-    mtimeMs,
-    modifiedAt: new Date(mtimeMs).toISOString(),
-    sizeBytes: (file.sizeBytes ?? 0) + (dependency.sizeBytes ?? 0)
+  const sidecarPath = source.contentDependencyPath(path)
+  // Recorded beside the transcript's own stat, never folded into it: one key
+  // cannot mean both "the transcript grew" and "the sibling changed".
+  return { ...file, sidecar: await observeRemoteSidecar(source, context, sidecarPath, issues) }
+}
+
+/**
+ * A stat that failed for any reason other than a missing path is `'unknown'`,
+ * not `'none'`: serving the cached session over an unreadable sibling would
+ * publish metadata nobody can currently see. `statRemoteSessionFile` already
+ * recorded the issue for the failure.
+ */
+async function observeRemoteSidecar(
+  source: RemoteSessionSource,
+  context: RemoteScannerContext,
+  sidecarPath: string,
+  issues: AiVaultScanIssue[]
+): Promise<SessionSidecarObservation> {
+  try {
+    const sidecar = await statRemoteSessionFile(
+      context.provider,
+      sidecarPath,
+      source.agent,
+      context.executionHostId,
+      issues,
+      { missingIsExpected: true, signal: context.signal, rethrowFailures: true }
+    )
+    return sidecar
+      ? { path: sidecarPath, mtimeMs: sidecar.mtimeMs, sizeBytes: sidecar.sizeBytes ?? 0 }
+      : 'none'
+  } catch {
+    return 'unknown'
   }
 }
 

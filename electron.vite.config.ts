@@ -8,9 +8,10 @@ import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-no
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  '@streamparser/json',
   '@xterm/headless',
   '@xterm/addon-serialize',
-  'psl',
+  'tldts',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
@@ -253,6 +254,9 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
+          'codex/managed-home-shell-preflight': resolve(
+            'src/main/codex/managed-home-shell-preflight.ts'
+          ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
           'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
         },
@@ -288,7 +292,7 @@ export const electronViteConfig: UserConfig = {
   preload: {
     build: {
       externalizeDeps: {
-        exclude: ['@electron-toolkit/preload', 'zod']
+        exclude: ['zod']
       }
     }
   },

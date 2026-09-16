@@ -239,7 +239,7 @@ export type BrowserSlice = {
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
-  addBrowserHistoryEntry: (url: string, title: string) => void
+  addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void
   workspaceDocHistory: WorkspaceDocHistoryEntry[]
   /** A visit bumps recency and count; a title-only refresh (bump: false) renames the row. */
   recordWorkspaceDocVisit: (

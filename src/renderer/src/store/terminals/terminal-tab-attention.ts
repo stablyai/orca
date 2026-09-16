@@ -1,6 +1,7 @@
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { findRenamableUnifiedTab } from './renamable-unified-tab'
 
 export function createTerminalTabAttentionActions(
   set: TerminalStoreSet,
@@ -16,7 +17,7 @@ export function createTerminalTabAttentionActions(
   | 'setTabColor'
 > {
   return {
-    markTerminalTabUnread: (tabId) => {
+    markTerminalTabUnread: (tabId, reason) => {
       const state = get()
       const ownerTab = Object.values(state.tabsByWorktree ?? {})
         .flat()
@@ -29,18 +30,18 @@ export function createTerminalTabAttentionActions(
         if (s.unreadTerminalTabs[tabId]) {
           return s
         }
-        return { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: true as const } }
+        return { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }
       })
     },
-    markTerminalPaneUnread: (paneKey) => {
+    markTerminalPaneUnread: (paneKey, reason) => {
       set((s) => {
         if (s.unreadTerminalPanes[paneKey]) {
           return s
         }
-        return { unreadTerminalPanes: { ...s.unreadTerminalPanes, [paneKey]: true as const } }
+        return { unreadTerminalPanes: { ...s.unreadTerminalPanes, [paneKey]: reason } }
       })
     },
-    markAgentCompletionPaneUnread: (paneKey) => {
+    markAgentCompletionPaneUnread: (paneKey, reason) => {
       set((s) => {
         if (s.unreadAgentCompletionPanes[paneKey]) {
           return s
@@ -48,7 +49,7 @@ export function createTerminalTabAttentionActions(
         return {
           unreadAgentCompletionPanes: {
             ...s.unreadAgentCompletionPanes,
-            [paneKey]: true as const
+            [paneKey]: reason
           }
         }
       })
@@ -87,9 +88,7 @@ export function createTerminalTabAttentionActions(
         scheduleRuntimeGraphSync()
         return { tabsByWorktree: next }
       })
-      const item = Object.values(get().unifiedTabsByWorktree)
-        .flat()
-        .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+      const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {
         get().setTabCustomLabel(item.id, title, opts)
       }
@@ -102,9 +101,7 @@ export function createTerminalTabAttentionActions(
         }
         return { tabsByWorktree: next }
       })
-      const item = Object.values(get().unifiedTabsByWorktree)
-        .flat()
-        .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+      const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {
         get().setUnifiedTabColor(item.id, color)
         // Why: tab color is host-authoritative for remote-server tabs; mirror it so it persists instead of reverting on the next snapshot.

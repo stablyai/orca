@@ -15,34 +15,6 @@ export function buildWallClockTimestamp(
     return isMatchingDateParts(localDate, parts) ? localDate.getTime() : null
   }
 
-  const timestamp = buildTimeZoneTimestamp(parts, timeZone)
-  if (timestamp === null) {
-    return null
-  }
-  const resolvedParts = getTimeZoneDateParts(timestamp, timeZone)
-  return resolvedParts && areMatchingWallClockParts(resolvedParts, parts) ? timestamp : null
-}
-
-function buildTimeZoneTimestamp(parts: WallClockDateParts, timeZone: string): number | null {
-  const utcGuess = Date.UTC(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute)
-  const firstOffset = getTimeZoneOffsetMs(utcGuess, timeZone)
-  if (firstOffset === null) {
-    return null
-  }
-  const firstTimestamp = utcGuess - firstOffset
-  const secondOffset = getTimeZoneOffsetMs(firstTimestamp, timeZone)
-  return secondOffset === null ? null : utcGuess - secondOffset
-}
-
-function getTimeZoneOffsetMs(timestamp: number, timeZone: string): number | null {
-  const parts = getTimeZoneDateParts(timestamp, timeZone)
-  if (!parts) {
-    return null
-  }
-  return Date.UTC(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute) - timestamp
-}
-
-function getTimeZoneDateParts(timestamp: number, timeZone: string): WallClockDateParts | null {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hourCycle: 'h23',
@@ -52,6 +24,40 @@ function getTimeZoneDateParts(timestamp: number, timeZone: string): WallClockDat
     hour: '2-digit',
     minute: '2-digit'
   })
+  const timestamp = buildTimeZoneTimestamp(parts, formatter)
+  if (timestamp === null) {
+    return null
+  }
+  const resolvedParts = getTimeZoneDateParts(timestamp, formatter)
+  return resolvedParts && areMatchingWallClockParts(resolvedParts, parts) ? timestamp : null
+}
+
+function buildTimeZoneTimestamp(
+  parts: WallClockDateParts,
+  formatter: Intl.DateTimeFormat
+): number | null {
+  const utcGuess = Date.UTC(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute)
+  const firstOffset = getTimeZoneOffsetMs(utcGuess, formatter)
+  if (firstOffset === null) {
+    return null
+  }
+  const firstTimestamp = utcGuess - firstOffset
+  const secondOffset = getTimeZoneOffsetMs(firstTimestamp, formatter)
+  return secondOffset === null ? null : utcGuess - secondOffset
+}
+
+function getTimeZoneOffsetMs(timestamp: number, formatter: Intl.DateTimeFormat): number | null {
+  const parts = getTimeZoneDateParts(timestamp, formatter)
+  if (!parts) {
+    return null
+  }
+  return Date.UTC(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute) - timestamp
+}
+
+function getTimeZoneDateParts(
+  timestamp: number,
+  formatter: Intl.DateTimeFormat
+): WallClockDateParts | null {
   const parts = Object.fromEntries(
     formatter.formatToParts(new Date(timestamp)).map((part) => [part.type, part.value])
   )

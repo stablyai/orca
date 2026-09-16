@@ -51,29 +51,6 @@ export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIn
   return graphState.cachedOpenFileIndexes
 }
 
-export function getEditorDraftVersionByFileId(
-  editorDrafts: AppState['editorDrafts']
-): Map<string, string> {
-  if (
-    graphState.cachedEditorDraftsSource === editorDrafts &&
-    graphState.cachedEditorDraftVersionByFileId
-  ) {
-    return graphState.cachedEditorDraftVersionByFileId
-  }
-  const versions = new Map<string, string>()
-  for (const [fileId, content] of Object.entries(editorDrafts)) {
-    let hash = 2166136261
-    for (let index = 0; index < content.length; index += 1) {
-      hash ^= content.charCodeAt(index)
-      hash = Math.imul(hash, 16777619)
-    }
-    versions.set(fileId, `draft:${content.length}:${(hash >>> 0).toString(16)}`)
-  }
-  graphState.cachedEditorDraftsSource = editorDrafts
-  graphState.cachedEditorDraftVersionByFileId = versions
-  return versions
-}
-
 export function buildMobileSessionAgentStatusByWorktree(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
   tabsByWorktree: AppState['tabsByWorktree']

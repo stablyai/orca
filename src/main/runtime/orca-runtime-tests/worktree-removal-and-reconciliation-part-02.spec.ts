@@ -298,7 +298,7 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValue([])
 
     try {
-      const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
+      const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
 
       expect(result).toEqual({
         preservedBranch: { branchName: 'feature/foo', head: 'abc' },
@@ -340,7 +340,9 @@ describe('OrcaRuntimeService', () => {
     )
 
     try {
-      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)).rejects.toThrow(
+      await expect(
+        runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
+      ).rejects.toThrow(
         `Failed to force delete worktree at ${TEST_WORKTREE_PATH}. error: failed to delete deep/file.txt: Filename too long`
       )
       expect(removePathSpy).not.toHaveBeenCalled()
@@ -387,7 +389,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     try {
-      const result = await runtime.removeManagedWorktree(worktreeId, true)
+      const result = await runtime.removeManagedWorktree(worktreeId, { force: true })
 
       expect(result).toEqual({
         preservedBranch: { branchName: 'feature/foo', head: 'abc' }
@@ -425,9 +427,9 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktreesStrict).mockResolvedValue(registeredWorktrees)
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    await expect(runtime.removeManagedWorktree(worktreeId, true, false)).rejects.toThrow(
-      'Worktree is locked by Git. Lock reason: active agent session'
-    )
+    await expect(
+      runtime.removeManagedWorktree(worktreeId, { force: true, runHooks: false })
+    ).rejects.toThrow('Worktree is locked by Git. Lock reason: active agent session')
 
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(removeWorktreeMeta).not.toHaveBeenCalled()

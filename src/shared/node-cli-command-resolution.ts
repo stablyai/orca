@@ -1,6 +1,7 @@
 import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
 type ResolveCommandOptions = {
   pathEnv?: string | null
@@ -245,6 +246,17 @@ function getVersionManagerDirectories(
   return directories
 }
 
+// Why one list for both resolvers: the system block must stay LAST so a
+// version-manager install always outranks a Homebrew/npm/snap one, and two
+// hand-spelled spreads is how the native and WSL lists drifted apart before.
+function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): string[] {
+  return [
+    ...getNvmVersionDirectories(homePath),
+    ...getBaseVersionManagerDirectories(platform, homePath),
+    ...getSystemCliInstallDirectories(platform, homePath)
+  ]
+}
+
 export function resolveCliCommand(
   commandName: string,
   options: ResolveCommandOptions = {}
@@ -258,19 +270,12 @@ export function resolveCliCommand(
   }
 
   const homePath = options.homePath ?? homedir()
-  const nvmCandidate = findFirstExecutable(
+  const installCandidate = findFirstExecutable(
     platform,
-    getNvmVersionDirectories(homePath),
+    getCliInstallDirectories(platform, homePath),
     executableNames
   )
-  const versionManagerCandidate =
-    nvmCandidate ??
-    findFirstExecutable(
-      platform,
-      getBaseVersionManagerDirectories(platform, homePath),
-      executableNames
-    )
-  return versionManagerCandidate ?? commandName
+  return installCandidate ?? commandName
 }
 
 export function resolveCliCommands(
@@ -281,10 +286,7 @@ export function resolveCliCommands(
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   const pathDirectories = splitPath(pathEnv)
   const homePath = options.homePath ?? homedir()
-  const installDirectories = [
-    ...getNvmVersionDirectories(homePath),
-    ...getBaseVersionManagerDirectories(platform, homePath)
-  ]
+  const installDirectories = getCliInstallDirectories(platform, homePath)
   const resolved = new Map<string, string>()
 
   for (const commandName of new Set(commandNames)) {

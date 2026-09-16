@@ -57,7 +57,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   store?: RuntimeStore
   baseBranch: string
   localWorktreeGitOptions: { wslDistro?: string }
-  localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }]
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
   const sanitizedName = sanitizeWorktreeName(args.request.name)
@@ -110,23 +109,31 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.username,
       args.localWorktreeGitOptions
     )
-    checkoutExistingBranch = await canCheckoutExistingLocalBranch(
-      args.repo.path,
-      branchName,
-      args.baseBranch,
-      ...args.localWorktreeGitOptionArgs
-    )
-    if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
-      selectedExistingLocalBranchName = branchName
+    const tryExistingBranch = async (): Promise<boolean> => {
+      checkoutExistingBranch = await canCheckoutExistingLocalBranch(
+        args.repo.path,
+        branchName,
+        args.baseBranch,
+        args.localWorktreeGitOptions
+      )
+      return checkoutExistingBranch
     }
+    const preferExistingBranch = Boolean(
+      args.request.branchNameOverride || selectedExistingLocalBranchName
+    )
+    checkoutExistingBranch = preferExistingBranch && (await tryExistingBranch())
     branchConflictKind = checkoutExistingBranch
       ? null
       : await getBranchConflictKind(
           args.repo.path,
           branchName,
           args.baseBranch,
-          ...args.localWorktreeGitOptionArgs
+          args.localWorktreeGitOptions,
+          preferExistingBranch ? undefined : tryExistingBranch
         )
+    if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
+      selectedExistingLocalBranchName = branchName
+    }
     const allowedPushTargetRemoteConflict =
       branchConflictKind &&
       isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args.request)

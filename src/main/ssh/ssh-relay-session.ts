@@ -5,11 +5,13 @@ import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { writeStringsViaSftp } from './sftp-upload'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { isRelayEndpointHeldError } from './ssh-relay-endpoint-incumbent'
 import { forgetRelayNodePtyRepairs, recoverRelayNodePtyForSpawn } from './ssh-relay-node-pty-repair'
 import type { TerminalUnavailableCause } from '../../shared/terminal-unavailable-cause'
 import { replayPendingSshPtyKills } from './ssh-pending-pty-kill-replay'
+import { sweepOrphanedRelayPtys } from './ssh-orphan-relay-pty-sweep'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
@@ -24,7 +26,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
   buildManagedHookDetectionCommands,
-  detectedManagedHookAgents
+  readManagedHookDetectionResult
 } from '../agent-hooks/managed-hook-detection-commands'
 import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
@@ -33,6 +35,7 @@ import {
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
   isRemoteAgentHooksEnabled
 } from '../../shared/agent-hook-relay'
+import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
@@ -78,7 +81,8 @@ import {
   type DetectedPort,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
+  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD,
+  sshRemotePtyLeaseAllowsReattach
 } from '../../shared/ssh-types'
 import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
 import type { Store } from '../persistence'
@@ -446,6 +450,14 @@ export class SshRelaySession {
     }
   }
 
+  async requestSessionSearch(method: string, params: Record<string, unknown>): Promise<unknown> {
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    return mux.request(method, params, { timeoutMs: 15_000 })
+  }
+
   async requestAiVaultSessionList(
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
@@ -637,6 +649,8 @@ export class SshRelaySession {
       // claim another connection holds. Notify the callback but still rethrow.
       // RelayEndpointHeldError is terminal for the same reason: a live incumbent owns the
       // socket path, and backoff cannot make it hand it over. The user resolves it.
+      // RelayEndpointUnresponsiveError is deliberately NOT here: a relay that never answered
+      // may be stalled, and silence is not a decision — it falls through to retry.
       if (
         isRelayVersionMismatchError(err) ||
         isRelayEndpointHeldError(err) ||
@@ -1115,11 +1129,18 @@ export class SshRelaySession {
     if (consumerOwnerState?.outputFlowControl) {
       this.sourceAckPublisherCleanup = installSshPtySourceAckPublisher(
         providerGeneration,
+        // ACK delivery is idempotent and re-derived from credit state, so it consumes
+        // the two-valued projection of the write settlement rather than the three arms.
         (batch, onSettled) =>
           mux.notifyWithSettlement(
             'pty.ackData',
             batch as unknown as Record<string, unknown>,
-            onSettled
+            (settlement) =>
+              onSettled(
+                settlement.outcome === 'accepted'
+                  ? { ok: true }
+                  : { ok: false, error: settlement.error }
+              )
           )
       )
       this.sourceCancellationPublisherCleanup = installSshPtySourceCancellationPublisher(
@@ -1358,17 +1379,20 @@ export class SshRelaySession {
 
     try {
       const store = this.store as { getSettings?: Store['getSettings'] }
-      const detected = (await mux.request('preflight.detectAgents', {
-        commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
-      })) as { agents?: unknown }
-      const agents = detectedManagedHookAgents(detected?.agents)
+      const detected = readManagedHookDetectionResult(
+        await mux.request('preflight.detectAgents', {
+          commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
+        })
+      )
+      const agents = detected.agents
       if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
         return
       }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
       const params = {
         ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
-        agents
+        agents,
+        ...(detected.claudeVersion ? { claudeVersion: detected.claudeVersion } : {})
       }
       const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
         errors?: unknown
@@ -1413,20 +1437,7 @@ export class SshRelaySession {
         await conn.writeFile(file.path, file.contents, { hostPlatform })
       }
     } else {
-      const sftp = await conn.sftp()
-      try {
-        for (const file of plan.files) {
-          await new Promise<void>((resolve, reject) => {
-            const ws = sftp.createWriteStream(file.path)
-            sftp.once('error', reject)
-            ws.once('close', resolve)
-            ws.once('error', reject)
-            ws.end(file.contents)
-          })
-        }
-      } finally {
-        sftp.end()
-      }
+      await writeStringsViaSftp(conn, plan.files)
     }
     for (const command of plan.postWriteCommands) {
       await execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(hostPlatform) })
@@ -1557,30 +1568,7 @@ export class SshRelaySession {
       if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
         return
       }
-      const envelope = params as {
-        paneKey?: unknown
-        launchToken?: unknown
-        tabId?: unknown
-        worktreeId?: unknown
-        env?: unknown
-        version?: unknown
-        hasExplicitPrompt?: unknown
-        promptInteractionKey?: unknown
-        hookEventName?: unknown
-        source?: unknown
-        providerPromptId?: unknown
-        compactTrigger?: unknown
-        toolUseId?: unknown
-        toolAgentId?: unknown
-        teammateName?: unknown
-        toolAgentType?: unknown
-        isReplay?: unknown
-        providerSession?: unknown
-        providerSessionOnly?: unknown
-        shedFields?: unknown
-        claudeRunningNonAgentTask?: unknown
-        payload?: unknown
-      }
+      const envelope = params
       if (typeof envelope.paneKey !== 'string') {
         return
       }
@@ -1602,6 +1590,7 @@ export class SshRelaySession {
             typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
           source: envelope.source,
           providerPromptId: envelope.providerPromptId,
+          grokPromptBoundary: envelope.grokPromptBoundary === true ? true : undefined,
           compactTrigger: envelope.compactTrigger,
           toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
           toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
@@ -1618,6 +1607,8 @@ export class SshRelaySession {
             typeof envelope.claudeRunningNonAgentTask === 'boolean'
               ? envelope.claudeRunningNonAgentTask
               : undefined,
+          // Why: the SSH relay protocol advertises no run-serving capability.
+          advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
           payload: envelope.payload
         },
         this.targetId
@@ -1680,10 +1671,9 @@ export class SshRelaySession {
 
     if (reason === 'shutdown') {
       clearPtyOwnershipForConnection(this.targetId)
-    } else {
-      // Why: handlers detached above, so no late event can re-stamp status between this clear and reconnect replay.
-      agentHookServer.clearStatusEntriesForConnection(this.targetId)
     }
+    // Connection loss makes remote status unverifiable, not exited. Keep the last observation;
+    // replay or certified process teardown will update or remove it on the execution host.
 
     const ptyProvider = getSshPtyProvider(this.targetId)
     if (ptyProvider && 'dispose' in ptyProvider) {
@@ -2045,10 +2035,7 @@ export class SshRelaySession {
     }
     const activeLease = this.store
       .getSshRemotePtyLeases(this.targetId)
-      .find(
-        (lease) =>
-          lease.ptyId === relayPtyId && lease.state !== 'terminated' && lease.state !== 'expired'
-      )
+      .find((lease) => lease.ptyId === relayPtyId && sshRemotePtyLeaseAllowsReattach(lease))
     const activeLeaseByPtyId = activeLease
       ? new Map<string, SshPtyLease>([[relayPtyId, activeLease]])
       : new Map<string, SshPtyLease>()
@@ -2335,9 +2322,18 @@ export class SshRelaySession {
     if (!shouldContinue()) {
       return
     }
+    // Why immediately before the read: a pane's binding is written by several writers, and the
+    // renderer's debounced layout publish lands long after the spawn commit that leased the pty —
+    // so a predecessor that was still bound at spawn time never gets marked by a spawn-side
+    // trigger. Re-deriving from each pane's CURRENT binding here is what actually bounds this set,
+    // and it repairs stores that already accumulated these rows.
+    this.store.reconcileSshRemotePtyLeasesForTarget(this.targetId)
+    // Why not `state !== 'expired'`: that state covers both a superseded sibling (re-adopting it is
+    // the 2 -> 19 -> 20 fan-out) and an orphan whose reattach merely lost contact. Only the first
+    // carries a retirement mark, and only it has to be skipped.
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
-      .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+      .filter((lease) => sshRemotePtyLeaseAllowsReattach(lease))
     const activeLeaseByPtyId = new Map(activeLeases.map((lease) => [lease.ptyId, lease]))
     const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
     // Why: pass pane identity so the relay can reject cross-generation id collisions; tabId falls back for pre-leafId leases.
@@ -2398,6 +2394,17 @@ export class SshRelaySession {
         Array.from(attachedLeaseIds)
       )
     }
+    // Why last: reclaiming comes first, so every PTY this connect could route to is routed before
+    // anything asks which ones are unreachable (#9819).
+    await sweepOrphanedRelayPtys({
+      targetId: this.targetId,
+      store: this.store,
+      provider: ptyProvider,
+      clientInstanceId: this.ptyConsumerClientInstanceId,
+      isSessionOwner: this.activePtyConsumerOwner() !== null,
+      routedPtyIds: ptyIds,
+      shouldContinue
+    })
   }
 
   private async reattachKnownPty(args: {
@@ -2761,11 +2768,17 @@ export class SshRelaySession {
         ptyId: appPtyId,
         incarnationId,
         ...(mayCreate ? {} : { mayCreate: false }),
-        mayReviveRetiredSurface: false
+        mayReviveRetiredSurface: false,
+        origin: 'relay_reattach'
       })
       if (bound === false) {
         // Topology absence alone is not authority to kill a process, but neither refusal may
         // publish or replay into a missing pane.
+        // We only got here because pty.attach succeeded, so the host just proved this PTY alive.
+        // Record that before the lease write: `expired` reads downstream as "reattach gave up",
+        // and terminal.recoverPane would otherwise treat this refusal as licence to spawn a
+        // replacement shell over a process the host attested is still running.
+        this.runtime?.markPtyLivenessLive(appPtyId)
         this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
         return 'missing-surface'
       }
@@ -2894,10 +2907,21 @@ export class SshRelaySession {
     )
     clearProviderPtyState(appPtyId)
     deletePtyOwnership(appPtyId)
+    // Deliberately does NOT call runtime.onPtyExit: pty.attach answers not-found both when it
+    // verified the pid is dead and when its session map simply has no such id (no liveness check on
+    // that path at all) — which is every id after a relay restart, since ids carry a per-start
+    // `ptyIdMintEpoch`. This branch may release the id, but certifying a death from that union
+    // would orphan a live remote shell (docs/reference/ssh-execution-boundary.md). The renderer
+    // gets code -1, which every reader treats as unverified loss.
     this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
     const win = this.getMainWindow()
     if (win && !win.isDestroyed()) {
-      win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
+      // Why a separate flag and not the code: `-1` is the stop sentinel every reader resolves to
+      // `stop_unverified`, so this branch — the one place a reachable relay answered for this exact
+      // id and reported it absent — was indistinguishable from a lost link. It says only that the
+      // relay disowned the id, which a restarted relay also does for ids it never minted, so it is
+      // deliberately not the `exited` verdict (docs/reference/ssh-execution-boundary.md).
+      win.webContents.send('pty:exit', { id: appPtyId, code: -1, ptySourceDisowned: true })
     }
   }
 

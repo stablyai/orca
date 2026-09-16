@@ -23,7 +23,11 @@ import {
 import { stripRemotePaneEnvWhenHooksDisabled } from '../provider/liveness'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import { hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
+import {
+  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
+  CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
+  hasClaudeAuthEnvConflict
+} from '../../../claude-accounts/environment'
 import {
   isSafePtySessionId,
   mintPtySessionId,
@@ -65,13 +69,18 @@ export async function prepareRuntimePtySpawn(
   ctx.isClaudeLaunch =
     !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error('A Claude account switch is in progress. Try again after it finishes.')
+    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
+  // `args.shellOverride` is the per-request pick (`terminal create --shell`), read here the way
+  // the renderer twin (ipc/spawn-preflight.ts) reads a tab's override. Without it a runtime create
+  // could only ever get the host default shell, so a caller asking for cmd/PowerShell got the
+  // default shell with the request typed into it. Still Windows-only: the override names a
+  // Windows shell, and spawn-options applies it under the same platform gate.
   ctx.terminalRuntimeOptions =
     process.platform === 'win32' && !args.connectionId
       ? resolveLocalWindowsTerminalRuntimeOptions({
-          requestedShellOverride: undefined,
+          requestedShellOverride: args.shellOverride,
           settings: ctx.deps.getSettings?.(),
           projectRuntime: resolveLocalProjectRuntimeForWorktreeId(ctx.deps.store, args.worktreeId),
           fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
@@ -134,12 +143,10 @@ export async function prepareRuntimePtySpawn(
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error('A Claude account switch is in progress. Try again after it finishes.')
+    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
-    throw new Error(
-      'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
-    )
+    throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
   }
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true

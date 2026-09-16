@@ -28,6 +28,6 @@ export async function pinnedAgentSessionLaunchArgs(
   resolver: LaunchArgsResolver | undefined,
   params: AgentSessionAttachParams
 ): Promise<{ launchArgs: string[] } | Record<string, never>> {
-  const launchArgs = await resolver?.(params.provider)
+  const launchArgs = params.launchArgs ?? (await resolver?.(params.provider))
   return launchArgs ? { launchArgs: [...launchArgs] } : {}
 }

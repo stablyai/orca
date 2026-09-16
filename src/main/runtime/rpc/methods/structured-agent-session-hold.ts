@@ -9,9 +9,10 @@
 // the hold is deliberate: re-registering an id runs the previous cleanup synchronously, so the
 // stale release lands before this hold rather than after it.
 
-import { defineMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled,
+  requireStructuredCleanupHost,
   requireStructuredHost
 } from './structured-agent-session-gate'
 import { HoldParams } from './structured-agent-session-schemas'
@@ -27,7 +28,7 @@ function holdCleanupIdFor(sessionId: string, holderKey: string): string {
   return `${HOLD_CLEANUP_PREFIX}:${holderKey}:${sessionId}`
 }
 
-export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
   defineMethod({
     name: 'agentSession.hold',
     params: HoldParams,
@@ -53,7 +54,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.release',
     params: HoldParams,
     handler: async (params, ctx) => {
-      const host = requireStructuredHost(ctx)
+      const host = requireStructuredCleanupHost(ctx)
       const holderKey = holderKeyFor(ctx, params.holderId)
       host.release(params.sessionId, holderKey)
       // Retires the backstop too; its release is a no-op against a holder already gone.

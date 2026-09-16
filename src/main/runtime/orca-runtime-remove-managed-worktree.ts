@@ -7,20 +7,23 @@ import {
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
-import { getRuntimeWorktreeRemovalOptionsKey } from './runtime-worktree-selection'
+import {
+  getRuntimeWorktreeRemovalOptionsKey,
+  type RemoveManagedWorktreeOptions
+} from './runtime-worktree-selection'
 import { withWorktreeSpan } from '../observability/instrumentation'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
-import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { resolveWorktreeRemovalRoute } from '../worktree-removal-execution-host-route'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { listWorktreesStrict } from '../git/worktree'
+import { isPrunableGitFileWorktree } from '../worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from './runtime-unregistered-worktree-removal'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isRuntimeWorktreePathMissing } from './runtime-worktree-filesystem'
-import { removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval } from '../local-worktree-removal-recovery'
+import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { removeRuntimeRegisteredRemoteWorktree } from './runtime-registered-remote-worktree-removal'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
@@ -30,11 +33,15 @@ import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
 export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateManagedRemoteWorktree {
   async removeManagedWorktree(
     worktreeSelector: string,
-    force = false,
-    runHooks = false,
-    allowUnverifiedPtyStop = false,
-    hostId?: string
+    options: RemoveManagedWorktreeOptions = {}
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
+    const {
+      force = false,
+      runHooks = false,
+      allowUnverifiedPtyStop = false,
+      allowFailedArchiveHook = false,
+      hostId
+    } = options
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -45,7 +52,12 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
+      force,
+      runHooks,
+      allowUnverifiedPtyStop,
+      allowFailedArchiveHook
+    })
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
@@ -79,22 +91,24 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
         if (orphanOrFolderResult) {
           return orphanOrFolderResult
         }
-        const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
-        const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
-        const localWorktreeGitOptions = repo.connectionId
-          ? {}
-          : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+        // One host for the whole removal. Listing on a different host from the one the prune and
+        // the delete use is how an `executionHostId: 'ssh:*'`-only row got listed remotely and
+        // deleted here; the route refuses rather than falling back to this machine.
+        const route = resolveWorktreeRemovalRoute(removalHostId)
+        const localWorktreeGitOptions =
+          route.kind === 'ssh' ? {} : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
         const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
-        const registeredWorktrees = repo.connectionId
-          ? await provider!.listWorktrees(repo.path)
-          : hasLocalWorktreeGitOptions
-            ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
-            : await listWorktreesStrict(repo.path)
+        const registeredWorktrees =
+          route.kind === 'ssh'
+            ? await route.provider.listWorktrees(repo.path)
+            : hasLocalWorktreeGitOptions
+              ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
+              : await listWorktreesStrict(repo.path)
         const removedMeta = resolveWorktreeRemovalMetadata(
           store,
           removalTarget.repoId,
           removalTarget.id,
-          cleanupHostId ?? getRepoExecutionHostId(repo)
+          removalHostId
         )
         const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
         const registeredWorktree = findRegisteredDeletableWorktree(
@@ -111,8 +125,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             removedPushTarget,
             force,
             allowUnverifiedPtyStop,
-            provider,
-            fsProvider: fsProvider ?? null,
+            route,
             localOptions: localWorktreeGitOptions,
             store,
             acquireWatcherRemoval: this.acquireFileWatcherRemoval,
@@ -123,7 +136,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
               }),
             deleteHistory: () =>
               deleteRemoteWorktreeHistory(
-                repo.connectionId ? this.getSshProviderFn?.(repo.connectionId) : undefined,
+                route.kind === 'ssh' ? this.getSshProviderFn?.(route.connectionId) : undefined,
                 removalTarget.id
               ),
             finishRemoval: () => {
@@ -145,15 +158,20 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
         }
         if (
-          !repo.connectionId &&
-          force === true &&
-          process.platform === 'win32' &&
-          (isWindowsAbsolutePathLike(canonicalWorktreePath) ||
-            !!localWorktreeGitOptions.wslDistro) &&
-          removedMeta &&
-          (await isRuntimeWorktreePathMissing(repo, canonicalWorktreePath, localWorktreeGitOptions))
+          route.kind === 'local' &&
+          ((await isPrunableGitFileWorktree(registeredWorktree, localWorktreeGitOptions)) ||
+            (force === true &&
+              process.platform === 'win32' &&
+              (isWindowsAbsolutePathLike(canonicalWorktreePath) ||
+                !!localWorktreeGitOptions.wslDistro) &&
+              removedMeta &&
+              (await isRuntimeWorktreePathMissing(
+                route.hostId,
+                canonicalWorktreePath,
+                localWorktreeGitOptions
+              ))))
         ) {
-          const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+          const removalResult = await removeStaleLocalWorktreeRegistration({
             canonicalWorktreePath,
             repoPath: repo.path,
             localWorktreeGitOptions,
@@ -182,26 +200,29 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           this.notifyWorktreesChanged(repo.id)
           return removalResult ?? {}
         }
-        if (repo.connectionId) {
+        if (route.kind === 'ssh') {
           return removeRuntimeRegisteredRemoteWorktree({
+            runHooks,
+            allowFailedArchiveHook,
             repo,
             target: removalTarget,
             registeredWorktree,
             removedPushTarget,
             store,
-            provider: provider!,
+            provider: route.provider,
+            connectionId: route.connectionId,
             force,
             allowUnverifiedPtyStop,
             deleteBranch,
             acquireWatcherRemoval: this.acquireFileWatcherRemoval,
             stopPtys: () =>
               this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-                connectionId: repo.connectionId!,
+                connectionId: route.connectionId,
                 allowUnverifiedStop: allowUnverifiedPtyStop
               }),
             deleteHistory: () =>
               deleteRemoteWorktreeHistory(
-                this.getSshProviderFn?.(repo.connectionId!),
+                this.getSshProviderFn?.(route.connectionId),
                 removalTarget.id
               ),
             preserveBranchHead: (result, fallbackHead) =>
@@ -233,6 +254,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           hasLocalOptions: hasLocalWorktreeGitOptions,
           force,
           runHooks,
+          allowFailedArchiveHook,
           allowUnverifiedPtyStop,
           deleteBranch,
           acquireWatcherRemoval: this.acquireFileWatcherRemoval,

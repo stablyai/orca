@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split class members.
+import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import { RuntimeFileCommandsWithSearchRuntimeFiles } from './runtime-file-commands-search-runtime-files'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -21,9 +22,9 @@ import {
 } from '../../shared/ripgrep-process-availability'
 import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
 import { wslAwareSpawn } from '../git/runner'
-import type { ResolvedRuntimeFileWorktree } from './runtime-file-watcher-leases'
+import type { RuntimeFileExplorerPath } from './runtime-file-command-target'
+import type { IFilesystemProvider } from '../providers/types'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileCommandsWithSearchRuntimeFiles {
   protected async searchLocalRuntimeFiles(
@@ -58,7 +59,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
       }
 
       const acc = createAccumulator()
-      let stdoutBuffer = ''
+      const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
       let resolved = false
       let processErrorObserved = false
       let unavailableExitObserved = false
@@ -84,6 +85,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
 
       let killTimeout: ReturnType<typeof setTimeout> | null = null
       const cleanupListeners = (): void => {
+        lines.clear()
         if (killTimeout) {
           clearTimeout(killTimeout)
           killTimeout = null
@@ -123,12 +125,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
 
       nextChild.stdout!.setEncoding('utf-8')
       const onStdoutData = (chunk: string): void => {
-        stdoutBuffer += chunk
-        const lines = stdoutBuffer.split('\n')
-        stdoutBuffer = lines.pop() ?? ''
-        for (const line of lines) {
-          processLine(line)
-        }
+        lines.push(chunk, processLine)
       }
       const onStderrData = (): void => {
         // Drain stderr so rg cannot block on a full pipe.
@@ -152,8 +149,9 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
           resolveWithoutRipgrep()
           return
         }
-        if (stdoutBuffer) {
-          processLine(stdoutBuffer)
+        const tail = lines.finish()
+        if (tail !== null) {
+          processLine(tail)
         }
         resolveOnce()
       }
@@ -176,7 +174,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
   protected async resolveFileExplorerPath(
     worktreeSelector: string,
     relativePath: string
-  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }> {
+  ): Promise<RuntimeFileExplorerPath> {
     const [target] = await this.resolveFileExplorerPaths(worktreeSelector, [relativePath])
     return target
   }
@@ -184,7 +182,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
   protected async resolveFileExplorerPaths(
     worktreeSelector: string,
     relativePaths: readonly string[]
-  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }[]> {
+  ): Promise<RuntimeFileExplorerPath[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     return relativePaths.map((relativePath) => ({
       worktree: target.worktree,
@@ -192,17 +190,17 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
         target.worktree.path,
         normalizeRuntimeRelativePath(relativePath)
       ),
-      connectionId: target.connectionId
+      executionHostId: target.executionHostId
     }))
   }
 
+  // `null` provider is the caller's "this host is unreachable" answer, not "list it here".
   protected async listRemoteMobileFiles(
     rootPath: string,
-    connectionId: string,
+    provider: IFilesystemProvider | null,
     maxResults?: number,
     signal?: AbortSignal
   ): Promise<string[]> {
-    const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
       return []
     }

@@ -44,14 +44,14 @@ authority.
 
 ### Placeholders That Fail Open
 
-`GitCapabilityCache` records commands Git *rejects*. A `git log --format`
+`GitCapabilityCache` records commands Git _rejects_. A `git log --format`
 placeholder Git does not know is not rejected: Git echoes it verbatim and exits
 zero, so there is no error to remember and no probe to cache. Ask for both forms
 in one record and pick at parse time.
 
-| Placeholder      | Preferred behavior                                                                                | Compatibility behavior                                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `%(decorate:…)`  | Git 2.43 separates commit decorations with `\x1f`, so ref names containing commas survive         | The same record also carries `%D` (Git 2.10); an unexpanded `%(decorate` placeholder selects it, at the cost of comma-splitting |
+| Placeholder     | Preferred behavior                                                                        | Compatibility behavior                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `%(decorate:…)` | Git 2.43 separates commit decorations with `\x1f`, so ref names containing commas survive | The same record also carries `%D` (Git 2.10); an unexpanded `%(decorate` placeholder selects it, at the cost of comma-splitting |
 
 ## Why Not `simple-git`
 
@@ -68,6 +68,12 @@ capability problem.
 PR checks run the capability contract against real Git 2.25.5, 2.38.1, and
 2.49.1 binaries. This spans the pre-2.29 serialized `FETCH_HEAD` fallback, the transitional
 `merge-tree --write-tree` behavior before `--merge-base`, and current Git.
+
+The three lanes run in parallel and each Git call in the container lanes costs a
+container start, so their wall clock is runner contention, not Git. Build the
+2.25.5 binary and pull the images before the lanes start: anything heavy left
+running alongside them is charged to whichever boundary case is in flight and
+surfaces as a Vitest timeout rather than as a slow setup step.
 
 Keep the unit tests alongside that matrix. They cover concurrent probes,
 native/WSL/SSH/relay isolation, and error-stream shapes that a single real

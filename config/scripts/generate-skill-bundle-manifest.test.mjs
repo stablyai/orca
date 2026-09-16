@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import {
   chmod,
   copyFile,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -522,13 +523,16 @@ describe('skill bundle manifest generator', () => {
   })
 
   it('computes the same Git tree identity as Git', async () => {
-    const packageRoot = path.resolve('skills', 'orca-cli')
+    const packageRoot = await createPackage()
+    await cp(path.join(REPO_ROOT, 'skills', 'orca-cli'), packageRoot, { recursive: true })
     const files = await collectPackageFiles(packageRoot)
-    const expected = execFileSync('git', ['ls-tree', 'HEAD:skills', 'orca-cli'], {
+    // Compare the same bytes even when the skill has uncommitted edits.
+    execFileSync('git', ['init', '--quiet'], { cwd: packageRoot })
+    execFileSync('git', ['-c', 'core.autocrlf=false', 'add', '-A'], { cwd: packageRoot })
+    const expected = execFileSync('git', ['write-tree'], {
+      cwd: packageRoot,
       encoding: 'utf8'
-    })
-      .trim()
-      .split(/\s+/)[2]
+    }).trim()
 
     expect(gitTreeSha(files)).toBe(expected)
   })

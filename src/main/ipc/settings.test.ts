@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
 const {
   applyAppIconMock,
@@ -13,6 +14,7 @@ const {
   resolveEnvironmentMock,
   rebuildAppMenuMock,
   applyBrowserSessionProxiesMock,
+  applySessionSearchSettingsChangeMock,
   listProfilesMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
@@ -27,6 +29,7 @@ const {
   resolveEnvironmentMock: vi.fn(),
   rebuildAppMenuMock: vi.fn(),
   applyBrowserSessionProxiesMock: vi.fn(),
+  applySessionSearchSettingsChangeMock: vi.fn(),
   listProfilesMock: vi.fn(() => [])
 }))
 
@@ -59,6 +62,10 @@ vi.mock('../browser/browser-session-registry', () => ({
 
 vi.mock('../app-icon', () => ({
   applyAppIcon: applyAppIconMock
+}))
+
+vi.mock('../ai-vault-search/session-search-enablement', () => ({
+  applySessionSearchSettingsChange: applySessionSearchSettingsChangeMock
 }))
 
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
@@ -113,6 +120,7 @@ describe('registerSettingsHandlers', () => {
     })
     rebuildAppMenuMock.mockClear()
     applyBrowserSessionProxiesMock.mockReset().mockResolvedValue(undefined)
+    applySessionSearchSettingsChangeMock.mockClear()
     listProfilesMock.mockReset().mockReturnValue([])
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
@@ -826,5 +834,48 @@ describe('registerSettingsHandlers', () => {
     await handler(settingsInvokeEvent, { showAutomationsButton: false })
 
     expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
+  })
+
+  // 3b stores the two booleans and nothing else; the consent copy and the
+  // history picker are PR 8's. A profile that has never opted in has no key.
+  it('normalizes an agent-session-search write and hands the change to the index', async () => {
+    const before = { aiVaultSearch: { enabled: false, historyDays: null } }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockImplementation((args: Partial<GlobalSettings>) => ({
+      ...before,
+      ...args
+    }))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      aiVaultSearch: { enabled: true, historyDays: 30.7, paused: true }
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ aiVaultSearch: { enabled: true, historyDays: 30 } }),
+      expect.anything()
+    )
+    expect(applySessionSearchSettingsChangeMock).toHaveBeenCalledWith(
+      before,
+      expect.objectContaining({ aiVaultSearch: { enabled: true, historyDays: 30 } })
+    )
+  })
+
+  it('leaves the index alone for a settings write that does not mention it', async () => {
+    store.getSettings.mockReturnValue({ appIcon: 'default' })
+    store.updateSettings.mockReturnValue({ appIcon: 'default' })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { appIcon: 'default' })
+
+    expect(applySessionSearchSettingsChangeMock).not.toHaveBeenCalled()
   })
 })

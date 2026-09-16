@@ -6,8 +6,6 @@
 // actually proved.
 
 import {
-  CODEX_APP_SERVER_MAX_RECORD_BYTES,
-  CodexAppServerFrameSizeError,
   isCodexAppServerRequestError,
   type CodexAppServerConnection
 } from './codex-app-server-connection'
@@ -18,8 +16,11 @@ export type CodexOpenedThread = {
   thread?: Record<string, unknown>
   /** Rollout file Codex named, when it named one. */
   historyPath: string | null
+  historyMode?: 'legacy' | 'paginated'
   model?: string
   effort?: string
+  /** Present, including null, only when this app-server reports the effective tier. */
+  serviceTier?: string | null
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -61,17 +62,6 @@ async function resumeCodexThread(
   }
 }
 
-function assertBoundedAcquisitionResult(method: string, opened: unknown): void {
-  const encoded = JSON.stringify(opened)
-  if (encoded === undefined) {
-    return
-  }
-  const encodedBytes = Buffer.byteLength(encoded, 'utf8')
-  if (encodedBytes > CODEX_APP_SERVER_MAX_RECORD_BYTES) {
-    throw new CodexAppServerFrameSizeError(method, encodedBytes, CODEX_APP_SERVER_MAX_RECORD_BYTES)
-  }
-}
-
 export async function openCodexThread(
   connection: Pick<CodexAppServerConnection, 'request'>,
   launch: { cwd: string; resumeThreadId: string | null; resumePath?: string | null },
@@ -87,7 +77,6 @@ export async function openCodexThread(
   const opened = resumeParams
     ? await resumeCodexThread(connection, resumeParams, timeoutMs)
     : await connection.request('thread/start', { cwd: launch.cwd }, { timeoutMs })
-  assertBoundedAcquisitionResult(resumeParams ? 'thread/resume' : 'thread/start', opened)
   const threadId = readCodexThreadId(opened)
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')
@@ -102,11 +91,17 @@ export async function openCodexThread(
       : {}
   const model = nonEmptyString(result.model)
   const effort = nonEmptyString(result.reasoningEffort)
+  const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
+  const serviceTier = nonEmptyString(result.serviceTier)
   return {
     threadId,
     thread,
     historyPath: readCodexThreadPath(opened),
+    ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
+      ? { historyMode: thread.historyMode }
+      : {}),
     ...(model ? { model } : {}),
-    ...(effort ? { effort } : {})
+    ...(effort ? { effort } : {}),
+    ...(serviceTierKnown ? { serviceTier } : {})
   }
 }

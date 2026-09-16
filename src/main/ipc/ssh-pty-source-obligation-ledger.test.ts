@@ -64,6 +64,95 @@ function commitSpan(
 }
 
 describe('SshPtySourceObligationLedger', () => {
+  it('skips the terminal prefix while successful ACK publication is delayed', () => {
+    const count = 1_024
+    const ledger = new SshPtySourceObligationLedger()
+    const owner = identity()
+    ledger.open(owner)
+    let endReads = 0
+    for (let index = 0; index < count; index += 1) {
+      const original = span(owner, `span-${index}`, index, 'x')
+      commitSpan(
+        ledger,
+        owner,
+        Object.freeze({
+          ...original,
+          get sourceEndSu() {
+            endReads += 1
+            return original.sourceEndSu
+          }
+        })
+      )
+    }
+    endReads = 0
+    for (let index = 0; index < count; index += 1) {
+      ledger.settle(`span-${index}`, 'model', 'accepted')
+      ledger.settle(`span-${index}`, 'desktop', 'parsed')
+    }
+    expect(endReads).toBeLessThanOrEqual(count * 32)
+    expect(ledger.snapshot(owner)).toMatchObject({
+      obligationsTerminalEndSu: count,
+      ackPublishedEndSu: 0,
+      openSpans: count
+    })
+    ledger.queueAck(owner)!.onSettled({ ok: false, error: new Error('write failed') })
+    expect(ledger.hasRetainedSpan('span-0')).toBe(true)
+    ledger.retryQueuedAck(owner)!.onSettled({ ok: true })
+    expect(ledger.snapshot(owner)).toMatchObject({ ackPublishedEndSu: count, openSpans: 0 })
+  })
+
+  it('keeps an open gap authoritative across late settlements and prefix reclamation', () => {
+    const ledger = new SshPtySourceObligationLedger()
+    const owner = identity()
+    ledger.open(owner, 100)
+    for (let index = 0; index < 8; index += 1) {
+      commitSpan(ledger, owner, span(owner, `span-${index}`, 100 + index, 'x'))
+      ledger.settle(`span-${index}`, 'model', 'accepted')
+    }
+    for (const index of [0, 1, 7, 6, 5, 4]) {
+      ledger.settle(`span-${index}`, 'desktop', 'parsed')
+    }
+    const earlyAck = ledger.queueAck(owner)!
+    earlyAck.onSettled({ ok: true })
+    expect(ledger.snapshot(owner)).toMatchObject({
+      obligationsTerminalEndSu: 102,
+      ackPublishedEndSu: 102,
+      openSpans: 6
+    })
+    ledger.beginTransfer('span-2', 'desktop', 'model', 'hidden')
+    ledger.commitTransfer('span-2', 'desktop')
+    expect(ledger.snapshot(owner).obligationsTerminalEndSu).toBe(103)
+    ledger.beginTransfer('span-3', 'desktop', 'model', 'hidden')
+    ledger.rollbackTransfer('span-3', 'desktop')
+    expect(ledger.snapshot(owner).obligationsTerminalEndSu).toBe(103)
+    ledger.settle('span-3', 'desktop', 'parsed')
+    expect(ledger.snapshot(owner).obligationsTerminalEndSu).toBe(108)
+    ledger.queueAck(owner)!.onSettled({ ok: true })
+    earlyAck.onSettled({ ok: true })
+    expect(ledger.snapshot(owner)).toMatchObject({ ackPublishedEndSu: 108, openSpans: 0 })
+  })
+
+  it('preserves zero-width span skipping and committed-tail rollback', () => {
+    const ledger = new SshPtySourceObligationLedger()
+    const owner = identity()
+    ledger.open(owner)
+    commitSpan(ledger, owner, span(owner, 'empty-start', 0, ''))
+    commitSpan(ledger, owner, span(owner, 'first', 0, 'x'))
+    commitSpan(ledger, owner, span(owner, 'empty-middle', 1, ''))
+    const tail = commitSpan(ledger, owner, span(owner, 'tail', 1, 'x'))
+    ledger.settle('first', 'model', 'accepted')
+    ledger.settle('first', 'desktop', 'parsed')
+    expect(ledger.snapshot(owner).obligationsTerminalEndSu).toBe(1)
+    expect(ledger.rollbackCommitted(tail)).toBe(true)
+    commitSpan(ledger, owner, span(owner, 'replacement', 1, 'yy'))
+    ledger.settle('replacement', 'desktop', 'parsed')
+    expect(ledger.snapshot(owner).obligationsTerminalEndSu).toBe(1)
+    ledger.settle('replacement', 'model', 'accepted')
+    expect(ledger.snapshot(owner).obligationsTerminalEndSu).toBe(3)
+    ledger.queueAck(owner)!.onSettled({ ok: true })
+    expect(ledger.snapshot(owner).openSpans).toBe(0)
+  })
+
   it('looks up retained spans directly by ID as the ledger grows', () => {
     const spanCount = 1_024
     const ledger = new SshPtySourceObligationLedger()

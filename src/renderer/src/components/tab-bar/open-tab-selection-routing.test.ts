@@ -63,7 +63,8 @@ const browserResult: OpenTabSearchResult = {
   contentType: 'browser',
   pageId: 'page-1',
   workspaceId: 'ws-1',
-  url: 'https://example.com/docs'
+  url: 'https://example.com/docs',
+  faviconUrl: null
 }
 
 const simulatorResult: OpenTabSearchResult = {

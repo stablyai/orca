@@ -612,6 +612,14 @@ describe('AgentTerminalPreview', () => {
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
   })
 
+  it('does not claim a remote pane closed when no snapshot can exist for it', async () => {
+    connect.mockResolvedValueOnce({ snapshot: null, replay: [] })
+    const view = render(<AgentTerminalPreview ptyId="ssh:devbox@@pty-3" />)
+
+    await waitFor(() => expect(view.getByText(/remote session/)).toBeInTheDocument())
+    expect(view.queryByText(/pane has closed/)).not.toBeInTheDocument()
+  })
+
   it('connects a replacement pty after the previous pty was gone', async () => {
     connect.mockResolvedValueOnce({ snapshot: null, replay: [] }).mockResolvedValueOnce({
       snapshot: { data: 'replacement', cols: 80, rows: 24, seq: 1 },

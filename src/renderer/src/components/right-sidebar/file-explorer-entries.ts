@@ -9,8 +9,5 @@ function isDotfileSegment(segment: string): boolean {
 }
 
 export function isDotfileRelativePath(relativePath: string): boolean {
-  return relativePath
-    .split(/[\\/]+/)
-    .filter(Boolean)
-    .some(isDotfileSegment)
+  return relativePath.split(/[\\/]+/).some(isDotfileSegment)
 }

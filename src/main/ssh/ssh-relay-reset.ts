@@ -2,6 +2,7 @@ import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { SHORT_RELAY_SOCKET_DIR_PREFIX } from './relay-socket-path-limit'
 
 export async function forceStopRelayForTarget(
   conn: SshConnection,
@@ -12,8 +13,10 @@ export async function forceStopRelayForTarget(
   const script = [
     `sock_name=${escapedSockName}`,
     'base="${HOME}/.orca-remote"',
-    'if [ -d "$base" ]; then',
-    '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name"; do',
+    // Why: a long $HOME moves the socket to the sun_path-safe short base (#10726); reset must reach it there too.
+    `short_base="${SHORT_RELAY_SOCKET_DIR_PREFIX}$(id -u 2>/dev/null)"`,
+    'if [ -d "$base" ] || [ -d "$short_base" ]; then',
+    '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name" "$short_base"/relay-*/"$sock_name"; do',
     '    [ -S "$sock" ] || continue',
     '    pid=""',
     // Why: lsof ORs selectors by default; -a prevents reset from targeting

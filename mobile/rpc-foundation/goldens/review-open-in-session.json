@@ -1,0 +1,122 @@
+{
+  "operation": "session.diff-review-actions",
+  "family": "session.diff-review-actions",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
+  "scenarioSha256": "2f0a6aa8ce100edbce9ccf64c81efe64356fccbdcd2e16f561360e2b11b5700f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2fc890e4b748": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "aefdadd223ee": {
+      "name": "files.openDiff#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.openDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "src/app.ts",
+            "staged": false,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "opened": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed424c831c19": {
+      "name": "files.openDiff#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.openDiff\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\",\"staged\":false}}",
+      "sent": 1
+    },
+    "f08ae8feb9a9": {
+      "name": "open-session",
+      "value": {},
+      "sent": 1
+    }
+  },
+  "recording": {
+    "scenario": "review-open-in-session",
+    "checkpoints": [
+      {
+        "id": "opened",
+        "observation": {
+          "sender": ["aefdadd223ee"],
+          "payloads": ["ed424c831c19"],
+          "settlements": {
+            "open-in-session": "eb79a9b3682a"
+          },
+          "state": "2fc890e4b748",
+          "effects": ["f08ae8feb9a9"]
+        }
+      }
+    ]
+  }
+}

@@ -553,6 +553,17 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
         }
         throw new Error('No such remote')
       }
+      if (args[0] === 'remote' && args[1] === '-v') {
+        return {
+          stdout: [
+            'origin\thttps://github.com/stablyai/orca.git (fetch)',
+            'origin\thttps://github.com/stablyai/orca.git (push)',
+            `${SIBLING_REMOTE}\t${FORK_URL} (fetch)`,
+            `${SIBLING_REMOTE}\t${FORK_URL} (push)`
+          ].join('\n'),
+          stderr: ''
+        }
+      }
       if (args[0] === 'remote' && args.length === 1) {
         return { stdout: `origin\n${SIBLING_REMOTE}\n`, stderr: '' }
       }

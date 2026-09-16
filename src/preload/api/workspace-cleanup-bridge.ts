@@ -25,8 +25,6 @@ export const workspaceCleanupApi = {
   getCachedScan: () => ipcRenderer.invoke('workspaceCleanup:getCachedScan'),
   dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
   clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
-  hasKillableLocalProcesses: (args) =>
-    ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args),
   beginRemovalSnapshotPruneBatch: (args) =>
     ipcRenderer.invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
   recordRemovalSnapshotPrune: (args) =>

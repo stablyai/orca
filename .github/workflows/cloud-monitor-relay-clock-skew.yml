@@ -1,0 +1,77 @@
+name: Monitor Relay Cell Clock Skew
+
+# Why: the 2026-08-01 sustained HOST_OFFLINE incident traced to one cell's
+# clock running ~100ms ahead, which deterministically failed every host
+# challenge under a zero-tolerance freshness check. /health and /ready cannot
+# see clock skew; this monitor alarms before drift reaches the (now 2s)
+# client tolerance.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  skew:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Measure Date-header skew for every relay cell
+        working-directory: .
+        run: |
+          set -u
+          # Date headers carry whole seconds; compare floored seconds on both
+          # sides so perfect sync reads 0/±1 and never flaps. An absolute
+          # floor-skew of >= 2 means real drift of at least ~1s — approaching
+          # the client's 2s challenge tolerance. Millisecond-precision deltas
+          # come from the desktop's named-check logging when activations fail.
+          ALARM_S=2
+          failures=0
+          reachable=0
+          unserved=0
+          # Keep this upper bound at or above the highest provisioned cell in
+          # environments/production.tfvars; unlisted cells are silently unmonitored.
+          for n in $(seq 1 22); do
+            cell="c${n}"
+            url="https://${cell}.relay.onorca.dev/health"
+            # Why: *.relay.onorca.dev is a wildcard, so the load balancer answers with its own
+            # accurate Date for a fenced, dead, or never-provisioned cell. Timing that reads as
+            # perfect sync. Only an HTTP 200 is the relay process itself answering, so only a
+            # 200 carries a clock worth judging.
+            response="$(curl -sS -D - -o /dev/null --max-time 8 "${url}" 2>/dev/null || true)"
+            status="$(printf '%s' "${response}" | awk 'NR==1 {print $2}')"
+            header="$(printf '%s' "${response}" | tr -d '\r' | grep -i '^date:' || true)"
+            if [ "${status:-000}" != "200" ] || [ -z "${header}" ]; then
+              # Expected for the fenced cells; a dead unfenced cell is caught by the heartbeat
+              # and readiness alerts, not here. Named either way so it is never invisible.
+              echo "${cell}: not serving (status ${status:-none}); no relay clock to judge"
+              unserved=$((unserved + 1))
+              continue
+            fi
+            reachable=$((reachable + 1))
+            server_s="$(date -d "${header#*: }" +%s)"
+            local_s="$(date +%s)"
+            skew=$((server_s - local_s))
+            abs=${skew#-}
+            if [ "${abs}" -ge "${ALARM_S}" ]; then
+              echo "::error::${cell}: clock skew ${skew}s reaches ±${ALARM_S}s alarm"
+              failures=$((failures + 1))
+            else
+              echo "${cell}: skew ${skew}s"
+            fi
+          done
+          echo "cells serving: ${reachable}, not serving: ${unserved}, alarms: ${failures}"
+          if [ "${reachable}" -eq 0 ]; then
+            # Now meaningful: previously the load balancer answered for every name, so this
+            # could never fire and a total fleet outage reported "all healthy".
+            echo "::error::no relay cell is serving; monitor blind"
+            exit 1
+          fi
+          exit "$((failures > 0 ? 1 : 0))"

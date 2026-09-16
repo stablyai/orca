@@ -1,0 +1,1222 @@
+{
+  "operation": "workspace.file-inventory",
+  "family": "legacy-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "262eaad263a45aa13ec5b27c12b59946b12c202474229fff7a5727dba6d702ca",
+  "scenarioSha256": "048c3ec55ec67d09d9b02e17822f1154adca577e57ffe6d3059102d552d2f759",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02a03f44e95f": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "039d4c02da97": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 240,
+        "settledAt": 240,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "0959d2b897c9": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "0d903486cbe8": {
+      "name": "files.list#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 240
+      }
+    },
+    "11617076ef90": {
+      "name": "files.searchPaths#3",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "third",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 360
+      }
+    },
+    "1567fc34445b": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "15b2254fad4b": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "beta.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "1ba589a74085": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "1ea7547b81a5": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "1f232e1642a7": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "3642acfe438f": {
+      "files": ["beta.ts"]
+    },
+    "387248eb3124": {
+      "name": "files.searchPaths#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"fresh\",\"limit\":16}}",
+      "sent": 3
+    },
+    "3b6419fbab75": {
+      "status": "fulfilled",
+      "startedAt": 240,
+      "settledAt": 240,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "5846735d7ce5": {
+      "name": "files.searchPaths#3",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"third\",\"limit\":16}}",
+      "sent": 4
+    },
+    "602e35a92eec": {
+      "files": []
+    },
+    "603254c040fc": {
+      "name": "files.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "old.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "825b5246a9b0": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a129552fdc6e": {
+      "files": ["third.ts"]
+    },
+    "a4643cbb0362": {
+      "name": "files.list#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}",
+      "sent": 4
+    },
+    "a4b06271def1": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "b2434f1de9f6": {
+      "name": "files.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 120
+      }
+    },
+    "bb65fa195d1c": {
+      "name": "files.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}",
+      "sent": 2
+    },
+    "c0821dc354d7": {
+      "name": "files.searchPaths#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "old",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "cd59dd2431e0": {
+      "name": "files.searchPaths#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}",
+      "sent": 1
+    },
+    "d2ad71e601c4": {
+      "status": "fulfilled",
+      "startedAt": 120,
+      "settledAt": 120,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "daf226a0261c": {
+      "name": "files.list#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 360,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "fresh.ts"
+              },
+              {
+                "relativePath": "third.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "e0c06b676602": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 240,
+        "settledAt": 240,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-legacy-inventory-files.searchpaths-2",
+    "checkpoints": [
+      {
+        "id": "b1.prelude:old-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "b2434f1de9f6"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.normal:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "15b2254fad4b"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "3642acfe438f",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.normal:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "15b2254fad4b", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.normal:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "15b2254fad4b", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.result-absent:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1567fc34445b"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.result-absent:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1567fc34445b", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.result-absent:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1567fc34445b", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.result-null:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "0959d2b897c9"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.result-null:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "0959d2b897c9", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.result-null:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "0959d2b897c9", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-ok-missing:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1ea7547b81a5"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-ok-missing:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1ea7547b81a5", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-ok-missing:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1ea7547b81a5", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-false-string-error:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1f232e1642a7"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-false-string-error:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1f232e1642a7", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-false-string-error:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1f232e1642a7", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-false-object-error:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "825b5246a9b0"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-false-object-error:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "825b5246a9b0", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.inner-false-object-error:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "825b5246a9b0", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.outer-refused:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "a4b06271def1"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.outer-refused:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "a4b06271def1", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.outer-refused:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "a4b06271def1", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.outer-refused-no-message:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "02a03f44e95f"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.outer-refused-no-message:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "02a03f44e95f", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.outer-refused-no-message:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "02a03f44e95f", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.method-not-found:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1ba589a74085", "0d903486cbe8"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "a4643cbb0362"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.method-not-found:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1ba589a74085", "0d903486cbe8"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "a4643cbb0362"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.method-not-found:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "1ba589a74085", "daf226a0261c"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "a4643cbb0362"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "a129552fdc6e",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.transport-rejection:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "e0c06b676602"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.transport-rejection:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "e0c06b676602", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.transport-rejection:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "e0c06b676602", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.transport-rejection-no-message:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "039d4c02da97"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.transport-rejection-no-message:third-query",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "039d4c02da97", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "b1.transport-rejection-no-message:fresh-arrived",
+        "observation": {
+          "sender": ["c0821dc354d7", "603254c040fc", "039d4c02da97", "11617076ef90"],
+          "payloads": ["cd59dd2431e0", "bb65fa195d1c", "387248eb3124", "5846735d7ce5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

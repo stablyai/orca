@@ -4,13 +4,26 @@ import type {
   PtySourceRecoveryResult
 } from '../shared/pty-source-recovery-contract'
 import type { PtySourceReceivingActivation } from '../shared/pty-source-receiving-activation'
-import type { PtySourceDeliveryIdentity } from '../shared/pty-source-credit-contract'
+import type {
+  PtySourceDeliveryIdentity,
+  PtySourceDeliverySnapshot
+} from '../shared/pty-source-credit-contract'
 import type { RequestContext } from './dispatcher'
 import type {
   RelayPtySourceDeliveryRecord,
   RelayPtySourceSendScheduler
 } from './relay-pty-source-send-scheduler'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
+
+// Takes the post-rotation snapshot: creditedEndSu is the accepted checkpoint and windowSu the
+// reconnecting client's window. The pre-rotation snapshot would fence below the checkpoint.
+export function boundedPtyRecoveryEnd(
+  snapshot: Pick<PtySourceDeliverySnapshot, 'receivedEndSu' | 'creditedEndSu' | 'windowSu'>
+): number {
+  const { receivedEndSu, creditedEndSu, windowSu } = snapshot
+  // Oversized quarantine cannot earn credit; fence at the checkpoint and drain it live.
+  return receivedEndSu - creditedEndSu > windowSu ? creditedEndSu : receivedEndSu
+}
 
 export function createPtySourceReceivingActivation(
   identity: PtySourceDeliveryIdentity,

@@ -14,7 +14,8 @@ export type IssueCommandLaunch =
 export function queueSetupAndIssueCommands(
   store: WorktreeActivationStore,
   worktreeId: string,
-  terminalTabId: string,
+  /** Null when the caller opens its own primary surface: setup still gets its own tab, but there is no shell to split from or return focus to. */
+  terminalTabId: string | null,
   setup: WorktreeSetupLaunch | undefined,
   issueCommand: IssueCommandLaunch | undefined,
   wrappedSetupCommandStr: string | undefined,
@@ -36,13 +37,13 @@ export function queueSetupAndIssueCommands(
         ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
       })
       // Why: createTab auto-activates the new tab; revert so focus stays on the primary terminal while Setup runs in the background.
-      if (opts?.activateCreatedTabs !== false) {
+      if (opts?.activateCreatedTabs !== false && terminalTabId) {
         store.setActiveTab(terminalTabId)
       }
       // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
       store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
       store.queueTabStartupCommand(setupTab.id, setupCommand)
-    } else {
+    } else if (terminalTabId) {
       store.queueTabSetupSplit(terminalTabId, {
         ...setupCommand,
         direction: mode === 'split-horizontal' ? 'horizontal' : 'vertical'
@@ -51,7 +52,7 @@ export function queueSetupAndIssueCommands(
   }
 
   // Why: issue automation runs in its own split, queued independently from setup so both can start in parallel (separate concerns).
-  if (issueCommand) {
+  if (issueCommand && terminalTabId) {
     // Why: WorktreeSetupLaunch carries a runner-script file to shell out to; the TaskPage variant is already an expanded command string.
     const queuedIssueCommand =
       'runnerScriptPath' in issueCommand

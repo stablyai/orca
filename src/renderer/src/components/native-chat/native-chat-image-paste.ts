@@ -30,22 +30,6 @@ export function getAgentImageHandling(agent: AgentType): AgentImageHandling {
   return IMAGE_ATTACHMENT_AGENTS.has(agent) ? 'attachment' : 'unsupported'
 }
 
-export type ImagePasteResult =
-  | { kind: 'attach'; path: string }
-  | { kind: 'unsupported'; agent: AgentType }
-
-/**
- * Given the agent and the temp-file path the image was written to, decide what
- * (if anything) to attach. Attachment-capable agents receive the path through
- * the same bracketed image-paste channel as the terminal TUI.
- */
-export function resolveImagePaste(agent: AgentType, tempFilePath: string): ImagePasteResult {
-  if (getAgentImageHandling(agent) === 'attachment') {
-    return { kind: 'attach', path: tempFilePath }
-  }
-  return { kind: 'unsupported', agent }
-}
-
 export function isNativeChatImageAttachmentPath(path: string): boolean {
   return isImageDropPath(path)
 }

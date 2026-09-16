@@ -1,0 +1,1764 @@
+{
+  "operation": "settings.task-hydration",
+  "family": "settings.task-hydration",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "b23c3076081901c89e8a8fb8d20028e03f030db040c9cd793b6f2c7cd49d8f25",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "00eea9f3200b": {
+      "name": "pendingGitHubProjectViewSelection",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "01e1056d97a4": {
+      "name": "visibleProviders",
+      "value": ["github", "linear"],
+      "sent": 5
+    },
+    "02f9384f5305": {
+      "name": "settings.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "settings refused"
+          },
+          "id": "frame-7",
+          "ok": false
+        }
+      }
+    },
+    "073647d24ac4": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "090c88478661": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "0d33c93fcbfd": {
+      "name": "projectRowItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "12b5d58423cb": {
+      "name": "githubProjectHiddenFieldIdsByView",
+      "value": {},
+      "sent": 5
+    },
+    "16348b11fcba": {
+      "name": "defaultGitHubPreset",
+      "value": "issues",
+      "sent": 5
+    },
+    "1652eab5c64a": {
+      "name": "provider",
+      "value": "github",
+      "sent": 10
+    },
+    "1825a87a7ca8": {
+      "hydrated": false,
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      }
+    },
+    "1dffb3fe8cd8": {
+      "name": "showLinearDisplayPicker",
+      "value": false,
+      "sent": 0
+    },
+    "1e1de8badcac": {
+      "name": "showLinearConnect",
+      "value": false,
+      "sent": 0
+    },
+    "1f7d21cec906": {
+      "name": "ui.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ui": {}
+          }
+        }
+      }
+    },
+    "1fd209dc12de": {
+      "name": "showGitLabViewPicker",
+      "value": false,
+      "sent": 0
+    },
+    "234fabe27913": {
+      "name": "preflight.check#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "252f3a25533f": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "28fa1cba5d1a": {
+      "name": "githubProjectSettings",
+      "value": {
+        "activeProject": {
+          "$rpc": "null"
+        },
+        "lastViewByProject": {},
+        "pinned": [],
+        "recent": []
+      },
+      "sent": 5
+    },
+    "29e877d918a0": {
+      "name": "linearConnected",
+      "value": false,
+      "sent": 10
+    },
+    "2c04c960ee94": {
+      "name": "showLinearTeamPicker",
+      "value": false,
+      "sent": 0
+    },
+    "2c4387ddd366": {
+      "name": "pendingHostedMerge",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "2e442e4df37c": {
+      "name": "showGitHubProjectFieldsPicker",
+      "value": false,
+      "sent": 0
+    },
+    "302fa402db4a": {
+      "name": "error",
+      "value": "",
+      "sent": 6
+    },
+    "308ffd78bb89": {
+      "name": "linearFilter",
+      "value": "all",
+      "sent": 5
+    },
+    "321bfff34ac2": {
+      "name": "showGitHubPresetPicker",
+      "value": false,
+      "sent": 5
+    },
+    "32dffd7f2f66": {
+      "name": "preflight.check#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
+      "sent": 5
+    },
+    "334b82d94582": {
+      "name": "linearStatusPickerItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "345762fe1fa4": {
+      "name": "showLinearOrderPicker",
+      "value": false,
+      "sent": 0
+    },
+    "3986390fc039": {
+      "name": "linear.status#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-10",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
+    "3adce6077ae5": {
+      "name": "showCreateTargetPicker",
+      "value": false,
+      "sent": 0
+    },
+    "3c29e49e60af": {
+      "name": "visibleProviders",
+      "value": ["github", "linear"],
+      "sent": 10
+    },
+    "3f6cb9f1d075": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "capabilities": ["mobile.tasks.v1"]
+          }
+        }
+      }
+    },
+    "3fee2a1d2652": {
+      "name": "linearFilter",
+      "value": "all",
+      "sent": 10
+    },
+    "40eabccc0362": {
+      "name": "showProviderPicker",
+      "value": false,
+      "sent": 0
+    },
+    "416e38ac3c1e": {
+      "name": "githubMode",
+      "value": "items",
+      "sent": 5
+    },
+    "41be2620a06b": {
+      "name": "reset-workspace",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "460c956ad356": {
+      "name": "showGitHubProjectPicker",
+      "value": false,
+      "sent": 5
+    },
+    "46e2a51822f5": {
+      "name": "selectedLinearWorkspaceId",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 10
+    },
+    "47b218ef208f": {
+      "name": "showRepoPicker",
+      "value": false,
+      "sent": 5
+    },
+    "4976dfca54f0": {
+      "name": "taskStateHydrated",
+      "value": false,
+      "sent": 5
+    },
+    "4f58fdfd02e0": {
+      "name": "githubKind",
+      "value": "issues",
+      "sent": 10
+    },
+    "5014b6118ca4": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 5
+    },
+    "528091bec621": {
+      "name": "githubMode",
+      "value": "items",
+      "sent": 10
+    },
+    "546c38d1781a": {
+      "name": "mergeMethodProjectRow",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "551c964c61ea": {
+      "name": "showProviderPicker",
+      "value": false,
+      "sent": 5
+    },
+    "56f2fa086479": {
+      "name": "pendingHostedStateChange",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "58140f732f03": {
+      "name": "showLinearWorkspacePicker",
+      "value": false,
+      "sent": 0
+    },
+    "586d2ff60587": {
+      "name": "githubKind",
+      "value": "issues",
+      "sent": 5
+    },
+    "58c52d8b7c76": {
+      "hydrated": true,
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      }
+    },
+    "59936af3cc5b": {
+      "name": "showLinearOrderPicker",
+      "value": false,
+      "sent": 5
+    },
+    "5d87a58f6c98": {
+      "name": "pendingProjectGitHubMerge",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "5e05b4814013": {
+      "name": "tasksSupportState",
+      "value": {
+        "client": "logical-client",
+        "kind": "supported"
+      },
+      "sent": 1
+    },
+    "5ebcdff07023": {
+      "name": "showGitLabFilterPicker",
+      "value": false,
+      "sent": 5
+    },
+    "5fbdd64c75bc": {
+      "name": "ui.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "63b9d87881e1": {
+      "name": "tasksSupportState",
+      "value": {
+        "client": "logical-client",
+        "kind": "unknown"
+      },
+      "sent": 0
+    },
+    "67d7ef589c15": {
+      "name": "showLinearFilterPicker",
+      "value": false,
+      "sent": 5
+    },
+    "6e5246994fa0": {
+      "name": "showLinearDisplayPicker",
+      "value": false,
+      "sent": 5
+    },
+    "6f02e2ca43f4": {
+      "name": "trustedOrcaHooks",
+      "value": {},
+      "sent": 10
+    },
+    "6f30f8b6f3d7": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["mobile.tasks.v1"]
+          }
+        }
+      }
+    },
+    "6fb34b13c14e": {
+      "name": "preflight.check#2",
+      "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
+      "sent": 10
+    },
+    "7126d29ddcda": {
+      "name": "ui.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-8",
+          "ok": true,
+          "result": {
+            "ui": {}
+          }
+        }
+      }
+    },
+    "758b8c1db523": {
+      "name": "projectRepoNotInOrca",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "76ef2e9da242": {
+      "name": "selectedLinearWorkspaceId",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "7746273caf63": {
+      "name": "taskStateHydrated",
+      "value": true,
+      "sent": 10
+    },
+    "78a159d9a918": {
+      "name": "showGitHubProjectViewPicker",
+      "value": false,
+      "sent": 0
+    },
+    "7a688c351c65": {
+      "name": "showSortPicker",
+      "value": false,
+      "sent": 5
+    },
+    "7c0f59ba016c": {
+      "name": "mergeMethodProjectRow",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "7c6e6014385b": {
+      "name": "showCreateTask",
+      "value": false,
+      "sent": 5
+    },
+    "7e22edf8e391": {
+      "name": "linear.status#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
+      "sent": 5
+    },
+    "83f55c58a6c5": {
+      "name": "showCreateTargetPicker",
+      "value": false,
+      "sent": 5
+    },
+    "851fcb1af715": {
+      "name": "query",
+      "value": "is:issue is:open",
+      "sent": 10
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "85beb8cfde14": {
+      "name": "mergeMethodTaskItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "8653f810a31c": {
+      "name": "defaultGitHubPreset",
+      "value": "issues",
+      "sent": 10
+    },
+    "86a763922cd7": {
+      "name": "appliedQuery",
+      "value": "is:issue is:open",
+      "sent": 5
+    },
+    "874e70d237d7": {
+      "name": "projectRepoNotInOrca",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "8832da75be8d": {
+      "name": "showGitHubPagePicker",
+      "value": false,
+      "sent": 0
+    },
+    "886ccf2737c7": {
+      "name": "showSortPicker",
+      "value": false,
+      "sent": 0
+    },
+    "8a2b4e3d0eed": {
+      "name": "trustedOrcaHooks",
+      "value": {},
+      "sent": 5
+    },
+    "8a3cb00faee0": {
+      "name": "linearConnected",
+      "value": false,
+      "sent": 5
+    },
+    "8c294e773a32": {
+      "name": "linearTeams",
+      "value": [],
+      "sent": 10
+    },
+    "8c53814e586c": {
+      "name": "tasksSupportState",
+      "value": {
+        "client": "logical-client",
+        "kind": "unknown"
+      },
+      "sent": 5
+    },
+    "8e5298b22c5f": {
+      "name": "projectRowDetail",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "8f483afc6fdd": {
+      "name": "runtimeTaskSettings",
+      "value": {},
+      "sent": 10
+    },
+    "9035f956e10e": {
+      "name": "githubProjectSettings",
+      "value": {
+        "activeProject": {
+          "$rpc": "null"
+        },
+        "lastViewByProject": {},
+        "pinned": [],
+        "recent": []
+      },
+      "sent": 10
+    },
+    "921033244a12": {
+      "name": "showGitHubProjectSortPicker",
+      "value": false,
+      "sent": 5
+    },
+    "921e10a277e7": {
+      "name": "pendingHostedMerge",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "947cf7373dd6": {
+      "name": "linearTeams",
+      "value": [],
+      "sent": 5
+    },
+    "963a91c532c8": {
+      "hydrated": true,
+      "settings": {}
+    },
+    "96a071be5404": {
+      "name": "showGitHubProjectFieldsPicker",
+      "value": false,
+      "sent": 5
+    },
+    "96cb852fd9c8": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 6
+    },
+    "977d0336784f": {
+      "name": "ui.get#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}",
+      "sent": 5
+    },
+    "9abed258acba": {
+      "name": "showGitHubPagePicker",
+      "value": false,
+      "sent": 5
+    },
+    "9b1d9febbcf6": {
+      "name": "showLinearGroupPicker",
+      "value": false,
+      "sent": 0
+    },
+    "9bd1de5d9753": {
+      "name": "detailPayload",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "9cc2d35c57dc": {
+      "name": "showGitLabFilterPicker",
+      "value": false,
+      "sent": 0
+    },
+    "9d1a470b3def": {
+      "name": "githubPreset",
+      "value": "issues",
+      "sent": 10
+    },
+    "9e19e2a66126": {
+      "name": "showRepoPicker",
+      "value": false,
+      "sent": 0
+    },
+    "9f93d78e416e": {
+      "name": "taskStateHydrated",
+      "value": true,
+      "sent": 5
+    },
+    "a060c9ebc224": {
+      "name": "pendingProjectGitHubMerge",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "a242348c4324": {
+      "name": "tasksSupportState",
+      "value": {
+        "client": "logical-client",
+        "kind": "supported"
+      },
+      "sent": 6
+    },
+    "a2cc59889dc0": {
+      "name": "showGitHubKindPicker",
+      "value": false,
+      "sent": 0
+    },
+    "a4760ef5a9f4": {
+      "name": "linear.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "a63e620951f0": {
+      "name": "selectedLinearTeamIds",
+      "value": [],
+      "sent": 5
+    },
+    "a91aca142b2e": {
+      "name": "showCreateTask",
+      "value": false,
+      "sent": 0
+    },
+    "aa095faa9afd": {
+      "name": "runtimeTaskSettings",
+      "value": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      },
+      "sent": 5
+    },
+    "aa624b10c314": {
+      "name": "linear.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
+    "afb75a8d93f3": {
+      "name": "showLinearWorkspacePicker",
+      "value": false,
+      "sent": 5
+    },
+    "b341e832c60d": {
+      "name": "projectRowItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "b577c113c079": {
+      "name": "showLinearViewPicker",
+      "value": false,
+      "sent": 5
+    },
+    "b9481aea1fae": {
+      "name": "taskStateHydrated",
+      "value": false,
+      "sent": 0
+    },
+    "ba7facf123fb": {
+      "name": "selectedLinearTeamIds",
+      "value": [],
+      "sent": 10
+    },
+    "beb06f5a697a": {
+      "name": "linear.status#2",
+      "json": "{\"id\":\"frame-10\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
+      "sent": 10
+    },
+    "c0016b5b1033": {
+      "name": "showGitHubProjectPicker",
+      "value": false,
+      "sent": 0
+    },
+    "c0739ee88dc8": {
+      "name": "reset-workspace",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "c2601492c7cd": {
+      "name": "showLinearConnect",
+      "value": false,
+      "sent": 5
+    },
+    "c27ba127946c": {
+      "name": "linearWorkspaces",
+      "value": [],
+      "sent": 5
+    },
+    "c5ddb311b886": {
+      "name": "settings.get#2",
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 10
+    },
+    "c6178e6a0f4e": {
+      "hydrated": false,
+      "settings": {}
+    },
+    "c7fb67dfaaa0": {
+      "name": "showLinearViewPicker",
+      "value": false,
+      "sent": 0
+    },
+    "c9012709cb6f": {
+      "name": "preflight.check#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-9",
+          "ok": true,
+          "result": {
+            "glab": {
+              "installed": false
+            }
+          }
+        }
+      }
+    },
+    "c9c0513fdcb9": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "cbb40988c5a5": {
+      "name": "query",
+      "value": "is:issue is:open",
+      "sent": 5
+    },
+    "d0c2ba0d141f": {
+      "name": "showGitHubProjectViewPicker",
+      "value": false,
+      "sent": 5
+    },
+    "d225c567feae": {
+      "name": "githubPreset",
+      "value": "issues",
+      "sent": 5
+    },
+    "d3db1d1b21c6": {
+      "name": "projectRowDetail",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
+    },
+    "d4d3179bb79e": {
+      "name": "showGitHubPresetPicker",
+      "value": false,
+      "sent": 0
+    },
+    "d6ed7b17eb65": {
+      "name": "linearStatusPickerItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "d705fce957e8": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    },
+    "d8fee76f0800": {
+      "name": "linearWorkspaces",
+      "value": [],
+      "sent": 10
+    },
+    "dc50f834cf28": {
+      "name": "detailPayload",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "dd92976a6365": {
+      "name": "ui.get#2",
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}",
+      "sent": 10
+    },
+    "ddd2bd23169a": {
+      "name": "githubProjectHiddenFieldIdsByView",
+      "value": {},
+      "sent": 10
+    },
+    "de85b23d1a59": {
+      "name": "showLinearTeamPicker",
+      "value": false,
+      "sent": 5
+    },
+    "e5662efa8968": {
+      "name": "preflight.check#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "glab": {
+              "installed": false
+            }
+          }
+        }
+      }
+    },
+    "e69b48c9e675": {
+      "name": "pendingHostedStateChange",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "e7af9bf83610": {
+      "name": "mergeMethodTaskItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "e8bff64c02da": {
+      "name": "showGitHubProjectSortPicker",
+      "value": false,
+      "sent": 0
+    },
+    "e96a98c6404f": {
+      "name": "showGitHubIssueSourcePicker",
+      "value": false,
+      "sent": 5
+    },
+    "ea9da6ec3f4b": {
+      "name": "appliedQuery",
+      "value": "is:issue is:open",
+      "sent": 10
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ef60e60436d0": {
+      "name": "showGitLabViewPicker",
+      "value": false,
+      "sent": 5
+    },
+    "f31031e7e491": {
+      "name": "showGitHubKindPicker",
+      "value": false,
+      "sent": 5
+    },
+    "f40b9d8aa1eb": {
+      "name": "showLinearFilterPicker",
+      "value": false,
+      "sent": 0
+    },
+    "f5ca82f623ea": {
+      "name": "pendingGitHubProjectViewSelection",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
+    },
+    "f695768dc671": {
+      "name": "showLinearGroupPicker",
+      "value": false,
+      "sent": 5
+    },
+    "f95005ae133d": {
+      "name": "provider",
+      "value": "github",
+      "sent": 5
+    },
+    "feb5f42359fb": {
+      "name": "showGitHubIssueSourcePicker",
+      "value": false,
+      "sent": 0
+    }
+  },
+  "recording": {
+    "scenario": "settings-task-hydration-refuse-after-data",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": [
+            "6f30f8b6f3d7",
+            "090c88478661",
+            "5fbdd64c75bc",
+            "234fabe27913",
+            "a4760ef5a9f4"
+          ],
+          "payloads": [
+            "852980e2efc0",
+            "5014b6118ca4",
+            "977d0336784f",
+            "32dffd7f2f66",
+            "7e22edf8e391"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "c6178e6a0f4e",
+          "effects": [
+            "b9481aea1fae",
+            "63b9d87881e1",
+            "58140f732f03",
+            "2c04c960ee94",
+            "c7fb67dfaaa0",
+            "9b1d9febbcf6",
+            "345762fe1fa4",
+            "1dffb3fe8cd8",
+            "1e1de8badcac",
+            "40eabccc0362",
+            "a2cc59889dc0",
+            "d4d3179bb79e",
+            "1fd209dc12de",
+            "9cc2d35c57dc",
+            "f40b9d8aa1eb",
+            "886ccf2737c7",
+            "9e19e2a66126",
+            "feb5f42359fb",
+            "8832da75be8d",
+            "c0016b5b1033",
+            "78a159d9a918",
+            "e8bff64c02da",
+            "2e442e4df37c",
+            "00eea9f3200b",
+            "073647d24ac4",
+            "b341e832c60d",
+            "758b8c1db523",
+            "9bd1de5d9753",
+            "8e5298b22c5f",
+            "a91aca142b2e",
+            "3adce6077ae5",
+            "334b82d94582",
+            "921e10a277e7",
+            "a060c9ebc224",
+            "e69b48c9e675",
+            "85beb8cfde14",
+            "546c38d1781a",
+            "41be2620a06b",
+            "5e05b4814013",
+            "d48d5c49486c"
+          ]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [
+            "6f30f8b6f3d7",
+            "d705fce957e8",
+            "1f7d21cec906",
+            "e5662efa8968",
+            "aa624b10c314"
+          ],
+          "payloads": [
+            "852980e2efc0",
+            "5014b6118ca4",
+            "977d0336784f",
+            "32dffd7f2f66",
+            "7e22edf8e391"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "58c52d8b7c76",
+          "effects": [
+            "b9481aea1fae",
+            "63b9d87881e1",
+            "58140f732f03",
+            "2c04c960ee94",
+            "c7fb67dfaaa0",
+            "9b1d9febbcf6",
+            "345762fe1fa4",
+            "1dffb3fe8cd8",
+            "1e1de8badcac",
+            "40eabccc0362",
+            "a2cc59889dc0",
+            "d4d3179bb79e",
+            "1fd209dc12de",
+            "9cc2d35c57dc",
+            "f40b9d8aa1eb",
+            "886ccf2737c7",
+            "9e19e2a66126",
+            "feb5f42359fb",
+            "8832da75be8d",
+            "c0016b5b1033",
+            "78a159d9a918",
+            "e8bff64c02da",
+            "2e442e4df37c",
+            "00eea9f3200b",
+            "073647d24ac4",
+            "b341e832c60d",
+            "758b8c1db523",
+            "9bd1de5d9753",
+            "8e5298b22c5f",
+            "a91aca142b2e",
+            "3adce6077ae5",
+            "334b82d94582",
+            "921e10a277e7",
+            "a060c9ebc224",
+            "e69b48c9e675",
+            "85beb8cfde14",
+            "546c38d1781a",
+            "41be2620a06b",
+            "5e05b4814013",
+            "d48d5c49486c",
+            "aa095faa9afd",
+            "8a2b4e3d0eed",
+            "12b5d58423cb",
+            "8a3cb00faee0",
+            "c27ba127946c",
+            "947cf7373dd6",
+            "a63e620951f0",
+            "76ef2e9da242",
+            "01e1056d97a4",
+            "f95005ae133d",
+            "416e38ac3c1e",
+            "16348b11fcba",
+            "d225c567feae",
+            "586d2ff60587",
+            "308ffd78bb89",
+            "28fa1cba5d1a",
+            "cbb40988c5a5",
+            "86a763922cd7",
+            "9f93d78e416e"
+          ]
+        }
+      },
+      {
+        "id": "data-present",
+        "observation": {
+          "sender": [
+            "6f30f8b6f3d7",
+            "d705fce957e8",
+            "1f7d21cec906",
+            "e5662efa8968",
+            "aa624b10c314"
+          ],
+          "payloads": [
+            "852980e2efc0",
+            "5014b6118ca4",
+            "977d0336784f",
+            "32dffd7f2f66",
+            "7e22edf8e391"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "58c52d8b7c76",
+          "effects": [
+            "b9481aea1fae",
+            "63b9d87881e1",
+            "58140f732f03",
+            "2c04c960ee94",
+            "c7fb67dfaaa0",
+            "9b1d9febbcf6",
+            "345762fe1fa4",
+            "1dffb3fe8cd8",
+            "1e1de8badcac",
+            "40eabccc0362",
+            "a2cc59889dc0",
+            "d4d3179bb79e",
+            "1fd209dc12de",
+            "9cc2d35c57dc",
+            "f40b9d8aa1eb",
+            "886ccf2737c7",
+            "9e19e2a66126",
+            "feb5f42359fb",
+            "8832da75be8d",
+            "c0016b5b1033",
+            "78a159d9a918",
+            "e8bff64c02da",
+            "2e442e4df37c",
+            "00eea9f3200b",
+            "073647d24ac4",
+            "b341e832c60d",
+            "758b8c1db523",
+            "9bd1de5d9753",
+            "8e5298b22c5f",
+            "a91aca142b2e",
+            "3adce6077ae5",
+            "334b82d94582",
+            "921e10a277e7",
+            "a060c9ebc224",
+            "e69b48c9e675",
+            "85beb8cfde14",
+            "546c38d1781a",
+            "41be2620a06b",
+            "5e05b4814013",
+            "d48d5c49486c",
+            "aa095faa9afd",
+            "8a2b4e3d0eed",
+            "12b5d58423cb",
+            "8a3cb00faee0",
+            "c27ba127946c",
+            "947cf7373dd6",
+            "a63e620951f0",
+            "76ef2e9da242",
+            "01e1056d97a4",
+            "f95005ae133d",
+            "416e38ac3c1e",
+            "16348b11fcba",
+            "d225c567feae",
+            "586d2ff60587",
+            "308ffd78bb89",
+            "28fa1cba5d1a",
+            "cbb40988c5a5",
+            "86a763922cd7",
+            "9f93d78e416e"
+          ]
+        }
+      },
+      {
+        "id": "refresh-pending",
+        "observation": {
+          "sender": [
+            "6f30f8b6f3d7",
+            "d705fce957e8",
+            "1f7d21cec906",
+            "e5662efa8968",
+            "aa624b10c314",
+            "c9c0513fdcb9"
+          ],
+          "payloads": [
+            "852980e2efc0",
+            "5014b6118ca4",
+            "977d0336784f",
+            "32dffd7f2f66",
+            "7e22edf8e391",
+            "96cb852fd9c8"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "revisit": "eb79a9b3682a"
+          },
+          "state": "1825a87a7ca8",
+          "effects": [
+            "b9481aea1fae",
+            "63b9d87881e1",
+            "58140f732f03",
+            "2c04c960ee94",
+            "c7fb67dfaaa0",
+            "9b1d9febbcf6",
+            "345762fe1fa4",
+            "1dffb3fe8cd8",
+            "1e1de8badcac",
+            "40eabccc0362",
+            "a2cc59889dc0",
+            "d4d3179bb79e",
+            "1fd209dc12de",
+            "9cc2d35c57dc",
+            "f40b9d8aa1eb",
+            "886ccf2737c7",
+            "9e19e2a66126",
+            "feb5f42359fb",
+            "8832da75be8d",
+            "c0016b5b1033",
+            "78a159d9a918",
+            "e8bff64c02da",
+            "2e442e4df37c",
+            "00eea9f3200b",
+            "073647d24ac4",
+            "b341e832c60d",
+            "758b8c1db523",
+            "9bd1de5d9753",
+            "8e5298b22c5f",
+            "a91aca142b2e",
+            "3adce6077ae5",
+            "334b82d94582",
+            "921e10a277e7",
+            "a060c9ebc224",
+            "e69b48c9e675",
+            "85beb8cfde14",
+            "546c38d1781a",
+            "41be2620a06b",
+            "5e05b4814013",
+            "d48d5c49486c",
+            "aa095faa9afd",
+            "8a2b4e3d0eed",
+            "12b5d58423cb",
+            "8a3cb00faee0",
+            "c27ba127946c",
+            "947cf7373dd6",
+            "a63e620951f0",
+            "76ef2e9da242",
+            "01e1056d97a4",
+            "f95005ae133d",
+            "416e38ac3c1e",
+            "16348b11fcba",
+            "d225c567feae",
+            "586d2ff60587",
+            "308ffd78bb89",
+            "28fa1cba5d1a",
+            "cbb40988c5a5",
+            "86a763922cd7",
+            "9f93d78e416e",
+            "4976dfca54f0",
+            "8c53814e586c",
+            "afb75a8d93f3",
+            "de85b23d1a59",
+            "b577c113c079",
+            "f695768dc671",
+            "59936af3cc5b",
+            "6e5246994fa0",
+            "c2601492c7cd",
+            "551c964c61ea",
+            "f31031e7e491",
+            "321bfff34ac2",
+            "ef60e60436d0",
+            "5ebcdff07023",
+            "67d7ef589c15",
+            "7a688c351c65",
+            "47b218ef208f",
+            "e96a98c6404f",
+            "9abed258acba",
+            "460c956ad356",
+            "d0c2ba0d141f",
+            "921033244a12",
+            "96a071be5404",
+            "f5ca82f623ea",
+            "252f3a25533f",
+            "0d33c93fcbfd",
+            "874e70d237d7",
+            "dc50f834cf28",
+            "d3db1d1b21c6",
+            "7c6e6014385b",
+            "83f55c58a6c5",
+            "d6ed7b17eb65",
+            "2c4387ddd366",
+            "5d87a58f6c98",
+            "56f2fa086479",
+            "e7af9bf83610",
+            "7c0f59ba016c",
+            "c0739ee88dc8"
+          ]
+        }
+      },
+      {
+        "id": "refused-after-data",
+        "observation": {
+          "sender": [
+            "6f30f8b6f3d7",
+            "d705fce957e8",
+            "1f7d21cec906",
+            "e5662efa8968",
+            "aa624b10c314",
+            "3f6cb9f1d075",
+            "02f9384f5305",
+            "7126d29ddcda",
+            "c9012709cb6f",
+            "3986390fc039"
+          ],
+          "payloads": [
+            "852980e2efc0",
+            "5014b6118ca4",
+            "977d0336784f",
+            "32dffd7f2f66",
+            "7e22edf8e391",
+            "96cb852fd9c8",
+            "c5ddb311b886",
+            "dd92976a6365",
+            "6fb34b13c14e",
+            "beb06f5a697a"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "revisit": "eb79a9b3682a"
+          },
+          "state": "963a91c532c8",
+          "effects": [
+            "b9481aea1fae",
+            "63b9d87881e1",
+            "58140f732f03",
+            "2c04c960ee94",
+            "c7fb67dfaaa0",
+            "9b1d9febbcf6",
+            "345762fe1fa4",
+            "1dffb3fe8cd8",
+            "1e1de8badcac",
+            "40eabccc0362",
+            "a2cc59889dc0",
+            "d4d3179bb79e",
+            "1fd209dc12de",
+            "9cc2d35c57dc",
+            "f40b9d8aa1eb",
+            "886ccf2737c7",
+            "9e19e2a66126",
+            "feb5f42359fb",
+            "8832da75be8d",
+            "c0016b5b1033",
+            "78a159d9a918",
+            "e8bff64c02da",
+            "2e442e4df37c",
+            "00eea9f3200b",
+            "073647d24ac4",
+            "b341e832c60d",
+            "758b8c1db523",
+            "9bd1de5d9753",
+            "8e5298b22c5f",
+            "a91aca142b2e",
+            "3adce6077ae5",
+            "334b82d94582",
+            "921e10a277e7",
+            "a060c9ebc224",
+            "e69b48c9e675",
+            "85beb8cfde14",
+            "546c38d1781a",
+            "41be2620a06b",
+            "5e05b4814013",
+            "d48d5c49486c",
+            "aa095faa9afd",
+            "8a2b4e3d0eed",
+            "12b5d58423cb",
+            "8a3cb00faee0",
+            "c27ba127946c",
+            "947cf7373dd6",
+            "a63e620951f0",
+            "76ef2e9da242",
+            "01e1056d97a4",
+            "f95005ae133d",
+            "416e38ac3c1e",
+            "16348b11fcba",
+            "d225c567feae",
+            "586d2ff60587",
+            "308ffd78bb89",
+            "28fa1cba5d1a",
+            "cbb40988c5a5",
+            "86a763922cd7",
+            "9f93d78e416e",
+            "4976dfca54f0",
+            "8c53814e586c",
+            "afb75a8d93f3",
+            "de85b23d1a59",
+            "b577c113c079",
+            "f695768dc671",
+            "59936af3cc5b",
+            "6e5246994fa0",
+            "c2601492c7cd",
+            "551c964c61ea",
+            "f31031e7e491",
+            "321bfff34ac2",
+            "ef60e60436d0",
+            "5ebcdff07023",
+            "67d7ef589c15",
+            "7a688c351c65",
+            "47b218ef208f",
+            "e96a98c6404f",
+            "9abed258acba",
+            "460c956ad356",
+            "d0c2ba0d141f",
+            "921033244a12",
+            "96a071be5404",
+            "f5ca82f623ea",
+            "252f3a25533f",
+            "0d33c93fcbfd",
+            "874e70d237d7",
+            "dc50f834cf28",
+            "d3db1d1b21c6",
+            "7c6e6014385b",
+            "83f55c58a6c5",
+            "d6ed7b17eb65",
+            "2c4387ddd366",
+            "5d87a58f6c98",
+            "56f2fa086479",
+            "e7af9bf83610",
+            "7c0f59ba016c",
+            "c0739ee88dc8",
+            "a242348c4324",
+            "302fa402db4a",
+            "8f483afc6fdd",
+            "6f02e2ca43f4",
+            "ddd2bd23169a",
+            "29e877d918a0",
+            "d8fee76f0800",
+            "8c294e773a32",
+            "ba7facf123fb",
+            "46e2a51822f5",
+            "3c29e49e60af",
+            "1652eab5c64a",
+            "528091bec621",
+            "8653f810a31c",
+            "9d1a470b3def",
+            "4f58fdfd02e0",
+            "3fee2a1d2652",
+            "9035f956e10e",
+            "851fcb1af715",
+            "ea9da6ec3f4b",
+            "7746273caf63"
+          ]
+        }
+      }
+    ]
+  }
+}

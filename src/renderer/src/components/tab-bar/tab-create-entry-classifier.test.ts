@@ -46,6 +46,58 @@ describe('tab create entry classification', () => {
     })
   })
 
+  it('treats domain paths as URLs instead of new files', () => {
+    expect(classifyTabEntryQuery('example.com/profile', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://example.com/profile'
+    })
+    expect(classifyTabEntryQuery('example.com/docs?tab=api#install', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://example.com/docs?tab=api#install'
+    })
+    expect(classifyTabEntryQuery('assistant.ai/profile', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://assistant.ai/profile'
+    })
+  })
+
+  it('keeps source paths and unlisted suffixes as files', () => {
+    expect(
+      classifyTabEntryQuery('example.com/profile', readyFiles(['example.com/profile']))
+    ).toEqual({
+      kind: 'existing-file',
+      matchKind: 'exact-path',
+      relativePath: 'example.com/profile'
+    })
+    expect(
+      getTabEntryOptions('example.com/profile', readyFiles(['example.com/profile'])).map(
+        (option) => option.classification
+      )
+    ).toEqual([
+      { kind: 'existing-file', matchKind: 'exact-path', relativePath: 'example.com/profile' },
+      { kind: 'host-url', url: 'https://example.com/profile' }
+    ])
+    expect(classifyTabEntryQuery('README.md/archive', readyFiles([]))).toEqual({
+      kind: 'new-file',
+      relativePath: 'README.md/archive'
+    })
+    expect(classifyTabEntryQuery('config.local/settings', readyFiles([]))).toEqual({
+      kind: 'new-file',
+      relativePath: 'config.local/settings'
+    })
+    expect(classifyTabEntryQuery('example.test/settings', readyFiles([]))).toEqual({
+      kind: 'new-file',
+      relativePath: 'example.test/settings'
+    })
+  })
+
+  it('accepts any public suffix without a local allowlist', () => {
+    expect(classifyTabEntryQuery('example.museum/exhibit', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://example.museum/exhibit'
+    })
+  })
+
   it('opens local-dev URLs with root suffixes as browser tabs', () => {
     expect(classifyTabEntryQuery('localhost:3000/', readyFiles([]))).toEqual({
       kind: 'host-url',

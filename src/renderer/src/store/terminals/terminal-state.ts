@@ -1,3 +1,4 @@
+import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -29,9 +30,9 @@ export type TerminalState = {
   activeTabIdByWorktree: Record<string, string | null>
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  unreadTerminalTabs: Record<string, true>
-  unreadTerminalPanes: Record<string, true>
-  unreadAgentCompletionPanes: Record<string, true>
+  unreadTerminalTabs: Record<string, StoredAgentAttentionUnread>
+  unreadTerminalPanes: Record<string, StoredAgentAttentionUnread>
+  unreadAgentCompletionPanes: Record<string, StoredAgentAttentionUnread>
   /** Scoped exit suppression and reference-counted shutdown ownership prevent teardown races. */
   suppressedPtyExitIds: Record<string, true>
   pendingPtyShutdownIds: Record<string, number>
@@ -118,6 +119,15 @@ export type TerminalState = {
    * or an explicit close settles the marker.
    */
   unverifiedPtyLossTabIds: Record<string, true>
+  /**
+   * PTY ids a reachable relay disowned — no relay will hand them back.
+   *
+   * Session-scoped: the counterpart to the marker above, and the only signal strong enough to let a
+   * reconnect retire a binding and respawn the pane. Short of `exited`, because a restarted relay
+   * disowns ids it never minted. Settled when the id is bound again
+   * (see terminal-disowned-pty-sources.ts).
+   */
+  disownedPtyIds: Record<string, true>
   /** Reattach snapshots are consumed once by the pane that receives the replacement PTY. */
   pendingSnapshotByPtyId: Record<
     string,

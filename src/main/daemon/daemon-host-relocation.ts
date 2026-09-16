@@ -22,6 +22,10 @@ import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-pr
  * imaged under it, which would otherwise kill the daemon and its live terminals. The relocated exe is a
  * run-as-node Orca.exe copy (not node.exe) so there's no console flash and asar still resolves. Fail-open:
  * any failure returns null and the caller forks the install-dir host (pre-relocation behavior).
+ *
+ * What escapes the updater is the PATH, not the file name: electron-builder's kill sweep selects
+ * processes whose image path sits under $INSTDIR. See docs/reference/windows-daemon-host-relocation.md
+ * for the survival contract and why the exe is copied verbatim rather than renamed.
  */
 
 export type RelocatedDaemonHost = {
@@ -37,8 +41,14 @@ const MARKER_NAME = '.materialized.json'
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
 
-// Copy of Orca.exe renamed to a distinct image name so the NSIS updater's `taskkill /IM Orca.exe` can't match it.
-const DAEMON_HOST_EXE_NAME = 'orca-terminal-daemon.exe'
+/**
+ * The host exe keeps the app exe's own file name, so the relocated image is a byte-for-byte,
+ * name-included copy of a signed binary — nothing for EDR to read as a renamed image (MITRE T1036).
+ * Survival comes from the path (see the module header). The one name-sensitive updater path is the
+ * no-PowerShell `taskkill /IM` fallback, where the daemon is killed and terminals cold-restore —
+ * the documented pre-relocation outcome, not a failure.
+ */
+const daemonHostExeName = (execPath: string): string => winPath.basename(execPath)
 
 // V8 snapshots + ICU data the Electron bootstrap reads even under ELECTRON_RUN_AS_NODE; siblings of Orca.exe.
 const RUNTIME_DATA_FILES = ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']
@@ -146,8 +156,8 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   const { appDir, execPath, resourcesPath, entrySourcePath, entryRelPath } = sources
   const ops: CopyOp[] = []
 
-  // Host exe (renamed) + V8/ICU blobs at dest root. Top-level DLLs omitted: GPU/media libs a windowless run-as-node host never loads (~48MB saved).
-  ops.push({ sourcePath: execPath, destRel: DAEMON_HOST_EXE_NAME, kind: 'file' })
+  // Host exe (verbatim name) + V8/ICU blobs at dest root. Top-level DLLs omitted: GPU/media libs a windowless run-as-node host never loads (~48MB saved).
+  ops.push({ sourcePath: execPath, destRel: daemonHostExeName(execPath), kind: 'file' })
   for (const name of RUNTIME_DATA_FILES) {
     ops.push({ sourcePath: join(appDir, name), destRel: name, kind: 'file', optional: true })
   }
@@ -245,7 +255,7 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (!marker || marker.version !== version) {
     return null
   }
-  const execPath = join(dest, DAEMON_HOST_EXE_NAME)
+  const execPath = join(dest, daemonHostExeName(sources.execPath))
   const entryPath = destPath(dest, marker.entryRelPath)
   if (!existsSync(execPath) || !existsSync(entryPath)) {
     return null
@@ -281,7 +291,9 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
       entryRelPath: sources.entryRelPath
     }
     writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
-    // Replace any stale/partial dest, then publish the staging dir atomically.
+    // Replace any stale/partial dest, then publish atomically. Windows refuses to delete a running
+    // image, so a live daemon already hosted in THIS version's dir (same-version reinstall, or a dev
+    // channel reusing a version) throws here and materialization fails open to the install-dir host.
     rmSync(dest, { recursive: true, force: true })
     renameSync(staging, dest)
   } catch {

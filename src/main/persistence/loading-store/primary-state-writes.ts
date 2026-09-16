@@ -161,7 +161,8 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     // Why: fsync before rename, then fsync the directory; see writeFileDurable.
     const handle = await open(tmpFile, 'w')
     try {
-      await handle.writeFile(payload, 'utf-8')
+      // Already UTF-8 bytes: passing the string here would re-encode the whole state on the main thread.
+      await handle.writeFile(payload)
       await handle.sync()
     } finally {
       await handle.close()
@@ -230,6 +231,12 @@ export function writeToDiskSync(
     !opts.force &&
     stateHash === owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash
   ) {
+    // Why: flushOrThrow already bumped writeGeneration; the file holds this state, so record it
+    // durable or persistPtyBinding's fast lane stays parked one generation behind forever.
+    owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration = Math.max(
+      owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration,
+      owner[primaryStateWriteOperationsContext].runtime.writeGeneration
+    )
     return
   }
   const dataFile = owner[primaryStateWriteOperationsContext].runtime.dataFile
@@ -273,7 +280,7 @@ export function writeToDiskSync(
 }
 
 export function installPrimaryStateWriteOperationsContext(
-  target: object,
+  target: PrimaryStateWriteOperations,
   source: PrimaryStateWriteOperations
 ): void {
   Object.defineProperty(target, primaryStateWriteOperationsContext, {

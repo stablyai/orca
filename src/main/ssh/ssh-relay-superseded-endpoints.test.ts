@@ -7,7 +7,10 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     (error as { sshChannelCloseConfirmed?: boolean } | null)?.sshChannelCloseConfirmed === false
 }))
 
-import { parseRelayEndpointIncumbentProbe } from './ssh-relay-endpoint-incumbent'
+import {
+  RelayProbeCleanupUnconfirmedError,
+  parseRelayEndpointIncumbentProbe
+} from './ssh-relay-endpoint-incumbent'
 import {
   classifySupersededRelay,
   supersededRelayEndpointListCommand,
@@ -67,7 +70,7 @@ describe('classifySupersededRelay', () => {
           'PRESENT=yes',
           'LISTEN=accepted',
           'HOLDERS_SOURCE=lsof',
-          'HOLDER=3669803 yes 13'
+          'HOLDER=3669803 yes 13 11'
         ])
       )
     ).toBe('retained-live-work')
@@ -76,7 +79,7 @@ describe('classifySupersededRelay', () => {
   it('nominates only a proven empty relay for reaping', () => {
     expect(
       classifySupersededRelay(
-        incumbent(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        incumbent(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
     ).toBe('reap-candidate')
   })
@@ -97,16 +100,33 @@ describe('classifySupersededRelay', () => {
 })
 
 describe('sweepSupersededRelayEndpoints', () => {
+  it('stops the sweep before cleanup when probe group termination is unconfirmed', async () => {
+    execCommand
+      .mockResolvedValueOnce(OLD_SOCK)
+      .mockResolvedValueOnce(
+        probe([
+          'PRESENT=yes',
+          'LISTEN=accepted',
+          'HOLDERS_SOURCE=unavailable',
+          'PROBE_CLEANUP=unconfirmed'
+        ])
+      )
+    await expect(sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)).rejects.toBeInstanceOf(
+      RelayProbeCleanupUnconfirmedError
+    )
+    expect(issuedCommands()).toHaveLength(2)
+  })
+
   it('leaves an upgrade-orphaned relay that still owns terminals running, untouched', async () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13 11'])
       )
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ sockPath: OLD_SOCK, outcome: 'retained-live-work' })
-    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
+    expect(issuedCommands().some((command) => /\bkill\s/.test(command))).toBe(false)
     expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
   })
 
@@ -114,7 +134,7 @@ describe('sweepSupersededRelayEndpoints', () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
       .mockResolvedValueOnce('GONE\n')
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
@@ -126,7 +146,7 @@ describe('sweepSupersededRelayEndpoints', () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
       .mockResolvedValueOnce('LIVE\n')
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)

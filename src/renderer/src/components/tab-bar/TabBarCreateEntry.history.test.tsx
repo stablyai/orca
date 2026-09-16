@@ -169,6 +169,16 @@ describe('TabBarCreateEntry browser history rows', () => {
     expect(rowTexts().some((text) => text.includes('Open page'))).toBe(false)
   })
 
+  it('uses the favicon captured with a history entry', () => {
+    const faviconUrl = 'https://linear.app/favicon.ico'
+    historyStoreMock.entries = [historyEntry({ ...linear, faviconUrl })]
+    mount()
+
+    setQuery('linear')
+
+    expect(container.querySelector<HTMLImageElement>('[role="option"] img')?.src).toBe(faviconUrl)
+  })
+
   it('skips history for a path-shaped query and for a forced search', () => {
     pathLikeMock.value = true
     mount()
@@ -192,7 +202,8 @@ describe('TabBarCreateEntry browser history rows', () => {
         contentType: 'browser',
         pageId: 'page-1',
         workspaceId: 'ws-1',
-        url: 'https://linear.app/acme/team/ORC/active'
+        url: 'https://linear.app/acme/team/ORC/active',
+        faviconUrl: null
       }
     ]
     mount()

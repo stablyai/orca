@@ -1,4 +1,4 @@
-import { Laptop, X } from 'lucide-react'
+import { Laptop, Loader2, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
@@ -36,6 +36,8 @@ export default function ClientHostedBrowserTab({
   onClose: () => void
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
+  const loading = row.loading && !row.hostAbsent
+  const PageIcon = loading ? Loader2 : Laptop
   const label = getClientHostedBrowserRowLabel(row)
   const hostDescription = describeClientHostedBrowserRowHost(row)
 
@@ -62,8 +64,8 @@ export default function ClientHostedBrowserTab({
             }}
           >
             {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-            <Laptop
-              className={`mr-1 size-3 shrink-0 ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
+            <PageIcon
+              className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
               aria-hidden
             />
             <span
@@ -71,9 +73,6 @@ export default function ClientHostedBrowserTab({
             >
               {label}
             </span>
-            {row.loading && (
-              <span className="mr-1 size-1.5 shrink-0 rounded-full bg-sky-500/80" aria-hidden />
-            )}
             <button
               type="button"
               aria-label={translate('browser.clientHosted.hostRowClose', 'Close hosted page')}

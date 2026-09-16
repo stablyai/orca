@@ -103,6 +103,7 @@ export function useComposerSubmitOrchestration(
     persistSetupAgentStartupPolicy: target.providerRuntimeSync.persistSetupAgentStartupPolicy,
     prepareFullSubmit: fullSubmitPreparation.prepareFullSubmit,
     resolvedInitialWorkspaceStatus: target.initialTargetState.resolvedInitialWorkspaceStatus,
+    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     setSidebarOpen: target.composerTargetStore.setSidebarOpen,
     sparseEnabled: target.asyncComposerState.sparseEnabled,
@@ -137,27 +138,14 @@ export function useComposerSubmitOrchestration(
     workspaceSeedName: target.derivedComposerState.workspaceSeedName
   })
   const multipleCreateReset = useMultipleCreateReset({
+    handleClearSmartNameSelection: source.issueSourceActions.handleClearSmartNameSelection,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
     nameInputRef: target.asyncComposerState.nameInputRef,
     setAgentPrompt: target.sourceContextState.setAgentPrompt,
     setAttachmentPaths: target.sourceContextState.setAttachmentPaths,
-    setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
-    setBranchNameOverridePreservesNameEdits:
-      target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
-    setCompareBaseRef: target.workspaceIdentityState.setCompareBaseRef,
     setCreateError: target.asyncComposerState.setCreateError,
-    setForkPushWarning: target.workspaceIdentityState.setForkPushWarning,
-    setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
-    setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
-    setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
-    setLinkedPR: target.workspaceIdentityState.setLinkedPR,
-    setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
-    setLinkedWorkItem: target.sourceContextState.setLinkedWorkItem,
     setName: target.sourceContextState.setName,
-    setNote: target.sourceContextState.setNote,
-    setPushTarget: target.workspaceIdentityState.setPushTarget,
-    setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
-    setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint
+    setNote: target.sourceContextState.setNote
   })
   const quickSubmitSourcePreparation = useQuickSubmitSourcePreparation({
     baseBranch: target.workspaceIdentityState.baseBranch,

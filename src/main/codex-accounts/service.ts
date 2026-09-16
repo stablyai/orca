@@ -12,6 +12,7 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import { CodexAccountIdentity, type ResolvedCodexIdentity } from './codex-account-identity'
 import { CodexConfigMirror } from './codex-config-mirror'
@@ -49,7 +50,14 @@ function killLoginProcessTree(
     process.platform === 'win32' &&
     typeof terminationPid === 'number' &&
     child.exitCode === null &&
-    child.signalCode === null
+    child.signalCode === null &&
+    // Last in the chain so a kill we never issue is never recorded, and a pid
+    // Electron owns refuses here into the plain-signal fallback below.
+    admitSelfInitiatedTreeKill({
+      pid: terminationPid,
+      site: 'codex-account-login-teardown',
+      scope: 'win-taskkill-tree'
+    })
   ) {
     try {
       // Why: child.kill() only reaches the direct child (cmd.exe for npm .cmd

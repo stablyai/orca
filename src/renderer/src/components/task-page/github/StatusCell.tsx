@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils'
 import { CircleDot, ChevronDown, Copy, CheckCircle2, Ban, ChevronRight } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
 import { TaskPageGitHubDuplicatePicker } from './DuplicatePicker'
+import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
+
 export function GHStatusCell({
   item,
   repo,
@@ -50,27 +52,7 @@ export function GHStatusCell({
   const [duplicatePickerOpen, setDuplicatePickerOpen] = useState(false)
   const [duplicateSearch, setDuplicateSearch] = useState('')
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
-  const duplicateIssueCandidates = useAppStore(
-    useShallow((s) => {
-      if (!duplicatePickerOpen) {
-        return []
-      }
-      const deduped = new Map<number, GitHubWorkItem>()
-      for (const entry of Object.values(s.workItemsCache)) {
-        for (const candidate of entry.data ?? []) {
-          if (
-            candidate.type === 'issue' &&
-            candidate.repoId === item.repoId &&
-            candidate.number !== item.number &&
-            !deduped.has(candidate.number)
-          ) {
-            deduped.set(candidate.number, candidate)
-          }
-        }
-      }
-      return Array.from(deduped.values()).sort((a, b) => b.number - a.number)
-    })
-  )
+  const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )

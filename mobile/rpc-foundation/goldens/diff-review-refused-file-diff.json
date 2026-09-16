@@ -1,0 +1,228 @@
+{
+  "operation": "session.diff-review-load",
+  "family": "session.diff-review",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
+  "scenarioSha256": "d1b04fe2945a2799ac8465d8fd9e45ab790ae29b401a0cf4fef68ebc5fa3cc76",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0698901154de": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "itemKey": "unstaged:src/app.ts",
+        "kind": "too-large"
+      }
+    },
+    "2ecd0366533c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "itemKey": "unstaged:src/app.ts",
+        "kind": "deleted"
+      }
+    },
+    "2eee9b17f40e": {
+      "name": "git.diff#3",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}",
+      "sent": 3
+    },
+    "414ef6b1967c": {
+      "name": "git.diff#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}",
+      "sent": 1
+    },
+    "5768cc374e1d": {
+      "branchCompare": "unloaded",
+      "diff": {
+        "itemKey": "unstaged:src/app.ts",
+        "kind": "too-large"
+      },
+      "snapshot": "unloaded"
+    },
+    "67daf7391fee": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unable to load diff",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "a58da3417608": {
+      "name": "git.diff#3",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "src/app.ts",
+            "staged": false,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "internal",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "b5ca1f0a42b7": {
+      "name": "git.diff#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}",
+      "sent": 2
+    },
+    "c40409188ab0": {
+      "name": "git.diff#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "src/app.ts",
+            "staged": false,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "internal",
+            "message": "boom"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "dde75a860803": {
+      "name": "git.diff#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "src/app.ts",
+            "staged": false,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "diff_too_large",
+            "message": "Diff exceeds the limit"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f10ae0495f82": {
+      "branchCompare": "unloaded",
+      "diff": {
+        "itemKey": "unstaged:src/app.ts",
+        "kind": "deleted"
+      },
+      "snapshot": "unloaded"
+    }
+  },
+  "recording": {
+    "scenario": "diff-review-refused-file-diff",
+    "checkpoints": [
+      {
+        "id": "diff-too-large",
+        "observation": {
+          "sender": ["dde75a860803"],
+          "payloads": ["414ef6b1967c"],
+          "settlements": {
+            "diff-too-large": "0698901154de"
+          },
+          "state": "5768cc374e1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "deleted",
+        "observation": {
+          "sender": ["dde75a860803", "c40409188ab0"],
+          "payloads": ["414ef6b1967c", "b5ca1f0a42b7"],
+          "settlements": {
+            "diff-too-large": "0698901154de",
+            "deleted": "2ecd0366533c"
+          },
+          "state": "f10ae0495f82",
+          "effects": []
+        }
+      },
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["dde75a860803", "c40409188ab0", "a58da3417608"],
+          "payloads": ["414ef6b1967c", "b5ca1f0a42b7", "2eee9b17f40e"],
+          "settlements": {
+            "diff-too-large": "0698901154de",
+            "deleted": "2ecd0366533c",
+            "refused": "67daf7391fee"
+          },
+          "state": "f10ae0495f82",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

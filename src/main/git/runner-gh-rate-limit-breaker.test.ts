@@ -12,6 +12,7 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
+import { fakeSpawnReturning } from '../../shared/child-process/__fixtures__/fake-spawned-child'
 import { ghExecFileAsync } from './runner'
 import {
   _resetGhRateLimitBreaker,
@@ -23,25 +24,16 @@ const PRIMARY_RATE_LIMIT_STDERR =
   'gh: API rate limit exceeded for user ID 1775218. Please wait. (HTTP 403)'
 
 function mockGhFailure(stderr: string): void {
-  execFileMock.mockImplementation((_binary, _args, options, callback) => {
-    const done = typeof options === 'function' ? options : callback
-    queueMicrotask(() =>
-      done(Object.assign(new Error(`Command failed: gh\n${stderr}`), { stderr }), '', stderr)
-    )
-    return { once: vi.fn() }
-  })
+  spawnMock.mockImplementation(fakeSpawnReturning({ stderr, code: 1 }))
 }
 
 function mockGhSuccess(stdout: string): void {
-  execFileMock.mockImplementation((_binary, _args, options, callback) => {
-    const done = typeof options === 'function' ? options : callback
-    queueMicrotask(() => done(null, stdout, ''))
-    return { once: vi.fn() }
-  })
+  spawnMock.mockImplementation(fakeSpawnReturning({ stdout }))
 }
 
 beforeEach(() => {
   execFileMock.mockReset()
+  spawnMock.mockReset()
 })
 
 afterEach(() => {
@@ -54,14 +46,14 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     await expect(
       ghExecFileAsync(['api', '--cache', '120s', 'search/issues?q=repo:a/b&per_page=1'])
     ).rejects.toThrow('rate limit')
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock).toHaveBeenCalledTimes(1)
 
     // The 90-repo storm case: every further search-bucket call must fail fast
     // without a subprocess.
     await expect(
       ghExecFileAsync(['api', '--cache', '120s', 'search/issues?q=repo:c/d&per_page=1'])
     ).rejects.toMatchObject({ ghRateLimitBlocked: true })
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps other buckets working while one bucket is blocked', async () => {
@@ -72,7 +64,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
       stdout: '[]',
       stderr: ''
     })
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock).toHaveBeenCalledTimes(2)
   })
 
   it('keeps other GitHub hosts and WSL runtimes working when github.com is blocked', async () => {
@@ -105,7 +97,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
         value: originalPlatform
       })
     }
-    expect(execFileMock).toHaveBeenCalledTimes(5)
+    expect(spawnMock).toHaveBeenCalledTimes(5)
   })
 
   it.each([
@@ -195,7 +187,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     ).resolves.toMatchObject({
       stdout: '{"resources":{}}'
     })
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock).toHaveBeenCalledTimes(2)
   })
 
   it('does not trip the breaker on secondary rate limits', async () => {

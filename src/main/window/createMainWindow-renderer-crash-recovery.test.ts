@@ -21,7 +21,7 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   }
 })
 
-import { createMainWindow, loadMainWindow } from './createMainWindow'
+import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
 import {
@@ -74,8 +74,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -120,8 +120,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -231,8 +231,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -272,8 +272,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
@@ -322,8 +322,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
@@ -353,6 +353,8 @@ describe('createMainWindow', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       id: 143,
+      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+      isDestroyed: vi.fn(() => false),
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -374,8 +376,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -415,10 +417,12 @@ describe('createMainWindow', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
     const onBeforeRecoveryReload = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
 
     withPlatform('win32', () => {
       createMainWindow(null, {
         onBeforeRecoveryReload,
+        onRendererRecoveryExhausted,
         shouldRecoverRenderer: (details) =>
           shouldRecoverRendererAfterProcessGone({
             reason: details.reason,
@@ -436,10 +440,14 @@ describe('createMainWindow', () => {
       {} as never,
       { reason: 'killed', exitCode: 1 } as Electron.RenderProcessGoneDetails
     )
-    vi.runAllTimers()
+    vi.advanceTimersByTime(250)
 
-    expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143)
+    expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143, 'automatic')
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    // Why the watchdog must stay quiet here: this reload is deliberate during logoff, and a process that
+    // outlives the session-end signal must not put a native modal on screen mid-teardown.
+    vi.runAllTimers()
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
     consoleError.mockRestore()
   })
 
@@ -615,8 +623,8 @@ describe('createMainWindow', () => {
     // 1 initial load + 3 recoveries; the 4th crash was refused.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
 
-    // The recovery prompt's Reload button goes straight to loadMainWindow, which the breaker never gates.
-    loadMainWindow(browserWindowInstance as unknown as Electron.BrowserWindow)
+    // The recovery prompt's Reload button takes the watched retry, which the breaker never gates.
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
 
     // Still-poisoned machine: the next crash re-raises the prompt immediately instead of re-arming auto-reloads.

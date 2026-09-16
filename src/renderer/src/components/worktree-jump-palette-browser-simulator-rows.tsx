@@ -1,20 +1,20 @@
 import type React from 'react'
-import { Globe, Smartphone } from 'lucide-react'
+import { Smartphone } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { BrowserPaletteItem, SimulatorPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
-  HighlightedText,
   PaletteHostBadgeChip,
+  PaletteLocationChip,
   PaletteOpenTabPrimaryLine,
   PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
+import { BrowserFavicon } from '@/components/browser-favicon'
 
 export function WorktreeJumpPaletteSimulatorRow({
   entry,
@@ -65,8 +65,7 @@ export function WorktreeJumpPaletteSimulatorRow({
               titleRanges={result.titleRanges}
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
-              worktreeName={result.worktreeName}
-              worktreeRanges={result.worktreeRanges}
+              secondaryMatches={result.secondaryMatches}
               sessionAge={simulatorSessionAge}
               leadingBadges={
                 <>
@@ -86,17 +85,21 @@ export function WorktreeJumpPaletteSimulatorRow({
                 </>
               }
             />
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <PaletteHostBadgeChip badge={simulatorHostBadge} />
-            {simulatorRepoName && (
-              <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                <RepoBadgeMark color={simulatorRepo?.badgeColor} />
-                <span className="truncate">
-                  <HighlightedText text={simulatorRepoName} matchRanges={result.repoRanges} />
-                </span>
+            {result.typeAliasMatches.length ? (
+              <span className="sr-only">
+                {result.typeAliasMatches.map((match) => match.text).join(', ')}
               </span>
-            )}
+            ) : null}
+          </div>
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
+            <PaletteHostBadgeChip badge={simulatorHostBadge} />
+            <PaletteLocationChip
+              repoName={simulatorRepoName}
+              repoRanges={result.repoRanges}
+              repoColor={simulatorRepo?.badgeColor}
+              worktreeName={result.worktreeName}
+              worktreeRanges={result.worktreeRanges}
+            />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}
@@ -147,7 +150,7 @@ export function WorktreeJumpPaletteBrowserRow({
       )}
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
-        <Globe className="size-3.5" aria-hidden="true" />
+        <BrowserFavicon faviconUrl={result.faviconUrl} className="size-3.5" />
       </div>
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex items-center justify-between gap-2.5">
@@ -157,8 +160,8 @@ export function WorktreeJumpPaletteBrowserRow({
               titleRanges={result.titleRanges}
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
-              worktreeName={result.worktreeName}
-              worktreeRanges={result.worktreeRanges}
+              secondaryMatches={result.secondaryMatches}
+              elideSecondaryPathHead
               sessionAge={browserSessionAge}
               leadingBadges={
                 <>
@@ -179,16 +182,15 @@ export function WorktreeJumpPaletteBrowserRow({
               }
             />
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
             <PaletteHostBadgeChip badge={browserHostBadge} />
-            {browserRepoName && (
-              <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                <RepoBadgeMark color={browserRepo?.badgeColor} />
-                <span className="truncate">
-                  <HighlightedText text={browserRepoName} matchRanges={result.repoRanges} />
-                </span>
-              </span>
-            )}
+            <PaletteLocationChip
+              repoName={browserRepoName}
+              repoRanges={result.repoRanges}
+              repoColor={browserRepo?.badgeColor}
+              worktreeName={result.worktreeName}
+              worktreeRanges={result.worktreeRanges}
+            />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}

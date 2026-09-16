@@ -123,14 +123,11 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
   }
 
   protected getTerminalHandlesForPtyId(ptyId: string): string[] {
-    const handles = new Set(
-      this.getLeavesForPty(ptyId)
-        .filter((candidate) => candidate.connected)
-        .map((leaf) => this.issueHandle(leaf))
-    )
-    const runtimeHandle = this.handleByPtyId.get(ptyId)
-    if (runtimeHandle) {
-      handles.add(runtimeHandle)
+    const handles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
+    for (const handle of this.getLeavesForPty(ptyId)
+      .filter((candidate) => candidate.connected)
+      .map((leaf) => this.issueHandle(leaf))) {
+      handles.add(handle)
     }
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (!pty) {
@@ -138,6 +135,23 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
     }
     if (handles.size === 0) {
       handles.add(this.issuePtyHandle(pty))
+    }
+    return [...handles].sort()
+  }
+
+  protected getExistingTerminalHandlesForPtyId(ptyId: string): string[] {
+    const handles = new Set(
+      this.getLeavesForPty(ptyId)
+        .map((leaf) => this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)))
+        .filter((handle): handle is string => handle !== undefined)
+    )
+    const runtimeHandle = this.handleByPtyId.get(ptyId)
+    if (runtimeHandle) {
+      handles.add(runtimeHandle)
+    }
+    const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+    if (incarnationHandle) {
+      handles.add(incarnationHandle)
     }
     return [...handles].sort()
   }

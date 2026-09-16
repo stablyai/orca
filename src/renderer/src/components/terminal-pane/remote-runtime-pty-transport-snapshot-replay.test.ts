@@ -127,7 +127,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     emitOutput(streamId, liveOutput, liveSeq)
 
     expect(onReplayData).toHaveBeenCalledOnce()
-    expect(onReplayData).toHaveBeenCalledWith('AUTHORITATIVE_INITIAL_MARKER')
+    expect(onReplayData).toHaveBeenCalledWith(
+      'AUTHORITATIVE_INITIAL_MARKER',
+      // The host's grid rides the snapshot so the pane replays it there.
+      expect.objectContaining({ snapshotCols: 80, snapshotRows: 24 })
+    )
     expect(onConnect).toHaveBeenCalledOnce()
     expect(onData).toHaveBeenCalledWith(liveOutput, expect.objectContaining({ seq: liveSeq }))
     await vi.waitFor(() => {

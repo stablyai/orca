@@ -2,9 +2,10 @@ import { memo, useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/client-context'
+import { gitCommitCompareRead } from './mobile-git-read-operations'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
@@ -105,12 +106,12 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     const commitId = expanded
     let stale = false
     setFilesById((prev) => (prev[commitId] ? prev : { ...prev, [commitId]: 'loading' }))
-    void client
-      .sendRequest('git.commitCompare', { worktree: `id:${worktreeId}`, commitId })
-      .then((response) => {
-        const entries = response.ok
-          ? ((response as RpcSuccess).result as { entries: GitBranchChangeEntry[] }).entries
-          : []
+    void gitCommitCompareRead
+      .request(client, { worktree: `id:${worktreeId}`, commitId })
+      .then((reply) => {
+        const compared = gitCommitCompareRead.interpret(reply)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const entries = compared.accepted ? (compared.value as GitBranchChangeEntry[]) : []
         if (!stale) {
           setFilesById((prev) => ({ ...prev, [commitId]: entries }))
         }

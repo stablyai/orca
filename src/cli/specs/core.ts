@@ -1,6 +1,9 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
+import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -64,7 +67,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',
     usage: 'orca worktree list [--repo <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['worktree', 'show'],
@@ -168,10 +172,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     destructive: true,
     summary: 'Remove a worktree from Orca and git',
-    usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
+    usage:
+      'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--allow-failed-archive-hook] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks', 'allow-failed-archive-hook'],
     notes: [
       'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
+      'With --run-hooks, a failed archive hook blocks the removal: nothing is stopped, deleted or deregistered, and the command exits non-zero with error code worktree_archive_hook_failed. --force does not waive this.',
+      'Pass --allow-failed-archive-hook to delete anyway after the hook has run and failed; the waived failure is reported back on result.archiveHookOverride. It requires --run-hooks and is rejected without it, because with no hook running there is no failure to waive.',
       'For Git worktrees, removal also attempts to delete the checked-out local branch, with or without --force. Orca retains branches it knows predated the worktree and any branch whose changes it cannot prove are already merged.'
     ]
   },
@@ -179,7 +186,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
     usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['terminal', 'list'],
@@ -220,13 +228,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal read --terminal term_abc123 --screen --json'
     ]
   },
-  {
-    path: ['terminal', 'send'],
-    summary: 'Send input to a live terminal',
-    usage:
-      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
-  },
+  TERMINAL_SEND_COMMAND_SPEC,
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',
@@ -236,25 +238,32 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'stop'],
-    summary: 'Stop terminals for a worktree',
+    hidden: true,
+    summary: 'Deprecated compatibility command for stopping terminal processes',
     usage: 'orca terminal stop --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Deprecated: use terminal close --worktree <selector> --all to stop the processes and durably remove their terminal surfaces.'
+    ]
   },
   {
     path: ['terminal', 'create'],
     summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.'
+      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
+      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
     ],
     examples: [
       'orca terminal create --json',
       'orca terminal create --worktree active --command "codex" --json',
       'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
-      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
+      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus',
+      'orca terminal create --worktree path:C:/src/app --shell cmd.exe --json'
     ]
   },
   {
@@ -267,19 +276,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
-  {
-    path: ['terminal', 'close'],
-    summary: 'Close a terminal pane/session, or its whole tab with --tab',
-    usage: 'orca terminal close [--terminal <handle>] [--tab] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab'],
-    notes: [
-      'Without --tab, preserves the existing pane/session close behavior. With --tab, waits until the whole tab is durably removed.'
-    ],
-    examples: [
-      'orca terminal close --terminal term_abc123',
-      'orca terminal close --terminal term_abc123 --tab --json'
-    ]
-  },
+  TERMINAL_CLOSE_COMMAND_SPEC,
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',

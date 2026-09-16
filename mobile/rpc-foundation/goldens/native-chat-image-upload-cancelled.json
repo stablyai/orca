@@ -1,0 +1,46 @@
+{
+  "operation": "nativeChat.image-upload",
+  "family": "nativeChat.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "1f513883eb62cdd1673eb58809817e2b2f5fd64b74f80ed6e3b9d8c2ef2d33e9",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "25716369cd8f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": []
+    },
+    "4ea1010bf65b": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "uploaded": []
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-image-upload-cancelled",
+    "checkpoints": [
+      {
+        "id": "no-wire",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "cancelled": "25716369cd8f"
+          },
+          "state": "4ea1010bf65b",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

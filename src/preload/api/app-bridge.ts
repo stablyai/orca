@@ -43,6 +43,8 @@ export const appApi = {
   awaitBeforeUnloadCheckpoint: () => awaitBeforeUnloadCheckpoint(),
   awaitFirstWindowStartupServices: (): Promise<void> =>
     ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+  awaitGitEnvironmentStartupBarrier: (): Promise<void> =>
+    ipcRenderer.invoke('app:awaitGitEnvironmentStartupBarrier'),
   prepareTerminalStartupRestoration: (): Promise<void> =>
     ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
   recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
