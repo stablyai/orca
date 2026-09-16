@@ -167,6 +167,8 @@ export type GlobalSettings = {
   terminalRightClickToPasteDefaultedForPlatform?: boolean
   /** Windows-only: COMSPEC always points to cmd.exe, so this explicit shell (default 'powershell.exe') overrides it. */
   terminalWindowsShell: string
+  /** Optional shell executable for new terminals on macOS and Linux. */
+  terminalDefaultShell?: string
   /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
   /** Account/auth location; auto follows the global Windows runtime while host/wsl pin it. */

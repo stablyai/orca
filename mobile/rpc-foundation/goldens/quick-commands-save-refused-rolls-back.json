@@ -3,9 +3,9 @@
   "family": "settings.quick-commands",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
   "scenarioSha256": "72517336e451e1e078135103073c1821e8af27c0702f6dc83b9a686fe7ff8c04",
   "platform": "darwin",
@@ -13,8 +13,48 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "07d2b92da065": {
+    "293828e985f4": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminalQuickCommands": []
+          }
+        }
+      }
+    },
+    "3a752c2955e2": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}"
+    },
+    "4864c34d28ba": {
       "name": "settings.updateTerminalQuickCommands#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -55,6 +95,11 @@
         }
       }
     },
+    "6ab1d0c3a5d5": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}"
+    },
     "7ed3d39f0607": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -67,49 +112,6 @@
       "loading": false,
       "persisted": [false],
       "ready": true
-    },
-    "a832f000ad89": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}",
-      "sent": 1
-    },
-    "d766ce9ee125": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.getTerminalQuickCommands"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "terminalQuickCommands": []
-          }
-        }
-      }
-    },
-    "e6aede33fdf3": {
-      "name": "settings.updateTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}",
-      "sent": 2
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -126,8 +128,8 @@
       {
         "id": "rolled-back",
         "observation": {
-          "sender": ["d766ce9ee125", "07d2b92da065"],
-          "payloads": ["a832f000ad89", "e6aede33fdf3"],
+          "sender": ["293828e985f4", "4864c34d28ba"],
+          "payloads": ["3a752c2955e2", "6ab1d0c3a5d5"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"

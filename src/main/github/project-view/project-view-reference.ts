@@ -1,4 +1,5 @@
 import type { ResolveProjectRefArgs } from '../../../shared/github/project-request-types'
+import { GITHUB_OWNER_NUMBER_SHORTHAND_RE } from '../../../shared/github/owner-slug'
 import type {
   GitHubProjectViewError,
   ResolveProjectRefResult
@@ -66,9 +67,7 @@ export function parseProjectPaste(input: string, host?: string): ParsedPaste | n
   } catch {
     // Shorthand parsing below remains available for non-URL input.
   }
-  // owner/number shorthand — owner alphabet matches OWNER_SLUG_RE.
-  const shortRe = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/
-  const sm = trimmed.match(shortRe)
+  const sm = trimmed.match(GITHUB_OWNER_NUMBER_SHORTHAND_RE)
   if (sm) {
     const number = Number.parseInt(sm[2], 10)
     if (!Number.isInteger(number) || number < 1) {

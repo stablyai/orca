@@ -1,7 +1,8 @@
-import { createElement, type Context } from 'react'
+import { createElement } from 'react'
 import { screenMount } from '../mounted-screen-tree'
 import { performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
+import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
@@ -10,7 +11,7 @@ const HOST = 'host-1'
 
 /** The screen-root hook reads its client through the context handle `client-context.tsx` keeps. */
 export const tasksRouteScreenMountExposures: readonly OperationExposure[] = [
-  ['client-context.tsx', '\nexports.recorderHostClientContext = Ctx;']
+  hostClientContextExposure
 ]
 
 /** The tasks screen root: the repo list its pickers and its create form are hydrated from. */
@@ -24,9 +25,7 @@ export function tasksRouteScreenMountAdapters(
       >(
         'mobile/src/tasks/use-mobile-tasks-route-and-item-state.tsx'
       ).useMobileTasksRouteAndItemState
-      const { recorderHostClientContext } = modules.load<{
-        recorderHostClientContext: Context<RpcClientContextValue | null>
-      }>('mobile/src/transport/client-context.tsx')
+      const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({
         acquire: () => client,
         release: () => {},
@@ -49,12 +48,7 @@ export function tasksRouteScreenMountAdapters(
         return null
       }
       const screen = screenMount(
-        () =>
-          createElement(
-            recorderHostClientContext.Provider,
-            { value: context },
-            createElement(Harness)
-          ),
+        () => createElement(hostClientContext.Provider, { value: context }, createElement(Harness)),
         effect
       )
       const model = (): ReturnType<typeof useRoute> => {

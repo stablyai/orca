@@ -3,10 +3,10 @@
   "family": "session.diff-review-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
-  "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
   "scenarioSha256": "9f1c39e91a97266b0a550d2b2d061592ae050078401ef23177dd2e00db67bf04",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -65,13 +65,9 @@
         "$rpc": "null"
       }
     },
-    "44751250aabd": {
+    "b19741dc6694": {
       "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}",
-      "sent": 1
-    },
-    "78219a737d4d": {
-      "name": "worktree.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -135,6 +131,11 @@
         }
       }
     },
+    "bc47263d2197": {
+      "name": "worktree.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -150,8 +151,8 @@
       {
         "id": "persisted",
         "observation": {
-          "sender": ["78219a737d4d"],
-          "payloads": ["44751250aabd"],
+          "sender": ["b19741dc6694"],
+          "payloads": ["bc47263d2197"],
           "settlements": {
             "mark-reviewed": "eb79a9b3682a"
           },

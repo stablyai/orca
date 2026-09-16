@@ -5803,7 +5803,12 @@
           "14444243ba": "PATH から {{value0}} を削除しますか?",
           "5d432fe44d": "インストール済み",
           "8a9b784c60": "古い",
-          "d363e5929b": "CLI の登録を確認しています…"
+          "d363e5929b": "CLI の登録を確認しています…",
+          "6f894ef9c2": "Finderで表示",
+          "cbe55e4d48": "エクスプローラーで表示",
+          "9fd4023db0": "ファイルマネージャーで表示",
+          "installFailureUnknownReason": "Orca は CLI 登録を完了できず、理由を報告しませんでした。",
+          "installFailureConflictRemedy": "{{value0}} を削除して、不要になった場合は再度登録してください。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",

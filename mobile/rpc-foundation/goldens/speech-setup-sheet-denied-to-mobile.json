@@ -3,9 +3,9 @@
   "family": "speech.setup-sheet",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "69c1c20ea667a2b6a5b53aeb3d9af11b2b707e04086e15ee4ff9e954b1701851",
   "platform": "darwin",
@@ -24,8 +24,14 @@
       }
     },
     "44136fa355b3": {},
-    "db814c0e0956": {
+    "4f793e38be31": {
       "name": "speech.models.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}"
+    },
+    "9b9e5dcda8ac": {
+      "name": "speech.models.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -57,11 +63,6 @@
           "ok": false
         }
       }
-    },
-    "f98fd51d5ce2": {
-      "name": "speech.models.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}",
-      "sent": 1
     }
   },
   "recording": {
@@ -70,8 +71,8 @@
       {
         "id": "denied",
         "observation": {
-          "sender": ["db814c0e0956"],
-          "payloads": ["f98fd51d5ce2"],
+          "sender": ["9b9e5dcda8ac"],
+          "payloads": ["4f793e38be31"],
           "settlements": {
             "list": "100447f8b483"
           },

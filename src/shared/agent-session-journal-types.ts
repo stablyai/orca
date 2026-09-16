@@ -169,11 +169,14 @@ export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCL
 export type AgentJournalTurnLifecycle = {
   turnId: string
   state: AgentJournalTurnLifecycleState
-  /** Provider key of the user item that opened the turn; clients resolve a
-   *  submission alias through it. A lifecycle row may key itself when provider
-   *  output opened a turn with no user item; absent means an older host. */
+  /** Journal key of the user item that opened the turn. A lifecycle row may key
+   *  itself when provider output opened a turn with no user item; absent means
+   *  an older host. */
   userItemId?: string
   startedAt?: number
+  /** Host clock at the send that opened this turn, when one is known. `startedAt`
+   *  remains the provider turn-open instant and is never rewritten. */
+  requestedAt?: number
   completedAt?: number
   /** The provider's own measured turn duration, preferred over the host interval. */
   durationMs?: number

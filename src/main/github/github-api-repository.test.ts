@@ -136,17 +136,20 @@ describe('resolveGitHubRepoExecution', () => {
     expect(isGitHubHostAuthenticatedMock).not.toHaveBeenCalled()
   })
 
-  it('normalizes github.com without spending an auth inventory probe', async () => {
-    await expect(
-      resolveGitHubApiRepository('/repo', {
-        owner: 'acme',
-        repo: 'widgets',
-        host: ' GitHub.COM '
-      })
-    ).resolves.toEqual({ owner: 'acme', repo: 'widgets', host: 'github.com' })
+  it.each(['acme', 'octocat_acme'])(
+    'normalizes github.com for %s without an auth inventory probe',
+    async (owner) => {
+      await expect(
+        resolveGitHubApiRepository('/repo', {
+          owner,
+          repo: 'widgets',
+          host: ' GitHub.COM '
+        })
+      ).resolves.toEqual({ owner, repo: 'widgets', host: 'github.com' })
 
-    expect(isGitHubHostAuthenticatedMock).not.toHaveBeenCalled()
-  })
+      expect(isGitHubHostAuthenticatedMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('backfills the origin host for a host-less caller-specific resolver', async () => {
     const ownerRepo = { owner: 'upstream', repo: 'widgets' }

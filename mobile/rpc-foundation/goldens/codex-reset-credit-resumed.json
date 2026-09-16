@@ -3,9 +3,9 @@
   "family": "components.codex-reset-credit",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "76b53dea504a688493843e23e8e7d052fc196f559bb1e2579d0fd38bf3156d0e",
   "scenarioSha256": "d85a4031b701e563941afcdd7375cf78a1ee1487a0dab722f8516c2bc8d3dcee",
   "platform": "darwin",
@@ -102,8 +102,62 @@
         "outcome": "alreadyRedeemed"
       }
     },
-    "1c9f0c57c36d": {
+    "413aa2c48b5e": {
+      "name": "device-store.removeItem",
+      "ordinal": 3,
+      "value": {
+        "key": "orca:codex-reset-credit-attempt:v1:0832055c2fa90e8e145c588ad4db656a2fc2840ed2e851a28494eae769db9b3e"
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9c4bad2e8f67": {
       "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "11111111-1111-4111-8111-111111111111"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "cce83ed60c84": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"11111111-1111-4111-8111-111111111111\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}"
+    },
+    "ecc8e2860eba": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -202,58 +256,6 @@
           }
         }
       }
-    },
-    "897e4d77e2a0": {
-      "name": "accounts.consumeCodexResetCredit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"11111111-1111-4111-8111-111111111111\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}",
-      "sent": 1
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "c19953b572ef": {
-      "name": "accounts.consumeCodexResetCredit#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "accounts.consumeCodexResetCredit"
-        },
-        {
-          "name": "params",
-          "value": {
-            "expectedScope": {
-              "accountId": "codex-1",
-              "accountRevision": 1700000000000,
-              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
-              "target": {
-                "runtime": "host",
-                "wslDistro": {
-                  "$rpc": "null"
-                }
-              }
-            },
-            "idempotencyKey": "11111111-1111-4111-8111-111111111111"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 90000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "c55ed0a410f8": {
-      "name": "device-store.removeItem",
-      "value": {
-        "key": "orca:codex-reset-credit-attempt:v1:0832055c2fa90e8e145c588ad4db656a2fc2840ed2e851a28494eae769db9b3e"
-      },
-      "sent": 1
     }
   },
   "recording": {
@@ -262,8 +264,8 @@
       {
         "id": "requested",
         "observation": {
-          "sender": ["c19953b572ef"],
-          "payloads": ["897e4d77e2a0"],
+          "sender": ["9c4bad2e8f67"],
+          "payloads": ["cce83ed60c84"],
           "settlements": {
             "confirm": "9270aeb7d9c6"
           },
@@ -274,13 +276,13 @@
       {
         "id": "consumed",
         "observation": {
-          "sender": ["1c9f0c57c36d"],
-          "payloads": ["897e4d77e2a0"],
+          "sender": ["ecc8e2860eba"],
+          "payloads": ["cce83ed60c84"],
           "settlements": {
             "confirm": "074c5080c062"
           },
           "state": "0e5764df4bfd",
-          "effects": ["c55ed0a410f8"]
+          "effects": ["413aa2c48b5e"]
         }
       }
     ]

@@ -48,6 +48,17 @@ Avoid type assertions except `as const`. Unavoidable casts need a line-specific 
 - **Lint**: `oxlint`, or `pnpm run check:code-quality:changed` for changed files (full `pnpm lint` is slow); format with `pnpm format`
 - **Design system**: `pnpm run lint:design-system` for the full renderer report (not a gate); the changed-lines gate above is what CI enforces
 
+# Writing Pull Requests
+
+Fill in [`.github/pull_request_template.md`](./.github/pull_request_template.md), written for a reviewer who has never seen this code:
+
+- No jargon — plain language, no internal shorthand.
+- The before and after as the user experiences it.
+- The mechanism you changed, not just the symptom.
+- Why this approach over the alternatives you considered.
+
+Cover all four concisely. Don't pad or walk the diff.
+
 # Considerations
 
 ## Worktree Safety

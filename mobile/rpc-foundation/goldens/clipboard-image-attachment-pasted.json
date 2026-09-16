@@ -3,9 +3,9 @@
   "family": "clipboard.image-attachment",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "60273f74d8fe869723cbbd1a459d7d789a92e07a0f1e9444b42e2d7767e5bec1",
   "platform": "darwin",
@@ -13,81 +13,16 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1c2f6fe81321": {
+    "08a3a6323626": {
       "name": "before-terminal-send",
+      "ordinal": 8,
       "value": {
         "terminal": "terminal-1"
-      },
-      "sent": 3
-    },
-    "5f71b4d3d25c": {
-      "name": "upload-start",
-      "value": {},
-      "sent": 0
-    },
-    "72c805fadcfb": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
-      "sent": 2
-    },
-    "7e48c58139e5": {
-      "name": "clipboard.startImageUpload#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.startImageUpload"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "uploadId": "upload-1"
-          }
-        }
       }
     },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "860d6a5b4609": {
+    "349431e2edcd": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/img.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 4
-    },
-    "8dfd1f053efc": {
-      "name": "clipboard.startImageUpload#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
-      "sent": 1
-    },
-    "b7a44aafa946": {
-      "attached": true,
-      "failure": {
-        "$rpc": "null"
-      }
-    },
-    "bc40e57896c9": {
-      "name": "terminal.send#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -127,8 +62,75 @@
         }
       }
     },
-    "e93276a9971b": {
+    "5af5db426de7": {
+      "name": "terminal.send#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/img.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "6696a47819e1": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "7c2e3ea286aa": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-1"
+          }
+        }
+      }
+    },
+    "814ccd56a769": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "8452698ac11a": {
       "name": "clipboard.commitImageUpload#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}"
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "994fccf9b305": {
+      "name": "upload-start",
+      "ordinal": 1,
+      "value": {}
+    },
+    "b50d2ec23283": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -158,13 +160,15 @@
         }
       }
     },
-    "e9a3deaf4515": {
-      "name": "clipboard.commitImageUpload#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}",
-      "sent": 3
+    "b7a44aafa946": {
+      "attached": true,
+      "failure": {
+        "$rpc": "null"
+      }
     },
-    "f1a3d38271bc": {
+    "f05e4695ffa3": {
       "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -205,13 +209,13 @@
       {
         "id": "attached",
         "observation": {
-          "sender": ["7e48c58139e5", "f1a3d38271bc", "e93276a9971b", "bc40e57896c9"],
-          "payloads": ["8dfd1f053efc", "72c805fadcfb", "e9a3deaf4515", "860d6a5b4609"],
+          "sender": ["7c2e3ea286aa", "f05e4695ffa3", "b50d2ec23283", "349431e2edcd"],
+          "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a", "5af5db426de7"],
           "settlements": {
             "normal": "84e5ca07cb7a"
           },
           "state": "b7a44aafa946",
-          "effects": ["5f71b4d3d25c", "1c2f6fe81321"]
+          "effects": ["994fccf9b305", "08a3a6323626"]
         }
       }
     ]

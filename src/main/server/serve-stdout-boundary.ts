@@ -18,10 +18,7 @@ export function emitServeBrowserIdentityActionLine(
   let action: string | null = null
   if (status.identity.state === 'future') {
     action = 'browser identity data is from a newer version; update Orca'
-  } else if (
-    status.identity.state === 'corrupt' ||
-    status.identity.state === 'unreadable'
-  ) {
+  } else if (status.identity.state === 'corrupt' || status.identity.state === 'unreadable') {
     action = `browser identity data is ${status.identity.state}; reset it explicitly`
   } else if (status.migrationNotice?.degraded) {
     action = 'an old choice could not be inspected; choose Cleaned or Native'

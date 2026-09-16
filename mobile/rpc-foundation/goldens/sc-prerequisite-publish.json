@@ -3,9 +3,9 @@
   "family": "git.remote-prerequisite",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "6cf6ebd20adc4cc76a12d3424863ee9db2b24f36593664a1f4e0e05de9a53d39",
   "platform": "darwin",
@@ -28,13 +28,19 @@
         "ran": true
       }
     },
-    "8e30f48c04a4": {
+    "191da6f43475": {
       "name": "progress",
-      "value": "publishing",
-      "sent": 0
+      "ordinal": 1,
+      "value": "publishing"
     },
-    "b12e1ce5068c": {
+    "316caee8c6a8": {
       "name": "git.push#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"publish\":true}}"
+    },
+    "ddf67b6024c1": {
+      "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -66,11 +72,6 @@
           }
         }
       }
-    },
-    "e54e0fa0a251": {
-      "name": "git.push#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"publish\":true}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -79,13 +80,13 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["b12e1ce5068c"],
-          "payloads": ["e54e0fa0a251"],
+          "sender": ["ddf67b6024c1"],
+          "payloads": ["316caee8c6a8"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["8e30f48c04a4"]
+          "effects": ["191da6f43475"]
         }
       }
     ]

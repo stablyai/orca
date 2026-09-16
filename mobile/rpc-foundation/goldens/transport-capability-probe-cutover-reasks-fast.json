@@ -3,9 +3,9 @@
   "family": "transport.capability-probe",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "c5d28c2973881ae6cc94c7d8f6eef544046461f15e236634489afd272b5f1e6b",
   "platform": "darwin",
@@ -13,11 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2c76473bef66": {
-      "published": []
-    },
-    "3e25b523d96b": {
+    "0f656c54115f": {
       "name": "status.get#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -49,29 +47,12 @@
         }
       }
     },
-    "852980e2efc0": {
+    "2c76473bef66": {
+      "published": []
+    },
+    "523bdccb77ba": {
       "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
-    },
-    "9d1bfe4d6810": {
-      "published": [["push.v1"]]
-    },
-    "b33a14df0df6": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 2
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "edf54746317d": {
-      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -105,6 +86,27 @@
           }
         }
       }
+    },
+    "9d1bfe4d6810": {
+      "published": [["push.v1"]]
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -113,8 +115,8 @@
       {
         "id": "cutover-rejected-the-probe",
         "observation": {
-          "sender": ["edf54746317d"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["523bdccb77ba"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "start": "eb79a9b3682a",
             "migrate": "eb79a9b3682a"
@@ -126,8 +128,8 @@
       {
         "id": "published-after-cutover-reask",
         "observation": {
-          "sender": ["edf54746317d", "3e25b523d96b"],
-          "payloads": ["852980e2efc0", "b33a14df0df6"],
+          "sender": ["523bdccb77ba", "0f656c54115f"],
+          "payloads": ["d08f74d65ee6", "f1834177e593"],
           "settlements": {
             "start": "eb79a9b3682a",
             "migrate": "eb79a9b3682a"

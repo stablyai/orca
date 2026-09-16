@@ -3,9 +3,9 @@
   "family": "git.commit-message-ai",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "540f05d84d1cbffd566af933c547838c75500bb5d708e8558c21fe8131d724e3",
   "platform": "darwin",
@@ -13,8 +13,29 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "125fbea5f50a": {
+    "1290c04bc26c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "message": "feat: recorded",
+        "success": true
+      }
+    },
+    "3ef8a5f65bc8": {
+      "generated": {
+        "message": "feat: recorded",
+        "success": true
+      }
+    },
+    "5be6b62a713f": {
       "name": "git.generateCommitMessage#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.generateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "7f1f9740a3b3": {
+      "name": "git.generateCommitMessage#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -38,27 +59,16 @@
         "startedAt": 0
       }
     },
-    "1290c04bc26c": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "message": "feat: recorded",
-        "success": true
-      }
-    },
-    "3ef8a5f65bc8": {
-      "generated": {
-        "message": "feat: recorded",
-        "success": true
-      }
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "a09d0ada6684": {
+    "adb40821f3e2": {
+      "generated": "ungenerated"
+    },
+    "b4da9398fc8e": {
       "name": "git.generateCommitMessage#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -90,14 +100,6 @@
           }
         }
       }
-    },
-    "adb40821f3e2": {
-      "generated": "ungenerated"
-    },
-    "c8f48abc0f5d": {
-      "name": "git.generateCommitMessage#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.generateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -106,8 +108,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["125fbea5f50a"],
-          "payloads": ["c8f48abc0f5d"],
+          "sender": ["7f1f9740a3b3"],
+          "payloads": ["5be6b62a713f"],
           "settlements": {
             "generate": "9270aeb7d9c6"
           },
@@ -118,8 +120,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["a09d0ada6684"],
-          "payloads": ["c8f48abc0f5d"],
+          "sender": ["b4da9398fc8e"],
+          "payloads": ["5be6b62a713f"],
           "settlements": {
             "generate": "1290c04bc26c"
           },

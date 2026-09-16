@@ -3,9 +3,9 @@
   "family": "nativeChat.terminal-write",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "3e8804f21d32370bb0bc48c4ea3d182748d48dc19d73de1b50005f18368566ba",
   "platform": "darwin",
@@ -13,57 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "46771288e046": {
-      "body": "accepted"
-    },
-    "7291a73df186": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": "accepted"
-    },
-    "960f67ee14e2": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "reported": true
-          }
-        }
-      }
-    },
-    "b139ed2905d3": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
-      "sent": 2
-    },
-    "c7c300e28254": {
+    "0c75127e9c76": {
       "name": "terminal.send#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -104,10 +56,60 @@
         }
       }
     },
-    "f61b028e9602": {
+    "37750614a050": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "46771288e046": {
+      "body": "accepted"
+    },
+    "6118d05454f8": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "reported": true
+          }
+        }
+      }
+    },
+    "7291a73df186": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "accepted"
+    },
+    "85a38010bc83": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
     }
   },
   "recording": {
@@ -116,8 +118,8 @@
       {
         "id": "accepted",
         "observation": {
-          "sender": ["c7c300e28254", "960f67ee14e2"],
-          "payloads": ["f61b028e9602", "b139ed2905d3"],
+          "sender": ["0c75127e9c76", "6118d05454f8"],
+          "payloads": ["37750614a050", "85a38010bc83"],
           "settlements": {
             "body": "7291a73df186"
           },

@@ -27,11 +27,12 @@ function readSkill(path = guidePath) {
 describe('orca CLI skill guidance', () => {
   it('keeps external browser routing at the OS/page boundary', () => {
     const skill = readSkill(guidePath)
-    const description = skill.replace(/\s+/gu, ' ')
+    const description = (/^---\n([\s\S]*?)\n---\n/u.exec(skill)?.[1] ?? '').replace(/\s+/gu, ' ')
 
     expect(description).toContain(
-      'Use Computer Use only for external windows or desktop UI that needs OS-level control, and Playwright or CDP for external pages.'
+      'Use Computer Use only when a visible window needs GUI control that a CLI, filesystem, or API cannot do.'
     )
+    expect(description).not.toMatch(/Playwright/iu)
     expect(skill).toContain(
       'For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool only when the task requires OS/window-level control'
     )

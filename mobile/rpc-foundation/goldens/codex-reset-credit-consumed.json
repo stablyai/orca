@@ -3,9 +3,9 @@
   "family": "components.codex-reset-credit",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "76b53dea504a688493843e23e8e7d052fc196f559bb1e2579d0fd38bf3156d0e",
   "scenarioSha256": "00260be9809576607ac91bfacd9fa6cc4f8a190c6b88804c977ea07d36d7162e",
   "platform": "darwin",
@@ -18,10 +18,13 @@
         "$rpc": "null"
       }
     },
-    "31c5054bc660": {
-      "name": "accounts.consumeCodexResetCredit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}",
-      "sent": 1
+    "3ec97892842e": {
+      "name": "device-store.setItem",
+      "ordinal": 1,
+      "value": {
+        "key": "orca:codex-reset-credit-attempt:v1:0832055c2fa90e8e145c588ad4db656a2fc2840ed2e851a28494eae769db9b3e",
+        "value": "{\"v\":1,\"hostId\":\"host-1\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"},\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\"}"
+      }
     },
     "60304d1e19bb": {
       "settled": {
@@ -29,8 +32,9 @@
         "outcome": "reset"
       }
     },
-    "90f55bfe00c2": {
+    "710747f3b781": {
       "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -69,16 +73,14 @@
       "status": "pending",
       "startedAt": 0
     },
-    "ab755576c214": {
-      "name": "device-store.setItem",
-      "value": {
-        "key": "orca:codex-reset-credit-attempt:v1:0832055c2fa90e8e145c588ad4db656a2fc2840ed2e851a28494eae769db9b3e",
-        "value": "{\"v\":1,\"hostId\":\"host-1\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"},\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\"}"
-      },
-      "sent": 0
-    },
-    "c4a98628ea44": {
+    "bc4b6f4f75c6": {
       "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}"
+    },
+    "c0587d8ea125": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -263,25 +265,25 @@
       {
         "id": "requested",
         "observation": {
-          "sender": ["90f55bfe00c2"],
-          "payloads": ["31c5054bc660"],
+          "sender": ["710747f3b781"],
+          "payloads": ["bc4b6f4f75c6"],
           "settlements": {
             "confirm": "9270aeb7d9c6"
           },
           "state": "0a07efb53f1e",
-          "effects": ["ab755576c214"]
+          "effects": ["3ec97892842e"]
         }
       },
       {
         "id": "consumed",
         "observation": {
-          "sender": ["c4a98628ea44"],
-          "payloads": ["31c5054bc660"],
+          "sender": ["c0587d8ea125"],
+          "payloads": ["bc4b6f4f75c6"],
           "settlements": {
             "confirm": "fed9e1669a83"
           },
           "state": "60304d1e19bb",
-          "effects": ["ab755576c214"]
+          "effects": ["3ec97892842e"]
         }
       }
     ]

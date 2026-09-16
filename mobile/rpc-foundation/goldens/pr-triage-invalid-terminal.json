@@ -3,9 +3,9 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "58ad4e4d5b0200c44f329236e10fd81918a1cc36b33b22cba24662c79dd61b4e",
   "platform": "darwin",
@@ -13,23 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "39a17efe1de6": {
+    "2540affc8fa5": {
       "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
-      "sent": 1
-    },
-    "478ad4afe83e": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "80e637504768": {
-      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -66,6 +52,21 @@
         }
       }
     },
+    "681fc4d59b92": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Created terminal response was invalid",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "94d38f1838f6": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
     "a4273b38df83": {
       "launched": "unlaunched"
     }
@@ -76,10 +77,10 @@
       {
         "id": "invalid",
         "observation": {
-          "sender": ["80e637504768"],
-          "payloads": ["39a17efe1de6"],
+          "sender": ["2540affc8fa5"],
+          "payloads": ["94d38f1838f6"],
           "settlements": {
-            "launch": "478ad4afe83e"
+            "launch": "681fc4d59b92"
           },
           "state": "a4273b38df83",
           "effects": []

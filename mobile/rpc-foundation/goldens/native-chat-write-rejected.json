@@ -3,9 +3,9 @@
   "family": "nativeChat.terminal-write",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "7e05773966a18123aaae297aed9ac44bd841713de88c8a1fa30c31b324118f6f",
   "platform": "darwin",
@@ -13,11 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "19f53fb21e4e": {
-      "body": "rejected"
-    },
-    "8b7ac879220d": {
+    "0143e6e129bc": {
       "name": "terminal.send#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -58,16 +56,19 @@
         }
       }
     },
+    "19f53fb21e4e": {
+      "body": "rejected"
+    },
+    "37750614a050": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
     "9bd3ea1ff2bb": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": "rejected"
-    },
-    "f61b028e9602": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -76,8 +77,8 @@
       {
         "id": "rejected",
         "observation": {
-          "sender": ["8b7ac879220d"],
-          "payloads": ["f61b028e9602"],
+          "sender": ["0143e6e129bc"],
+          "payloads": ["37750614a050"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },

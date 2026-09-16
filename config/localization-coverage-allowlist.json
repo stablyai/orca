@@ -89,5 +89,131 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:title",
+    "text": "Default shell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:description",
+    "text": "Shell used for new terminal panes",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "shell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "terminal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "fish",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "zsh",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "bash",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "nushell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "default",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Terminal shell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:description",
+    "text": "Choose what Orca opens for new local terminal panes.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:ariaLabel",
+    "text": "Terminal shell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:label",
+    "text": "System shell (",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:label",
+    "text": "Custom shell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "fish, nu, or /bin/zsh",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Custom shell executable",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-text",
+    "text": "Enter a shell name on PATH or an executable path. Orca starts it as a login shell.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-text",
+    "text": ". Switch to System shell or choose an executable on this host.",
+    "dynamic": false,
+    "count": 1
   }
 ]

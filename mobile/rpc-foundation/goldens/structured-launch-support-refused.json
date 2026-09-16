@@ -3,9 +3,9 @@
   "family": "agentSession.structured-launch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
   "scenarioSha256": "d8928461e3295d265872e5f98fb8aad445b5edc55fc76f137e45c0cff0d8b961",
   "platform": "darwin",
@@ -21,13 +21,14 @@
         "kind": "unsupported"
       }
     },
-    "3db129933d79": {
+    "568aa5cfc6b5": {
       "name": "agentSession.createSupport#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
     },
-    "99caa4276b06": {
+    "efee3e1e1620": {
       "name": "agentSession.createSupport#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -73,8 +74,8 @@
       {
         "id": "unsupported",
         "observation": {
-          "sender": ["99caa4276b06"],
-          "payloads": ["3db129933d79"],
+          "sender": ["efee3e1e1620"],
+          "payloads": ["568aa5cfc6b5"],
           "settlements": {
             "claude": "2c227fd1941f"
           },

@@ -5808,7 +5808,12 @@
           "14444243ba": "PATH에서 `{{value0}}`을(를) 제거하시겠습니까?",
           "5d432fe44d": "설치됨",
           "8a9b784c60": "오래됨",
-          "d363e5929b": "CLI 등록 확인 중…"
+          "d363e5929b": "CLI 등록 확인 중…",
+          "6f894ef9c2": "Finder에서 보기",
+          "cbe55e4d48": "탐색기에서 보기",
+          "9fd4023db0": "파일 관리자에서 보기",
+          "installFailureUnknownReason": "Orca가 CLI 등록을 완료하지 못했고 이유를 보고하지 않았습니다.",
+          "installFailureConflictRemedy": "{{value0}}을(를) 제거하고 더 이상 필요하지 않으면 다시 등록하세요."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",

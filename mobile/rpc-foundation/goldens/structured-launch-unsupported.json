@@ -3,9 +3,9 @@
   "family": "agentSession.structured-launch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "0029646a5b1756ea4fde82a23da0f70eb645333f",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
   "scenarioSha256": "c30e9cae49e134715c009a98f423f3e4a9d552c014be3e28b38e98c57999b6f5",
   "platform": "darwin",
@@ -13,19 +13,20 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3db129933d79": {
-      "name": "agentSession.createSupport#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
-      "sent": 1
-    },
     "551313dcc738": {
       "launched": {
         "kind": "unsupported",
         "reason": "remote"
       }
     },
-    "bef30d717da6": {
+    "568aa5cfc6b5": {
       "name": "agentSession.createSupport#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
+    },
+    "57e0653db3e3": {
+      "name": "agentSession.createSupport#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -75,8 +76,8 @@
       {
         "id": "unsupported",
         "observation": {
-          "sender": ["bef30d717da6"],
-          "payloads": ["3db129933d79"],
+          "sender": ["57e0653db3e3"],
+          "payloads": ["568aa5cfc6b5"],
           "settlements": {
             "claude": "dd51c5566f19"
           },

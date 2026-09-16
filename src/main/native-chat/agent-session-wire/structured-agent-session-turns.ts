@@ -54,14 +54,16 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
 async function dispatchSafely(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  requestedAt: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
-      fence: ctx.fence
+      fence: ctx.fence,
+      ...(requestedAt === undefined ? {} : { requestedAt })
     })
   } catch (error) {
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
@@ -116,7 +118,12 @@ export async function performSend(
   }
   ctx.publish()
 
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  // The row just written is the send's instant on the host clock; the turn this
+  // dispatch opens records it so the live counter never re-anchors at turn-open.
+  const requestedAt = ctx.journal
+    .submissions()
+    .find((entry) => entry.clientMessageId === input.clientMessageId)?.submittedAt
+  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body, requestedAt)
   // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
     ctx.publish()
