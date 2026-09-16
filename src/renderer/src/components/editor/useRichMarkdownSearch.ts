@@ -14,6 +14,7 @@ import {
   richMarkdownSearchPluginKey
 } from './rich-markdown-search'
 import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 
 export function useRichMarkdownSearch({
   editor,
@@ -315,20 +316,19 @@ export function useRichMarkdownSearch({
 
       const target = event.target
       const targetInsideEditor = target instanceof Node && root.contains(target)
-      if (
-        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
+      const shortcutArgs = [
+        getShortcutPlatform(),
+        keybindings,
+        getLayoutBaseCharacterForCode
+      ] as const
+      if (isMarkdownPreviewFindShortcut(event, ...shortcutArgs) && targetInsideEditor) {
         event.preventDefault()
         event.stopPropagation()
         openSearch()
         return
       }
 
-      if (
-        isMarkdownPreviewReplaceShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
+      if (isMarkdownPreviewReplaceShortcut(event, ...shortcutArgs) && targetInsideEditor) {
         event.preventDefault()
         event.stopPropagation()
         openReplace()
