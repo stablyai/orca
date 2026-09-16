@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessSpec } from '../shared/child-process/process-spec'
+import type { ProcessResult, ProcessSpec } from '../shared/child-process/process-spec'
 
 const callMock = vi.fn()
-const runProcessMock = vi.fn()
+const runProcessMock = vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
 
 vi.mock('./runtime-client', () => {
   class RuntimeClient {
@@ -67,8 +67,7 @@ describe('orca fill --secret-ref', () => {
       value: 'hunter2',
       page: 'page-1'
     })
-    const spec = runProcessMock.mock.calls[0]?.[0] as ProcessSpec
-    expect(spec.args).toEqual(['read', '--no-newline', VAULT_REF])
+    expect(runProcessMock.mock.calls[0]?.[0].args).toEqual(['read', '--no-newline', VAULT_REF])
     const printed = log.mock.calls.map((args) => args.join(' ')).join('\n')
     expect(printed).not.toContain('hunter2')
     expect(printed).toContain(VAULT_REF)
