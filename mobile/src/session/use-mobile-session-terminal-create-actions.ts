@@ -3,12 +3,13 @@ import {
   type MobileQuickCommandLaunch
 } from '../terminal/quick-commands'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { sessionTabCreateTerminal } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import type { Terminal, TerminalCreateResult } from './mobile-session-route-types'
+import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
@@ -104,7 +105,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           return
         }
       }
-      const response = await client.sendRequest('session.tabs.createTerminal', {
+      const response = await sessionTabCreateTerminal.request(client, {
         worktree: `id:${worktreeId}`,
         afterTabId: activeSessionTabId ?? undefined,
         clientMutationId,
@@ -118,100 +119,100 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         select: true,
         navigation: 'caller'
       })
-      if (response.ok) {
-        const result = (response as RpcSuccess).result as TerminalCreateResult
-        const created = result.tab
-        // Why: unsubscribe the old terminal so the server restores its desktop dims; otherwise its restore timer is never set.
-        const prev = activeHandleRef.current
-        if (prev) {
-          unsubscribeTerminal(prev)
-          initializedHandlesRef.current.delete(prev)
-        }
-        pendingActiveSessionTabIdRef.current = created.id
-        activeSessionTabTypeRef.current = 'terminal'
-        setActiveSessionTabId(created.id)
-        setSessionTabs((prev) => {
-          if (prev.some((tab) => tab.id === created.id)) {
-            return prev
-          }
-          return [...prev, { ...created, isActive: true }]
-        })
-        if (typeof created.terminal === 'string') {
-          const createdHandle = created.terminal
-          defaultTerminalHandlesToLiveInput([createdHandle])
-          // Why: snapshots lag the create RPC; without this marker applySessionTabs reverts the active handle, blanking the new pane.
-          pendingActiveTerminalHandleRef.current = createdHandle
-          activeHandleRef.current = createdHandle
-          setActiveHandle(createdHandle)
-          setTerminals((prev) => {
-            const existing = prev.find((terminal) => terminal.handle === createdHandle)
-            const createdTerminal: Terminal = {
-              handle: createdHandle,
-              title: created.title || existing?.title || 'Terminal',
-              terminalTheme: created.terminalTheme ?? existing?.terminalTheme,
-              isActive: true
-            }
-            if (existing) {
-              const next = prev.map((terminal) =>
-                terminal.handle === createdHandle ? { ...terminal, ...createdTerminal } : terminal
-              )
-              terminalsRef.current = next
-              return terminalRecordsEqual(prev, next) ? prev : next
-            }
-            const next = [...prev, createdTerminal]
-            terminalsRef.current = next
-            return next
-          })
-          subscribeToTerminal(createdHandle)
-          if (options?.initialPrompt?.trim()) {
-            void client
-              .sendRequest(
-                'terminal.send',
-                buildTerminalSendParams({
-                  terminal: createdHandle,
-                  text: options.initialPrompt,
-                  enter: options.enter !== false,
-                  deviceToken: deviceTokenRef.current
-                })
-              )
-              .then((sendResponse) => {
-                if (!sendResponse.ok) {
-                  throw new Error(
-                    (sendResponse as RpcFailure).error.message || 'Failed to send notes'
-                  )
-                }
-                const result = (sendResponse as RpcSuccess).result as {
-                  send?: { accepted?: boolean }
-                }
-                if (result.send?.accepted === false) {
-                  throw new Error('Terminal input is locked by another client.')
-                }
-                triggerSuccess()
-                showToast(options.successToast ?? 'Notes sent')
-                options.onPromptSent?.()
-              })
-              .catch((err) => {
-                triggerError()
-                showToast(
-                  options.errorToast ??
-                    (err instanceof Error ? err.message : "Couldn't send notes"),
-                  1800
-                )
-              })
-          } else if (options?.successToast) {
-            triggerSuccess()
-            showToast(options.successToast)
-          }
-        } else {
-          // Why: a prior pending handle must not outlive a create that returned no terminal; web-ready subscribe gates on this ref.
-          pendingActiveTerminalHandleRef.current = null
-          activeHandleRef.current = null
-          setActiveHandle(null)
-        }
-        scheduleDelayedAction(() => void fetchSessionTabs(), 500)
-      } else {
-        reportCreateFailure((response as RpcFailure).error.message)
+      // Why interpret here rather than branching: a refused create throws the host's message,
+      // which the catch below reports exactly as the old `else` branch did.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      const created = sessionTabCreateTerminal.interpret(response) as Extract<
+        MobileSessionTab,
+        { type: 'terminal' }
+      >
+      // Why: unsubscribe the old terminal so the server restores its desktop dims; otherwise its restore timer is never set.
+      const prev = activeHandleRef.current
+      if (prev) {
+        unsubscribeTerminal(prev)
+        initializedHandlesRef.current.delete(prev)
       }
+      pendingActiveSessionTabIdRef.current = created.id
+      activeSessionTabTypeRef.current = 'terminal'
+      setActiveSessionTabId(created.id)
+      setSessionTabs((prev) => {
+        if (prev.some((tab) => tab.id === created.id)) {
+          return prev
+        }
+        return [...prev, { ...created, isActive: true }]
+      })
+      if (typeof created.terminal === 'string') {
+        const createdHandle = created.terminal
+        defaultTerminalHandlesToLiveInput([createdHandle])
+        // Why: snapshots lag the create RPC; without this marker applySessionTabs reverts the active handle, blanking the new pane.
+        pendingActiveTerminalHandleRef.current = createdHandle
+        activeHandleRef.current = createdHandle
+        setActiveHandle(createdHandle)
+        setTerminals((prev) => {
+          const existing = prev.find((terminal) => terminal.handle === createdHandle)
+          const createdTerminal: Terminal = {
+            handle: createdHandle,
+            title: created.title || existing?.title || 'Terminal',
+            terminalTheme: created.terminalTheme ?? existing?.terminalTheme,
+            isActive: true
+          }
+          if (existing) {
+            const next = prev.map((terminal) =>
+              terminal.handle === createdHandle ? { ...terminal, ...createdTerminal } : terminal
+            )
+            terminalsRef.current = next
+            return terminalRecordsEqual(prev, next) ? prev : next
+          }
+          const next = [...prev, createdTerminal]
+          terminalsRef.current = next
+          return next
+        })
+        subscribeToTerminal(createdHandle)
+        if (options?.initialPrompt?.trim()) {
+          void client
+            .sendRequest(
+              'terminal.send',
+              buildTerminalSendParams({
+                terminal: createdHandle,
+                text: options.initialPrompt,
+                enter: options.enter !== false,
+                deviceToken: deviceTokenRef.current
+              })
+            )
+            .then((sendResponse) => {
+              if (!sendResponse.ok) {
+                throw new Error(
+                  (sendResponse as RpcFailure).error.message || 'Failed to send notes'
+                )
+              }
+              const result = (sendResponse as RpcSuccess).result as {
+                send?: { accepted?: boolean }
+              }
+              if (result.send?.accepted === false) {
+                throw new Error('Terminal input is locked by another client.')
+              }
+              triggerSuccess()
+              showToast(options.successToast ?? 'Notes sent')
+              options.onPromptSent?.()
+            })
+            .catch((err) => {
+              triggerError()
+              showToast(
+                options.errorToast ?? (err instanceof Error ? err.message : "Couldn't send notes"),
+                1800
+              )
+            })
+        } else if (options?.successToast) {
+          triggerSuccess()
+          showToast(options.successToast)
+        }
+      } else {
+        // Why: a prior pending handle must not outlive a create that returned no terminal; web-ready subscribe gates on this ref.
+        pendingActiveTerminalHandleRef.current = null
+        activeHandleRef.current = null
+        setActiveHandle(null)
+      }
+      scheduleDelayedAction(() => void fetchSessionTabs(), 500)
     } catch (error) {
       reportCreateFailure(error instanceof Error ? error.message : '')
     } finally {

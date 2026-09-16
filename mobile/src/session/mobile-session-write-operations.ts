@@ -1,10 +1,15 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import {
+  rpcReadUnchecked,
+  rpcUncheckedMemberReader,
+  rpcUncheckedPayloadReader
+} from '../transport/rpc-reader-payload'
 import { isTerminalSendResultAccepted } from '../terminal/terminal-send-rpc-response'
 import { quickCommandsReader } from './mobile-session-read-operations'
 
 // The session screen's writes: terminal input from native chat and the image surfaces, the tab
-// strip's rename/close/activate, the markdown tab save and the quick-command save.
+// strip's rename/close/activate, the New Tab terminal create, the terminal menu's display-mode
+// toggle, the markdown tab save and the quick-command save.
 // The `subscribe` and `sendUnsubscribe` ports these files sit next to are a separate boundary and
 // are untouched here.
 
@@ -26,6 +31,53 @@ export const nativeChatTerminalWrite = bindDeferredRpcOperation(
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
     read: (raw) => rpcReadUnchecked('terminal-send-accepted', isTerminalSendResultAccepted(raw))
+  })
+)
+
+/**
+ * Creating a terminal tab from New Tab or a quick command.
+ *
+ * The reader is the unguarded member read the call site did, kept unguarded on purpose: a null or
+ * absent result still raises its property-read exception on `tab`, and a reply carrying no `tab`
+ * still reaches the screen as `undefined` and fails on the next property.
+ * `require-result-or-throw-message` is what keeps both where they were, because that policy rethrows
+ * a reader's exception rather than turning it into an incompatible verdict, so the create's own
+ * `catch` reports it as the same failure copy.
+ *
+ * Throws the host's message rather than a skip because the host names the real cause — pty
+ * exhaustion, a disabled agent, an unresolved worktree — and the screen shows it verbatim.
+ * Collapsing every failure to one sentence is the defect this call site already fixed.
+ *
+ * Separate from `reviewTerminalCreateRun` despite the identical method and policy: that one creates
+ * a throwaway terminal to drop a review prompt into and reads the handle to address the send, while
+ * this one adopts the tab into the session strip. Sharing an operation would let a change to either
+ * reply contract reach the other screen.
+ */
+export const sessionTabCreateTerminal = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.tabs-create-terminal',
+    method: 'session.tabs.createTerminal',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedMemberReader('created-terminal-tab', 'tab')
+  })
+)
+
+/**
+ * The terminal menu's display-mode toggle.
+ *
+ * A skip, and the caller reads no verdict at all, because the server does the resize and reports it
+ * on the terminal's existing subscription: main awaited the envelope and looked at nothing in it, so
+ * only a transport rejection was ever a failure here. Declared rather than omitted so the next
+ * caller inherits a policy instead of choosing one.
+ */
+export const terminalDisplayModeSet = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.set-display-mode-or-skip',
+    method: 'terminal.setDisplayMode',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('terminal-display-mode-set')
   })
 )
 
