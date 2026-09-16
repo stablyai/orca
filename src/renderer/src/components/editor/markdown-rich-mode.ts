@@ -1,3 +1,6 @@
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
 import { defaultSchema } from 'rehype-sanitize'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
@@ -58,7 +61,12 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains reference-style links.'
       )
     },
-    pattern: /^\[[^\]]+\]:\s+\S+/m
+    // Why: a cheap, linear-time pre-filter — a single non-nested character
+    // class, so it can't backtrack. It deliberately over-admits shapes no
+    // container nesting produces (e.g. `1) [x]:`); `[label]: ` also opens
+    // ordinary prose, so `hasLinkReferenceDefinition` confirms a real
+    // definition per CommonMark.
+    pattern: /^[ \t>*+\-\d.)]*\[[^\]]+\]:/m
   },
   {
     reason: 'footnotes',
@@ -113,9 +121,13 @@ export function getMarkdownRichModeUnsupportedReason(
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
-    if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.reason
+    if (!matcher.pattern.test(contentWithoutCode)) {
+      continue
     }
+    if (matcher.reason === 'reference-links' && !hasLinkReferenceDefinition(contentWithoutCode)) {
+      continue
+    }
+    return matcher.reason
   }
 
   if (hasHtml) {
@@ -154,6 +166,33 @@ export function getMarkdownRichModeEligibility(params: {
     exceedsSizeLimit: decision.exceedsSizeLimit,
     unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
   }
+}
+
+const linkReferenceDefinitionProcessor = unified().use(remarkParse).use(remarkGfm)
+
+// Why: only an mdast `definition` node proves a `[label]:` line is a link
+// reference definition and not prose. Definitions can sit inside blockquotes
+// and list items, so the whole tree is walked. Above the same size cap as the
+// HTML round-trip check, parsing is skipped and the pre-filter match is
+// trusted as a definition, since blocking rich mode is the safe default.
+function hasLinkReferenceDefinition(content: string): boolean {
+  if (content.length > 50_000) {
+    return true
+  }
+  const tree = linkReferenceDefinitionProcessor.parse(content)
+  return containsDefinitionNode(tree)
+}
+
+function containsDefinitionNode(node: { type: string; children?: unknown[] }): boolean {
+  if (node.type === 'definition') {
+    return true
+  }
+  if (!Array.isArray(node.children)) {
+    return false
+  }
+  return node.children.some((child) =>
+    containsDefinitionNode(child as { type: string; children?: unknown[] })
+  )
 }
 
 function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
