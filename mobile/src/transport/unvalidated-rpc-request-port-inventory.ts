@@ -104,8 +104,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // mobile-diff-review-git-operations.ts. The terminal input surface followed: the composed send,
   // the live keystroke send and the clipboard paste all send through terminal.input-send in
   // terminal/mobile-terminal-operations.ts, and the accessory's connection lookup reads the repo
-  // list through the new-tab operation. What is left below opens or rides a subscription, takes its
-  // method as a parameter, or sends from a webview handle the runner has no way to hold.
+  // list through the new-tab operation. Every holdout below opens or rides a subscription or takes its
+  // method as a parameter, except the gesture-input file, which this PR simply did not cover.
   // Holdout: the method is a parameter. `callAgentSession` takes a method string and a generic
   // result type, and five call sites across two hooks pass their own, plus one inside this module's
   // own mutation wrapper; an operation fixes the method at definition time, so migrating it is a
@@ -125,9 +125,10 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // Holdout: unrecorded site, record-first rule. The create path subscribes to the terminal it
   // makes, and the request-only runner refuses the subscription.
   { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 2 },
-  // Holdout: unrecorded site, record-first rule. PTY mode is recordable now — the terminal-input
-  // adapter fixtures the mode map a paste reads — so the webview handle is the remaining blocker:
-  // gesture input is queued against a live webview the runner cannot mount or address.
+  // Holdout: scope only, no recorder gap. The gesture flush reads refs (client, connection state,
+  // PTY modes, the gesture buckets, active handle and tab type), and the clear-buffer ref optional-
+  // chains the webview, so a mount with a null terminal ref records both sends. These 2 refs are
+  // migratable as they stand; they were out of this PR's bucket.
   { file: 'src/session/use-mobile-session-terminal-input.ts', references: 2 },
   // Holdout: unrecorded site, record-first rule. The display-mode write is gated on an open
   // terminal subscription, which is a later step.
