@@ -23,7 +23,10 @@ export const getAdvancedNetworkSearchEntries = createLocalizedCatalog((): Settin
       ...translateSearchKeyword('auto.components.settings.general.search.91a46caafc', 'no_proxy'),
       ...translateSearchKeyword('auto.components.settings.general.search.3a73054565', 'bypass'),
       ...translateSearchKeyword('auto.components.settings.general.search.3566fce83f', 'localhost'),
-      ...translateSearchKeyword('auto.components.settings.general.search.c56cb6f1c2', 'network')
+      ...translateSearchKeyword('auto.components.settings.general.search.c56cb6f1c2', 'network'),
+      // English-only aliases: the configured proxy also applies to git clone.
+      ...translateSearchKeyword('', 'git', { englishOnly: true }),
+      ...translateSearchKeyword('', 'clone', { englishOnly: true })
     ]
   }
 ])
