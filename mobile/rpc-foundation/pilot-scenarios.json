@@ -20243,6 +20243,122 @@
           "checkpoint": "cleared"
         }
       ]
+    },
+    {
+      "id": "notifications-desktop-stream-closed",
+      "operation": "notifications.desktop-stream",
+      "version": 1,
+      "family": "notifications.desktop-stream",
+      "sites": ["mobile/src/notifications/mobile-notifications.ts"],
+      "schedules": [],
+      "deviceStore": {
+        "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationTray": [
+          {
+            "request": {
+              "identifier": "tray-1",
+              "content": {
+                "data": {
+                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
+                  "kind": "alert",
+                  "notificationId": "note-1",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 7
+                }
+              }
+            }
+          },
+          {
+            "request": {
+              "identifier": "tray-2",
+              "content": {
+                "data": {
+                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
+                  "kind": "alert",
+                  "notificationId": "note-2",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 8
+                }
+              }
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "action": "start",
+          "id": "start"
+        },
+        {
+          "frame": "notifications.subscribe#1",
+          "params": {
+            "includeDesktopSuppressed": true
+          },
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-1"
+            }
+          }
+        },
+        {
+          "complete": "notifications.getMissedSince#1",
+          "params": {
+            "lastSeenSeq": 9007199254740991,
+            "deliveredPushes": [
+              {
+                "notificationId": "note-1",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationId": "note-2",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 8
+              }
+            ]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "dismissedPushes": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "stop",
+          "id": "stop"
+        },
+        {
+          "complete": "notifications.unsubscribe#1",
+          "params": {
+            "subscriptionId": "sub-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "unsubscribed": true
+            }
+          }
+        },
+        {
+          "checkpoint": "stopped"
+        },
+        {
+          "action": "cutover",
+          "id": "cutover"
+        },
+        {
+          "checkpoint": "not-replayed"
+        }
+      ]
     }
   ]
 }

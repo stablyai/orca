@@ -359,13 +359,13 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 346 manifest scenarios against frozen goldens and fails on any divergence: 693 goldens
-over 810 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
+It replays 347 manifest scenarios against frozen goldens and fails on any divergence: 694 goldens
+over 811 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
 the change they describe and are not restatements of this one. For a migration it answers one
 question — does the rewritten call site produce the same sender calls, settlements, state and
 effects as main did?
 
-It is not a substitute for reading the diff. Three facts bound it, all learned the hard way:
+It is not a substitute for reading the diff. Four facts bound it, all learned the hard way:
 
 - **It was blind to refusal ordering.** Reordering the settings and sibling refusal checks in
   `mobile-new-tab-agent-loader.ts` survives every golden except `probe-new-tab-both-refused` —
@@ -385,6 +385,15 @@ It is not a substitute for reading the diff. Three facts bound it, all learned t
   all 163 tests, because no scenario rejected `git.status` for that family. Driving every scripted
   reply kills it on five matrix goldens. The lesson is about the skip, not about that call site: a
   generator that opts a family out without failing is indistinguishable from coverage.
+- **It was blind to a stream close with no frame behind it.** Deleting `unsubscribeStream()` from
+  `mobile-notifications.ts`'s cleanup — the local close, not the `notifications.unsubscribe` RPC
+  beside it — survived all 810 tests. Neither unsubscribe builder in `rpc-client-stream-registry.ts`
+  knows `notifications.subscribe`, so closing that stream writes nothing to the wire: what the
+  mutant leaks is a live subscription record, and the leak stays invisible until a cutover replays
+  it. `notifications-desktop-stream-closed` stops the stream and then cuts over, where the leak
+  becomes a second `notifications.subscribe` payload. A family whose method does build an
+  unsubscribe (`nativeChat.subscribe`, `runtime.clientEvents.subscribe`) is pinned by that payload
+  at unmount and needs no such scenario.
 
 `mutants/probe-hole-witness.test.ts` closes the first two and keeps them closed. It asserts the
 hole and the closure together: each probe must kill its mutation _and_ every pre-probe scenario of
