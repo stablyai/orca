@@ -12,6 +12,7 @@ import {
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
 import { reconcileCodexSubagentTranscript } from '../../codex-subagent-transcript'
+import { isCodexTranscriptAutoApprovalReview } from '../../codex-transcript-approval-review'
 import { readFirstString } from '../interactive-tool'
 import type { HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
@@ -110,15 +111,47 @@ export function normalizeCodexEvent(
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
+  const agentId = readString(hookPayload, 'agent_id')
+  if (eventName === 'SessionStart' && !agentId) {
+    state.codexSubagentRosterByPaneKey.delete(paneKey)
+    state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  }
+  const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
+  const transcriptState = getOrCreateCodexSubagentTranscriptState(state, paneKey)
+  const parentPath = agentId
+    ? eventName === 'PermissionRequest'
+      ? transcriptState.parent.filePath
+      : undefined
+    : transcriptPath
+  if (parentPath) {
+    reconcileCodexSubagentTranscript(
+      transcriptState,
+      getOrCreateCodexSubagentRoster(state, paneKey),
+      parentPath
+    )
+  }
+  const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+  const isQuestion = isAskUserQuestionTool(toolName)
+  // PermissionRequest precedes auto-review; only the matching turn can identify its reviewer.
+  const isAutoReview =
+    eventName === 'PermissionRequest' &&
+    !isQuestion &&
+    isCodexTranscriptAutoApprovalReview(
+      transcriptState,
+      transcriptPath,
+      readString(hookPayload, 'turn_id'),
+      agentId,
+      toolName
+    )
+
   // Why: Codex's request_user_input (0.145+) is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting like grok's ask_user_question.
-  const isUserInputPreTool =
-    eventName === 'PreToolUse' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
+  const isUserInputPreTool = eventName === 'PreToolUse' && isQuestion
   const stateName =
     eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
     (eventName === 'PreToolUse' && !isUserInputPreTool) ||
-    eventName === 'PostToolUse'
+    eventName === 'PostToolUse' ||
+    isAutoReview
       ? 'working'
       : eventName === 'PermissionRequest' || isUserInputPreTool
         ? 'waiting'
@@ -129,7 +162,6 @@ export function normalizeCodexEvent(
     return null
   }
 
-  const agentId = readString(hookPayload, 'agent_id')
   if (agentId) {
     upsertCodexSubagent(
       getOrCreateCodexSubagentRoster(state, paneKey),
@@ -144,19 +176,6 @@ export function normalizeCodexEvent(
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if (eventName === 'SessionStart') {
-    // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
-    state.codexSubagentTranscriptByPaneKey.delete(paneKey)
-  }
-  const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
-  if (transcriptPath) {
-    reconcileCodexSubagentTranscript(
-      getOrCreateCodexSubagentTranscriptState(state, paneKey),
-      getOrCreateCodexSubagentRoster(state, paneKey),
-      transcriptPath
-    )
-  }
   if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
     // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -172,8 +191,15 @@ export function normalizeCodexEvent(
     state.codexSubagentRosterByPaneKey.get(paneKey),
     stateName
   )
-  return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-    stateName: effectiveState,
-    updateLead: true
-  })
+  return buildCodexStatusPayload(
+    state,
+    isAutoReview ? 'PreToolUse' : eventName,
+    promptText,
+    paneKey,
+    hookPayload,
+    {
+      stateName: effectiveState,
+      updateLead: true
+    }
+  )
 }

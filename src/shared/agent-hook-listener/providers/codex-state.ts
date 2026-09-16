@@ -120,7 +120,11 @@ export function reconcileRemoteCodexState(
       finishCodexSubagent(roster, agentId)
     }
   } else {
-    const leadState = codexLeadStateForHookEvent(eventName)
+    // The execution host may have identified this permission request as automatic review.
+    const leadState =
+      eventName === 'PermissionRequest' && payload.state === 'working'
+        ? 'working'
+        : codexLeadStateForHookEvent(eventName)
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }

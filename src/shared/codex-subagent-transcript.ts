@@ -1,5 +1,6 @@
-import { closeSync, openSync, readSync, readdirSync, statSync, type Stats } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+import { readCodexRolloutCursor, type CodexRolloutCursor } from './codex-rollout-cursor'
 
 import {
   finishCodexSubagent,
@@ -8,20 +9,12 @@ import {
   type CodexSubagentRoster
 } from './codex-subagent-roster'
 
-const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
-const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
 const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
 
-type JsonlCursor = {
-  filePath?: string
-  offset: number
-  carry: string
-}
-
-type TrackedTranscriptSubagent = JsonlCursor & {
+type TrackedTranscriptSubagent = CodexRolloutCursor & {
   description?: string
   /** Latest model seen in the child's own rollout. Retained across polls
    *  because the cursor is incremental: `turn_context` is emitted once per
@@ -32,7 +25,7 @@ type TrackedTranscriptSubagent = JsonlCursor & {
 }
 
 export type CodexSubagentTranscriptState = {
-  parent: JsonlCursor
+  parent: CodexRolloutCursor
   subagents: Map<string, TrackedTranscriptSubagent>
 }
 
@@ -40,67 +33,6 @@ type JsonRecord = Record<string, unknown>
 
 function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
-}
-
-/** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines. */
-function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
-  if (!cursor.filePath) {
-    return undefined
-  }
-  let stats: Stats
-  try {
-    stats = statSync(cursor.filePath)
-  } catch {
-    return undefined
-  }
-  if (!stats.isFile()) {
-    return undefined
-  }
-  if (stats.size < cursor.offset) {
-    cursor.offset = 0
-    cursor.carry = ''
-  }
-  if (stats.size === cursor.offset) {
-    return []
-  }
-  const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
-  const start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
-  const buffer = Buffer.allocUnsafe(bytesToRead)
-  let bytesRead = 0
-  let fd: number | undefined
-  try {
-    fd = openSync(cursor.filePath, 'r')
-    bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
-  } catch {
-    return undefined
-  } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
-    }
-  }
-  const skippedPrefix = start !== cursor.offset
-  const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
-  const lines = content.split('\n')
-  cursor.offset = start + bytesRead
-  cursor.carry = lines.pop() ?? ''
-  if (skippedPrefix) {
-    lines.shift()
-  }
-  const records: JsonRecord[] = []
-  for (const line of lines) {
-    if (Buffer.byteLength(line, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES) {
-      continue
-    }
-    try {
-      const parsed = record(JSON.parse(line) as unknown)
-      if (parsed) {
-        records.push(parsed)
-      }
-    } catch {
-      // A malformed rollout line must not block later lifecycle events.
-    }
-  }
-  return records
 }
 
 function readTranscriptDirectory(directory: string): string[] {
@@ -267,7 +199,7 @@ export function reconcileCodexSubagentTranscript(
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
     state.subagents.clear()
   }
-  for (const recordValue of readJsonlCursor(state.parent) ?? []) {
+  for (const recordValue of readCodexRolloutCursor(state.parent) ?? []) {
     const activity = readActivity(recordValue)
     if (!activity) {
       continue
@@ -302,7 +234,7 @@ export function reconcileCodexSubagentTranscript(
         entriesByDirectory
       )
     }
-    const records = readJsonlCursor(tracked)
+    const records = readCodexRolloutCursor(tracked)
     if (!records) {
       // Why: a rollout that never appears (or is deleted) has no completion event, so time-box it instead of leaking a working row.
       tracked.filePath = undefined

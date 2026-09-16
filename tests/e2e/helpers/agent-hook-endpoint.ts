@@ -59,7 +59,6 @@ export async function emitCodexHookStatus(
     lastAssistantMessage?: string
   }
 ): Promise<void> {
-  const [tabId] = status.paneKey.split(':')
   const payload =
     status.state === 'working'
       ? {
@@ -70,6 +69,18 @@ export async function emitCodexHookStatus(
           hook_event_name: 'Stop',
           last_assistant_message: status.lastAssistantMessage
         }
+  await emitCodexHookPayload(endpoint, { ...status, payload })
+}
+
+export async function emitCodexHookPayload(
+  endpoint: AgentHookEndpoint,
+  event: {
+    paneKey: string
+    worktreeId: string
+    payload: Record<string, unknown>
+  }
+): Promise<void> {
+  const [tabId] = event.paneKey.split(':')
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
     method: 'POST',
     headers: {
@@ -77,12 +88,12 @@ export async function emitCodexHookStatus(
       'X-Orca-Agent-Hook-Token': endpoint.token
     },
     body: JSON.stringify({
-      paneKey: status.paneKey,
+      paneKey: event.paneKey,
       tabId,
-      worktreeId: status.worktreeId,
+      worktreeId: event.worktreeId,
       env: endpoint.env,
       version: endpoint.version,
-      payload
+      payload: event.payload
     })
   })
   if (response.status !== 204) {
