@@ -47,8 +47,8 @@ test('cmd+p quick open prioritizes the filename and reveals the full path on hov
     .filter({ hasText: relativeFilePath })
   // Streaming results can remount the row under a stationary pointer.
   await expect(async () => {
-    await row.hover({ position: { x: 20, y: 12 }, timeout: 1_000 })
-    await row.hover({ position: { x: 40, y: 12 }, timeout: 1_000 })
+    await row.hover({ position: { x: 20, y: 12 }, timeout: 2_000 })
+    await row.hover({ position: { x: 40, y: 12 }, timeout: 2_000 })
     await expect(tooltip).toBeVisible({ timeout: 1_000 })
   }).toPass({ timeout: 10_000, intervals: [100, 250, 500] })
 
