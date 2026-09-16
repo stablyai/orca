@@ -72,12 +72,35 @@ export function InlineUsageBars({
         </div>
       ))}
       {usageWindows.length === 0 && limits.status === 'error' ? (
-        <span className="text-[10px] text-muted-foreground">
-          {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
-        </span>
+        <span className="text-[10px] text-muted-foreground">{unavailableUsageLabel(limits)}</span>
       ) : null}
     </div>
   )
+}
+
+// Why: "sign in" is wrong advice for a throttled or unreachable usage endpoint; only auth failures need a login.
+const AUTH_FAILURE_KINDS: ReadonlySet<string> = new Set([
+  'reauth-required',
+  'stale-token',
+  'missing-credentials',
+  'refreshable-credentials-without-token',
+  'delegated-refresh-required',
+  'keychain-unavailable',
+  'missing-scope'
+])
+
+export function unavailableUsageLabel(limits: ProviderRateLimits): string {
+  const failureKind = limits.usageMetadata?.failureKind
+  if (!failureKind || AUTH_FAILURE_KINDS.has(failureKind)) {
+    return translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')
+  }
+  if (failureKind === 'rate-limited') {
+    return translate(
+      'components.status.bar.inlineUsage.temporarilyUnavailable',
+      'Usage temporarily unavailable'
+    )
+  }
+  return translate('components.status.bar.inlineUsage.unavailable', 'Usage unavailable')
 }
 
 export function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
