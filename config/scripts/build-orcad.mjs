@@ -275,35 +275,96 @@ if (process.exitCode !== 1) {
  */
 async function smokeLoadWatcherChild() {
   const probeDir = mkdtempSync(join(tmpdir(), 'orcad-watcher-smoke-'))
-  const child = fork(WATCHER_OUT_FILE, [], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+  // Why hand the child a canary dir instead of letting it make its own: the child only
+  // cleans up a self-made dir from an `exit` handler it registers *after* the canary's
+  // native subscribe resolves. That has not happened by the time the ack lands, and never
+  // happens at all on a machine with no compiled @parcel/watcher — the case this gate
+  // exists to pass. Either way the smoke leaks an empty orca-watcher-canary-* dir per
+  // build. ORCA_WATCHER_CANARY_DIR is the seam the real host uses for exactly this
+  // (see parcel-watcher-child-launch.ts); given one, the child leaves cleanup to us.
+  const canaryDir = mkdtempSync(join(tmpdir(), 'orcad-watcher-smoke-canary-'))
+  const child = fork(WATCHER_OUT_FILE, [], {
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+    env: { ...process.env, ORCA_WATCHER_CANARY_DIR: canaryDir }
+  })
   let stderr = ''
   child.stderr?.on('data', (chunk) => {
     stderr += String(chunk)
   })
   try {
     return await new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        resolve(`No 'subscribe-started' ack within 30s.\n${stderr.slice(0, 2000)}`)
-      }, 30_000)
+      const timer = setTimeout(
+        () => settle(`No 'subscribe-started' ack within 30s.\n${stderr.slice(0, 2000)}`),
+        30_000
+      )
+      let settled = false
       const settle = (failure) => {
+        if (settled) {
+          return
+        }
+        settled = true
         clearTimeout(timer)
+        // Past the verdict the child's fate says nothing, so stop reading it as evidence
+        // and just reap it. Watching `exit` after this is what made a good build fail: the
+        // parent disconnects the instant it acks, a child that writes once more takes
+        // EPIPE on an unhandled 'error' and exits non-zero, and that was read as a load
+        // failure. It surfaces on slow hardware far more than on a fast one.
+        child.removeAllListeners('exit')
+        child.removeAllListeners('error')
+        // The child outlives the verdict by a few ms, and an emitter with no 'error'
+        // listener throws on emit — so a stray kill/EPIPE error here would crash the build
+        // this function just passed.
+        child.on('error', () => {})
+        if (child.connected) {
+          child.disconnect()
+        }
+        // Why still wait for the exit we just stopped grading: the caller's `finally`
+        // removes probeDir and canaryDir, and a child that still holds a native watcher
+        // handle on either fails that rmSync with EBUSY/EPERM on Windows, where kill()
+        // only *starts* an asynchronous TerminateProcess. Only the timing is used; the
+        // code and signal are never read again. Bounded, so an unreapable child degrades
+        // to a leaked temp dir rather than a hung build.
+        if (child.exitCode === null && child.signalCode === null) {
+          const reaped = setTimeout(() => resolve(failure), 5_000)
+          child.once('exit', () => {
+            clearTimeout(reaped)
+            resolve(failure)
+          })
+          child.kill('SIGKILL')
+          return
+        }
+        // Already dead — usually the exit-before-ack failure, whose own `exit` event is
+        // what called this. Waiting for a second one would just burn the deadline.
         resolve(failure)
       }
       child.on('message', (message) => {
+        // The ack IS the verdict. It is emitted once the child's graph has resolved under
+        // plain Node, which is the only thing this gate claims to prove — deliberately
+        // before the native module is touched, so a build machine with no compiled
+        // @parcel/watcher still passes.
         if (message?.op === 'subscribe-started') {
-          child.disconnect()
+          settle(null)
         }
       })
       child.on('error', (error) => settle(`fork failed: ${error.message}`))
-      // Why exit and not disconnect: the child exits 0 on disconnect, so a non-zero code
-      // or a signal here is a load failure rather than a clean teardown.
+      // Only an exit BEFORE the ack is evidence: it means the graph never resolved.
       child.on('exit', (code, signal) =>
-        settle(code === 0 ? null : `exit code=${code} signal=${signal}\n${stderr.slice(0, 2000)}`)
+        settle(
+          `the child exited before acking: code=${code} signal=${signal}\n${stderr.slice(0, 2000)}`
+        )
       )
       child.send({ op: 'subscribe', id: 1, dir: probeDir, opts: {} })
     })
   } finally {
-    rmSync(probeDir, { recursive: true, force: true })
+    // Best-effort on purpose, matching removeWatcherCanaryDirectory: `force` only covers
+    // ENOENT, so a handle this smoke does not control could still surface EBUSY/EPERM.
+    // A leaked temp dir must never fail a build whose watcher child loaded cleanly.
+    for (const dir of [probeDir, canaryDir]) {
+      try {
+        rmSync(dir, { recursive: true, force: true })
+      } catch {
+        // Housekeeping only; the verdict above already stands.
+      }
+    }
   }
 }
