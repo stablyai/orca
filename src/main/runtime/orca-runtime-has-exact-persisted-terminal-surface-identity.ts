@@ -56,6 +56,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
   protected rollbackLegacyWorkerTerminalSurface(
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): void {
+    this.ptyOwnershipRevisions.advance(candidate.ptyId)
     const snapshot = this.mobileSessionTabsByWorktree.get(candidate.worktreeId)
     if (snapshot) {
       const retired = retireTerminalSurfacesFromSnapshot({
@@ -95,8 +96,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
       }
     }
     if (pty?.tabId === candidate.tabId) {
-      pty.tabId = null
-      pty.paneKey = null
+      this.recordPtyWorktree(pty.ptyId, pty.worktreeId, { tabId: null, paneKey: null })
     }
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,

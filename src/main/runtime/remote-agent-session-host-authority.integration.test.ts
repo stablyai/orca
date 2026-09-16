@@ -70,7 +70,7 @@ describe('remote agent-session host authority integration', () => {
   })
 
   it(
-    'deduplicates racing remote resumes, adopts retries, and retires exited surfaces',
+    'returns one incumbent across racing workspace requests and lost-reply retries',
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-agent-authority-repro-'))
@@ -104,6 +104,15 @@ describe('remote agent-session host authority integration', () => {
         getProjects: () => []
       }
       const runtime = new OrcaRuntimeService(store as never)
+      Object.assign(runtime, {
+        resolveTerminalWorkspaceLaunchScope: async (selector: string) => ({
+          id: selector.replace(/^id:/, ''),
+          path: userDataPath,
+          connectionId: null,
+          repo: null,
+          folderWorkspace: null
+        })
+      })
       let nextRequestedSession = 0
       runtime.setPtyController({
         spawn: async (options) => {
@@ -129,6 +138,7 @@ describe('remote agent-session host authority integration', () => {
           })
           return {
             id: result.agentSessionEnsure?.owner.ptyId ?? resolvedSessionId,
+            incarnationId: result.incarnationId,
             ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
           }
         },
@@ -168,7 +178,7 @@ describe('remote agent-session host authority integration', () => {
         ),
         secondClient.request<RuntimeEnsureAgentSessionResult>(
           'terminal.ensureAgentSession',
-          request,
+          { ...request, worktree: 'id:second-workspace' },
           REQUEST_TIMEOUT_MS
         )
       ])
@@ -183,19 +193,31 @@ describe('remote agent-session host authority integration', () => {
         'created'
       ])
       expect(second.result.terminal).toMatchObject({
+        worktreeId: first.result.terminal.worktreeId,
         handle: first.result.terminal.handle,
         tabId: first.result.terminal.tabId,
         paneKey: first.result.terminal.paneKey,
         ptyId: first.result.terminal.ptyId
       })
+      expect(first.result.terminal.worktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
       expect(spawnSubprocess).toHaveBeenCalledOnce()
       expect(host.listSessions()).toHaveLength(1)
 
       // Why: a retry cannot prove whether its previous response arrived, so
       // the provider identity—not a new client operation—must recover the owner.
+      const incumbentPtyId = first.result.terminal.ptyId
+      if (!incumbentPtyId) {
+        throw new Error('incumbent PTY missing')
+      }
+      const runtimeRecords = runtime as unknown as {
+        getOrCreatePtyWorktreeRecord: (ptyId: string) => { launchToken: string | null } | null
+      }
+      const incumbentRecord = runtimeRecords.getOrCreatePtyWorktreeRecord(incumbentPtyId)
+      const incumbentLaunchToken = incumbentRecord?.launchToken
+      expect(incumbentLaunchToken).toBeTruthy()
       const retry = await retryClient.request<RuntimeEnsureAgentSessionResult>(
         'terminal.ensureAgentSession',
-        request,
+        { ...request, worktree: 'id:second-workspace' },
         REQUEST_TIMEOUT_MS
       )
       expect(retry).toMatchObject({
@@ -211,6 +233,16 @@ describe('remote agent-session host authority integration', () => {
         }
       })
       expect(spawnSubprocess).toHaveBeenCalledOnce()
+
+      expect(runtimeRecords.getOrCreatePtyWorktreeRecord(incumbentPtyId)?.launchToken).toBe(
+        incumbentLaunchToken
+      )
+      const otherTabs = await secondClient.request<RuntimeMobileSessionTabsResult>(
+        'session.tabs.list',
+        { worktree: 'id:second-workspace' },
+        REQUEST_TIMEOUT_MS
+      )
+      expect(otherTabs).toMatchObject({ ok: true, result: { tabs: [] } })
 
       subprocesses[0]?.exit(0)
       await vi.waitFor(async () => {

@@ -125,6 +125,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+    this.ptyOwnershipRevisions.advance(ptyId)
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return

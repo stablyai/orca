@@ -17,6 +17,9 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
       return false
     }
 
+    if (options.resetIncarnation || (this.wslDistroByPtyId.get(ptyId) ?? null) !== wslDistro) {
+      this.ptyOwnershipRevisions.advance(ptyId)
+    }
     if (options.resetIncarnation) {
       // Why: an explicit new lifecycle supersedes an unidentifiable exit from the reused PTY id.
       this.earlyExitedPtyIncarnations.delete(ptyId)

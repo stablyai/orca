@@ -32,6 +32,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.markGraphReady(1)
+    await runtime.listTerminals()
 
     const terminals = await runtime.listTerminals()
 
@@ -56,10 +57,13 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
-      listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+      listProcesses: async () => [
+        { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+      ]
     })
     runtime.attachWindow(1)
     runtime.markGraphReady(1)
+    await runtime.listTerminals()
 
     expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
       title: null
@@ -103,10 +107,13 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
-      listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+      listProcesses: async () => [
+        { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+      ]
     })
     runtime.attachWindow(1)
     runtime.markGraphReady(1)
+    await runtime.listTerminals()
 
     runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 100)
     // cursor-agent re-emits its bare native title on internal redraws while still working; it must not stomp the synthesized working title.
@@ -132,10 +139,13 @@ describe('OrcaRuntimeService', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null,
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       // Live from cursor-agent: dropped, never recorded.
       runtime.onPtyData(ptyId, '\x1b]0;Cursor Agent\x07', 100)
@@ -164,10 +174,13 @@ describe('OrcaRuntimeService', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null,
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 100)
       runtime.onPtyData(ptyId, 'streaming output with no title\r\n', 101)
@@ -196,10 +209,13 @@ describe('OrcaRuntimeService', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => foreground,
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 100)
       runtime.onPtyData(ptyId, 'agent exited; back at the shell\r\n', 101)
@@ -233,10 +249,13 @@ describe('OrcaRuntimeService', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => foreground,
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 100)
       runtime.onPtyData(ptyId, 'streaming output with no title\r\n', 101)
@@ -262,10 +281,13 @@ describe('OrcaRuntimeService', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => 'cursor-agent',
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 100)
       runtime.onPtyData(ptyId, 'streaming output with no title\r\n', 101)
@@ -288,10 +310,13 @@ describe('OrcaRuntimeService', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null,
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData(ptyId, 'output without a title\r\n', 101)
@@ -318,10 +343,13 @@ describe('OrcaRuntimeService', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null,
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData(ptyId, 'output without a title\r\n', 101)
@@ -349,12 +377,13 @@ describe('OrcaRuntimeService', () => {
         kill: () => true,
         getForegroundProcess: async () => null,
         listProcesses: async () => [
-          { id: ptyA, cwd: '/tmp/worktree-a', title: 'shell' },
-          { id: ptyB, cwd: '/tmp/worktree-a', title: 'shell' }
+          { id: ptyA, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' },
+          { id: ptyB, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
         ]
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
+      await runtime.listTerminals()
 
       runtime.onPtyData(ptyA, '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData(ptyB, '\x1b]0;Aider working\x07', 100)
