@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import {
   buildAskAnswerKeys,
-  buildCodexAskAnswerKeys,
+  buildAskChatRowKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseAskFromStatus,
@@ -13,15 +13,20 @@ import {
   type AskQuestion,
   type InteractiveQuestionParser
 } from '../../../../shared/native-chat-ask'
+import { buildCodexAskAnswerKeys } from '../../../../shared/native-chat-ask-codex'
+import { routeAskAnswer, type AskAnswerRouting } from '../../../../shared/native-chat-ask-routing'
 
 export {
   buildAskAnswerKeys,
+  buildAskChatRowKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseAskFromStatus,
   registerQuestionTool,
+  routeAskAnswer,
   type AskAnswerKeyGroup,
+  type AskAnswerRouting,
   type AskAnswerSelection,
   type AskOption,
   type AskPrompt,

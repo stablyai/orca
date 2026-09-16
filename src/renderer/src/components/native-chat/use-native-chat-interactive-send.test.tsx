@@ -131,17 +131,97 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
-  it('infers OpenClaude answers through its Claude-compatible selector path', () => {
+  it('routes an OpenClaude answer through the option-number keystroke path', () => {
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'openclaude')
     )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
+    expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
+      { terminalTabId: 'tab-1' },
+      'pty-1',
+      [{ raw: '2' }],
+      expect.any(Function)
+    )
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+  })
+
+  // resolveHookPayloadAgentType keeps an OpenClaude pane's status payload at
+  // literal agentType 'openclaude', and both inference gates reject anything
+  // but 'claude'. OpenClaude steps its selector like Claude but must take the
+  // same no-confirmation path as Codex, or the card holds the pane's wait
+  // behind a confirmation that can never arrive.
+  it('reports that an OpenClaude answer owes no confirmation', () => {
+    mocks.storeState = {
+      agentStatusByPaneKey: { [PANE_KEY]: { ...waitingQuestion, agentType: 'openclaude' } }
+    }
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'openclaude')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+
+    expect(sendResult?.awaitsConfirmation).toBe(false)
+
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
-    expect(onSettled).toBeTypeOf('function')
     onSettled?.(true)
-    expect(mocks.inferQuestionAnswered).toHaveBeenCalledOnce()
+    sendResult?.confirmAnswered()
+
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
+  // Codex steps its selector like Claude, but both inference gates reject a
+  // non-Claude payload, so the card must not hold the pane's wait for a
+  // confirmation that can never be granted.
+  it('reports that a Codex answer owes no confirmation', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'codex')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+
+    expect(sendResult?.awaitsConfirmation).toBe(false)
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
+    onSettled?.(true)
+    sendResult?.confirmAnswered()
+
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
+  it('reports that a Claude answer awaits confirmation', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+
+    expect(sendResult?.awaitsConfirmation).toBe(true)
+  })
+
+  it('reports no confirmation for a pasted-answer agent', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'grok')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+
+    expect(sendResult?.awaitsConfirmation).toBe(false)
+    sendResult?.confirmAnswered()
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
   })
 
   it('does nothing when no option is answered', () => {
@@ -154,7 +234,7 @@ describe('useNativeChatInteractiveSend', () => {
       resultValue = result.current.sendAnswer(PROMPT, [{ indices: [] }])
     })
 
-    expect(resultValue).toEqual({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
+    expect(resultValue).toMatchObject({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
     expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
@@ -211,19 +291,40 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
   })
 
-  it('infers a Claude question answer only after every runtime write was delivered', () => {
+  // Delivered bytes are not an answered question: a selector layout the
+  // keystrokes do not fit leaves the ask live (#16865). Only the card's
+  // confirmation signal may clear the pane's wait.
+  it('does not clear the question wait on delivery alone', () => {
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
     )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
-    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
 
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
     expect(onSettled).toBeTypeOf('function')
-    onSettled?.(false)
-    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
     onSettled?.(true)
+
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
+  it('clears the question wait once, when the card confirms the ask resolved', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
+    onSettled?.(true)
+    sendResult?.confirmAnswered()
+    // A second confirmation (deadline race, replacement prompt) must not
+    // re-clear a wait that may already belong to the next question.
+    sendResult?.confirmAnswered()
 
     expect(mocks.inferQuestionAnswered).toHaveBeenCalledExactlyOnceWith({
       paneKey: PANE_KEY,
@@ -240,7 +341,10 @@ describe('useNativeChatInteractiveSend', () => {
     )
 
     // Answer question A while it is the current waiting question.
-    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
 
     // A different AskUserQuestion becomes current before the paced send settles.
     mocks.storeState = {
@@ -256,6 +360,7 @@ describe('useNativeChatInteractiveSend', () => {
 
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
     onSettled?.(true)
+    sendResult?.confirmAnswered()
 
     // The baseline is question A's (captured before delivery), so the server can
     // reject it against the now-current question B instead of clearing B's wait.
@@ -278,7 +383,7 @@ describe('useNativeChatInteractiveSend', () => {
     act(() => {
       sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }], onDeliverySettled)
     })
-    expect(sendResult).toEqual({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
+    expect(sendResult).toMatchObject({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
 
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
     onSettled?.(false)
@@ -286,5 +391,57 @@ describe('useNativeChatInteractiveSend', () => {
 
     act(() => result.current.cancelPending())
     expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+
+  it('escapes to chat through the selector row, sending the text only after it closes', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => {
+      result.current.escapeToChat(PROMPT, '  neither, explain first  ')
+    })
+
+    // Two options and no previews, so the "Chat about this" row is numbered 4.
+    expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledOnce()
+    expect(mocks.sendNativeChatAskAnswer.mock.calls[0]![2]).toEqual([{ raw: '4' }])
+    // The words wait for the selector to close rather than racing its teardown.
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]![3]
+    act(() => onSettled?.(true))
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledOnce()
+    expect(mocks.sendNativeChatMessage.mock.calls[0]![2]).toBe('neither, explain first')
+  })
+
+  it('escapes to chat with no text when the user only declined', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => result.current.escapeToChat(PROMPT, '   '))
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]![3]
+    act(() => onSettled?.(true))
+
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+  })
+
+  it('cancels only the answer keystrokes, never a message send', () => {
+    const answerHandle = { cancel: vi.fn(), settleAfterMs: 500 }
+    const messageHandle = { cancel: vi.fn(), settleAfterMs: 500 }
+    mocks.sendNativeChatAskAnswer.mockReturnValue(answerHandle)
+    mocks.sendNativeChatMessage.mockReturnValue(messageHandle)
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => {
+      result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+    act(() => result.current.cancelPending())
+
+    expect(answerHandle.cancel).toHaveBeenCalledOnce()
+    expect(messageHandle.cancel).not.toHaveBeenCalled()
   })
 })
