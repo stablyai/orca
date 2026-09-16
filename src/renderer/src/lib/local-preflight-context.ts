@@ -23,6 +23,7 @@ import {
 } from './local-preflight-context-cache'
 
 export { localPreflightContextKey } from './local-preflight-context-key'
+export { getProjectRuntimePreflightContext } from './local-preflight-context-cache'
 export type { LocalPreflightContext } from './local-preflight-context-cache'
 export {
   _getProjectRuntimePreflightContextCacheSizeForTest,
@@ -248,7 +249,7 @@ export function getLocalAgentPreflightContext(
   return undefined
 }
 
-function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
+export function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
   // Why: preflight selectors are synchronous. Reuse an existing capability
   // answer when available without spawning WSL probes from store reads.
   if (!hasCachedWindowsTerminalCapabilities()) {
