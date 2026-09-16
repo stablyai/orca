@@ -3,9 +3,9 @@
   "family": "tasks.task-create-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "a4d3d1f322d49593056bd20f4122bbf0309d2161123e404161950bcab65decd5",
   "platform": "darwin",
@@ -13,52 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0fef9dc7845d": {
-      "name": "createTitle",
-      "ordinal": 7,
-      "value": ""
-    },
-    "13b1e9c092d4": {
-      "name": "createBody",
-      "ordinal": 8,
-      "value": ""
-    },
-    "2b5235cc87a9": {
-      "name": "actionItem",
-      "ordinal": 5,
-      "value": {
-        "key": "gitlab:repo-1:issue:6",
-        "provider": "gitlab",
-        "source": {
-          "author": {
-            "$rpc": "null"
-          },
-          "id": "issue:6",
-          "labels": [],
-          "number": 6,
-          "repoId": "repo-1",
-          "repoName": "Repo",
-          "state": "opened",
-          "title": "A new task",
-          "type": "issue",
-          "updatedAt": "2026-01-01T00:00:00.000Z",
-          "url": "https://gitlab.com/group/project/-/issues/6"
-        },
-        "status": "Open",
-        "subtitle": "Repo #6",
-        "title": "A new task",
-        "updatedAt": "2026-01-01T00:00:00.000Z"
-      }
-    },
-    "5294116e0f90": {
+    "46bbfadb0481": {
       "name": "creatingTask",
-      "ordinal": 1,
-      "value": true
-    },
-    "556994c67572": {
-      "name": "gitlab.createIssue#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
+      "value": true,
+      "sent": 0
     },
     "580f3724d37b": {
       "composer": false,
@@ -88,9 +46,28 @@
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     },
-    "ac13fff3e6e2": {
+    "6652745ed1c6": {
+      "name": "createBody",
+      "value": "",
+      "sent": 1
+    },
+    "781721955405": {
+      "name": "showCreateTask",
+      "value": false,
+      "sent": 1
+    },
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
+    },
+    "c0c0f9a6037e": {
+      "name": "createTitle",
+      "value": "",
+      "sent": 1
+    },
+    "c9c89070b638": {
       "name": "gitlab.createIssue#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -126,11 +103,6 @@
         }
       }
     },
-    "b1504689c2b3": {
-      "name": "creatingTask",
-      "ordinal": 9,
-      "value": false
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -139,15 +111,42 @@
         "$rpc": "undefined"
       }
     },
-    "ed3a7d6bc894": {
-      "name": "error",
-      "ordinal": 2,
-      "value": ""
+    "ebd58d2ca60f": {
+      "name": "gitlab.createIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}",
+      "sent": 1
     },
-    "fa467ac4ab12": {
-      "name": "showCreateTask",
-      "ordinal": 6,
-      "value": false
+    "f4790c11c55e": {
+      "name": "actionItem",
+      "value": {
+        "key": "gitlab:repo-1:issue:6",
+        "provider": "gitlab",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:6",
+          "labels": [],
+          "number": 6,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "opened",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://gitlab.com/group/project/-/issues/6"
+        },
+        "status": "Open",
+        "subtitle": "Repo #6",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      "sent": 1
+    },
+    "fc7f792d6e89": {
+      "name": "creatingTask",
+      "value": false,
+      "sent": 1
     }
   },
   "recording": {
@@ -156,21 +155,21 @@
       {
         "id": "create-settled",
         "observation": {
-          "sender": ["ac13fff3e6e2"],
-          "payloads": ["556994c67572"],
+          "sender": ["c9c89070b638"],
+          "payloads": ["ebd58d2ca60f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
           "state": "580f3724d37b",
           "effects": [
-            "5294116e0f90",
-            "ed3a7d6bc894",
-            "2b5235cc87a9",
-            "fa467ac4ab12",
-            "0fef9dc7845d",
-            "13b1e9c092d4",
-            "b1504689c2b3"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "f4790c11c55e",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89"
           ]
         }
       }

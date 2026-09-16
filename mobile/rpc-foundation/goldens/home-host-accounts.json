@@ -3,9 +3,9 @@
   "family": "home.host-accounts",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "c632fdbc4b730777ecb09f08bec14cca0586042b01ed99d40d0228806c7def4a",
   "scenarioSha256": "366426641e25542fcc6fcd351ece6a1ee897c8b3974c08eb7557eadfa4d3b06f",
   "platform": "darwin",
@@ -13,9 +13,56 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "16b4c187b90c": {
+    "2525c654127c": {
+      "host-1": {
+        "claude": {
+          "accounts": [
+            {
+              "email": "claude@example.test",
+              "id": "claude-1",
+              "updatedAt": 1700000000000
+            }
+          ],
+          "activeAccountId": "claude-1"
+        },
+        "codex": {
+          "accounts": [],
+          "activeAccountId": {
+            "$rpc": "null"
+          }
+        },
+        "rateLimits": {
+          "claude": {
+            "$rpc": "null"
+          },
+          "claudeTarget": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          },
+          "codex": {
+            "$rpc": "null"
+          },
+          "codexTarget": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          },
+          "inactiveClaudeAccounts": [],
+          "inactiveCodexAccounts": []
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "6432de87fc3e": {
       "name": "accounts.list#1",
-      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.list\"}",
+      "sent": 1
+    },
+    "ae89fde72803": {
+      "name": "accounts.list#1",
       "args": [
         {
           "name": "method",
@@ -72,57 +119,33 @@
         }
       }
     },
-    "2525c654127c": {
-      "host-1": {
-        "claude": {
-          "accounts": [
-            {
-              "email": "claude@example.test",
-              "id": "claude-1",
-              "updatedAt": 1700000000000
-            }
-          ],
-          "activeAccountId": "claude-1"
+    "d54161165272": {
+      "name": "accounts.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
         },
-        "codex": {
-          "accounts": [],
-          "activeAccountId": {
-            "$rpc": "null"
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
           }
         },
-        "rateLimits": {
-          "claude": {
-            "$rpc": "null"
-          },
-          "claudeTarget": {
-            "runtime": "host",
-            "wslDistro": {
-              "$rpc": "null"
-            }
-          },
-          "codex": {
-            "$rpc": "null"
-          },
-          "codexTarget": {
-            "runtime": "host",
-            "wslDistro": {
-              "$rpc": "null"
-            }
-          },
-          "inactiveClaudeAccounts": [],
-          "inactiveCodexAccounts": []
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
         }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "3bf8cb601ec3": {
-      "name": "accounts.list#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.list\"}"
-    },
-    "44136fa355b3": {},
-    "78574a24b32d": {
+    "e14c03c3141f": {
       "name": "accounts",
-      "ordinal": 3,
       "value": {
         "host-1": {
           "claude": {
@@ -164,33 +187,8 @@
             "inactiveCodexAccounts": []
           }
         }
-      }
-    },
-    "884d6f264bfd": {
-      "name": "accounts.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "accounts.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+      },
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -207,8 +205,8 @@
       {
         "id": "accounts-pending",
         "observation": {
-          "sender": ["884d6f264bfd"],
-          "payloads": ["3bf8cb601ec3"],
+          "sender": ["d54161165272"],
+          "payloads": ["6432de87fc3e"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -219,13 +217,13 @@
       {
         "id": "accounts-published",
         "observation": {
-          "sender": ["16b4c187b90c"],
-          "payloads": ["3bf8cb601ec3"],
+          "sender": ["ae89fde72803"],
+          "payloads": ["6432de87fc3e"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
           "state": "2525c654127c",
-          "effects": ["78574a24b32d"]
+          "effects": ["e14c03c3141f"]
         }
       }
     ]

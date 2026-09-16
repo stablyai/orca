@@ -3,9 +3,9 @@
   "family": "session.tabs-stream-health",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
   "scenarioSha256": "101e8ce865088891800680db0e3df787b5f15ceb05ace9840931c384d9732d1c",
   "platform": "darwin",
@@ -13,19 +13,19 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0cde28482d1a": {
+    "1ee5cdadc74e": {
       "name": "session.tabs.list#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 1
     },
     "49a2260ea0e7": {
       "accepted": "unapplied",
       "applicationRevision": 0
     },
-    "510d7b10aacf": {
+    "5a7cc7a45078": {
       "name": "fetch-started",
-      "ordinal": 1,
-      "value": {}
+      "value": {},
+      "sent": 0
     },
     "84e5ca07cb7a": {
       "status": "fulfilled",
@@ -33,17 +33,8 @@
       "settledAt": 0,
       "value": true
     },
-    "878af0e23d93": {
-      "name": "fetch-failed",
-      "ordinal": 4,
-      "value": {
-        "code": "worktree_not_found",
-        "message": "No such workspace"
-      }
-    },
-    "c4ac5e6a7071": {
+    "98c25056240e": {
       "name": "session.tabs.list#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -76,6 +67,14 @@
         }
       }
     },
+    "d63bc6be6a3f": {
+      "name": "fetch-failed",
+      "value": {
+        "code": "worktree_not_found",
+        "message": "No such workspace"
+      },
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -91,14 +90,14 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["c4ac5e6a7071"],
-          "payloads": ["0cde28482d1a"],
+          "sender": ["98c25056240e"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
           },
           "state": "49a2260ea0e7",
-          "effects": ["510d7b10aacf", "878af0e23d93"]
+          "effects": ["5a7cc7a45078", "d63bc6be6a3f"]
         }
       }
     ]

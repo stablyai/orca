@@ -3,9 +3,9 @@
   "family": "github.pr-title-mutation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "071e745453795d18d683aaab63e810783e3cee4927b47425c20a3d915397d0dd",
   "platform": "darwin",
@@ -13,19 +13,18 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "55b590476b96": {
+    "3235254d283e": {
       "name": "github.updatePRTitle#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}",
+      "sent": 1
     },
     "578bc8950993": {
       "title": {
         "ok": true
       }
     },
-    "a53dd29bf747": {
+    "96fcd9b9c31e": {
       "name": "github.updatePRTitle#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -72,8 +71,8 @@
       {
         "id": "title",
         "observation": {
-          "sender": ["a53dd29bf747"],
-          "payloads": ["55b590476b96"],
+          "sender": ["96fcd9b9c31e"],
+          "payloads": ["3235254d283e"],
           "settlements": {
             "title": "fbc958e4d46e"
           },

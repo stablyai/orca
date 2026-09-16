@@ -3,9 +3,9 @@
   "family": "tasks.project-row-fields",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "370aeaee59978071ccb821da13c9e6114936c168947b608539cdb80d40cc9889",
   "scenarioSha256": "8ad021e101d8ef17ed47472a5fbfbeaebb2690a4040c89a0e9ee133e69e4fecd",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "02839f22d2db": {
+      "name": "projectMutating",
+      "value": false,
+      "sent": 1
+    },
     "06f1fbeb0d68": {
       "error": "inner refused",
       "mutating": false,
@@ -96,19 +101,18 @@
         }
       }
     },
-    "093815ac28fb": {
-      "name": "github.project.clearItemField#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.clearItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\"}}"
-    },
-    "1cc38c8dde55": {
+    "0f3697bbd111": {
       "name": "projectMutating",
-      "ordinal": 18,
-      "value": false
+      "value": true,
+      "sent": 2
     },
-    "28df9bffe06e": {
+    "1b30471b40d2": {
+      "name": "projectRowDetailError",
+      "value": "inner refused",
+      "sent": 3
+    },
+    "1cac1b5d748f": {
       "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -136,28 +140,97 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-3",
-          "ok": false
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
         }
       }
     },
-    "2dc6bc594542": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "outer refused"
+    "208468d41a71": {
+      "name": "githubProjectTable",
+      "value": {
+        "fields": [
+          {
+            "dataType": "SINGLE_SELECT",
+            "id": "field-1",
+            "kind": "single-select",
+            "name": "Status",
+            "options": [
+              {
+                "color": "YELLOW",
+                "id": "option-1",
+                "name": "In progress"
+              }
+            ]
+          }
+        ],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 1,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "url": "https://github.com/owner/repo/issues/1"
+            },
+            "fieldValuesByFieldId": {
+              "field-1": {
+                "color": "YELLOW",
+                "fieldId": "field-1",
+                "kind": "single-select",
+                "name": "In progress",
+                "optionId": "option-1"
+              }
+            },
+            "id": "item-1",
+            "itemType": "ISSUE"
+          },
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 2,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "url": "https://github.com/owner/repo/pull/2"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-2",
+            "itemType": "PULL_REQUEST"
+          }
+        ],
+        "selectedView": {
+          "filter": "",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      },
+      "sent": 1
     },
-    "32537a469112": {
+    "347fa6adc9f3": {
       "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "Failed to update issue type"
+      "value": "",
+      "sent": 3
     },
-    "40dc9d5e44c9": {
+    "34daaf185d9e": {
       "name": "projectRowItem",
-      "ordinal": 10,
       "value": {
         "content": {
           "assignees": [],
@@ -170,15 +243,136 @@
           "state": "OPEN",
           "url": "https://github.com/owner/repo/issues/1"
         },
-        "fieldValuesByFieldId": {},
+        "fieldValuesByFieldId": {
+          "field-1": {
+            "color": "YELLOW",
+            "fieldId": "field-1",
+            "kind": "single-select",
+            "name": "In progress",
+            "optionId": "option-1"
+          }
+        },
         "id": "item-1",
         "itemType": "ISSUE"
+      },
+      "sent": 1
+    },
+    "3602df6361c4": {
+      "name": "github.project.updateItemField#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\",\"value\":{\"kind\":\"single-select\",\"optionId\":\"option-1\"}}}",
+      "sent": 1
+    },
+    "3dd9611f0850": {
+      "name": "github.project.clearItemField#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.clearItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\"}}",
+      "sent": 2
+    },
+    "410042a82391": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueTypeBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "issueTypeId": "type-1",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
       }
     },
-    "4123bc693ce4": {
-      "name": "projectMutating",
-      "ordinal": 14,
-      "value": true
+    "4134e8c61d66": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueTypeBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "issueTypeId": "type-1",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "41896a7a7f79": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueTypeBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "issueTypeId": "type-1",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
     },
     "424e9a1ae7ed": {
       "error": "",
@@ -279,22 +473,20 @@
         }
       }
     },
-    "47711910ddd4": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
+    "46c028c0d924": {
+      "name": "github.project.clearItemField#1",
       "args": [
         {
           "name": "method",
-          "value": "github.project.updateIssueTypeBySlug"
+          "value": "github.project.clearItemField"
         },
         {
           "name": "params",
           "value": {
+            "fieldId": "field-1",
             "host": "github.enterprise.test",
-            "issueTypeId": "type-1",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo"
+            "itemId": "item-1",
+            "projectId": "project-1"
           }
         },
         {
@@ -309,18 +501,13 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-3",
+          "id": "frame-2",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "ok": true
           }
         }
       }
-    },
-    "491a53ca1f35": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 16,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueTypeBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"issueTypeId\":\"type-1\"}}"
     },
     "4f9f6d6a111c": {
       "error": "Unknown method",
@@ -405,41 +592,72 @@
         }
       }
     },
-    "55cfdf6b82e5": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueTypeBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "issueTypeId": "type-1",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo"
+    "55107e6e9979": {
+      "name": "githubProjectTable",
+      "value": {
+        "fields": [
+          {
+            "dataType": "SINGLE_SELECT",
+            "id": "field-1",
+            "kind": "single-select",
+            "name": "Status",
+            "options": [
+              {
+                "color": "YELLOW",
+                "id": "option-1",
+                "name": "In progress"
+              }
+            ]
           }
+        ],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
         },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
+        "rows": [
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 1,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "url": "https://github.com/owner/repo/issues/1"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-1",
+            "itemType": "ISSUE"
+          },
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 2,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "url": "https://github.com/owner/repo/pull/2"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-2",
+            "itemType": "PULL_REQUEST"
           }
+        ],
+        "selectedView": {
+          "filter": "",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
         }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
+      },
+      "sent": 2
     },
     "56f10066f7c7": {
       "error": "outer refused",
@@ -524,49 +742,30 @@
         }
       }
     },
-    "5797e2249a89": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueTypeBySlug"
+    "574da420bac4": {
+      "name": "projectRowItem",
+      "value": {
+        "content": {
+          "assignees": [],
+          "issueType": {
+            "color": "RED",
+            "description": {
+              "$rpc": "null"
+            },
+            "id": "type-1",
+            "name": "Bug"
+          },
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "url": "https://github.com/owner/repo/issues/1"
         },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "issueTypeId": "type-1",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "5d32aa29303c": {
-      "name": "projectMutating",
-      "ordinal": 1,
-      "value": true
+        "fieldValuesByFieldId": {},
+        "id": "item-1",
+        "itemType": "ISSUE"
+      },
+      "sent": 3
     },
     "609b678e071d": {
       "error": "Cannot read properties of null (reading 'ok')",
@@ -651,21 +850,26 @@
         }
       }
     },
-    "6623e063706c": {
-      "name": "github.project.clearItemField#1",
-      "ordinal": 8,
+    "60c2e1f55655": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueTypeBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"issueTypeId\":\"type-1\"}}",
+      "sent": 3
+    },
+    "63352559e8ae": {
+      "name": "github.project.updateIssueTypeBySlug#1",
       "args": [
         {
           "name": "method",
-          "value": "github.project.clearItemField"
+          "value": "github.project.updateIssueTypeBySlug"
         },
         {
           "name": "params",
           "value": {
-            "fieldId": "field-1",
             "host": "github.enterprise.test",
-            "itemId": "item-1",
-            "projectId": "project-1"
+            "issueTypeId": "type-1",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo"
           }
         },
         {
@@ -680,11 +884,8 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
+          "id": "frame-3",
+          "ok": true
         }
       }
     },
@@ -771,6 +972,43 @@
         }
       }
     },
+    "6a1a1849278e": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueTypeBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "issueTypeId": "type-1",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
     "6e1a42381897": {
       "error": "",
       "mutating": true,
@@ -854,61 +1092,20 @@
         }
       }
     },
-    "6fa1c828a0ac": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "72332e237f1f": {
+    "6f4f9198e5ff": {
       "name": "projectMutating",
-      "ordinal": 6,
-      "value": false
+      "value": false,
+      "sent": 2
     },
-    "73039dc59899": {
-      "name": "github.project.updateItemField#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateItemField"
-        },
-        {
-          "name": "params",
-          "value": {
-            "fieldId": "field-1",
-            "host": "github.enterprise.test",
-            "itemId": "item-1",
-            "projectId": "project-1",
-            "value": {
-              "kind": "single-select",
-              "optionId": "option-1"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "7440f0f1bab9": {
+    "73c3051352c2": {
       "name": "projectMutating",
-      "ordinal": 19,
-      "value": false
+      "value": false,
+      "sent": 3
+    },
+    "7b2465eedefe": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 0
     },
     "7c1d7cf7bffa": {
       "error": "Failed to update issue type",
@@ -993,85 +1190,82 @@
         }
       }
     },
-    "8448cf1d250f": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueTypeBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "issueTypeId": "type-1",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo"
+    "824d5b4543f1": {
+      "name": "githubProjectTable",
+      "value": {
+        "fields": [
+          {
+            "dataType": "SINGLE_SELECT",
+            "id": "field-1",
+            "kind": "single-select",
+            "name": "Status",
+            "options": [
+              {
+                "color": "YELLOW",
+                "id": "option-1",
+                "name": "In progress"
+              }
+            ]
           }
+        ],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
         },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
+        "rows": [
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "color": "RED",
+                "description": {
+                  "$rpc": "null"
+                },
+                "id": "type-1",
+                "name": "Bug"
+              },
+              "labels": [],
+              "number": 1,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "url": "https://github.com/owner/repo/issues/1"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-1",
+            "itemType": "ISSUE"
           },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "8bc50051fc54": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueTypeBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "issueTypeId": "type-1",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo"
+          {
+            "content": {
+              "assignees": [],
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 2,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "url": "https://github.com/owner/repo/pull/2"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-2",
+            "itemType": "PULL_REQUEST"
           }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
+        ],
+        "selectedView": {
+          "filter": "",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
         }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
+      },
+      "sent": 3
     },
-    "9178c438fa7b": {
+    "9138850642c5": {
       "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "Connection closed"
+      "value": "outer refused",
+      "sent": 3
     },
     "979b91030a71": {
       "error": "transport failure",
@@ -1156,9 +1350,8 @@
         }
       }
     },
-    "a0e0c04dece2": {
+    "aa3d456d5986": {
       "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -1186,173 +1379,114 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
           "id": "frame-3",
-          "ok": true
+          "ok": false
         }
       }
     },
-    "a1dab467956d": {
-      "name": "githubProjectTable",
-      "ordinal": 11,
-      "value": {
-        "fields": [
-          {
-            "dataType": "SINGLE_SELECT",
-            "id": "field-1",
-            "kind": "single-select",
-            "name": "Status",
-            "options": [
-              {
-                "color": "YELLOW",
-                "id": "option-1",
-                "name": "In progress"
-              }
-            ]
-          }
-        ],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
+    "ad112425d74f": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueTypeBySlug"
         },
-        "rows": [
-          {
-            "content": {
-              "assignees": [],
-              "issueType": {
-                "$rpc": "null"
-              },
-              "labels": [],
-              "number": 1,
-              "repository": "owner/repo",
-              "state": "OPEN",
-              "url": "https://github.com/owner/repo/issues/1"
-            },
-            "fieldValuesByFieldId": {},
-            "id": "item-1",
-            "itemType": "ISSUE"
-          },
-          {
-            "content": {
-              "assignees": [],
-              "issueType": {
-                "$rpc": "null"
-              },
-              "labels": [],
-              "number": 2,
-              "repository": "owner/repo",
-              "state": "OPEN",
-              "url": "https://github.com/owner/repo/pull/2"
-            },
-            "fieldValuesByFieldId": {},
-            "id": "item-2",
-            "itemType": "PULL_REQUEST"
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "issueTypeId": "type-1",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo"
           }
-        ],
-        "selectedView": {
-          "filter": "",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "a90f501112f8": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "Unknown method"
+    "b2345144ca7e": {
+      "name": "projectFieldDrafts",
+      "value": {
+        "field-1": ""
+      },
+      "sent": 2
     },
-    "ab52357ddee7": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "inner refused"
-    },
-    "b849b5f1de35": {
+    "d19660e0ba85": {
       "name": "github.project.updateItemField#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateItemField\",\"params\":{\"projectId\":\"project-1\",\"host\":\"github.enterprise.test\",\"itemId\":\"item-1\",\"fieldId\":\"field-1\",\"value\":{\"kind\":\"single-select\",\"optionId\":\"option-1\"}}}"
-    },
-    "bff535848bcf": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": ""
-    },
-    "c0f6974a198e": {
-      "name": "githubProjectTable",
-      "ordinal": 18,
-      "value": {
-        "fields": [
-          {
-            "dataType": "SINGLE_SELECT",
-            "id": "field-1",
-            "kind": "single-select",
-            "name": "Status",
-            "options": [
-              {
-                "color": "YELLOW",
-                "id": "option-1",
-                "name": "In progress"
-              }
-            ]
-          }
-        ],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateItemField"
         },
-        "rows": [
-          {
-            "content": {
-              "assignees": [],
-              "issueType": {
-                "color": "RED",
-                "description": {
-                  "$rpc": "null"
-                },
-                "id": "type-1",
-                "name": "Bug"
-              },
-              "labels": [],
-              "number": 1,
-              "repository": "owner/repo",
-              "state": "OPEN",
-              "url": "https://github.com/owner/repo/issues/1"
-            },
-            "fieldValuesByFieldId": {},
-            "id": "item-1",
-            "itemType": "ISSUE"
-          },
-          {
-            "content": {
-              "assignees": [],
-              "issueType": {
-                "$rpc": "null"
-              },
-              "labels": [],
-              "number": 2,
-              "repository": "owner/repo",
-              "state": "OPEN",
-              "url": "https://github.com/owner/repo/pull/2"
-            },
-            "fieldValuesByFieldId": {},
-            "id": "item-2",
-            "itemType": "PULL_REQUEST"
+        {
+          "name": "params",
+          "value": {
+            "fieldId": "field-1",
+            "host": "github.enterprise.test",
+            "itemId": "item-1",
+            "projectId": "project-1",
+            "value": {
+              "kind": "single-select",
+              "optionId": "option-1"
+            }
           }
-        ],
-        "selectedView": {
-          "filter": "",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
         }
       }
     },
-    "d0617c2f5659": {
+    "d1a1ddbea4f4": {
+      "name": "projectRowDetailError",
+      "value": "Failed to update issue type",
+      "sent": 3
+    },
+    "d1bb762720d5": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 1
+    },
+    "d72ea315da15": {
+      "name": "projectRowDetailError",
+      "value": "transport failure",
+      "sent": 3
+    },
+    "d74cf538de66": {
       "name": "projectRowItem",
-      "ordinal": 4,
       "value": {
         "content": {
           "assignees": [],
@@ -1365,22 +1499,14 @@
           "state": "OPEN",
           "url": "https://github.com/owner/repo/issues/1"
         },
-        "fieldValuesByFieldId": {
-          "field-1": {
-            "color": "YELLOW",
-            "fieldId": "field-1",
-            "kind": "single-select",
-            "name": "In progress",
-            "optionId": "option-1"
-          }
-        },
+        "fieldValuesByFieldId": {},
         "id": "item-1",
         "itemType": "ISSUE"
-      }
+      },
+      "sent": 2
     },
-    "d32da45ac925": {
+    "d8504a4a27ff": {
       "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -1411,46 +1537,15 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "error": "refused"
+            "ok": true
           }
         }
       }
     },
-    "d4dac0b465bb": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueTypeBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "issueTypeId": "type-1",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
+    "d856c0886ca0": {
+      "name": "projectRowDetailError",
+      "value": "Unknown method",
+      "sent": 3
     },
     "de29905548eb": {
       "error": "",
@@ -1545,17 +1640,43 @@
         }
       }
     },
-    "e09e2ac8124b": {
-      "name": "projectFieldDrafts",
-      "ordinal": 12,
-      "value": {
-        "field-1": ""
+    "e44d4ff4fd2c": {
+      "name": "github.project.updateIssueTypeBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueTypeBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "issueTypeId": "type-1",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
       }
-    },
-    "e3180bc6526a": {
-      "name": "projectMutating",
-      "ordinal": 13,
-      "value": false
     },
     "e4b835fd05c7": {
       "error": "Cannot read properties of undefined (reading 'ok')",
@@ -1640,9 +1761,31 @@
         }
       }
     },
-    "e6e6a29e5419": {
+    "e7d38ed5fb03": {
+      "name": "projectRowDetailError",
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 3
+    },
+    "eb612a2e1a87": {
+      "name": "projectRowDetailError",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 3
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f37a9bff665c": {
+      "name": "projectRowDetailError",
+      "value": "Connection closed",
+      "sent": 3
+    },
+    "f4712f15d814": {
       "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -1670,130 +1813,17 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
           "id": "frame-3",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
+          "ok": false
         }
       }
     },
-    "e969afb182da": {
-      "name": "githubProjectTable",
-      "ordinal": 5,
-      "value": {
-        "fields": [
-          {
-            "dataType": "SINGLE_SELECT",
-            "id": "field-1",
-            "kind": "single-select",
-            "name": "Status",
-            "options": [
-              {
-                "color": "YELLOW",
-                "id": "option-1",
-                "name": "In progress"
-              }
-            ]
-          }
-        ],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
-        },
-        "rows": [
-          {
-            "content": {
-              "assignees": [],
-              "issueType": {
-                "$rpc": "null"
-              },
-              "labels": [],
-              "number": 1,
-              "repository": "owner/repo",
-              "state": "OPEN",
-              "url": "https://github.com/owner/repo/issues/1"
-            },
-            "fieldValuesByFieldId": {
-              "field-1": {
-                "color": "YELLOW",
-                "fieldId": "field-1",
-                "kind": "single-select",
-                "name": "In progress",
-                "optionId": "option-1"
-              }
-            },
-            "id": "item-1",
-            "itemType": "ISSUE"
-          },
-          {
-            "content": {
-              "assignees": [],
-              "issueType": {
-                "$rpc": "null"
-              },
-              "labels": [],
-              "number": 2,
-              "repository": "owner/repo",
-              "state": "OPEN",
-              "url": "https://github.com/owner/repo/pull/2"
-            },
-            "fieldValuesByFieldId": {},
-            "id": "item-2",
-            "itemType": "PULL_REQUEST"
-          }
-        ],
-        "selectedView": {
-          "filter": "",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      }
-    },
-    "ea064759ca04": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "transport failure"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "ef5a2c4ee0b4": {
-      "name": "projectRowItem",
-      "ordinal": 17,
-      "value": {
-        "content": {
-          "assignees": [],
-          "issueType": {
-            "color": "RED",
-            "description": {
-              "$rpc": "null"
-            },
-            "id": "type-1",
-            "name": "Bug"
-          },
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo",
-          "state": "OPEN",
-          "url": "https://github.com/owner/repo/issues/1"
-        },
-        "fieldValuesByFieldId": {},
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "efc7c3d84f9e": {
+    "f692cb94d5e5": {
       "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -1831,55 +1861,6 @@
           }
         }
       }
-    },
-    "f39ed9ab521e": {
-      "name": "projectMutating",
-      "ordinal": 7,
-      "value": true
-    },
-    "f4a22493ac89": {
-      "name": "github.project.updateIssueTypeBySlug#1",
-      "ordinal": 15,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueTypeBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "issueTypeId": "type-1",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "fc81dfe2109f": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "Cannot read properties of undefined (reading 'ok')"
     }
   },
   "recording": {
@@ -1888,21 +1869,21 @@
       {
         "id": "tk-project-row-fields.prelude:set-field-settled",
         "observation": {
-          "sender": ["73039dc59899"],
-          "payloads": ["b849b5f1de35"],
+          "sender": ["d19660e0ba85"],
+          "payloads": ["3602df6361c4"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a"
           },
           "state": "424e9a1ae7ed",
-          "effects": ["5d32aa29303c", "d0617c2f5659", "e969afb182da", "72332e237f1f"]
+          "effects": ["7b2465eedefe", "34daaf185d9e", "208468d41a71", "02839f22d2db"]
         }
       },
       {
         "id": "tk-project-row-fields.prelude:clear-field-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c"],
-          "payloads": ["b849b5f1de35", "093815ac28fb"],
+          "sender": ["d19660e0ba85", "46c028c0d924"],
+          "payloads": ["3602df6361c4", "3dd9611f0850"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -1910,23 +1891,23 @@
           },
           "state": "68296a29ee63",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.prelude:cleanup",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "8bc50051fc54"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "ad112425d74f"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -1935,26 +1916,26 @@
           },
           "state": "6e1a42381897",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "9178c438fa7b",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "f37a9bff665c",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.normal:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "e6e6a29e5419"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "d8504a4a27ff"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -1963,27 +1944,27 @@
           },
           "state": "de29905548eb",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "ef5a2c4ee0b4",
-            "c0f6974a198e",
-            "7440f0f1bab9"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "574da420bac4",
+            "824d5b4543f1",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.result-absent:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "a0e0c04dece2"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "63352559e8ae"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -1992,26 +1973,26 @@
           },
           "state": "e4b835fd05c7",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "fc81dfe2109f",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "e7d38ed5fb03",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.result-null:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "47711910ddd4"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "6a1a1849278e"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2020,26 +2001,26 @@
           },
           "state": "609b678e071d",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "6fa1c828a0ac",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "eb612a2e1a87",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.inner-ok-missing:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "d32da45ac925"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "410042a82391"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2048,27 +2029,27 @@
           },
           "state": "de29905548eb",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "ef5a2c4ee0b4",
-            "c0f6974a198e",
-            "7440f0f1bab9"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "574da420bac4",
+            "824d5b4543f1",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.inner-false-string-error:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "5797e2249a89"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "1cac1b5d748f"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2077,26 +2058,26 @@
           },
           "state": "7c1d7cf7bffa",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "32537a469112",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "d1a1ddbea4f4",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.inner-false-object-error:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "efc7c3d84f9e"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "f692cb94d5e5"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2105,26 +2086,26 @@
           },
           "state": "06f1fbeb0d68",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "ab52357ddee7",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "1b30471b40d2",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.outer-refused:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "8448cf1d250f"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "e44d4ff4fd2c"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2133,26 +2114,26 @@
           },
           "state": "56f10066f7c7",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "2dc6bc594542",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "9138850642c5",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.outer-refused-no-message:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "f4a22493ac89"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "f4712f15d814"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2161,26 +2142,26 @@
           },
           "state": "68296a29ee63",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "bff535848bcf",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "347fa6adc9f3",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.method-not-found:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "28df9bffe06e"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "aa3d456d5986"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2189,26 +2170,26 @@
           },
           "state": "4f9f6d6a111c",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "a90f501112f8",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "d856c0886ca0",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.transport-rejection:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "55cfdf6b82e5"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "4134e8c61d66"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2217,26 +2198,26 @@
           },
           "state": "979b91030a71",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "ea064759ca04",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "d72ea315da15",
+            "73c3051352c2"
           ]
         }
       },
       {
         "id": "tk-project-row-fields.transport-rejection-no-message:issue-type-settled",
         "observation": {
-          "sender": ["73039dc59899", "6623e063706c", "d4dac0b465bb"],
-          "payloads": ["b849b5f1de35", "093815ac28fb", "491a53ca1f35"],
+          "sender": ["d19660e0ba85", "46c028c0d924", "41896a7a7f79"],
+          "payloads": ["3602df6361c4", "3dd9611f0850", "60c2e1f55655"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "set-field-0": "eb79a9b3682a",
@@ -2245,18 +2226,18 @@
           },
           "state": "68296a29ee63",
           "effects": [
-            "5d32aa29303c",
-            "d0617c2f5659",
-            "e969afb182da",
-            "72332e237f1f",
-            "f39ed9ab521e",
-            "40dc9d5e44c9",
-            "a1dab467956d",
-            "e09e2ac8124b",
-            "e3180bc6526a",
-            "4123bc693ce4",
-            "bff535848bcf",
-            "1cc38c8dde55"
+            "7b2465eedefe",
+            "34daaf185d9e",
+            "208468d41a71",
+            "02839f22d2db",
+            "d1bb762720d5",
+            "d74cf538de66",
+            "55107e6e9979",
+            "b2345144ca7e",
+            "6f4f9198e5ff",
+            "0f3697bbd111",
+            "347fa6adc9f3",
+            "73c3051352c2"
           ]
         }
       }

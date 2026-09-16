@@ -3,9 +3,9 @@
   "family": "tasks.item-comment-gitlab-mr",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "cb696d402b8af2b9a54d4d6f9d85abfc12280e73b360196e55ec25530e610eee",
   "platform": "darwin",
@@ -13,20 +13,35 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "14949c71727e": {
+    "1792a570e51c": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 905
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      },
+      "sent": 1
+    },
+    "32a3635e06a4": {
       "name": "mutatingStatus",
-      "ordinal": 7,
-      "value": false
-    },
-    "59b03dcdb55e": {
-      "name": "itemCommentDraft",
-      "ordinal": 5,
-      "value": ""
-    },
-    "63b426badd37": {
-      "name": "gitlab.addMRComment#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addMRComment\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
+      "value": false,
+      "sent": 1
     },
     "6c49f5e0f2ca": {
       "draft": "",
@@ -67,9 +82,13 @@
         "provider": "gitlab"
       }
     },
-    "de38fe098abd": {
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
+    },
+    "c6b7aaa4bd08": {
       "name": "gitlab.addMRComment#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -110,6 +129,16 @@
         }
       }
     },
+    "cc96725d8f47": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 0
+    },
+    "e13ed6b2ab74": {
+      "name": "gitlab.addMRComment#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addMRComment\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}",
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -118,40 +147,10 @@
         "$rpc": "undefined"
       }
     },
-    "ed3a7d6bc894": {
-      "name": "error",
-      "ordinal": 2,
-      "value": ""
-    },
-    "f157114ec080": {
-      "name": "detailPayload",
-      "ordinal": 6,
-      "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 905
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "fd2fad47bec2": {
-      "name": "mutatingStatus",
-      "ordinal": 1,
-      "value": true
+    "ffdb6c1abbef": {
+      "name": "itemCommentDraft",
+      "value": "",
+      "sent": 1
     }
   },
   "recording": {
@@ -160,19 +159,19 @@
       {
         "id": "comment-settled",
         "observation": {
-          "sender": ["de38fe098abd"],
-          "payloads": ["63b426badd37"],
+          "sender": ["c6b7aaa4bd08"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
           "state": "6c49f5e0f2ca",
           "effects": [
-            "fd2fad47bec2",
-            "ed3a7d6bc894",
-            "59b03dcdb55e",
-            "f157114ec080",
-            "14949c71727e"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "ffdb6c1abbef",
+            "1792a570e51c",
+            "32a3635e06a4"
           ]
         }
       }

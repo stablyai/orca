@@ -3,19 +3,23 @@
   "family": "settings.task-workspace",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
-  "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
   "scenarioSha256": "994ea8b4ddb05774a8c2d5902bb68bf5e8f25399a787262b8f23f458f2790698",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0de38c54b7c1": {
+    "01533f698bc3": {
+      "name": "workspaceAgent",
+      "value": "codex",
+      "sent": 1
+    },
+    "090c88478661": {
       "name": "settings.get#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -35,19 +39,45 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "0fc3e204e7ba": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
         }
       }
     },
-    "143586ed2364": {
+    "127ad2bdc042": {
       "name": "settings.get#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -82,26 +112,30 @@
         }
       }
     },
-    "1686352a2bbd": {
-      "name": "error",
-      "ordinal": 8,
-      "value": "Selected agent is disabled. Choose an enabled agent before creating."
-    },
-    "1a4a4adee14f": {
+    "2a3409305e35": {
       "name": "creatingKey",
-      "ordinal": 8,
+      "value": "linear:1",
+      "sent": 0
+    },
+    "2a5e2689bf37": {
+      "name": "setupPrompt",
       "value": {
-        "$rpc": "null"
-      }
+        "agentOverride": "claude",
+        "command": "setup",
+        "item": {
+          "key": "linear:1",
+          "provider": "linear",
+          "source": {
+            "id": "issue-1"
+          }
+        },
+        "repoName": "Repo",
+        "source": "repo"
+      },
+      "sent": 1
     },
-    "2a351b169759": {
-      "name": "workspaceAgentOverridden",
-      "ordinal": 7,
-      "value": false
-    },
-    "377e2658e1c6": {
+    "2b3aa0da0852": {
       "name": "settings.get#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -121,22 +155,41 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "3d80d04df464": {
+    "2d957a8af6b3": {
+      "name": "runtimeTaskSettings",
+      "value": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      },
+      "sent": 1
+    },
+    "3542b2dc7cf4": {
+      "name": "creatingKey",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
+    },
+    "5c52bc3f9e55": {
       "name": "settings.get#1",
-      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 1
+    },
+    "6a98511b6371": {
+      "name": "settings.get#1",
       "args": [
         {
           "name": "method",
@@ -169,40 +222,15 @@
         }
       }
     },
-    "41a2214deb19": {
-      "name": "settings.get#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
+    "7abdfe20af50": {
+      "creating": "linear:1",
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
       }
     },
-    "483b4c51c982": {
-      "name": "error",
-      "ordinal": 7,
-      "value": "Selected agent is disabled. Choose an enabled agent before creating."
-    },
-    "515754ff63c6": {
+    "7ca23c4c946b": {
       "name": "settings.get#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -240,14 +268,8 @@
         }
       }
     },
-    "563b6d30cbc3": {
-      "name": "runtimeTaskSettings",
-      "ordinal": 5,
-      "value": {}
-    },
-    "5dfa692a84f8": {
+    "8b77098df0c3": {
       "name": "settings.get#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -272,14 +294,26 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "",
+          "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "5ef461d18660": {
+    "8b8197eed660": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      }
+    },
+    "8f8296303a77": {
       "name": "settings.get#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -312,132 +346,19 @@
         }
       }
     },
-    "626f3cf8fc2d": {
-      "name": "workspaceAgentOverridden",
-      "ordinal": 6,
-      "value": false
-    },
-    "7abdfe20af50": {
-      "creating": "linear:1",
-      "error": "",
-      "settings": {
-        "disabledTuiAgents": ["claude"]
-      }
-    },
-    "82b1a94a28f4": {
-      "name": "runtimeTaskSettings",
-      "ordinal": 5,
-      "value": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": ["claude"],
-        "hostSettingOverrides": {},
-        "prBotAuthorOverrides": ["bot-user"],
-        "visibleTaskProviders": ["github", "linear"]
-      }
-    },
-    "8811969aea41": {
-      "name": "settings.get#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "8b8197eed660": {
-      "creating": {
-        "$rpc": "null"
-      },
-      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
-      "settings": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": ["claude"],
-        "hostSettingOverrides": {},
-        "prBotAuthorOverrides": ["bot-user"],
-        "visibleTaskProviders": ["github", "linear"]
-      }
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "951af0d31429": {
-      "name": "settings.get#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
+    "98260d6be053": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 1
     },
-    "975f2ff9a730": {
-      "name": "settings.get#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "a492527dfec9": {
-      "name": "setupPrompt",
-      "ordinal": 6,
-      "value": {
-        "agentOverride": "claude",
-        "command": "setup",
-        "item": {
-          "key": "linear:1",
-          "provider": "linear",
-          "source": {
-            "id": "issue-1"
-          }
-        },
-        "repoName": "Repo",
-        "source": "repo"
-      }
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
     },
     "adec34c2065c": {
       "creating": {
@@ -446,126 +367,8 @@
       "error": "",
       "settings": {}
     },
-    "c8c640db7dff": {
-      "name": "workspaceAgent",
-      "ordinal": 6,
-      "value": "codex"
-    },
-    "d048cafe213d": {
+    "b759ab27e4dd": {
       "name": "settings.get#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "d1777904aa15": {
-      "name": "workspaceAgent",
-      "ordinal": 5,
-      "value": "codex"
-    },
-    "d5df3f6b123a": {
-      "creating": {
-        "$rpc": "null"
-      },
-      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
-      "settings": {
-        "disabledTuiAgents": ["claude"]
-      }
-    },
-    "d82310a7e5db": {
-      "name": "settings.get#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "d958e78341fc": {
-      "name": "creatingKey",
-      "ordinal": 7,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "e0a8ee1f3c00": {
-      "name": "creatingKey",
-      "ordinal": 1,
-      "value": "linear:1"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "ed3a7d6bc894": {
-      "name": "error",
-      "ordinal": 2,
-      "value": ""
-    },
-    "f2ebfa81caaf": {
-      "name": "creatingKey",
-      "ordinal": 9,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "fc902c20ffc9": {
-      "name": "settings.get#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -597,6 +400,161 @@
           "ok": false
         }
       }
+    },
+    "d27ce798af34": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "d5df3f6b123a": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "e0cf1af55a54": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "e1bd8b4a5d70": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "eaf6fe088c19": {
+      "name": "error",
+      "value": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "sent": 1
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f80ac8877eab": {
+      "name": "runtimeTaskSettings",
+      "value": {},
+      "sent": 1
+    },
+    "f84a8688af61": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
     }
   },
   "recording": {
@@ -605,251 +563,251 @@
       {
         "id": "settings-task-workspace-fulfilled.prelude:settings-pending",
         "observation": {
-          "sender": ["41a2214deb19"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["090c88478661"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "7abdfe20af50",
-          "effects": ["e0a8ee1f3c00", "ed3a7d6bc894"]
+          "effects": ["2a3409305e35", "9e263f5e91be"]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.prelude:cleanup",
         "observation": {
-          "sender": ["d048cafe213d"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["f84a8688af61"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "7abdfe20af50",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.normal:settled",
         "observation": {
-          "sender": ["515754ff63c6"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["7ca23c4c946b"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "8b8197eed660",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "82b1a94a28f4",
-            "c8c640db7dff",
-            "2a351b169759",
-            "1686352a2bbd",
-            "f2ebfa81caaf"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "2d957a8af6b3",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.result-absent:settled",
         "observation": {
-          "sender": ["951af0d31429"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["e0cf1af55a54"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.result-null:settled",
         "observation": {
-          "sender": ["d82310a7e5db"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["e1bd8b4a5d70"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.inner-ok-missing:settled",
         "observation": {
-          "sender": ["8811969aea41"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["0fc3e204e7ba"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "adec34c2065c",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "563b6d30cbc3",
-            "a492527dfec9",
-            "d958e78341fc"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "2a5e2689bf37",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.inner-false-string-error:settled",
         "observation": {
-          "sender": ["377e2658e1c6"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["d27ce798af34"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "adec34c2065c",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "563b6d30cbc3",
-            "a492527dfec9",
-            "d958e78341fc"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "2a5e2689bf37",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.inner-false-object-error:settled",
         "observation": {
-          "sender": ["143586ed2364"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["127ad2bdc042"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "adec34c2065c",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "563b6d30cbc3",
-            "a492527dfec9",
-            "d958e78341fc"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "2a5e2689bf37",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.outer-refused:settled",
         "observation": {
-          "sender": ["5ef461d18660"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["8f8296303a77"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["3d80d04df464"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["6a98511b6371"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.method-not-found:settled",
         "observation": {
-          "sender": ["fc902c20ffc9"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["b759ab27e4dd"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.transport-rejection:settled",
         "observation": {
-          "sender": ["0de38c54b7c1"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["8b77098df0c3"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
       {
         "id": "settings-task-workspace-fulfilled.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["5dfa692a84f8"],
-          "payloads": ["975f2ff9a730"],
+          "sender": ["2b3aa0da0852"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "e0a8ee1f3c00",
-            "ed3a7d6bc894",
-            "d1777904aa15",
-            "626f3cf8fc2d",
-            "483b4c51c982",
-            "1a4a4adee14f"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       }

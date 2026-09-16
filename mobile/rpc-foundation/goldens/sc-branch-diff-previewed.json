@@ -3,10 +3,10 @@
   "family": "git.branch-diff-preview",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
-  "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "57147be5ea5d7c74e8fd0d2473c7001dd91008cf53128d5e60fd6d3d607183e6",
   "scenarioSha256": "819d010b9a8bb2741b09f104415f648e0e65d797882a2152ccfa4fb8a107cafc",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -20,42 +20,8 @@
         "truncated": false
       }
     },
-    "040bae459f65": {
+    "2465956f5415": {
       "name": "git.branchDiff#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchDiff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "compare": {
-              "baseOid": "base-oid",
-              "baseRef": "origin/main",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
-            },
-            "filePath": "src/app.ts",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "1908cad2fe5e": {
-      "name": "git.branchDiff#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -96,14 +62,46 @@
         }
       }
     },
-    "424c6bc6b69b": {
+    "91c37bcd04c9": {
       "name": "git.branchDiff#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo42::/p\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}"
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "compare": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base"
+            },
+            "filePath": "src/app.ts",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "a13b63650ed2": {
+      "name": "git.branchDiff#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo42::/p\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}",
+      "sent": 1
     },
     "e5400edc0fdd": {
       "preview": {
@@ -125,8 +123,8 @@
       {
         "id": "diff-pending",
         "observation": {
-          "sender": ["040bae459f65"],
-          "payloads": ["424c6bc6b69b"],
+          "sender": ["91c37bcd04c9"],
+          "payloads": ["a13b63650ed2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open": "9270aeb7d9c6"
@@ -138,8 +136,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["1908cad2fe5e"],
-          "payloads": ["424c6bc6b69b"],
+          "sender": ["2465956f5415"],
+          "payloads": ["a13b63650ed2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open": "eb79a9b3682a"

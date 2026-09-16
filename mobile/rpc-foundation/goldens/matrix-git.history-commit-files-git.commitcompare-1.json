@@ -3,38 +3,27 @@
   "family": "git.history-commit-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
-  "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "57147be5ea5d7c74e8fd0d2473c7001dd91008cf53128d5e60fd6d3d607183e6",
   "scenarioSha256": "fc12c33acd3f3a34cbdb5893204be009bb089e2383a715fea4151c912de11ab0",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0a26f0498c96": {
-      "name": "git.commitCompare#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.commitCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"commitId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}"
-    },
-    "0e92a08f8380": {
+    "17bc1e177fe1": {
       "name": "git.history#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
-    },
-    "11a306daf1d5": {
-      "name": "git.commitCompare#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "git.commitCompare"
+          "value": "git.history"
         },
         {
           "name": "params",
           "value": {
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "limit": 50,
             "worktree": "id:repo42::/p"
           }
         },
@@ -46,18 +35,12 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "2aefb3585b96": {
+    "2ea5bae46e87": {
       "name": "git.commitCompare#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -82,12 +65,14 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
           "id": "frame-2",
-          "ok": false
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
         }
       }
     },
@@ -102,9 +87,19 @@
       "labels": [],
       "text": []
     },
-    "3897e5e98ea7": {
+    "50a8663c6ca2": {
+      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "No file changes"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "69050e5a4b01": {
       "name": "git.commitCompare#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -137,148 +132,8 @@
         }
       }
     },
-    "422907b8d3a0": {
+    "71b6cd7c1ab9": {
       "name": "git.commitCompare#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.commitCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "486b65ae0756": {
-      "name": "git.commitCompare#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.commitCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "50a8663c6ca2": {
-      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "No file changes"],
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "FlatList": 1
-      },
-      "labels": [],
-      "text": []
-    },
-    "5d7a655deafc": {
-      "name": "git.history#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.history"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 50,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "635bd2bf140a": {
-      "name": "git.commitCompare#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.commitCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "68ada0c25629": {
-      "name": "git.commitCompare#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -312,21 +167,47 @@
         }
       }
     },
-    "8271d8fc83a6": {
-      "commitRow": "unrendered",
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "View": 1
-      },
-      "labels": [],
-      "text": []
-    },
-    "93866d571e27": {
+    "7dcf11a76b50": {
       "name": "git.commitCompare#1",
-      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "7e2ddc2aee54": {
+      "name": "git.history#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}",
+      "sent": 1
+    },
+    "7ec1daf6558e": {
+      "name": "git.commitCompare#1",
       "args": [
         {
           "name": "method",
@@ -360,9 +241,218 @@
         }
       }
     },
-    "94c8fcc83e52": {
+    "8271d8fc83a6": {
+      "commitRow": "unrendered",
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "View": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "83c65c3101c2": {
+      "name": "git.commitCompare#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.commitCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"commitId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "sent": 2
+    },
+    "8effc530299a": {
+      "name": "git.commitCompare#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "9af72aef4cd4": {
+      "name": "git.commitCompare#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9c31d251527e": {
+      "name": "git.commitCompare#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9d4d0ea6c245": {
+      "commitRow": [
+        "first",
+        "aaaaaaa",
+        " · ",
+        "dev",
+        " · ",
+        "1h",
+        "src/app.ts",
+        "+",
+        "4",
+        " ",
+        "-",
+        "1",
+        "src/other.ts",
+        "+",
+        "9",
+        " "
+      ],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "a283e281da26": {
+      "name": "git.commitCompare#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "a5ec382f1ea9": {
+      "name": "git.commitCompare#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "b2ab284c5373": {
       "name": "git.history#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -404,75 +494,8 @@
         }
       }
     },
-    "9d4d0ea6c245": {
-      "commitRow": [
-        "first",
-        "aaaaaaa",
-        " · ",
-        "dev",
-        " · ",
-        "1h",
-        "src/app.ts",
-        "+",
-        "4",
-        " ",
-        "-",
-        "1",
-        "src/other.ts",
-        "+",
-        "9",
-        " "
-      ],
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "FlatList": 1
-      },
-      "labels": [],
-      "text": []
-    },
-    "c0e03d216935": {
+    "d20f49d98e53": {
       "name": "git.commitCompare#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.commitCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "ce63cea4bc23": {
-      "name": "git.commitCompare#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -497,9 +520,8 @@
         "startedAt": 0
       }
     },
-    "da380f404a23": {
+    "d573c17c2122": {
       "name": "git.commitCompare#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -551,42 +573,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f74a46ce4082": {
-      "name": "git.commitCompare#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.commitCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
     }
   },
   "recording": {
@@ -595,8 +581,8 @@
       {
         "id": "sc-history-commit-files.prelude:history-pending",
         "observation": {
-          "sender": ["5d7a655deafc"],
-          "payloads": ["0e92a08f8380"],
+          "sender": ["17bc1e177fe1"],
+          "payloads": ["7e2ddc2aee54"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -607,8 +593,8 @@
       {
         "id": "sc-history-commit-files.prelude:files-pending",
         "observation": {
-          "sender": ["94c8fcc83e52", "ce63cea4bc23"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "d20f49d98e53"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -620,8 +606,8 @@
       {
         "id": "sc-history-commit-files.normal:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "da380f404a23"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "d573c17c2122"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -633,8 +619,8 @@
       {
         "id": "sc-history-commit-files.result-absent:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "11a306daf1d5"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "a5ec382f1ea9"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -646,8 +632,8 @@
       {
         "id": "sc-history-commit-files.result-null:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "3897e5e98ea7"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "69050e5a4b01"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -659,8 +645,8 @@
       {
         "id": "sc-history-commit-files.inner-ok-missing:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "422907b8d3a0"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "7dcf11a76b50"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -672,8 +658,8 @@
       {
         "id": "sc-history-commit-files.inner-false-string-error:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "93866d571e27"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "7ec1daf6558e"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -685,8 +671,8 @@
       {
         "id": "sc-history-commit-files.inner-false-object-error:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "c0e03d216935"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "2ea5bae46e87"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -698,8 +684,8 @@
       {
         "id": "sc-history-commit-files.outer-refused:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "68ada0c25629"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "71b6cd7c1ab9"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -711,8 +697,8 @@
       {
         "id": "sc-history-commit-files.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "2aefb3585b96"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "a283e281da26"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -724,8 +710,8 @@
       {
         "id": "sc-history-commit-files.method-not-found:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "f74a46ce4082"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "8effc530299a"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -737,8 +723,8 @@
       {
         "id": "sc-history-commit-files.transport-rejection:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "635bd2bf140a"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "9af72aef4cd4"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
@@ -750,8 +736,8 @@
       {
         "id": "sc-history-commit-files.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["94c8fcc83e52", "486b65ae0756"],
-          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "sender": ["b2ab284c5373", "9c31d251527e"],
+          "payloads": ["7e2ddc2aee54", "83c65c3101c2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"

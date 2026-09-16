@@ -3,9 +3,9 @@
   "family": "session.tab-close",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "fe83a7d50d08f874d863eb8872bcb24d974c1dc46571a93d3f9184f8feba63a4",
   "platform": "darwin",
@@ -13,41 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1195cdf08e57": {
-      "name": "unsubscribe-terminal",
-      "ordinal": 3,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
-    "32947a33faab": {
-      "name": "clear-live-input",
-      "ordinal": 4,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
-    "50a46af5cf5c": {
+    "375042b2eaa9": {
       "name": "session.tabs.close#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.close\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"reason\":\"user\"}}"
-    },
-    "567d11711027": {
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": [
-        {
-          "handle": "terminal-1",
-          "isActive": true,
-          "title": "Terminal"
-        }
-      ]
-    },
-    "de4cc94c0333": {
-      "name": "session.tabs.close#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -81,6 +48,38 @@
         }
       }
     },
+    "567d11711027": {
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "Terminal"
+        }
+      ]
+    },
+    "6b12924233e1": {
+      "name": "session.tabs.close#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.close\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"reason\":\"user\"}}",
+      "sent": 1
+    },
+    "a1c0c7168922": {
+      "name": "unsubscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
+    "c965e2e20176": {
+      "name": "clear-live-input",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -96,13 +95,13 @@
       {
         "id": "closed",
         "observation": {
-          "sender": ["de4cc94c0333"],
-          "payloads": ["50a46af5cf5c"],
+          "sender": ["375042b2eaa9"],
+          "payloads": ["6b12924233e1"],
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["a1c0c7168922", "c965e2e20176"]
         }
       }
     ]

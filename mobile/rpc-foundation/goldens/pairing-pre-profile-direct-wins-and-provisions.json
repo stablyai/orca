@@ -3,9 +3,9 @@
   "family": "pairing.pre-profile",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "e4fb7aa3b071c1207f206adcc0f31e92b6bb98a80f86a0772e48b5cebcab24ff",
   "platform": "darwin",
@@ -13,24 +13,56 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "061b247f2805": {
-      "name": "host-saved",
-      "ordinal": 13,
-      "value": "relay-host-0001x"
-    },
-    "077b94702eb7": {
-      "name": "candidate-closed",
-      "ordinal": 15,
-      "value": "direct"
-    },
-    "1f647ffe77b0": {
-      "name": "pairing.getEndpoints#1",
-      "ordinal": 11,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}"
-    },
-    "28a5fc6036c5": {
+    "0b5064a35c5a": {
       "name": "pairing.provisionRelay#1",
-      "ordinal": 8,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}",
+      "sent": 3
+    },
+    "0b595cd54ac3": {
+      "name": "journal-saved",
+      "value": "pair-fixture-1",
+      "sent": 0
+    },
+    "12869cc488be": {
+      "name": "host-saved",
+      "value": "relay-host-0001x",
+      "sent": 4
+    },
+    "26f802fad080": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "3c9308d9b7be": {
+      "name": "pairing.provisionRelay#1",
       "args": [
         {
           "name": "method",
@@ -67,122 +99,23 @@
         }
       }
     },
-    "33c6a36cc4b6": {
-      "name": "journal-cleared",
-      "ordinal": 14,
-      "value": "pair-fixture-1"
-    },
-    "406c8ab0b9b6": {
-      "name": "journal-saved",
-      "ordinal": 1,
-      "value": "pair-fixture-1"
-    },
-    "6995d6b0bd4c": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": []
-          }
-        }
-      }
-    },
-    "6d04596c636d": {
-      "name": "status.get#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "8bf25ca8d4ae": {
-      "name": "bundle-written",
-      "ordinal": 12,
-      "value": {
-        "version": 4
-      }
-    },
-    "8e378786864c": {
-      "name": "candidate-closed",
-      "ordinal": 6,
-      "value": "relay"
-    },
-    "9b50435fa2f8": {
-      "outcome": "host-1",
-      "savedHost": "relay-host-0001x",
-      "timedOut": false
-    },
-    "c86730581187": {
-      "name": "status.get#2",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "capabilities": []
-          }
-        }
-      }
-    },
-    "d1b2eddf66f4": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "hostId": "host-1"
-      }
-    },
-    "e29d4c104dd3": {
-      "name": "journal-updated",
-      "ordinal": 7,
-      "value": "pair-fixture-1"
-    },
-    "ea163bb1f5e0": {
+    "402b39e9424c": {
       "name": "pairing.getEndpoints#1",
-      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}",
+      "sent": 4
+    },
+    "477b001b0374": {
+      "name": "candidate-closed",
+      "value": "direct",
+      "sent": 4
+    },
+    "47dedea61355": {
+      "name": "journal-cleared",
+      "value": "pair-fixture-1",
+      "sent": 4
+    },
+    "56266d1e7340": {
+      "name": "pairing.getEndpoints#1",
       "args": [
         {
           "name": "method",
@@ -234,20 +167,83 @@
         }
       }
     },
-    "edde120654bf": {
+    "63ab1563ba51": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "6b9f1bf73e55": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 4
+    },
+    "6cb74a535419": {
       "name": "status.get#2",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
     },
-    "f49423f836f9": {
-      "name": "pairing.provisionRelay#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
+    "9b50435fa2f8": {
+      "outcome": "host-1",
+      "savedHost": "relay-host-0001x",
+      "timedOut": false
     },
-    "f6b99510eefb": {
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "b96f13a39e18": {
+      "name": "journal-updated",
+      "value": "pair-fixture-1",
+      "sent": 2
+    },
+    "ca7cb1785a59": {
       "name": "candidate-closed",
-      "ordinal": 16,
-      "value": "relay"
+      "value": "relay",
+      "sent": 4
+    },
+    "d1b2eddf66f4": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "hostId": "host-1"
+      }
+    },
+    "d433a326314e": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 2
     }
   },
   "recording": {
@@ -256,21 +252,21 @@
       {
         "id": "paired-over-direct",
         "observation": {
-          "sender": ["6995d6b0bd4c", "c86730581187", "28a5fc6036c5", "ea163bb1f5e0"],
-          "payloads": ["6d04596c636d", "edde120654bf", "f49423f836f9", "1f647ffe77b0"],
+          "sender": ["26f802fad080", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "406c8ab0b9b6",
-            "8e378786864c",
-            "e29d4c104dd3",
-            "8bf25ca8d4ae",
-            "061b247f2805",
-            "33c6a36cc4b6",
-            "077b94702eb7",
-            "f6b99510eefb"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       }

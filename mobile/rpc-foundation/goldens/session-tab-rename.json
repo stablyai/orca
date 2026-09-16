@@ -3,9 +3,9 @@
   "family": "session.tab-close",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "9e877af8539e5425f65edd6b3ff8af73e719aae2033980411a8e8a3b508dcd9e",
   "platform": "darwin",
@@ -13,9 +13,37 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "056772c9ebd6": {
+    "42b6d6d7fdf9": {
+      "activeHandle": "terminal-1",
+      "sessionTabs": [
+        {
+          "id": "tab-1",
+          "isActive": true,
+          "terminal": "terminal-1",
+          "title": "Terminal",
+          "type": "terminal"
+        }
+      ],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "build"
+        }
+      ]
+    },
+    "5a5a35e0f4ab": {
       "name": "terminal.rename#1",
-      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}",
+      "sent": 1
+    },
+    "5d179ad4af0c": {
+      "name": "fetch-terminals",
+      "value": {},
+      "sent": 1
+    },
+    "986504944223": {
+      "name": "terminal.rename#1",
       "args": [
         {
           "name": "method",
@@ -48,35 +76,6 @@
         }
       }
     },
-    "0923ddf47a9b": {
-      "name": "fetch-terminals",
-      "ordinal": 3,
-      "value": {}
-    },
-    "42b6d6d7fdf9": {
-      "activeHandle": "terminal-1",
-      "sessionTabs": [
-        {
-          "id": "tab-1",
-          "isActive": true,
-          "terminal": "terminal-1",
-          "title": "Terminal",
-          "type": "terminal"
-        }
-      ],
-      "terminals": [
-        {
-          "handle": "terminal-1",
-          "isActive": true,
-          "title": "build"
-        }
-      ]
-    },
-    "7e43ade02444": {
-      "name": "terminal.rename#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -92,13 +91,13 @@
       {
         "id": "renamed",
         "observation": {
-          "sender": ["056772c9ebd6"],
-          "payloads": ["7e43ade02444"],
+          "sender": ["986504944223"],
+          "payloads": ["5a5a35e0f4ab"],
           "settlements": {
             "rename": "eb79a9b3682a"
           },
           "state": "42b6d6d7fdf9",
-          "effects": ["0923ddf47a9b"]
+          "effects": ["5d179ad4af0c"]
         }
       }
     ]

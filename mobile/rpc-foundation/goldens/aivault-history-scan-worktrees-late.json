@@ -3,9 +3,9 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
   "scenarioSha256": "10011c7c75e74d9c2e880c5458c9156264ae07e91956a80946ede1d4e684952a",
   "platform": "darwin",
@@ -13,9 +13,21 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "05215ca2ea35": {
+    "33d053404f10": {
+      "activeWorktreePath": {
+        "$rpc": "null"
+      },
+      "hostStatusResult": {
+        "capabilities": ["aiVault.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "loading"
+      }
+    },
+    "38364726a135": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -56,22 +68,13 @@
         }
       }
     },
-    "33d053404f10": {
-      "activeWorktreePath": {
-        "$rpc": "null"
-      },
-      "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "loading"
-      }
+    "4f3bdb245d26": {
+      "name": "aiVault.listSessions#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
+      "sent": 3
     },
-    "4a76a58cbdac": {
+    "6e50957443ea": {
       "name": "status.get#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -103,9 +106,13 @@
         }
       }
     },
-    "4e35efd1ee45": {
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "9cac597c56da": {
       "name": "status.get#2",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -137,10 +144,10 @@
         }
       }
     },
-    "72d9a278aca3": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     },
     "cd739a80b7a8": {
       "activeWorktreePath": "/repo/feature",
@@ -161,11 +168,6 @@
         ]
       }
     },
-    "d08f74d65ee6": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -173,11 +175,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f1834177e593": {
-      "name": "status.get#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -186,8 +183,8 @@
       {
         "id": "held",
         "observation": {
-          "sender": ["4a76a58cbdac"],
-          "payloads": ["d08f74d65ee6"],
+          "sender": ["6e50957443ea"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -198,8 +195,8 @@
       {
         "id": "ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "4e35efd1ee45", "05215ca2ea35"],
-          "payloads": ["d08f74d65ee6", "f1834177e593", "72d9a278aca3"],
+          "sender": ["6e50957443ea", "9cac597c56da", "38364726a135"],
+          "payloads": ["852980e2efc0", "b33a14df0df6", "4f3bdb245d26"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"

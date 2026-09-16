@@ -3,9 +3,9 @@
   "family": "files.terminal-path-tap",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
   "scenarioSha256": "a927e85c3ae58cd3b017955fe28aeffec6a5471b51d782f116639a3aaf4af77d",
   "platform": "darwin",
@@ -13,9 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0358eb8770a0": {
+    "18cda90904c3": {
       "name": "files.resolveTerminalPath#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -59,19 +58,23 @@
         }
       }
     },
-    "47a3b40d1640": {
-      "name": "files.open#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
+    "1d18c66a85d5": {
+      "name": "open-feedback",
+      "value": {},
+      "sent": 1
     },
-    "561f3fedeb78": {
+    "52c3c247865d": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}",
+      "sent": 2
+    },
+    "9120b59f16ec": {
       "name": "files.resolveTerminalPath#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}",
+      "sent": 1
     },
-    "591c78d805ec": {
+    "9a73d7a9fdc6": {
       "name": "files.open#1",
-      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -105,11 +108,6 @@
         }
       }
     },
-    "c0978ed13409": {
-      "name": "open-feedback",
-      "ordinal": 3,
-      "value": {}
-    },
     "c7ce9c8dc60e": {
       "activeSessionTabId": "tab-source",
       "failed": 1,
@@ -132,13 +130,13 @@
       {
         "id": "open-refused",
         "observation": {
-          "sender": ["0358eb8770a0", "591c78d805ec"],
-          "payloads": ["561f3fedeb78", "47a3b40d1640"],
+          "sender": ["18cda90904c3", "9a73d7a9fdc6"],
+          "payloads": ["9120b59f16ec", "52c3c247865d"],
           "settlements": {
             "tap": "eb79a9b3682a"
           },
           "state": "c7ce9c8dc60e",
-          "effects": ["c0978ed13409"]
+          "effects": ["1d18c66a85d5"]
         }
       }
     ]

@@ -3,9 +3,9 @@
   "family": "nativeChat.session-option-pick",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "57b60064eca4526e5d533de5862e7e86ba69b6722cd04692228bdc768486cd76",
   "platform": "darwin",
@@ -13,12 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0aa1124bf746": {
-      "settled": "settled"
-    },
-    "23f8f4ed8c86": {
+    "087f0393107f": {
       "name": "settings.mutateNativeChatSessionOptions#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -59,10 +55,13 @@
         }
       }
     },
-    "3284376ef9b6": {
+    "0aa1124bf746": {
+      "settled": "settled"
+    },
+    "71ba996139a2": {
       "name": "settings.mutateNativeChatSessionOptions#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.mutateNativeChatSessionOptions\",\"params\":{\"type\":\"apply-picks\",\"agent\":\"claude\",\"picks\":[{\"modelId\":\"opus\",\"optionId\":\"model\",\"value\":\"opus\"}]}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.mutateNativeChatSessionOptions\",\"params\":{\"type\":\"apply-picks\",\"agent\":\"claude\",\"picks\":[{\"modelId\":\"opus\",\"optionId\":\"model\",\"value\":\"opus\"}]}}",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -79,8 +78,8 @@
       {
         "id": "refusal-swallowed",
         "observation": {
-          "sender": ["23f8f4ed8c86"],
-          "payloads": ["3284376ef9b6"],
+          "sender": ["087f0393107f"],
+          "payloads": ["71ba996139a2"],
           "settlements": {
             "pick": "eb79a9b3682a"
           },

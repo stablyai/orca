@@ -3,9 +3,9 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "d80bc346e84bc35e6dce70643dcd3af3ea9e5a7f8a1f2b7a9e92c71c0c30d4c9",
   "platform": "darwin",
@@ -23,14 +23,16 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "280ce0d6f832": {
-      "name": "terminal.send#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}"
+    "39a17efe1de6": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
+      "sent": 1
     },
-    "438dbb654f4e": {
+    "a4273b38df83": {
+      "launched": "unlaunched"
+    },
+    "aec093de35d6": {
       "name": "terminal.send#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -66,9 +68,13 @@
         }
       }
     },
-    "5093e98ba369": {
+    "c286eacee37b": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}",
+      "sent": 2
+    },
+    "d0f04fba35ce": {
       "name": "session.tabs.createTerminal#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -107,14 +113,6 @@
           }
         }
       }
-    },
-    "94d38f1838f6": {
-      "name": "session.tabs.createTerminal#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
-    },
-    "a4273b38df83": {
-      "launched": "unlaunched"
     }
   },
   "recording": {
@@ -123,8 +121,8 @@
       {
         "id": "locked",
         "observation": {
-          "sender": ["5093e98ba369", "438dbb654f4e"],
-          "payloads": ["94d38f1838f6", "280ce0d6f832"],
+          "sender": ["d0f04fba35ce", "aec093de35d6"],
+          "payloads": ["39a17efe1de6", "c286eacee37b"],
           "settlements": {
             "launch": "0f026fafa7e1"
           },

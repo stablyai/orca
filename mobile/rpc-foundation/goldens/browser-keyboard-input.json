@@ -3,9 +3,9 @@
   "family": "browser.keyboard",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "eb2294c30af70ebc2bac092dc5105249ae8cf1941f750406622f7ff6dd70cc1b",
   "platform": "darwin",
@@ -13,37 +13,25 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "6104536ec606": {
-      "name": "browser.keypress#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keypress\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"key\":\"Enter\"}}"
-    },
-    "8160e8872519": {
-      "busy": false,
-      "dialog": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "keyboardValue": "",
-      "pointerModifiers": []
-    },
-    "86b725378b3b": {
+    "1bc6d9688999": {
       "name": "browser.keyboardInsertText#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keyboardInsertText\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"text\":\"hello\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keyboardInsertText\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"text\":\"hello\"}}",
+      "sent": 1
     },
-    "a5e12fd12d8a": {
+    "2f4d80d09d24": {
+      "name": "browser.keypress#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keypress\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"key\":\"Enter\"}}",
+      "sent": 2
+    },
+    "5fe64ef6c1f3": {
       "name": "toast",
-      "ordinal": 3,
       "value": {
         "message": "Sent"
-      }
+      },
+      "sent": 1
     },
-    "d1075b8afeb6": {
+    "770254847b6a": {
       "name": "browser.keyboardInsertText#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -77,9 +65,19 @@
         }
       }
     },
-    "e6c97e728698": {
+    "8160e8872519": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "",
+      "pointerModifiers": []
+    },
+    "c532c7fdcc69": {
       "name": "browser.keypress#1",
-      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -128,15 +126,15 @@
       {
         "id": "typed",
         "observation": {
-          "sender": ["d1075b8afeb6", "e6c97e728698"],
-          "payloads": ["86b725378b3b", "6104536ec606"],
+          "sender": ["770254847b6a", "c532c7fdcc69"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["a5e12fd12d8a"]
+          "effects": ["5fe64ef6c1f3"]
         }
       }
     ]

@@ -3,9 +3,9 @@
   "family": "terminal.query-reply",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "15b5694a63d54aeb4f4d9a861729e7e3b42ce06b15af6784fcb1afab744ed18b",
   "platform": "darwin",
@@ -13,9 +13,49 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0420904bea73": {
+    "11a49f853eb8": {
+      "accepted": true
+    },
+    "13a2535cdcfb": {
       "name": "terminal.send#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "22ecc0da8593": {
+      "name": "terminal.send#1",
       "args": [
         {
           "name": "method",
@@ -46,21 +86,16 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-1",
-          "ok": false
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
     },
-    "11a49f853eb8": {
-      "accepted": true
-    },
-    "1c9b433a64af": {
+    "3290e88f844f": {
       "name": "terminal.send#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -100,9 +135,259 @@
         }
       }
     },
-    "45073f2a20cd": {
+    "4ed60727a7ff": {
       "name": "terminal.send#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "5871998f69af": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "62a266491834": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "672329e62a64": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7c12e14c2dd9": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "88cfdbfbe02c": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "954da0737971": {
+      "name": "terminal.send#1",
       "args": [
         {
           "name": "method",
@@ -144,148 +429,8 @@
         }
       }
     },
-    "47af8c59000b": {
+    "9b8953212260": {
       "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "inputKind": "query-reply",
-            "terminal": "terminal-1",
-            "text": "\u001b[0n"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "7ed3d39f0607": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": false
-    },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "c4e418609064": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "inputKind": "query-reply",
-            "terminal": "terminal-1",
-            "text": "\u001b[0n"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "ccb884e12d95": {
-      "name": "terminal.send#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
-    "cd7cf7b1f566": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "inputKind": "query-reply",
-            "terminal": "terminal-1",
-            "text": "\u001b[0n"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
-        }
-      }
-    },
-    "d0610239099e": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -325,169 +470,13 @@
         }
       }
     },
-    "d38917d7821b": {
+    "a766e4175d1c": {
       "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "inputKind": "query-reply",
-            "terminal": "terminal-1",
-            "text": "\u001b[0n"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "d8df66fb56fd": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "inputKind": "query-reply",
-            "terminal": "terminal-1",
-            "text": "\u001b[0n"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "e3c7cb2287d9": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "inputKind": "query-reply",
-            "terminal": "terminal-1",
-            "text": "\u001b[0n"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
     },
     "f043bb99cc1d": {
       "accepted": false
-    },
-    "fdba7b2a8cca": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "inputKind": "query-reply",
-            "terminal": "terminal-1",
-            "text": "\u001b[0n"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
     }
   },
   "recording": {
@@ -496,8 +485,8 @@
       {
         "id": "terminal-query-reply-accepted.normal:accepted",
         "observation": {
-          "sender": ["cd7cf7b1f566"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["4ed60727a7ff"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },
@@ -508,8 +497,8 @@
       {
         "id": "terminal-query-reply-accepted.result-absent:accepted",
         "observation": {
-          "sender": ["47af8c59000b"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["88cfdbfbe02c"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -520,8 +509,8 @@
       {
         "id": "terminal-query-reply-accepted.result-null:accepted",
         "observation": {
-          "sender": ["c4e418609064"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["22ecc0da8593"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -532,8 +521,8 @@
       {
         "id": "terminal-query-reply-accepted.inner-ok-missing:accepted",
         "observation": {
-          "sender": ["d38917d7821b"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["62a266491834"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -544,8 +533,8 @@
       {
         "id": "terminal-query-reply-accepted.inner-false-string-error:accepted",
         "observation": {
-          "sender": ["d0610239099e"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["9b8953212260"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -556,8 +545,8 @@
       {
         "id": "terminal-query-reply-accepted.inner-false-object-error:accepted",
         "observation": {
-          "sender": ["45073f2a20cd"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["954da0737971"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -568,8 +557,8 @@
       {
         "id": "terminal-query-reply-accepted.outer-refused:accepted",
         "observation": {
-          "sender": ["d8df66fb56fd"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["672329e62a64"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -580,8 +569,8 @@
       {
         "id": "terminal-query-reply-accepted.outer-refused-no-message:accepted",
         "observation": {
-          "sender": ["1c9b433a64af"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["3290e88f844f"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -592,8 +581,8 @@
       {
         "id": "terminal-query-reply-accepted.method-not-found:accepted",
         "observation": {
-          "sender": ["0420904bea73"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["5871998f69af"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -604,8 +593,8 @@
       {
         "id": "terminal-query-reply-accepted.transport-rejection:accepted",
         "observation": {
-          "sender": ["fdba7b2a8cca"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["13a2535cdcfb"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -616,8 +605,8 @@
       {
         "id": "terminal-query-reply-accepted.transport-rejection-no-message:accepted",
         "observation": {
-          "sender": ["e3c7cb2287d9"],
-          "payloads": ["ccb884e12d95"],
+          "sender": ["7c12e14c2dd9"],
+          "payloads": ["a766e4175d1c"],
           "settlements": {
             "send": "7ed3d39f0607"
           },

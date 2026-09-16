@@ -3,9 +3,9 @@
   "family": "tasks.workspace-ssh-local",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "af0623c2d106d2ed18ef9149d4990539f9ed82146ae091a872a3e1d792efeffe",
   "platform": "darwin",
@@ -13,15 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "11405363c62d": {
+    "0c2cba5f3708": {
       "name": "workspaceAgent",
-      "ordinal": 1,
-      "value": "claude"
-    },
-    "5da628eecd2f": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+      "value": "claude",
+      "sent": 0
     },
     "7400f4eebe66": {
       "agent": "claude",
@@ -32,16 +27,18 @@
         "$rpc": "null"
       }
     },
-    "9637248df9cb": {
-      "name": "workspaceDetectedAgentIds",
-      "ordinal": 3,
-      "value": {
-        "$rpc": "null"
-      }
+    "77b6cedadbe8": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 0
     },
-    "9fdd4a87eb0b": {
+    "c56f76942e16": {
       "name": "preflight.detectAgents#1",
-      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}",
+      "sent": 1
+    },
+    "cb93b17470e8": {
+      "name": "preflight.detectAgents#1",
       "args": [
         {
           "name": "method",
@@ -71,15 +68,17 @@
         }
       }
     },
-    "a9ec92743b9e": {
-      "name": "workspaceAgentOverridden",
-      "ordinal": 2,
-      "value": false
-    },
-    "d68cba3b57e1": {
+    "d00f9527d4f2": {
       "name": "workspaceDetectedAgentIds",
-      "ordinal": 6,
-      "value": ["codex", "claude"]
+      "value": ["codex", "claude"],
+      "sent": 1
+    },
+    "dd9d8bf76a0e": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -96,13 +95,13 @@
       {
         "id": "local-agents-detected",
         "observation": {
-          "sender": ["9fdd4a87eb0b"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["cb93b17470e8"],
+          "payloads": ["c56f76942e16"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "7400f4eebe66",
-          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "d68cba3b57e1"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "d00f9527d4f2"]
         }
       }
     ]

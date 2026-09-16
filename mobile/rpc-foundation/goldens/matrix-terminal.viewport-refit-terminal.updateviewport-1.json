@@ -3,9 +3,9 @@
   "family": "terminal.viewport-refit",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "bde05ca916393d7f5ccd48686cf13a52fb2dfa599ea874b084c58bd59adb7e7f",
   "platform": "darwin",
@@ -13,9 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "00f9f7ee6897": {
+    "121036dfcf5a": {
       "name": "terminal.updateViewport#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -50,14 +49,14 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "refused"
+            "applied": true,
+            "updated": true
           }
         }
       }
     },
-    "023dd4dc980e": {
+    "1c67fe61e3e6": {
       "name": "terminal.updateViewport#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -98,94 +97,23 @@
         }
       }
     },
-    "0c8f096f45e7": {
-      "name": "terminal.updateViewport#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.updateViewport"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 150,
-        "settledAt": 150,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
+    "37024426b62f": {
+      "name": "subscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
     },
-    "3528bb02a8da": {
-      "name": "terminal.updateViewport#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.updateViewport"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 150,
-        "settledAt": 150,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
+    "3c255f83f3e1": {
+      "name": "reflow",
+      "value": {
+        "cols": 100,
+        "rows": 30
+      },
+      "sent": 1
     },
-    "488f89ec001e": {
+    "3f6a9fc794e0": {
       "name": "terminal.updateViewport#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -223,9 +151,92 @@
         }
       }
     },
-    "558c422ccf47": {
+    "43d05571e0f1": {
       "name": "terminal.updateViewport#1",
-      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 150,
+        "settledAt": 150,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "43ede4e0a03a": {
+      "name": "terminal.updateViewport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "7e0619ad636f": {
+      "measured": true,
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "90e3c020eef5": {
+      "name": "terminal.updateViewport#1",
       "args": [
         {
           "name": "method",
@@ -268,57 +279,8 @@
         }
       }
     },
-    "685125182eef": {
-      "name": "reflow",
-      "ordinal": 4,
-      "value": {
-        "cols": 100,
-        "rows": 30
-      }
-    },
-    "71d36d2b307f": {
+    "a056a0c8d9d3": {
       "name": "terminal.updateViewport#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.updateViewport"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 150,
-        "settledAt": 150,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "737f04849b85": {
-      "name": "terminal.updateViewport#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -359,28 +321,8 @@
         }
       }
     },
-    "7e0619ad636f": {
-      "measured": true,
-      "viewport": {
-        "cols": 100,
-        "rows": 30
-      }
-    },
-    "890d1937dd65": {
-      "name": "unsubscribe-terminal",
-      "ordinal": 4,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
-    "8ee930d6bf0e": {
+    "a1305ea259dd": {
       "name": "terminal.updateViewport#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.updateViewport\",\"params\":{\"terminal\":\"terminal-1\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"viewport\":{\"cols\":100,\"rows\":30}}}"
-    },
-    "a47f5afd190d": {
-      "name": "terminal.updateViewport#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -415,15 +357,115 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "applied": true,
-            "updated": true
+            "$rpc": "null"
           }
         }
       }
     },
-    "b0d098357ff3": {
+    "a1c0c7168922": {
+      "name": "unsubscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
+    "a993d0d38252": {
+      "name": "measure-fit",
+      "value": {
+        "frameHeight": 600
+      },
+      "sent": 0
+    },
+    "ba81b169e3b7": {
       "name": "terminal.updateViewport#1",
-      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c0619ddc2d8f": {
+      "name": "terminal.updateViewport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ca5578df10d1": {
+      "name": "terminal.updateViewport#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.updateViewport\",\"params\":{\"terminal\":\"terminal-1\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"viewport\":{\"cols\":100,\"rows\":30}}}",
+      "sent": 1
+    },
+    "e578c2bcde04": {
+      "name": "terminal.updateViewport#1",
       "args": [
         {
           "name": "method",
@@ -464,65 +506,12 @@
         }
       }
     },
-    "c0f39ed4140d": {
-      "name": "terminal.updateViewport#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.updateViewport"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "terminal": "terminal-1",
-            "viewport": {
-              "cols": 100,
-              "rows": 30
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 150,
-        "settledAt": 150,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "c13357779299": {
-      "name": "subscribe-terminal",
-      "ordinal": 5,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "f199e923e51c": {
-      "name": "measure-fit",
-      "ordinal": 1,
-      "value": {
-        "frameHeight": 600
       }
     }
   },
@@ -532,144 +521,144 @@
       {
         "id": "terminal-viewport-refit-applied.normal:reflowed",
         "observation": {
-          "sender": ["a47f5afd190d"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["121036dfcf5a"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "685125182eef"]
+          "effects": ["a993d0d38252", "3c255f83f3e1"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.result-absent:reflowed",
         "observation": {
-          "sender": ["c0f39ed4140d"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["43ede4e0a03a"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.result-null:reflowed",
         "observation": {
-          "sender": ["0c8f096f45e7"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["a1305ea259dd"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.inner-ok-missing:reflowed",
         "observation": {
-          "sender": ["00f9f7ee6897"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["ba81b169e3b7"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.inner-false-string-error:reflowed",
         "observation": {
-          "sender": ["023dd4dc980e"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["1c67fe61e3e6"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.inner-false-object-error:reflowed",
         "observation": {
-          "sender": ["558c422ccf47"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["90e3c020eef5"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.outer-refused:reflowed",
         "observation": {
-          "sender": ["b0d098357ff3"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["e578c2bcde04"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.outer-refused-no-message:reflowed",
         "observation": {
-          "sender": ["3528bb02a8da"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["c0619ddc2d8f"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.method-not-found:reflowed",
         "observation": {
-          "sender": ["737f04849b85"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["a056a0c8d9d3"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.transport-rejection:reflowed",
         "observation": {
-          "sender": ["71d36d2b307f"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["43d05571e0f1"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
         "id": "terminal-viewport-refit-applied.transport-rejection-no-message:reflowed",
         "observation": {
-          "sender": ["488f89ec001e"],
-          "payloads": ["8ee930d6bf0e"],
+          "sender": ["3f6a9fc794e0"],
+          "payloads": ["ca5578df10d1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       }
     ]

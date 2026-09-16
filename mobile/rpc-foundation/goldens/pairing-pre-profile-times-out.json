@@ -3,9 +3,9 @@
   "family": "pairing.pre-profile",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "9ab72231bf97fbe7eed232019c56568a9411433835eae424628af62c7c6a10c1",
   "platform": "darwin",
@@ -13,9 +13,39 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "03106dceb986": {
+    "0b595cd54ac3": {
+      "name": "journal-saved",
+      "value": "pair-fixture-1",
+      "sent": 0
+    },
+    "63ab1563ba51": {
       "name": "status.get#1",
-      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "86d361a0bf7c": {
+      "outcome": "unpaired",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "b2a8517fe750": {
+      "name": "candidate-closed",
+      "value": "direct",
+      "sent": 2
+    },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "ba9fd57319d3": {
+      "name": "status.get#1",
       "args": [
         {
           "name": "method",
@@ -39,37 +69,6 @@
         "startedAt": 0
       }
     },
-    "406c8ab0b9b6": {
-      "name": "journal-saved",
-      "ordinal": 1,
-      "value": "pair-fixture-1"
-    },
-    "6d04596c636d": {
-      "name": "status.get#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "6fd2524785ca": {
-      "name": "candidate-closed",
-      "ordinal": 7,
-      "value": "relay"
-    },
-    "76572b132647": {
-      "name": "candidate-closed",
-      "ordinal": 6,
-      "value": "direct"
-    },
-    "86d361a0bf7c": {
-      "outcome": "unpaired",
-      "savedHost": {
-        "$rpc": "null"
-      },
-      "timedOut": false
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
     "ccefc12fda27": {
       "outcome": "unpaired",
       "savedHost": {
@@ -77,14 +76,13 @@
       },
       "timedOut": true
     },
-    "edde120654bf": {
-      "name": "status.get#2",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "d433a326314e": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 2
     },
-    "f6d9975e7a13": {
+    "f6c99f740e75": {
       "name": "status.get#2",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -115,25 +113,25 @@
       {
         "id": "racing",
         "observation": {
-          "sender": ["03106dceb986", "f6d9975e7a13"],
-          "payloads": ["6d04596c636d", "edde120654bf"],
+          "sender": ["ba9fd57319d3", "f6c99f740e75"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6"],
           "settlements": {
             "pair": "9270aeb7d9c6"
           },
           "state": "86d361a0bf7c",
-          "effects": ["406c8ab0b9b6"]
+          "effects": ["0b595cd54ac3"]
         }
       },
       {
         "id": "timed-out",
         "observation": {
-          "sender": ["03106dceb986", "f6d9975e7a13"],
-          "payloads": ["6d04596c636d", "edde120654bf"],
+          "sender": ["ba9fd57319d3", "f6c99f740e75"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6"],
           "settlements": {
             "pair": "9270aeb7d9c6"
           },
           "state": "ccefc12fda27",
-          "effects": ["406c8ab0b9b6", "76572b132647", "6fd2524785ca"]
+          "effects": ["0b595cd54ac3", "b2a8517fe750", "d433a326314e"]
         }
       }
     ]

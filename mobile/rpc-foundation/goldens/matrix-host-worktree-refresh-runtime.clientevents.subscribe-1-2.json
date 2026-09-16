@@ -3,9 +3,9 @@
   "family": "host-worktree-refresh",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "8e41c8624b9b6185e447cee3590a851ab88b6b1ee1d632af90e3a771a90310be",
   "scenarioSha256": "6d03d17a5711db33473611858b225e2ac42fe33d2a982fbb0defdbd1dce037d6",
   "platform": "darwin",
@@ -13,38 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "121f5eaa52a4": {
-      "name": "fetchWorktrees",
-      "ordinal": 7,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "18399efbe63d": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 3,
-      "value": {
-        "options": {
-          "force": true,
-          "queueIfInFlight": true
-        }
-      }
-    },
-    "1d8fe76c29c7": {
+    "0bc2d39e90d7": {
       "name": "runtime.clientEvents.unsubscribe#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
-    },
-    "1e1067bda316": {
-      "name": "fetchWorktrees",
-      "ordinal": 5,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}",
+      "sent": 0
     },
     "1e5c2d0839f0": {
       "fetchRepoMetadata": 3,
@@ -56,63 +28,40 @@
       "fetchWorktrees": 2,
       "running": true
     },
-    "306fcb72ddc5": {
+    "32ad88ec13e3": {
       "name": "fetchRepoMetadata",
-      "ordinal": 8,
       "value": {
         "options": {
           "force": true,
           "queueIfInFlight": true
         }
-      }
-    },
-    "3582e201880e": {
-      "name": "runtime.clientEvents.unsubscribe#2",
-      "ordinal": 13,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
-    },
-    "4a27571a011a": {
-      "name": "fetchWorktrees",
-      "ordinal": 2,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "4e7ae49574b8": {
-      "name": "fetchWorktrees",
-      "ordinal": 4,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "5073e6d40272": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 12,
-      "value": {
-        "options": {
-          "force": true,
-          "queueIfInFlight": true
-        }
-      }
+      },
+      "sent": 0
     },
     "5170d1b8463c": {
       "fetchRepoMetadata": 4,
       "fetchWorktrees": 4,
       "running": true
     },
+    "519cd29a30fa": {
+      "name": "runtime.clientEvents.subscribe#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}",
+      "sent": 0
+    },
     "5752a5d2a343": {
       "fetchRepoMetadata": 4,
       "fetchWorktrees": 4,
       "running": false
     },
-    "6845207acb4b": {
+    "5f7bd3b1a756": {
+      "name": "runtime.clientEvents.unsubscribe#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}",
+      "sent": 0
+    },
+    "61f865a194bf": {
       "name": "runtime.clientEvents.unsubscribe#2",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}",
+      "sent": 0
     },
     "6d9fd24a7491": {
       "fetchRepoMetadata": 1,
@@ -129,96 +78,43 @@
       "fetchWorktrees": 1,
       "running": true
     },
-    "846dab6e46b5": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 5,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "8dd3ef405a35": {
-      "name": "runtime.clientEvents.unsubscribe#1",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
-    },
-    "8fa922dbb034": {
+    "8f638d83589d": {
       "name": "fetchWorktrees",
-      "ordinal": 11,
       "value": {
         "options": {
           "$rpc": "undefined"
         }
-      }
+      },
+      "sent": 0
     },
     "91e9a84a208f": {
       "fetchRepoMetadata": 4,
       "fetchWorktrees": 5,
       "running": false
     },
-    "92d71b4be523": {
-      "name": "runtime.clientEvents.unsubscribe#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
-    },
     "942472e310cd": {
       "fetchRepoMetadata": 3,
       "fetchWorktrees": 3,
       "running": true
     },
-    "9575c14143bf": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 7,
-      "value": {
-        "options": {
-          "force": true,
-          "queueIfInFlight": true
-        }
-      }
+    "bdc95c0ab9bc": {
+      "name": "runtime.clientEvents.subscribe#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}",
+      "sent": 0
     },
-    "96ebe4a1b522": {
+    "cfd2555aae81": {
       "name": "fetchRepoMetadata",
-      "ordinal": 6,
       "value": {
         "options": {
           "$rpc": "undefined"
         }
-      }
-    },
-    "b6a25eca1497": {
-      "name": "runtime.clientEvents.subscribe#2",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
-    "bbb8d0c38170": {
-      "name": "runtime.clientEvents.subscribe#2",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
-    "d135ee9b8a83": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 11,
-      "value": {
-        "options": {
-          "force": true,
-          "queueIfInFlight": true
-        }
-      }
+      },
+      "sent": 0
     },
     "e54e98a537b8": {
       "fetchRepoMetadata": 2,
       "fetchWorktrees": 3,
       "running": true
-    },
-    "e85faf2eefd5": {
-      "name": "fetchWorktrees",
-      "ordinal": 10,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -228,20 +124,10 @@
         "$rpc": "undefined"
       }
     },
-    "ecab30959754": {
-      "name": "runtime.clientEvents.subscribe#2",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
     "edb34b7fcc08": {
       "fetchRepoMetadata": 4,
       "fetchWorktrees": 5,
       "running": true
-    },
-    "eef1ee3c2773": {
-      "name": "runtime.clientEvents.subscribe#1",
-      "ordinal": 1,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     },
     "f2af146a9f12": {
       "status": "fulfilled",
@@ -249,15 +135,6 @@
       "settledAt": 3000,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "f6b2af4d8f38": {
-      "name": "fetchWorktrees",
-      "ordinal": 6,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
       }
     }
   },
@@ -268,53 +145,53 @@
         "id": "host-worktree-refresh-stream.prelude:started",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.prelude:ready",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.normal:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "6d9fd24a7491",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.normal:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "e54e98a537b8",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "8f638d83589d",
+            "cfd2555aae81"
           ]
         }
       },
@@ -322,19 +199,19 @@
         "id": "host-worktree-refresh-stream.normal:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "1e5c2d0839f0",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -342,20 +219,20 @@
         "id": "host-worktree-refresh-stream.normal:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "1d8fe76c29c7"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "1e5c2d0839f0",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -363,22 +240,22 @@
         "id": "host-worktree-refresh-stream.normal:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "1d8fe76c29c7"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "edb34b7fcc08",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "8fa922dbb034",
-            "5073e6d40272"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -386,7 +263,7 @@
         "id": "host-worktree-refresh-stream.normal:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "1d8fe76c29c7", "3582e201880e"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756", "61f865a194bf"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -394,15 +271,15 @@
           },
           "state": "91e9a84a208f",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "8fa922dbb034",
-            "5073e6d40272"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -410,42 +287,42 @@
         "id": "host-worktree-refresh-stream.result-absent:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.result-absent:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.result-absent:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -453,19 +330,19 @@
         "id": "host-worktree-refresh-stream.result-absent:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -473,21 +350,21 @@
         "id": "host-worktree-refresh-stream.result-absent:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "5170d1b8463c",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -495,7 +372,7 @@
         "id": "host-worktree-refresh-stream.result-absent:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523", "6845207acb4b"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756", "61f865a194bf"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -503,14 +380,14 @@
           },
           "state": "5752a5d2a343",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -518,42 +395,42 @@
         "id": "host-worktree-refresh-stream.result-null:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.result-null:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.result-null:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -561,19 +438,19 @@
         "id": "host-worktree-refresh-stream.result-null:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -581,21 +458,21 @@
         "id": "host-worktree-refresh-stream.result-null:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "5170d1b8463c",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -603,7 +480,7 @@
         "id": "host-worktree-refresh-stream.result-null:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523", "6845207acb4b"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756", "61f865a194bf"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -611,14 +488,14 @@
           },
           "state": "5752a5d2a343",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -626,42 +503,42 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.inner-ok-missing:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.inner-ok-missing:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -669,19 +546,19 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -689,21 +566,21 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "5170d1b8463c",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -711,7 +588,7 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523", "6845207acb4b"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756", "61f865a194bf"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -719,14 +596,14 @@
           },
           "state": "5752a5d2a343",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -734,42 +611,42 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.inner-false-string-error:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.inner-false-string-error:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -777,19 +654,19 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -797,21 +674,21 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "5170d1b8463c",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -819,7 +696,7 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523", "6845207acb4b"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756", "61f865a194bf"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -827,14 +704,14 @@
           },
           "state": "5752a5d2a343",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -842,42 +719,42 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.inner-false-object-error:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.inner-false-object-error:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -885,19 +762,19 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "942472e310cd",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -905,21 +782,21 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "5170d1b8463c",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -927,7 +804,7 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "ecab30959754", "92d71b4be523", "6845207acb4b"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "5f7bd3b1a756", "61f865a194bf"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
@@ -935,14 +812,14 @@
           },
           "state": "5752a5d2a343",
           "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "846dab6e46b5",
-            "f6b2af4d8f38",
-            "9575c14143bf",
-            "e85faf2eefd5",
-            "d135ee9b8a83"
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "cfd2555aae81",
+            "8f638d83589d",
+            "32ad88ec13e3",
+            "8f638d83589d",
+            "32ad88ec13e3"
           ]
         }
       },
@@ -950,228 +827,228 @@
         "id": "host-worktree-refresh-stream.outer-refused:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170", "8dd3ef405a35"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "0bc2d39e90d7"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
           "state": "73ef93d781b5",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170", "8dd3ef405a35"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "0bc2d39e90d7"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
           "state": "73ef93d781b5",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:worktrees-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "8297145c6199",
-          "effects": ["4a27571a011a", "18399efbe63d"]
+          "effects": ["8f638d83589d", "32ad88ec13e3"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:polled",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:repos-changed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773"],
+          "payloads": ["bdc95c0ab9bc"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
           "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170", "8dd3ef405a35"],
+          "payloads": ["bdc95c0ab9bc", "519cd29a30fa", "0bc2d39e90d7"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
           "state": "73ef93d781b5",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "effects": ["8f638d83589d", "32ad88ec13e3", "8f638d83589d", "cfd2555aae81"]
         }
       }
     ]

@@ -3,9 +3,9 @@
   "family": "tasks.workspace-source",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "046dd3a125a3c9abcf5a0dd122818939b516adb91cbda2554b3409d4bb3a7980",
   "platform": "darwin",
@@ -13,19 +13,24 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02e24a49522e": {
-      "name": "repo.sparsePresets#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    "0522501c6443": {
+      "name": "workspaceSparsePresets",
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "sent": 1
     },
-    "215f6b1d86cd": {
-      "name": "workspaceBaseBranchLoading",
-      "ordinal": 13,
-      "value": true
+    "1f03192052c0": {
+      "name": "workspaceSparsePresetsLoading",
+      "value": false,
+      "sent": 1
     },
-    "2198c28257cb": {
+    "395368dea8ff": {
       "name": "repo.searchRefs#1",
-      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -59,27 +64,10 @@
         }
       }
     },
-    "22b30d5c0550": {
-      "name": "workspaceSparsePresetId",
-      "ordinal": 11,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "329626b87ebb": {
-      "name": "workspaceBaseBranchLoading",
-      "ordinal": 18,
-      "value": false
-    },
-    "395b11d2530a": {
-      "name": "workspaceSparsePresetsLoading",
-      "ordinal": 12,
-      "value": false
-    },
-    "4efabea114c4": {
-      "name": "workspaceSparsePresetsError",
-      "ordinal": 3,
-      "value": ""
+    "539a8c80071f": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": false,
+      "sent": 0
     },
     "57f06e6e349e": {
       "branchError": "",
@@ -94,51 +82,40 @@
       "presetsError": "",
       "presetsLoaded": true
     },
-    "653409308f6c": {
-      "name": "workspaceSparsePresetsLoaded",
-      "ordinal": 10,
-      "value": true
-    },
-    "666bd27e7019": {
-      "name": "workspaceSparsePresetsLoaded",
-      "ordinal": 2,
-      "value": false
-    },
-    "802594b0307e": {
+    "66f7aa09c444": {
       "name": "workspaceBaseBranchLoading",
-      "ordinal": 6,
-      "value": false
+      "value": false,
+      "sent": 1
     },
-    "826410120272": {
-      "name": "workspaceSparsePresets",
-      "ordinal": 9,
-      "value": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ]
+    "78f4c8d53e98": {
+      "name": "workspaceBaseBranchLoading",
+      "value": true,
+      "sent": 1
     },
-    "94be039bc034": {
-      "name": "repo.searchRefs#1",
-      "ordinal": 16,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
-    },
-    "a135d4b358aa": {
+    "8a621ac1da52": {
       "name": "workspaceBaseBranchResults",
-      "ordinal": 17,
       "value": [
         {
           "localBranchName": "main",
           "refName": "main"
         }
-      ]
+      ],
+      "sent": 2
     },
-    "b2d70a96a17a": {
-      "name": "workspaceBaseBranchResults",
-      "ordinal": 5,
-      "value": []
+    "8c08bfbbb957": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": true,
+      "sent": 1
+    },
+    "96f470cee43b": {
+      "name": "workspaceBaseBranchError",
+      "value": "",
+      "sent": 1
+    },
+    "a81d1426bf3c": {
+      "name": "workspaceBaseBranchLoading",
+      "value": false,
+      "sent": 2
     },
     "b78bcf7ca596": {
       "branchError": "",
@@ -158,9 +135,13 @@
       "presetsError": "",
       "presetsLoaded": true
     },
-    "b7cb2292ffa2": {
+    "bc245469b086": {
+      "name": "repo.searchRefs#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}",
+      "sent": 2
+    },
+    "c8d4d05367d6": {
       "name": "repo.sparsePresets#1",
-      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -198,10 +179,15 @@
         }
       }
     },
-    "d8718329d555": {
-      "name": "workspaceBaseBranchError",
-      "ordinal": 14,
-      "value": ""
+    "c9ed58434d0b": {
+      "name": "repo.sparsePresets#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 1
+    },
+    "d74e7c93c5be": {
+      "name": "workspaceBaseBranchResults",
+      "value": [],
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -211,15 +197,22 @@
         "$rpc": "undefined"
       }
     },
-    "f7ab22c990a5": {
-      "name": "workspaceBaseBranchError",
-      "ordinal": 7,
-      "value": ""
+    "f359ebae96d2": {
+      "name": "workspaceSparsePresetId",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
     },
-    "faf6e6083f43": {
+    "f68a2eba2c59": {
       "name": "workspaceSparsePresetsLoading",
-      "ordinal": 1,
-      "value": true
+      "value": true,
+      "sent": 0
+    },
+    "ff042d71c647": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 0
     }
   },
   "recording": {
@@ -228,51 +221,51 @@
       {
         "id": "presets-loaded",
         "observation": {
-          "sender": ["b7cb2292ffa2"],
-          "payloads": ["02e24a49522e"],
+          "sender": ["c8d4d05367d6"],
+          "payloads": ["c9ed58434d0b"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "57f06e6e349e",
           "effects": [
-            "faf6e6083f43",
-            "666bd27e7019",
-            "4efabea114c4",
-            "b2d70a96a17a",
-            "802594b0307e",
-            "f7ab22c990a5",
-            "826410120272",
-            "653409308f6c",
-            "22b30d5c0550",
-            "395b11d2530a"
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0"
           ]
         }
       },
       {
         "id": "branches-loaded",
         "observation": {
-          "sender": ["b7cb2292ffa2", "2198c28257cb"],
-          "payloads": ["02e24a49522e", "94be039bc034"],
+          "sender": ["c8d4d05367d6", "395368dea8ff"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
           },
           "state": "b78bcf7ca596",
           "effects": [
-            "faf6e6083f43",
-            "666bd27e7019",
-            "4efabea114c4",
-            "b2d70a96a17a",
-            "802594b0307e",
-            "f7ab22c990a5",
-            "826410120272",
-            "653409308f6c",
-            "22b30d5c0550",
-            "395b11d2530a",
-            "215f6b1d86cd",
-            "d8718329d555",
-            "a135d4b358aa",
-            "329626b87ebb"
+            "f68a2eba2c59",
+            "539a8c80071f",
+            "ff042d71c647",
+            "d74e7c93c5be",
+            "66f7aa09c444",
+            "96f470cee43b",
+            "0522501c6443",
+            "8c08bfbbb957",
+            "f359ebae96d2",
+            "1f03192052c0",
+            "78f4c8d53e98",
+            "96f470cee43b",
+            "8a621ac1da52",
+            "a81d1426bf3c"
           ]
         }
       }

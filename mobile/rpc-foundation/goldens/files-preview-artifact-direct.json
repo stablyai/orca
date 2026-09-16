@@ -3,9 +3,9 @@
   "family": "files.preview-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "dd8b7a0916a84c7d763a163759c02210ae99f8fbccfccaa98796b8610c5da97c",
   "platform": "darwin",
@@ -13,35 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "500d95d47092": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "byteLength": 5,
-        "content": "hello",
-        "kind": "text",
-        "status": "ready",
-        "truncated": false
-      }
-    },
-    "5beb3ae90517": {
+    "194fabd9b9d8": {
       "name": "files.readTerminalArtifact#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}"
-    },
-    "784ea351e5b2": {
-      "preview": {
-        "byteLength": 5,
-        "content": "hello",
-        "kind": "text",
-        "status": "ready",
-        "truncated": false
-      }
-    },
-    "b3fa0f7828ce": {
-      "name": "files.readTerminalArtifact#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -76,6 +49,32 @@
           }
         }
       }
+    },
+    "500d95d47092": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "784ea351e5b2": {
+      "preview": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "a3bce9470bbb": {
+      "name": "files.readTerminalArtifact#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}",
+      "sent": 1
     }
   },
   "recording": {
@@ -84,8 +83,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["b3fa0f7828ce"],
-          "payloads": ["5beb3ae90517"],
+          "sender": ["194fabd9b9d8"],
+          "payloads": ["a3bce9470bbb"],
           "settlements": {
             "load": "500d95d47092"
           },

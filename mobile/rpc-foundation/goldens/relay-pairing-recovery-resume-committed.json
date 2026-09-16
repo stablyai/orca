@@ -3,9 +3,9 @@
   "family": "relay.pairing-recovery",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "7e54c3af4b8b8e6eac007267fb96620283b735491883c505401c79656d920ca6",
   "platform": "darwin",
@@ -13,27 +13,20 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1020838fc104": {
-      "name": "pairing.getEndpoints#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}"
-    },
-    "4b87f8374959": {
-      "name": "bundle-written",
-      "ordinal": 4,
-      "value": {
-        "version": 4
-      }
-    },
-    "6fd2524785ca": {
-      "name": "candidate-closed",
-      "ordinal": 7,
-      "value": "relay"
-    },
-    "792cb678f228": {
+    "0080ab426cd1": {
       "name": "host-saved",
-      "ordinal": 5,
-      "value": "host-1"
+      "value": "host-1",
+      "sent": 1
+    },
+    "2e0a00540206": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}",
+      "sent": 1
+    },
+    "6873c5ee509e": {
+      "name": "journal-cleared",
+      "value": "recovery",
+      "sent": 1
     },
     "7a3e4e5413b5": {
       "outcome": "recovered",
@@ -41,14 +34,13 @@
         "$rpc": "null"
       }
     },
-    "87db1a2d2066": {
-      "name": "journal-cleared",
-      "ordinal": 6,
-      "value": "recovery"
+    "be67e12f6925": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 1
     },
-    "a0ee987f0809": {
+    "c5d6533ca9ce": {
       "name": "pairing.getEndpoints#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -101,10 +93,17 @@
         }
       }
     },
-    "c7269155f70c": {
+    "cf1bfb36f84e": {
       "name": "journal-updated",
-      "ordinal": 3,
-      "value": "relay-basis"
+      "value": "relay-basis",
+      "sent": 1
+    },
+    "e0d0c16b34cc": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 1
     },
     "f0723ea3ab16": {
       "status": "fulfilled",
@@ -119,18 +118,18 @@
       {
         "id": "recovered-on-resume",
         "observation": {
-          "sender": ["a0ee987f0809"],
-          "payloads": ["1020838fc104"],
+          "sender": ["c5d6533ca9ce"],
+          "payloads": ["2e0a00540206"],
           "settlements": {
             "recover": "f0723ea3ab16"
           },
           "state": "7a3e4e5413b5",
           "effects": [
-            "c7269155f70c",
-            "4b87f8374959",
-            "792cb678f228",
-            "87db1a2d2066",
-            "6fd2524785ca"
+            "cf1bfb36f84e",
+            "e0d0c16b34cc",
+            "0080ab426cd1",
+            "6873c5ee509e",
+            "be67e12f6925"
           ]
         }
       }

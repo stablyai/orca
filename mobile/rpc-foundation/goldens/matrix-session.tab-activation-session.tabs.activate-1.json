@@ -3,9 +3,9 @@
   "family": "session.tab-activation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
   "scenarioSha256": "d25fc19d4e3e9b12f2a60a076ea10741e13fc45dcd9a76bd3a9d88432c3e6fbe",
   "platform": "darwin",
@@ -13,9 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1ddcf41b827c": {
+    "02648396b3a2": {
       "name": "session.tabs.activate#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -46,10 +45,49 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "11b4a1934825": {
+      "name": "terminal.focus#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}",
+      "sent": 1
+    },
+    "12726a31e046": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
           }
         }
       }
@@ -88,48 +126,8 @@
         }
       }
     },
-    "2474331a374d": {
+    "2a882f2e8b6b": {
       "name": "session.tabs.activate#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.activate"
-        },
-        {
-          "name": "params",
-          "value": {
-            "intent": "user",
-            "navigation": "caller",
-            "notifyClients": false,
-            "tabId": "tab-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "24783550ac3a": {
-      "name": "session.tabs.activate#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -166,24 +164,21 @@
         }
       }
     },
-    "36e84700f75b": {
-      "name": "terminal.focus#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}"
-    },
-    "3db95ed7902c": {
-      "name": "terminal.focus#1",
-      "ordinal": 1,
+    "3b8731983e55": {
+      "name": "session.tabs.activate#1",
       "args": [
         {
           "name": "method",
-          "value": "terminal.focus"
+          "value": "session.tabs.activate"
         },
         {
           "name": "params",
           "value": {
-            "navigation": "host",
-            "terminal": "terminal-1"
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
           }
         },
         {
@@ -198,11 +193,12 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "focused": true
-          }
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
         }
       }
     },
@@ -271,79 +267,6 @@
         }
       }
     },
-    "53dacccc19f8": {
-      "name": "session.tabs.activate#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.activate"
-        },
-        {
-          "name": "params",
-          "value": {
-            "intent": "user",
-            "navigation": "caller",
-            "notifyClients": false,
-            "tabId": "tab-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true
-        }
-      }
-    },
-    "5497c29f1704": {
-      "name": "session.tabs.activate#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.activate"
-        },
-        {
-          "name": "params",
-          "value": {
-            "intent": "user",
-            "navigation": "caller",
-            "notifyClients": false,
-            "tabId": "tab-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
     "5a867a59d359": {
       "failure": "",
       "focus": {
@@ -387,9 +310,42 @@
         }
       }
     },
-    "795aac33fef6": {
+    "7118e8aeaaae": {
+      "name": "terminal.focus#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "focused": true
+          }
+        }
+      }
+    },
+    "799e842efb06": {
       "name": "session.tabs.activate#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -417,11 +373,12 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
           "id": "frame-2",
-          "ok": true,
-          "result": {
-            "activated": true
-          }
+          "ok": false
         }
       }
     },
@@ -434,6 +391,11 @@
           "focused": true
         }
       }
+    },
+    "7cd4f4dc7a60": {
+      "name": "session.tabs.activate#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}",
+      "sent": 2
     },
     "7d4b7965217b": {
       "status": "fulfilled",
@@ -468,53 +430,8 @@
         "ok": true
       }
     },
-    "98fa77794333": {
+    "8a96ab8caedf": {
       "name": "session.tabs.activate#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.activate"
-        },
-        {
-          "name": "params",
-          "value": {
-            "intent": "user",
-            "navigation": "caller",
-            "notifyClients": false,
-            "tabId": "tab-1",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "9fd53197e14f": {
-      "name": "session.tabs.activate#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
-    },
-    "a246b8b840e5": {
-      "name": "session.tabs.activate#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -543,7 +460,7 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "",
+          "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
       }
@@ -556,6 +473,46 @@
         "category": "Error",
         "message": "transport failure",
         "isRpcDeliveryUnknown": true
+      }
+    },
+    "aa61e32f6fc2": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
       }
     },
     "b7d3873d1f62": {
@@ -596,6 +553,40 @@
         "isRpcDeliveryUnknown": true
       }
     },
+    "c9ffa22c6b1c": {
+      "name": "session.tabs.activate#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
     "ccf7770577df": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -609,9 +600,8 @@
         "ok": false
       }
     },
-    "d1683d683d0d": {
+    "d53e4b22b23e": {
       "name": "session.tabs.activate#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -648,9 +638,28 @@
         }
       }
     },
-    "d6a633975120": {
+    "e300d58f5c29": {
+      "activate": {
+        "error": {
+          "code": "refused",
+          "message": ""
+        },
+        "id": "frame-2",
+        "ok": false
+      },
+      "failure": {
+        "$rpc": "null"
+      },
+      "focus": {
+        "id": "frame-1",
+        "ok": true,
+        "result": {
+          "focused": true
+        }
+      }
+    },
+    "e495a9a84cf0": {
       "name": "session.tabs.activate#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -681,14 +690,13 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "activated": true
           }
         }
       }
     },
-    "e1cb1d0ed778": {
+    "e972c0a27347": {
       "name": "session.tabs.activate#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -717,28 +725,8 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "transport failure",
+          "message": "",
           "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "e300d58f5c29": {
-      "activate": {
-        "error": {
-          "code": "refused",
-          "message": ""
-        },
-        "id": "frame-2",
-        "ok": false
-      },
-      "failure": {
-        "$rpc": "null"
-      },
-      "focus": {
-        "id": "frame-1",
-        "ok": true,
-        "result": {
-          "focused": true
         }
       }
     },
@@ -822,8 +810,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.normal:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "795aac33fef6"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "e495a9a84cf0"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "84d74a6de2ca"
@@ -835,8 +823,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.result-absent:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "53dacccc19f8"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "c9ffa22c6b1c"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "86832c8db827"
@@ -848,8 +836,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.result-null:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "d6a633975120"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "02648396b3a2"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "bb654f2bdea7"
@@ -861,8 +849,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.inner-ok-missing:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "5497c29f1704"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "12726a31e046"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "7d4b7965217b"
@@ -874,8 +862,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.inner-false-string-error:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "24783550ac3a"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "2a882f2e8b6b"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "5f3ba1cd76e0"
@@ -887,8 +875,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.inner-false-object-error:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "1ddcf41b827c"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "aa61e32f6fc2"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "23857f5f3255"
@@ -900,8 +888,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.outer-refused:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "98fa77794333"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "3b8731983e55"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "ccf7770577df"
@@ -913,8 +901,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.outer-refused-no-message:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "2474331a374d"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "799e842efb06"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "43044100d546"
@@ -926,8 +914,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.method-not-found:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "d1683d683d0d"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "d53e4b22b23e"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "45c1af849de7"
@@ -939,8 +927,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.transport-rejection:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "e1cb1d0ed778"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "8a96ab8caedf"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "a947768bc0ed"
@@ -952,8 +940,8 @@
       {
         "id": "session-tab-activation-focus-and-activate.transport-rejection-no-message:activated",
         "observation": {
-          "sender": ["3db95ed7902c", "a246b8b840e5"],
-          "payloads": ["36e84700f75b", "9fd53197e14f"],
+          "sender": ["7118e8aeaaae", "e972c0a27347"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "c7584e82c72f"

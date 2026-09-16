@@ -3,9 +3,9 @@
   "family": "session.diff-review-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
   "scenarioSha256": "2f0a6aa8ce100edbce9ccf64c81efe64356fccbdcd2e16f561360e2b11b5700f",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1e2ced5a5f5a": {
-      "name": "files.openDiff#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.openDiff\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\",\"staged\":false}}"
-    },
     "2fc890e4b748": {
       "actionError": {
         "$rpc": "null"
@@ -53,14 +48,8 @@
         "$rpc": "null"
       }
     },
-    "4353ae13dc10": {
-      "name": "open-session",
-      "ordinal": 3,
-      "value": {}
-    },
-    "ab27560e03f6": {
+    "aefdadd223ee": {
       "name": "files.openDiff#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -101,6 +90,16 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ed424c831c19": {
+      "name": "files.openDiff#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.openDiff\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\",\"staged\":false}}",
+      "sent": 1
+    },
+    "f08ae8feb9a9": {
+      "name": "open-session",
+      "value": {},
+      "sent": 1
     }
   },
   "recording": {
@@ -109,13 +108,13 @@
       {
         "id": "opened",
         "observation": {
-          "sender": ["ab27560e03f6"],
-          "payloads": ["1e2ced5a5f5a"],
+          "sender": ["aefdadd223ee"],
+          "payloads": ["ed424c831c19"],
           "settlements": {
             "open-in-session": "eb79a9b3682a"
           },
           "state": "2fc890e4b748",
-          "effects": ["4353ae13dc10"]
+          "effects": ["f08ae8feb9a9"]
         }
       }
     ]

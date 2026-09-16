@@ -3,9 +3,9 @@
   "family": "session.native-chat-stop",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "a72f08c12c244912912be34deb3ec12bada6b74f1bc29c0034b347dcba9ddb10",
   "platform": "darwin",
@@ -13,61 +13,13 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "5cd1d4a9aed5": {
+    "1ce75e48864f": {
       "name": "terminal.send#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
     },
-    "650fdd02bab4": {
-      "name": "terminal.send#2",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "terminal": "terminal-1",
-            "text": "\u001b"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 14920
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 80,
-        "settledAt": 120,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
-        }
-      }
-    },
-    "75263c07c807": {
-      "name": "cancel-pending",
-      "ordinal": 1,
-      "value": {}
-    },
-    "ab0f3d65723e": {
+    "1d3e6369460d": {
       "name": "terminal.send#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -107,30 +59,59 @@
         }
       }
     },
-    "debf84af8d66": {
-      "errors": []
+    "4dfb46310986": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 3
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
+    "60fbbfd9bd11": {
+      "name": "cancel-pending",
+      "value": {},
+      "sent": 0
+    },
+    "86ab67d60a77": {
+      "name": "terminal.send#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 14920
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 80,
+        "settledAt": 120,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
       }
     },
-    "ef422fa31f61": {
-      "name": "terminal.send#2",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
-    "ef7005279d33": {
+    "960f67ee14e2": {
       "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
-    "fcdecc63b46e": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -163,6 +144,22 @@
           }
         }
       }
+    },
+    "b139ed2905d3": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
+      "sent": 2
+    },
+    "debf84af8d66": {
+      "errors": []
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -171,25 +168,25 @@
       {
         "id": "first-accepted",
         "observation": {
-          "sender": ["ab0f3d65723e", "fcdecc63b46e"],
-          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "sender": ["1d3e6369460d", "960f67ee14e2"],
+          "payloads": ["1ce75e48864f", "b139ed2905d3"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
           "state": "debf84af8d66",
-          "effects": ["75263c07c807"]
+          "effects": ["60fbbfd9bd11"]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["ab0f3d65723e", "fcdecc63b46e", "650fdd02bab4"],
-          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "sender": ["1d3e6369460d", "960f67ee14e2", "86ab67d60a77"],
+          "payloads": ["1ce75e48864f", "b139ed2905d3", "4dfb46310986"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
           "state": "debf84af8d66",
-          "effects": ["75263c07c807"]
+          "effects": ["60fbbfd9bd11"]
         }
       }
     ]

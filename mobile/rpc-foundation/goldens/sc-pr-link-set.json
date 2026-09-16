@@ -3,9 +3,9 @@
   "family": "worktree.review-link",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "b65bad4f8c0ae0b686f6c3db93bd43ffa072ae426f978f1a86ad8008fb24fa24",
   "platform": "darwin",
@@ -19,22 +19,8 @@
         "ok": true
       }
     },
-    "41bdce9de379": {
-      "linkedPR": "unread",
-      "outcome": "unlinked"
-    },
-    "4b458696422e": {
+    "2c746c8732cd": {
       "name": "worktree.set#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":12}}"
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "f50799b307b6": {
-      "name": "worktree.set#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -59,9 +45,12 @@
         "startedAt": 0
       }
     },
-    "fbc51b3438c8": {
+    "41bdce9de379": {
+      "linkedPR": "unread",
+      "outcome": "unlinked"
+    },
+    "86441203344c": {
       "name": "worktree.set#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -94,6 +83,15 @@
         }
       }
     },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "ab2ee9c092a5": {
+      "name": "worktree.set#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":12}}",
+      "sent": 1
+    },
     "fbc958e4d46e": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -109,8 +107,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["f50799b307b6"],
-          "payloads": ["4b458696422e"],
+          "sender": ["2c746c8732cd"],
+          "payloads": ["ab2ee9c092a5"],
           "settlements": {
             "link": "9270aeb7d9c6"
           },
@@ -121,8 +119,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["fbc51b3438c8"],
-          "payloads": ["4b458696422e"],
+          "sender": ["86441203344c"],
+          "payloads": ["ab2ee9c092a5"],
           "settlements": {
             "link": "fbc958e4d46e"
           },

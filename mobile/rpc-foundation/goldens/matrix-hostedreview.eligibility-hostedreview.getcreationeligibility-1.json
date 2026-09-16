@@ -3,9 +3,9 @@
   "family": "hostedReview.eligibility",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "6c4de90e2617d204e82ca5e65eb17fc397acbcbb9dc0ec18594d2a7739e3528b",
   "platform": "darwin",
@@ -24,9 +24,49 @@
         "code": "incompatible_reply"
       }
     },
-    "0cca43b8bfa3": {
+    "099a55e691ed": {
       "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "198e064322d5": {
+      "name": "hostedReview.getCreationEligibility#1",
       "args": [
         {
           "name": "method",
@@ -70,51 +110,8 @@
         }
       }
     },
-    "0d85ba411639": {
+    "1c4e890f9aaf": {
       "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": {
-              "$rpc": "null"
-            },
-            "branch": "feature",
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "109e1e2537c2": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -152,10 +149,7 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
+            "$rpc": "null"
           }
         }
       }
@@ -179,162 +173,8 @@
         "title": "Host title"
       }
     },
-    "2cbc383a17fc": {
-      "eligibility": {
-        "blockedReason": {
-          "$rpc": "null"
-        },
-        "body": "Host body",
-        "canCreate": true,
-        "defaultBaseRef": "main",
-        "nextAction": {
-          "$rpc": "null"
-        },
-        "provider": "gitlab",
-        "reviewLookupOutcome": "none",
-        "title": "Host title"
-      },
-      "prefill": "unresolved"
-    },
-    "482bc172202f": {
+    "291496f6f93a": {
       "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": {
-              "$rpc": "null"
-            },
-            "branch": "feature",
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "485a0942bda3": {
-      "eligibility": "unfetched",
-      "prefill": "unresolved"
-    },
-    "4dfe4f2ad75c": {
-      "eligibility": {
-        "$rpc": "null"
-      },
-      "prefill": "unresolved"
-    },
-    "554be04adc27": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": {
-              "$rpc": "null"
-            },
-            "branch": "feature",
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "5c011f91c938": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": {
-              "$rpc": "null"
-            },
-            "branch": "feature",
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "62a6b8a935a7": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -378,116 +218,40 @@
         }
       }
     },
-    "82629d23ef47": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
+    "2cbc383a17fc": {
+      "eligibility": {
+        "blockedReason": {
+          "$rpc": "null"
         },
-        {
-          "name": "params",
-          "value": {
-            "base": {
-              "$rpc": "null"
-            },
-            "branch": "feature",
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
+        "body": "Host body",
+        "canCreate": true,
+        "defaultBaseRef": "main",
+        "nextAction": {
+          "$rpc": "null"
         },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
+        "provider": "gitlab",
+        "reviewLookupOutcome": "none",
+        "title": "Host title"
+      },
+      "prefill": "unresolved"
     },
-    "8bbf03da5e8d": {
+    "349d5045a996": {
       "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}",
+      "sent": 1
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
+    "485a0942bda3": {
+      "eligibility": "unfetched",
+      "prefill": "unresolved"
     },
-    "a0eed8835645": {
+    "4dfe4f2ad75c": {
+      "eligibility": {
+        "$rpc": "null"
+      },
+      "prefill": "unresolved"
+    },
+    "6506a6ec7ac3": {
       "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": {
-              "$rpc": "null"
-            },
-            "branch": "feature",
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "c403f967c681": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -531,19 +295,8 @@
         }
       }
     },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "e81b03821126": {
+    "6c52d90237b7": {
       "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -581,22 +334,98 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "refused"
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "ee20a1dc39e7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "null"
+    "79c3a2ea5c23": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
       }
     },
-    "ef2ac85133d3": {
+    "7fb1231fd64d": {
       "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "899a024357b9": {
+      "name": "hostedReview.getCreationEligibility#1",
       "args": [
         {
           "name": "method",
@@ -649,6 +478,165 @@
           }
         }
       }
+    },
+    "8cef4aaa067c": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "e41e491351c2": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "fed21873c57f": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -657,8 +645,8 @@
       {
         "id": "sc-eligibility-fetched.prelude:pending",
         "observation": {
-          "sender": ["482bc172202f"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["e41e491351c2"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "9270aeb7d9c6"
           },
@@ -669,8 +657,8 @@
       {
         "id": "sc-eligibility-fetched.normal:settled",
         "observation": {
-          "sender": ["ef2ac85133d3"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["899a024357b9"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "24bd84c9fb40"
           },
@@ -681,8 +669,8 @@
       {
         "id": "sc-eligibility-fetched.result-absent:settled",
         "observation": {
-          "sender": ["0d85ba411639"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["099a55e691ed"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "067b33e5b1a9"
           },
@@ -693,8 +681,8 @@
       {
         "id": "sc-eligibility-fetched.result-null:settled",
         "observation": {
-          "sender": ["82629d23ef47"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["1c4e890f9aaf"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "067b33e5b1a9"
           },
@@ -705,8 +693,8 @@
       {
         "id": "sc-eligibility-fetched.inner-ok-missing:settled",
         "observation": {
-          "sender": ["e81b03821126"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["8cef4aaa067c"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "067b33e5b1a9"
           },
@@ -717,8 +705,8 @@
       {
         "id": "sc-eligibility-fetched.inner-false-string-error:settled",
         "observation": {
-          "sender": ["5c011f91c938"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["6c52d90237b7"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "067b33e5b1a9"
           },
@@ -729,8 +717,8 @@
       {
         "id": "sc-eligibility-fetched.inner-false-object-error:settled",
         "observation": {
-          "sender": ["109e1e2537c2"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["fed21873c57f"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "067b33e5b1a9"
           },
@@ -741,8 +729,8 @@
       {
         "id": "sc-eligibility-fetched.outer-refused:settled",
         "observation": {
-          "sender": ["c403f967c681"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["6506a6ec7ac3"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "ee20a1dc39e7"
           },
@@ -753,8 +741,8 @@
       {
         "id": "sc-eligibility-fetched.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["62a6b8a935a7"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["291496f6f93a"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "ee20a1dc39e7"
           },
@@ -765,8 +753,8 @@
       {
         "id": "sc-eligibility-fetched.method-not-found:settled",
         "observation": {
-          "sender": ["0cca43b8bfa3"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["198e064322d5"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "ee20a1dc39e7"
           },
@@ -777,8 +765,8 @@
       {
         "id": "sc-eligibility-fetched.transport-rejection:settled",
         "observation": {
-          "sender": ["a0eed8835645"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["7fb1231fd64d"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "a947768bc0ed"
           },
@@ -789,8 +777,8 @@
       {
         "id": "sc-eligibility-fetched.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["554be04adc27"],
-          "payloads": ["8bbf03da5e8d"],
+          "sender": ["79c3a2ea5c23"],
+          "payloads": ["349d5045a996"],
           "settlements": {
             "fetch": "c7584e82c72f"
           },

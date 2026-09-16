@@ -7,8 +7,7 @@ description: >-
   worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
   agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
   worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
-  for external windows or desktop UI that needs OS-level control, and Playwright or CDP for
-  external pages.
+  when a visible window needs GUI control that a CLI, filesystem, or API cannot do.
 ---
 
 # Orca CLI

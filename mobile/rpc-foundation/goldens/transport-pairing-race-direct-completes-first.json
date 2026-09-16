@@ -3,9 +3,9 @@
   "family": "transport.pairing-race",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "488173fa313295f97aa88fb4bf1944fdb655e37cfd2444e9d15515bd6ad82d95",
   "platform": "darwin",
@@ -13,49 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "61a4715b43bf": {
-      "name": "status.get#2",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "capabilities": []
-          }
-        }
-      }
-    },
-    "93edac3a1c3e": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": "direct"
-    },
-    "a1e33b5bf8ef": {
+    "26f802fad080": {
       "name": "status.get#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -87,23 +46,62 @@
         }
       }
     },
-    "ca99f593a4a0": {
+    "36caf183b988": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "63ab1563ba51": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "93edac3a1c3e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "direct"
+    },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
+    "d433a326314e": {
       "name": "candidate-closed",
-      "ordinal": 5,
-      "value": "relay"
+      "value": "relay",
+      "sent": 2
     },
     "d9b301beff12": {
       "outcome": "direct"
-    },
-    "e7b5d7d57a61": {
-      "name": "status.get#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "f1834177e593": {
-      "name": "status.get#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -112,13 +110,13 @@
       {
         "id": "direct-wins-when-it-completes-first",
         "observation": {
-          "sender": ["a1e33b5bf8ef", "61a4715b43bf"],
-          "payloads": ["e7b5d7d57a61", "f1834177e593"],
+          "sender": ["26f802fad080", "36caf183b988"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6"],
           "settlements": {
             "race": "93edac3a1c3e"
           },
           "state": "d9b301beff12",
-          "effects": ["ca99f593a4a0"]
+          "effects": ["d433a326314e"]
         }
       }
     ]

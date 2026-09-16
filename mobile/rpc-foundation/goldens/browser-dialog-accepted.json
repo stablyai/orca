@@ -3,9 +3,9 @@
   "family": "browser.dialog",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "95f377bc4d8bf1248cafed26b2e9f425ad37e8d3c99e354bd6a8c67eb9bd9b1b",
   "platform": "darwin",
@@ -13,11 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "93f4e9f3ead2": {
-      "name": "browser.dialogAccept#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.dialogAccept\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\"}}"
-    },
     "9855d4ec3415": {
       "busy": false,
       "dialog": {
@@ -29,9 +24,21 @@
       "keyboardValue": "hello",
       "pointerModifiers": []
     },
-    "cd44f29d755e": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f11babba920d": {
       "name": "browser.dialogAccept#1",
-      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.dialogAccept\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\"}}",
+      "sent": 1
+    },
+    "f23289a40300": {
+      "name": "browser.dialogAccept#1",
       "args": [
         {
           "name": "method",
@@ -63,14 +70,6 @@
           }
         }
       }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     }
   },
   "recording": {
@@ -79,8 +78,8 @@
       {
         "id": "dismissed",
         "observation": {
-          "sender": ["cd44f29d755e"],
-          "payloads": ["93f4e9f3ead2"],
+          "sender": ["f23289a40300"],
+          "payloads": ["f11babba920d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"

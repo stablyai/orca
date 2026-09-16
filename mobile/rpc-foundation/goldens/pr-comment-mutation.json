@@ -3,9 +3,9 @@
   "family": "github.pr-comment-mutation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "73cc5da2649b9687bb0d8247fa4ecf3c085746cf398515e8d2b40be2ed0da688",
   "platform": "darwin",
@@ -13,43 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "14120b04af8e": {
-      "name": "github.project.updateIssueCommentBySlug#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueCommentBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "body": "edited",
-            "commentId": 55,
-            "owner": "owner",
-            "repo": "repo"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
     "2dd1ced3c6e3": {
       "edit-comment": {
         "ok": true
@@ -65,15 +28,15 @@
       }
     },
     "44136fa355b3": {},
-    "58627406aba1": {
-      "name": "github.addPRReviewCommentReply#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"commentId\":55,\"body\":\"recorded reply\",\"threadId\":\"thread-1\",\"path\":\"src/app.ts\",\"line\":3}}"
+    "5708d54f0f07": {
+      "name": "github.addIssueComment#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"body\":\"recorded comment\",\"type\":\"pr\"}}",
+      "sent": 2
     },
-    "6053fd8b5f02": {
+    "6aa18d3e13ab": {
       "name": "github.resolveReviewThread#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}"
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}",
+      "sent": 3
     },
     "720507281e9c": {
       "reply": {
@@ -86,6 +49,39 @@
         "ok": true
       }
     },
+    "7d998237c7b0": {
+      "name": "github.resolveReviewThread#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.resolveReviewThread"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-9",
+            "resolve": true,
+            "threadId": "thread-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": true
+        }
+      }
+    },
     "a03244774599": {
       "reply": {
         "ok": true
@@ -94,9 +90,8 @@
         "ok": true
       }
     },
-    "a07493bedc8a": {
+    "a09b7d2d7c5a": {
       "name": "github.project.deleteIssueCommentBySlug#1",
-      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -130,14 +125,60 @@
         }
       }
     },
-    "a76ab6b460fe": {
-      "name": "github.addIssueComment#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"body\":\"recorded comment\",\"type\":\"pr\"}}"
+    "b72d1b08ed71": {
+      "name": "github.addPRReviewCommentReply#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addPRReviewCommentReply"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "recorded reply",
+            "commentId": 55,
+            "line": 3,
+            "path": "src/app.ts",
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "threadId": "thread-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "comment": {
+              "id": 56
+            },
+            "ok": true
+          }
+        }
+      }
     },
-    "a780f3a81230": {
+    "c40fec826b4d": {
+      "name": "github.project.updateIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55,\"body\":\"edited\"}}",
+      "sent": 4
+    },
+    "c676e676ae9d": {
+      "name": "github.addPRReviewCommentReply#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"commentId\":55,\"body\":\"recorded reply\",\"threadId\":\"thread-1\",\"path\":\"src/app.ts\",\"line\":3}}",
+      "sent": 1
+    },
+    "c809528f892d": {
       "name": "github.addIssueComment#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -175,68 +216,25 @@
         }
       }
     },
-    "a80b00127a67": {
-      "name": "github.resolveReviewThread#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.resolveReviewThread"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-9",
-            "resolve": true,
-            "threadId": "thread-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": true
-        }
-      }
-    },
-    "aaea0ed8039c": {
-      "name": "github.project.updateIssueCommentBySlug#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55,\"body\":\"edited\"}}"
-    },
-    "b038a4dffade": {
+    "c9b1ffba7154": {
       "name": "github.project.deleteIssueCommentBySlug#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55}}"
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55}}",
+      "sent": 5
     },
-    "b9fd8579bf37": {
-      "name": "github.addPRReviewCommentReply#1",
-      "ordinal": 1,
+    "cb0ebf3e3df2": {
+      "name": "github.project.updateIssueCommentBySlug#1",
       "args": [
         {
           "name": "method",
-          "value": "github.addPRReviewCommentReply"
+          "value": "github.project.updateIssueCommentBySlug"
         },
         {
           "name": "params",
           "value": {
-            "body": "recorded reply",
+            "body": "edited",
             "commentId": 55,
-            "line": 3,
-            "path": "src/app.ts",
-            "prNumber": 12,
-            "repo": "id:repo-9",
-            "threadId": "thread-1"
+            "owner": "owner",
+            "repo": "repo"
           }
         },
         {
@@ -251,12 +249,9 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-4",
           "ok": true,
           "result": {
-            "comment": {
-              "id": 56
-            },
             "ok": true
           }
         }
@@ -309,8 +304,8 @@
       {
         "id": "reply",
         "observation": {
-          "sender": ["b9fd8579bf37"],
-          "payloads": ["58627406aba1"],
+          "sender": ["b72d1b08ed71"],
+          "payloads": ["c676e676ae9d"],
           "settlements": {
             "reply": "fbc958e4d46e"
           },
@@ -321,8 +316,8 @@
       {
         "id": "root-comment",
         "observation": {
-          "sender": ["b9fd8579bf37", "a780f3a81230"],
-          "payloads": ["58627406aba1", "a76ab6b460fe"],
+          "sender": ["b72d1b08ed71", "c809528f892d"],
+          "payloads": ["c676e676ae9d", "5708d54f0f07"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e"
@@ -334,8 +329,8 @@
       {
         "id": "resolve-thread",
         "observation": {
-          "sender": ["b9fd8579bf37", "a780f3a81230", "a80b00127a67"],
-          "payloads": ["58627406aba1", "a76ab6b460fe", "6053fd8b5f02"],
+          "sender": ["b72d1b08ed71", "c809528f892d", "7d998237c7b0"],
+          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -348,8 +343,8 @@
       {
         "id": "edit-comment",
         "observation": {
-          "sender": ["b9fd8579bf37", "a780f3a81230", "a80b00127a67", "14120b04af8e"],
-          "payloads": ["58627406aba1", "a76ab6b460fe", "6053fd8b5f02", "aaea0ed8039c"],
+          "sender": ["b72d1b08ed71", "c809528f892d", "7d998237c7b0", "cb0ebf3e3df2"],
+          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -364,18 +359,18 @@
         "id": "delete-comment",
         "observation": {
           "sender": [
-            "b9fd8579bf37",
-            "a780f3a81230",
-            "a80b00127a67",
-            "14120b04af8e",
-            "a07493bedc8a"
+            "b72d1b08ed71",
+            "c809528f892d",
+            "7d998237c7b0",
+            "cb0ebf3e3df2",
+            "a09b7d2d7c5a"
           ],
           "payloads": [
-            "58627406aba1",
-            "a76ab6b460fe",
-            "6053fd8b5f02",
-            "aaea0ed8039c",
-            "b038a4dffade"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",

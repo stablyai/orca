@@ -3,9 +3,9 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
   "scenarioSha256": "efb8d1cd2a2ff0ade4cdc48a1aacec565e33b405bbe95c100b86534cdde49740",
   "platform": "darwin",
@@ -13,9 +13,238 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "03941f1abe9e": {
+    "1277d47c0e64": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "$rpc": "null"
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "error",
+        "message": "Cannot read properties of undefined (reading 'sessions')"
+      }
+    },
+    "232a27ecb718": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "23523c413cbd": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "$rpc": "null"
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "error",
+        "message": "Unable to load agent sessions"
+      }
+    },
+    "56c96fec6d08": {
+      "name": "aiVault.listSessions#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
+      "sent": 2
+    },
+    "61f76365e23c": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "$rpc": "null"
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "error",
+        "message": "Cannot read properties of null (reading 'sessions')"
+      }
+    },
+    "63954da09bd5": {
+      "name": "aiVault.listSessions#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "698f848e6967": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "$rpc": "null"
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "error",
+        "message": "Unknown method"
+      }
+    },
+    "6e50957443ea": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "82e315fc9ae9": {
+      "name": "aiVault.listSessions#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "a07975f2dc20": {
+      "name": "aiVault.listSessions#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "b439901fb32e": {
+      "name": "aiVault.listSessions#1",
       "args": [
         {
           "name": "method",
@@ -52,9 +281,8 @@
         }
       }
     },
-    "04f87f24d8d3": {
+    "b4700df437ac": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -76,43 +304,21 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
         }
       }
     },
-    "1277d47c0e64": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "Cannot read properties of undefined (reading 'sessions')"
-      }
-    },
-    "23523c413cbd": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "Unable to load agent sessions"
-      }
-    },
-    "3719c54df702": {
+    "b567072e5440": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -153,9 +359,8 @@
         }
       }
     },
-    "42c8943b1c10": {
+    "c5357db644f1": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -177,92 +382,30 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-2",
-          "ok": false
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "4a76a58cbdac": {
-      "name": "status.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
+    "c9c67b3f0119": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "$rpc": "null"
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "error",
+        "message": "outer refused"
       }
     },
-    "4aab3e54002b": {
+    "cb6df2fa8b89": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "5bd663d5906f": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -297,7 +440,26 @@
         }
       }
     },
-    "61f76365e23c": {
+    "cd739a80b7a8": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "capabilities": ["aiVault.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "issues": [],
+        "kind": "ready",
+        "sessions": [
+          {
+            "agent": "claude",
+            "cwd": "/repo/feature",
+            "id": "s1"
+          }
+        ]
+      }
+    },
+    "d86e3b3b7ca7": {
       "activeWorktreePath": "/repo/feature",
       "hostStatusResult": {
         "$rpc": "null"
@@ -306,95 +468,11 @@
       "scope": "workspace",
       "screenState": {
         "kind": "error",
-        "message": "Cannot read properties of null (reading 'sessions')"
+        "message": "transport failure"
       }
     },
-    "698f848e6967": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "Unknown method"
-      }
-    },
-    "768971aec76e": {
+    "e52e185c004d": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "7bad42e9328e": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "82f5db4fce4d": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -422,133 +500,11 @@
         "value": {
           "error": {
             "code": "refused",
-            "message": ""
+            "message": "outer refused"
           },
           "id": "frame-2",
           "ok": false
         }
-      }
-    },
-    "8af00090aaf6": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "97bd894604ee": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
-    },
-    "c75783a264f1": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true
-        }
-      }
-    },
-    "c9c67b3f0119": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "outer refused"
-      }
-    },
-    "cd739a80b7a8": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "issues": [],
-        "kind": "ready",
-        "sessions": [
-          {
-            "agent": "claude",
-            "cwd": "/repo/feature",
-            "id": "s1"
-          }
-        ]
-      }
-    },
-    "d08f74d65ee6": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "d86e3b3b7ca7": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "transport failure"
       }
     },
     "e8d512f74641": {
@@ -587,6 +543,38 @@
           "$rpc": "undefined"
         }
       }
+    },
+    "fe995263cbdb": {
+      "name": "aiVault.listSessions#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
     }
   },
   "recording": {
@@ -595,8 +583,8 @@
       {
         "id": "aivault-history-scan-fulfilled.normal:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "3719c54df702"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "b567072e5440"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -607,8 +595,8 @@
       {
         "id": "aivault-history-scan-fulfilled.result-absent:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "c75783a264f1"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "fe995263cbdb"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -619,8 +607,8 @@
       {
         "id": "aivault-history-scan-fulfilled.result-null:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "4aab3e54002b"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "63954da09bd5"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -631,8 +619,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-ok-missing:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "8af00090aaf6"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "a07975f2dc20"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -643,8 +631,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-false-string-error:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "5bd663d5906f"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "cb6df2fa8b89"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -655,8 +643,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-false-object-error:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "03941f1abe9e"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "b439901fb32e"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -667,8 +655,8 @@
       {
         "id": "aivault-history-scan-fulfilled.outer-refused:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "42c8943b1c10"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "e52e185c004d"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -679,8 +667,8 @@
       {
         "id": "aivault-history-scan-fulfilled.outer-refused-no-message:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "82f5db4fce4d"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "82e315fc9ae9"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -691,8 +679,8 @@
       {
         "id": "aivault-history-scan-fulfilled.method-not-found:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "7bad42e9328e"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "b4700df437ac"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -703,8 +691,8 @@
       {
         "id": "aivault-history-scan-fulfilled.transport-rejection:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "768971aec76e"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "232a27ecb718"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -715,8 +703,8 @@
       {
         "id": "aivault-history-scan-fulfilled.transport-rejection-no-message:ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "04f87f24d8d3"],
-          "payloads": ["d08f74d65ee6", "97bd894604ee"],
+          "sender": ["6e50957443ea", "c5357db644f1"],
+          "payloads": ["852980e2efc0", "56c96fec6d08"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

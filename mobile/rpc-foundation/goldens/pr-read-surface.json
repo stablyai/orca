@@ -3,9 +3,9 @@
   "family": "github.pr-read",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "4246e7ffa62e85aac489c561171a6468f862b7f18eefac9926b65073616b6d35",
   "platform": "darwin",
@@ -13,27 +13,19 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "083bb0224d9d": {
-      "name": "github.prForBranch#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}"
-    },
-    "0a9f2ff19df4": {
-      "name": "github.workItemDetails#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}"
-    },
-    "191e3c96ad53": {
-      "name": "github.repoSlug#1",
-      "ordinal": 1,
+    "1bdfee368839": {
+      "name": "hostedReview.forBranch#1",
       "args": [
         {
           "name": "method",
-          "value": "github.repoSlug"
+          "value": "hostedReview.forBranch"
         },
         {
           "name": "params",
           "value": {
+            "active": true,
+            "branch": "feature",
+            "linkedGitHubPR": 12,
             "repo": "id:repo-9"
           }
         },
@@ -49,12 +41,16 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
-            "host": "github.com",
-            "owner": "orca",
-            "repo": "orca"
+            "mergeable": "MERGEABLE",
+            "number": 12,
+            "provider": "github",
+            "state": "open",
+            "title": "Recorded",
+            "updatedAt": "2026-01-01",
+            "url": "https://x/12"
           }
         }
       }
@@ -95,29 +91,17 @@
         }
       }
     },
-    "1f5765918736": {
+    "207e61d5e813": {
+      "name": "github.prForBranch#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}",
+      "sent": 3
+    },
+    "2638b3063bb1": {
       "name": "github.repoSlug#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-9\"}}"
-    },
-    "41113a109089": {
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      }
-    },
-    "44136fa355b3": {},
-    "4617f439805b": {
-      "name": "github.listAssignableUsers#1",
-      "ordinal": 13,
       "args": [
         {
           "name": "method",
-          "value": "github.listAssignableUsers"
+          "value": "github.repoSlug"
         },
         {
           "name": "params",
@@ -137,31 +121,50 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-7",
+          "id": "frame-1",
           "ok": true,
-          "result": [
-            {
-              "login": "octocat",
-              "name": "Octo Cat"
-            }
-          ]
+          "result": {
+            "host": "github.com",
+            "owner": "orca",
+            "repo": "orca"
+          }
         }
       }
     },
-    "471a75cee137": {
-      "name": "github.workItemDetails#1",
-      "ordinal": 7,
+    "384abd5851d2": {
+      "name": "github.prChecks#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}",
+      "sent": 5
+    },
+    "41113a109089": {
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "499ca7b4c13a": {
+      "name": "github.prCheckDetails#1",
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null}}",
+      "sent": 6
+    },
+    "4a081d46fc88": {
+      "name": "github.prChecks#1",
       "args": [
         {
           "name": "method",
-          "value": "github.workItemDetails"
+          "value": "github.prChecks"
         },
         {
           "name": "params",
           "value": {
-            "number": 12,
-            "repo": "id:repo-9",
-            "type": "pr"
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
           }
         },
         {
@@ -176,21 +179,16 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-4",
+          "id": "frame-5",
           "ok": true,
-          "result": {
-            "body": "body",
-            "headSha": "head-sha-1",
-            "item": {
-              "assignees": [],
-              "id": "PR_1",
-              "labels": [],
-              "number": 12,
-              "state": "open",
-              "title": "Recorded",
-              "type": "pr"
+          "result": [
+            {
+              "checkRunId": 7,
+              "conclusion": "success",
+              "name": "build",
+              "status": "completed"
             }
-          }
+          ]
         }
       }
     },
@@ -260,48 +258,10 @@
         }
       }
     },
-    "4bf8f27dd319": {
-      "name": "hostedReview.forBranch#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.forBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "active": true,
-            "branch": "feature",
-            "linkedGitHubPR": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "mergeable": "MERGEABLE",
-            "number": 12,
-            "provider": "github",
-            "state": "open",
-            "title": "Recorded",
-            "updatedAt": "2026-01-01",
-            "url": "https://x/12"
-          }
-        }
-      }
+    "4c91dcea8967": {
+      "name": "github.workItemDetails#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}",
+      "sent": 4
     },
     "50f04028e403": {
       "check-details": {
@@ -484,10 +444,50 @@
         }
       }
     },
-    "52504eafec78": {
-      "name": "github.prChecks#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
+    "59ec56b0e49c": {
+      "name": "github.workItemDetails#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-9",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "body": "body",
+            "headSha": "head-sha-1",
+            "item": {
+              "assignees": [],
+              "id": "PR_1",
+              "labels": [],
+              "number": 12,
+              "state": "open",
+              "title": "Recorded",
+              "type": "pr"
+            }
+          }
+        }
+      }
     },
     "5a46540568af": {
       "hosted-review": {
@@ -527,10 +527,47 @@
         }
       }
     },
-    "6a3f611aad80": {
+    "9353f049138c": {
       "name": "github.prCheckDetails#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null}}"
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prCheckDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "checkName": "build",
+            "checkRunId": 7,
+            "repo": "id:repo-9",
+            "url": {
+              "$rpc": "null"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "annotations": [],
+            "conclusion": "success",
+            "jobs": [],
+            "name": "build",
+            "status": "completed"
+          }
+        }
+      }
     },
     "9589a1e1a61e": {
       "hosted-review": {
@@ -601,53 +638,6 @@
           "host": "github.com",
           "owner": "orca",
           "repo": "orca"
-        }
-      }
-    },
-    "a0b9d1ab313a": {
-      "name": "github.prForBranch#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prForBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "branch": "feature",
-            "linkedPRNumber": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "fetchedAt": 0,
-            "kind": "found",
-            "pr": {
-              "headSha": "head-sha-1",
-              "mergeable": "MERGEABLE",
-              "number": 12,
-              "state": "open",
-              "title": "Recorded",
-              "url": "https://x/12"
-            }
-          }
         }
       }
     },
@@ -890,15 +880,56 @@
         }
       }
     },
-    "cdbefce64e00": {
+    "ba3f7a2212a2": {
       "name": "hostedReview.forBranch#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":12,\"active\":true}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":12,\"active\":true}}",
+      "sent": 2
     },
-    "d4a62d86d857": {
-      "name": "github.listAssignableUsers#1",
-      "ordinal": 14,
-      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-9\"}}"
+    "c9cb3ce714a0": {
+      "name": "github.prForBranch#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "fetchedAt": 0,
+            "kind": "found",
+            "pr": {
+              "headSha": "head-sha-1",
+              "mergeable": "MERGEABLE",
+              "number": 12,
+              "state": "open",
+              "title": "Recorded",
+              "url": "https://x/12"
+            }
+          }
+        }
+      }
     },
     "d89e7b8ce2a0": {
       "status": "fulfilled",
@@ -935,23 +966,17 @@
         ]
       }
     },
-    "e97a125cdb88": {
-      "name": "github.prCheckDetails#1",
-      "ordinal": 11,
+    "efcf99a657b9": {
+      "name": "github.listAssignableUsers#1",
       "args": [
         {
           "name": "method",
-          "value": "github.prCheckDetails"
+          "value": "github.listAssignableUsers"
         },
         {
           "name": "params",
           "value": {
-            "checkName": "build",
-            "checkRunId": 7,
-            "repo": "id:repo-9",
-            "url": {
-              "$rpc": "null"
-            }
+            "repo": "id:repo-9"
           }
         },
         {
@@ -966,15 +991,14 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-6",
+          "id": "frame-7",
           "ok": true,
-          "result": {
-            "annotations": [],
-            "conclusion": "success",
-            "jobs": [],
-            "name": "build",
-            "status": "completed"
-          }
+          "result": [
+            {
+              "login": "octocat",
+              "name": "Octo Cat"
+            }
+          ]
         }
       }
     },
@@ -1128,6 +1152,11 @@
         }
       }
     },
+    "f2282e0dfeff": {
+      "name": "github.repoSlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-9\"}}",
+      "sent": 1
+    },
     "f2563d0882ec": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -1167,46 +1196,10 @@
         }
       }
     },
-    "fa4bf991415d": {
-      "name": "github.prChecks#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prChecks"
-        },
-        {
-          "name": "params",
-          "value": {
-            "headSha": "head-sha-1",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true,
-          "result": [
-            {
-              "checkRunId": 7,
-              "conclusion": "success",
-              "name": "build",
-              "status": "completed"
-            }
-          ]
-        }
-      }
+    "f6aef41b070e": {
+      "name": "github.listAssignableUsers#1",
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-9\"}}",
+      "sent": 7
     },
     "fd7cf23591a3": {
       "hosted-review": {
@@ -1358,8 +1351,8 @@
       {
         "id": "repo-slug",
         "observation": {
-          "sender": ["191e3c96ad53"],
-          "payloads": ["1f5765918736"],
+          "sender": ["2638b3063bb1"],
+          "payloads": ["f2282e0dfeff"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0"
           },
@@ -1370,8 +1363,8 @@
       {
         "id": "hosted-review",
         "observation": {
-          "sender": ["191e3c96ad53", "4bf8f27dd319"],
-          "payloads": ["1f5765918736", "cdbefce64e00"],
+          "sender": ["2638b3063bb1", "1bdfee368839"],
+          "payloads": ["f2282e0dfeff", "ba3f7a2212a2"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7"
@@ -1383,8 +1376,8 @@
       {
         "id": "pr-for-branch",
         "observation": {
-          "sender": ["191e3c96ad53", "4bf8f27dd319", "a0b9d1ab313a"],
-          "payloads": ["1f5765918736", "cdbefce64e00", "083bb0224d9d"],
+          "sender": ["2638b3063bb1", "1bdfee368839", "c9cb3ce714a0"],
+          "payloads": ["f2282e0dfeff", "ba3f7a2212a2", "207e61d5e813"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
@@ -1397,8 +1390,8 @@
       {
         "id": "work-item",
         "observation": {
-          "sender": ["191e3c96ad53", "4bf8f27dd319", "a0b9d1ab313a", "471a75cee137"],
-          "payloads": ["1f5765918736", "cdbefce64e00", "083bb0224d9d", "0a9f2ff19df4"],
+          "sender": ["2638b3063bb1", "1bdfee368839", "c9cb3ce714a0", "59ec56b0e49c"],
+          "payloads": ["f2282e0dfeff", "ba3f7a2212a2", "207e61d5e813", "4c91dcea8967"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
             "hosted-review": "b0b5c628b5c7",
@@ -1413,18 +1406,18 @@
         "id": "checks",
         "observation": {
           "sender": [
-            "191e3c96ad53",
-            "4bf8f27dd319",
-            "a0b9d1ab313a",
-            "471a75cee137",
-            "fa4bf991415d"
+            "2638b3063bb1",
+            "1bdfee368839",
+            "c9cb3ce714a0",
+            "59ec56b0e49c",
+            "4a081d46fc88"
           ],
           "payloads": [
-            "1f5765918736",
-            "cdbefce64e00",
-            "083bb0224d9d",
-            "0a9f2ff19df4",
-            "52504eafec78"
+            "f2282e0dfeff",
+            "ba3f7a2212a2",
+            "207e61d5e813",
+            "4c91dcea8967",
+            "384abd5851d2"
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
@@ -1441,20 +1434,20 @@
         "id": "check-details",
         "observation": {
           "sender": [
-            "191e3c96ad53",
-            "4bf8f27dd319",
-            "a0b9d1ab313a",
-            "471a75cee137",
-            "fa4bf991415d",
-            "e97a125cdb88"
+            "2638b3063bb1",
+            "1bdfee368839",
+            "c9cb3ce714a0",
+            "59ec56b0e49c",
+            "4a081d46fc88",
+            "9353f049138c"
           ],
           "payloads": [
-            "1f5765918736",
-            "cdbefce64e00",
-            "083bb0224d9d",
-            "0a9f2ff19df4",
-            "52504eafec78",
-            "6a3f611aad80"
+            "f2282e0dfeff",
+            "ba3f7a2212a2",
+            "207e61d5e813",
+            "4c91dcea8967",
+            "384abd5851d2",
+            "499ca7b4c13a"
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
@@ -1472,22 +1465,22 @@
         "id": "assignable",
         "observation": {
           "sender": [
-            "191e3c96ad53",
-            "4bf8f27dd319",
-            "a0b9d1ab313a",
-            "471a75cee137",
-            "fa4bf991415d",
-            "e97a125cdb88",
-            "4617f439805b"
+            "2638b3063bb1",
+            "1bdfee368839",
+            "c9cb3ce714a0",
+            "59ec56b0e49c",
+            "4a081d46fc88",
+            "9353f049138c",
+            "efcf99a657b9"
           ],
           "payloads": [
-            "1f5765918736",
-            "cdbefce64e00",
-            "083bb0224d9d",
-            "0a9f2ff19df4",
-            "52504eafec78",
-            "6a3f611aad80",
-            "d4a62d86d857"
+            "f2282e0dfeff",
+            "ba3f7a2212a2",
+            "207e61d5e813",
+            "4c91dcea8967",
+            "384abd5851d2",
+            "499ca7b4c13a",
+            "f6aef41b070e"
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",

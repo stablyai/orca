@@ -73,7 +73,7 @@ export type AgentLaunchIntent = {
 /** The surface the host actually created. */
 export type AgentLaunchOutcome =
   | { kind: 'structured'; sessionId: string; handle: string }
-  | { kind: 'terminal'; handle: string; warning?: string }
+  | { kind: 'terminal'; handle: string }
 
 /** Whether the launch text was delivered, for a caller that needs to report or retry it. */
 export type AgentLaunchPromptReceipt = {
@@ -85,6 +85,18 @@ export type AgentLaunchResult = {
   outcome: AgentLaunchOutcome
   /** The workspace the agent runs in, resolved or created. */
   worktreeId: string
+  /**
+   * The launch completed but something in it did not: a startup terminal that failed to spawn,
+   * untracked files that could not be copied. `worktree.create` returns this at the top level and
+   * mobile already surfaces it, so a launch that drops it lands the user on a workspace that is
+   * quietly incomplete.
+   *
+   * Top level rather than on the outcome, and deliberately the ONLY place a launch warning lives:
+   * it is produced by the create as often as by the surface, it applies to a structured session
+   * and a terminal alike, and a reader should not have to branch on `outcome.kind` to discover
+   * that the workspace it just opened is missing something.
+   */
+  warning?: string
   /** Why the outcome is what it is — always populated, so a downgrade is never silent. */
   receipt: AgentLaunchModeReceipt
   prompt?: AgentLaunchPromptReceipt
@@ -122,12 +134,13 @@ export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
 /** Strips the reserved agent fields from a create payload. Callers migrating from
  *  `worktree.create` pass their existing params; this keeps a stale `startupAgent` from
  *  re-creating the agent-first path the router exists to replace. */
-export function withoutReservedAgentCreateFields(
-  create: Readonly<Record<string, unknown>>
-): Record<string, unknown> {
+export function withoutReservedAgentCreateFields<Create extends Readonly<Record<string, unknown>>>(
+  create: Create
+): Create {
   const stripped: Record<string, unknown> = { ...create }
   for (const field of AGENT_LAUNCH_RESERVED_CREATE_FIELDS) {
     delete stripped[field]
   }
-  return stripped
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every reserved field is optional on a create payload, so dropping them leaves the caller's own shape.
+  return stripped as Create
 }

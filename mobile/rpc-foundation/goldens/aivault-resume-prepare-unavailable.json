@@ -3,9 +3,9 @@
   "family": "aiVault.resume-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "a5eedea5f551e0ca0e143292f1d9aa8920dd7af62a02d8e8777666ab3779c019",
   "platform": "darwin",
@@ -13,25 +13,13 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "88c8bb20eb6f": {
+    "770627dbd25d": {
       "name": "aiVault.prepareSessionResume#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}",
+      "sent": 1
     },
-    "e839ea279e77": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "agent": "codex",
-        "codexHome": "/hosts/codex-runtime-home/home",
-        "executionHostId": "local",
-        "filePath": "/sessions/rollout.jsonl"
-      }
-    },
-    "e8fdd9c76c0f": {
+    "a25c46d6c1db": {
       "name": "aiVault.prepareSessionResume#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -67,6 +55,17 @@
         }
       }
     },
+    "e839ea279e77": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
     "f9dc8bff0bbd": {
       "failure": {
         "$rpc": "null"
@@ -85,8 +84,8 @@
       {
         "id": "degraded-to-legacy",
         "observation": {
-          "sender": ["e8fdd9c76c0f"],
-          "payloads": ["88c8bb20eb6f"],
+          "sender": ["a25c46d6c1db"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "e839ea279e77"
           },

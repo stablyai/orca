@@ -3,9 +3,9 @@
   "family": "components.execution-target",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "82b891c7a7a2f255e2d22a372ee6112c9cc1f650259244e87f2e8c1356e97e5f",
   "platform": "darwin",
@@ -13,9 +13,59 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0355054e5e71": {
+    "0b078c630b23": {
+      "name": "preflight.detectRemoteAgents#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
+      "sent": 4
+    },
+    "14b354ce0ded": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}",
+      "sent": 1
+    },
+    "4e2e9a890ced": {
+      "detected": ["codex"],
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": "connected"
+      }
+    },
+    "6004e75ef39e": {
+      "name": "preflight.detectRemoteAgents#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "77f42ff60d15": {
       "name": "ssh.connect#1",
-      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}",
+      "sent": 3
+    },
+    "81c9c204b647": {
+      "name": "ssh.connect#1",
       "args": [
         {
           "name": "method",
@@ -54,98 +104,8 @@
         }
       }
     },
-    "10b5ec5ae537": {
-      "name": "preflight.detectRemoteAgents#2",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectRemoteAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "12098dde49de": {
-      "name": "ssh.connect#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
-    },
-    "4aa26501c485": {
-      "name": "preflight.detectRemoteAgents#2",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
-    },
-    "4e2e9a890ced": {
-      "detected": ["codex"],
-      "gate": {
-        "connectInProgress": false,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": "connected"
-      }
-    },
-    "70b1e8fb528a": {
-      "name": "preflight.detectRemoteAgents#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectRemoteAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": ["codex"]
-        }
-      }
-    },
-    "8265ec539d5a": {
-      "name": "preflight.detectRemoteAgents#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
-    },
-    "a11809a84754": {
+    "89aa7a3bd619": {
       "name": "ssh.getState#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
-    },
-    "b53739a58194": {
-      "name": "ssh.getState#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -184,9 +144,44 @@
         }
       }
     },
-    "b6835adccf60": {
+    "9a892112da5b": {
+      "name": "preflight.detectRemoteAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "bb1f9f7430c4": {
+      "name": "preflight.detectRemoteAgents#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}",
+      "sent": 2
+    },
+    "ca123825be51": {
       "name": "ssh.getState#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -240,8 +235,8 @@
       {
         "id": "state-pending",
         "observation": {
-          "sender": ["b6835adccf60"],
-          "payloads": ["a11809a84754"],
+          "sender": ["ca123825be51"],
+          "payloads": ["14b354ce0ded"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -252,8 +247,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["b53739a58194", "70b1e8fb528a", "0355054e5e71", "10b5ec5ae537"],
-          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "sender": ["89aa7a3bd619", "9a892112da5b", "81c9c204b647", "6004e75ef39e"],
+          "payloads": ["14b354ce0ded", "bb1f9f7430c4", "77f42ff60d15", "0b078c630b23"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"

@@ -3,9 +3,9 @@
   "family": "session.worktree-connection",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "e7e3718f685e3713cf1b8209d59d618741f892bd286853b79bb456c59cec8d86",
   "scenarioSha256": "e7fb7a8083aac4c8c5edc7dd52465ca53bfcded00bf8b1ec18ae7604651bbe32",
   "platform": "darwin",
@@ -13,38 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "03628457e494": {
-      "name": "repo.list#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
     "2381a3fe154e": {
       "status": "rejected",
       "startedAt": 0,
@@ -53,37 +21,6 @@
         "category": "TypeError",
         "message": "Cannot read properties of undefined (reading 'repos')",
         "isRpcDeliveryUnknown": false
-      }
-    },
-    "24485b5028f5": {
-      "name": "repo.list#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true
-        }
       }
     },
     "32a7c0ae7918": {
@@ -103,9 +40,8 @@
       },
       "pasteOutcome": "unpasted"
     },
-    "3be971df5814": {
+    "397587780f89": {
       "name": "repo.list#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -130,47 +66,11 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
+            "code": "refused",
+            "message": ""
           },
           "id": "frame-2",
           "ok": false
-        }
-      }
-    },
-    "3fb0e93ab6cb": {
-      "name": "settings.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "settings": {
-              "terminalCopyTrimsGutter": true
-            }
-          }
         }
       }
     },
@@ -181,9 +81,8 @@
       },
       "pasteOutcome": "unpasted"
     },
-    "4a8214d9a3ed": {
+    "52500878f297": {
       "name": "repo.list#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -203,19 +102,21 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
         }
       }
     },
-    "51945e80fbd2": {
+    "572ea5e1e980": {
       "name": "repo.list#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -242,17 +143,19 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "error": {
-              "message": "inner refused"
-            },
+            "error": "inner refused",
             "ok": false
           }
         }
       }
     },
-    "5a51b87432e2": {
+    "5c52bc3f9e55": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 1
+    },
+    "63200026ea8b": {
       "name": "repo.list#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -295,88 +198,8 @@
         }
       }
     },
-    "5dd995908a4c": {
+    "63c1ccf6c3e3": {
       "name": "repo.list#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "63dfbb6942f2": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'repos')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "72444832e687": {
-      "name": "repo.list#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "78109a75646c": {
-      "name": "repo.list#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -408,6 +231,47 @@
         }
       }
     },
+    "63dfbb6942f2": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of null (reading 'repos')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "6e5c6593dad8": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "87c5de8dadf8": {
       "connectionId": {
         "$rpc": "null"
@@ -424,9 +288,53 @@
       },
       "pasteOutcome": "unpasted"
     },
-    "97c99028249e": {
+    "9eb52b24aea4": {
       "name": "repo.list#1",
-      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ad49fec56c14": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 2
+    },
+    "ae85758452ae": {
+      "name": "repo.list#1",
       "args": [
         {
           "name": "method",
@@ -453,20 +361,9 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "error": "refused"
           }
         }
-      }
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
       }
     },
     "af2065a16bd9": {
@@ -476,9 +373,109 @@
       },
       "pasteOutcome": "unpasted"
     },
-    "b324f195491d": {
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "caa7fdd9839a": {
       "name": "repo.list#1",
-      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "cc1facdf008c": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d1013a931f34": {
+      "connectionId": "Cannot read properties of null (reading 'repos')",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "unpasted"
+    },
+    "d607cc114b04": {
+      "connectionId": "outer refused",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "unpasted"
+    },
+    "e31fdb68b5c2": {
+      "name": "repo.list#1",
       "args": [
         {
           "name": "method",
@@ -503,57 +500,13 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "refused",
-            "message": ""
+            "code": "method_not_found",
+            "message": "Unknown method"
           },
           "id": "frame-2",
           "ok": false
         }
       }
-    },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "c8c77ac17e0a": {
-      "name": "settings.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "d1013a931f34": {
-      "connectionId": "Cannot read properties of null (reading 'repos')",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "unpasted"
-    },
-    "d607cc114b04": {
-      "connectionId": "outer refused",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "unpasted"
-    },
-    "d64700b9de3b": {
-      "name": "repo.list#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "e61132f30b52": {
       "status": "fulfilled",
@@ -593,6 +546,41 @@
         "message": "",
         "isRpcDeliveryUnknown": false
       }
+    },
+    "f3df5e006d8e": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "terminalCopyTrimsGutter": true
+            }
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -601,8 +589,8 @@
       {
         "id": "terminal-worktree-connection-resolved.normal:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "5a51b87432e2"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "63200026ea8b"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "e61132f30b52"
@@ -614,8 +602,8 @@
       {
         "id": "terminal-worktree-connection-resolved.result-absent:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "24485b5028f5"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "9eb52b24aea4"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "2381a3fe154e"
@@ -627,8 +615,8 @@
       {
         "id": "terminal-worktree-connection-resolved.result-null:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "78109a75646c"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "63c1ccf6c3e3"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "63dfbb6942f2"
@@ -640,8 +628,8 @@
       {
         "id": "terminal-worktree-connection-resolved.inner-ok-missing:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "5dd995908a4c"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "ae85758452ae"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "ee20a1dc39e7"
@@ -653,8 +641,8 @@
       {
         "id": "terminal-worktree-connection-resolved.inner-false-string-error:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "97c99028249e"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "572ea5e1e980"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "ee20a1dc39e7"
@@ -666,8 +654,8 @@
       {
         "id": "terminal-worktree-connection-resolved.inner-false-object-error:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "51945e80fbd2"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "caa7fdd9839a"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "ee20a1dc39e7"
@@ -679,8 +667,8 @@
       {
         "id": "terminal-worktree-connection-resolved.outer-refused:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "72444832e687"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "52500878f297"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "32a7c0ae7918"
@@ -692,8 +680,8 @@
       {
         "id": "terminal-worktree-connection-resolved.outer-refused-no-message:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "b324f195491d"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "397587780f89"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "f3b516f62081"
@@ -705,8 +693,8 @@
       {
         "id": "terminal-worktree-connection-resolved.method-not-found:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "3be971df5814"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "e31fdb68b5c2"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "b948e8307e81"
@@ -718,8 +706,8 @@
       {
         "id": "terminal-worktree-connection-resolved.transport-rejection:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "4a8214d9a3ed"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "6e5c6593dad8"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "a947768bc0ed"
@@ -731,8 +719,8 @@
       {
         "id": "terminal-worktree-connection-resolved.transport-rejection-no-message:resolved",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "03628457e494"],
-          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "sender": ["f3df5e006d8e", "cc1facdf008c"],
+          "payloads": ["5c52bc3f9e55", "ad49fec56c14"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "c7584e82c72f"

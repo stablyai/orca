@@ -12,6 +12,20 @@ on:
       # Why: the mobile terminal link parsers are conformance-tested against
       # these shared fixtures; desktop-side fixture edits must re-run this suite.
       - 'src/shared/terminal-file-link-conformance.ts'
+      # Why: mobile imports the negotiated capability names directly and records
+      # the whole capability read verbatim in its goldens, so a capability added
+      # desktop-side rewrites a mobile fixture and must re-run this suite.
+      - 'src/shared/protocol-version.ts'
+      # Why: mobile's rpc-params-contract.ts is a type-only re-export of the
+      # generated params catalog, and mobile/tsconfig.json includes **/*.ts. A
+      # schema edit anywhere under here changes mobile's types, so a desktop-only
+      # change can break mobile's typecheck with no other mobile signal.
+      - 'src/shared/rpc-contract/**'
+      # Why: the catalog above holds params only. This file is the sole holder of
+      # the agent.launch RESULT shape, and mobile imports it as a value, not just
+      # a type. CROSS_VERSION_WIRE_PREFIXES already treats it as wire-critical, so
+      # without this one gate classes it that way while this one cannot see it.
+      - 'src/shared/agent-launch-intent.ts'
       # Why: this job holds the only checks that load the Fastfile, so edits to
       # it or to the release workflow it guards must re-run them.
       - '.github/workflows/mobile.yml'

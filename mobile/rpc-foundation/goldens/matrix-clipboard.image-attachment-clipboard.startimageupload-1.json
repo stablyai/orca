@@ -3,9 +3,9 @@
   "family": "clipboard.image-attachment",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "fc690a2ac59a6fbcdc08f9b91e769cd793f5a48d9034a50c2d587ce0d0fca3d9",
   "platform": "darwin",
@@ -21,9 +21,42 @@
       "attached": "unattached",
       "failure": "transport failure"
     },
-    "1284cf331810": {
+    "10eb844da0d9": {
       "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "12f2bb1c7b16": {
+      "name": "clipboard.startImageUpload#1",
       "args": [
         {
           "name": "method",
@@ -49,17 +82,89 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "refused",
-            "message": "outer refused"
+            "code": "method_not_found",
+            "message": "Unknown method"
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "23326ee9349f": {
+    "2360f0a18466": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null.",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "443dd7aae7aa": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined.",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "5573fed479c2": {
+      "attached": "unattached",
+      "failure": {
+        "$rpc": "null"
+      }
+    },
+    "5884da2bfdb4": {
       "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "5f71b4d3d25c": {
+      "name": "upload-start",
+      "value": {},
+      "sent": 0
+    },
+    "64cf59fb95a9": {
+      "name": "clipboard.startImageUpload#1",
       "args": [
         {
           "name": "method",
@@ -95,29 +200,8 @@
         }
       }
     },
-    "2360f0a18466": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null.",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "40cb28255df6": {
+    "6f4464fb363d": {
       "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -151,58 +235,8 @@
         }
       }
     },
-    "443dd7aae7aa": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined.",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "5573fed479c2": {
-      "attached": "unattached",
-      "failure": {
-        "$rpc": "null"
-      }
-    },
-    "6696a47819e1": {
+    "71c09680e90b": {
       "name": "clipboard.startImageUpload#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
-    },
-    "6f72c81d8bb0": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.appendImageUploadChunk"
-        },
-        {
-          "name": "params",
-          "value": {
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "offset": 0,
-            "uploadId": "upload-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "766a69d73d62": {
-      "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -223,19 +257,138 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
         }
       }
     },
-    "7a79daaa2290": {
+    "72c805fadcfb": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
+      "sent": 2
+    },
+    "7d50e9097d4b": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "7e48c58139e5": {
       "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-1"
+          }
+        }
+      }
+    },
+    "81e9dee3833a": {
+      "attached": "unattached",
+      "failure": ""
+    },
+    "873e759fa035": {
+      "name": "clipboard.startImageUpload#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "8de120313755": {
+      "attached": "unattached",
+      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined."
+    },
+    "8dfd1f053efc": {
+      "name": "clipboard.startImageUpload#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}",
+      "sent": 1
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "934346926f7a": {
+      "attached": "unattached",
+      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null."
+    },
+    "9dea35e9f187": {
+      "name": "clipboard.startImageUpload#1",
       "args": [
         {
           "name": "method",
@@ -269,9 +422,23 @@
         }
       }
     },
-    "7c2e3ea286aa": {
+    "a8cff4297929": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}",
+      "sent": 2
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b782aed57bef": {
       "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -292,34 +459,60 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "uploadId": "upload-1"
-          }
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "814ccd56a769": {
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d3e85c1d5bb4": {
       "name": "clipboard.appendImageUploadChunk#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "81e9dee3833a": {
-      "attached": "unattached",
-      "failure": ""
+    "d6a7fe2e0164": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}",
+      "sent": 2
     },
-    "8de120313755": {
-      "attached": "unattached",
-      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is undefined."
-    },
-    "8e050dc4db92": {
+    "d8eb6923f5c3": {
       "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -352,42 +545,18 @@
         }
       }
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "934346926f7a": {
-      "attached": "unattached",
-      "failure": "Cannot destructure property 'uploadId' of 'startResponse.result' as it is null."
-    },
-    "994fccf9b305": {
-      "name": "upload-start",
-      "ordinal": 1,
-      "value": {}
-    },
-    "a0e884b87798": {
-      "name": "clipboard.saveImageAsTempFile#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}"
-    },
-    "a947768bc0ed": {
+    "f3b516f62081": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
         "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
+        "message": "",
+        "isRpcDeliveryUnknown": false
       }
     },
-    "aa2ba6a08e8b": {
+    "f61098e90dc1": {
       "name": "clipboard.appendImageUploadChunk#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
-    },
-    "ab55a4eae105": {
-      "name": "clipboard.appendImageUploadChunk#1",
-      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -414,189 +583,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "cb5056a8a1fe": {
-      "name": "clipboard.saveImageAsTempFile#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.saveImageAsTempFile"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "connection-1",
-            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "cd37c121c1fd": {
-      "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.startImageUpload"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "d088e8eeec5d": {
-      "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.startImageUpload"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "d7fc074e6b40": {
-      "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.startImageUpload"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "e20dc4b09a24": {
-      "name": "clipboard.startImageUpload#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "clipboard.startImageUpload"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "connection-1",
-            "expectedBase64Length": 32
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "f3b516f62081": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": false
-      }
     }
   },
   "recording": {
@@ -605,133 +591,133 @@
       {
         "id": "clipboard-image-attachment-upload-refused.normal:upload-refused",
         "observation": {
-          "sender": ["7c2e3ea286aa", "6f72c81d8bb0"],
-          "payloads": ["6696a47819e1", "814ccd56a769"],
+          "sender": ["7e48c58139e5", "d3e85c1d5bb4"],
+          "payloads": ["8dfd1f053efc", "72c805fadcfb"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
           "state": "5573fed479c2",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.result-absent:upload-refused",
         "observation": {
-          "sender": ["cd37c121c1fd"],
-          "payloads": ["6696a47819e1"],
+          "sender": ["873e759fa035"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
             "normal": "443dd7aae7aa"
           },
           "state": "8de120313755",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.result-null:upload-refused",
         "observation": {
-          "sender": ["d7fc074e6b40"],
-          "payloads": ["6696a47819e1"],
+          "sender": ["10eb844da0d9"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
             "normal": "2360f0a18466"
           },
           "state": "934346926f7a",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.inner-ok-missing:upload-refused",
         "observation": {
-          "sender": ["8e050dc4db92", "ab55a4eae105"],
-          "payloads": ["6696a47819e1", "aa2ba6a08e8b"],
+          "sender": ["d8eb6923f5c3", "f61098e90dc1"],
+          "payloads": ["8dfd1f053efc", "a8cff4297929"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
           "state": "5573fed479c2",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.inner-false-string-error:upload-refused",
         "observation": {
-          "sender": ["7a79daaa2290", "ab55a4eae105"],
-          "payloads": ["6696a47819e1", "aa2ba6a08e8b"],
+          "sender": ["9dea35e9f187", "f61098e90dc1"],
+          "payloads": ["8dfd1f053efc", "a8cff4297929"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
           "state": "5573fed479c2",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.inner-false-object-error:upload-refused",
         "observation": {
-          "sender": ["23326ee9349f", "ab55a4eae105"],
-          "payloads": ["6696a47819e1", "aa2ba6a08e8b"],
+          "sender": ["64cf59fb95a9", "f61098e90dc1"],
+          "payloads": ["8dfd1f053efc", "a8cff4297929"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
           "state": "5573fed479c2",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.outer-refused:upload-refused",
         "observation": {
-          "sender": ["1284cf331810"],
-          "payloads": ["6696a47819e1"],
+          "sender": ["71c09680e90b"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
             "normal": "32a7c0ae7918"
           },
           "state": "09c6a4baa397",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.outer-refused-no-message:upload-refused",
         "observation": {
-          "sender": ["40cb28255df6"],
-          "payloads": ["6696a47819e1"],
+          "sender": ["6f4464fb363d"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
             "normal": "f3b516f62081"
           },
           "state": "81e9dee3833a",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.method-not-found:upload-refused",
         "observation": {
-          "sender": ["d088e8eeec5d", "cb5056a8a1fe"],
-          "payloads": ["6696a47819e1", "a0e884b87798"],
+          "sender": ["12f2bb1c7b16", "7d50e9097d4b"],
+          "payloads": ["8dfd1f053efc", "d6a7fe2e0164"],
           "settlements": {
             "normal": "9270aeb7d9c6"
           },
           "state": "5573fed479c2",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.transport-rejection:upload-refused",
         "observation": {
-          "sender": ["766a69d73d62"],
-          "payloads": ["6696a47819e1"],
+          "sender": ["5884da2bfdb4"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
             "normal": "a947768bc0ed"
           },
           "state": "0ba13b24aafa",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       },
       {
         "id": "clipboard-image-attachment-upload-refused.transport-rejection-no-message:upload-refused",
         "observation": {
-          "sender": ["e20dc4b09a24"],
-          "payloads": ["6696a47819e1"],
+          "sender": ["b782aed57bef"],
+          "payloads": ["8dfd1f053efc"],
           "settlements": {
             "normal": "c7584e82c72f"
           },
           "state": "81e9dee3833a",
-          "effects": ["994fccf9b305"]
+          "effects": ["5f71b4d3d25c"]
         }
       }
     ]

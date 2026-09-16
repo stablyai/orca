@@ -3,9 +3,9 @@
   "family": "files.mutation-ownership",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "8d24f52eb4194c3bc5d9f0dcabade6d7a09c066f79f911657647ed21dbecb3b1",
   "platform": "darwin",
@@ -13,9 +13,21 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "4e53935c13ac": {
+    "548f05412e41": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "expectedExecutionHostId": "local"
+      }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
+    "8bdc2aec524d": {
       "name": "worktree.show#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -49,32 +61,8 @@
         }
       }
     },
-    "548f05412e41": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "expectedExecutionHostId": "local"
-      }
-    },
-    "bab8756fa040": {
-      "ownership": {
-        "expectedExecutionHostId": "local"
-      }
-    },
-    "c924e7a5a7da": {
-      "name": "worktree.show#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
-    },
-    "d08f74d65ee6": {
+    "a56852d6836b": {
       "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "e81d3a627ac2": {
-      "name": "status.get#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -105,6 +93,16 @@
           }
         }
       }
+    },
+    "bab8756fa040": {
+      "ownership": {
+        "expectedExecutionHostId": "local"
+      }
+    },
+    "e7e6fb5e264b": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 2
     }
   },
   "recording": {
@@ -113,8 +111,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["e81d3a627ac2", "4e53935c13ac"],
-          "payloads": ["d08f74d65ee6", "c924e7a5a7da"],
+          "sender": ["a56852d6836b", "8bdc2aec524d"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b"],
           "settlements": {
             "capture": "548f05412e41"
           },

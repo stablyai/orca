@@ -3,9 +3,9 @@
   "family": "tasks.item-detail-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "c0ef16b959002e4a3c5347114a0844b95670e274ef010d910b6671ac5f49e783",
   "scenarioSha256": "36bbd34ed8b8f67e516ce7cd230b01ab88f14369fda632037c46dbbd1a0d95a3",
   "platform": "darwin",
@@ -13,9 +13,13 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "17a248d44317": {
+    "1867a9df681c": {
+      "name": "detailLoading",
+      "value": false,
+      "sent": 1
+    },
+    "292ec83c1b66": {
       "name": "gitlab.workItemDetails#1",
-      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -62,26 +66,42 @@
         }
       }
     },
-    "1dc35b955ad0": {
+    "48d06c2dc5c4": {
       "name": "gitlab.workItemDetails#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":4,\"type\":\"issue\",\"projectRef\":\"group/project\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":4,\"type\":\"issue\",\"projectRef\":\"group/project\"}}",
+      "sent": 1
     },
-    "264010756b38": {
+    "56d172ecd2fe": {
       "name": "detailLoading",
-      "ordinal": 3,
-      "value": true
+      "value": true,
+      "sent": 0
     },
-    "33614c90b6eb": {
+    "9bd1de5d9753": {
       "name": "detailPayload",
-      "ordinal": 1,
       "value": {
         "$rpc": "null"
-      }
+      },
+      "sent": 0
     },
-    "5a29c0f1892b": {
+    "9d6ce9f28401": {
+      "name": "detailError",
+      "value": "",
+      "sent": 0
+    },
+    "a11900db0941": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      },
+      "sent": 1
+    },
+    "d6522427a24c": {
       "name": "actionItem",
-      "ordinal": 7,
       "value": {
         "provider": "gitlab",
         "source": {
@@ -105,29 +125,38 @@
           "type": "issue"
         },
         "title": "A GitLab issue"
-      }
+      },
+      "sent": 1
     },
-    "6a8913577681": {
-      "name": "detailPayload",
-      "ordinal": 6,
-      "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "8ccd4fa759a5": {
-      "name": "detailLoading",
-      "ordinal": 9,
-      "value": false
-    },
-    "a4f1a8696a24": {
-      "name": "detailError",
-      "ordinal": 2,
-      "value": ""
+    "e8f33a90ab1d": {
+      "name": "items",
+      "value": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "checksSummary": {
+              "failed": 0,
+              "neutral": 0,
+              "passed": 0,
+              "pending": 0,
+              "state": "none",
+              "total": 0
+            },
+            "id": "gitlab:issue:4",
+            "labels": ["bug"],
+            "mergeable": "MERGEABLE",
+            "number": 4,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "reviewDecision": "approved",
+            "reviewerCount": 0,
+            "state": "opened",
+            "type": "issue"
+          },
+          "title": "A GitLab issue"
+        }
+      ],
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -198,36 +227,6 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
-    },
-    "fa9ae39d069e": {
-      "name": "items",
-      "ordinal": 8,
-      "value": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "checksSummary": {
-              "failed": 0,
-              "neutral": 0,
-              "passed": 0,
-              "pending": 0,
-              "state": "none",
-              "total": 0
-            },
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "mergeable": "MERGEABLE",
-            "number": 4,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "reviewDecision": "approved",
-            "reviewerCount": 0,
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ]
     }
   },
   "recording": {
@@ -236,20 +235,20 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["17a248d44317"],
-          "payloads": ["1dc35b955ad0"],
+          "sender": ["292ec83c1b66"],
+          "payloads": ["48d06c2dc5c4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "f2d8814a60b2",
           "effects": [
-            "33614c90b6eb",
-            "a4f1a8696a24",
-            "264010756b38",
-            "6a8913577681",
-            "5a29c0f1892b",
-            "fa9ae39d069e",
-            "8ccd4fa759a5"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "a11900db0941",
+            "d6522427a24c",
+            "e8f33a90ab1d",
+            "1867a9df681c"
           ]
         }
       }

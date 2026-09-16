@@ -3,9 +3,9 @@
   "family": "notifications.push-registration",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
   "adapterSha256": "2e3d939dc162dbc5a38d8a7207111688204a825fd70348721917b3016e1c9470",
   "scenarioSha256": "c77a518d35203370669fea20f7669d7695a2ec851f22b220a8be417c546efeab",
   "platform": "darwin",
@@ -13,9 +13,8 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "069cda9739b6": {
+    "0bbe8daa9ab4": {
       "name": "notifications.registerPush#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -48,14 +47,53 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "refused"
+            "$rpc": "null"
           }
         }
       }
     },
-    "2a4ec77775e2": {
+    "1572598fbe7d": {
       "name": "notifications.registerPush#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.registerPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": {
+              "onlyWhenDesktopAway": true,
+              "sound": true
+            },
+            "platform": "ios",
+            "token": "apns-token-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "19d1a2755f20": {
+      "name": "notifications.registerPush#1",
       "args": [
         {
           "name": "method",
@@ -96,9 +134,8 @@
         }
       }
     },
-    "37b76f37333f": {
+    "456f2c64521a": {
       "name": "notifications.registerPush#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -124,120 +161,18 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "70a555b8bb94": {
+    "69f036fbc850": {
       "name": "notifications.registerPush#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
-    },
-    "722a8fdf7d4f": {
-      "name": "notifications.registerPush#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.registerPush"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filter": {
-              "onlyWhenDesktopAway": true,
-              "sound": true
-            },
-            "platform": "ios",
-            "token": "apns-token-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "79ed32a5bb02": {
-      "name": "notifications.registerPush#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.registerPush"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filter": {
-              "onlyWhenDesktopAway": true,
-              "sound": true
-            },
-            "platform": "ios",
-            "token": "apns-token-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "registered": true,
-            "registrationId": "registration-1"
-          }
-        }
-      }
-    },
-    "7ed3d39f0607": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": false
-    },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "89a10bdc733c": {
-      "name": "notifications.registerPush#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -273,9 +208,56 @@
         }
       }
     },
-    "8fcbab9ed2bf": {
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "9efcd0543760": {
       "name": "notifications.registerPush#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.registerPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": {
+              "onlyWhenDesktopAway": true,
+              "sound": true
+            },
+            "platform": "ios",
+            "token": "apns-token-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "a60f8fdb595d": {
+      "name": "notifications.registerPush#1",
       "args": [
         {
           "name": "method",
@@ -308,15 +290,18 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "error": "refused"
           }
         }
       }
     },
-    "93d5e9575318": {
+    "aff6f3c3c1c1": {
+      "name": "notifications.unregisterPush#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unregisterPush\",\"params\":null}",
+      "sent": 2
+    },
+    "b3199f217b27": {
       "name": "notifications.registerPush#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -355,46 +340,8 @@
         }
       }
     },
-    "af33feca5244": {
-      "name": "notifications.registerPush#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.registerPush"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filter": {
-              "onlyWhenDesktopAway": true,
-              "sound": true
-            },
-            "platform": "ios",
-            "token": "apns-token-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "caff83b6525e": {
+    "b39a27f847f4": {
       "name": "notifications.unregisterPush#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -427,60 +374,8 @@
         }
       }
     },
-    "d56fde1e24ad": {
+    "bf47435ebba0": {
       "name": "notifications.registerPush#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.registerPush"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filter": {
-              "onlyWhenDesktopAway": true,
-              "sound": true
-            },
-            "platform": "ios",
-            "token": "apns-token-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "d92e80fc55a0": {
-      "name": "notifications.unregisterPush#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unregisterPush\",\"params\":null}"
-    },
-    "deec5cecd49f": {
-      "register": true,
-      "unregister": true
-    },
-    "e60c81d67095": {
-      "register": false,
-      "unregister": true
-    },
-    "f34c0fb6d568": {
-      "name": "notifications.registerPush#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -511,13 +406,106 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "refused",
-            "message": "outer refused"
+            "code": "method_not_found",
+            "message": "Unknown method"
           },
           "id": "frame-1",
           "ok": false
         }
       }
+    },
+    "d30fd4b61f0c": {
+      "name": "notifications.registerPush#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.registerPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": {
+              "onlyWhenDesktopAway": true,
+              "sound": true
+            },
+            "platform": "ios",
+            "token": "apns-token-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "registered": true,
+            "registrationId": "registration-1"
+          }
+        }
+      }
+    },
+    "deec5cecd49f": {
+      "register": true,
+      "unregister": true
+    },
+    "e13a6969f606": {
+      "name": "notifications.registerPush#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.registerPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": {
+              "onlyWhenDesktopAway": true,
+              "sound": true
+            },
+            "platform": "ios",
+            "token": "apns-token-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e45f138ab181": {
+      "name": "notifications.registerPush#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}",
+      "sent": 1
+    },
+    "e60c81d67095": {
+      "register": false,
+      "unregister": true
     }
   },
   "recording": {
@@ -526,8 +514,8 @@
       {
         "id": "notifications-push-registered.normal:settled",
         "observation": {
-          "sender": ["79ed32a5bb02", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["d30fd4b61f0c", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "84e5ca07cb7a",
             "unregister": "84e5ca07cb7a"
@@ -539,8 +527,8 @@
       {
         "id": "notifications-push-registered.result-absent:settled",
         "observation": {
-          "sender": ["af33feca5244", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["9efcd0543760", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -552,8 +540,8 @@
       {
         "id": "notifications-push-registered.result-null:settled",
         "observation": {
-          "sender": ["37b76f37333f", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["0bbe8daa9ab4", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -565,8 +553,8 @@
       {
         "id": "notifications-push-registered.inner-ok-missing:settled",
         "observation": {
-          "sender": ["069cda9739b6", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["a60f8fdb595d", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -578,8 +566,8 @@
       {
         "id": "notifications-push-registered.inner-false-string-error:settled",
         "observation": {
-          "sender": ["8fcbab9ed2bf", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["e13a6969f606", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -591,8 +579,8 @@
       {
         "id": "notifications-push-registered.inner-false-object-error:settled",
         "observation": {
-          "sender": ["2a4ec77775e2", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["19d1a2755f20", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -604,8 +592,8 @@
       {
         "id": "notifications-push-registered.outer-refused:settled",
         "observation": {
-          "sender": ["f34c0fb6d568", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["1572598fbe7d", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -617,8 +605,8 @@
       {
         "id": "notifications-push-registered.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["93d5e9575318", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["b3199f217b27", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -630,8 +618,8 @@
       {
         "id": "notifications-push-registered.method-not-found:settled",
         "observation": {
-          "sender": ["722a8fdf7d4f", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["bf47435ebba0", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -643,8 +631,8 @@
       {
         "id": "notifications-push-registered.transport-rejection:settled",
         "observation": {
-          "sender": ["d56fde1e24ad", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["456f2c64521a", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"
@@ -656,8 +644,8 @@
       {
         "id": "notifications-push-registered.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["89a10bdc733c", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["69f036fbc850", "b39a27f847f4"],
+          "payloads": ["e45f138ab181", "aff6f3c3c1c1"],
           "settlements": {
             "register": "7ed3d39f0607",
             "unregister": "84e5ca07cb7a"

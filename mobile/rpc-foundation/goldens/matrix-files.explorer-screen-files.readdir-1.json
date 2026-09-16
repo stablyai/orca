@@ -3,19 +3,116 @@
   "family": "files.explorer-screen",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
+  "baseline": "97aa5ff19b19231670ab7d06d070115640bb8f41",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "ac348e7acb5789a101aa091b6b09d05671d1d253d1ded55789612d3e043955b0",
-  "adapterSha256": "7a42a348f4407b94cf75ac77a4b6b783b7d28103b1ae1d111d2708dab0dd4a0c",
+  "recorderSha256": "d08bf9cd596ee449531f079c9f4f83efcb03fbc5e8d8658d15e0407d3464ec0e",
+  "adapterSha256": "160421b989563424531fc893a115b95b399d1524ebaf1c91caa8b2862b52eb07",
   "scenarioSha256": "8c1fa604104c5551b8418af225c9420b1292f0c55b392f847985947c66749959",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "09c69b142397": {
+    "13db9ec07bae": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Pressable": 2,
+        "SafeAreaView": 1,
+        "Text": 4,
+        "View": 4
+      },
+      "labels": ["Back to session"],
+      "rows": [],
+      "text": ["Files", "orca-files", "outer refused", "Retry"]
+    },
+    "195987bc4ef2": {
       "name": "files.readDir#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "1fac8f3b8f44": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "FlatList": 1,
+        "Pressable": 1,
+        "SafeAreaView": 1,
+        "Text": 2,
+        "View": 3
+      },
+      "labels": ["Back to session"],
+      "rows": ["dir:src", "file:README.md"],
+      "text": ["Files", "orca-files"]
+    },
+    "23a7ef6123a7": {
+      "name": "files.readDir#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": [
+            {
+              "isDirectory": true,
+              "name": "src"
+            },
+            {
+              "isDirectory": false,
+              "name": "README.md"
+            }
+          ]
+        }
+      }
+    },
+    "2d716277e0b4": {
+      "name": "files.readDir#1",
       "args": [
         {
           "name": "method",
@@ -43,45 +140,13 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "refused"
+            "$rpc": "null"
           }
         }
       }
     },
-    "13db9ec07bae": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "SafeAreaView": 1,
-        "Text": 4,
-        "View": 4
-      },
-      "labels": ["Back to session"],
-      "rows": [],
-      "text": ["Files", "orca-files", "outer refused", "Retry"]
-    },
-    "1fac8f3b8f44": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "FlatList": 1,
-        "Pressable": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 3
-      },
-      "labels": ["Back to session"],
-      "rows": ["dir:src", "file:README.md"],
-      "text": ["Files", "orca-files"]
-    },
-    "33bb136847f8": {
+    "30859af566b0": {
       "name": "files.readDir#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -145,9 +210,151 @@
       "rows": [],
       "text": ["Files", "orca-files", "Unable to load files", "Retry"]
     },
-    "4366cea5194d": {
+    "4f4a81c91e23": {
+      "name": "files.readDir#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "4f61e2e0cdf7": {
+      "name": "files.readDir#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "55062daf394e": {
+      "name": "screen.crash",
+      "value": {
+        "message": "entries.filter is not a function"
+      },
+      "sent": 1
+    },
+    "6660284d98a2": {
+      "name": "files.readDir#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7fd035a057b5": {
+      "name": "files.readDir#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "80bd28a48dda": {
       "name": "files.list#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -192,176 +399,13 @@
         }
       }
     },
-    "48ab538807ac": {
+    "87ae27687a19": {
       "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}",
+      "sent": 1
     },
-    "5878b1d32e8e": {
+    "91637dc6ae5b": {
       "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "59851eb4cbf7": {
-      "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "5cc7c8379fdc": {
-      "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "60320cd79348": {
-      "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "7135933422f5": {
-      "name": "files.readDir#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -397,14 +441,54 @@
         }
       }
     },
-    "75aaf142eb3b": {
-      "name": "files.list#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}"
-    },
-    "7d0bba92f36f": {
+    "995efbb97b13": {
       "name": "files.readDir#1",
-      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "a0139a06ef98": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Pressable": 1,
+        "SafeAreaView": 1,
+        "Text": 3,
+        "View": 4
+      },
+      "labels": ["Back to session"],
+      "rows": [],
+      "text": ["Files", "orca-files", "No files found"]
+    },
+    "b3e7934618ec": {
+      "name": "files.readDir#1",
       "args": [
         {
           "name": "method",
@@ -435,26 +519,6 @@
         }
       }
     },
-    "858aa6e98236": {
-      "name": "files.readDir#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
-    },
-    "a0139a06ef98": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 1,
-        "SafeAreaView": 1,
-        "Text": 3,
-        "View": 4
-      },
-      "labels": ["Back to session"],
-      "rows": [],
-      "text": ["Files", "orca-files", "No files found"]
-    },
     "b85511fb8929": {
       "crash": {
         "$rpc": "null"
@@ -471,9 +535,8 @@
       "rows": ["dir:src", "file:README.md"],
       "text": ["Files", "orca-files", " - Showing first 5000"]
     },
-    "ba7f7b642df7": {
+    "ba58d31f3c54": {
       "name": "files.readDir#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -501,50 +564,16 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "bcba3c565d8e": {
-      "name": "screen.crash",
-      "ordinal": 3,
-      "value": {
-        "message": "entries.filter is not a function"
-      }
-    },
-    "e0b32411ccef": {
-      "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
+    "c3a91710450a": {
+      "name": "files.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}",
+      "sent": 2
     },
     "e91880eefe86": {
       "crash": {
@@ -576,48 +605,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "fbc738d75fe6": {
-      "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": [
-            {
-              "isDirectory": true,
-              "name": "src"
-            },
-            {
-              "isDirectory": false,
-              "name": "README.md"
-            }
-          ]
-        }
-      }
     }
   },
   "recording": {
@@ -626,8 +613,8 @@
       {
         "id": "files-explorer-legacy-fallback.prelude:loading",
         "observation": {
-          "sender": ["59851eb4cbf7"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["195987bc4ef2"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -638,8 +625,8 @@
       {
         "id": "files-explorer-legacy-fallback.normal:legacy-listed",
         "observation": {
-          "sender": ["fbc738d75fe6"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["23a7ef6123a7"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -650,8 +637,8 @@
       {
         "id": "files-explorer-legacy-fallback.result-absent:legacy-listed",
         "observation": {
-          "sender": ["5878b1d32e8e"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["995efbb97b13"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -662,8 +649,8 @@
       {
         "id": "files-explorer-legacy-fallback.result-null:legacy-listed",
         "observation": {
-          "sender": ["ba7f7b642df7"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["2d716277e0b4"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -674,44 +661,44 @@
       {
         "id": "files-explorer-legacy-fallback.inner-ok-missing:legacy-listed",
         "observation": {
-          "sender": ["09c69b142397"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["7fd035a057b5"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "ea2c96b08e6b",
-          "effects": ["bcba3c565d8e"]
+          "effects": ["55062daf394e"]
         }
       },
       {
         "id": "files-explorer-legacy-fallback.inner-false-string-error:legacy-listed",
         "observation": {
-          "sender": ["5cc7c8379fdc"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["ba58d31f3c54"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "ea2c96b08e6b",
-          "effects": ["bcba3c565d8e"]
+          "effects": ["55062daf394e"]
         }
       },
       {
         "id": "files-explorer-legacy-fallback.inner-false-object-error:legacy-listed",
         "observation": {
-          "sender": ["7135933422f5"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["91637dc6ae5b"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "ea2c96b08e6b",
-          "effects": ["bcba3c565d8e"]
+          "effects": ["55062daf394e"]
         }
       },
       {
         "id": "files-explorer-legacy-fallback.outer-refused:legacy-listed",
         "observation": {
-          "sender": ["48ab538807ac"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["6660284d98a2"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -722,8 +709,8 @@
       {
         "id": "files-explorer-legacy-fallback.outer-refused-no-message:legacy-listed",
         "observation": {
-          "sender": ["60320cd79348"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["4f4a81c91e23"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -734,8 +721,8 @@
       {
         "id": "files-explorer-legacy-fallback.method-not-found:legacy-listed",
         "observation": {
-          "sender": ["33bb136847f8", "4366cea5194d"],
-          "payloads": ["858aa6e98236", "75aaf142eb3b"],
+          "sender": ["30859af566b0", "80bd28a48dda"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -746,8 +733,8 @@
       {
         "id": "files-explorer-legacy-fallback.transport-rejection:legacy-listed",
         "observation": {
-          "sender": ["7d0bba92f36f"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["b3e7934618ec"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -758,8 +745,8 @@
       {
         "id": "files-explorer-legacy-fallback.transport-rejection-no-message:legacy-listed",
         "observation": {
-          "sender": ["e0b32411ccef"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["4f61e2e0cdf7"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
