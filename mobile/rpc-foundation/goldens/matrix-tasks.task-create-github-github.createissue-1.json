@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "014040846f649f3c6ca1175b610ed1b51bae3001e7de103549d7ee1a511a2506",
   "platform": "darwin",
@@ -120,10 +120,6 @@
           }
         }
       }
-    },
-    "1561684e8ae9": {
-      "name": "github.createIssue#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
     },
     "198ac889ae28": {
       "name": "error",
@@ -260,6 +256,11 @@
       "value": "",
       "sent": 1
     },
+    "6add5b7ef51f": {
+      "name": "repo.update#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.update\",\"params\":{\"repo\":\"id:repo-1\",\"updates\":{\"issueSourcePreference\":\"upstream\"}}}",
+      "sent": 2
+    },
     "781721955405": {
       "name": "showCreateTask",
       "value": false,
@@ -384,6 +385,11 @@
       "value": "Unknown method",
       "sent": 1
     },
+    "b91134109e2b": {
+      "name": "github.createIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}",
+      "sent": 1
+    },
     "c0c0f9a6037e": {
       "name": "createTitle",
       "value": "",
@@ -396,10 +402,6 @@
       "item": {
         "$rpc": "null"
       }
-    },
-    "c41296ee02f7": {
-      "name": "repo.update#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.update\",\"params\":{\"repo\":\"id:repo-1\",\"updates\":{\"issueSourcePreference\":\"upstream\"}}}"
     },
     "c4f585980acf": {
       "name": "error",
@@ -657,7 +659,7 @@
         "id": "tk-create-github.normal:create-settled",
         "observation": {
           "sender": ["06e1643ed0af"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -678,7 +680,7 @@
         "id": "tk-create-github.normal:issue-source-settled",
         "observation": {
           "sender": ["06e1643ed0af", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -701,7 +703,7 @@
         "id": "tk-create-github.result-absent:create-settled",
         "observation": {
           "sender": ["5a343b47b8b2"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -714,7 +716,7 @@
         "id": "tk-create-github.result-absent:issue-source-settled",
         "observation": {
           "sender": ["5a343b47b8b2", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -734,7 +736,7 @@
         "id": "tk-create-github.result-null:create-settled",
         "observation": {
           "sender": ["14be26876a89"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -747,7 +749,7 @@
         "id": "tk-create-github.result-null:issue-source-settled",
         "observation": {
           "sender": ["14be26876a89", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -767,7 +769,7 @@
         "id": "tk-create-github.inner-ok-missing:create-settled",
         "observation": {
           "sender": ["ed6dd7582b18"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -787,7 +789,7 @@
         "id": "tk-create-github.inner-ok-missing:issue-source-settled",
         "observation": {
           "sender": ["ed6dd7582b18", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -809,7 +811,7 @@
         "id": "tk-create-github.inner-false-string-error:create-settled",
         "observation": {
           "sender": ["04fee07f8d96"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -822,7 +824,7 @@
         "id": "tk-create-github.inner-false-string-error:issue-source-settled",
         "observation": {
           "sender": ["04fee07f8d96", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -842,7 +844,7 @@
         "id": "tk-create-github.inner-false-object-error:create-settled",
         "observation": {
           "sender": ["cccb7ee799b9"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -855,7 +857,7 @@
         "id": "tk-create-github.inner-false-object-error:issue-source-settled",
         "observation": {
           "sender": ["cccb7ee799b9", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -875,7 +877,7 @@
         "id": "tk-create-github.outer-refused:create-settled",
         "observation": {
           "sender": ["19bc740e746a"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -888,7 +890,7 @@
         "id": "tk-create-github.outer-refused:issue-source-settled",
         "observation": {
           "sender": ["19bc740e746a", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -908,7 +910,7 @@
         "id": "tk-create-github.outer-refused-no-message:create-settled",
         "observation": {
           "sender": ["f66dd3cc48cf"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -921,7 +923,7 @@
         "id": "tk-create-github.outer-refused-no-message:issue-source-settled",
         "observation": {
           "sender": ["f66dd3cc48cf", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -941,7 +943,7 @@
         "id": "tk-create-github.method-not-found:create-settled",
         "observation": {
           "sender": ["d6c61589920d"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -954,7 +956,7 @@
         "id": "tk-create-github.method-not-found:issue-source-settled",
         "observation": {
           "sender": ["d6c61589920d", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -974,7 +976,7 @@
         "id": "tk-create-github.transport-rejection:create-settled",
         "observation": {
           "sender": ["dc838deee187"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -987,7 +989,7 @@
         "id": "tk-create-github.transport-rejection:issue-source-settled",
         "observation": {
           "sender": ["dc838deee187", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",
@@ -1007,7 +1009,7 @@
         "id": "tk-create-github.transport-rejection-no-message:create-settled",
         "observation": {
           "sender": ["907da244f26c"],
-          "payloads": ["1561684e8ae9"],
+          "payloads": ["b91134109e2b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
@@ -1020,7 +1022,7 @@
         "id": "tk-create-github.transport-rejection-no-message:issue-source-settled",
         "observation": {
           "sender": ["907da244f26c", "98e33157a9f2"],
-          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "payloads": ["b91134109e2b", "6add5b7ef51f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a",

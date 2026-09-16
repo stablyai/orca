@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "19d55a77e9c2f64f062070c9985f756e0ba72f3ccc3c884a80843fe888f42a47",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "03f8dcaf51c7": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
+    },
     "093b7147f9b0": {
       "name": "orchestration.workerTerminalUserInput#1",
       "args": [
@@ -47,10 +52,6 @@
           }
         }
       }
-    },
-    "0a0137383ed3": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "0f86dd69448c": {
       "name": "terminal.send#1",
@@ -94,10 +95,6 @@
     },
     "11a49f853eb8": {
       "accepted": true
-    },
-    "191580ba859d": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
     "2638782fdff1": {
       "name": "terminal.send#1",
@@ -423,6 +420,11 @@
         }
       }
     },
+    "b139ed2905d3": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
+      "sent": 2
+    },
     "d156eef40d6a": {
       "name": "terminal.send#1",
       "args": [
@@ -513,7 +515,7 @@
         "id": "terminal-raw-input-reported.normal:reported",
         "observation": {
           "sender": ["4dbb5ea36ed2", "093b7147f9b0"],
-          "payloads": ["0a0137383ed3", "191580ba859d"],
+          "payloads": ["03f8dcaf51c7", "b139ed2905d3"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },
@@ -525,7 +527,7 @@
         "id": "terminal-raw-input-reported.result-absent:reported",
         "observation": {
           "sender": ["6f81ca41dbcf"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -537,7 +539,7 @@
         "id": "terminal-raw-input-reported.result-null:reported",
         "observation": {
           "sender": ["80e6ae38e612"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -549,7 +551,7 @@
         "id": "terminal-raw-input-reported.inner-ok-missing:reported",
         "observation": {
           "sender": ["a944d85eac60"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -561,7 +563,7 @@
         "id": "terminal-raw-input-reported.inner-false-string-error:reported",
         "observation": {
           "sender": ["2638782fdff1"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -573,7 +575,7 @@
         "id": "terminal-raw-input-reported.inner-false-object-error:reported",
         "observation": {
           "sender": ["de23a95594f0"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -585,7 +587,7 @@
         "id": "terminal-raw-input-reported.outer-refused:reported",
         "observation": {
           "sender": ["7b6ba38169d9"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -597,7 +599,7 @@
         "id": "terminal-raw-input-reported.outer-refused-no-message:reported",
         "observation": {
           "sender": ["0f86dd69448c"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -609,7 +611,7 @@
         "id": "terminal-raw-input-reported.method-not-found:reported",
         "observation": {
           "sender": ["6d223e9c6727"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -621,7 +623,7 @@
         "id": "terminal-raw-input-reported.transport-rejection:reported",
         "observation": {
           "sender": ["d156eef40d6a"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -633,7 +635,7 @@
         "id": "terminal-raw-input-reported.transport-rejection-no-message:reported",
         "observation": {
           "sender": ["8e79300038ac"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },

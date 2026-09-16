@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
   "scenarioSha256": "a2b5b73b2455f9efc48361e4b96ab1d3ecc3d136459403c9c3678104604cd774",
   "platform": "darwin",
@@ -70,10 +70,6 @@
         }
       }
     },
-    "be35c536a20e": {
-      "name": "markdown.saveTab#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -81,6 +77,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f7fe2c70c07e": {
+      "name": "markdown.saveTab#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}",
+      "sent": 1
     }
   },
   "recording": {
@@ -90,7 +91,7 @@
         "id": "saved",
         "observation": {
           "sender": ["a06e17cbe383"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },

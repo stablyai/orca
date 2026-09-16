@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "2cea87c339b35daf62c963092c01c6379db43f2ee4ca5cb2b5f817975b0caf65",
   "platform": "darwin",
@@ -23,10 +23,6 @@
       "merge": {
         "ok": true
       }
-    },
-    "0550d42a40c4": {
-      "name": "github.mergePR#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}"
     },
     "0e14bd119328": {
       "merge": {
@@ -85,10 +81,6 @@
       "merge": {
         "ok": true
       }
-    },
-    "247c152db16d": {
-      "name": "github.rerunPRChecks#1",
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}"
     },
     "258eb619fcbb": {
       "auto-merge": {
@@ -265,6 +257,11 @@
         "ok": true
       }
     },
+    "7ac1c9a0499c": {
+      "name": "github.removePRReviewers#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.removePRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}",
+      "sent": 5
+    },
     "7e030fa29a4e": {
       "auto-merge": {
         "ok": true
@@ -323,6 +320,11 @@
         }
       }
     },
+    "84e87c0ff2a1": {
+      "name": "github.rerunPRChecks#1",
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}",
+      "sent": 6
+    },
     "88359e8a639b": {
       "auto-merge": {
         "ok": true
@@ -340,6 +342,11 @@
       "request-reviewers": {
         "ok": true
       }
+    },
+    "904c5b458065": {
+      "name": "github.updatePRState#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}",
+      "sent": 3
     },
     "9305632adf32": {
       "name": "github.setPRAutoMerge#1",
@@ -527,13 +534,15 @@
         "ok": true
       }
     },
-    "b303193775ad": {
-      "name": "github.updatePRState#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
+    "ad425b477607": {
+      "name": "github.requestPRReviewers#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}",
+      "sent": 4
     },
-    "b9123a0fc952": {
-      "name": "github.removePRReviewers#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.removePRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
+    "ba8452129ec1": {
+      "name": "github.mergePR#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}",
+      "sent": 1
     },
     "bbb832d9d5a0": {
       "auto-merge": {
@@ -555,10 +564,6 @@
       "rerun-checks": {
         "ok": true
       }
-    },
-    "bdcf1daddf4e": {
-      "name": "github.setPRAutoMerge#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}"
     },
     "c3a8e861aedd": {
       "auto-merge": {
@@ -666,6 +671,11 @@
           }
         }
       }
+    },
+    "cf156f33a1f2": {
+      "name": "github.setPRAutoMerge#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}",
+      "sent": 2
     },
     "d026cfa35ea0": {
       "auto-merge": {
@@ -848,10 +858,6 @@
         }
       }
     },
-    "f44b3cd07d00": {
-      "name": "github.requestPRReviewers#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
-    },
     "f5bd2f1cf948": {
       "name": "github.removePRReviewers#1",
       "args": [
@@ -990,7 +996,7 @@
         "id": "pr-mutation-status.prelude:merge",
         "observation": {
           "sender": ["ccf2be5c9d44"],
-          "payloads": ["0550d42a40c4"],
+          "payloads": ["ba8452129ec1"],
           "settlements": {
             "merge": "fbc958e4d46e"
           },
@@ -1002,7 +1008,7 @@
         "id": "pr-mutation-status.prelude:auto-merge",
         "observation": {
           "sender": ["ccf2be5c9d44", "9305632adf32"],
-          "payloads": ["0550d42a40c4", "bdcf1daddf4e"],
+          "payloads": ["ba8452129ec1", "cf156f33a1f2"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e"
@@ -1015,7 +1021,7 @@
         "id": "pr-mutation-status.prelude:close",
         "observation": {
           "sender": ["ccf2be5c9d44", "9305632adf32", "84790920ad91"],
-          "payloads": ["0550d42a40c4", "bdcf1daddf4e", "b303193775ad"],
+          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1029,7 +1035,7 @@
         "id": "pr-mutation-status.prelude:request-reviewers",
         "observation": {
           "sender": ["ccf2be5c9d44", "9305632adf32", "84790920ad91", "63c7b86ce0f8"],
-          "payloads": ["0550d42a40c4", "bdcf1daddf4e", "b303193775ad", "f44b3cd07d00"],
+          "payloads": ["ba8452129ec1", "cf156f33a1f2", "904c5b458065", "ad425b477607"],
           "settlements": {
             "merge": "fbc958e4d46e",
             "auto-merge": "fbc958e4d46e",
@@ -1051,11 +1057,11 @@
             "97b08057c152"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1080,12 +1086,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1110,11 +1116,11 @@
             "e54d1591f561"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1139,12 +1145,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1169,11 +1175,11 @@
             "5beb63c8f3e4"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1198,12 +1204,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1228,11 +1234,11 @@
             "ffae51817019"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1257,12 +1263,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1287,11 +1293,11 @@
             "5427ca897dae"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1316,12 +1322,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1346,11 +1352,11 @@
             "f5bd2f1cf948"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1375,12 +1381,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1405,11 +1411,11 @@
             "d8e94101426c"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1434,12 +1440,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1464,11 +1470,11 @@
             "ef0f653e02b7"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1493,12 +1499,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1523,11 +1529,11 @@
             "613a6a4cb4fa"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1552,12 +1558,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1582,11 +1588,11 @@
             "c3af046e05d9"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1611,12 +1617,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1641,11 +1647,11 @@
             "a48666d7363e"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",
@@ -1670,12 +1676,12 @@
             "e53c2e2f9a43"
           ],
           "payloads": [
-            "0550d42a40c4",
-            "bdcf1daddf4e",
-            "b303193775ad",
-            "f44b3cd07d00",
-            "b9123a0fc952",
-            "247c152db16d"
+            "ba8452129ec1",
+            "cf156f33a1f2",
+            "904c5b458065",
+            "ad425b477607",
+            "7ac1c9a0499c",
+            "84e87c0ff2a1"
           ],
           "settlements": {
             "merge": "fbc958e4d46e",

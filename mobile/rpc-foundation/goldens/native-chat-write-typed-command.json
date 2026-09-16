@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "a89ff803859c60e5645126de8b0f423807c435dcd856fe8825721f71f3b5bec5",
   "platform": "darwin",
@@ -13,27 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "191580ba859d": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
     "1c80024cfa2c": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 48,
       "value": "accepted"
-    },
-    "242d9ae1137d": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
-    "3a5d777418c3": {
-      "name": "terminal.send#4",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\r\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
-    "3d0cd6be0408": {
-      "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"o\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "52ae659a3d36": {
       "name": "terminal.send#1",
@@ -77,6 +61,11 @@
         }
       }
     },
+    "66c88ab02520": {
+      "name": "terminal.send#3",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"k\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 4
+    },
     "6cdf69ee833e": {
       "name": "terminal.send#3",
       "args": [
@@ -118,6 +107,11 @@
           }
         }
       }
+    },
+    "7058e378fab6": {
+      "name": "terminal.send#4",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\r\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 5
     },
     "960f67ee14e2": {
       "name": "orchestration.workerTerminalUserInput#1",
@@ -196,12 +190,13 @@
         }
       }
     },
+    "b139ed2905d3": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
+      "sent": 2
+    },
     "bf797abab699": {
       "command": "accepted"
-    },
-    "ce10d21caab1": {
-      "name": "terminal.send#3",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"k\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "cffc885c4847": {
       "name": "terminal.send#4",
@@ -244,6 +239,16 @@
           }
         }
       }
+    },
+    "df3ce4768fd3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
+    },
+    "e5ae2e16817a": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"o\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 3
     }
   },
   "recording": {
@@ -260,11 +265,11 @@
             "cffc885c4847"
           ],
           "payloads": [
-            "242d9ae1137d",
-            "191580ba859d",
-            "3d0cd6be0408",
-            "ce10d21caab1",
-            "3a5d777418c3"
+            "df3ce4768fd3",
+            "b139ed2905d3",
+            "e5ae2e16817a",
+            "66c88ab02520",
+            "7058e378fab6"
           ],
           "settlements": {
             "command": "1c80024cfa2c"

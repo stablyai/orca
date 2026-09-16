@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "52b2cc222d9819121ba99f8f603bc76abe420d731e5853116e802a4db59e2d3e",
   "platform": "darwin",
@@ -315,6 +315,11 @@
       "value": "transport failure",
       "sent": 1
     },
+    "8441059da147": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}",
+      "sent": 1
+    },
     "85f150b2df81": {
       "name": "projectRowDetailError",
       "value": "",
@@ -595,10 +600,6 @@
         }
       }
     },
-    "e27d1a246a98": {
-      "name": "github.project.workItemDetailsBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -664,7 +665,7 @@
         "id": "tk-project-row-detail.normal:mounted",
         "observation": {
           "sender": ["d1f95449bb04"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -693,7 +694,7 @@
         "id": "tk-project-row-detail.result-absent:mounted",
         "observation": {
           "sender": ["629ca94bfed3"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -722,7 +723,7 @@
         "id": "tk-project-row-detail.result-null:mounted",
         "observation": {
           "sender": ["697a14434811"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -751,7 +752,7 @@
         "id": "tk-project-row-detail.inner-ok-missing:mounted",
         "observation": {
           "sender": ["fe08a0925a32"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -780,7 +781,7 @@
         "id": "tk-project-row-detail.inner-false-string-error:mounted",
         "observation": {
           "sender": ["b5e6f1e3f366"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -809,7 +810,7 @@
         "id": "tk-project-row-detail.inner-false-object-error:mounted",
         "observation": {
           "sender": ["ab01782b6daf"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -838,7 +839,7 @@
         "id": "tk-project-row-detail.outer-refused:mounted",
         "observation": {
           "sender": ["e11a0d677154"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -867,7 +868,7 @@
         "id": "tk-project-row-detail.outer-refused-no-message:mounted",
         "observation": {
           "sender": ["9cbb2a5c7ddc"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -896,7 +897,7 @@
         "id": "tk-project-row-detail.method-not-found:mounted",
         "observation": {
           "sender": ["46f64f0cee44"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -925,7 +926,7 @@
         "id": "tk-project-row-detail.transport-rejection:mounted",
         "observation": {
           "sender": ["2a5f104cc20a"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -954,7 +955,7 @@
         "id": "tk-project-row-detail.transport-rejection-no-message:mounted",
         "observation": {
           "sender": ["5a7bbfc7f8af"],
-          "payloads": ["e27d1a246a98"],
+          "payloads": ["8441059da147"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

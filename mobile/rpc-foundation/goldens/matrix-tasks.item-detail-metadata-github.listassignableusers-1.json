@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
   "scenarioSha256": "3ef6ef046f60d2d11ef81adf69bd5216036405eb05e5fd30cf1c402120488ee5",
   "platform": "darwin",
@@ -88,6 +88,11 @@
         }
       }
     },
+    "11dbb2f7ba6a": {
+      "name": "github.listLabels#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 2
+    },
     "13787c8669de": {
       "name": "itemAssignableUsers",
       "value": {
@@ -130,6 +135,11 @@
         "error": "inner refused",
         "ok": false
       },
+      "sent": 2
+    },
+    "2c7c5fe4358d": {
+      "name": "github.listAssignableUsers#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}",
       "sent": 2
     },
     "30554accaab5": {
@@ -200,10 +210,6 @@
       "users": [],
       "usersError": "Unknown method",
       "usersLoading": false
-    },
-    "594a2904a1bc": {
-      "name": "github.listAssignableUsers#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
     "5b9626f7c5fd": {
       "labels": ["bug", "chore"],
@@ -600,10 +606,6 @@
         "$rpc": "undefined"
       }
     },
-    "ef317c60c3c6": {
-      "name": "github.listLabels#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
     "f70626574f7a": {
       "name": "itemAvailableLabels",
       "value": [],
@@ -661,7 +663,7 @@
         "id": "tk-item-detail-metadata.normal:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -685,7 +687,7 @@
         "id": "tk-item-detail-metadata.result-absent:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "6d95cba5d507"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -709,7 +711,7 @@
         "id": "tk-item-detail-metadata.result-null:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "c023bb126b23"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -733,7 +735,7 @@
         "id": "tk-item-detail-metadata.inner-ok-missing:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "0fe9f9810aa0"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -757,7 +759,7 @@
         "id": "tk-item-detail-metadata.inner-false-string-error:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "9a2526df52e3"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -781,7 +783,7 @@
         "id": "tk-item-detail-metadata.inner-false-object-error:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "bd9fec1f736c"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -805,7 +807,7 @@
         "id": "tk-item-detail-metadata.outer-refused:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "0201be19f73d"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -829,7 +831,7 @@
         "id": "tk-item-detail-metadata.outer-refused-no-message:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "c9f3dee36b09"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -853,7 +855,7 @@
         "id": "tk-item-detail-metadata.method-not-found:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "fba383759dad"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -877,7 +879,7 @@
         "id": "tk-item-detail-metadata.transport-rejection:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "a282430e8f14"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -901,7 +903,7 @@
         "id": "tk-item-detail-metadata.transport-rejection-no-message:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "78c83a187176"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

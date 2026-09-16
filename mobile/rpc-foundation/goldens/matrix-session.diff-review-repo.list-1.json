@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "c9f720134506b6db71b742c219abe736fca1f90070403d7c96df9396fd048b6f",
   "platform": "darwin",
@@ -46,6 +46,11 @@
         }
       }
     },
+    "231aaf164318": {
+      "name": "git.branchCompare#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
+      "sent": 5
+    },
     "2432ad799433": {
       "name": "repo.list#1",
       "args": [
@@ -83,18 +88,6 @@
           }
         }
       }
-    },
-    "3179b4e89c80": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "317a243394fa": {
-      "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "31bd76fdf517": {
-      "name": "worktree.show#2",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
     "335768b54f09": {
       "name": "repo.list#1",
@@ -166,10 +159,6 @@
         }
       }
     },
-    "3fa5df34c660": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
     "3feccf790548": {
       "name": "git.status#1",
       "args": [
@@ -217,6 +206,11 @@
           }
         }
       }
+    },
+    "40b17d95f271": {
+      "name": "git.status#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 1
     },
     "4cb3f61eba79": {
       "name": "worktree.show#2",
@@ -290,6 +284,11 @@
         }
       }
     },
+    "67fead2b3d30": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 4
+    },
     "6e5c6593dad8": {
       "name": "repo.list#1",
       "args": [
@@ -321,9 +320,10 @@
         }
       }
     },
-    "75ceb6a12cfd": {
-      "name": "git.branchCompare#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
+    "6f43dceb9058": {
+      "name": "worktree.show#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 4
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -387,6 +387,11 @@
           }
         }
       }
+    },
+    "c0edcb195574": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 4
     },
     "cc1facdf008c": {
       "name": "repo.list#1",
@@ -872,7 +877,7 @@
         "id": "diff-review-snapshot.prelude:pending",
         "observation": {
           "sender": ["b8b93d3f8005"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "9270aeb7d9c6"
           },
@@ -891,11 +896,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -915,11 +920,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -939,11 +944,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -963,11 +968,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -987,11 +992,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -1011,11 +1016,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -1035,11 +1040,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -1059,11 +1064,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -1083,11 +1088,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -1107,11 +1112,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -1131,11 +1136,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
   "scenarioSha256": "a621156bbb662c78a0baa356b60d0af41d10a7bd14e54f23be0581a59377cec3",
   "platform": "darwin",
@@ -18,6 +18,11 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": false
+    },
+    "a832f000ad89": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}",
+      "sent": 1
     },
     "b0069ba7e0a2": {
       "name": "settings.updateTerminalQuickCommands#1",
@@ -100,13 +105,10 @@
         }
       }
     },
-    "e1663c7c38e3": {
-      "name": "settings.getTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}"
-    },
-    "e3cf3d452fcf": {
+    "e6aede33fdf3": {
       "name": "settings.updateTerminalQuickCommands#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}",
+      "sent": 2
     },
     "e9c308be6dea": {
       "commands": [],
@@ -131,7 +133,7 @@
         "id": "saved",
         "observation": {
           "sender": ["d766ce9ee125", "b0069ba7e0a2"],
-          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "payloads": ["a832f000ad89", "e6aede33fdf3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "persist": "7ed3d39f0607"

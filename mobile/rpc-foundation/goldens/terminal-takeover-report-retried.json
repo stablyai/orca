@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "8ad436ca6c3de8b0b3148326337acce18a8a4cf3c514acad1a4530a001f28c75",
   "platform": "darwin",
@@ -13,14 +13,16 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "002261d201ea": {
+    "077fe24856b3": {
       "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
+      "sent": 1
     },
     "44136fa355b3": {},
-    "797d27f8307a": {
+    "488e1b567bfb": {
       "name": "orchestration.workerTerminalUserInput#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
+      "sent": 2
     },
     "db9815351ccf": {
       "name": "orchestration.workerTerminalUserInput#2",
@@ -109,7 +111,7 @@
         "id": "reported-on-retry",
         "observation": {
           "sender": ["f3349fb58cad", "db9815351ccf"],
-          "payloads": ["002261d201ea", "797d27f8307a"],
+          "payloads": ["077fe24856b3", "488e1b567bfb"],
           "settlements": {
             "report": "eb79a9b3682a"
           },

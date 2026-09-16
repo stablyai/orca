@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "2e3d939dc162dbc5a38d8a7207111688204a825fd70348721917b3016e1c9470",
   "scenarioSha256": "ac2b214ece34dc25aef2b73d020e04343f81cd48b3d243508be92cfdba01eb45",
   "platform": "darwin",
@@ -62,9 +62,10 @@
       "settledAt": 0,
       "value": false
     },
-    "95f8386a206f": {
+    "e45f138ab181": {
       "name": "notifications.registerPush#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}",
+      "sent": 1
     }
   },
   "recording": {
@@ -74,7 +75,7 @@
         "id": "not-registered",
         "observation": {
           "sender": ["50a69e8e4ac9"],
-          "payloads": ["95f8386a206f"],
+          "payloads": ["e45f138ab181"],
           "settlements": {
             "register": "7ed3d39f0607"
           },

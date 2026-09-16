@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
   "scenarioSha256": "fab12524a09049d976da752cbe1b837a0aee04ce6e1eef75cbf517c862cb0d4a",
   "platform": "darwin",
@@ -54,14 +54,15 @@
         }
       }
     },
+    "1ee5cdadc74e": {
+      "name": "session.tabs.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 1
+    },
     "2eae38db7631": {
       "name": "fetch-errored",
       "value": "",
       "sent": 1
-    },
-    "30425281a407": {
-      "name": "session.tabs.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
     },
     "32f791db34da": {
       "name": "session.tabs.list#1",
@@ -527,7 +528,7 @@
         "id": "session-tabs-health-reconciled.normal:reconciled",
         "observation": {
           "sender": ["d46815b7ac09"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -540,7 +541,7 @@
         "id": "session-tabs-health-reconciled.result-absent:reconciled",
         "observation": {
           "sender": ["e4b0c74e48f9"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -553,7 +554,7 @@
         "id": "session-tabs-health-reconciled.result-null:reconciled",
         "observation": {
           "sender": ["32f791db34da"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -566,7 +567,7 @@
         "id": "session-tabs-health-reconciled.inner-ok-missing:reconciled",
         "observation": {
           "sender": ["42599e959a49"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -579,7 +580,7 @@
         "id": "session-tabs-health-reconciled.inner-false-string-error:reconciled",
         "observation": {
           "sender": ["e582528e16b2"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -592,7 +593,7 @@
         "id": "session-tabs-health-reconciled.inner-false-object-error:reconciled",
         "observation": {
           "sender": ["17e92af0f44e"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -605,7 +606,7 @@
         "id": "session-tabs-health-reconciled.outer-refused:reconciled",
         "observation": {
           "sender": ["5a9d6a1160e9"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -618,7 +619,7 @@
         "id": "session-tabs-health-reconciled.outer-refused-no-message:reconciled",
         "observation": {
           "sender": ["67009efe57d4"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -631,7 +632,7 @@
         "id": "session-tabs-health-reconciled.method-not-found:reconciled",
         "observation": {
           "sender": ["f65bb5453d98"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -644,7 +645,7 @@
         "id": "session-tabs-health-reconciled.transport-rejection:reconciled",
         "observation": {
           "sender": ["fafc7ede7ef6"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"
@@ -657,7 +658,7 @@
         "id": "session-tabs-health-reconciled.transport-rejection-no-message:reconciled",
         "observation": {
           "sender": ["eb7e045cfdd3"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"

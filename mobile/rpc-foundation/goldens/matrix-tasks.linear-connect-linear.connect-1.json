@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "a60d7c0ce3d155116aecbb3d1ca015b4d9de310155f4e840b2fc391dc9d04860",
   "platform": "darwin",
@@ -195,6 +195,11 @@
           }
         }
       }
+    },
+    "6469c8226ac8": {
+      "name": "linear.connect#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.connect\",\"params\":{\"apiKey\":\"lin_api_key\"}}",
+      "sent": 1
     },
     "69d74e72326c": {
       "name": "linearConnected",
@@ -422,10 +427,6 @@
         }
       }
     },
-    "dae705f55c7f": {
-      "name": "linear.connect#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.connect\",\"params\":{\"apiKey\":\"lin_api_key\"}}"
-    },
     "dfd3413a2232": {
       "connected": false,
       "error": "inner refused",
@@ -544,7 +545,7 @@
         "id": "tk-linear-connect.normal:connect-settled",
         "observation": {
           "sender": ["b7f1fad8d45f"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -566,7 +567,7 @@
         "id": "tk-linear-connect.result-absent:connect-settled",
         "observation": {
           "sender": ["f9bc34407ac9"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -579,7 +580,7 @@
         "id": "tk-linear-connect.result-null:connect-settled",
         "observation": {
           "sender": ["632dd7f078e3"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -592,7 +593,7 @@
         "id": "tk-linear-connect.inner-ok-missing:connect-settled",
         "observation": {
           "sender": ["d01bbd7239d1"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -614,7 +615,7 @@
         "id": "tk-linear-connect.inner-false-string-error:connect-settled",
         "observation": {
           "sender": ["2be5e0f901e5"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -627,7 +628,7 @@
         "id": "tk-linear-connect.inner-false-object-error:connect-settled",
         "observation": {
           "sender": ["a0771398ca86"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -640,7 +641,7 @@
         "id": "tk-linear-connect.outer-refused:connect-settled",
         "observation": {
           "sender": ["292bbaa1f6fe"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -653,7 +654,7 @@
         "id": "tk-linear-connect.outer-refused-no-message:connect-settled",
         "observation": {
           "sender": ["a80af0abe2b3"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -666,7 +667,7 @@
         "id": "tk-linear-connect.method-not-found:connect-settled",
         "observation": {
           "sender": ["4e1726d2cf8f"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -679,7 +680,7 @@
         "id": "tk-linear-connect.transport-rejection:connect-settled",
         "observation": {
           "sender": ["9f6138af26e9"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"
@@ -692,7 +693,7 @@
         "id": "tk-linear-connect.transport-rejection-no-message:connect-settled",
         "observation": {
           "sender": ["fc80dec0189f"],
-          "payloads": ["dae705f55c7f"],
+          "payloads": ["6469c8226ac8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect-0": "eb79a9b3682a"

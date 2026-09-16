@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "06c2ad6d4b464f889a640be7a238f6d0ff7c54b0e93fb5ea22aaa856dadb0336",
   "platform": "darwin",
@@ -46,10 +46,6 @@
           "ok": false
         }
       }
-    },
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "2698c9770ad3": {
       "name": "status.get#1",
@@ -192,6 +188,11 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": true
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
     },
     "88200d49083c": {
       "name": "status.get#1",
@@ -406,7 +407,7 @@
         "id": "components-codex-capability.normal:settled",
         "observation": {
           "sender": ["6a0093a8288b"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "84e5ca07cb7a"
           },
@@ -418,7 +419,7 @@
         "id": "components-codex-capability.result-absent:settled",
         "observation": {
           "sender": ["7d3dd7f9381b"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -430,7 +431,7 @@
         "id": "components-codex-capability.result-null:settled",
         "observation": {
           "sender": ["88200d49083c"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -442,7 +443,7 @@
         "id": "components-codex-capability.inner-ok-missing:settled",
         "observation": {
           "sender": ["4451bb95a76e"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -454,7 +455,7 @@
         "id": "components-codex-capability.inner-false-string-error:settled",
         "observation": {
           "sender": ["944bf432f199"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -466,7 +467,7 @@
         "id": "components-codex-capability.inner-false-object-error:settled",
         "observation": {
           "sender": ["89236e432861"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -478,7 +479,7 @@
         "id": "components-codex-capability.outer-refused:settled",
         "observation": {
           "sender": ["16cd464bf664"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -490,7 +491,7 @@
         "id": "components-codex-capability.outer-refused-no-message:settled",
         "observation": {
           "sender": ["9cdf3c107e7b"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -502,7 +503,7 @@
         "id": "components-codex-capability.method-not-found:settled",
         "observation": {
           "sender": ["c71b2f8a6993"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -514,7 +515,7 @@
         "id": "components-codex-capability.transport-rejection:settled",
         "observation": {
           "sender": ["de87f6266897"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },
@@ -526,7 +527,7 @@
         "id": "components-codex-capability.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["2698c9770ad3"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "probe": "7ed3d39f0607"
           },

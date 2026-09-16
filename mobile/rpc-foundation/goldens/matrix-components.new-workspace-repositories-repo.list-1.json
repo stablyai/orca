@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "64c1772f0f95a3c43fbb14398a8804b2b4784f7f18874e4fd79767ae634c7faa",
   "scenarioSha256": "95f7dbb11bca7203d29bd13230d4a286f49ff20596535163094e1bff73e7f3cb",
   "platform": "darwin",
@@ -232,6 +232,11 @@
         "$rpc": "null"
       }
     },
+    "5730368193ee": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 1
+    },
     "6a50de773e54": {
       "crash": {
         "$rpc": "null"
@@ -241,10 +246,6 @@
       "selected": {
         "$rpc": "null"
       }
-    },
-    "6bdbf70bafa2": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "6e5c6593dad8": {
       "name": "repo.list#1",
@@ -477,7 +478,7 @@
         "id": "new-workspace-repositories-fulfilled.prelude:loading",
         "observation": {
           "sender": ["26accd69bc48"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -489,7 +490,7 @@
         "id": "new-workspace-repositories-fulfilled.normal:selected",
         "observation": {
           "sender": ["288dd3529eaf"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -501,7 +502,7 @@
         "id": "new-workspace-repositories-fulfilled.result-absent:selected",
         "observation": {
           "sender": ["2ebe4d776f9b"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -513,7 +514,7 @@
         "id": "new-workspace-repositories-fulfilled.result-null:selected",
         "observation": {
           "sender": ["38e790fd9e9c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -525,7 +526,7 @@
         "id": "new-workspace-repositories-fulfilled.inner-ok-missing:selected",
         "observation": {
           "sender": ["06b63e0d9986"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -537,7 +538,7 @@
         "id": "new-workspace-repositories-fulfilled.inner-false-string-error:selected",
         "observation": {
           "sender": ["f96e83d33565"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -549,7 +550,7 @@
         "id": "new-workspace-repositories-fulfilled.inner-false-object-error:selected",
         "observation": {
           "sender": ["9d3fa0db2665"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -561,7 +562,7 @@
         "id": "new-workspace-repositories-fulfilled.outer-refused:selected",
         "observation": {
           "sender": ["b9f0f1e94cd9"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -573,7 +574,7 @@
         "id": "new-workspace-repositories-fulfilled.outer-refused-no-message:selected",
         "observation": {
           "sender": ["06fc8e7b85d5"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -585,7 +586,7 @@
         "id": "new-workspace-repositories-fulfilled.method-not-found:selected",
         "observation": {
           "sender": ["e341bd05e614"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -597,7 +598,7 @@
         "id": "new-workspace-repositories-fulfilled.transport-rejection:selected",
         "observation": {
           "sender": ["6e5c6593dad8"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -609,7 +610,7 @@
         "id": "new-workspace-repositories-fulfilled.transport-rejection-no-message:selected",
         "observation": {
           "sender": ["cc1facdf008c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

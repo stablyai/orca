@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "d4052f119c7ed68dc922c8beeb0074701f1532b10e48e284fb71aa165a17e437",
   "platform": "darwin",
@@ -104,6 +104,11 @@
         "$rpc": "null"
       }
     },
+    "d9f709e8100e": {
+      "name": "repo.hooks#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -111,10 +116,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f5dc0ce1e7b8": {
-      "name": "repo.hooks#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
     }
   },
   "recording": {
@@ -124,7 +125,7 @@
         "id": "hooks-pending",
         "observation": {
           "sender": ["28e75475e9e0"],
-          "payloads": ["f5dc0ce1e7b8"],
+          "payloads": ["d9f709e8100e"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -136,7 +137,7 @@
         "id": "settled",
         "observation": {
           "sender": ["3515a8adcd6d"],
-          "payloads": ["f5dc0ce1e7b8"],
+          "payloads": ["d9f709e8100e"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

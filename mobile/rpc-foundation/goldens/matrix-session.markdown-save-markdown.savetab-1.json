@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
   "scenarioSha256": "389c6118f3137b78e88af6b901554b0331c652063a00d8ba3119e0883ce82f25",
   "platform": "darwin",
@@ -327,10 +327,6 @@
         }
       }
     },
-    "be35c536a20e": {
-      "name": "markdown.saveTab#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}"
-    },
     "c1e52e8ff7d9": {
       "markdown": {
         "tab-md": {
@@ -543,6 +539,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f7fe2c70c07e": {
+      "name": "markdown.saveTab#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}",
+      "sent": 1
     }
   },
   "recording": {
@@ -552,7 +553,7 @@
         "id": "session-markdown-saved.normal:saved",
         "observation": {
           "sender": ["a06e17cbe383"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -564,7 +565,7 @@
         "id": "session-markdown-saved.result-absent:saved",
         "observation": {
           "sender": ["e167231dab00"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -576,7 +577,7 @@
         "id": "session-markdown-saved.result-null:saved",
         "observation": {
           "sender": ["b7782c6305b8"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -588,7 +589,7 @@
         "id": "session-markdown-saved.inner-ok-missing:saved",
         "observation": {
           "sender": ["dec169f24f21"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -600,7 +601,7 @@
         "id": "session-markdown-saved.inner-false-string-error:saved",
         "observation": {
           "sender": ["2a1476024127"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -612,7 +613,7 @@
         "id": "session-markdown-saved.inner-false-object-error:saved",
         "observation": {
           "sender": ["3cab53956ec5"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -624,7 +625,7 @@
         "id": "session-markdown-saved.outer-refused:saved",
         "observation": {
           "sender": ["db1a22f5197e"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -636,7 +637,7 @@
         "id": "session-markdown-saved.outer-refused-no-message:saved",
         "observation": {
           "sender": ["d4147861284a"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -648,7 +649,7 @@
         "id": "session-markdown-saved.method-not-found:saved",
         "observation": {
           "sender": ["bd0650cd45fe"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -660,7 +661,7 @@
         "id": "session-markdown-saved.transport-rejection:saved",
         "observation": {
           "sender": ["cb2fb2a37dbd"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },
@@ -672,7 +673,7 @@
         "id": "session-markdown-saved.transport-rejection-no-message:saved",
         "observation": {
           "sender": ["7afacfd8853f"],
-          "payloads": ["be35c536a20e"],
+          "payloads": ["f7fe2c70c07e"],
           "settlements": {
             "save": "eb79a9b3682a"
           },

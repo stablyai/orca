@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "d321d6c17e67ae90f6ceefb775495ff765a86a35423ed33a212e71ec5e9e94aa",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "00ae68859cc4": {
+      "name": "worktree.listRetiredNames#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.listRetiredNames\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 1
+    },
     "02fe07399476": {
       "name": "worktree.listRetiredNames#1",
       "args": [
@@ -277,10 +282,6 @@
         "names": ["marlin", "orca"]
       }
     },
-    "ba7d8283433b": {
-      "name": "worktree.listRetiredNames#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.listRetiredNames\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
     "be9540321e8c": {
       "name": "worktree.listRetiredNames#1",
       "args": [
@@ -438,7 +439,7 @@
         "id": "worktree-retired-names.prelude:names-pending",
         "observation": {
           "sender": ["569633c0c5c5"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -450,7 +451,7 @@
         "id": "worktree-retired-names.normal:settled",
         "observation": {
           "sender": ["5e2e60e145d8"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -462,7 +463,7 @@
         "id": "worktree-retired-names.result-absent:settled",
         "observation": {
           "sender": ["62049c27970e"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -474,7 +475,7 @@
         "id": "worktree-retired-names.result-null:settled",
         "observation": {
           "sender": ["097832ba0321"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -486,7 +487,7 @@
         "id": "worktree-retired-names.inner-ok-missing:settled",
         "observation": {
           "sender": ["0c1342cbe912"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -498,7 +499,7 @@
         "id": "worktree-retired-names.inner-false-string-error:settled",
         "observation": {
           "sender": ["2b135054eb20"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -510,7 +511,7 @@
         "id": "worktree-retired-names.inner-false-object-error:settled",
         "observation": {
           "sender": ["dfdfe583f72c"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -522,7 +523,7 @@
         "id": "worktree-retired-names.outer-refused:settled",
         "observation": {
           "sender": ["65d2ebb48892"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -534,7 +535,7 @@
         "id": "worktree-retired-names.outer-refused-no-message:settled",
         "observation": {
           "sender": ["be9540321e8c"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -546,7 +547,7 @@
         "id": "worktree-retired-names.method-not-found:settled",
         "observation": {
           "sender": ["e30ddb3bb2da"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -558,7 +559,7 @@
         "id": "worktree-retired-names.transport-rejection:settled",
         "observation": {
           "sender": ["ea14357ab74a"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -570,7 +571,7 @@
         "id": "worktree-retired-names.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["02fe07399476"],
-          "payloads": ["ba7d8283433b"],
+          "payloads": ["00ae68859cc4"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

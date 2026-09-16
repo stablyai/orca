@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "76b53dea504a688493843e23e8e7d052fc196f559bb1e2579d0fd38bf3156d0e",
   "scenarioSha256": "d85a4031b701e563941afcdd7375cf78a1ee1487a0dab722f8516c2bc8d3dcee",
   "platform": "darwin",
@@ -203,13 +203,14 @@
         }
       }
     },
+    "897e4d77e2a0": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"11111111-1111-4111-8111-111111111111\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}",
+      "sent": 1
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "b9cf7ce248dc": {
-      "name": "accounts.consumeCodexResetCredit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"11111111-1111-4111-8111-111111111111\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}"
     },
     "c19953b572ef": {
       "name": "accounts.consumeCodexResetCredit#1",
@@ -262,7 +263,7 @@
         "id": "requested",
         "observation": {
           "sender": ["c19953b572ef"],
-          "payloads": ["b9cf7ce248dc"],
+          "payloads": ["897e4d77e2a0"],
           "settlements": {
             "confirm": "9270aeb7d9c6"
           },
@@ -274,7 +275,7 @@
         "id": "consumed",
         "observation": {
           "sender": ["1c9f0c57c36d"],
-          "payloads": ["b9cf7ce248dc"],
+          "payloads": ["897e4d77e2a0"],
           "settlements": {
             "confirm": "074c5080c062"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "399fa8b85d9c2fc341ea2284a54aed278fd1a5b19a84cc9284c29d5a583bc519",
   "platform": "darwin",
@@ -55,6 +55,11 @@
         "isRpcDeliveryUnknown": false
       }
     },
+    "0b5064a35c5a": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}",
+      "sent": 3
+    },
     "0b595cd54ac3": {
       "name": "journal-saved",
       "value": "pair-fixture-1",
@@ -101,14 +106,6 @@
           }
         }
       }
-    },
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "1f4d3b93dbcb": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}"
     },
     "26f802fad080": {
       "name": "status.get#1",
@@ -180,6 +177,11 @@
           }
         }
       }
+    },
+    "402b39e9424c": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}",
+      "sent": 4
     },
     "44341dbd8021": {
       "name": "pairing.provisionRelay#1",
@@ -267,10 +269,6 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "53412dd89894": {
-      "name": "pairing.provisionRelay#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
-    },
     "56266d1e7340": {
       "name": "pairing.getEndpoints#1",
       "args": [
@@ -323,6 +321,11 @@
           }
         }
       }
+    },
+    "63ab1563ba51": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     },
     "6b9f1bf73e55": {
       "name": "bundle-written",
@@ -568,14 +571,15 @@
         }
       }
     },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
     "b96f13a39e18": {
       "name": "journal-updated",
       "value": "pair-fixture-1",
       "sent": 2
-    },
-    "c0c86e67c300": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "c3bd958eef0c": {
       "name": "pairing.provisionRelay#1",
@@ -750,7 +754,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.normal:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a", "402b39e9424c"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -771,7 +775,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.result-absent:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "818e73b19334"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "8cfbee11e6cb"
           },
@@ -789,7 +793,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.result-null:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "7b9574d1b723"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "06dee54a3689"
           },
@@ -807,7 +811,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.inner-ok-missing:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "44341dbd8021"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "f19ff6c94d68"
           },
@@ -825,7 +829,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-string-error:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "765407131fe4"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "5099f8914209"
           },
@@ -843,7 +847,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-object-error:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "139fb7a92eac"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "5099f8914209"
           },
@@ -861,7 +865,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "c3bd958eef0c"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "4e3b57d795cb"
           },
@@ -879,7 +883,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused-no-message:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "f4797c8e8b5e"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "d56bfdbce702"
           },
@@ -897,7 +901,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.method-not-found:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "afe249bdfa5f"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },
@@ -917,7 +921,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "77d3c0d012b7"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "a947768bc0ed"
           },
@@ -935,7 +939,7 @@
         "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection-no-message:paired-over-direct",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "0539a34c02a8"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "c7584e82c72f"
           },

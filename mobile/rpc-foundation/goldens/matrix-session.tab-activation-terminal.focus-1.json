@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
   "scenarioSha256": "5b050af6f02aa90f66340838cb5cc53c8fc0d5693d313b653c23881150384874",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0442e34fbb3f": {
-      "name": "terminal.focus#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}"
-    },
     "0590b758ddc1": {
       "activate": {
         "id": "frame-2",
@@ -36,6 +32,11 @@
           "ok": false
         }
       }
+    },
+    "11b4a1934825": {
+      "name": "terminal.focus#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}",
+      "sent": 1
     },
     "159084d9517c": {
       "name": "terminal.focus#1",
@@ -288,6 +289,11 @@
           }
         }
       }
+    },
+    "7cd4f4dc7a60": {
+      "name": "session.tabs.activate#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}",
+      "sent": 2
     },
     "84d74a6de2ca": {
       "status": "fulfilled",
@@ -642,10 +648,6 @@
         }
       }
     },
-    "c9c16f3b6d6f": {
-      "name": "session.tabs.activate#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
-    },
     "d563a507f706": {
       "name": "terminal.focus#1",
       "args": [
@@ -779,7 +781,7 @@
         "id": "session-tab-activation-focus-and-activate.normal:activated",
         "observation": {
           "sender": ["7118e8aeaaae", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "ecc5d1639f16",
             "activate": "84d74a6de2ca"
@@ -792,7 +794,7 @@
         "id": "session-tab-activation-focus-and-activate.result-absent:activated",
         "observation": {
           "sender": ["25e79f9d5740", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "fdc16c91d99d",
             "activate": "84d74a6de2ca"
@@ -805,7 +807,7 @@
         "id": "session-tab-activation-focus-and-activate.result-null:activated",
         "observation": {
           "sender": ["a8af1cd1c301", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "c76b51daf336",
             "activate": "84d74a6de2ca"
@@ -818,7 +820,7 @@
         "id": "session-tab-activation-focus-and-activate.inner-ok-missing:activated",
         "observation": {
           "sender": ["a0e45ce9a66b", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "2502744f8808",
             "activate": "84d74a6de2ca"
@@ -831,7 +833,7 @@
         "id": "session-tab-activation-focus-and-activate.inner-false-string-error:activated",
         "observation": {
           "sender": ["d563a507f706", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "57ccbda9fde1",
             "activate": "84d74a6de2ca"
@@ -844,7 +846,7 @@
         "id": "session-tab-activation-focus-and-activate.inner-false-object-error:activated",
         "observation": {
           "sender": ["b5031b4cc6e6", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "97219c38288c",
             "activate": "84d74a6de2ca"
@@ -857,7 +859,7 @@
         "id": "session-tab-activation-focus-and-activate.outer-refused:activated",
         "observation": {
           "sender": ["bbc6fbe00a97", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "c43f43ee2e4c",
             "activate": "84d74a6de2ca"
@@ -870,7 +872,7 @@
         "id": "session-tab-activation-focus-and-activate.outer-refused-no-message:activated",
         "observation": {
           "sender": ["ba98adc95c80", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "fe7233635ac5",
             "activate": "84d74a6de2ca"
@@ -883,7 +885,7 @@
         "id": "session-tab-activation-focus-and-activate.method-not-found:activated",
         "observation": {
           "sender": ["893f5a2f4823", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "484fd4423b44",
             "activate": "84d74a6de2ca"
@@ -896,7 +898,7 @@
         "id": "session-tab-activation-focus-and-activate.transport-rejection:activated",
         "observation": {
           "sender": ["159084d9517c", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "a947768bc0ed",
             "activate": "84d74a6de2ca"
@@ -909,7 +911,7 @@
         "id": "session-tab-activation-focus-and-activate.transport-rejection-no-message:activated",
         "observation": {
           "sender": ["36ee2d642745", "e495a9a84cf0"],
-          "payloads": ["0442e34fbb3f", "c9c16f3b6d6f"],
+          "payloads": ["11b4a1934825", "7cd4f4dc7a60"],
           "settlements": {
             "focus": "c7584e82c72f",
             "activate": "84d74a6de2ca"

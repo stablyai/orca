@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "28d8dfb15fec1ecaaa1c675c9c8c0cdc196e184a6884625c44dfe1f0f9fc8e7e",
   "platform": "darwin",
@@ -16,6 +16,11 @@
     "32a3635e06a4": {
       "name": "mutatingStatus",
       "value": false,
+      "sent": 1
+    },
+    "772281b8af97": {
+      "name": "gitlab.mergeMR#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":\"group/project\"}}",
       "sent": 1
     },
     "84465663f388": {
@@ -103,10 +108,6 @@
         }
       }
     },
-    "c6bf9878ffb7": {
-      "name": "gitlab.mergeMR#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":\"group/project\"}}"
-    },
     "cc96725d8f47": {
       "name": "mutatingStatus",
       "value": true,
@@ -128,7 +129,7 @@
         "id": "merge-settled",
         "observation": {
           "sender": ["c483c06533af"],
-          "payloads": ["c6bf9878ffb7"],
+          "payloads": ["772281b8af97"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "merge-0": "eb79a9b3682a"

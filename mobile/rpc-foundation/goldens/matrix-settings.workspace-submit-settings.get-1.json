@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "a89bdf93df71a958810aba72c80e42f663644781a29e934898e2ddf86c5dd5d5",
   "platform": "darwin",
@@ -114,6 +114,11 @@
         "disabledTuiAgents": ["claude"]
       }
     },
+    "28faeb877519": {
+      "name": "worktree.create#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"setupDecision\":\"inherit\",\"name\":\"recorded\",\"displayName\":\"recorded\",\"displayNameKind\":\"user\",\"startupAgent\":\"claude\",\"createdWithAgent\":\"claude\"}}",
+      "sent": 2
+    },
     "2b3aa0da0852": {
       "name": "settings.get#1",
       "args": [
@@ -207,6 +212,11 @@
         }
       }
     },
+    "5c52bc3f9e55": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 1
+    },
     "5efbd884ea5a": {
       "creating": false,
       "error": "Selected agent is disabled. Choose an enabled agent before creating.",
@@ -297,10 +307,6 @@
           }
         }
       }
-    },
-    "7ddcb1852b39": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "8b77098df0c3": {
       "name": "settings.get#1",
@@ -538,10 +544,6 @@
         "$rpc": "undefined"
       }
     },
-    "f0d91b98b6a3": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"setupDecision\":\"inherit\",\"name\":\"recorded\",\"displayName\":\"recorded\",\"displayNameKind\":\"user\",\"startupAgent\":\"claude\",\"createdWithAgent\":\"claude\"}}"
-    },
     "f84a8688af61": {
       "name": "settings.get#1",
       "args": [
@@ -612,7 +614,7 @@
         "id": "settings-workspace-submit-fulfilled.prelude:settings-pending",
         "observation": {
           "sender": ["090c88478661"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
@@ -625,7 +627,7 @@
         "id": "settings-workspace-submit-fulfilled.prelude:cleanup",
         "observation": {
           "sender": ["f84a8688af61"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -638,7 +640,7 @@
         "id": "settings-workspace-submit-fulfilled.normal:settled",
         "observation": {
           "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -657,7 +659,7 @@
         "id": "settings-workspace-submit-fulfilled.result-absent:settled",
         "observation": {
           "sender": ["e0cf1af55a54"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -670,7 +672,7 @@
         "id": "settings-workspace-submit-fulfilled.result-null:settled",
         "observation": {
           "sender": ["e1bd8b4a5d70"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -683,7 +685,7 @@
         "id": "settings-workspace-submit-fulfilled.inner-ok-missing:settled",
         "observation": {
           "sender": ["0fc3e204e7ba", "fbc1bf929509"],
-          "payloads": ["7ddcb1852b39", "f0d91b98b6a3"],
+          "payloads": ["5c52bc3f9e55", "28faeb877519"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
@@ -696,7 +698,7 @@
         "id": "settings-workspace-submit-fulfilled.inner-ok-missing:cleanup",
         "observation": {
           "sender": ["0fc3e204e7ba", "588949297c83"],
-          "payloads": ["7ddcb1852b39", "f0d91b98b6a3"],
+          "payloads": ["5c52bc3f9e55", "28faeb877519"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -709,7 +711,7 @@
         "id": "settings-workspace-submit-fulfilled.inner-false-string-error:settled",
         "observation": {
           "sender": ["d27ce798af34", "fbc1bf929509"],
-          "payloads": ["7ddcb1852b39", "f0d91b98b6a3"],
+          "payloads": ["5c52bc3f9e55", "28faeb877519"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
@@ -722,7 +724,7 @@
         "id": "settings-workspace-submit-fulfilled.inner-false-string-error:cleanup",
         "observation": {
           "sender": ["d27ce798af34", "588949297c83"],
-          "payloads": ["7ddcb1852b39", "f0d91b98b6a3"],
+          "payloads": ["5c52bc3f9e55", "28faeb877519"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -735,7 +737,7 @@
         "id": "settings-workspace-submit-fulfilled.inner-false-object-error:settled",
         "observation": {
           "sender": ["127ad2bdc042", "fbc1bf929509"],
-          "payloads": ["7ddcb1852b39", "f0d91b98b6a3"],
+          "payloads": ["5c52bc3f9e55", "28faeb877519"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
@@ -748,7 +750,7 @@
         "id": "settings-workspace-submit-fulfilled.inner-false-object-error:cleanup",
         "observation": {
           "sender": ["127ad2bdc042", "588949297c83"],
-          "payloads": ["7ddcb1852b39", "f0d91b98b6a3"],
+          "payloads": ["5c52bc3f9e55", "28faeb877519"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -761,7 +763,7 @@
         "id": "settings-workspace-submit-fulfilled.outer-refused:settled",
         "observation": {
           "sender": ["8f8296303a77"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -774,7 +776,7 @@
         "id": "settings-workspace-submit-fulfilled.outer-refused-no-message:settled",
         "observation": {
           "sender": ["6a98511b6371"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -787,7 +789,7 @@
         "id": "settings-workspace-submit-fulfilled.method-not-found:settled",
         "observation": {
           "sender": ["b759ab27e4dd"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -800,7 +802,7 @@
         "id": "settings-workspace-submit-fulfilled.transport-rejection:settled",
         "observation": {
           "sender": ["8b77098df0c3"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -813,7 +815,7 @@
         "id": "settings-workspace-submit-fulfilled.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["2b3aa0da0852"],
-          "payloads": ["7ddcb1852b39"],
+          "payloads": ["5c52bc3f9e55"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"

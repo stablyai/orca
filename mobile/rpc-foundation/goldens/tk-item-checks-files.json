@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
   "scenarioSha256": "15de2c1dd80a591a5e27d50664ff21d4e71442c711fc3bbdf7d1f95f499cf04c",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "023bacc5a99f": {
-      "name": "github.setPRFileViewed#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-1\",\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/index.ts\",\"viewed\":true}}"
-    },
     "02b35324051f": {
       "name": "prFileLoadingPath",
       "value": {
@@ -34,9 +30,15 @@
       "value": false,
       "sent": 3
     },
-    "169fba726515": {
-      "name": "github.addPRReviewComment#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewComment\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"commitId\":\"head-sha\",\"path\":\"src/index.ts\",\"line\":12,\"body\":\"a review comment\"}}"
+    "0dc508badab8": {
+      "name": "github.prFileContents#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prFileContents\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"path\":\"src/index.ts\",\"status\":\"modified\",\"headSha\":\"head-sha\",\"baseSha\":\"base-sha\"}}",
+      "sent": 4
+    },
+    "129905b0618e": {
+      "name": "github.rerunPRChecks#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"failedOnly\":true}}",
+      "sent": 1
     },
     "1e34370849ff": {
       "name": "error",
@@ -340,9 +342,10 @@
       },
       "refreshSeq": 1
     },
-    "719c7f70fd21": {
-      "name": "github.resolveReviewThread#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-1\",\"threadId\":\"thread-1\",\"resolve\":true}}"
+    "6cf2940fc2bf": {
+      "name": "github.addPRReviewComment#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewComment\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"commitId\":\"head-sha\",\"path\":\"src/index.ts\",\"line\":12,\"body\":\"a review comment\"}}",
+      "sent": 5
     },
     "7418dba01b6e": {
       "contents": {},
@@ -665,10 +668,6 @@
       "value": "",
       "sent": 1
     },
-    "d530e4061382": {
-      "name": "github.prFileContents#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prFileContents\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"path\":\"src/index.ts\",\"status\":\"modified\",\"headSha\":\"head-sha\",\"baseSha\":\"base-sha\"}}"
-    },
     "d6639f415773": {
       "name": "detailPayload",
       "value": {
@@ -757,9 +756,10 @@
         }
       }
     },
-    "e6fbd22fd721": {
-      "name": "github.rerunPRChecks#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"failedOnly\":true}}"
+    "e5ad8c9d0fe9": {
+      "name": "github.resolveReviewThread#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-1\",\"threadId\":\"thread-1\",\"resolve\":true}}",
+      "sent": 3
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -778,6 +778,11 @@
       "name": "prFileCommentDrafts",
       "value": {},
       "sent": 5
+    },
+    "ff91ba8c33f6": {
+      "name": "github.setPRFileViewed#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-1\",\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/index.ts\",\"viewed\":true}}",
+      "sent": 2
     }
   },
   "recording": {
@@ -787,7 +792,7 @@
         "id": "rerun-settled",
         "observation": {
           "sender": ["a94ae672d47d"],
-          "payloads": ["e6fbd22fd721"],
+          "payloads": ["129905b0618e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "rerun-0": "eb79a9b3682a"
@@ -800,7 +805,7 @@
         "id": "viewed-settled",
         "observation": {
           "sender": ["a94ae672d47d", "e14b632f629a"],
-          "payloads": ["e6fbd22fd721", "023bacc5a99f"],
+          "payloads": ["129905b0618e", "ff91ba8c33f6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "rerun-0": "eb79a9b3682a",
@@ -823,7 +828,7 @@
         "id": "thread-settled",
         "observation": {
           "sender": ["a94ae672d47d", "e14b632f629a", "bcb382ff8ccc"],
-          "payloads": ["e6fbd22fd721", "023bacc5a99f", "719c7f70fd21"],
+          "payloads": ["129905b0618e", "ff91ba8c33f6", "e5ad8c9d0fe9"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "rerun-0": "eb79a9b3682a",
@@ -851,7 +856,7 @@
         "id": "expand-settled",
         "observation": {
           "sender": ["a94ae672d47d", "e14b632f629a", "bcb382ff8ccc", "56b95ef32926"],
-          "payloads": ["e6fbd22fd721", "023bacc5a99f", "719c7f70fd21", "d530e4061382"],
+          "payloads": ["129905b0618e", "ff91ba8c33f6", "e5ad8c9d0fe9", "0dc508badab8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "rerun-0": "eb79a9b3682a",
@@ -892,11 +897,11 @@
             "a5b56b388d19"
           ],
           "payloads": [
-            "e6fbd22fd721",
-            "023bacc5a99f",
-            "719c7f70fd21",
-            "d530e4061382",
-            "169fba726515"
+            "129905b0618e",
+            "ff91ba8c33f6",
+            "e5ad8c9d0fe9",
+            "0dc508badab8",
+            "6cf2940fc2bf"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",

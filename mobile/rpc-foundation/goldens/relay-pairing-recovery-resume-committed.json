@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "7e54c3af4b8b8e6eac007267fb96620283b735491883c505401c79656d920ca6",
   "platform": "darwin",
@@ -18,6 +18,11 @@
       "value": "host-1",
       "sent": 1
     },
+    "2e0a00540206": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}",
+      "sent": 1
+    },
     "6873c5ee509e": {
       "name": "journal-cleared",
       "value": "recovery",
@@ -28,10 +33,6 @@
       "winner": {
         "$rpc": "null"
       }
-    },
-    "b6e709c11a41": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}"
     },
     "be67e12f6925": {
       "name": "candidate-closed",
@@ -118,7 +119,7 @@
         "id": "recovered-on-resume",
         "observation": {
           "sender": ["c5d6533ca9ce"],
-          "payloads": ["b6e709c11a41"],
+          "payloads": ["2e0a00540206"],
           "settlements": {
             "recover": "f0723ea3ab16"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "182f37fbe6ae7c0694b50d603ecd4a03bc9a8c7c9738ebb775b47eb5f3b9660f",
   "platform": "darwin",
@@ -22,9 +22,10 @@
         "message": "Update Orca desktop to review changes on mobile."
       }
     },
-    "317a243394fa": {
+    "40b17d95f271": {
       "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 1
     },
     "55c07df45014": {
       "branchCompare": "unloaded",
@@ -76,7 +77,7 @@
         "id": "unavailable",
         "observation": {
           "sender": ["93b9682c496c"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "unavailable": "14804a5e414f"
           },

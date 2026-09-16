@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "579077efd3a4652a6930af3f6690138c20536270cbcd7274246047d2e322199f",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "03f8dcaf51c7": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
+    },
     "093b7147f9b0": {
       "name": "orchestration.workerTerminalUserInput#1",
       "args": [
@@ -48,16 +53,8 @@
         }
       }
     },
-    "0a0137383ed3": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
     "11a49f853eb8": {
       "accepted": true
-    },
-    "191580ba859d": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
     "4dbb5ea36ed2": {
       "name": "terminal.send#1",
@@ -105,6 +102,11 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": true
+    },
+    "b139ed2905d3": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}",
+      "sent": 2
     }
   },
   "recording": {
@@ -114,7 +116,7 @@
         "id": "reported",
         "observation": {
           "sender": ["4dbb5ea36ed2", "093b7147f9b0"],
-          "payloads": ["0a0137383ed3", "191580ba859d"],
+          "payloads": ["03f8dcaf51c7", "b139ed2905d3"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },

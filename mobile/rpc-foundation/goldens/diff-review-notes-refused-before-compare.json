@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "3e7fa054f77587b9ac24b6732a9926273b0f2ff35a266e633d0ccd1dada932cc",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "231aaf164318": {
+      "name": "git.branchCompare#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
+      "sent": 5
+    },
     "2432ad799433": {
       "name": "repo.list#1",
       "args": [
@@ -76,18 +81,6 @@
         "startedAt": 0
       }
     },
-    "3179b4e89c80": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "317a243394fa": {
-      "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "31bd76fdf517": {
-      "name": "worktree.show#2",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
     "3ec8052ccdb3": {
       "name": "worktree.show#1",
       "args": [
@@ -123,10 +116,6 @@
           }
         }
       }
-    },
-    "3fa5df34c660": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
     "3feccf790548": {
       "name": "git.status#1",
@@ -176,13 +165,29 @@
         }
       }
     },
-    "75ceb6a12cfd": {
-      "name": "git.branchCompare#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
+    "40b17d95f271": {
+      "name": "git.status#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 1
+    },
+    "67fead2b3d30": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 4
+    },
+    "6f43dceb9058": {
+      "name": "worktree.show#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 4
     },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "c0edcb195574": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 4
     },
     "c70359272e10": {
       "name": "worktree.show#1",
@@ -316,7 +321,7 @@
         "id": "notes-refused",
         "observation": {
           "sender": ["3feccf790548", "c70359272e10", "26accd69bc48", "ed34044b22f4"],
-          "payloads": ["317a243394fa", "3fa5df34c660", "3179b4e89c80", "31bd76fdf517"],
+          "payloads": ["40b17d95f271", "c0edcb195574", "67fead2b3d30", "6f43dceb9058"],
           "settlements": {
             "snapshot": "9270aeb7d9c6"
           },
@@ -335,11 +340,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "eae2ae6e9c42"

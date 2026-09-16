@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "a84f8a5acfd428eb77b5c02a3de0fa8b780c666db31bbe574ecf76cdf84adeb2",
   "platform": "darwin",
@@ -47,10 +47,6 @@
           }
         }
       }
-    },
-    "0e24d2a37a0d": {
-      "name": "worktree.resolvePrBase#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
     },
     "156f5e61efd3": {
       "name": "worktree.resolveMrBase#1",
@@ -357,9 +353,10 @@
         "compareBaseRef": "origin/main"
       }
     },
-    "69afcaf1cb72": {
+    "65f985665d42": {
       "name": "worktree.resolveMrBase#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}",
+      "sent": 2
     },
     "7214459608bf": {
       "status": "rejected",
@@ -402,6 +399,11 @@
           "ok": true
         }
       }
+    },
+    "95d2391d09f2": {
+      "name": "worktree.resolvePrBase#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}",
+      "sent": 1
     },
     "96b186d42430": {
       "name": "worktree.resolveMrBase#1",
@@ -583,7 +585,7 @@
         "id": "tw-hosted-base-resolved.prelude:pr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea"],
-          "payloads": ["0e24d2a37a0d"],
+          "payloads": ["95d2391d09f2"],
           "settlements": {
             "pr": "5428de0f5130"
           },
@@ -595,7 +597,7 @@
         "id": "tw-hosted-base-resolved.normal:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "aad8e7ddeea2"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "fd552ecb03da"
@@ -608,7 +610,7 @@
         "id": "tw-hosted-base-resolved.result-absent:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "93bb7cfeae89"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "ae5862eb7a20"
@@ -621,7 +623,7 @@
         "id": "tw-hosted-base-resolved.result-null:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "336e99424dd0"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "7214459608bf"
@@ -634,7 +636,7 @@
         "id": "tw-hosted-base-resolved.inner-ok-missing:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "08ecbab921e6"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "2aaea8ee523e"
@@ -647,7 +649,7 @@
         "id": "tw-hosted-base-resolved.inner-false-string-error:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "96b186d42430"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "d05b2d417b9c"
@@ -660,7 +662,7 @@
         "id": "tw-hosted-base-resolved.inner-false-object-error:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "156f5e61efd3"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "2c7f810cc819"
@@ -673,7 +675,7 @@
         "id": "tw-hosted-base-resolved.outer-refused:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "201cea1f9864"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "32a7c0ae7918"
@@ -686,7 +688,7 @@
         "id": "tw-hosted-base-resolved.outer-refused-no-message:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "382c27f806f2"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "f3b516f62081"
@@ -699,7 +701,7 @@
         "id": "tw-hosted-base-resolved.method-not-found:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "17ae65496a72"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "b948e8307e81"
@@ -712,7 +714,7 @@
         "id": "tw-hosted-base-resolved.transport-rejection:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "bd721565327b"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "a947768bc0ed"
@@ -725,7 +727,7 @@
         "id": "tw-hosted-base-resolved.transport-rejection-no-message:mr-base-resolved",
         "observation": {
           "sender": ["4febe923ceea", "22f024eeb07c"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "payloads": ["95d2391d09f2", "65f985665d42"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "c7584e82c72f"

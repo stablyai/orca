@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "9ab72231bf97fbe7eed232019c56568a9411433835eae424628af62c7c6a10c1",
   "platform": "darwin",
@@ -18,9 +18,10 @@
       "value": "pair-fixture-1",
       "sent": 0
     },
-    "1e5b32902af7": {
+    "63ab1563ba51": {
       "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     },
     "86d361a0bf7c": {
       "outcome": "unpaired",
@@ -36,6 +37,11 @@
     "b2a8517fe750": {
       "name": "candidate-closed",
       "value": "direct",
+      "sent": 2
+    },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
       "sent": 2
     },
     "ba9fd57319d3": {
@@ -62,10 +68,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "c0c86e67c300": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "ccefc12fda27": {
       "outcome": "unpaired",
@@ -112,7 +114,7 @@
         "id": "racing",
         "observation": {
           "sender": ["ba9fd57319d3", "f6c99f740e75"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6"],
           "settlements": {
             "pair": "9270aeb7d9c6"
           },
@@ -124,7 +126,7 @@
         "id": "timed-out",
         "observation": {
           "sender": ["ba9fd57319d3", "f6c99f740e75"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6"],
           "settlements": {
             "pair": "9270aeb7d9c6"
           },

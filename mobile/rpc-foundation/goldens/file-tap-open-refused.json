@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
   "scenarioSha256": "a927e85c3ae58cd3b017955fe28aeffec6a5471b51d782f116639a3aaf4af77d",
   "platform": "darwin",
@@ -63,6 +63,16 @@
       "value": {},
       "sent": 1
     },
+    "52c3c247865d": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}",
+      "sent": 2
+    },
+    "9120b59f16ec": {
+      "name": "files.resolveTerminalPath#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}",
+      "sent": 1
+    },
     "9a73d7a9fdc6": {
       "name": "files.open#1",
       "args": [
@@ -105,10 +115,6 @@
         "$rpc": "null"
       }
     },
-    "d88940bfb593": {
-      "name": "files.resolveTerminalPath#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -116,10 +122,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f334b291fecc": {
-      "name": "files.open#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
     }
   },
   "recording": {
@@ -129,7 +131,7 @@
         "id": "open-refused",
         "observation": {
           "sender": ["18cda90904c3", "9a73d7a9fdc6"],
-          "payloads": ["d88940bfb593", "f334b291fecc"],
+          "payloads": ["9120b59f16ec", "52c3c247865d"],
           "settlements": {
             "tap": "eb79a9b3682a"
           },

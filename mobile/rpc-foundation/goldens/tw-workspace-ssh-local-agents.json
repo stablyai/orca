@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "af0623c2d106d2ed18ef9149d4990539f9ed82146ae091a872a3e1d792efeffe",
   "platform": "darwin",
@@ -31,6 +31,11 @@
       "name": "workspaceAgentOverridden",
       "value": false,
       "sent": 0
+    },
+    "c56f76942e16": {
+      "name": "preflight.detectAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}",
+      "sent": 1
     },
     "cb93b17470e8": {
       "name": "preflight.detectAgents#1",
@@ -63,10 +68,6 @@
         }
       }
     },
-    "cf32edc950ac": {
-      "name": "preflight.detectAgents#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
-    },
     "d00f9527d4f2": {
       "name": "workspaceDetectedAgentIds",
       "value": ["codex", "claude"],
@@ -95,7 +96,7 @@
         "id": "local-agents-detected",
         "observation": {
           "sender": ["cb93b17470e8"],
-          "payloads": ["cf32edc950ac"],
+          "payloads": ["c56f76942e16"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

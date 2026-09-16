@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "f46cef9d1c6a5ed6d8b6f1d180cdf5c666f52e043b70feb07e5fccee885ceeda",
   "platform": "darwin",
@@ -49,6 +49,11 @@
         }
       }
     },
+    "781e10561184": {
+      "name": "files.read#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}",
+      "sent": 2
+    },
     "82537e84c006": {
       "name": "markdown.readTab#1",
       "args": [
@@ -84,9 +89,10 @@
         }
       }
     },
-    "b084676e5f8f": {
+    "af5666510c34": {
       "name": "markdown.readTab#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}",
+      "sent": 1
     },
     "c6cea5310098": {
       "file": {},
@@ -110,10 +116,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ff6e4cc603b2": {
-      "name": "files.read#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
     }
   },
   "recording": {
@@ -123,7 +125,7 @@
         "id": "fell-back",
         "observation": {
           "sender": ["82537e84c006", "10a4d64eaaba"],
-          "payloads": ["b084676e5f8f", "ff6e4cc603b2"],
+          "payloads": ["af5666510c34", "781e10561184"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },

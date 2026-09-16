@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "694e6a331a7b0a742059ac6575ee8fd5cdeb3ba80abe58cbd216f6bc4a24e400",
   "scenarioSha256": "b146be741484f2a6dca25e97f52b9ed10f8a2b28bd00e6b56acffbcd82136b2f",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "017d690f964b": {
+      "name": "aiVault.listSessions#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
+      "sent": 4
+    },
     "074d2293c010": {
       "name": "worktree.ps#1",
       "args": [
@@ -76,10 +81,6 @@
         "Agent Session History Unavailable",
         "Update Orca on this host to browse agent session history."
       ]
-    },
-    "15686a7a3813": {
-      "name": "aiVault.listSessions#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
     },
     "18c1e8ee98a9": {
       "name": "status.get#2",
@@ -373,10 +374,6 @@
         }
       }
     },
-    "4912be5d956f": {
-      "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
-    },
     "4af220e500d6": {
       "crash": {
         "$rpc": "null"
@@ -561,10 +558,6 @@
         }
       }
     },
-    "a5ba8a3216d2": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
     "af9574769167": {
       "crash": {
         "$rpc": "null"
@@ -707,6 +700,16 @@
         }
       }
     },
+    "d4ef0569dbbc": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 3
+    },
+    "de79fb948454": {
+      "name": "worktree.ps#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}",
+      "sent": 2
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -715,9 +718,10 @@
         "$rpc": "undefined"
       }
     },
-    "ec120260263a": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "ff0ffaddbbf7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     }
   },
   "recording": {
@@ -727,7 +731,7 @@
         "id": "aivault-history-screen-worktrees.prelude:worktrees-pending",
         "observation": {
           "sender": ["bc1a8e138f82", "ba9fd57319d3"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -739,7 +743,7 @@
         "id": "aivault-history-screen-worktrees.normal:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "29ba09534e96", "522b745543f1"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a", "15686a7a3813"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc", "017d690f964b"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -751,7 +755,7 @@
         "id": "aivault-history-screen-worktrees.result-absent:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "3bf9d347000f"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -763,7 +767,7 @@
         "id": "aivault-history-screen-worktrees.result-null:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "1c8a5fa9c737"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -775,7 +779,7 @@
         "id": "aivault-history-screen-worktrees.inner-ok-missing:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "70934ebc4e94"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -787,7 +791,7 @@
         "id": "aivault-history-screen-worktrees.inner-false-string-error:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "4584964f74a7"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -799,7 +803,7 @@
         "id": "aivault-history-screen-worktrees.inner-false-object-error:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "20368e0f363c"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -811,7 +815,7 @@
         "id": "aivault-history-screen-worktrees.outer-refused:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "266cf07850dd"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -823,7 +827,7 @@
         "id": "aivault-history-screen-worktrees.outer-refused-no-message:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "8f8b5bf6f808"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -835,7 +839,7 @@
         "id": "aivault-history-screen-worktrees.method-not-found:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "d2bc55fb4a14"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -847,7 +851,7 @@
         "id": "aivault-history-screen-worktrees.transport-rejection:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "18c1e8ee98a9"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -859,7 +863,7 @@
         "id": "aivault-history-screen-worktrees.transport-rejection-no-message:worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "1ca2b2b151f0"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

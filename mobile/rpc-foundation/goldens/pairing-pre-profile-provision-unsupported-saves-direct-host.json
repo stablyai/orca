@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "5696ea2a62bb3f24902305f8bac0c4ae8f1e505f359db76fd69aabe353adae86",
   "platform": "darwin",
@@ -13,14 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0b5064a35c5a": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}",
+      "sent": 3
+    },
     "0b595cd54ac3": {
       "name": "journal-saved",
       "value": "pair-fixture-1",
       "sent": 0
-    },
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "26f802fad080": {
       "name": "status.get#1",
@@ -70,9 +71,10 @@
       "value": "relay",
       "sent": 3
     },
-    "53412dd89894": {
-      "name": "pairing.provisionRelay#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
+    "63ab1563ba51": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     },
     "6cb74a535419": {
       "name": "status.get#2",
@@ -147,14 +149,15 @@
         }
       }
     },
+    "b33a14df0df6": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
+    },
     "b96f13a39e18": {
       "name": "journal-updated",
       "value": "pair-fixture-1",
       "sent": 2
-    },
-    "c0c86e67c300": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "d1b2eddf66f4": {
       "status": "fulfilled",
@@ -182,7 +185,7 @@
         "id": "direct-host-saved",
         "observation": {
           "sender": ["26f802fad080", "6cb74a535419", "afe249bdfa5f"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "payloads": ["63ab1563ba51", "b33a14df0df6", "0b5064a35c5a"],
           "settlements": {
             "pair": "d1b2eddf66f4"
           },

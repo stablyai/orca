@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "092777c9ce457dcae95eafbe083c70510580569ac74e31c0d4224ac94b9fad76",
   "platform": "darwin",
@@ -88,10 +88,6 @@
           "ok": false
         }
       }
-    },
-    "3ae1d19b9c51": {
-      "name": "browser.mouseMove#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
     },
     "3d2559c47ac0": {
       "name": "browser.mouseWheel#1",
@@ -202,6 +198,11 @@
         }
       }
     },
+    "60d1415b69e8": {
+      "name": "browser.mouseMove#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}",
+      "sent": 1
+    },
     "68930a4fb066": {
       "name": "browser.mouseWheel#1",
       "args": [
@@ -310,10 +311,6 @@
           }
         }
       }
-    },
-    "8bf9a97ea141": {
-      "name": "browser.mouseWheel#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseWheel\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"dx\":0,\"dy\":-120}}"
     },
     "9855d4ec3415": {
       "busy": false,
@@ -430,6 +427,11 @@
         }
       }
     },
+    "d2d492cca894": {
+      "name": "browser.mouseWheel#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseWheel\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"dx\":0,\"dy\":-120}}",
+      "sent": 2
+    },
     "e7e871a97516": {
       "name": "browser.mouseWheel#1",
       "args": [
@@ -480,7 +482,7 @@
         "id": "browser-wheel-scrolled.normal:scrolled",
         "observation": {
           "sender": ["56a99047a121", "71b1fb55eafa"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -493,7 +495,7 @@
         "id": "browser-wheel-scrolled.result-absent:scrolled",
         "observation": {
           "sender": ["56a99047a121", "c3a7e8d1a1a5"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -506,7 +508,7 @@
         "id": "browser-wheel-scrolled.result-null:scrolled",
         "observation": {
           "sender": ["56a99047a121", "68930a4fb066"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -519,7 +521,7 @@
         "id": "browser-wheel-scrolled.inner-ok-missing:scrolled",
         "observation": {
           "sender": ["56a99047a121", "3d2559c47ac0"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -532,7 +534,7 @@
         "id": "browser-wheel-scrolled.inner-false-string-error:scrolled",
         "observation": {
           "sender": ["56a99047a121", "69ac9de0ee4a"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -545,7 +547,7 @@
         "id": "browser-wheel-scrolled.inner-false-object-error:scrolled",
         "observation": {
           "sender": ["56a99047a121", "03b40646208d"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -558,7 +560,7 @@
         "id": "browser-wheel-scrolled.outer-refused:scrolled",
         "observation": {
           "sender": ["56a99047a121", "1c44b93a0de8"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -571,7 +573,7 @@
         "id": "browser-wheel-scrolled.outer-refused-no-message:scrolled",
         "observation": {
           "sender": ["56a99047a121", "60398cced00c"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -584,7 +586,7 @@
         "id": "browser-wheel-scrolled.method-not-found:scrolled",
         "observation": {
           "sender": ["56a99047a121", "a81f1310f255"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -597,7 +599,7 @@
         "id": "browser-wheel-scrolled.transport-rejection:scrolled",
         "observation": {
           "sender": ["56a99047a121", "e7e871a97516"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"
@@ -610,7 +612,7 @@
         "id": "browser-wheel-scrolled.transport-rejection-no-message:scrolled",
         "observation": {
           "sender": ["56a99047a121", "ae30023f85cc"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "payloads": ["60d1415b69e8", "d2d492cca894"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"

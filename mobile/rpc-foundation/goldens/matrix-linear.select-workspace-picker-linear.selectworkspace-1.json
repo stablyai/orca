@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "b65996c152b632d553a31e07e31ea5c76f998eada42cf0966923d730da21908f",
   "scenarioSha256": "c7de1f6fc0895d4ddf1b87a83859da46c583f098e058f14c8f85d48120c80c40",
   "platform": "darwin",
@@ -285,10 +285,6 @@
         }
       }
     },
-    "99a34c4ee1d1": {
-      "name": "linear.selectWorkspace#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.selectWorkspace\",\"params\":{\"workspaceId\":\"workspace-b\"}}"
-    },
     "9fd9d48475fb": {
       "name": "linear.selectWorkspace#1",
       "args": [
@@ -430,6 +426,11 @@
         }
       }
     },
+    "ea687d1f2a99": {
+      "name": "linear.selectWorkspace#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.selectWorkspace\",\"params\":{\"workspaceId\":\"workspace-b\"}}",
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -446,7 +447,7 @@
         "id": "linear-select-workspace.prelude:selected",
         "observation": {
           "sender": ["4a23506ae3dc"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -458,7 +459,7 @@
         "id": "linear-select-workspace.normal:switched",
         "observation": {
           "sender": ["06776b3d9986"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -470,7 +471,7 @@
         "id": "linear-select-workspace.result-absent:switched",
         "observation": {
           "sender": ["b3bc3d5e8602"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -482,7 +483,7 @@
         "id": "linear-select-workspace.result-null:switched",
         "observation": {
           "sender": ["9fd9d48475fb"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -494,7 +495,7 @@
         "id": "linear-select-workspace.inner-ok-missing:switched",
         "observation": {
           "sender": ["8b0126beaa0f"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -506,7 +507,7 @@
         "id": "linear-select-workspace.inner-false-string-error:switched",
         "observation": {
           "sender": ["8c94ac859e25"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -518,7 +519,7 @@
         "id": "linear-select-workspace.inner-false-object-error:switched",
         "observation": {
           "sender": ["1a260f9b2146"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -530,7 +531,7 @@
         "id": "linear-select-workspace.outer-refused:switched",
         "observation": {
           "sender": ["34abdc8d41b6"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -542,7 +543,7 @@
         "id": "linear-select-workspace.outer-refused-no-message:switched",
         "observation": {
           "sender": ["55f248ebab5b"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -554,7 +555,7 @@
         "id": "linear-select-workspace.method-not-found:switched",
         "observation": {
           "sender": ["d85b70dd191e"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -566,7 +567,7 @@
         "id": "linear-select-workspace.transport-rejection:switched",
         "observation": {
           "sender": ["cc85f4131ab5"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },
@@ -578,7 +579,7 @@
         "id": "linear-select-workspace.transport-rejection-no-message:switched",
         "observation": {
           "sender": ["87ae939e1ef2"],
-          "payloads": ["99a34c4ee1d1"],
+          "payloads": ["ea687d1f2a99"],
           "settlements": {
             "select-b": "eb79a9b3682a"
           },

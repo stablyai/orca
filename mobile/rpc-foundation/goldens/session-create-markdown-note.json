@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "4118eea1175cba0f15174072f5715f9054ded09a4cb0c359fc4ee41ad00e9440",
   "platform": "darwin",
@@ -17,14 +17,6 @@
       "name": "fetch-session-tabs",
       "value": {},
       "sent": 4
-    },
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "37cca55d53d5": {
-      "name": "files.open#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}"
     },
     "4267c22fd1f9": {
       "name": "files.createFile#1",
@@ -61,6 +53,16 @@
         }
       }
     },
+    "4c5f889d4eb7": {
+      "name": "files.createFile#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}",
+      "sent": 3
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
+    },
     "8bdc2aec524d": {
       "name": "worktree.show#1",
       "args": [
@@ -96,10 +98,6 @@
         }
       }
     },
-    "9199aee60486": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
-    },
     "a56852d6836b": {
       "name": "status.get#1",
       "args": [
@@ -132,6 +130,11 @@
           }
         }
       }
+    },
+    "ca3214963232": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\"}}",
+      "sent": 4
     },
     "d38c135a5752": {
       "name": "files.open#1",
@@ -175,9 +178,10 @@
         "$rpc": "null"
       }
     },
-    "e344f453f8a0": {
-      "name": "files.createFile#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}"
+    "e7e6fb5e264b": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 2
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -195,7 +199,7 @@
         "id": "created",
         "observation": {
           "sender": ["a56852d6836b", "8bdc2aec524d", "4267c22fd1f9", "d38c135a5752"],
-          "payloads": ["1e5b32902af7", "9199aee60486", "e344f453f8a0", "37cca55d53d5"],
+          "payloads": ["852980e2efc0", "e7e6fb5e264b", "4c5f889d4eb7", "ca3214963232"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },

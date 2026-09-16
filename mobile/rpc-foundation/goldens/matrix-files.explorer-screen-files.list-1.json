@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "160421b989563424531fc893a115b95b399d1524ebaf1c91caa8b2862b52eb07",
   "scenarioSha256": "38b5590173c1f6791d1b35c0f036e2f844ed4b0e39c880e8e376c5f314adaade",
   "platform": "darwin",
@@ -102,10 +102,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "1a3946e517d4": {
-      "name": "files.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}"
     },
     "1ab1c4e91b2b": {
       "name": "files.list#1",
@@ -403,6 +399,11 @@
         }
       }
     },
+    "87ae27687a19": {
+      "name": "files.readDir#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}",
+      "sent": 1
+    },
     "8966ebfaf515": {
       "crash": {
         "$rpc": "null"
@@ -468,10 +469,6 @@
       "rows": [],
       "text": ["Files", "orca-files", "files is not iterable", "Retry"]
     },
-    "b5b1bc83b44d": {
-      "name": "files.readDir#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
-    },
     "b7a3bc68b28f": {
       "name": "files.list#1",
       "args": [
@@ -517,6 +514,11 @@
       "labels": ["Back to session"],
       "rows": ["dir:src", "file:README.md"],
       "text": ["Files", "orca-files", " - Showing first 5000"]
+    },
+    "c3a91710450a": {
+      "name": "files.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}",
+      "sent": 2
     },
     "e91880eefe86": {
       "crash": {
@@ -616,7 +618,7 @@
         "id": "files-explorer-legacy-fallback.prelude:loading",
         "observation": {
           "sender": ["195987bc4ef2"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -628,7 +630,7 @@
         "id": "files-explorer-legacy-fallback.normal:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "80bd28a48dda"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -640,7 +642,7 @@
         "id": "files-explorer-legacy-fallback.result-absent:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "b7a3bc68b28f"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -652,7 +654,7 @@
         "id": "files-explorer-legacy-fallback.result-null:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "f8568eb054ee"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -664,7 +666,7 @@
         "id": "files-explorer-legacy-fallback.inner-ok-missing:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "f08f593a8be1"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -676,7 +678,7 @@
         "id": "files-explorer-legacy-fallback.inner-false-string-error:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "172ce972ddef"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -688,7 +690,7 @@
         "id": "files-explorer-legacy-fallback.inner-false-object-error:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "6d857847180e"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -700,7 +702,7 @@
         "id": "files-explorer-legacy-fallback.outer-refused:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "7331b73c2e67"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -712,7 +714,7 @@
         "id": "files-explorer-legacy-fallback.outer-refused-no-message:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "86cd436cbbb4"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -724,7 +726,7 @@
         "id": "files-explorer-legacy-fallback.method-not-found:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "21c8265367a7"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -736,7 +738,7 @@
         "id": "files-explorer-legacy-fallback.transport-rejection:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "4d91e2cd49e7"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -748,7 +750,7 @@
         "id": "files-explorer-legacy-fallback.transport-rejection-no-message:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "1ab1c4e91b2b"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

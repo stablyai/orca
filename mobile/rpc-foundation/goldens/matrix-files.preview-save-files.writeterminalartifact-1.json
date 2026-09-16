@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "8d443bda91fe5a1fa74910d525bb2ec40f639109bc71afbd42bccd949b3d463f",
   "platform": "darwin",
@@ -329,9 +329,10 @@
         }
       }
     },
-    "a3886e3a9791": {
-      "name": "files.writeTerminalArtifact#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.writeTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\",\"content\":\"next\"}}"
+    "a3bce9470bbb": {
+      "name": "files.readTerminalArtifact#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}",
+      "sent": 1
     },
     "a947768bc0ed": {
       "status": "rejected",
@@ -470,9 +471,10 @@
         }
       }
     },
-    "e0401d205ea2": {
-      "name": "files.readTerminalArtifact#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}"
+    "d76588bfa9bd": {
+      "name": "files.writeTerminalArtifact#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.writeTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\",\"content\":\"next\"}}",
+      "sent": 2
     },
     "e391aec81b96": {
       "name": "files.readTerminalArtifact#1",
@@ -546,7 +548,7 @@
         "id": "files-save-verified.prelude:verify-pending",
         "observation": {
           "sender": ["e81d5596c201"],
-          "payloads": ["e0401d205ea2"],
+          "payloads": ["a3bce9470bbb"],
           "settlements": {
             "save": "9270aeb7d9c6"
           },
@@ -558,7 +560,7 @@
         "id": "files-save-verified.normal:settled",
         "observation": {
           "sender": ["e391aec81b96", "7875007ef392"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "54a6055a16b5"
           },
@@ -570,7 +572,7 @@
         "id": "files-save-verified.result-absent:settled",
         "observation": {
           "sender": ["e391aec81b96", "a1ef4333ebe3"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "54a6055a16b5"
           },
@@ -582,7 +584,7 @@
         "id": "files-save-verified.result-null:settled",
         "observation": {
           "sender": ["e391aec81b96", "c889a22fe351"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "54a6055a16b5"
           },
@@ -594,7 +596,7 @@
         "id": "files-save-verified.inner-ok-missing:settled",
         "observation": {
           "sender": ["e391aec81b96", "78be845b88ca"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "54a6055a16b5"
           },
@@ -606,7 +608,7 @@
         "id": "files-save-verified.inner-false-string-error:settled",
         "observation": {
           "sender": ["e391aec81b96", "82f499ca91c8"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "54a6055a16b5"
           },
@@ -618,7 +620,7 @@
         "id": "files-save-verified.inner-false-object-error:settled",
         "observation": {
           "sender": ["e391aec81b96", "bddbfe5ee1aa"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "54a6055a16b5"
           },
@@ -630,7 +632,7 @@
         "id": "files-save-verified.outer-refused:settled",
         "observation": {
           "sender": ["e391aec81b96", "2e3484ef7995"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -642,7 +644,7 @@
         "id": "files-save-verified.outer-refused-no-message:settled",
         "observation": {
           "sender": ["e391aec81b96", "c09d56029b09"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -654,7 +656,7 @@
         "id": "files-save-verified.method-not-found:settled",
         "observation": {
           "sender": ["e391aec81b96", "4db44f048a4d"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "15467bba2d60"
           },
@@ -666,7 +668,7 @@
         "id": "files-save-verified.transport-rejection:settled",
         "observation": {
           "sender": ["e391aec81b96", "3a281590ccf7"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "a947768bc0ed"
           },
@@ -678,7 +680,7 @@
         "id": "files-save-verified.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["e391aec81b96", "24195166cf4d"],
-          "payloads": ["e0401d205ea2", "a3886e3a9791"],
+          "payloads": ["a3bce9470bbb", "d76588bfa9bd"],
           "settlements": {
             "save": "c7584e82c72f"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "70f601caeaee957bd3b172fc0fc12e85d6e2d6bed7683c86869559c6c9f25834",
   "platform": "darwin",
@@ -79,10 +79,6 @@
           }
         }
       }
-    },
-    "27e92f99be15": {
-      "name": "linear.status#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
     },
     "31bffe41a47f": {
       "name": "settings.get#1",
@@ -251,11 +247,12 @@
         }
       }
     },
-    "42701bb4f394": {
-      "name": "preflight.check#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-    },
     "44136fa355b3": {},
+    "4872493b1fb7": {
+      "name": "preflight.check#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
+      "sent": 3
+    },
     "569aea0064f4": {
       "name": "linear.status#1",
       "args": [
@@ -371,6 +368,11 @@
         }
       }
     },
+    "75ef90fdbf02": {
+      "name": "linear.status#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
+      "sent": 3
+    },
     "79b8c1b0d1d1": {
       "host-1": ["github"]
     },
@@ -412,10 +414,6 @@
           }
         }
       }
-    },
-    "7ddcb1852b39": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "8f1426c2f53b": {
       "name": "providers",
@@ -555,6 +553,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ee74dff8b8a2": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 3
     }
   },
   "recording": {
@@ -564,7 +567,7 @@
         "id": "settings-home-providers-fulfilled.prelude:settings-pending",
         "observation": {
           "sender": ["da2c3b49481f", "66bc794cca63", "569aea0064f4"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -576,7 +579,7 @@
         "id": "settings-home-providers-fulfilled.normal:settled",
         "observation": {
           "sender": ["7dadf370725c", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -588,7 +591,7 @@
         "id": "settings-home-providers-fulfilled.result-absent:settled",
         "observation": {
           "sender": ["d08bd2846cf7", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -600,7 +603,7 @@
         "id": "settings-home-providers-fulfilled.result-null:settled",
         "observation": {
           "sender": ["40b5654c1d45", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -612,7 +615,7 @@
         "id": "settings-home-providers-fulfilled.inner-ok-missing:settled",
         "observation": {
           "sender": ["272a1c90c400", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -624,7 +627,7 @@
         "id": "settings-home-providers-fulfilled.inner-false-string-error:settled",
         "observation": {
           "sender": ["6493002b4410", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -636,7 +639,7 @@
         "id": "settings-home-providers-fulfilled.inner-false-object-error:settled",
         "observation": {
           "sender": ["c14c60dab8a3", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -648,7 +651,7 @@
         "id": "settings-home-providers-fulfilled.outer-refused:settled",
         "observation": {
           "sender": ["090d7111bcf7", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -660,7 +663,7 @@
         "id": "settings-home-providers-fulfilled.outer-refused-no-message:settled",
         "observation": {
           "sender": ["31bffe41a47f", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -672,7 +675,7 @@
         "id": "settings-home-providers-fulfilled.method-not-found:settled",
         "observation": {
           "sender": ["3870e54005de", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -684,7 +687,7 @@
         "id": "settings-home-providers-fulfilled.transport-rejection:settled",
         "observation": {
           "sender": ["3c9d36434dd9", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -696,7 +699,7 @@
         "id": "settings-home-providers-fulfilled.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["68046551307c", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },

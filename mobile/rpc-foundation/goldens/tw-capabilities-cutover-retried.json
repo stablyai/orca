@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "fb9c0e4b7c34f9bd1bd355b606c6ba75a7583cff3788000b7ed013612f5574fe",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
     "32354557bece": {
       "capabilities": "unprobed"
     },
@@ -28,6 +24,11 @@
         "tasksSupported": true,
         "worktreeCreateIdempotency": false
       }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -78,9 +79,10 @@
         }
       }
     },
-    "c0c86e67c300": {
+    "b33a14df0df6": {
       "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     },
     "c9c0513fdcb9": {
       "name": "status.get#2",
@@ -159,7 +161,7 @@
         "id": "reprobing-after-cutover",
         "observation": {
           "sender": ["edf54746317d", "c9c0513fdcb9"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300"],
+          "payloads": ["852980e2efc0", "b33a14df0df6"],
           "settlements": {
             "probe": "9270aeb7d9c6",
             "migrate": "eb79a9b3682a"
@@ -172,7 +174,7 @@
         "id": "probed-on-replacement",
         "observation": {
           "sender": ["edf54746317d", "ae9ff6b74ec1"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300"],
+          "payloads": ["852980e2efc0", "b33a14df0df6"],
           "settlements": {
             "probe": "a8bcef1e95ed",
             "migrate": "eb79a9b3682a"

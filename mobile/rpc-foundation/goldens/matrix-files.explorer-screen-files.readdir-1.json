@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "160421b989563424531fc893a115b95b399d1524ebaf1c91caa8b2862b52eb07",
   "scenarioSha256": "8c1fa604104c5551b8418af225c9420b1292f0c55b392f847985947c66749959",
   "platform": "darwin",
@@ -53,10 +53,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "1a3946e517d4": {
-      "name": "files.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}"
     },
     "1fac8f3b8f44": {
       "crash": {
@@ -403,6 +399,11 @@
         }
       }
     },
+    "87ae27687a19": {
+      "name": "files.readDir#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}",
+      "sent": 1
+    },
     "91637dc6ae5b": {
       "name": "files.readDir#1",
       "args": [
@@ -518,10 +519,6 @@
         }
       }
     },
-    "b5b1bc83b44d": {
-      "name": "files.readDir#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
-    },
     "b85511fb8929": {
       "crash": {
         "$rpc": "null"
@@ -573,6 +570,11 @@
         }
       }
     },
+    "c3a91710450a": {
+      "name": "files.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}",
+      "sent": 2
+    },
     "e91880eefe86": {
       "crash": {
         "$rpc": "null"
@@ -612,7 +614,7 @@
         "id": "files-explorer-legacy-fallback.prelude:loading",
         "observation": {
           "sender": ["195987bc4ef2"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -624,7 +626,7 @@
         "id": "files-explorer-legacy-fallback.normal:legacy-listed",
         "observation": {
           "sender": ["23a7ef6123a7"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -636,7 +638,7 @@
         "id": "files-explorer-legacy-fallback.result-absent:legacy-listed",
         "observation": {
           "sender": ["995efbb97b13"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -648,7 +650,7 @@
         "id": "files-explorer-legacy-fallback.result-null:legacy-listed",
         "observation": {
           "sender": ["2d716277e0b4"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -660,7 +662,7 @@
         "id": "files-explorer-legacy-fallback.inner-ok-missing:legacy-listed",
         "observation": {
           "sender": ["7fd035a057b5"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -672,7 +674,7 @@
         "id": "files-explorer-legacy-fallback.inner-false-string-error:legacy-listed",
         "observation": {
           "sender": ["ba58d31f3c54"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -684,7 +686,7 @@
         "id": "files-explorer-legacy-fallback.inner-false-object-error:legacy-listed",
         "observation": {
           "sender": ["91637dc6ae5b"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -696,7 +698,7 @@
         "id": "files-explorer-legacy-fallback.outer-refused:legacy-listed",
         "observation": {
           "sender": ["6660284d98a2"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -708,7 +710,7 @@
         "id": "files-explorer-legacy-fallback.outer-refused-no-message:legacy-listed",
         "observation": {
           "sender": ["4f4a81c91e23"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -720,7 +722,7 @@
         "id": "files-explorer-legacy-fallback.method-not-found:legacy-listed",
         "observation": {
           "sender": ["30859af566b0", "80bd28a48dda"],
-          "payloads": ["b5b1bc83b44d", "1a3946e517d4"],
+          "payloads": ["87ae27687a19", "c3a91710450a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -732,7 +734,7 @@
         "id": "files-explorer-legacy-fallback.transport-rejection:legacy-listed",
         "observation": {
           "sender": ["b3e7934618ec"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -744,7 +746,7 @@
         "id": "files-explorer-legacy-fallback.transport-rejection-no-message:legacy-listed",
         "observation": {
           "sender": ["4f61e2e0cdf7"],
-          "payloads": ["b5b1bc83b44d"],
+          "payloads": ["87ae27687a19"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

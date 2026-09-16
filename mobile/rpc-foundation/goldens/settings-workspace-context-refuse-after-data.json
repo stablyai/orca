@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "76793a56e7b9e596d8c42e9a5a1c47337db32d7437bec2e41d6e7253943f3fd8",
   "platform": "darwin",
@@ -97,14 +97,6 @@
         "startedAt": 0
       }
     },
-    "0fb6ff3590e2": {
-      "name": "preflight.check#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-    },
-    "13028e692551": {
-      "name": "preflight.check#2",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-    },
     "234fabe27913": {
       "name": "preflight.check#1",
       "args": [
@@ -141,6 +133,16 @@
       },
       "trust": {}
     },
+    "2e6a7013ce61": {
+      "name": "ui.get#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}",
+      "sent": 4
+    },
+    "31184e123046": {
+      "name": "linear.status#2",
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
+      "sent": 8
+    },
     "39bfd36b44ed": {
       "name": "ui.get#2",
       "args": [
@@ -165,14 +167,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "3fc2a1b54e13": {
-      "name": "settings.get#2",
-      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "4335d4b6568f": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "4938921744c6": {
       "name": "ui.get#1",
@@ -206,6 +200,11 @@
           }
         }
       }
+    },
+    "4f682962c3c3": {
+      "name": "preflight.check#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
+      "sent": 4
     },
     "563e4c82b345": {
       "name": "preflight.check#1",
@@ -267,6 +266,11 @@
         "startedAt": 0
       }
     },
+    "6d3dba7b22b6": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 4
+    },
     "7126d29ddcda": {
       "name": "ui.get#2",
       "args": [
@@ -300,9 +304,10 @@
         }
       }
     },
-    "76de732c569f": {
-      "name": "linear.status#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    "762a39050969": {
+      "name": "settings.get#2",
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 8
     },
     "789980530ae3": {
       "name": "linear.status#1",
@@ -362,6 +367,11 @@
         "startedAt": 0
       }
     },
+    "80712cb13084": {
+      "name": "linear.status#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
+      "sent": 4
+    },
     "822040616fbb": {
       "name": "settings.get#1",
       "args": [
@@ -400,18 +410,6 @@
           }
         }
       }
-    },
-    "82ff8123c1fe": {
-      "name": "ui.get#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
-    },
-    "847430ffa968": {
-      "name": "linear.status#2",
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-    },
-    "84b10f34b617": {
-      "name": "ui.get#2",
-      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     },
     "a4760ef5a9f4": {
       "name": "linear.status#1",
@@ -531,6 +529,11 @@
         }
       }
     },
+    "dee8051f4ae6": {
+      "name": "ui.get#2",
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}",
+      "sent": 8
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -538,6 +541,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f1c1823caa54": {
+      "name": "preflight.check#2",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
+      "sent": 8
     },
     "f6a09f8c5b85": {
       "providers": [],
@@ -554,7 +562,7 @@
         "id": "settings-pending",
         "observation": {
           "sender": ["234fabe27913", "a4760ef5a9f4", "090c88478661", "5fbdd64c75bc"],
-          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "payloads": ["4f682962c3c3", "80712cb13084", "6d3dba7b22b6", "2e6a7013ce61"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -566,7 +574,7 @@
         "id": "settled",
         "observation": {
           "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
-          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "payloads": ["4f682962c3c3", "80712cb13084", "6d3dba7b22b6", "2e6a7013ce61"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -578,7 +586,7 @@
         "id": "data-present",
         "observation": {
           "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
-          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "payloads": ["4f682962c3c3", "80712cb13084", "6d3dba7b22b6", "2e6a7013ce61"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -600,14 +608,14 @@
             "39bfd36b44ed"
           ],
           "payloads": [
-            "0fb6ff3590e2",
-            "76de732c569f",
-            "4335d4b6568f",
-            "82ff8123c1fe",
-            "13028e692551",
-            "847430ffa968",
-            "3fc2a1b54e13",
-            "84b10f34b617"
+            "4f682962c3c3",
+            "80712cb13084",
+            "6d3dba7b22b6",
+            "2e6a7013ce61",
+            "f1c1823caa54",
+            "31184e123046",
+            "762a39050969",
+            "dee8051f4ae6"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -632,14 +640,14 @@
             "7126d29ddcda"
           ],
           "payloads": [
-            "0fb6ff3590e2",
-            "76de732c569f",
-            "4335d4b6568f",
-            "82ff8123c1fe",
-            "13028e692551",
-            "847430ffa968",
-            "3fc2a1b54e13",
-            "84b10f34b617"
+            "4f682962c3c3",
+            "80712cb13084",
+            "6d3dba7b22b6",
+            "2e6a7013ce61",
+            "f1c1823caa54",
+            "31184e123046",
+            "762a39050969",
+            "dee8051f4ae6"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",

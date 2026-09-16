@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "b65bad4f8c0ae0b686f6c3db93bd43ffa072ae426f978f1a86ad8008fb24fa24",
   "platform": "darwin",
@@ -87,9 +87,10 @@
       "status": "pending",
       "startedAt": 0
     },
-    "c7ae0a3a6e6e": {
+    "ab2ee9c092a5": {
       "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":12}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":12}}",
+      "sent": 1
     },
     "fbc958e4d46e": {
       "status": "fulfilled",
@@ -107,7 +108,7 @@
         "id": "pending",
         "observation": {
           "sender": ["2c746c8732cd"],
-          "payloads": ["c7ae0a3a6e6e"],
+          "payloads": ["ab2ee9c092a5"],
           "settlements": {
             "link": "9270aeb7d9c6"
           },
@@ -119,7 +120,7 @@
         "id": "settled",
         "observation": {
           "sender": ["86441203344c"],
-          "payloads": ["c7ae0a3a6e6e"],
+          "payloads": ["ab2ee9c092a5"],
           "settlements": {
             "link": "fbc958e4d46e"
           },

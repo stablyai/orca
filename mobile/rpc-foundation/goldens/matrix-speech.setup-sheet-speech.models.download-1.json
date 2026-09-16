@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "6c0a9d2f2e28acd10c3a1f03888c23961e95bff02af10fe0e703d34fe6d60e8b",
   "platform": "darwin",
@@ -75,10 +75,6 @@
           }
         }
       }
-    },
-    "0ea7d26d0706": {
-      "name": "speech.dictation.setup#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.setup\",\"params\":{\"enabled\":true,\"modelId\":\"whisper-small\"}}"
     },
     "13c598d21f30": {
       "name": "speech.models.download#1",
@@ -337,6 +333,16 @@
         }
       }
     },
+    "73dfd7a0c915": {
+      "name": "speech.dictation.setup#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.setup\",\"params\":{\"enabled\":true,\"modelId\":\"whisper-small\"}}",
+      "sent": 4
+    },
+    "74cafa3ceeba": {
+      "name": "speech.models.download#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.download\",\"params\":{\"modelId\":\"whisper-small\"}}",
+      "sent": 2
+    },
     "7adbf3e936d4": {
       "name": "speech.models.download#1",
       "args": [
@@ -397,6 +403,11 @@
         ],
         "selectedModelId": "whisper-small"
       }
+    },
+    "90128f3a26be": {
+      "name": "speech.models.delete#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.delete\",\"params\":{\"modelId\":\"whisper-small\"}}",
+      "sent": 3
     },
     "94b559509089": {
       "name": "speech.models.download#1",
@@ -631,17 +642,10 @@
         "$rpc": "undefined"
       }
     },
-    "f14b5bb0c614": {
-      "name": "speech.models.delete#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.delete\",\"params\":{\"modelId\":\"whisper-small\"}}"
-    },
-    "f7594a980fe2": {
-      "name": "speech.models.download#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.download\",\"params\":{\"modelId\":\"whisper-small\"}}"
-    },
-    "f7f1557b866b": {
+    "f98fd51d5ce2": {
       "name": "speech.models.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}",
+      "sent": 1
     },
     "fc5fb77f49bb": {
       "status": "fulfilled",
@@ -661,7 +665,7 @@
         "id": "speech-setup-sheet-fulfilled.normal:settled",
         "observation": {
           "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
@@ -676,7 +680,7 @@
         "id": "speech-setup-sheet-fulfilled.result-absent:settled",
         "observation": {
           "sender": ["4670310cd94e", "625909c6ba57", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
@@ -691,7 +695,7 @@
         "id": "speech-setup-sheet-fulfilled.result-null:settled",
         "observation": {
           "sender": ["4670310cd94e", "234c35cef130", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
@@ -706,7 +710,7 @@
         "id": "speech-setup-sheet-fulfilled.inner-ok-missing:settled",
         "observation": {
           "sender": ["4670310cd94e", "1c35c145196b", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
@@ -721,7 +725,7 @@
         "id": "speech-setup-sheet-fulfilled.inner-false-string-error:settled",
         "observation": {
           "sender": ["4670310cd94e", "070886afd931", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
@@ -736,7 +740,7 @@
         "id": "speech-setup-sheet-fulfilled.inner-false-object-error:settled",
         "observation": {
           "sender": ["4670310cd94e", "99815410184d", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
@@ -751,7 +755,7 @@
         "id": "speech-setup-sheet-fulfilled.outer-refused:settled",
         "observation": {
           "sender": ["4670310cd94e", "13c598d21f30", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "32a7c0ae7918",
@@ -766,7 +770,7 @@
         "id": "speech-setup-sheet-fulfilled.outer-refused-no-message:settled",
         "observation": {
           "sender": ["4670310cd94e", "5a8462b1c151", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "d1b9d465d73d",
@@ -781,7 +785,7 @@
         "id": "speech-setup-sheet-fulfilled.method-not-found:settled",
         "observation": {
           "sender": ["4670310cd94e", "94b559509089", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "b948e8307e81",
@@ -796,7 +800,7 @@
         "id": "speech-setup-sheet-fulfilled.transport-rejection:settled",
         "observation": {
           "sender": ["4670310cd94e", "bd088da40a2e", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "a947768bc0ed",
@@ -811,7 +815,7 @@
         "id": "speech-setup-sheet-fulfilled.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["4670310cd94e", "7adbf3e936d4", "c41375ac7391", "374a424a4fcb"],
-          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "payloads": ["f98fd51d5ce2", "74cafa3ceeba", "90128f3a26be", "73dfd7a0c915"],
           "settlements": {
             "list": "a2879fd6371d",
             "download": "c7584e82c72f",

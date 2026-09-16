@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "ae07579881829263a2b5590249d4119f5d9f4ef3877149ac3b780ad985413f00",
   "platform": "darwin",
@@ -46,10 +46,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "02a9b21b0da8": {
-      "name": "gitlab.addMRComment#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addMRComment\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
     },
     "0846de0f949a": {
       "draft": "a comment",
@@ -856,6 +852,11 @@
         }
       }
     },
+    "e13ed6b2ab74": {
+      "name": "gitlab.addMRComment#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addMRComment\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}",
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -887,7 +888,7 @@
         "id": "tk-item-comment-gitlab-mr.normal:comment-settled",
         "observation": {
           "sender": ["c6b7aaa4bd08"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -906,7 +907,7 @@
         "id": "tk-item-comment-gitlab-mr.result-absent:comment-settled",
         "observation": {
           "sender": ["20abdda2b770"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -919,7 +920,7 @@
         "id": "tk-item-comment-gitlab-mr.result-null:comment-settled",
         "observation": {
           "sender": ["c89ea6e7700c"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -932,7 +933,7 @@
         "id": "tk-item-comment-gitlab-mr.inner-ok-missing:comment-settled",
         "observation": {
           "sender": ["d8a0bdf0682e"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -951,7 +952,7 @@
         "id": "tk-item-comment-gitlab-mr.inner-false-string-error:comment-settled",
         "observation": {
           "sender": ["e0e1142aee10"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -964,7 +965,7 @@
         "id": "tk-item-comment-gitlab-mr.inner-false-object-error:comment-settled",
         "observation": {
           "sender": ["d447b467c652"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -977,7 +978,7 @@
         "id": "tk-item-comment-gitlab-mr.outer-refused:comment-settled",
         "observation": {
           "sender": ["3e5facf48993"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -990,7 +991,7 @@
         "id": "tk-item-comment-gitlab-mr.outer-refused-no-message:comment-settled",
         "observation": {
           "sender": ["7f2697ace03b"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1003,7 +1004,7 @@
         "id": "tk-item-comment-gitlab-mr.method-not-found:comment-settled",
         "observation": {
           "sender": ["ad694b26e210"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1016,7 +1017,7 @@
         "id": "tk-item-comment-gitlab-mr.transport-rejection:comment-settled",
         "observation": {
           "sender": ["01a6101342a9"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1029,7 +1030,7 @@
         "id": "tk-item-comment-gitlab-mr.transport-rejection-no-message:comment-settled",
         "observation": {
           "sender": ["e07e078ae271"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"

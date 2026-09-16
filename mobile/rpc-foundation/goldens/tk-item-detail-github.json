@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "c0ef16b959002e4a3c5347114a0844b95670e274ef010d910b6671ac5f49e783",
   "scenarioSha256": "5fbff075d7da476f93c2a7da871c2afacc67822d1317acf6c23000195e2b2576",
   "platform": "darwin",
@@ -145,6 +145,11 @@
       "value": true,
       "sent": 0
     },
+    "7a351201fa97": {
+      "name": "github.workItemDetails#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"type\":\"pr\"}}",
+      "sent": 1
+    },
     "9bd1de5d9753": {
       "name": "detailPayload",
       "value": {
@@ -156,10 +161,6 @@
       "name": "detailError",
       "value": "",
       "sent": 0
-    },
-    "d46a22dbc133": {
-      "name": "github.workItemDetails#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"type\":\"pr\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -177,7 +178,7 @@
         "id": "mounted",
         "observation": {
           "sender": ["54ee429ef116"],
-          "payloads": ["d46a22dbc133"],
+          "payloads": ["7a351201fa97"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

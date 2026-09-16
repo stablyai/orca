@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "3199c745e22973b432b0a36c34bb0bdda994334a4a0cd7ad2daf8b172625ce8d",
   "platform": "darwin",
@@ -155,10 +155,6 @@
         "startedAt": 0
       }
     },
-    "2aac570a2011": {
-      "name": "ssh.listTargetSummaries#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
-    },
     "2ebe4d776f9b": {
       "name": "repo.list#1",
       "args": [
@@ -222,11 +218,12 @@
         }
       }
     },
-    "4335d4b6568f": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
     "44136fa355b3": {},
+    "5730368193ee": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 1
+    },
     "6134b73f18d0": {
       "repoColorsByName": [
         ["Local", "#6366f1"],
@@ -242,9 +239,10 @@
         ["Remote", "repo-2"]
       ]
     },
-    "6bdbf70bafa2": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    "6d3dba7b22b6": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 4
     },
     "6e5c6593dad8": {
       "name": "repo.list#1",
@@ -492,6 +490,11 @@
         }
       }
     },
+    "c78ad1abf9d8": {
+      "name": "ssh.listTargetSummaries#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}",
+      "sent": 4
+    },
     "cc1facdf008c": {
       "name": "repo.list#1",
       "args": [
@@ -522,10 +525,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "df7cbc246ac0": {
-      "name": "host.platform#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
     },
     "e341bd05e614": {
       "name": "repo.list#1",
@@ -648,6 +647,11 @@
           }
         }
       }
+    },
+    "fc07cf302dbe": {
+      "name": "host.platform#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}",
+      "sent": 4
     }
   },
   "recording": {
@@ -657,7 +661,7 @@
         "id": "settings-repo-metadata-fulfilled.normal:settings-pending",
         "observation": {
           "sender": ["b40605df86b7", "f7539bb05693", "090c88478661", "02449e890487"],
-          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
+          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -670,7 +674,7 @@
         "id": "settings-repo-metadata-fulfilled.normal:settled",
         "observation": {
           "sender": ["b40605df86b7", "f7539bb05693", "822040616fbb", "7f85f28c922e"],
-          "payloads": ["6bdbf70bafa2", "2aac570a2011", "4335d4b6568f", "df7cbc246ac0"],
+          "payloads": ["5730368193ee", "c78ad1abf9d8", "6d3dba7b22b6", "fc07cf302dbe"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -690,7 +694,7 @@
         "id": "settings-repo-metadata-fulfilled.result-absent:settings-pending",
         "observation": {
           "sender": ["2ebe4d776f9b"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -703,7 +707,7 @@
         "id": "settings-repo-metadata-fulfilled.result-absent:settled",
         "observation": {
           "sender": ["2ebe4d776f9b"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -716,7 +720,7 @@
         "id": "settings-repo-metadata-fulfilled.result-null:settings-pending",
         "observation": {
           "sender": ["38e790fd9e9c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -729,7 +733,7 @@
         "id": "settings-repo-metadata-fulfilled.result-null:settled",
         "observation": {
           "sender": ["38e790fd9e9c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -742,7 +746,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-ok-missing:settings-pending",
         "observation": {
           "sender": ["06b63e0d9986"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -755,7 +759,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-ok-missing:settled",
         "observation": {
           "sender": ["06b63e0d9986"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -768,7 +772,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-string-error:settings-pending",
         "observation": {
           "sender": ["f96e83d33565"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -781,7 +785,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-string-error:settled",
         "observation": {
           "sender": ["f96e83d33565"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -794,7 +798,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-object-error:settings-pending",
         "observation": {
           "sender": ["9d3fa0db2665"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -807,7 +811,7 @@
         "id": "settings-repo-metadata-fulfilled.inner-false-object-error:settled",
         "observation": {
           "sender": ["9d3fa0db2665"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -820,7 +824,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused:settings-pending",
         "observation": {
           "sender": ["b9f0f1e94cd9"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -833,7 +837,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused:settled",
         "observation": {
           "sender": ["b9f0f1e94cd9"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -846,7 +850,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused-no-message:settings-pending",
         "observation": {
           "sender": ["06fc8e7b85d5"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -859,7 +863,7 @@
         "id": "settings-repo-metadata-fulfilled.outer-refused-no-message:settled",
         "observation": {
           "sender": ["06fc8e7b85d5"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -872,7 +876,7 @@
         "id": "settings-repo-metadata-fulfilled.method-not-found:settings-pending",
         "observation": {
           "sender": ["e341bd05e614"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -885,7 +889,7 @@
         "id": "settings-repo-metadata-fulfilled.method-not-found:settled",
         "observation": {
           "sender": ["e341bd05e614"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -898,7 +902,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection:settings-pending",
         "observation": {
           "sender": ["6e5c6593dad8"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -911,7 +915,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection:settled",
         "observation": {
           "sender": ["6e5c6593dad8"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -924,7 +928,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection-no-message:settings-pending",
         "observation": {
           "sender": ["cc1facdf008c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -937,7 +941,7 @@
         "id": "settings-repo-metadata-fulfilled.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["cc1facdf008c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"

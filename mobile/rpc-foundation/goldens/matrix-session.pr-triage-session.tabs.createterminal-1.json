@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "0d06d27000a8f6ad66480a16c7b84e8464f4b6e1d775326aeae005926e134cb4",
   "platform": "darwin",
@@ -105,6 +105,11 @@
         "message": "outer refused",
         "isRpcDeliveryUnknown": false
       }
+    },
+    "39a17efe1de6": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
+      "sent": 1
     },
     "43aa948e3918": {
       "name": "terminal.send#1",
@@ -278,6 +283,11 @@
         "isRpcDeliveryUnknown": false
       }
     },
+    "c286eacee37b": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}",
+      "sent": 2
+    },
     "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
@@ -328,10 +338,6 @@
           }
         }
       }
-    },
-    "d3b1c8acd1dd": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     },
     "e15e98b4502f": {
       "name": "session.tabs.createTerminal#1",
@@ -447,10 +453,6 @@
           "ok": false
         }
       }
-    },
-    "f3199cb6db52": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}"
     },
     "f3edde9dd385": {
       "name": "session.tabs.createTerminal#1",
@@ -573,7 +575,7 @@
         "id": "pr-triage-launch.prelude:pending",
         "observation": {
           "sender": ["b5eced0566fb"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "9270aeb7d9c6"
           },
@@ -585,7 +587,7 @@
         "id": "pr-triage-launch.normal:launched",
         "observation": {
           "sender": ["d0f04fba35ce", "43aa948e3918"],
-          "payloads": ["d3b1c8acd1dd", "f3199cb6db52"],
+          "payloads": ["39a17efe1de6", "c286eacee37b"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -597,7 +599,7 @@
         "id": "pr-triage-launch.result-absent:launched",
         "observation": {
           "sender": ["e15e98b4502f"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "681fc4d59b92"
           },
@@ -609,7 +611,7 @@
         "id": "pr-triage-launch.result-null:launched",
         "observation": {
           "sender": ["13d5b62d9335"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "681fc4d59b92"
           },
@@ -621,7 +623,7 @@
         "id": "pr-triage-launch.inner-ok-missing:launched",
         "observation": {
           "sender": ["9bf5a66636e8"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "681fc4d59b92"
           },
@@ -633,7 +635,7 @@
         "id": "pr-triage-launch.inner-false-string-error:launched",
         "observation": {
           "sender": ["f3edde9dd385"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "681fc4d59b92"
           },
@@ -645,7 +647,7 @@
         "id": "pr-triage-launch.inner-false-object-error:launched",
         "observation": {
           "sender": ["fc9c768a4e5b"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "681fc4d59b92"
           },
@@ -657,7 +659,7 @@
         "id": "pr-triage-launch.outer-refused:launched",
         "observation": {
           "sender": ["0c54b1949d2e"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "32a7c0ae7918"
           },
@@ -669,7 +671,7 @@
         "id": "pr-triage-launch.outer-refused-no-message:launched",
         "observation": {
           "sender": ["ef42ebed8204"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "30ec57518c05"
           },
@@ -681,7 +683,7 @@
         "id": "pr-triage-launch.method-not-found:launched",
         "observation": {
           "sender": ["edecb88c17e4"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "b948e8307e81"
           },
@@ -693,7 +695,7 @@
         "id": "pr-triage-launch.transport-rejection:launched",
         "observation": {
           "sender": ["f8822a0cc5c3"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "a947768bc0ed"
           },
@@ -705,7 +707,7 @@
         "id": "pr-triage-launch.transport-rejection-no-message:launched",
         "observation": {
           "sender": ["4aada9ff077b"],
-          "payloads": ["d3b1c8acd1dd"],
+          "payloads": ["39a17efe1de6"],
           "settlements": {
             "launch": "c7584e82c72f"
           },

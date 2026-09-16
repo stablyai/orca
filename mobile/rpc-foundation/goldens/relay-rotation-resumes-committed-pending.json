@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
   "scenarioSha256": "96df784c1d56de3bdd04afe20ab019339c7d9a616528ca2617e2fffe4f0157c8",
   "platform": "darwin",
@@ -20,6 +20,11 @@
       },
       "pending": false,
       "version": 5
+    },
+    "723e3af65fac": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
+      "sent": 1
     },
     "760bb6245333": {
       "status": "fulfilled",
@@ -64,10 +69,6 @@
         "version": 5
       },
       "sent": 1
-    },
-    "beafd16aeb22": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
     },
     "c623ac0f092b": {
       "name": "pairing.getEndpoints#1",
@@ -131,7 +132,7 @@
         "id": "pending-install-adopted",
         "observation": {
           "sender": ["c623ac0f092b"],
-          "payloads": ["beafd16aeb22"],
+          "payloads": ["723e3af65fac"],
           "settlements": {
             "rotate": "760bb6245333"
           },

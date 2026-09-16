@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "941fcf202417c94ef546f5ee331983689d8b72397dac6f61dda944ca24abed9e",
   "platform": "darwin",
@@ -22,6 +22,16 @@
         "message": "Terminal input is locked",
         "isRpcDeliveryUnknown": false
       }
+    },
+    "39cabd8258a3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}",
+      "sent": 2
+    },
+    "495d8519301e": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
+      "sent": 1
     },
     "5f84c02b1f7b": {
       "name": "terminal.send#1",
@@ -107,17 +117,9 @@
         }
       }
     },
-    "a9a45875782f": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}"
-    },
     "da57c90b80d6": {
       "failure": "Terminal input is locked",
       "launched": "unlaunched"
-    },
-    "eb30e498d168": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     }
   },
   "recording": {
@@ -127,7 +129,7 @@
         "id": "input-locked",
         "observation": {
           "sender": ["6b1e36abce6b", "5f84c02b1f7b"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "0f026fafa7e1"
           },

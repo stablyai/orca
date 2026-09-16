@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
   "scenarioSha256": "e6429c235d8c0b0376f71fea7b47c3b9ff22b850c92922b85ff993ae8b6cd6d0",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "11dbb2f7ba6a": {
+      "name": "github.listLabels#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 2
+    },
     "14b04c3d1156": {
       "name": "itemAssignableUsersLoading",
       "value": true,
@@ -33,6 +38,11 @@
       ],
       "usersError": "",
       "usersLoading": false
+    },
+    "2c7c5fe4358d": {
+      "name": "github.listAssignableUsers#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 2
     },
     "30554accaab5": {
       "name": "itemAvailableLabels",
@@ -79,10 +89,6 @@
       "name": "itemBodyDraft",
       "value": "body",
       "sent": 0
-    },
-    "594a2904a1bc": {
-      "name": "github.listAssignableUsers#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
     "60ab7459b747": {
       "name": "itemLabelsLoading",
@@ -159,10 +165,6 @@
         "$rpc": "undefined"
       }
     },
-    "ef317c60c3c6": {
-      "name": "github.listLabels#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
     "f70626574f7a": {
       "name": "itemAvailableLabels",
       "value": [],
@@ -186,7 +188,7 @@
         "id": "mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

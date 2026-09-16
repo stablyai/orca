@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "d15c1f4e0f95b5c49a8f889d2d37458225293d7306c8439690d972d2df4c29c0",
   "platform": "darwin",
@@ -51,9 +51,10 @@
         }
       }
     },
-    "4a07826edb3b": {
+    "6df57490419a": {
       "name": "files.readTerminalArtifactPreview#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifactPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/shot.png\",\"grantId\":\"grant-1\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifactPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/shot.png\",\"grantId\":\"grant-1\"}}",
+      "sent": 1
     },
     "7659b8b575da": {
       "preview": {
@@ -80,7 +81,7 @@
         "id": "settled",
         "observation": {
           "sender": ["25b0318e985e"],
-          "payloads": ["4a07826edb3b"],
+          "payloads": ["6df57490419a"],
           "settlements": {
             "load": "eee847a9d90d"
           },

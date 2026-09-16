@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "5aaa104a652d4f10cd48ab742112cf59fca22f52bbf85ee3716505a9642fbe37",
   "platform": "darwin",
@@ -52,6 +52,11 @@
           "ok": false
         }
       }
+    },
+    "2e0a00540206": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}",
+      "sent": 1
     },
     "2eeacc921b96": {
       "name": "pairing.getEndpoints#2",
@@ -233,6 +238,11 @@
         }
       }
     },
+    "8ba03f7fcc7b": {
+      "name": "pairing.getEndpoints#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
+      "sent": 2
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -303,10 +313,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "b6e709c11a41": {
-      "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}"
     },
     "baf49bcdca70": {
       "name": "pairing.getEndpoints#1",
@@ -490,10 +496,6 @@
       "settledAt": 0,
       "value": "recovered"
     },
-    "f98de3f4f0c2": {
-      "name": "pairing.getEndpoints#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
-    },
     "fcb233bb6e13": {
       "name": "pairing.getEndpoints#1",
       "args": [
@@ -539,7 +541,7 @@
         "id": "relay-pairing-recovery-resume-committed.normal:recovered-on-resume",
         "observation": {
           "sender": ["c5d6533ca9ce"],
-          "payloads": ["b6e709c11a41"],
+          "payloads": ["2e0a00540206"],
           "settlements": {
             "recover": "f0723ea3ab16"
           },
@@ -557,7 +559,7 @@
         "id": "relay-pairing-recovery-resume-committed.result-absent:recovered-on-resume",
         "observation": {
           "sender": ["35b3ec66b615", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -569,7 +571,7 @@
         "id": "relay-pairing-recovery-resume-committed.result-absent:cleanup",
         "observation": {
           "sender": ["35b3ec66b615", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -581,7 +583,7 @@
         "id": "relay-pairing-recovery-resume-committed.result-null:recovered-on-resume",
         "observation": {
           "sender": ["4b671f98d808", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -593,7 +595,7 @@
         "id": "relay-pairing-recovery-resume-committed.result-null:cleanup",
         "observation": {
           "sender": ["4b671f98d808", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -605,7 +607,7 @@
         "id": "relay-pairing-recovery-resume-committed.inner-ok-missing:recovered-on-resume",
         "observation": {
           "sender": ["c02af6dd81bf", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -617,7 +619,7 @@
         "id": "relay-pairing-recovery-resume-committed.inner-ok-missing:cleanup",
         "observation": {
           "sender": ["c02af6dd81bf", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -629,7 +631,7 @@
         "id": "relay-pairing-recovery-resume-committed.inner-false-string-error:recovered-on-resume",
         "observation": {
           "sender": ["4db4ba57f248", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -641,7 +643,7 @@
         "id": "relay-pairing-recovery-resume-committed.inner-false-string-error:cleanup",
         "observation": {
           "sender": ["4db4ba57f248", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -653,7 +655,7 @@
         "id": "relay-pairing-recovery-resume-committed.inner-false-object-error:recovered-on-resume",
         "observation": {
           "sender": ["fcb233bb6e13", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -665,7 +667,7 @@
         "id": "relay-pairing-recovery-resume-committed.inner-false-object-error:cleanup",
         "observation": {
           "sender": ["fcb233bb6e13", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -677,7 +679,7 @@
         "id": "relay-pairing-recovery-resume-committed.outer-refused:recovered-on-resume",
         "observation": {
           "sender": ["a772bd8e8c4e", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -689,7 +691,7 @@
         "id": "relay-pairing-recovery-resume-committed.outer-refused:cleanup",
         "observation": {
           "sender": ["a772bd8e8c4e", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -701,7 +703,7 @@
         "id": "relay-pairing-recovery-resume-committed.outer-refused-no-message:recovered-on-resume",
         "observation": {
           "sender": ["baf49bcdca70", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -713,7 +715,7 @@
         "id": "relay-pairing-recovery-resume-committed.outer-refused-no-message:cleanup",
         "observation": {
           "sender": ["baf49bcdca70", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -725,7 +727,7 @@
         "id": "relay-pairing-recovery-resume-committed.method-not-found:recovered-on-resume",
         "observation": {
           "sender": ["10e679344b45", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -737,7 +739,7 @@
         "id": "relay-pairing-recovery-resume-committed.method-not-found:cleanup",
         "observation": {
           "sender": ["10e679344b45", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -749,7 +751,7 @@
         "id": "relay-pairing-recovery-resume-committed.transport-rejection:recovered-on-resume",
         "observation": {
           "sender": ["aede376f279f", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -761,7 +763,7 @@
         "id": "relay-pairing-recovery-resume-committed.transport-rejection:cleanup",
         "observation": {
           "sender": ["aede376f279f", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },
@@ -773,7 +775,7 @@
         "id": "relay-pairing-recovery-resume-committed.transport-rejection-no-message:recovered-on-resume",
         "observation": {
           "sender": ["83b560135719", "c4e8e63a5f9f"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "9270aeb7d9c6"
           },
@@ -785,7 +787,7 @@
         "id": "relay-pairing-recovery-resume-committed.transport-rejection-no-message:cleanup",
         "observation": {
           "sender": ["83b560135719", "2eeacc921b96"],
-          "payloads": ["b6e709c11a41", "f98de3f4f0c2"],
+          "payloads": ["2e0a00540206", "8ba03f7fcc7b"],
           "settlements": {
             "recover": "c8a7c6e1a485"
           },

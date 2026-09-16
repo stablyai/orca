@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "d2947158840576cbd0f0604ed3d37b0f446c63c6d439b4d1b7def7fe8524523d",
   "platform": "darwin",
@@ -87,10 +87,6 @@
         }
       }
     },
-    "a87f1f91dc98": {
-      "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
-    },
     "ab1a9ba6301c": {
       "admitted": [
         {
@@ -117,6 +113,11 @@
           "hostId": "host-1"
         }
       }
+    },
+    "c97fe566ef74": {
+      "name": "worktree.ps#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"supportsWorktreeVisibilitySourceDefaults\":true}}",
+      "sent": 1
     },
     "f97b6b46b1d5": {
       "name": "worktree.ps#1",
@@ -154,7 +155,7 @@
         "id": "catalog-pending",
         "observation": {
           "sender": ["f97b6b46b1d5"],
-          "payloads": ["a87f1f91dc98"],
+          "payloads": ["c97fe566ef74"],
           "settlements": {
             "fetch": "9270aeb7d9c6"
           },
@@ -166,7 +167,7 @@
         "id": "settled",
         "observation": {
           "sender": ["227f9e3de4fa"],
-          "payloads": ["a87f1f91dc98"],
+          "payloads": ["c97fe566ef74"],
           "settlements": {
             "fetch": "9948855e8b8d"
           },

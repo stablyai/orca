@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "5605a2984d7692aa80e5e38f804bdfed4b1ce8ac2102def5dc728b1a79dc1acf",
   "platform": "darwin",
@@ -126,6 +126,11 @@
       "settledAt": 0,
       "value": "origin/main"
     },
+    "1e728fd0846c": {
+      "name": "repo.baseRefDefault#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.baseRefDefault\",\"params\":{\"repo\":\"id:repo42\"}}",
+      "sent": 3
+    },
     "26accd69bc48": {
       "name": "repo.list#1",
       "args": [
@@ -150,6 +155,11 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "281aabb80148": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
+      "sent": 2
     },
     "2843e3ab21fc": {
       "name": "repo.baseRefDefault#1",
@@ -324,10 +334,6 @@
         "startedAt": 0
       }
     },
-    "594101d24d72": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
     "59ad0b14ed9f": {
       "name": "repo.baseRefDefault#1",
       "args": [
@@ -474,6 +480,11 @@
         "isRpcDeliveryUnknown": true
       }
     },
+    "ad49fec56c14": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 2
+    },
     "b46548195c7a": {
       "name": "repo.baseRefDefault#1",
       "args": [
@@ -542,14 +553,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "cd73fe3775d3": {
-      "name": "repo.baseRefDefault#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.baseRefDefault\",\"params\":{\"repo\":\"id:repo42\"}}"
-    },
-    "cec763c8abc6": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
     "deac258dd8b1": {
       "status": "rejected",
       "startedAt": 0,
@@ -615,7 +618,7 @@
         "id": "sc-base-ref-default.prelude:requests-pending",
         "observation": {
           "sender": ["535f7698e80e", "26accd69bc48"],
-          "payloads": ["cec763c8abc6", "594101d24d72"],
+          "payloads": ["281aabb80148", "ad49fec56c14"],
           "settlements": {
             "resolve": "9270aeb7d9c6"
           },
@@ -627,7 +630,7 @@
         "id": "sc-base-ref-default.prelude:barrier-settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "c6857d66bf1a"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "9270aeb7d9c6"
           },
@@ -639,7 +642,7 @@
         "id": "sc-base-ref-default.normal:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "b46548195c7a"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "198cce9909ce"
           },
@@ -651,7 +654,7 @@
         "id": "sc-base-ref-default.result-absent:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "634e13dcef43"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "ee20a1dc39e7"
           },
@@ -663,7 +666,7 @@
         "id": "sc-base-ref-default.result-null:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "59ad0b14ed9f"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "ee20a1dc39e7"
           },
@@ -675,7 +678,7 @@
         "id": "sc-base-ref-default.inner-ok-missing:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "0be93460f365"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "ee20a1dc39e7"
           },
@@ -687,7 +690,7 @@
         "id": "sc-base-ref-default.inner-false-string-error:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "2843e3ab21fc"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "ee20a1dc39e7"
           },
@@ -699,7 +702,7 @@
         "id": "sc-base-ref-default.inner-false-object-error:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "467d43e1ff0f"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "ee20a1dc39e7"
           },
@@ -711,7 +714,7 @@
         "id": "sc-base-ref-default.outer-refused:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "ea6b907523d7"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "32a7c0ae7918"
           },
@@ -723,7 +726,7 @@
         "id": "sc-base-ref-default.outer-refused-no-message:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "0208d586a748"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "deac258dd8b1"
           },
@@ -735,7 +738,7 @@
         "id": "sc-base-ref-default.method-not-found:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "43be25da851a"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "ee20a1dc39e7"
           },
@@ -747,7 +750,7 @@
         "id": "sc-base-ref-default.transport-rejection:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "a5632796ed43"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "a947768bc0ed"
           },
@@ -759,7 +762,7 @@
         "id": "sc-base-ref-default.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["6396d004a0e7", "089d79f002a1", "4200126ab3ab"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "c7584e82c72f"
           },

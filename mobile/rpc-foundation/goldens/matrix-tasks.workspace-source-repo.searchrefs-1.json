@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "9e91d46870cd69279cc7d8ebfd317ab8b13136ccff9662876c7601a3a83ecafe",
   "platform": "darwin",
@@ -143,18 +143,10 @@
         }
       }
     },
-    "46027e62015d": {
-      "name": "repo.searchRefs#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
-    },
     "469b68abd6bf": {
       "name": "workspaceBaseBranchError",
       "value": "Cannot read properties of null (reading 'refDetails')",
       "sent": 2
-    },
-    "4cedb91a2f7a": {
-      "name": "repo.sparsePresets#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
     "52925a303ed6": {
       "name": "repo.searchRefs#1",
@@ -480,6 +472,11 @@
         }
       }
     },
+    "bc245469b086": {
+      "name": "repo.searchRefs#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}",
+      "sent": 2
+    },
     "bd26306458d2": {
       "name": "repo.searchRefs#1",
       "args": [
@@ -572,6 +569,11 @@
           }
         }
       }
+    },
+    "c9ed58434d0b": {
+      "name": "repo.sparsePresets#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 1
     },
     "ca6dda44e51a": {
       "name": "workspaceBaseBranchError",
@@ -670,7 +672,7 @@
         "id": "tw-workspace-source-presets.prelude:presets-loaded",
         "observation": {
           "sender": ["c8d4d05367d6"],
-          "payloads": ["4cedb91a2f7a"],
+          "payloads": ["c9ed58434d0b"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -693,7 +695,7 @@
         "id": "tw-workspace-source-presets.normal:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "395368dea8ff"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -721,7 +723,7 @@
         "id": "tw-workspace-source-presets.result-absent:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "846e910f6579"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -750,7 +752,7 @@
         "id": "tw-workspace-source-presets.result-null:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "28f23529596e"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -779,7 +781,7 @@
         "id": "tw-workspace-source-presets.inner-ok-missing:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "5485811c08ca"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -807,7 +809,7 @@
         "id": "tw-workspace-source-presets.inner-false-string-error:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "f6f9a9765c0c"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -835,7 +837,7 @@
         "id": "tw-workspace-source-presets.inner-false-object-error:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "94cafc85a34d"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -863,7 +865,7 @@
         "id": "tw-workspace-source-presets.outer-refused:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "bb1a94f8cb3f"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -892,7 +894,7 @@
         "id": "tw-workspace-source-presets.outer-refused-no-message:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "7444e76d58f7"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -921,7 +923,7 @@
         "id": "tw-workspace-source-presets.method-not-found:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "bd26306458d2"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -950,7 +952,7 @@
         "id": "tw-workspace-source-presets.transport-rejection:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "5b0e628f442c"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"
@@ -979,7 +981,7 @@
         "id": "tw-workspace-source-presets.transport-rejection-no-message:branches-loaded",
         "observation": {
           "sender": ["c8d4d05367d6", "52925a303ed6"],
-          "payloads": ["4cedb91a2f7a", "46027e62015d"],
+          "payloads": ["c9ed58434d0b", "bc245469b086"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "branch-query": "eb79a9b3682a"

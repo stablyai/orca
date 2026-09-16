@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "25a4762d735dfb4979e6ef31b9fdb380941a824a54b45b3d08ddb2cde25c2eb7",
   "platform": "darwin",
@@ -13,9 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "594101d24d72": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    "1e728fd0846c": {
+      "name": "repo.baseRefDefault#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.baseRefDefault\",\"params\":{\"repo\":\"id:repo42\"}}",
+      "sent": 3
+    },
+    "281aabb80148": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
+      "sent": 2
     },
     "8c0c5002db30": {
       "name": "repo.baseRefDefault#1",
@@ -51,13 +57,10 @@
         }
       }
     },
-    "cd73fe3775d3": {
-      "name": "repo.baseRefDefault#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.baseRefDefault\",\"params\":{\"repo\":\"id:repo42\"}}"
-    },
-    "cec763c8abc6": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    "ad49fec56c14": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 2
     },
     "de82d9737123": {
       "name": "repo.list#1",
@@ -148,7 +151,7 @@
         "id": "settled",
         "observation": {
           "sender": ["f9af0bcc7ed6", "de82d9737123", "8c0c5002db30"],
-          "payloads": ["cec763c8abc6", "594101d24d72", "cd73fe3775d3"],
+          "payloads": ["281aabb80148", "ad49fec56c14", "1e728fd0846c"],
           "settlements": {
             "resolve": "ee20a1dc39e7"
           },

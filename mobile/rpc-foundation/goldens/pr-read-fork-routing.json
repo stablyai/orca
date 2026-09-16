@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "ba21f7fc3966cb1e3c1e59d6e8a8b184fa0559bf3037365391ce23e364befd7f",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "1628217f6c86": {
+      "name": "github.prChecks#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha-1\"}}",
+      "sent": 1
+    },
     "1c88fe396b45": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -88,6 +93,11 @@
         }
       }
     },
+    "41ffb0b7ab72": {
+      "name": "github.prChecks#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12}}",
+      "sent": 3
+    },
     "4b1b59229060": {
       "name": "github.prChecks#1",
       "args": [
@@ -133,13 +143,10 @@
         }
       }
     },
-    "76a886c59ea8": {
+    "4d9630d13e9a": {
       "name": "github.prCheckDetails#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"}}}"
-    },
-    "76f58b97e8c8": {
-      "name": "github.prChecks#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"}}}",
+      "sent": 2
     },
     "79b747202f2f": {
       "check-details": {
@@ -278,10 +285,6 @@
           }
         ]
       }
-    },
-    "e8fac4788c30": {
-      "name": "github.prChecks#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"},\"headSha\":\"head-sha-1\"}}"
     }
   },
   "recording": {
@@ -291,7 +294,7 @@
         "id": "fork-checks",
         "observation": {
           "sender": ["4b1b59229060"],
-          "payloads": ["e8fac4788c30"],
+          "payloads": ["1628217f6c86"],
           "settlements": {
             "fork-checks": "e23eb2e4b033"
           },
@@ -303,7 +306,7 @@
         "id": "fork-check-details",
         "observation": {
           "sender": ["4b1b59229060", "aa5e45571cbb"],
-          "payloads": ["e8fac4788c30", "76a886c59ea8"],
+          "payloads": ["1628217f6c86", "4d9630d13e9a"],
           "settlements": {
             "fork-checks": "e23eb2e4b033",
             "fork-check-details": "1c88fe396b45"
@@ -316,7 +319,7 @@
         "id": "no-head-sha",
         "observation": {
           "sender": ["4b1b59229060", "aa5e45571cbb", "41d8d2be435b"],
-          "payloads": ["e8fac4788c30", "76a886c59ea8", "76f58b97e8c8"],
+          "payloads": ["1628217f6c86", "4d9630d13e9a", "41ffb0b7ab72"],
           "settlements": {
             "fork-checks": "e23eb2e4b033",
             "fork-check-details": "1c88fe396b45",

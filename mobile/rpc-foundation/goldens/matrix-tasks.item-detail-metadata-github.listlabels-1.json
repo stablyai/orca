@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
   "scenarioSha256": "a2ecf4ddc2c9870a8d73cbd920b46bb0663a958ac156dc6de092be3c9474ea2b",
   "platform": "darwin",
@@ -111,6 +111,11 @@
       "usersError": "",
       "usersLoading": false
     },
+    "11dbb2f7ba6a": {
+      "name": "github.listLabels#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 2
+    },
     "14b04c3d1156": {
       "name": "itemAssignableUsersLoading",
       "value": true,
@@ -162,6 +167,11 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "2c7c5fe4358d": {
+      "name": "github.listAssignableUsers#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 2
     },
     "2f84a8101a09": {
       "name": "itemAvailableLabels",
@@ -321,10 +331,6 @@
       ],
       "usersError": "",
       "usersLoading": false
-    },
-    "594a2904a1bc": {
-      "name": "github.listAssignableUsers#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
     "60ab7459b747": {
       "name": "itemLabelsLoading",
@@ -699,10 +705,6 @@
         "$rpc": "undefined"
       }
     },
-    "ef317c60c3c6": {
-      "name": "github.listLabels#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
     "f06d897d7f6d": {
       "name": "itemAvailableLabels",
       "value": {
@@ -733,7 +735,7 @@
         "id": "tk-item-detail-metadata.normal:mounted",
         "observation": {
           "sender": ["31a9aea0d54a", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -757,7 +759,7 @@
         "id": "tk-item-detail-metadata.result-absent:mounted",
         "observation": {
           "sender": ["0512455a3440", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -781,7 +783,7 @@
         "id": "tk-item-detail-metadata.result-null:mounted",
         "observation": {
           "sender": ["d81297d32421", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -805,7 +807,7 @@
         "id": "tk-item-detail-metadata.inner-ok-missing:mounted",
         "observation": {
           "sender": ["3f1ea2cb79b5", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -829,7 +831,7 @@
         "id": "tk-item-detail-metadata.inner-false-string-error:mounted",
         "observation": {
           "sender": ["3de77e6e6dc2", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -853,7 +855,7 @@
         "id": "tk-item-detail-metadata.inner-false-object-error:mounted",
         "observation": {
           "sender": ["b041f1e6a2ab", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -877,7 +879,7 @@
         "id": "tk-item-detail-metadata.outer-refused:mounted",
         "observation": {
           "sender": ["e37b0adae2ad", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -901,7 +903,7 @@
         "id": "tk-item-detail-metadata.outer-refused-no-message:mounted",
         "observation": {
           "sender": ["b807e8ed0345", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -925,7 +927,7 @@
         "id": "tk-item-detail-metadata.method-not-found:mounted",
         "observation": {
           "sender": ["089cd991bfef", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -949,7 +951,7 @@
         "id": "tk-item-detail-metadata.transport-rejection:mounted",
         "observation": {
           "sender": ["26a2b4de39d4", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -973,7 +975,7 @@
         "id": "tk-item-detail-metadata.transport-rejection-no-message:mounted",
         "observation": {
           "sender": ["c98fbfaab90a", "a268d5d92265"],
-          "payloads": ["ef317c60c3c6", "594a2904a1bc"],
+          "payloads": ["11dbb2f7ba6a", "2c7c5fe4358d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

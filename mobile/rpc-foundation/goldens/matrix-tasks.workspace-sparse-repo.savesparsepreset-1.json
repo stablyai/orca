@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "3d4637406e2d658b72f73153f0a5e176cb8b143593b72bce0cdf979bc6e4cbdd",
   "platform": "darwin",
@@ -16,6 +16,16 @@
     "0a30edace604": {
       "name": "workspaceSparsePresetsError",
       "value": "Failed to save sparse preset.",
+      "sent": 2
+    },
+    "14b354ce0ded": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}",
+      "sent": 1
+    },
+    "15dd622cbe08": {
+      "name": "repo.saveSparsePreset#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}",
       "sent": 2
     },
     "1923ab7dba76": {
@@ -700,14 +710,6 @@
       "name": "workspaceSparsePresetsError",
       "value": "transport failure",
       "sent": 2
-    },
-    "f9dfbe0c0ea7": {
-      "name": "ssh.getState#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
-    },
-    "fd758406cc2c": {
-      "name": "repo.saveSparsePreset#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
     }
   },
   "recording": {
@@ -717,7 +719,7 @@
         "id": "tw-workspace-sparse-saved.prelude:ssh-state-read",
         "observation": {
           "sender": ["89aa7a3bd619"],
-          "payloads": ["f9dfbe0c0ea7"],
+          "payloads": ["14b354ce0ded"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -729,7 +731,7 @@
         "id": "tw-workspace-sparse-saved.prelude:cleanup",
         "observation": {
           "sender": ["89aa7a3bd619", "4d66e995ff47"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -748,7 +750,7 @@
         "id": "tw-workspace-sparse-saved.normal:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "5c44ff5f6877"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -770,7 +772,7 @@
         "id": "tw-workspace-sparse-saved.result-absent:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "95295c6eaa8d"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -789,7 +791,7 @@
         "id": "tw-workspace-sparse-saved.result-null:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "d14de7ce4d84"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -808,7 +810,7 @@
         "id": "tw-workspace-sparse-saved.inner-ok-missing:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "92b857799ffd"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -827,7 +829,7 @@
         "id": "tw-workspace-sparse-saved.inner-false-string-error:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "bd0266b23771"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -846,7 +848,7 @@
         "id": "tw-workspace-sparse-saved.inner-false-object-error:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "c5a3f70f9b02"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -865,7 +867,7 @@
         "id": "tw-workspace-sparse-saved.outer-refused:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "1923ab7dba76"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -884,7 +886,7 @@
         "id": "tw-workspace-sparse-saved.outer-refused-no-message:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "990a149dc1be"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -903,7 +905,7 @@
         "id": "tw-workspace-sparse-saved.method-not-found:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "74c1230400a6"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -922,7 +924,7 @@
         "id": "tw-workspace-sparse-saved.transport-rejection:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "f4d4ba362712"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
@@ -941,7 +943,7 @@
         "id": "tw-workspace-sparse-saved.transport-rejection-no-message:preset-saved",
         "observation": {
           "sender": ["89aa7a3bd619", "23e798f4b47c"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "payloads": ["14b354ce0ded", "15dd622cbe08"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"

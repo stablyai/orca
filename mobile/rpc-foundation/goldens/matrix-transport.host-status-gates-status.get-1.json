@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "d6be62e5eb2737d75634c053098d06a4bb175c64ff915cec6ead79922492a068",
   "platform": "darwin",
@@ -46,10 +46,6 @@
           "ok": false
         }
       }
-    },
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "2698c9770ad3": {
       "name": "status.get#1",
@@ -167,6 +163,11 @@
           "ok": true
         }
       }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
     },
     "88200d49083c": {
       "name": "status.get#1",
@@ -434,7 +435,7 @@
         "id": "transport-host-status-gates-ready.normal:gates-proven",
         "observation": {
           "sender": ["eed0ae8cfbd7"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -446,7 +447,7 @@
         "id": "transport-host-status-gates-ready.result-absent:gates-proven",
         "observation": {
           "sender": ["7d3dd7f9381b"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -458,7 +459,7 @@
         "id": "transport-host-status-gates-ready.result-null:gates-proven",
         "observation": {
           "sender": ["88200d49083c"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -470,7 +471,7 @@
         "id": "transport-host-status-gates-ready.inner-ok-missing:gates-proven",
         "observation": {
           "sender": ["4451bb95a76e"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -482,7 +483,7 @@
         "id": "transport-host-status-gates-ready.inner-false-string-error:gates-proven",
         "observation": {
           "sender": ["944bf432f199"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -494,7 +495,7 @@
         "id": "transport-host-status-gates-ready.inner-false-object-error:gates-proven",
         "observation": {
           "sender": ["89236e432861"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -506,7 +507,7 @@
         "id": "transport-host-status-gates-ready.outer-refused:gates-proven",
         "observation": {
           "sender": ["16cd464bf664"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -518,7 +519,7 @@
         "id": "transport-host-status-gates-ready.outer-refused-no-message:gates-proven",
         "observation": {
           "sender": ["9cdf3c107e7b"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -530,7 +531,7 @@
         "id": "transport-host-status-gates-ready.method-not-found:gates-proven",
         "observation": {
           "sender": ["c71b2f8a6993"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -542,7 +543,7 @@
         "id": "transport-host-status-gates-ready.transport-rejection:gates-proven",
         "observation": {
           "sender": ["de87f6266897"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -554,7 +555,7 @@
         "id": "transport-host-status-gates-ready.transport-rejection-no-message:gates-proven",
         "observation": {
           "sender": ["2698c9770ad3"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

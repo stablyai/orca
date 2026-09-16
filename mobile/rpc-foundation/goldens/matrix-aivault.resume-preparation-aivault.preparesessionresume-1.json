@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "c3b400967b0b1c7bd3f82a278f4b10855ade72d384922ec4d34795c7bb20084d",
   "platform": "darwin",
@@ -237,6 +237,11 @@
         }
       }
     },
+    "770627dbd25d": {
+      "name": "aiVault.prepareSessionResume#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}",
+      "sent": 1
+    },
     "954fabd8665f": {
       "failure": "transport failure",
       "prepared": "unprepared"
@@ -313,10 +318,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "9a6c365d544f": {
-      "name": "aiVault.prepareSessionResume#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}"
     },
     "a947768bc0ed": {
       "status": "rejected",
@@ -522,7 +523,7 @@
         "id": "aivault-resume-prepare-repin.normal:repinned",
         "observation": {
           "sender": ["d8803e70463f"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "15e10cea84b9"
           },
@@ -534,7 +535,7 @@
         "id": "aivault-resume-prepare-repin.result-absent:repinned",
         "observation": {
           "sender": ["3cb5dd9bacb9"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "e839ea279e77"
           },
@@ -546,7 +547,7 @@
         "id": "aivault-resume-prepare-repin.result-null:repinned",
         "observation": {
           "sender": ["b8c26ad576fc"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "e839ea279e77"
           },
@@ -558,7 +559,7 @@
         "id": "aivault-resume-prepare-repin.inner-ok-missing:repinned",
         "observation": {
           "sender": ["eb577fc22483"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "e839ea279e77"
           },
@@ -570,7 +571,7 @@
         "id": "aivault-resume-prepare-repin.inner-false-string-error:repinned",
         "observation": {
           "sender": ["110d8c28ad70"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "e839ea279e77"
           },
@@ -582,7 +583,7 @@
         "id": "aivault-resume-prepare-repin.inner-false-object-error:repinned",
         "observation": {
           "sender": ["9736bcb85d7d"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "e839ea279e77"
           },
@@ -594,7 +595,7 @@
         "id": "aivault-resume-prepare-repin.outer-refused:repinned",
         "observation": {
           "sender": ["dbbdae8f39e4"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "32a7c0ae7918"
           },
@@ -606,7 +607,7 @@
         "id": "aivault-resume-prepare-repin.outer-refused-no-message:repinned",
         "observation": {
           "sender": ["6c0717cacf4f"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "06345cef27f9"
           },
@@ -618,7 +619,7 @@
         "id": "aivault-resume-prepare-repin.method-not-found:repinned",
         "observation": {
           "sender": ["1174bbe22a9f"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "e839ea279e77"
           },
@@ -630,7 +631,7 @@
         "id": "aivault-resume-prepare-repin.transport-rejection:repinned",
         "observation": {
           "sender": ["1cc5c362a1d4"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "a947768bc0ed"
           },
@@ -642,7 +643,7 @@
         "id": "aivault-resume-prepare-repin.transport-rejection-no-message:repinned",
         "observation": {
           "sender": ["97f3b981d81f"],
-          "payloads": ["9a6c365d544f"],
+          "payloads": ["770627dbd25d"],
           "settlements": {
             "prepare": "c7584e82c72f"
           },

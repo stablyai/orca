@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "cf671da175d50a4c2e1336f4e8338c24c4752db111e1eafd226bee6ff3582b1d",
   "platform": "darwin",
@@ -77,10 +77,6 @@
           "ok": false
         }
       }
-    },
-    "2369258c9999": {
-      "name": "settings.update#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
     },
     "2b21a178e827": {
       "name": "settings.update#1",
@@ -276,6 +272,11 @@
         }
       }
     },
+    "7f8a022ecd59": {
+      "name": "settings.update#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}",
+      "sent": 1
+    },
     "8bdf90b8099a": {
       "name": "defaultGitHubPreset",
       "value": "assigned",
@@ -429,7 +430,7 @@
         "id": "settings-task-write.prelude:optimistic",
         "observation": {
           "sender": ["74827568abb0"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -442,7 +443,7 @@
         "id": "settings-task-write.normal:settled",
         "observation": {
           "sender": ["5b0cac0bdf84"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -455,7 +456,7 @@
         "id": "settings-task-write.result-absent:settled",
         "observation": {
           "sender": ["79d43c68f387"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -468,7 +469,7 @@
         "id": "settings-task-write.result-null:settled",
         "observation": {
           "sender": ["71615e0dba6b"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -481,7 +482,7 @@
         "id": "settings-task-write.inner-ok-missing:settled",
         "observation": {
           "sender": ["a90dfad3297a"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -494,7 +495,7 @@
         "id": "settings-task-write.inner-false-string-error:settled",
         "observation": {
           "sender": ["71459ddb091d"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -507,7 +508,7 @@
         "id": "settings-task-write.inner-false-object-error:settled",
         "observation": {
           "sender": ["2b21a178e827"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -520,7 +521,7 @@
         "id": "settings-task-write.outer-refused:settled",
         "observation": {
           "sender": ["1ba7a60a2f98"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -533,7 +534,7 @@
         "id": "settings-task-write.outer-refused-no-message:settled",
         "observation": {
           "sender": ["9b81c7f38dcf"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -546,7 +547,7 @@
         "id": "settings-task-write.method-not-found:settled",
         "observation": {
           "sender": ["f9d1c4554592"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -559,7 +560,7 @@
         "id": "settings-task-write.transport-rejection:settled",
         "observation": {
           "sender": ["178d4ef77ad7"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
@@ -572,7 +573,7 @@
         "id": "settings-task-write.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["d26aa345f588"],
-          "payloads": ["2369258c9999"],
+          "payloads": ["7f8a022ecd59"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"

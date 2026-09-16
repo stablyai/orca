@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "f721ab4438c4183927ce5ebc5fd6f1f18414701a5fa3b2807c359785829962a3",
   "platform": "darwin",
@@ -80,6 +80,11 @@
         "isRpcDeliveryUnknown": false
       }
     },
+    "39cabd8258a3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}",
+      "sent": 2
+    },
     "3ad18553135a": {
       "name": "session.tabs.createTerminal#1",
       "args": [
@@ -135,6 +140,11 @@
     "432332c9740e": {
       "failure": "Created terminal response was invalid",
       "launched": "unlaunched"
+    },
+    "495d8519301e": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
+      "sent": 1
     },
     "4ee71a589941": {
       "name": "session.tabs.createTerminal#1",
@@ -464,10 +474,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "a9a45875782f": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}"
-    },
     "b948e8307e81": {
       "status": "rejected",
       "startedAt": 0,
@@ -617,10 +623,6 @@
       "failure": "transport failure",
       "launched": "unlaunched"
     },
-    "eb30e498d168": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
-    },
     "efa7e20c5a6f": {
       "failure": "outer refused",
       "launched": "unlaunched"
@@ -637,7 +639,7 @@
         "id": "aivault-resume-launch-sent.normal:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "a84f5d45a48b"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "6e79da536ca9"
           },
@@ -649,7 +651,7 @@
         "id": "aivault-resume-launch-sent.result-absent:resumed",
         "observation": {
           "sender": ["671d748c842b"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "681fc4d59b92"
           },
@@ -661,7 +663,7 @@
         "id": "aivault-resume-launch-sent.result-null:resumed",
         "observation": {
           "sender": ["d34341547b51"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "681fc4d59b92"
           },
@@ -673,7 +675,7 @@
         "id": "aivault-resume-launch-sent.inner-ok-missing:resumed",
         "observation": {
           "sender": ["3ad18553135a"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "681fc4d59b92"
           },
@@ -685,7 +687,7 @@
         "id": "aivault-resume-launch-sent.inner-false-string-error:resumed",
         "observation": {
           "sender": ["92613ac6d4fa"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "681fc4d59b92"
           },
@@ -697,7 +699,7 @@
         "id": "aivault-resume-launch-sent.inner-false-object-error:resumed",
         "observation": {
           "sender": ["4ee71a589941"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "681fc4d59b92"
           },
@@ -709,7 +711,7 @@
         "id": "aivault-resume-launch-sent.outer-refused:resumed",
         "observation": {
           "sender": ["611cf7134d32"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "32a7c0ae7918"
           },
@@ -721,7 +723,7 @@
         "id": "aivault-resume-launch-sent.outer-refused-no-message:resumed",
         "observation": {
           "sender": ["cb0891b6056d"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "30ec57518c05"
           },
@@ -733,7 +735,7 @@
         "id": "aivault-resume-launch-sent.method-not-found:resumed",
         "observation": {
           "sender": ["00ce2da4b927"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "b948e8307e81"
           },
@@ -745,7 +747,7 @@
         "id": "aivault-resume-launch-sent.transport-rejection:resumed",
         "observation": {
           "sender": ["dbc538c406b0"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "a947768bc0ed"
           },
@@ -757,7 +759,7 @@
         "id": "aivault-resume-launch-sent.transport-rejection-no-message:resumed",
         "observation": {
           "sender": ["80ce09f50b96"],
-          "payloads": ["eb30e498d168"],
+          "payloads": ["495d8519301e"],
           "settlements": {
             "full": "c7584e82c72f"
           },

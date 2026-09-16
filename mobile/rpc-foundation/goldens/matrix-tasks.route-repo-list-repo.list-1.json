@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "d1810575d5f0e7a45f9f9a327c271f0ed483b16b21b65cfb5fcfa9dc90baf6c8",
   "scenarioSha256": "6373b83783b1a9b061bede3bba7aa3b573c3a50b897102a094df93f926856fdc",
   "platform": "darwin",
@@ -262,6 +262,11 @@
       "repoListStatus": "error",
       "repos": []
     },
+    "5730368193ee": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 1
+    },
     "63dfbb6942f2": {
       "status": "rejected",
       "startedAt": 0,
@@ -271,10 +276,6 @@
         "message": "Cannot read properties of null (reading 'repos')",
         "isRpcDeliveryUnknown": false
       }
-    },
-    "6bdbf70bafa2": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "6e5c6593dad8": {
       "name": "repo.list#1",
@@ -613,7 +614,7 @@
         "id": "tasks-route-repo-list.prelude:repos-pending",
         "observation": {
           "sender": ["26accd69bc48"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "9270aeb7d9c6"
@@ -626,7 +627,7 @@
         "id": "tasks-route-repo-list.normal:repos-loaded",
         "observation": {
           "sender": ["49bee46155dd"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "fcd8faa86ca8"
@@ -639,7 +640,7 @@
         "id": "tasks-route-repo-list.result-absent:repos-loaded",
         "observation": {
           "sender": ["2ebe4d776f9b"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "2381a3fe154e"
@@ -652,7 +653,7 @@
         "id": "tasks-route-repo-list.result-null:repos-loaded",
         "observation": {
           "sender": ["38e790fd9e9c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "63dfbb6942f2"
@@ -665,7 +666,7 @@
         "id": "tasks-route-repo-list.inner-ok-missing:repos-loaded",
         "observation": {
           "sender": ["06b63e0d9986"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "eb79a9b3682a"
@@ -678,7 +679,7 @@
         "id": "tasks-route-repo-list.inner-false-string-error:repos-loaded",
         "observation": {
           "sender": ["f96e83d33565"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "eb79a9b3682a"
@@ -691,7 +692,7 @@
         "id": "tasks-route-repo-list.inner-false-object-error:repos-loaded",
         "observation": {
           "sender": ["9d3fa0db2665"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "eb79a9b3682a"
@@ -704,7 +705,7 @@
         "id": "tasks-route-repo-list.outer-refused:repos-loaded",
         "observation": {
           "sender": ["b9f0f1e94cd9"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "32a7c0ae7918"
@@ -717,7 +718,7 @@
         "id": "tasks-route-repo-list.outer-refused-no-message:repos-loaded",
         "observation": {
           "sender": ["06fc8e7b85d5"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "f3b516f62081"
@@ -730,7 +731,7 @@
         "id": "tasks-route-repo-list.method-not-found:repos-loaded",
         "observation": {
           "sender": ["e341bd05e614"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "b948e8307e81"
@@ -743,7 +744,7 @@
         "id": "tasks-route-repo-list.transport-rejection:repos-loaded",
         "observation": {
           "sender": ["6e5c6593dad8"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "a947768bc0ed"
@@ -756,7 +757,7 @@
         "id": "tasks-route-repo-list.transport-rejection-no-message:repos-loaded",
         "observation": {
           "sender": ["cc1facdf008c"],
-          "payloads": ["6bdbf70bafa2"],
+          "payloads": ["5730368193ee"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "c7584e82c72f"

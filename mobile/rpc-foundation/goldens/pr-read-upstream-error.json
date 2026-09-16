@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "b2445b299e18664b698d659c5041860b8a253314687666ae467aab441ab07235",
   "platform": "darwin",
@@ -33,9 +33,15 @@
         "ok": false
       }
     },
-    "85e0e5ca36ba": {
-      "name": "github.prForBranch#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}"
+    "35eb8ce186f2": {
+      "name": "github.prForBranch#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}",
+      "sent": 1
+    },
+    "47a1e5a3aa01": {
+      "name": "github.prForBranch#3",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}",
+      "sent": 3
     },
     "8a06535cb136": {
       "name": "github.prForBranch#2",
@@ -89,9 +95,10 @@
         }
       }
     },
-    "93d80e74f837": {
-      "name": "github.prForBranch#3",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}"
+    "a3f868623d30": {
+      "name": "github.prForBranch#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}",
+      "sent": 2
     },
     "a976d414bc11": {
       "status": "fulfilled",
@@ -138,10 +145,6 @@
           }
         }
       }
-    },
-    "e43c980a94c5": {
-      "name": "github.prForBranch#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null}}"
     },
     "f1de1849a48d": {
       "name": "github.prForBranch#1",
@@ -199,7 +202,7 @@
         "id": "upstream",
         "observation": {
           "sender": ["f1de1849a48d"],
-          "payloads": ["e43c980a94c5"],
+          "payloads": ["35eb8ce186f2"],
           "settlements": {
             "upstream": "fe9c1046b91d"
           },
@@ -211,7 +214,7 @@
         "id": "malformed",
         "observation": {
           "sender": ["f1de1849a48d", "8a06535cb136"],
-          "payloads": ["e43c980a94c5", "85e0e5ca36ba"],
+          "payloads": ["35eb8ce186f2", "a3f868623d30"],
           "settlements": {
             "upstream": "fe9c1046b91d",
             "malformed": "a976d414bc11"
@@ -224,7 +227,7 @@
         "id": "no-pr",
         "observation": {
           "sender": ["f1de1849a48d", "8a06535cb136", "ab4b72242bb7"],
-          "payloads": ["e43c980a94c5", "85e0e5ca36ba", "93d80e74f837"],
+          "payloads": ["35eb8ce186f2", "a3f868623d30", "47a1e5a3aa01"],
           "settlements": {
             "upstream": "fe9c1046b91d",
             "malformed": "a976d414bc11",

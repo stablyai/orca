@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "04b2052cce6f24d9e208c992f204355639409ddc9793b3044b394c0e38d3c284",
   "platform": "darwin",
@@ -164,9 +164,15 @@
       }
     },
     "44136fa355b3": {},
-    "478fd4bcbb87": {
+    "5708d54f0f07": {
       "name": "github.addIssueComment#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"body\":\"recorded comment\",\"type\":\"pr\"}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"body\":\"recorded comment\",\"type\":\"pr\"}}",
+      "sent": 2
+    },
+    "6aa18d3e13ab": {
+      "name": "github.resolveReviewThread#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}",
+      "sent": 3
     },
     "6faee2aa2763": {
       "name": "github.project.deleteIssueCommentBySlug#1",
@@ -278,10 +284,6 @@
         }
       }
     },
-    "8108c9f604fb": {
-      "name": "github.addPRReviewCommentReply#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"commentId\":55,\"body\":\"recorded reply\",\"threadId\":\"thread-1\",\"path\":\"src/app.ts\",\"line\":3}}"
-    },
     "8cc87cf6e61d": {
       "delete-comment": {
         "error": "Unknown method",
@@ -387,10 +389,6 @@
         "error": "transport failure",
         "ok": false
       }
-    },
-    "af688481a64e": {
-      "name": "github.project.deleteIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55}}"
     },
     "b527e21e8b74": {
       "name": "github.project.deleteIssueCommentBySlug#1",
@@ -538,6 +536,11 @@
         }
       }
     },
+    "c40fec826b4d": {
+      "name": "github.project.updateIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55,\"body\":\"edited\"}}",
+      "sent": 4
+    },
     "c48cbac933ba": {
       "name": "github.project.deleteIssueCommentBySlug#1",
       "args": [
@@ -572,6 +575,11 @@
           }
         }
       }
+    },
+    "c676e676ae9d": {
+      "name": "github.addPRReviewCommentReply#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewCommentReply\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"commentId\":55,\"body\":\"recorded reply\",\"threadId\":\"thread-1\",\"path\":\"src/app.ts\",\"line\":3}}",
+      "sent": 1
     },
     "c809528f892d": {
       "name": "github.addIssueComment#1",
@@ -611,6 +619,11 @@
           }
         }
       }
+    },
+    "c9b1ffba7154": {
+      "name": "github.project.deleteIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.deleteIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55}}",
+      "sent": 5
     },
     "cb0ebf3e3df2": {
       "name": "github.project.updateIssueCommentBySlug#1",
@@ -706,10 +719,6 @@
         "ok": true
       }
     },
-    "d9b62b144917": {
-      "name": "github.resolveReviewThread#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.resolveReviewThread\",\"params\":{\"repo\":\"id:repo-9\",\"threadId\":\"thread-1\",\"resolve\":true}}"
-    },
     "e4d7b3c37cab": {
       "name": "github.project.deleteIssueCommentBySlug#1",
       "args": [
@@ -745,10 +754,6 @@
           "ok": false
         }
       }
-    },
-    "e8277b2fbe2f": {
-      "name": "github.project.updateIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"commentId\":55,\"body\":\"edited\"}}"
     },
     "f7ebab409cd3": {
       "delete-comment": {
@@ -812,7 +817,7 @@
         "id": "pr-comment-mutation.prelude:reply",
         "observation": {
           "sender": ["b72d1b08ed71"],
-          "payloads": ["8108c9f604fb"],
+          "payloads": ["c676e676ae9d"],
           "settlements": {
             "reply": "fbc958e4d46e"
           },
@@ -824,7 +829,7 @@
         "id": "pr-comment-mutation.prelude:root-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "c809528f892d"],
-          "payloads": ["8108c9f604fb", "478fd4bcbb87"],
+          "payloads": ["c676e676ae9d", "5708d54f0f07"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e"
@@ -837,7 +842,7 @@
         "id": "pr-comment-mutation.prelude:resolve-thread",
         "observation": {
           "sender": ["b72d1b08ed71", "c809528f892d", "7d998237c7b0"],
-          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917"],
+          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -851,7 +856,7 @@
         "id": "pr-comment-mutation.prelude:edit-comment",
         "observation": {
           "sender": ["b72d1b08ed71", "c809528f892d", "7d998237c7b0", "cb0ebf3e3df2"],
-          "payloads": ["8108c9f604fb", "478fd4bcbb87", "d9b62b144917", "e8277b2fbe2f"],
+          "payloads": ["c676e676ae9d", "5708d54f0f07", "6aa18d3e13ab", "c40fec826b4d"],
           "settlements": {
             "reply": "fbc958e4d46e",
             "root-comment": "fbc958e4d46e",
@@ -873,11 +878,11 @@
             "a09b7d2d7c5a"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -901,11 +906,11 @@
             "b5ded9939b2b"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -929,11 +934,11 @@
             "c48cbac933ba"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -957,11 +962,11 @@
             "23b9ce21023f"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -985,11 +990,11 @@
             "cb1da026444f"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1013,11 +1018,11 @@
             "2ed368bb030a"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1041,11 +1046,11 @@
             "e4d7b3c37cab"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1069,11 +1074,11 @@
             "b5aaedad11c3"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1097,11 +1102,11 @@
             "b527e21e8b74"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1125,11 +1130,11 @@
             "6faee2aa2763"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",
@@ -1153,11 +1158,11 @@
             "73b514d9f764"
           ],
           "payloads": [
-            "8108c9f604fb",
-            "478fd4bcbb87",
-            "d9b62b144917",
-            "e8277b2fbe2f",
-            "af688481a64e"
+            "c676e676ae9d",
+            "5708d54f0f07",
+            "6aa18d3e13ab",
+            "c40fec826b4d",
+            "c9b1ffba7154"
           ],
           "settlements": {
             "reply": "fbc958e4d46e",

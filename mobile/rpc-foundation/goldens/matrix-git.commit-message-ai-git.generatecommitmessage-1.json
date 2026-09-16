@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "22ea5279155ecf749aaab521ffd570221ac3169b177fc1daf85ef93a49d38260",
   "platform": "darwin",
@@ -337,10 +337,6 @@
         }
       }
     },
-    "a64074c2ba96": {
-      "name": "git.generateCommitMessage#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.generateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
     "a947768bc0ed": {
       "status": "rejected",
       "startedAt": 0,
@@ -434,6 +430,11 @@
         "isRpcDeliveryUnknown": true
       }
     },
+    "c8f48abc0f5d": {
+      "name": "git.generateCommitMessage#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.generateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}",
+      "sent": 1
+    },
     "e96b430d7d35": {
       "name": "git.generateCommitMessage#1",
       "args": [
@@ -516,7 +517,7 @@
         "id": "sc-commit-message-generated.prelude:pending",
         "observation": {
           "sender": ["125fbea5f50a"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "9270aeb7d9c6"
           },
@@ -528,7 +529,7 @@
         "id": "sc-commit-message-generated.normal:settled",
         "observation": {
           "sender": ["a09d0ada6684"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "1290c04bc26c"
           },
@@ -540,7 +541,7 @@
         "id": "sc-commit-message-generated.result-absent:settled",
         "observation": {
           "sender": ["bfe04c9c1653"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "b95c8d57adc9"
           },
@@ -552,7 +553,7 @@
         "id": "sc-commit-message-generated.result-null:settled",
         "observation": {
           "sender": ["68e6f784ba09"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "b95c8d57adc9"
           },
@@ -564,7 +565,7 @@
         "id": "sc-commit-message-generated.inner-ok-missing:settled",
         "observation": {
           "sender": ["46920d3cb0c1"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "a0551476eb3b"
           },
@@ -576,7 +577,7 @@
         "id": "sc-commit-message-generated.inner-false-string-error:settled",
         "observation": {
           "sender": ["5213fea85cf0"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "a0551476eb3b"
           },
@@ -588,7 +589,7 @@
         "id": "sc-commit-message-generated.inner-false-object-error:settled",
         "observation": {
           "sender": ["3f131697d120"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "a0551476eb3b"
           },
@@ -600,7 +601,7 @@
         "id": "sc-commit-message-generated.outer-refused:settled",
         "observation": {
           "sender": ["fa7a334b373d"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "5ad7ea556320"
           },
@@ -612,7 +613,7 @@
         "id": "sc-commit-message-generated.outer-refused-no-message:settled",
         "observation": {
           "sender": ["63410fd1b187"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "b95c8d57adc9"
           },
@@ -624,7 +625,7 @@
         "id": "sc-commit-message-generated.method-not-found:settled",
         "observation": {
           "sender": ["e96b430d7d35"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "3186ccdbc53f"
           },
@@ -636,7 +637,7 @@
         "id": "sc-commit-message-generated.transport-rejection:settled",
         "observation": {
           "sender": ["31141af16c2d"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "a947768bc0ed"
           },
@@ -648,7 +649,7 @@
         "id": "sc-commit-message-generated.transport-rejection-no-message:settled",
         "observation": {
           "sender": ["c39c20fa07f2"],
-          "payloads": ["a64074c2ba96"],
+          "payloads": ["c8f48abc0f5d"],
           "settlements": {
             "generate": "c7584e82c72f"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "c97d925b63253e87ada0777e95a24ccf4e4e1682eda048800b44e335767df648",
   "platform": "darwin",
@@ -323,9 +323,10 @@
         }
       }
     },
-    "b084676e5f8f": {
+    "af5666510c34": {
       "name": "markdown.readTab#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}",
+      "sent": 1
     },
     "cdeef4a961fe": {
       "name": "markdown.readTab#1",
@@ -461,7 +462,7 @@
         "id": "session-markdown-tab-read.normal:read",
         "observation": {
           "sender": ["38b08634cae3"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -473,7 +474,7 @@
         "id": "session-markdown-tab-read.result-absent:read",
         "observation": {
           "sender": ["f3f0693c7791"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -485,7 +486,7 @@
         "id": "session-markdown-tab-read.result-null:read",
         "observation": {
           "sender": ["0f062a4c61ef"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -497,7 +498,7 @@
         "id": "session-markdown-tab-read.inner-ok-missing:read",
         "observation": {
           "sender": ["4d2966bef600"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -509,7 +510,7 @@
         "id": "session-markdown-tab-read.inner-false-string-error:read",
         "observation": {
           "sender": ["cdeef4a961fe"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -521,7 +522,7 @@
         "id": "session-markdown-tab-read.inner-false-object-error:read",
         "observation": {
           "sender": ["4a63a1a50d4c"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -533,7 +534,7 @@
         "id": "session-markdown-tab-read.outer-refused:read",
         "observation": {
           "sender": ["15b3e337fb90"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -545,7 +546,7 @@
         "id": "session-markdown-tab-read.outer-refused-no-message:read",
         "observation": {
           "sender": ["d07653bfda9f"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -557,7 +558,7 @@
         "id": "session-markdown-tab-read.method-not-found:read",
         "observation": {
           "sender": ["475bab247189"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -569,7 +570,7 @@
         "id": "session-markdown-tab-read.transport-rejection:read",
         "observation": {
           "sender": ["04c0c8bada07"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
@@ -581,7 +582,7 @@
         "id": "session-markdown-tab-read.transport-rejection-no-message:read",
         "observation": {
           "sender": ["4145feef3760"],
-          "payloads": ["b084676e5f8f"],
+          "payloads": ["af5666510c34"],
           "settlements": {
             "markdown": "eb79a9b3682a"
           },

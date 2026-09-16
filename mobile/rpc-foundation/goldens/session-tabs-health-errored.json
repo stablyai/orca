@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
   "scenarioSha256": "4f55a21a5c42ff8d96ccb1b16de235f91f9f7e38fe90de7191c36c8c16cc4e43",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "1ee5cdadc74e": {
+      "name": "session.tabs.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}",
+      "sent": 1
+    },
     "2f0306c93cc8": {
       "name": "session.tabs.list#1",
       "args": [
@@ -43,10 +48,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "30425281a407": {
-      "name": "session.tabs.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
     },
     "49a2260ea0e7": {
       "accepted": "unapplied",
@@ -84,7 +85,7 @@
         "id": "errored",
         "observation": {
           "sender": ["2f0306c93cc8"],
-          "payloads": ["30425281a407"],
+          "payloads": ["1ee5cdadc74e"],
           "settlements": {
             "activate": "84e5ca07cb7a",
             "reconcile": "eb79a9b3682a"

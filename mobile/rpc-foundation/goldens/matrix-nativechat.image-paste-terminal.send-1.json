@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "88da63e9f56e02dbe8404471e23251f9b13fd00b1ab10c19aa15b3a73128a53e",
   "platform": "darwin",
@@ -50,9 +50,10 @@
         }
       }
     },
-    "242d9ae1137d": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    "213d2dbb9be4": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 2
     },
     "37db94f2b504": {
       "name": "terminal.send#1",
@@ -252,10 +253,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "b83e56a4ec7e": {
-      "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
     "bb0a3578940a": {
       "name": "terminal.send#1",
       "args": [
@@ -389,6 +386,11 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "df3ce4768fd3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
     },
     "e23dda10e475": {
       "name": "terminal.send#1",
@@ -565,7 +567,7 @@
         "id": "native-chat-image-paste-single.normal:pasted",
         "observation": {
           "sender": ["52ae659a3d36", "518651fd2840"],
-          "payloads": ["242d9ae1137d", "b83e56a4ec7e"],
+          "payloads": ["df3ce4768fd3", "213d2dbb9be4"],
           "settlements": {
             "one": "84e5ca07cb7a"
           },
@@ -577,7 +579,7 @@
         "id": "native-chat-image-paste-single.result-absent:pasted",
         "observation": {
           "sender": ["0c34ad3edfd4"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -589,7 +591,7 @@
         "id": "native-chat-image-paste-single.result-null:pasted",
         "observation": {
           "sender": ["ca4bb356176b"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -601,7 +603,7 @@
         "id": "native-chat-image-paste-single.inner-ok-missing:pasted",
         "observation": {
           "sender": ["bb0a3578940a"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -613,7 +615,7 @@
         "id": "native-chat-image-paste-single.inner-false-string-error:pasted",
         "observation": {
           "sender": ["eee5069757c1"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -625,7 +627,7 @@
         "id": "native-chat-image-paste-single.inner-false-object-error:pasted",
         "observation": {
           "sender": ["efe52c3cedea"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -637,7 +639,7 @@
         "id": "native-chat-image-paste-single.outer-refused:pasted",
         "observation": {
           "sender": ["604f82044ca0"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -649,7 +651,7 @@
         "id": "native-chat-image-paste-single.outer-refused-no-message:pasted",
         "observation": {
           "sender": ["37db94f2b504"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -661,7 +663,7 @@
         "id": "native-chat-image-paste-single.method-not-found:pasted",
         "observation": {
           "sender": ["e23dda10e475"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "7ed3d39f0607"
           },
@@ -673,7 +675,7 @@
         "id": "native-chat-image-paste-single.transport-rejection:pasted",
         "observation": {
           "sender": ["f0668186d466"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "a947768bc0ed"
           },
@@ -685,7 +687,7 @@
         "id": "native-chat-image-paste-single.transport-rejection-no-message:pasted",
         "observation": {
           "sender": ["d4132868cdd1"],
-          "payloads": ["242d9ae1137d"],
+          "payloads": ["df3ce4768fd3"],
           "settlements": {
             "one": "c7584e82c72f"
           },

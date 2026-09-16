@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "34ab4edb621856980c8678629bd809c100d27dcd0747db5abbf4508c7231b7e5",
   "platform": "darwin",
@@ -52,6 +52,11 @@
         }
       }
     },
+    "983dbe8444ac": {
+      "name": "linear.listIssues#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"assigned\",\"limit\":50}}",
+      "sent": 1
+    },
     "a95bdb94e589": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -61,10 +66,6 @@
           "id": "issue-2"
         }
       ]
-    },
-    "b107467b4d7c": {
-      "name": "linear.listIssues#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"assigned\",\"limit\":50}}"
     },
     "f2b981b0b281": {
       "linear": [
@@ -81,7 +82,7 @@
         "id": "linear-assigned",
         "observation": {
           "sender": ["4e3aac46030e"],
-          "payloads": ["b107467b4d7c"],
+          "payloads": ["983dbe8444ac"],
           "settlements": {
             "linear": "a95bdb94e589"
           },

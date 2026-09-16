@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
   "scenarioSha256": "64916f2d8ab51132b08c3e8c72f89c3a2698d83945def294f42edf22eb6d08ea",
   "platform": "darwin",
@@ -13,9 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "4a8f44bda967": {
+    "3db129933d79": {
       "name": "agentSession.createSupport#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
+      "sent": 1
     },
     "509ea9274732": {
       "name": "agentSession.create#1",
@@ -73,10 +74,6 @@
         "message": "No agent"
       }
     },
-    "87c3a18d4168": {
-      "name": "agentSession.create#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
-    },
     "bc88a2996f1c": {
       "name": "agentSession.createSupport#1",
       "args": [
@@ -111,6 +108,11 @@
         }
       }
     },
+    "ca22846fa804": {
+      "name": "agentSession.create#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.create\",\"params\":{\"envelope\":{\"sessionId\":\"claude_00000000_0000_4000_8000_000000000001\",\"clientOperationId\":\"1767225600000-00000000000040008000000000000002\",\"expectedRuntimeFence\":null,\"payloadFingerprint\":\"ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605\"},\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}",
+      "sent": 2
+    },
     "cddfb66db4f3": {
       "launched": {
         "kind": "unknown",
@@ -125,7 +127,7 @@
         "id": "refused",
         "observation": {
           "sender": ["bc88a2996f1c", "509ea9274732"],
-          "payloads": ["4a8f44bda967", "87c3a18d4168"],
+          "payloads": ["3db129933d79", "ca22846fa804"],
           "settlements": {
             "claude": "57068cb6a8b6"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "694e6a331a7b0a742059ac6575ee8fd5cdeb3ba80abe58cbd216f6bc4a24e400",
   "scenarioSha256": "f50f63c4e2a69793b3d322ed16089c4241ff6169d8f9549106480230fb8dd5e7",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "017d690f964b": {
+      "name": "aiVault.listSessions#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
+      "sent": 4
+    },
     "074d2293c010": {
       "name": "worktree.ps#1",
       "args": [
@@ -57,10 +62,6 @@
         }
       }
     },
-    "15686a7a3813": {
-      "name": "aiVault.listSessions#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
-    },
     "29ba09534e96": {
       "name": "status.get#2",
       "args": [
@@ -93,10 +94,6 @@
           }
         }
       }
-    },
-    "4912be5d956f": {
-      "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
     },
     "522b745543f1": {
       "name": "aiVault.listSessions#1",
@@ -157,10 +154,6 @@
           }
         }
       }
-    },
-    "a5ba8a3216d2": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "ba9fd57319d3": {
       "name": "status.get#1",
@@ -228,6 +221,16 @@
       "labels": ["Back", "Refresh agent sessions"],
       "text": ["Agent Session History", "orca-history"]
     },
+    "d4ef0569dbbc": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 3
+    },
+    "de79fb948454": {
+      "name": "worktree.ps#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}",
+      "sent": 2
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -236,9 +239,10 @@
         "$rpc": "undefined"
       }
     },
-    "ec120260263a": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "ff0ffaddbbf7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     }
   },
   "recording": {
@@ -248,7 +252,7 @@
         "id": "worktrees-pending",
         "observation": {
           "sender": ["bc1a8e138f82", "ba9fd57319d3"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -260,7 +264,7 @@
         "id": "worktrees-listed",
         "observation": {
           "sender": ["074d2293c010", "6ae619d3108a", "29ba09534e96", "522b745543f1"],
-          "payloads": ["4912be5d956f", "a5ba8a3216d2", "ec120260263a", "15686a7a3813"],
+          "payloads": ["de79fb948454", "ff0ffaddbbf7", "d4ef0569dbbc", "017d690f964b"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

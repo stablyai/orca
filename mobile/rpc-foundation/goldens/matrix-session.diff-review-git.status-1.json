@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "b4627f9ac9bc090a2b48fd35f32d5dc3d66fefe0fb65abab75597ef2c73510ec",
   "platform": "darwin",
@@ -21,6 +21,11 @@
         "kind": "unavailable",
         "message": "Update Orca desktop to review changes on mobile."
       }
+    },
+    "231aaf164318": {
+      "name": "git.branchCompare#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
+      "sent": 5
     },
     "2432ad799433": {
       "name": "repo.list#1",
@@ -59,18 +64,6 @@
           }
         }
       }
-    },
-    "3179b4e89c80": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "317a243394fa": {
-      "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "31bd76fdf517": {
-      "name": "worktree.show#2",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
     "32a7c0ae7918": {
       "status": "rejected",
@@ -117,10 +110,6 @@
           }
         }
       }
-    },
-    "3fa5df34c660": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
     "3feccf790548": {
       "name": "git.status#1",
@@ -169,6 +158,11 @@
           }
         }
       }
+    },
+    "40b17d95f271": {
+      "name": "git.status#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 1
     },
     "4327397d6202": {
       "name": "git.status#1",
@@ -247,9 +241,15 @@
         "message": "Update Orca desktop to review changes on mobile."
       }
     },
-    "75ceb6a12cfd": {
-      "name": "git.branchCompare#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
+    "67fead2b3d30": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 4
+    },
+    "6f43dceb9058": {
+      "name": "worktree.show#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 4
     },
     "773f406d8ab5": {
       "name": "git.status#1",
@@ -444,6 +444,11 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "c0edcb195574": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 4
     },
     "c7584e82c72f": {
       "status": "rejected",
@@ -939,7 +944,7 @@
         "id": "diff-review-snapshot.prelude:pending",
         "observation": {
           "sender": ["b8b93d3f8005"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "9270aeb7d9c6"
           },
@@ -958,11 +963,11 @@
             "da3aebbee6f2"
           ],
           "payloads": [
-            "317a243394fa",
-            "3fa5df34c660",
-            "3179b4e89c80",
-            "31bd76fdf517",
-            "75ceb6a12cfd"
+            "40b17d95f271",
+            "c0edcb195574",
+            "67fead2b3d30",
+            "6f43dceb9058",
+            "231aaf164318"
           ],
           "settlements": {
             "snapshot": "f880a1519497"
@@ -975,7 +980,7 @@
         "id": "diff-review-snapshot.result-absent:snapshot",
         "observation": {
           "sender": ["dedfcab351e6"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "880bffe257f0"
           },
@@ -987,7 +992,7 @@
         "id": "diff-review-snapshot.result-null:snapshot",
         "observation": {
           "sender": ["d52732ec0da4"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "880bffe257f0"
           },
@@ -999,7 +1004,7 @@
         "id": "diff-review-snapshot.inner-ok-missing:snapshot",
         "observation": {
           "sender": ["b2cc0d6f05e0"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "880bffe257f0"
           },
@@ -1011,7 +1016,7 @@
         "id": "diff-review-snapshot.inner-false-string-error:snapshot",
         "observation": {
           "sender": ["925bc1732e6e"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "880bffe257f0"
           },
@@ -1023,7 +1028,7 @@
         "id": "diff-review-snapshot.inner-false-object-error:snapshot",
         "observation": {
           "sender": ["f55a580e621c"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "880bffe257f0"
           },
@@ -1035,7 +1040,7 @@
         "id": "diff-review-snapshot.outer-refused:snapshot",
         "observation": {
           "sender": ["c7c47b24d772"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "32a7c0ae7918"
           },
@@ -1047,7 +1052,7 @@
         "id": "diff-review-snapshot.outer-refused-no-message:snapshot",
         "observation": {
           "sender": ["773f406d8ab5"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "83a3b2ff8260"
           },
@@ -1059,7 +1064,7 @@
         "id": "diff-review-snapshot.method-not-found:snapshot",
         "observation": {
           "sender": ["93b9682c496c"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "14804a5e414f"
           },
@@ -1071,7 +1076,7 @@
         "id": "diff-review-snapshot.transport-rejection:snapshot",
         "observation": {
           "sender": ["4327397d6202"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "a947768bc0ed"
           },
@@ -1083,7 +1088,7 @@
         "id": "diff-review-snapshot.transport-rejection-no-message:snapshot",
         "observation": {
           "sender": ["f04da7e8c374"],
-          "payloads": ["317a243394fa"],
+          "payloads": ["40b17d95f271"],
           "settlements": {
             "snapshot": "c7584e82c72f"
           },

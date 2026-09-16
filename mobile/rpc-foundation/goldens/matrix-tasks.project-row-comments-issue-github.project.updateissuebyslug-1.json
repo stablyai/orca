@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "cfe0284f502001a57a9d18585222e5ae4b254d9bac32e0bb4080ee9363e8e019",
   "platform": "darwin",
@@ -88,10 +88,6 @@
         "id": "item-1",
         "itemType": "ISSUE"
       }
-    },
-    "0ce8caa0cc82": {
-      "name": "github.project.addIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.addIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"body\":\"a project comment\"}}"
     },
     "0ef970845cc7": {
       "name": "projectRowDetailError",
@@ -184,10 +180,6 @@
       "name": "projectRowDetailError",
       "value": "Unknown method",
       "sent": 1
-    },
-    "16637fd57f65": {
-      "name": "github.project.updateIssueCommentBySlug#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501,\"body\":\"an edited comment\"}}"
     },
     "1c06180a60fe": {
       "detail": {
@@ -803,6 +795,11 @@
         }
       }
     },
+    "5f2604a47fa1": {
+      "name": "github.project.updateIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"commentId\":501,\"body\":\"an edited comment\"}}",
+      "sent": 3
+    },
     "68f35933f895": {
       "name": "github.project.updateIssueBySlug#1",
       "args": [
@@ -1220,10 +1217,6 @@
         "itemType": "ISSUE"
       }
     },
-    "9340829c00ac": {
-      "name": "github.project.updateIssueBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"title\":\"Renamed\"}}}"
-    },
     "9698ad92ebc9": {
       "name": "projectCommentDraft",
       "value": "",
@@ -1561,6 +1554,16 @@
           "ok": false
         }
       }
+    },
+    "c2bda70f8353": {
+      "name": "github.project.updateIssueBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"title\":\"Renamed\"}}}",
+      "sent": 1
+    },
+    "cfc8331c4dc0": {
+      "name": "github.project.addIssueCommentBySlug#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.addIssueCommentBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"body\":\"a project comment\"}}",
+      "sent": 2
     },
     "d1bb762720d5": {
       "name": "projectMutating",
@@ -2203,7 +2206,7 @@
         "id": "tk-project-row-comments-issue.normal:update-item-settled",
         "observation": {
           "sender": ["a3c003fbf907"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2216,7 +2219,7 @@
         "id": "tk-project-row-comments-issue.normal:add-comment-settled",
         "observation": {
           "sender": ["a3c003fbf907", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2239,7 +2242,7 @@
         "id": "tk-project-row-comments-issue.normal:update-comment-settled",
         "observation": {
           "sender": ["a3c003fbf907", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2269,7 +2272,7 @@
         "id": "tk-project-row-comments-issue.result-absent:update-item-settled",
         "observation": {
           "sender": ["5ed215cd45d5"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2282,7 +2285,7 @@
         "id": "tk-project-row-comments-issue.result-absent:add-comment-settled",
         "observation": {
           "sender": ["5ed215cd45d5", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2304,7 +2307,7 @@
         "id": "tk-project-row-comments-issue.result-absent:update-comment-settled",
         "observation": {
           "sender": ["5ed215cd45d5", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2333,7 +2336,7 @@
         "id": "tk-project-row-comments-issue.result-null:update-item-settled",
         "observation": {
           "sender": ["4d1ed5381bf1"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2346,7 +2349,7 @@
         "id": "tk-project-row-comments-issue.result-null:add-comment-settled",
         "observation": {
           "sender": ["4d1ed5381bf1", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2368,7 +2371,7 @@
         "id": "tk-project-row-comments-issue.result-null:update-comment-settled",
         "observation": {
           "sender": ["4d1ed5381bf1", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2397,7 +2400,7 @@
         "id": "tk-project-row-comments-issue.inner-ok-missing:update-item-settled",
         "observation": {
           "sender": ["a36c9349bb7d"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2410,7 +2413,7 @@
         "id": "tk-project-row-comments-issue.inner-ok-missing:add-comment-settled",
         "observation": {
           "sender": ["a36c9349bb7d", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2433,7 +2436,7 @@
         "id": "tk-project-row-comments-issue.inner-ok-missing:update-comment-settled",
         "observation": {
           "sender": ["a36c9349bb7d", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2463,7 +2466,7 @@
         "id": "tk-project-row-comments-issue.inner-false-string-error:update-item-settled",
         "observation": {
           "sender": ["a2f2a0705e06"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2476,7 +2479,7 @@
         "id": "tk-project-row-comments-issue.inner-false-string-error:add-comment-settled",
         "observation": {
           "sender": ["a2f2a0705e06", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2498,7 +2501,7 @@
         "id": "tk-project-row-comments-issue.inner-false-string-error:update-comment-settled",
         "observation": {
           "sender": ["a2f2a0705e06", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2527,7 +2530,7 @@
         "id": "tk-project-row-comments-issue.inner-false-object-error:update-item-settled",
         "observation": {
           "sender": ["5e7147dcfd07"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2540,7 +2543,7 @@
         "id": "tk-project-row-comments-issue.inner-false-object-error:add-comment-settled",
         "observation": {
           "sender": ["5e7147dcfd07", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2562,7 +2565,7 @@
         "id": "tk-project-row-comments-issue.inner-false-object-error:update-comment-settled",
         "observation": {
           "sender": ["5e7147dcfd07", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2591,7 +2594,7 @@
         "id": "tk-project-row-comments-issue.outer-refused:update-item-settled",
         "observation": {
           "sender": ["bc53376d51ab"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2604,7 +2607,7 @@
         "id": "tk-project-row-comments-issue.outer-refused:add-comment-settled",
         "observation": {
           "sender": ["bc53376d51ab", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2626,7 +2629,7 @@
         "id": "tk-project-row-comments-issue.outer-refused:update-comment-settled",
         "observation": {
           "sender": ["bc53376d51ab", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2655,7 +2658,7 @@
         "id": "tk-project-row-comments-issue.outer-refused-no-message:update-item-settled",
         "observation": {
           "sender": ["13824903a84a"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2668,7 +2671,7 @@
         "id": "tk-project-row-comments-issue.outer-refused-no-message:add-comment-settled",
         "observation": {
           "sender": ["13824903a84a", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2690,7 +2693,7 @@
         "id": "tk-project-row-comments-issue.outer-refused-no-message:update-comment-settled",
         "observation": {
           "sender": ["13824903a84a", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2719,7 +2722,7 @@
         "id": "tk-project-row-comments-issue.method-not-found:update-item-settled",
         "observation": {
           "sender": ["68f35933f895"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2732,7 +2735,7 @@
         "id": "tk-project-row-comments-issue.method-not-found:add-comment-settled",
         "observation": {
           "sender": ["68f35933f895", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2754,7 +2757,7 @@
         "id": "tk-project-row-comments-issue.method-not-found:update-comment-settled",
         "observation": {
           "sender": ["68f35933f895", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2783,7 +2786,7 @@
         "id": "tk-project-row-comments-issue.transport-rejection:update-item-settled",
         "observation": {
           "sender": ["b0b8eaa35966"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2796,7 +2799,7 @@
         "id": "tk-project-row-comments-issue.transport-rejection:add-comment-settled",
         "observation": {
           "sender": ["b0b8eaa35966", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2818,7 +2821,7 @@
         "id": "tk-project-row-comments-issue.transport-rejection:update-comment-settled",
         "observation": {
           "sender": ["b0b8eaa35966", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2847,7 +2850,7 @@
         "id": "tk-project-row-comments-issue.transport-rejection-no-message:update-item-settled",
         "observation": {
           "sender": ["140fa75b0a29"],
-          "payloads": ["9340829c00ac"],
+          "payloads": ["c2bda70f8353"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a"
@@ -2860,7 +2863,7 @@
         "id": "tk-project-row-comments-issue.transport-rejection-no-message:add-comment-settled",
         "observation": {
           "sender": ["140fa75b0a29", "909e5a140366"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",
@@ -2882,7 +2885,7 @@
         "id": "tk-project-row-comments-issue.transport-rejection-no-message:update-comment-settled",
         "observation": {
           "sender": ["140fa75b0a29", "909e5a140366", "8f5c8979ff80"],
-          "payloads": ["9340829c00ac", "0ce8caa0cc82", "16637fd57f65"],
+          "payloads": ["c2bda70f8353", "cfc8331c4dc0", "5f2604a47fa1"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-item-0": "eb79a9b3682a",

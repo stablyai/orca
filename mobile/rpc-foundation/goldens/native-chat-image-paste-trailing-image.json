@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
   "scenarioSha256": "ebf9397271bfd5462403e60748f5bd505d554eba5f74ce79a8c40550e9719dcc",
   "platform": "darwin",
@@ -13,15 +13,16 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "242d9ae1137d": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
     "47a22f9d0047": {
       "failure": {
         "$rpc": "null"
       },
       "pasted": true
+    },
+    "4e7e5e8e5767": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 2
     },
     "52ae659a3d36": {
       "name": "terminal.send#1",
@@ -71,9 +72,10 @@
       "settledAt": 0,
       "value": true
     },
-    "ee5ea32bdaf0": {
-      "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    "df3ce4768fd3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
     },
     "ff84951eb090": {
       "name": "terminal.send#2",
@@ -125,7 +127,7 @@
         "id": "pasted",
         "observation": {
           "sender": ["52ae659a3d36", "ff84951eb090"],
-          "payloads": ["242d9ae1137d", "ee5ea32bdaf0"],
+          "payloads": ["df3ce4768fd3", "4e7e5e8e5767"],
           "settlements": {
             "trailing": "84e5ca07cb7a"
           },

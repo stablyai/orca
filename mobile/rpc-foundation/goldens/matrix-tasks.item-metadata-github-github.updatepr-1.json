@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
   "scenarioSha256": "27587bfb5745051e3cb27b01dc49b90b6f3c8ddbeb38f20772502fae2f562d91",
   "platform": "darwin",
@@ -314,6 +314,11 @@
     "32a3635e06a4": {
       "name": "mutatingStatus",
       "value": false,
+      "sent": 1
+    },
+    "387542f122bb": {
+      "name": "github.updatePR#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"title\":\"Renamed\",\"body\":\"new body\"}}}",
       "sent": 1
     },
     "48545870a5c1": {
@@ -773,10 +778,6 @@
         "title": "Renamed"
       },
       "sent": 1
-    },
-    "b092bbd7362d": {
-      "name": "github.updatePR#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"updates\":{\"title\":\"Renamed\",\"body\":\"new body\"}}}"
     },
     "b53c339a3854": {
       "name": "error",
@@ -1368,7 +1369,7 @@
         "id": "tk-item-metadata-github.normal:update-pr-settled",
         "observation": {
           "sender": ["7cb20f219688"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1388,7 +1389,7 @@
         "id": "tk-item-metadata-github.result-absent:update-pr-settled",
         "observation": {
           "sender": ["e7eb483032e9"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1401,7 +1402,7 @@
         "id": "tk-item-metadata-github.result-null:update-pr-settled",
         "observation": {
           "sender": ["107d6bce09cd"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1414,7 +1415,7 @@
         "id": "tk-item-metadata-github.inner-ok-missing:update-pr-settled",
         "observation": {
           "sender": ["cd3f120ad936"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1434,7 +1435,7 @@
         "id": "tk-item-metadata-github.inner-false-string-error:update-pr-settled",
         "observation": {
           "sender": ["a188da72de28"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1447,7 +1448,7 @@
         "id": "tk-item-metadata-github.inner-false-object-error:update-pr-settled",
         "observation": {
           "sender": ["6411b70b2d18"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1460,7 +1461,7 @@
         "id": "tk-item-metadata-github.outer-refused:update-pr-settled",
         "observation": {
           "sender": ["5b0b55895e09"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1473,7 +1474,7 @@
         "id": "tk-item-metadata-github.outer-refused-no-message:update-pr-settled",
         "observation": {
           "sender": ["81d3548ec9e7"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1486,7 +1487,7 @@
         "id": "tk-item-metadata-github.method-not-found:update-pr-settled",
         "observation": {
           "sender": ["cfadfbdb8f62"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1499,7 +1500,7 @@
         "id": "tk-item-metadata-github.transport-rejection:update-pr-settled",
         "observation": {
           "sender": ["d1a69a5a36ed"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"
@@ -1512,7 +1513,7 @@
         "id": "tk-item-metadata-github.transport-rejection-no-message:update-pr-settled",
         "observation": {
           "sender": ["5cf7d5c76957"],
-          "payloads": ["b092bbd7362d"],
+          "payloads": ["387542f122bb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-pr-0": "eb79a9b3682a"

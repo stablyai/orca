@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "77b0812842903075bb3d3ec1f7bcea94b1e1dac5993c3c8854bd4c3d2a567988",
   "platform": "darwin",
@@ -16,6 +16,11 @@
     "000516aa083b": {
       "name": "error",
       "value": "outer refused",
+      "sent": 2
+    },
+    "03f32ac43ec3": {
+      "name": "github.prChecks#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"noCache\":true}}",
       "sent": 2
     },
     "0879b3f9a393": {
@@ -59,6 +64,11 @@
           "title": "A pull request"
         }
       ],
+      "sent": 1
+    },
+    "15f7c99a18fb": {
+      "name": "github.requestPRReviewers#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}",
       "sent": 1
     },
     "193449bf1c4d": {
@@ -389,18 +399,10 @@
         }
       }
     },
-    "4fdc894b14c6": {
-      "name": "github.prChecks#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headSha\":\"head-sha\",\"noCache\":true}}"
-    },
     "52d25e1f3035": {
       "name": "error",
       "value": "Connection closed",
       "sent": 2
-    },
-    "53b8bc3863fe": {
-      "name": "github.requestPRReviewers#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
     },
     "5652285eaff7": {
       "draft": "a comment",
@@ -1465,7 +1467,7 @@
         "id": "tk-item-review-github.prelude:reviewers-settled",
         "observation": {
           "sender": ["d4d38f1bf018"],
-          "payloads": ["53b8bc3863fe"],
+          "payloads": ["15f7c99a18fb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a"
@@ -1486,7 +1488,7 @@
         "id": "tk-item-review-github.prelude:cleanup",
         "observation": {
           "sender": ["d4d38f1bf018", "227732d86ad6"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1512,7 +1514,7 @@
         "id": "tk-item-review-github.normal:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "8e390a30a275"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1540,7 +1542,7 @@
         "id": "tk-item-review-github.result-absent:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "49bfc4ebe9c1"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1566,7 +1568,7 @@
         "id": "tk-item-review-github.result-null:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "35b06a3e84d7"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1592,7 +1594,7 @@
         "id": "tk-item-review-github.inner-ok-missing:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "b980a4f03682"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1618,7 +1620,7 @@
         "id": "tk-item-review-github.inner-false-string-error:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "ad435cdf6cd7"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1644,7 +1646,7 @@
         "id": "tk-item-review-github.inner-false-object-error:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "cc50caed33f4"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1670,7 +1672,7 @@
         "id": "tk-item-review-github.outer-refused:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "d1b002eaac7d"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1696,7 +1698,7 @@
         "id": "tk-item-review-github.outer-refused-no-message:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "3d317dffb023"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1722,7 +1724,7 @@
         "id": "tk-item-review-github.method-not-found:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "39e5f350a12a"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1748,7 +1750,7 @@
         "id": "tk-item-review-github.transport-rejection:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "852540b712d7"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",
@@ -1774,7 +1776,7 @@
         "id": "tk-item-review-github.transport-rejection-no-message:checks-settled",
         "observation": {
           "sender": ["d4d38f1bf018", "5ff04b5a92eb"],
-          "payloads": ["53b8bc3863fe", "4fdc894b14c6"],
+          "payloads": ["15f7c99a18fb", "03f32ac43ec3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "reviewers-0": "eb79a9b3682a",

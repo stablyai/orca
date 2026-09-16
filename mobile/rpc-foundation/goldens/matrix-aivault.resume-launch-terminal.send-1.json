@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
   "scenarioSha256": "aa812132ede83e4aced73a644e996df82a38bfc70ead70a5db2e9af8a8b1bfff",
   "platform": "darwin",
@@ -197,6 +197,11 @@
         }
       }
     },
+    "39cabd8258a3": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}",
+      "sent": 2
+    },
     "400d946a183d": {
       "failure": {
         "$rpc": "null"
@@ -206,6 +211,11 @@
         "terminal": "terminal-9",
         "title": "codex"
       }
+    },
+    "495d8519301e": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}",
+      "sent": 1
     },
     "54558214b507": {
       "failure": "Unknown method",
@@ -398,10 +408,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "a9a45875782f": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}"
-    },
     "b948e8307e81": {
       "status": "rejected",
       "startedAt": 0,
@@ -497,10 +503,6 @@
       "failure": "transport failure",
       "launched": "unlaunched"
     },
-    "eb30e498d168": {
-      "name": "session.tabs.createTerminal#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
-    },
     "efa7e20c5a6f": {
       "failure": "outer refused",
       "launched": "unlaunched"
@@ -553,7 +555,7 @@
         "id": "aivault-resume-launch-sent.normal:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "a84f5d45a48b"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "6e79da536ca9"
           },
@@ -565,7 +567,7 @@
         "id": "aivault-resume-launch-sent.result-absent:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "17ee408f637d"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "6e79da536ca9"
           },
@@ -577,7 +579,7 @@
         "id": "aivault-resume-launch-sent.result-null:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "335573146591"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "6e79da536ca9"
           },
@@ -589,7 +591,7 @@
         "id": "aivault-resume-launch-sent.inner-ok-missing:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "3253374e68e6"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "6e79da536ca9"
           },
@@ -601,7 +603,7 @@
         "id": "aivault-resume-launch-sent.inner-false-string-error:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "9b68cd60047e"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "6e79da536ca9"
           },
@@ -613,7 +615,7 @@
         "id": "aivault-resume-launch-sent.inner-false-object-error:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "dac3aef412ff"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "6e79da536ca9"
           },
@@ -625,7 +627,7 @@
         "id": "aivault-resume-launch-sent.outer-refused:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "049bcc141657"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "32a7c0ae7918"
           },
@@ -637,7 +639,7 @@
         "id": "aivault-resume-launch-sent.outer-refused-no-message:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "fa85a657c342"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "8511f0debfc0"
           },
@@ -649,7 +651,7 @@
         "id": "aivault-resume-launch-sent.method-not-found:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "0f7c8cc35709"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "b948e8307e81"
           },
@@ -661,7 +663,7 @@
         "id": "aivault-resume-launch-sent.transport-rejection:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "c27cefd487fc"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "a947768bc0ed"
           },
@@ -673,7 +675,7 @@
         "id": "aivault-resume-launch-sent.transport-rejection-no-message:resumed",
         "observation": {
           "sender": ["6b1e36abce6b", "71b34bf921d6"],
-          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "payloads": ["495d8519301e", "39cabd8258a3"],
           "settlements": {
             "full": "c7584e82c72f"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "9e877af8539e5425f65edd6b3ff8af73e719aae2033980411a8e8a3b508dcd9e",
   "platform": "darwin",
@@ -32,14 +32,15 @@
         }
       ]
     },
+    "5a5a35e0f4ab": {
+      "name": "terminal.rename#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}",
+      "sent": 1
+    },
     "5d179ad4af0c": {
       "name": "fetch-terminals",
       "value": {},
       "sent": 1
-    },
-    "89e4126272a3": {
-      "name": "terminal.rename#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}"
     },
     "986504944223": {
       "name": "terminal.rename#1",
@@ -91,7 +92,7 @@
         "id": "renamed",
         "observation": {
           "sender": ["986504944223"],
-          "payloads": ["89e4126272a3"],
+          "payloads": ["5a5a35e0f4ab"],
           "settlements": {
             "rename": "eb79a9b3682a"
           },

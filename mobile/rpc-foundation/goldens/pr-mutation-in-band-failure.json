@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
   "scenarioSha256": "70a94f45dbf7d58d9024c1cc4c94edd98fa48cd5ccffe8f2b7c53fa3e55d18d3",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0550d42a40c4": {
-      "name": "github.mergePR#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}"
-    },
     "06af128d666d": {
       "name": "github.updatePRState#1",
       "args": [
@@ -149,14 +145,6 @@
         }
       }
     },
-    "3ee6b36340d7": {
-      "name": "github.setPRAutoMerge#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}"
-    },
-    "551aaea772ad": {
-      "name": "github.rerunPRChecks#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}"
-    },
     "5b819e88a0c1": {
       "close": {
         "error": "Branch is protected",
@@ -189,9 +177,20 @@
         "ok": false
       }
     },
-    "c2df352b7a94": {
+    "9e1f3da56de1": {
       "name": "github.updatePRState#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}",
+      "sent": 2
+    },
+    "ba8452129ec1": {
+      "name": "github.mergePR#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}",
+      "sent": 1
+    },
+    "d8bf37552be5": {
+      "name": "github.rerunPRChecks#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}",
+      "sent": 4
     },
     "f2d0a4251252": {
       "status": "fulfilled",
@@ -250,6 +249,11 @@
         "ok": false
       }
     },
+    "fba4f98f0770": {
+      "name": "github.setPRAutoMerge#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}",
+      "sent": 3
+    },
     "fbc958e4d46e": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -266,7 +270,7 @@
         "id": "string-error",
         "observation": {
           "sender": ["13ee6ced5768"],
-          "payloads": ["0550d42a40c4"],
+          "payloads": ["ba8452129ec1"],
           "settlements": {
             "string-error": "f8ef6dd619cb"
           },
@@ -278,7 +282,7 @@
         "id": "object-error",
         "observation": {
           "sender": ["13ee6ced5768", "06af128d666d"],
-          "payloads": ["0550d42a40c4", "c2df352b7a94"],
+          "payloads": ["ba8452129ec1", "9e1f3da56de1"],
           "settlements": {
             "string-error": "f8ef6dd619cb",
             "object-error": "f2d0a4251252"
@@ -291,7 +295,7 @@
         "id": "unstructured",
         "observation": {
           "sender": ["13ee6ced5768", "06af128d666d", "32fa5cd01884"],
-          "payloads": ["0550d42a40c4", "c2df352b7a94", "3ee6b36340d7"],
+          "payloads": ["ba8452129ec1", "9e1f3da56de1", "fba4f98f0770"],
           "settlements": {
             "string-error": "f8ef6dd619cb",
             "object-error": "f2d0a4251252",
@@ -305,7 +309,7 @@
         "id": "empty-object-error",
         "observation": {
           "sender": ["13ee6ced5768", "06af128d666d", "32fa5cd01884", "f3a534fa6403"],
-          "payloads": ["0550d42a40c4", "c2df352b7a94", "3ee6b36340d7", "551aaea772ad"],
+          "payloads": ["ba8452129ec1", "9e1f3da56de1", "fba4f98f0770", "d8bf37552be5"],
           "settlements": {
             "string-error": "f8ef6dd619cb",
             "object-error": "f2d0a4251252",

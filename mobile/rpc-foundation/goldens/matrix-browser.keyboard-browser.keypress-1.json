@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "c1df871e84d4399e9a447caaff244241933c0dfc7c3d5e114d022e54b0ed7ed4",
   "platform": "darwin",
@@ -13,9 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "04ae34c3208f": {
+    "1bc6d9688999": {
+      "name": "browser.keyboardInsertText#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keyboardInsertText\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"text\":\"hello\"}}",
+      "sent": 1
+    },
+    "2f4d80d09d24": {
       "name": "browser.keypress#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keypress\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"key\":\"Enter\"}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keypress\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"key\":\"Enter\"}}",
+      "sent": 2
     },
     "368e34201541": {
       "name": "browser.keypress#1",
@@ -51,10 +57,6 @@
           }
         }
       }
-    },
-    "37ef5fe93769": {
-      "name": "browser.keyboardInsertText#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keyboardInsertText\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"text\":\"hello\"}}"
     },
     "3c82ed937461": {
       "name": "browser.keypress#1",
@@ -475,7 +477,7 @@
         "id": "browser-keyboard-input.normal:typed",
         "observation": {
           "sender": ["770254847b6a", "c532c7fdcc69"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -489,7 +491,7 @@
         "id": "browser-keyboard-input.result-absent:typed",
         "observation": {
           "sender": ["770254847b6a", "72b0cf4a3571"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -503,7 +505,7 @@
         "id": "browser-keyboard-input.result-null:typed",
         "observation": {
           "sender": ["770254847b6a", "3c82ed937461"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -517,7 +519,7 @@
         "id": "browser-keyboard-input.inner-ok-missing:typed",
         "observation": {
           "sender": ["770254847b6a", "368e34201541"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -531,7 +533,7 @@
         "id": "browser-keyboard-input.inner-false-string-error:typed",
         "observation": {
           "sender": ["770254847b6a", "f1c7c94fd8da"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -545,7 +547,7 @@
         "id": "browser-keyboard-input.inner-false-object-error:typed",
         "observation": {
           "sender": ["770254847b6a", "e35aacc63861"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -559,7 +561,7 @@
         "id": "browser-keyboard-input.outer-refused:typed",
         "observation": {
           "sender": ["770254847b6a", "be48c9f97d81"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -573,7 +575,7 @@
         "id": "browser-keyboard-input.outer-refused-no-message:typed",
         "observation": {
           "sender": ["770254847b6a", "c2f31140b989"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -587,7 +589,7 @@
         "id": "browser-keyboard-input.method-not-found:typed",
         "observation": {
           "sender": ["770254847b6a", "92ab66cd3f6d"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -601,7 +603,7 @@
         "id": "browser-keyboard-input.transport-rejection:typed",
         "observation": {
           "sender": ["770254847b6a", "8795eb123f48"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",
@@ -615,7 +617,7 @@
         "id": "browser-keyboard-input.transport-rejection-no-message:typed",
         "observation": {
           "sender": ["770254847b6a", "7b06f0a27e27"],
-          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "payloads": ["1bc6d9688999", "2f4d80d09d24"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "text": "eb79a9b3682a",

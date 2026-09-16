@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
   "scenarioSha256": "10011c7c75e74d9c2e880c5458c9156264ae07e91956a80946ede1d4e684952a",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
     "33d053404f10": {
       "activeWorktreePath": {
         "$rpc": "null"
@@ -72,6 +68,11 @@
         }
       }
     },
+    "4f3bdb245d26": {
+      "name": "aiVault.listSessions#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}",
+      "sent": 3
+    },
     "6e50957443ea": {
       "name": "status.get#1",
       "args": [
@@ -104,6 +105,11 @@
           }
         }
       }
+    },
+    "852980e2efc0": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 1
     },
     "9cac597c56da": {
       "name": "status.get#2",
@@ -138,9 +144,10 @@
         }
       }
     },
-    "c0c86e67c300": {
+    "b33a14df0df6": {
       "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
+      "sent": 2
     },
     "cd739a80b7a8": {
       "activeWorktreePath": "/repo/feature",
@@ -168,10 +175,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f191cc9d24e3": {
-      "name": "aiVault.listSessions#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
     }
   },
   "recording": {
@@ -181,7 +184,7 @@
         "id": "held",
         "observation": {
           "sender": ["6e50957443ea"],
-          "payloads": ["1e5b32902af7"],
+          "payloads": ["852980e2efc0"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -193,7 +196,7 @@
         "id": "ready",
         "observation": {
           "sender": ["6e50957443ea", "9cac597c56da", "38364726a135"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "f191cc9d24e3"],
+          "payloads": ["852980e2efc0", "b33a14df0df6", "4f3bdb245d26"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"

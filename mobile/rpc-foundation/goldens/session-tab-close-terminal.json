@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "194b010d00fdeca85418870fd053ac500c38cae02e98c4bfc544b8fea78bbcb8",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2d697fe0c9bf": {
-      "name": "terminal.close#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.close\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
     "7e31b0a0202e": {
       "name": "terminal.close#1",
       "args": [
@@ -57,6 +53,11 @@
       },
       "sent": 1
     },
+    "af3f27d99348": {
+      "name": "terminal.close#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.close\",\"params\":{\"terminal\":\"terminal-1\"}}",
+      "sent": 1
+    },
     "c965e2e20176": {
       "name": "clear-live-input",
       "value": {
@@ -95,7 +96,7 @@
         "id": "closed",
         "observation": {
           "sender": ["7e31b0a0202e"],
-          "payloads": ["2d697fe0c9bf"],
+          "payloads": ["af3f27d99348"],
           "settlements": {
             "close-terminal": "eb79a9b3682a"
           },

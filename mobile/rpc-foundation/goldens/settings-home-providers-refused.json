@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "9f19bd485ecf9c7fe7a3323e5458dbf484f208c9ad3e7dd516c83e00af18904d",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "c22f33a0ed28622d4d53ae31e934056f87d2c10e8dc4475831ae1ee5fd3a9b8b",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "27e92f99be15": {
-      "name": "linear.status#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-    },
     "2f02be854c04": {
       "name": "settings.get#1",
       "args": [
@@ -86,11 +82,12 @@
         }
       }
     },
-    "42701bb4f394": {
-      "name": "preflight.check#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-    },
     "44136fa355b3": {},
+    "4872493b1fb7": {
+      "name": "preflight.check#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}",
+      "sent": 3
+    },
     "569aea0064f4": {
       "name": "linear.status#1",
       "args": [
@@ -141,12 +138,13 @@
         "startedAt": 0
       }
     },
+    "75ef90fdbf02": {
+      "name": "linear.status#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}",
+      "sent": 3
+    },
     "79b8c1b0d1d1": {
       "host-1": ["github"]
-    },
-    "7ddcb1852b39": {
-      "name": "settings.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "8f1426c2f53b": {
       "name": "providers",
@@ -220,6 +218,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ee74dff8b8a2": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}",
+      "sent": 3
     }
   },
   "recording": {
@@ -229,7 +232,7 @@
         "id": "settings-pending",
         "observation": {
           "sender": ["da2c3b49481f", "66bc794cca63", "569aea0064f4"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
@@ -241,7 +244,7 @@
         "id": "settled",
         "observation": {
           "sender": ["2f02be854c04", "349f2cb31004", "a3c30fa6fdda"],
-          "payloads": ["7ddcb1852b39", "42701bb4f394", "27e92f99be15"],
+          "payloads": ["ee74dff8b8a2", "4872493b1fb7", "75ef90fdbf02"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
