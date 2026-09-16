@@ -48,7 +48,12 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
   OpenCodeUsagePersistedState,
   'hasAnyOpenCodeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(
+    store: Pick<
+      Store,
+      'getRepos' | 'getAllWorktreeMeta' | 'getFolderWorkspaces' | 'getProjectGroups'
+    >
+  ) {
     super(store, {
       logTag: '[opencode-usage]',
       resolveCacheFile: getOpenCodeUsageFile,

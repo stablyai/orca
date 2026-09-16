@@ -1,4 +1,3 @@
-import type { Repo } from '../../shared/repo-types'
 import type { UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 
@@ -21,14 +20,14 @@ export function getUsageWorktreeFingerprint(
 }
 
 export function createWorktreeRefs(
-  repos: Repo[],
   worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>
 ): UsageScanWorktreeRef[] {
   const refs: UsageScanWorktreeRef[] = []
-  for (const repo of repos) {
-    for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
+  // Why: folder workspaces are keyed by a synthetic repo id that `getRepos()` never lists.
+  for (const [repoId, worktrees] of worktreesByRepo) {
+    for (const worktree of worktrees) {
       refs.push({
-        repoId: repo.id,
+        repoId,
         worktreeId: worktree.worktreeId,
         path: worktree.path,
         displayName: worktree.displayName

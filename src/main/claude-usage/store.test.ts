@@ -22,16 +22,23 @@ vi.mock('./scanner', async (importOriginal) => ({
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
 import { scanClaudeUsageFiles } from './scanner'
+import { aggregateClaudeUsage } from './usage-aggregation'
+import { attributeClaudeUsageTurns, buildWorktreeLookup } from './worktree-attribution'
 
 function createBackingStore(): ConstructorParameters<typeof ClaudeUsageStore>[0] {
   return {
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({})
+    getAllWorktreeMeta: () => ({}),
+    getFolderWorkspaces: () => [],
+    getProjectGroups: () => []
   }
 }
 
-function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): ClaudeUsageStore {
-  const store = new ClaudeUsageStore(createBackingStore())
+function createStoreWithState(
+  state: Partial<ClaudeUsagePersistedState>,
+  backingStore: Partial<ConstructorParameters<typeof ClaudeUsageStore>[0]> = {}
+): ClaudeUsageStore {
+  const store = new ClaudeUsageStore({ ...createBackingStore(), ...backingStore })
 
   ;(store as unknown as { state: ClaudeUsagePersistedState }).state = {
     schemaVersion: 1,
@@ -143,6 +150,78 @@ describe('ClaudeUsageStore', () => {
     expect(summary.sessions).toBe(0)
     expect(summary.turns).toBe(0)
     expect(summary.zeroCacheReadTurns).toBe(0)
+  })
+
+  it('attributes folder-workspace sessions to their workspace under the Orca scope', async () => {
+    const folderPath = '/outside/plain-folder'
+    const store = createStoreWithState(
+      {
+        scanState: {
+          enabled: true,
+          lastScanStartedAt: null,
+          lastScanCompletedAt: null,
+          lastScanError: null
+        }
+      },
+      {
+        getFolderWorkspaces: () => [
+          {
+            id: 'workspace-1',
+            projectGroupId: 'group-1',
+            name: 'Plain Folder',
+            folderPath,
+            connectionId: null,
+            linkedTask: null,
+            comment: '',
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0,
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ]
+      }
+    )
+    // Why: attribute through the real worktree lookup so a scan that never
+    // receives the folder-workspace ref still falls back to a null worktreeId.
+    vi.mocked(scanClaudeUsageFiles).mockImplementation(async (worktrees) => ({
+      processedFiles: [],
+      ...aggregateClaudeUsage(
+        await attributeClaudeUsageTurns(
+          [
+            {
+              sessionId: 'session-1',
+              timestamp: '2026-04-09T14:00:00.000Z',
+              model: 'claude-sonnet-4-6',
+              cwd: folderPath,
+              gitBranch: null,
+              inputTokens: 100,
+              outputTokens: 20,
+              cacheReadTokens: 10,
+              cacheWriteTokens: 5,
+              cacheWrite1hTokens: 0
+            }
+          ],
+          await buildWorktreeLookup(worktrees)
+        )
+      )
+    }))
+
+    const summary = await store.getSummary('orca', '30d')
+
+    expect(vi.mocked(scanClaudeUsageFiles).mock.calls[0]?.[0]).toContainEqual({
+      repoId: 'folder-workspace:group-1',
+      worktreeId: 'folder:workspace-1',
+      path: folderPath,
+      displayName: 'Plain Folder'
+    })
+    // Why: the Orca scope drops null worktreeIds, so surviving rows prove attribution.
+    expect(summary.sessions).toBe(1)
+    expect(summary.turns).toBe(1)
+    expect(summary.inputTokens).toBe(100)
+    expect(summary.topProject).toBe('Plain Folder')
   })
 
   it('filters sessions by local calendar day instead of raw UTC date prefixes', async () => {
