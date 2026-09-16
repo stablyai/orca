@@ -1,10 +1,17 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
-/** A pending request to confirm closing a pinned tab. `onConfirm` runs the
- *  original close once the user accepts; the label is shown in the dialog. */
+/** Which confirmation copy the dialog renders and which "don't ask again"
+ *  setting it toggles. `pinned` is the always-on pinned-tab guard; `any` is the
+ *  opt-in confirm-before-closing-any-tab guard. */
+export type TabCloseConfirmVariant = 'pinned' | 'any'
+
+/** A pending request to confirm closing a tab. `onConfirm` runs the original
+ *  close once the user accepts; the label is shown in the dialog. `variant`
+ *  defaults to `pinned` for callers that predate the confirm-any-tab guard. */
 export type PinnedTabCloseConfirmRequest = {
   tabLabel: string
+  variant?: TabCloseConfirmVariant
   onConfirm: () => void
   onCancel?: () => void
 }

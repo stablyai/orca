@@ -74,6 +74,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
     window.api.ui.onCloseActiveTab((payload) => {
       dispatchWorkspaceTabCommand({
         type: 'close',
+        userInitiated: true,
         ...(payload?.sourceId
           ? { target: { kind: 'browser-source', sourceId: payload.sourceId } as const }
           : {})

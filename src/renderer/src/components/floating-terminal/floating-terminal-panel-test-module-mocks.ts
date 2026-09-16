@@ -82,7 +82,7 @@ export function createImeInputContextRefreshModule(): Pick<
 }
 
 // closeFloatingItemConfirmed routes terminals through closeTerminalTab (own pin guard + F9
-// force-reenter) and non-terminals through guardPinnedTabClose; mock both to assert routing.
+// force-reenter) and non-terminals through guardTabClose; mock both to assert routing.
 export function createTerminalTabActionsModule(): Pick<
   FloatingTerminalPanelMocks,
   'closeTerminalTab'
@@ -94,11 +94,11 @@ export function createTerminalTabActionsModule(): Pick<
 
 export function createPinnedTabCloseGuardModule(): Pick<
   FloatingTerminalPanelMocks,
-  'guardPinnedTabClose'
-> & { resolvePinnedTabLabel: () => string } {
+  'guardTabClose'
+> & { resolveTabLabel: () => string } {
   return {
-    guardPinnedTabClose: mocks.guardPinnedTabClose,
-    resolvePinnedTabLabel: () => 'Floating Tab'
+    guardTabClose: mocks.guardTabClose,
+    resolveTabLabel: () => 'Floating Tab'
   }
 }
 

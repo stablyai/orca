@@ -1,7 +1,7 @@
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { toVisibleTabType, type Tab } from '../../../shared/tab-types'
 import { useAppStore } from '@/store'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import { guardTabClose, resolveTabLabel } from '@/store/tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
 import {
   handleSwitchRecentTab,
@@ -29,6 +29,9 @@ export type WorkspaceTabCommand =
       context?: KeybindingContext
       skipEmptyCheck?: boolean
       bulk?: boolean
+      /** Genuine single-tab user gesture (✕, context-menu Close, Cmd/Ctrl+W, native
+       *  menu). Only these open the opt-in confirm-any-tab dialog. */
+      userInitiated?: boolean
     }
   | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
   | { type: 'previous-recent' }
@@ -149,14 +152,20 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     const close = () =>
       commands.closeItem(tab.id, {
         skipEmptyCheck: command.bulk || command.skipEmptyCheck,
-        skipRunningProcessConfirm: command.bulk
+        skipRunningProcessConfirm: command.bulk,
+        userInitiated: command.userInitiated
       })
     if (tab.contentType === 'terminal' || command.bulk) {
       close()
     } else {
-      guardPinnedTabClose({
+      // Why: dirty editors already prompt via save/discard; don't double-prompt.
+      const isDirtyEditor =
+        tab.contentType !== 'browser' &&
+        (state.openFiles.find((file) => file.id === tab.entityId)?.isDirty ?? false)
+      guardTabClose({
         isPinned: tab.isPinned === true,
-        tabLabel: resolvePinnedTabLabel(state, target.worktreeId, tab.id),
+        tabLabel: resolveTabLabel(state, target.worktreeId, tab.id),
+        userInitiated: command.userInitiated && !isDirtyEditor,
         onClose: close
       })
     }
