@@ -46,6 +46,38 @@ describe('getMarkdownViewModes', () => {
   })
 })
 
+describe('getEditorToggleModes rich-mode fallback', () => {
+  it('offers Preview alongside Source and Rich when rich mode falls back for this content', () => {
+    expect(
+      getEditorToggleModes({
+        language: 'markdown',
+        mode: 'edit',
+        richModeFallsBackToSource: true
+      })
+    ).toEqual(['source', 'rich', 'preview', 'changes'])
+  })
+
+  it('omits Preview when rich mode renders normally', () => {
+    expect(
+      getEditorToggleModes({
+        language: 'markdown',
+        mode: 'edit',
+        richModeFallsBackToSource: false
+      })
+    ).toEqual(['source', 'rich', 'changes'])
+  })
+
+  it('does not add Preview for non-markdown languages even when the flag is set', () => {
+    expect(
+      getEditorToggleModes({
+        language: 'mermaid',
+        mode: 'edit',
+        richModeFallsBackToSource: true
+      })
+    ).toEqual(['source', 'rich', 'changes'])
+  })
+})
+
 describe('markdown preview helpers', () => {
   it('defaults markdown edit tabs to rich mode', () => {
     expect(
