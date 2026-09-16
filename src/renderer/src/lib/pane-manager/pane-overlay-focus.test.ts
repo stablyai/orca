@@ -32,6 +32,7 @@ function fixture() {
   const onActivePaneChange = vi.fn()
   const manager = Object.create(PaneManager.prototype) as PaneManager
   Object.assign(manager, {
+    root,
     panes,
     activePaneId: null,
     styleOptions: {},

@@ -207,7 +207,7 @@ describe('attachPaneDrag', () => {
       getStyleOptions: () => ({}),
       isDestroyed: () => false,
       safeFit: vi.fn(),
-      applyPaneOpacity: vi.fn(),
+      applyActivePaneStyles: vi.fn(),
       applyDividerStyles: vi.fn(),
       refitPanesUnder: vi.fn(),
       onDragActiveChange
@@ -270,7 +270,7 @@ describe('attachPaneDrag', () => {
       getStyleOptions: () => ({}),
       isDestroyed: () => false,
       safeFit: vi.fn(),
-      applyPaneOpacity: vi.fn(),
+      applyActivePaneStyles: vi.fn(),
       applyDividerStyles: vi.fn(),
       refitPanesUnder: vi.fn(),
       onDragActiveChange
@@ -337,7 +337,7 @@ describe('attachPaneDrag', () => {
       getStyleOptions: () => ({}),
       isDestroyed: () => false,
       safeFit: vi.fn(),
-      applyPaneOpacity: vi.fn(),
+      applyActivePaneStyles: vi.fn(),
       applyDividerStyles: vi.fn(),
       refitPanesUnder: vi.fn(),
       resolveExternalDropTarget: ({ clientX, clientY }) =>
@@ -385,7 +385,7 @@ describe('attachPaneDrag', () => {
       getStyleOptions: () => ({}),
       isDestroyed: () => false,
       safeFit: vi.fn(),
-      applyPaneOpacity: vi.fn(),
+      applyActivePaneStyles: vi.fn(),
       applyDividerStyles: vi.fn(),
       refitPanesUnder: vi.fn()
     })
@@ -424,7 +424,7 @@ describe('attachPaneDrag', () => {
       getStyleOptions: () => ({}),
       isDestroyed: () => false,
       safeFit: vi.fn(),
-      applyPaneOpacity: vi.fn(),
+      applyActivePaneStyles: vi.fn(),
       applyDividerStyles: vi.fn(),
       refitPanesUnder: vi.fn()
     })
