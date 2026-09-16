@@ -560,6 +560,29 @@ The original settings slice coverage maps nine host-RPC callers in
 instruction. Later manifest additions require new scenarios and remain uncovered until
 those recordings land. This runner does not certify native storage or transport skew.
 
+## Salvaged reads
+
+A checked reader parses tolerantly: `salvagingArray` drops an element that does not parse rather
+than failing the whole reply, and `salvagedOptional` drops a member that is present but malformed
+rather than reading it as incompatible. `collectSalvageDrops` counts both and names their paths on
+every decoded reply, and no product code reads the result — so which rows a reply lost was visible
+nowhere, including here.
+
+The recorder now reads it. `salvage-observation.ts` wraps `classifyRpcReply` on the mounted module,
+which is the one seam every checked read passes through and the only one that knows which operation
+the drop happened under, and records a non-empty report as a `reply-salvage` effect carrying the
+operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
+tree changes: the report was already being built and thrown away.
+
+No golden carries one. All 19,384 checked reads in the corpus decode their reply whole, on every
+reply partition — the matrix varies the envelope a host sends, not the shape of a row inside a
+result — so this observation pins the absence rather than a recorded drop. What it buys is the
+next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
+golden even where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
+observation itself honest, driving a malformed row and a malformed optional through the real
+`git.status` reply schema, because a refactor that stopped reporting would otherwise leave every
+golden comparing clean.
+
 ## The cleanup checkpoint
 
 Teardown runs on the recorded path, not only in `finally`. Each checkpoint clones the effects
