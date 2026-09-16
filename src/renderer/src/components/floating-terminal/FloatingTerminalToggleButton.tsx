@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { selectFloatingWorkspaceHasUnread } from '@/store/selectors'
 import {
@@ -70,6 +71,7 @@ export function FloatingTerminalToggleButton({
   // closes — the offending tab (see selectFloatingWorkspaceHasUnread).
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const showAttentionDot = !open && hasFloatingUnread
+  const dimWhenIdle = !open && !showAttentionDot
   const initialPositionState = useRef<FloatingTerminalTriggerPositionState | null>(null)
   if (initialPositionState.current === null) {
     initialPositionState.current = readInitialTriggerPosition()
@@ -210,7 +212,14 @@ export function FloatingTerminalToggleButton({
             // pages a soft drop shadow lifts it; on near-black dark surfaces a
             // drop shadow vanishes, so use a distinctly lighter fill plus a
             // bright hairline ring to define the edge.
-            className="relative cursor-grab rounded-lg border-transparent text-foreground bg-card shadow-[0_4px_12px_rgb(0_0_0_/_0.22),0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)] hover:-translate-y-0.5 hover:bg-accent active:translate-y-0 active:cursor-grabbing dark:bg-accent dark:shadow-[0_6px_16px_rgb(0_0_0_/_0.55),0_0_0_1px_rgb(255_255_255_/_0.22)] dark:hover:bg-[color-mix(in_srgb,var(--accent)_82%,white)]"
+            className={cn(
+              'relative cursor-grab rounded-lg border-transparent text-foreground bg-card shadow-[0_4px_12px_rgb(0_0_0_/_0.22),0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)] hover:-translate-y-0.5 hover:bg-accent active:translate-y-0 active:cursor-grabbing dark:bg-accent dark:shadow-[0_6px_16px_rgb(0_0_0_/_0.55),0_0_0_1px_rgb(255_255_255_/_0.22)] dark:hover:bg-[color-mix(in_srgb,var(--accent)_82%,white)]',
+              // Why: parked over content it can cover (a terminal prompt row),
+              // so idle it fades back and any pointer/keyboard approach restores
+              // it. Unread activity and the open panel stay full strength.
+              dimWhenIdle &&
+                'opacity-45 hover:opacity-100 focus-visible:opacity-100 active:opacity-100'
+            )}
             data-floating-terminal-toggle
             aria-label={
               open
