@@ -21,6 +21,7 @@ ORCA full-screenshot --json
 ORCA pdf --json
 ORCA click --element <ref> --json
 ORCA fill --element <ref> --value <text> --json
+ORCA fill --element <ref> --secret-ref op://<vault>/<item>/<field> --json
 ORCA type --input <text> --json
 ORCA select --element <ref> --value <value> --json
 ORCA check --element <ref> --json
@@ -54,6 +55,9 @@ Browser rules:
 - Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command "tab ..."`, so Orca keeps UI state synchronized.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Anything not listed above goes through `ORCA exec --command "<agent-browser command>"`.
+- To fill a password without the value entering your context or any process argv, pass
+  `--secret-ref op://<vault>/<item>/<field>` (1Password CLI) or `--secret-ref bw://<item>[/password|username|totp]`
+  (Bitwarden CLI). Orca runs the vendor CLI itself and sends the value straight to the page; it is never printed.
 - If `fill` or `type` fails on a custom input, try `ORCA focus --element @e1 --json` then `ORCA inserttext --text "text" --json`.
 - A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation.
 

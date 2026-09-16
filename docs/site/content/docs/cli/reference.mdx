@@ -177,6 +177,18 @@ orca screenshot --worktree active --json
 
 Refs such as `@e3` come from `snapshot`. Re-snapshot after navigation, tab switches, clicks that change the page, and any stale-ref error.
 
+To fill a password field without the secret reaching the agent's context, the terminal, or any
+process arguments, pass a password-manager reference instead of a value:
+
+```bash
+orca fill --element @e2 --secret-ref "op://Private/Acme staging/password" --worktree active --json
+orca fill --element @e2 --secret-ref "bw://acme-staging/password" --worktree active --json
+```
+
+Orca runs the vendor CLI (`op` for `op://`, `bw` for `bw://`) itself, sends the value straight to the
+page, and prints only the reference. The CLI must already be installed and unlocked; set
+`ORCA_OP_CLI` or `ORCA_BW_CLI` if it is not on `PATH`.
+
 Tab and capture commands:
 
 ```bash

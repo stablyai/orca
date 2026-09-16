@@ -133,6 +133,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  --element <ref>           Element ref from snapshot (e.g. @e3)',
   '  --url <url>               URL to navigate to',
   '  --value <text>            Value to fill or select',
+  '  --secret-ref <ref>        Fill from a password manager: op://<vault>/<item>/<field> or bw://<item>[/<field>]',
   '  --input <text>            Text to type at current focus (no element needed)',
   '  --expression <js>         JavaScript expression to evaluate',
   '  --key <key>               Key to press (Enter, Tab, Escape, Control+a, etc.)',
