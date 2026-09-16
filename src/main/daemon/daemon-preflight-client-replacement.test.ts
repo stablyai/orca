@@ -3,6 +3,7 @@ import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { relayTestSocketPath } from '../../relay/relay-test-socket-path'
 import { DaemonClient } from './client'
 import { DaemonServer } from './daemon-server'
 import { encodeNdjson } from './ndjson'
@@ -72,7 +73,7 @@ describe('daemon preflight client replacement', () => {
     })
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
-    const socketPath = join(dir, 'daemon.sock')
+    const socketPath = relayTestSocketPath(dir, 'daemon.sock')
     const tokenPath = join(dir, 'daemon.token')
     server = new DaemonServer({ socketPath, tokenPath, preparePtySpawn, spawnSubprocess })
     await server.start()
@@ -111,7 +112,7 @@ describe('daemon preflight client replacement', () => {
     })
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
-    const socketPath = join(dir, 'daemon.sock')
+    const socketPath = relayTestSocketPath(dir, 'daemon.sock')
     const tokenPath = join(dir, 'daemon.token')
     server = new DaemonServer({ socketPath, tokenPath, preparePtySpawn, spawnSubprocess })
     await server.start()
