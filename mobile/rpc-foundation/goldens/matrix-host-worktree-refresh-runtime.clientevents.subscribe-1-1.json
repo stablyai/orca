@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "a28085adbfb65d3f27393cc7a0d78cfa2b4ff07e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "b4c8ef71757ad1651031dc1f8993f78f49e8e352186028d79b0d39c28510862e",
+  "recorderSha256": "c43137b9d07ba4c620318bc8e9f60b55fe1bc82c6231001de887b5c1942b92c1",
   "adapterSha256": "8e41c8624b9b6185e447cee3590a851ab88b6b1ee1d632af90e3a771a90310be",
   "scenarioSha256": "0604294e541a4b2c73e0501cfc393c84384342ffcae286211a657ca5bc5892b7",
   "platform": "darwin",
@@ -70,6 +70,28 @@
       "name": "runtime.clientEvents.unsubscribe#2",
       "ordinal": 13,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
+    },
+    "3a96bb9c2176": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 11,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#1"
+        }
+      ]
+    },
+    "42c91b1d1905": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 4,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#1"
+        }
+      ]
     },
     "4a27571a011a": {
       "name": "fetchWorktrees",
@@ -216,6 +238,18 @@
           },
           "state": "8297145c6199",
           "effects": ["4a27571a011a", "18399efbe63d"]
+        }
+      },
+      {
+        "id": "host-worktree-refresh-stream.prelude:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d", "42c91b1d1905"]
         }
       },
       {
@@ -475,6 +509,29 @@
         }
       },
       {
+        "id": "host-worktree-refresh-stream.result-absent:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "e14cb0033202",
+          "effects": [
+            "4a27571a011a",
+            "18399efbe63d",
+            "4e7ae49574b8",
+            "1e1067bda316",
+            "96ebe4a1b522",
+            "121f5eaa52a4",
+            "306fcb72ddc5",
+            "3a96bb9c2176"
+          ]
+        }
+      },
+      {
         "id": "host-worktree-refresh-stream.result-null:ready",
         "observation": {
           "sender": [],
@@ -597,6 +654,29 @@
             "96ebe4a1b522",
             "121f5eaa52a4",
             "306fcb72ddc5"
+          ]
+        }
+      },
+      {
+        "id": "host-worktree-refresh-stream.result-null:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "e14cb0033202",
+          "effects": [
+            "4a27571a011a",
+            "18399efbe63d",
+            "4e7ae49574b8",
+            "1e1067bda316",
+            "96ebe4a1b522",
+            "121f5eaa52a4",
+            "306fcb72ddc5",
+            "3a96bb9c2176"
           ]
         }
       },
@@ -727,6 +807,29 @@
         }
       },
       {
+        "id": "host-worktree-refresh-stream.inner-ok-missing:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "e14cb0033202",
+          "effects": [
+            "4a27571a011a",
+            "18399efbe63d",
+            "4e7ae49574b8",
+            "1e1067bda316",
+            "96ebe4a1b522",
+            "121f5eaa52a4",
+            "306fcb72ddc5",
+            "3a96bb9c2176"
+          ]
+        }
+      },
+      {
         "id": "host-worktree-refresh-stream.inner-false-string-error:ready",
         "observation": {
           "sender": [],
@@ -853,6 +956,29 @@
         }
       },
       {
+        "id": "host-worktree-refresh-stream.inner-false-string-error:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "e14cb0033202",
+          "effects": [
+            "4a27571a011a",
+            "18399efbe63d",
+            "4e7ae49574b8",
+            "1e1067bda316",
+            "96ebe4a1b522",
+            "121f5eaa52a4",
+            "306fcb72ddc5",
+            "3a96bb9c2176"
+          ]
+        }
+      },
+      {
         "id": "host-worktree-refresh-stream.inner-false-object-error:ready",
         "observation": {
           "sender": [],
@@ -975,6 +1101,29 @@
             "96ebe4a1b522",
             "121f5eaa52a4",
             "306fcb72ddc5"
+          ]
+        }
+      },
+      {
+        "id": "host-worktree-refresh-stream.inner-false-object-error:cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12",
+            "stop": "f2af146a9f12"
+          },
+          "state": "e14cb0033202",
+          "effects": [
+            "4a27571a011a",
+            "18399efbe63d",
+            "4e7ae49574b8",
+            "1e1067bda316",
+            "96ebe4a1b522",
+            "121f5eaa52a4",
+            "306fcb72ddc5",
+            "3a96bb9c2176"
           ]
         }
       },

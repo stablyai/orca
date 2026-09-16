@@ -36,6 +36,8 @@ export class ScriptedRpcTransport {
     string,
     { id: string; params: unknown; deliver: (response: RpcResponse) => boolean }
   >()
+  private readonly registries: RpcClientStreamRegistry[] = []
+  private readonly streamPayloads = new Map<string, string>()
   private activeName = ''
   private opening = false
   private listenerCrash: FrameListenerCrash | null = null
@@ -103,7 +105,7 @@ export class ScriptedRpcTransport {
     // because a logical request outlives a cutover, a stream does not. Byte-neutral either way — the
     // re-send after a cutover comes from the logical client's own replay — but it keeps a frame
     // routed through the session that published its subscribe.
-    const streams = new RpcClientStreamRegistry({
+    const streams: RpcClientStreamRegistry = new RpcClientStreamRegistry({
       nextId: () => this.nextFrameId(),
       deviceToken: DEVICE_TOKEN,
       getState: () => this.state,
@@ -121,10 +123,14 @@ export class ScriptedRpcTransport {
             deliver: (response) => streams.handleResponse(response)
           })
         }
+        // A replay after a cutover re-sends an already-registered id under a fresh occurrence, so
+        // the latest payload is the one a teardown observation should name.
+        this.streamPayloads.set(payload.id, name)
         this.publish(name, value)
         return true
       }
     })
+    this.registries.push(streams)
     return {
       sendRequest: (...args) => {
         const name = this.activeName
@@ -167,6 +173,38 @@ export class ScriptedRpcTransport {
 
   private nextFrameId(): string {
     return `frame-${++this.frameCount}`
+  }
+
+  /**
+   * Every stream each session's registry still holds, in registration order, named by the subscribe
+   * payload it was opened on. Read off the registry's own map rather than mirrored as the recorder
+   * watches subscribes and frames go by: the leak this exists to observe is precisely a divergence
+   * between what the product believes it closed and what the registry still holds, and a mirror
+   * would reproduce the product's bookkeeping instead of observing it.
+   */
+  registeredStreams(): { method: string; payload: string | null; cancelled: boolean }[] {
+    return this.registries.flatMap((registry) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is checked on the next line, and the registry is the one this transport constructed.
+      const streams = (registry as unknown as { streams?: unknown }).streams
+      if (!(streams instanceof Map) || streams.size !== registry.size()) {
+        throw new Error('RpcClientStreamRegistry no longer holds its open streams in `streams`')
+      }
+      return [...streams].map(
+        ([id, stream]: [string, { method?: unknown; cancelled?: unknown }]) => {
+          if (typeof stream.method !== 'string') {
+            throw new Error(`Registered stream ${id} has no method`)
+          }
+          // A cancelled record is the product having closed the stream and the registry holding it
+          // until the subscription id it needs to unsubscribe with arrives; only an uncancelled one
+          // is a cleanup that never ran.
+          return {
+            method: stream.method,
+            payload: this.streamPayloads.get(id) ?? null,
+            cancelled: stream.cancelled === true
+          }
+        }
+      )
+    })
   }
 
   /**

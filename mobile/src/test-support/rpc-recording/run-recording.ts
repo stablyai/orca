@@ -44,6 +44,15 @@ export async function runRecording(
   const teardown = async (): Promise<void> => {
     cleaned = true
     await mounted?.dispose()
+    // A stream the product forgot to close is only visible on the wire when its method has an
+    // unsubscribe builder; `notifications.subscribe` has none, so closing it writes nothing and the
+    // leak stays a live registry record until some later cutover replays it. Observed here, after
+    // the product's own cleanup and before the transport tears the registries down, so a
+    // builder-less subscription is pinned without a scenario that cuts over to expose it.
+    const registered = transport.registeredStreams()
+    if (registered.length) {
+      effect('streams-registered-at-teardown', registered)
+    }
     transport.dispose()
     await scheduler.flush()
   }

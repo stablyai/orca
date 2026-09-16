@@ -687,6 +687,50 @@ describe('recording boundaries', () => {
     expect(await drive(true)).not.toEqual(await drive(false))
   })
 
+  it('observes a stream the product left registered at teardown, and nothing when it closes', async () => {
+    const drive = async (close: boolean): Promise<RecordedValue> => {
+      const recording = await runRecording(
+        {
+          id: 'teardown-streams',
+          operation: 'op',
+          version: 1,
+          family: 'op',
+          sites: [],
+          schedules: [],
+          steps: [
+            { action: 'mount', id: 'mount' },
+            { frame: `${CLIENT_EVENTS}#1`, params: null, reply: readyFrame('sub-1') },
+            { checkpoint: 'settled' }
+          ]
+        },
+        ({ client }) => {
+          let unsubscribe = (): void => {}
+          return {
+            action: () => {
+              unsubscribe = client.subscribe(CLIENT_EVENTS, null, () => {})
+            },
+            state: () => ({}),
+            dispose: () => {
+              if (close) {
+                unsubscribe()
+              }
+            }
+          }
+        },
+        vitestRecordingScheduler()
+      )
+      // Teardown is the last checkpoint only when it observed something, which is the point.
+      return recording.checkpoints.at(-1)!.observation.effects
+    }
+    expect(await drive(false)).toMatchObject([
+      {
+        name: 'streams-registered-at-teardown',
+        value: [{ method: CLIENT_EVENTS, payload: `${CLIENT_EVENTS}#1`, cancelled: false }]
+      }
+    ])
+    expect(await drive(true)).toEqual([])
+  })
+
   it('drives the reply matrix over frames, and matrixes a family that only subscribes', () => {
     const changed = { ok: true, streaming: true, result: { type: 'worktreesChanged' } }
     const base: RecordingScenario = {
