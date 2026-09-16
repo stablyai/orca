@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
+import { NativeChatCodeBlock } from '@/components/native-chat/NativeChatCodeBlock'
 
 describe('CommentMarkdown', () => {
   it('marks compact headings so a parent can opt into block flow', () => {
@@ -222,6 +223,33 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('overflow-x-auto')
     expect(markup).toContain('[&amp;_.mermaid-block_pre]:max-h-80')
     expect(markup).not.toContain('<pre')
+  })
+
+  it('uses the supplied code-block renderer for fenced document markdown', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content={'```ts\nconst answer = 42\n```'}
+        renderCodeBlock={NativeChatCodeBlock}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Copy code"')
+    expect(markup).toContain('data-code-language="ts"')
+    expect(markup).toContain('const answer = 42')
+  })
+
+  it('does not invent a language label for a bare code fence', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content={'```\nconst answer = 42\n```'}
+        renderCodeBlock={NativeChatCodeBlock}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Copy code"')
+    expect(markup).not.toContain('data-code-language')
   })
 
   it('keeps compact mermaid fences as bounded source blocks', () => {

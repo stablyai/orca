@@ -5,7 +5,6 @@ const source = readFileSync(
   new URL('../host-screen/use-host-worktree-actions.ts', import.meta.url),
   'utf8'
 )
-
 function sliceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
   expect(start).toBeGreaterThanOrEqual(0)
@@ -21,8 +20,10 @@ describe('mobile worktree activation', () => {
       'const openFloatingWorkspace = useCallback'
     )
 
-    expect(openSession).toContain("sendRequest('worktree.activate'")
+    expect(openSession).toContain('worktreeActivate')
     expect(openSession).toContain('notifyClients: false')
     expect(openSession).toContain("navigation: 'caller'")
+    // The method is no longer in this file: tsc pins the params to worktreeActivate's shape and
+    // the host-worktree-actions-pin-open-delete golden pins the bytes.
   })
 })

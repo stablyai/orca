@@ -1,24 +1,10 @@
-import { z } from 'zod'
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from '../../../codex/managed-wsl-home-shell-preflight'
 import { getManagedAgentHookStatuses } from '../../../agent-hooks/managed-agent-hook-controls'
 import { getActiveSshAgentHookInstallReports } from '../../../ipc/ssh'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
+import { PrepareCodexForWslPaneParams } from '../../../../shared/rpc-contract/agent-hooks-params'
 
-const PrepareCodexForWslPaneParams = z
-  .object({
-    codexHome: z.string().max(4_096),
-    orcaCodexHome: z.string().max(4_096),
-    wslDistro: z
-      .string()
-      .trim()
-      .min(1)
-      .max(255)
-      .regex(/^[^\\/\r\n]+$/)
-  })
-  .strict()
-
-/** RPC methods that expose local and SSH-host managed-hook install state. */
-export const AGENT_HOOK_METHODS: readonly RpcMethod[] = [
+export const AGENT_HOOK_METHODS = [
   defineMethod({
     // Why: SSH hook state belongs to the host running the agent. Only the
     // active runtime can report the relay sessions that installed those hooks.

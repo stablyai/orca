@@ -29,7 +29,7 @@ afterEach(() => {
 describe('Task/Dispatch lifecycle guards', () => {
   it('rejects a worker report while another supervised Dispatch is active', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'legacy supervised split' })
+    const task = database.createTask({ runId: 'run_legacy_local', spec: 'legacy supervised split' })
     const first = startWorker(database, task.id, 'first')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const second = startWorker(database, task.id, 'second')
@@ -55,7 +55,7 @@ describe('Task/Dispatch lifecycle guards', () => {
     'settles context-only legacy siblings after a %s worker report',
     (outcome) => {
       const database = createDatabase()
-      const task = database.createTask({ spec: 'legacy mixed split' })
+      const task = database.createTask({ runId: 'run_legacy_local', spec: 'legacy mixed split' })
       const contextOnly = createRootDispatch(database, task.id, 'term_context')
       sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       const worker = startWorker(database, task.id, 'reporter')
@@ -78,7 +78,10 @@ describe('Task/Dispatch lifecycle guards', () => {
       expect(() =>
         createRootDispatch(
           database,
-          database.createTask({ spec: 'later context work' }).id,
+          database.createTask({
+            runId: 'run_legacy_local',
+            spec: 'later context work'
+          }).id,
           'term_context'
         )
       ).not.toThrow()
@@ -87,7 +90,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('settles a newer context-only legacy sibling after a worker report', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'reversed legacy mixed split' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'reversed legacy mixed split'
+    })
     const worker = startWorker(database, task.id, 'reversed_reporter')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const contextOnly = createRootDispatch(database, task.id, 'term_reversed_context')
@@ -112,7 +118,10 @@ describe('Task/Dispatch lifecycle guards', () => {
     'treats abandon of an already %s worker as stale without a lifecycle conflict',
     (state) => {
       const database = createDatabase()
-      const task = database.createTask({ spec: `already ${state}` })
+      const task = database.createTask({
+        runId: 'run_legacy_local',
+        spec: `already ${state}`
+      })
       const worker = startWorker(database, task.id, `already_${state}`)
       if (state === 'failed') {
         database.failDispatch(worker.dispatchId, 'process exited', { workerProcessExited: true })
@@ -130,7 +139,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('rejects generic failure while a supervised worker remains active', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'supervised failure guard' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'supervised failure guard'
+    })
     const worker = startWorker(database, task.id, 'guarded')
 
     expect(() => database.failDispatch(worker.dispatchId, 'unsafe retry')).toThrowError(
@@ -151,7 +163,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('atomically settles worker state when a proven process exit fails its Dispatch', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'exited worker' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'exited worker'
+    })
     const worker = startWorker(database, task.id, 'exited')
 
     expect(
@@ -168,7 +183,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('settles a stop-unknown worker when a positive PTY exit arrives', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'stop-unknown exited worker' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'stop-unknown exited worker'
+    })
     const worker = startWorker(database, task.id, 'stop_unknown_exited')
 
     expect(database.beginWorkerStop(worker.dispatchId, 'runtime_test').disposition).toBe('stopping')
@@ -198,7 +216,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('keeps a Task dispatched when missing-terminal recovery leaves another worker active', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'legacy missing-terminal split' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'legacy missing-terminal split'
+    })
     const missing = startWorker(database, task.id, 'missing')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const live = startWorker(database, task.id, 'live')
@@ -225,7 +246,10 @@ describe('Task/Dispatch lifecycle guards', () => {
     'keeps a Task dispatched when a %s worker start fails beside a live worker',
     (kind) => {
       const database = createDatabase()
-      const task = database.createTask({ spec: `${kind} split start failure` })
+      const task = database.createTask({
+        runId: 'run_legacy_local',
+        spec: `${kind} split start failure`
+      })
       const failed = database.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,
@@ -342,7 +366,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('rolls back federated start uncertainty when the Task transition cannot commit', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'atomic federated uncertainty' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'atomic federated uncertainty'
+    })
     const started = database.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -383,7 +410,10 @@ describe('Task/Dispatch lifecycle guards', () => {
     '%s releases the last context-only sibling after a newer worker start fails',
     (operation) => {
       const database = createDatabase()
-      const task = database.createTask({ spec: `${operation} historical sibling` })
+      const task = database.createTask({
+        runId: 'run_legacy_local',
+        spec: `${operation} historical sibling`
+      })
       const contextOnly = createRootDispatch(database, task.id, `term_${operation}`)
       sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       const failed = database.createStartingWorkerDispatch({
@@ -411,7 +441,10 @@ describe('Task/Dispatch lifecycle guards', () => {
       expect(() =>
         createRootDispatch(
           database,
-          database.createTask({ spec: `${operation} later work` }).id,
+          database.createTask({
+            runId: 'run_legacy_local',
+            spec: `${operation} later work`
+          }).id,
           `term_${operation}`
         )
       ).not.toThrow()
@@ -422,7 +455,10 @@ describe('Task/Dispatch lifecycle guards', () => {
     '%s records guarded receipts for context-only Dispatch and Task release',
     (operation) => {
       const database = createDatabase()
-      const task = database.createTask({ spec: `${operation} receipt release` })
+      const task = database.createTask({
+        runId: 'run_legacy_local',
+        spec: `${operation} receipt release`
+      })
       const contextOnly = createRootDispatch(database, task.id, `term_${operation}`)
 
       const released =
@@ -445,7 +481,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('rolls back both context-only projections when the Task transition fails', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'context-only atomic receipt' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'context-only atomic receipt'
+    })
     const contextOnly = createRootDispatch(database, task.id, 'term_context')
     sqliteFor(database).exec(`
       CREATE TRIGGER reject_context_release_task_block
@@ -470,7 +509,10 @@ describe('Task/Dispatch lifecycle guards', () => {
     '%s preserves a live worker sibling and lets it report',
     (operation) => {
       const database = createDatabase()
-      const task = database.createTask({ spec: `${operation} legacy worker split` })
+      const task = database.createTask({
+        runId: 'run_legacy_local',
+        spec: `${operation} legacy worker split`
+      })
       const live = startWorker(database, task.id, `${operation}_live`)
       sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       const released = startWorker(database, task.id, `${operation}_released`)
@@ -502,7 +544,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('blocks a Task when an interleaved stop settles its final active Dispatch', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'interleaved legacy worker release' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'interleaved legacy worker release'
+    })
     const stopping = startWorker(database, task.id, 'interleaved_stopping')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const abandoned = startWorker(database, task.id, 'interleaved_abandoned')
@@ -521,7 +566,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('restores a live sibling after stopping an uncertain worker start', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'uncertain legacy worker split' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'uncertain legacy worker split'
+    })
     const live = startWorker(database, task.id, 'uncertain_live')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const uncertain = database.createStartingWorkerDispatch({
@@ -552,7 +600,10 @@ describe('Task/Dispatch lifecycle guards', () => {
     'restores a live sibling after an uncertain worker start fails through %s',
     (recovery) => {
       const database = createDatabase()
-      const task = database.createTask({ spec: `${recovery} uncertain sibling` })
+      const task = database.createTask({
+        runId: 'run_legacy_local',
+        spec: `${recovery} uncertain sibling`
+      })
       const live = startWorker(database, task.id, `${recovery}_live`)
       sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       const uncertain = database.createStartingWorkerDispatch({
@@ -589,7 +640,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('rejects gate creation while a supervised worker remains active', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'worker gate guard' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'worker gate guard'
+    })
     const worker = startWorker(database, task.id, 'gate')
 
     expect(() => database.createGate({ taskId: task.id, question: 'Proceed?' })).toThrowError(
@@ -607,7 +661,10 @@ describe('Task/Dispatch lifecycle guards', () => {
 
   it('rolls back gate resolution when an active Dispatch blocks readiness', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'corrupt gated task' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'corrupt gated task'
+    })
     const gate = database.createGate({ taskId: task.id, question: 'Proceed?' })
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const dispatch = createRootDispatch(database, task.id, 'term_worker')

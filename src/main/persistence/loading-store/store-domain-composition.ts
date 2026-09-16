@@ -1,4 +1,5 @@
 import type { StoreRuntimeState } from './store-runtime-state'
+import type { Store } from './store'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
 import { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
@@ -108,7 +109,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   WriteFlushBarrierOperations
 ] as const
 
-export function installStoreDomainContexts(target: object, domains: StoreDomains): void {
+export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
   installWriteSchedulingOperationsContext(target, domains.scheduling)
   installPrimaryStateWriteOperationsContext(target, domains.writes)
   installProjectCollectionOperationsContext(target, domains.projects)

@@ -412,7 +412,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     expect(events).toHaveLength(2)
   })
 
-  it('clears stamped status on reconnect loss but not final shutdown', async () => {
+  it('keeps stamped status unverifiable across reconnect loss and final shutdown', async () => {
     const initialRelay = createFakeRelay()
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay)
@@ -436,16 +436,13 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await session.reconnect({} as SshConnection)
     initialRelay.dispose()
 
-    expect(agentHookServer.getStatusSnapshot()).toEqual([])
-    expect(clearListener).toHaveBeenCalledOnce()
-    expect(clearListener).toHaveBeenCalledWith({
-      transient: true,
-      connectionId: 'conn-clear',
-      clearedAt: expect.any(Number)
-    })
+    expect(agentHookServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ connectionId: 'conn-clear', state: 'working' })
+    ])
+    expect(clearListener).not.toHaveBeenCalled()
     session.dispose()
     session = null
-    expect(clearListener).toHaveBeenCalledOnce()
+    expect(clearListener).not.toHaveBeenCalled()
   })
 
   it('asks the fake relay for cached hook replay after the session wires its listener', async () => {

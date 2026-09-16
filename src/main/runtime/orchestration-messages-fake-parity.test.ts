@@ -7,9 +7,13 @@ type PointerTarget = { ptyId: string; processIncarnation: string }
 
 // The slice of the mailbox store the pointer batch selector depends on.
 type PointerStore = {
-  insertMessage(message: { from: string; to: string; subject: string; type?: MessageType }): {
-    id: string
-  }
+  insertMessage(message: {
+    runId: string
+    from: string
+    to: string
+    subject: string
+    type?: MessageType
+  }): { id: string }
   stageMailboxPointerEnter(ids: string[], target: PointerTarget): boolean
   markMailboxPointerWriteAttempted(ids: string[], target: PointerTarget): boolean
   getUndeliveredUnreadMessages(
@@ -32,7 +36,12 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
 
   it('refuses a claim another flight already holds', () => {
     const store = createStore()
-    const message = store.insertMessage({ from: 'a', to: 'run:run-1', subject: 'contended' })
+    const message = store.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'contended'
+    })
 
     expect(store.stageMailboxPointerEnter([message.id], rival)).toBe(true)
     expect(store.stageMailboxPointerEnter([message.id], mine)).toBe(false)
@@ -41,8 +50,18 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
 
   it('rolls the whole batch back when one row is already claimed', () => {
     const store = createStore()
-    const free = store.insertMessage({ from: 'a', to: 'run:run-1', subject: 'free' })
-    const taken = store.insertMessage({ from: 'a', to: 'run:run-1', subject: 'taken' })
+    const free = store.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'free'
+    })
+    const taken = store.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'taken'
+    })
     expect(store.stageMailboxPointerEnter([taken.id], rival)).toBe(true)
 
     expect(store.stageMailboxPointerEnter([free.id, taken.id], mine)).toBe(false)
@@ -52,8 +71,19 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
 
   it('applies the exclusion and limit the pointer batch selector relies on', () => {
     const store = createStore()
-    store.insertMessage({ from: 'a', to: 'run:run-1', subject: 'reserved', type: 'escalation' })
-    const kept = store.insertMessage({ from: 'a', to: 'run:run-1', subject: 'kept' })
+    store.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'reserved',
+      type: 'escalation'
+    })
+    const kept = store.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'kept'
+    })
 
     expect(
       store

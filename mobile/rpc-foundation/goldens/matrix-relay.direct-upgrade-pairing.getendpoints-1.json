@@ -1,0 +1,837 @@
+{
+  "operation": "relay.direct-upgrade",
+  "family": "relay.direct-upgrade",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
+  "scenarioSha256": "03355bc2696d02fed125d9f0e24c6c26c8df2f3709c1c5f4412aaf9317cd41d4",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "002b5db3666b": {
+      "name": "pairing.getEndpoints#2",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
+      "sent": 3
+    },
+    "06dee54a3689": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "0e69ea8bf15f": {
+      "journal": "present",
+      "outcome": "failed: "
+    },
+    "157eaa06961f": {
+      "name": "pairing.getEndpoints#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-fixture-1",
+              "result": {
+                "authorizationMode": "authenticated-direct",
+                "currentVersion": 4,
+                "reqId": "install-fixture-1",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "2b3f0d69e5c0": {
+      "journal": "present",
+      "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]"
+    },
+    "4683b84a57a2": {
+      "name": "host-saved",
+      "value": "host-1",
+      "sent": 3
+    },
+    "4a4993ef4038": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}",
+      "sent": 2
+    },
+    "4e3b57d795cb": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "refused: outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "541fbb4c1bb0": {
+      "journal": "present",
+      "outcome": "failed: refused: outer refused"
+    },
+    "54733e945aef": {
+      "journal": "present",
+      "outcome": "failed: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key: \\\"error\\\"\"\n  }\n]"
+    },
+    "55af89989a85": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "590b3311b0c4": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "bundle": {
+          "current": {
+            "expiresAt": 1767830400000,
+            "hash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "token": "pending00000000000000000000000000000000001x",
+            "version": 4
+          },
+          "deviceToken": "device-token-1",
+          "hostId": "host-1",
+          "v": 1
+        },
+        "host": {
+          "deviceToken": "device-token-1",
+          "endpoint": "ws://192.168.1.10:8765",
+          "endpoints": [
+            {
+              "id": "direct-primary",
+              "kind": "lan",
+              "url": "ws://192.168.1.10:8765"
+            },
+            {
+              "id": "relay-primary",
+              "kind": "relay",
+              "url": "wss://cell.example/v1/connect/relay-host-0001x"
+            }
+          ],
+          "id": "host-1",
+          "lastConnected": 1767225600000,
+          "name": "Fixture host",
+          "publicKeyB64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+          "relay": {
+            "assignmentEpoch": 1,
+            "cellUrl": "https://cell.example",
+            "directorUrl": "https://director.example",
+            "e2eeFraming": 2,
+            "relayHostId": "relay-host-0001x",
+            "v": 1
+          },
+          "relayHostId": "relay-host-0001x"
+        }
+      }
+    },
+    "6c43da669636": {
+      "journal": {
+        "$rpc": "null"
+      },
+      "outcome": "declined"
+    },
+    "723e3af65fac": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}",
+      "sent": 1
+    },
+    "7d023da12fdb": {
+      "name": "journal-cleared",
+      "value": "upgrade",
+      "sent": 3
+    },
+    "81230fab3114": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "84a67e5b95a5": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "8cfbee11e6cb": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "8ea887e0fc46": {
+      "name": "journal-cleared",
+      "value": "upgrade",
+      "sent": 1
+    },
+    "8eb22646fb28": {
+      "journal": "present",
+      "outcome": "failed: refused: "
+    },
+    "952828fa571a": {
+      "journal": "present",
+      "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]"
+    },
+    "9631a7132ab0": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "980bbba0b617": {
+      "journal": {
+        "$rpc": "null"
+      },
+      "outcome": "relay-host-0001x"
+    },
+    "a3865c87e54b": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "reqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "authorizationMode": "authenticated-direct",
+            "currentVersion": 4,
+            "reqId": "install-fixture-1",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
+    },
+    "a3dc16ec07e4": {
+      "journal": "present",
+      "outcome": "failed: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"ok\",\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"ok\\\", \\\"error\\\"\"\n  }\n]"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "abe9b3fdea58": {
+      "journal": "present",
+      "outcome": "failed: transport failure"
+    },
+    "b991b2c7609f": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 3
+    },
+    "ba95b28e3a94": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-fixture-1",
+              "state": "not-found",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "c0a543a83bd5": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d56bfdbce702": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "refused: ",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "d5eb910acc55": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d6e7487f3275": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"ok\",\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"ok\\\", \\\"error\\\"\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "e4db75cccc06": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e8ffbfb9ecd4": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eadc22371637": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "f4f341e9c757": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key: \\\"error\\\"\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "f85f71f6d927": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-relay.direct-upgrade-pairing.getendpoints-1",
+    "checkpoints": [
+      {
+        "id": "relay-direct-upgrade-commits.normal:direct-upgrade-committed",
+        "observation": {
+          "sender": ["ba95b28e3a94", "a3865c87e54b", "157eaa06961f"],
+          "payloads": ["723e3af65fac", "4a4993ef4038", "002b5db3666b"],
+          "settlements": {
+            "upgrade": "590b3311b0c4"
+          },
+          "state": "980bbba0b617",
+          "effects": ["b991b2c7609f", "4683b84a57a2", "7d023da12fdb"]
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.result-absent:direct-upgrade-committed",
+        "observation": {
+          "sender": ["f85f71f6d927"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "8cfbee11e6cb"
+          },
+          "state": "952828fa571a",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.result-null:direct-upgrade-committed",
+        "observation": {
+          "sender": ["c0a543a83bd5"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "06dee54a3689"
+          },
+          "state": "2b3f0d69e5c0",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.inner-ok-missing:direct-upgrade-committed",
+        "observation": {
+          "sender": ["eadc22371637"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "f4f341e9c757"
+          },
+          "state": "54733e945aef",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.inner-false-string-error:direct-upgrade-committed",
+        "observation": {
+          "sender": ["84a67e5b95a5"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "d6e7487f3275"
+          },
+          "state": "a3dc16ec07e4",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.inner-false-object-error:direct-upgrade-committed",
+        "observation": {
+          "sender": ["9631a7132ab0"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "d6e7487f3275"
+          },
+          "state": "a3dc16ec07e4",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.outer-refused:direct-upgrade-committed",
+        "observation": {
+          "sender": ["e4db75cccc06"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "4e3b57d795cb"
+          },
+          "state": "541fbb4c1bb0",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.outer-refused-no-message:direct-upgrade-committed",
+        "observation": {
+          "sender": ["81230fab3114"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "d56bfdbce702"
+          },
+          "state": "8eb22646fb28",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.method-not-found:direct-upgrade-committed",
+        "observation": {
+          "sender": ["55af89989a85"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "ee20a1dc39e7"
+          },
+          "state": "6c43da669636",
+          "effects": ["8ea887e0fc46"]
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.transport-rejection:direct-upgrade-committed",
+        "observation": {
+          "sender": ["e8ffbfb9ecd4"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "a947768bc0ed"
+          },
+          "state": "abe9b3fdea58",
+          "effects": []
+        }
+      },
+      {
+        "id": "relay-direct-upgrade-commits.transport-rejection-no-message:direct-upgrade-committed",
+        "observation": {
+          "sender": ["d5eb910acc55"],
+          "payloads": ["723e3af65fac"],
+          "settlements": {
+            "upgrade": "c7584e82c72f"
+          },
+          "state": "0e69ea8bf15f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

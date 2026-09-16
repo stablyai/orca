@@ -7,11 +7,10 @@
 //     segment is a semantic task name and the only label available. There is no
 //     `thread/started` for a child, so nickname/role/depth do not exist.
 //   * `agentsStates` on `collabAgentToolCall` arrived empty (`{}`) throughout the
-//     probe, so nothing here reads it — state comes from `kind` alone.
+//     probe, so nothing here reads it; child turn events own execution state.
 //   * `thread/tokenUsage/updated` reports a per-thread RUNNING TOTAL, so the
 //     latest frame replaces the previous one — it is never accumulated.
 
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import type { CodexThreadItem } from './codex-structured-item-translation'
 
 export const CODEX_SUBAGENT_ITEM_TYPE = 'subAgentActivity'
@@ -46,24 +45,6 @@ export function readCodexSubagentActivity(item: CodexThreadItem): CodexSubagentA
     agentThreadId,
     agentPath: nonEmptyString(item.agentPath)
   }
-}
-
-/**
- * The state a `kind` implies for the child it names.
- *
- * An unrecognized kind means "this child exists and reported something we
- * cannot classify" — `working`, which the session sweep will later settle to
- * `unverifiable` if nothing better ever arrives. Claiming a terminal state from
- * an unknown kind would assert an outcome the wire never gave us.
- */
-export function codexSubagentStateForKind(kind: string): NativeChatSubagentState {
-  if (kind === 'completed') {
-    return 'completed'
-  }
-  if (kind === 'interrupted') {
-    return 'stopped'
-  }
-  return 'working'
 }
 
 /** Path segments, empty ones dropped: `/root/list_directory` → 2 segments. */

@@ -127,7 +127,12 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
 
     expect(hook!.attachments).toEqual([
-      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
+      {
+        id: 'img-1',
+        path: '/tmp/a.png',
+        previewUri: 'file:///a.jpg',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      }
     ])
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
   })

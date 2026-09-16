@@ -1,0 +1,630 @@
+{
+  "operation": "session.pr-mutations",
+  "family": "github.pr-title-mutation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "fe91d5518501a078dff3010e74c4b9d70122f88a629e384336cd1b6a84de36a8",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0400bbb4177c": {
+      "title": {
+        "error": "Request failed: github.updatePRTitle",
+        "ok": false
+      }
+    },
+    "17e9a253f62d": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1b2778bf67a2": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "273a783a3e6f": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2d92f601524b": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "3235254d283e": {
+      "name": "github.updatePRTitle#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}",
+      "sent": 1
+    },
+    "578bc8950993": {
+      "title": {
+        "ok": true
+      }
+    },
+    "5ff779cd8c84": {
+      "title": {
+        "error": "Failed to update title.",
+        "ok": false
+      }
+    },
+    "63139c527e1e": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "6e9fb05124f5": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to update title.",
+        "ok": false
+      }
+    },
+    "732177caffde": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "73a201bf0d92": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Request failed: github.updatePRTitle",
+        "ok": false
+      }
+    },
+    "96fcd9b9c31e": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": true
+        }
+      }
+    },
+    "98cad060a5b3": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "a197c20578aa": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
+    "ae3df1024ded": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "b3c795dd8d35": {
+      "title": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "c5ea88c843eb": {
+      "title": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "d8959e64c99e": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e1fc6048c4fb": {
+      "title": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
+    "e676985c7e4b": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ec52831dce6f": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "fa93ca01f266": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-github.pr-title-mutation-github.updateprtitle-1",
+    "checkpoints": [
+      {
+        "id": "pr-title-mutation.normal:title",
+        "observation": {
+          "sender": ["96fcd9b9c31e"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "fbc958e4d46e"
+          },
+          "state": "578bc8950993",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.result-absent:title",
+        "observation": {
+          "sender": ["2d92f601524b"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "6e9fb05124f5"
+          },
+          "state": "5ff779cd8c84",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.result-null:title",
+        "observation": {
+          "sender": ["ec52831dce6f"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "6e9fb05124f5"
+          },
+          "state": "5ff779cd8c84",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.inner-ok-missing:title",
+        "observation": {
+          "sender": ["98cad060a5b3"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "6e9fb05124f5"
+          },
+          "state": "5ff779cd8c84",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.inner-false-string-error:title",
+        "observation": {
+          "sender": ["d8959e64c99e"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "6e9fb05124f5"
+          },
+          "state": "5ff779cd8c84",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.inner-false-object-error:title",
+        "observation": {
+          "sender": ["17e9a253f62d"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "6e9fb05124f5"
+          },
+          "state": "5ff779cd8c84",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.outer-refused:title",
+        "observation": {
+          "sender": ["63139c527e1e"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "1b2778bf67a2"
+          },
+          "state": "c5ea88c843eb",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.outer-refused-no-message:title",
+        "observation": {
+          "sender": ["ae3df1024ded"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "73a201bf0d92"
+          },
+          "state": "0400bbb4177c",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.method-not-found:title",
+        "observation": {
+          "sender": ["273a783a3e6f"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "fa93ca01f266"
+          },
+          "state": "b3c795dd8d35",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.transport-rejection:title",
+        "observation": {
+          "sender": ["732177caffde"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "a197c20578aa"
+          },
+          "state": "e1fc6048c4fb",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-title-mutation.transport-rejection-no-message:title",
+        "observation": {
+          "sender": ["e676985c7e4b"],
+          "payloads": ["3235254d283e"],
+          "settlements": {
+            "title": "73a201bf0d92"
+          },
+          "state": "0400bbb4177c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -239,9 +239,9 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         })
 
         expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: windows-native-registry')
+        expect(result.stdout).toContain('Rebuilding failed native modules: @orca/windows-registry')
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['windows-native-registry'])
+        expect(rebuildCall.onlyModules).toEqual(['@orca/windows-registry'])
       } finally {
         removeTreeSync(projectDir)
       }

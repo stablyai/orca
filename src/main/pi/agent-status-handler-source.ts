@@ -1,4 +1,5 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
@@ -8,6 +9,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
+          ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
           '    // Why: /reload re-registers the active session, but it is not a',
           '    // turn boundary and must not clear the visible status or unread state.',
           "    if (event.reason === 'reload') return",
@@ -86,13 +88,31 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '// etc.), so we forward the raw object verbatim under the same field',
     '// names Claude uses (tool_name / tool_input) and let the server pick the',
     '// preview. Keeps tool-name knowledge centralized on the receiver side.',
+    '// Why: a restarted agent inherits the previous owner PID through env, so a',
+    '// dead owner must be claimable or the pane goes silent for good. Only ESRCH',
+    '// proves the owner is gone -- every other probe result keeps suppression, so',
+    '// a live foreign owner still cannot double-report. Mirrors the tri-state in',
+    '// main/agent-hooks/managed-hook-owner-identity.ts, which this runtime cannot',
+    '// import (the extension loads inside pi/omp with no Orca deps).',
+    'function isStatusOwnerAlive(pid: string): boolean {',
+    '  const parsed = Number(pid)',
+    '  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 0x7fffffff) return false',
+    "  if (typeof process.kill !== 'function') return true",
+    '  try {',
+    '    process.kill(parsed, 0)',
+    '    return true',
+    '  } catch (err: unknown) {',
+    "    return (err as { code?: string } | null)?.code !== 'ESRCH'",
+    '  }',
+    '}',
+    '',
     "// Why: child agents inherit the lead's pane env; only its process may",
     '// register status hooks. PID identity keeps in-process reloads reporting.',
     'export default function (pi): void {',
     ...primeDaemonWorkerGuard,
     `  const ownerPid = process.env.${ownerEnv}`,
     '  const selfPid = String(process.pid)',
-    '  if (ownerPid && ownerPid !== selfPid) return',
+    '  if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return',
     `  process.env.${ownerEnv} = selfPid`,
     ...sessionStartHandler,
     `  pi.on('before_agent_start', (event${ctxParam}) => {`,
@@ -104,6 +124,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
     '    agentEndReported = false',
+    // Why: a turn cannot begin under a dialog holding input focus, so this is the one
+    // boundary that can recover a modal whose close never arrived.
+    ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true'] : []),
     "    post('agent_start')",
     '  })',
     '',
@@ -131,6 +154,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  })',
     '',
     ...approvalHandlers,
+    ...getPiAgentStatusUiPromptHandlerSourceLines(kind),
     "  // Why: capture the assistant's final text on each completed message",
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',
@@ -166,6 +190,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  function postAgentEndOnce(): void {',
     '    if (agentEndReported) return',
     '    agentEndReported = true',
+    // Why: distinct from agentEndReported, which also dedupes the completion post and so
+    // starts false on a pane that has not run a turn yet — that pane is idle, not busy.
+    ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
     "    post('agent_end')",
     '  }',
     '',

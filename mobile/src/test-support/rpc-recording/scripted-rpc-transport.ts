@@ -1,0 +1,261 @@
+import type { ConnectionState, RpcResponse } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc-client'
+import { RpcClientRequestTracker } from '../../transport/rpc-client-request-tracker'
+import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
+import { createStableLogicalRpcClient } from '../../transport/stable-logical-rpc-client'
+import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
+import {
+  captureArguments,
+  captureValue,
+  observeSettlement,
+  type Settlement
+} from './recording-values'
+import type { Rejection } from './recording-scenario'
+
+/** The one device identity every recorded frame carries; nothing here reads a keychain. */
+const DEVICE_TOKEN = 'recording-device'
+
+export class ScriptedRpcTransport {
+  readonly requests: {
+    name: string
+    args: ReturnType<typeof captureArguments>
+    settlement: Settlement
+  }[] = []
+  readonly payloads: { name: string; json: string; sent: number }[] = []
+  readonly client: RpcClient
+  readonly logical
+  private counts = new Map<string, number>()
+  private bindings = new Map<string, { id: string; params: unknown; completed: boolean }>()
+  private aliases = new Map<string, string>()
+  private openStreams = new Map<
+    string,
+    { id: string; params: unknown; deliver: (response: RpcResponse) => boolean }
+  >()
+  private activeName = ''
+  private opening = false
+  private frameCount = 0
+  private state: ConnectionState = 'connected'
+  private listeners = new Set<(state: ConnectionState) => void>()
+  private rejects = new Map<string, (error: Error) => void>()
+  private tracker = new RpcClientRequestTracker({
+    nextId: () => this.nextFrameId(),
+    getState: () => this.state,
+    waitForConnected: async () => {
+      if (this.state !== 'connected') {
+        throw new Error('Scripted transport disconnected')
+      }
+    },
+    deviceToken: DEVICE_TOKEN,
+    sendEncrypted: (value) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the physical client publishes the frame this transport just serialized.
+      const payload = value as { id: string; method: string; params: unknown }
+      const name = this.wireNames.shift()
+      if (!name) {
+        throw new Error('Unbound physical request')
+      }
+      this.bindings.set(name, { id: payload.id, params: payload.params, completed: false })
+      this.publish(name, value)
+      return true
+    }
+  })
+  private wireNames: string[] = []
+
+  /** `now` is the recording scheduler's virtual clock; every settlement is stamped from it. */
+  constructor(private readonly now: () => number = () => 0) {
+    const session = this.session()
+    this.logical = createStableLogicalRpcClient(session, 'lan')
+    this.client = {
+      ...this.logical,
+      sendRequest: (...args: Parameters<RpcClient['sendRequest']>) => {
+        const name = this.occurrence(args[0])
+        this.activeName = name
+        const request = {
+          name,
+          args: captureArguments(args),
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a pending settlement has no settledAt yet.
+          settlement: { status: 'pending', startedAt: this.now() } as Settlement
+        }
+        this.requests.push(request)
+        const promise = this.logical.sendRequest(...args)
+        observeSettlement(promise, this.now, (state) => {
+          request.settlement = state
+        })
+        return promise
+      }
+    }
+  }
+
+  private session(): RpcClient {
+    // One registry per physical session, the way `DirectRpcClient` builds one: the tracker is shared
+    // because a logical request outlives a cutover, a stream does not. Byte-neutral either way — the
+    // re-send after a cutover comes from the logical client's own replay — but it keeps a frame
+    // routed through the session that published its subscribe.
+    const streams = new RpcClientStreamRegistry({
+      nextId: () => this.nextFrameId(),
+      deviceToken: DEVICE_TOKEN,
+      getState: () => this.state,
+      sendEncrypted: (value) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stream registry publishes the frame it just built.
+        const payload = value as { id: string; method: string; params: unknown }
+        const name = this.occurrence(payload.method)
+        // Only a subscribe opens a stream. The registry sends its unsubscribes through this same
+        // hook, and filing one under `openStreams` made a frame aimed at an unsubscribe name route
+        // at that id, find nothing, record nothing and not throw.
+        if (this.opening) {
+          this.openStreams.set(name, {
+            id: payload.id,
+            params: payload.params,
+            deliver: (response) => streams.handleResponse(response)
+          })
+        }
+        this.publish(name, value)
+        return true
+      }
+    })
+    return {
+      sendRequest: (...args) => {
+        const name = this.activeName
+        this.wireNames.push(name)
+        return new Promise<RpcResponse>((resolve, reject) => {
+          this.rejects.set(name, reject)
+          this.tracker.sendRequest(...args).then(resolve, reject)
+        })
+      },
+      subscribe: (method, params, onData, options) => {
+        this.opening = true
+        try {
+          return streams.subscribe(method, params, onData, options)
+        } finally {
+          this.opening = false
+        }
+      },
+      updateTerminalSubscriptionViewport: (terminal, viewport) =>
+        streams.updateTerminalViewport(terminal, viewport),
+      getState: () => this.state,
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => 0,
+      onStateChange: (listener) => {
+        this.listeners.add(listener)
+        return () => {
+          this.listeners.delete(listener)
+        }
+      },
+      notifyForeground: () => {},
+      close: () => {
+        this.tracker.rejectAll('Connection closed', { deliveryUnknown: true })
+      }
+    }
+  }
+
+  private nextFrameId(): string {
+    return `frame-${++this.frameCount}`
+  }
+
+  /** One occurrence counter per method, so a subscribe payload is named the way a request is. */
+  private occurrence(method: string): string {
+    const next = (this.counts.get(method) ?? 0) + 1
+    this.counts.set(method, next)
+    return `${method}#${next}`
+  }
+
+  private publish(name: string, value: unknown): void {
+    // Why the send count: `payloads` and `requests` are independent lists, and a subscribe publishes
+    // synchronously while a request first waits for connected — so swapping the two in product
+    // source moves neither list. Stamping the count at write time makes that swap a golden diff.
+    this.payloads.push({ name, json: JSON.stringify(value), sent: this.requests.length })
+  }
+
+  /**
+   * A whole host response delivered at a subscribe payload's wire id, through the real registry, so
+   * `ready`, a data event, `end` and a refusal are one step kind rather than four.
+   */
+  frame(name: string, params: unknown, reply: unknown): void {
+    const stream = this.openStreams.get(name)
+    if (!stream) {
+      throw new Error(`Missing subscription payload: ${name}`)
+    }
+    if (JSON.stringify(captureValue(stream.params)) !== JSON.stringify(captureValue(params))) {
+      throw new Error(`Subscribe params mismatch: ${name}`)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the response as JSON; the wire id is the transport’s.
+    const routed = stream.deliver({ ...(reply as object), id: stream.id } as RpcResponse)
+    if (!routed) {
+      // Only a non-streaming reply lands here: the registry routes every streaming response to the
+      // id that opened the stream, retired or not. A scenario that has stopped matching, not a
+      // stream that closed early.
+      throw new Error(`No open stream for frame: ${name}`)
+    }
+  }
+
+  /** Whether a scripted name names a request that was sent and is still waiting for its reply. */
+  outstanding(name: string): boolean {
+    const binding = this.bindings.get(this.aliases.get(name) ?? name)
+    return binding !== undefined && !binding.completed
+  }
+
+  bind(alias: string, name: string, params: unknown): void {
+    name = this.aliases.get(name) ?? name
+    const binding = this.bindings.get(name)
+    if (!binding || this.aliases.has(alias)) {
+      throw new Error(`Invalid request binding: ${alias}`)
+    }
+    if (JSON.stringify(captureValue(binding.params)) !== JSON.stringify(captureValue(params))) {
+      throw new Error(`Binding params mismatch: ${alias}`)
+    }
+    this.aliases.set(alias, name)
+  }
+
+  complete(name: string, params: unknown, reply: unknown, rejection?: Rejection): void {
+    const alias = this.aliases.get(name)
+    const requestedName = alias ?? name
+    const method = requestedName.split('#')[0]
+    if (
+      !alias &&
+      [...this.bindings].filter(([key, value]) => key.split('#')[0] === method && !value.completed)
+        .length > 1
+    ) {
+      throw new Error(`Concurrent requests require a logical binding: ${name}`)
+    }
+    name = requestedName
+    const binding = this.bindings.get(name)
+    if (!binding || binding.completed) {
+      throw new Error(`Missing or completed request: ${name}`)
+    }
+    if (JSON.stringify(captureValue(binding.params)) !== JSON.stringify(captureValue(params))) {
+      throw new Error(`Request params mismatch: ${name}`)
+    }
+    binding.completed = true
+    if (rejection) {
+      const error =
+        rejection.category === 'TypeError'
+          ? new TypeError(rejection.message)
+          : new Error(rejection.message)
+      if (rejection.deliveryUnknown) {
+        markRpcDeliveryUnknown(error)
+      }
+      // Resolve the physical tracker to cancel its deadline before injecting the scripted rejection.
+      this.rejects.get(name)?.(error)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario asked for a null result, which is a reply shape a host can send.
+      this.tracker.resolve({ id: binding.id, ok: true, result: null } as RpcResponse)
+    } else {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the reply as JSON; the wire id is the transport’s.
+      this.tracker.resolve({ ...(reply as object), id: binding.id } as RpcResponse)
+    }
+  }
+
+  disconnect(): void {
+    this.state = 'disconnected'
+    this.tracker.rejectAll('Connection lost', { deliveryUnknown: true })
+    for (const listener of this.listeners) {
+      listener(this.state)
+    }
+  }
+
+  async cutover(): Promise<void> {
+    await this.logical.migrateTo(this.session(), 'relay')
+  }
+
+  dispose(): void {
+    this.logical.close()
+  }
+}

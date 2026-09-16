@@ -281,8 +281,11 @@ function escapeRegExp(value) {
 }
 
 function includesPreservedLatinTerm(value, term) {
+  if (!value.includes(term)) {
+    return false
+  }
   if (!/^[A-Za-z_]+$/.test(term)) {
-    return value.includes(term)
+    return true
   }
   return new RegExp(`(^|[^A-Za-z_])${escapeRegExp(term)}($|[^A-Za-z_])`).test(value)
 }

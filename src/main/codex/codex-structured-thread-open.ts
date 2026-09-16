@@ -19,6 +19,8 @@ export type CodexOpenedThread = {
   historyMode?: 'legacy' | 'paginated'
   model?: string
   effort?: string
+  /** Present, including null, only when this app-server reports the effective tier. */
+  serviceTier?: string | null
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -89,6 +91,8 @@ export async function openCodexThread(
       : {}
   const model = nonEmptyString(result.model)
   const effort = nonEmptyString(result.reasoningEffort)
+  const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
+  const serviceTier = nonEmptyString(result.serviceTier)
   return {
     threadId,
     thread,
@@ -97,6 +101,7 @@ export async function openCodexThread(
       ? { historyMode: thread.historyMode }
       : {}),
     ...(model ? { model } : {}),
-    ...(effort ? { effort } : {})
+    ...(effort ? { effort } : {}),
+    ...(serviceTierKnown ? { serviceTier } : {})
   }
 }

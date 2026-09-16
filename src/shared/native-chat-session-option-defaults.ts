@@ -5,6 +5,7 @@ import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
 } from './native-chat-session-options'
+import { encodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
@@ -29,31 +30,42 @@ export function resolveNativeChatSessionOptionDefaults(
   return values
 }
 
-/** Why only these two: they are the only ids the picker persists into
- *  `nativeChatSessionOptions` that both structured providers also accept as
- *  strings. Claude's `fastMode` is a boolean the durable `Record<string, string>`
- *  record cannot carry, and the providers' remaining keys are settable only
- *  mid-session, never seeded at launch. */
-export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort'] as const
+/** Canonical values seed through the existing durable string record; the codec
+ *  is the only boundary that represents the boolean Fast preference as text. */
+export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort', 'fastMode'] as const
 
-/** The saved selection a structured create seeds into its reservation, narrowed
- *  to the wire-safe string subset the durable record and both providers accept. */
+/** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
+ *  each encoded as a bounded string. An empty result is `undefined` rather than `{}` — an empty map fails
+ *  the durable record's bounded-string guard, and `agent_session_options_invalid` is not a wire
+ *  refusal code, so the throw strands the launch with no fallback.
+ *
+ *  Shared with orchestration, whose `--model`/`--effort` seed a worker's session the same way a
+ *  saved selection seeds the user's own chat. */
+export function narrowStructuredLaunchSeedOptions(
+  values: Readonly<Record<string, unknown>> | null | undefined
+): Record<string, string> | undefined {
+  const seeded: Record<string, string> = {}
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+    const value = values?.[id]
+    if ((id === 'model' || id === 'effort') && !(typeof value === 'string' && value.trim())) {
+      continue
+    }
+    if (typeof value === 'string' || typeof value === 'boolean') {
+      const encoded = encodeStructuredAgentSessionOptionValue(id, value)
+      if (encoded !== null) {
+        seeded[id] = encoded
+      }
+    }
+  }
+  return Object.keys(seeded).length > 0 ? seeded : undefined
+}
+
+/** The saved selection a structured create seeds into its string-valued reservation. */
 export function resolveStructuredLaunchSeedOptions(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType
 ): Record<string, string> | undefined {
-  const defaults = resolveNativeChatSessionOptionDefaults(persisted, agent)
-  if (!defaults) {
-    return undefined
-  }
-  const seeded: Record<string, string> = {}
-  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
-    const value = defaults[id]
-    if (typeof value === 'string' && value.trim()) {
-      seeded[id] = value
-    }
-  }
-  return Object.keys(seeded).length > 0 ? seeded : undefined
+  return narrowStructuredLaunchSeedOptions(resolveNativeChatSessionOptionDefaults(persisted, agent))
 }
 
 /** Fold a settled batch of picks onto the durable record. A surface that must send the

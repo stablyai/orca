@@ -4,7 +4,13 @@ import { OrcaRuntimeWithBindPtyIncarnationHandle } from './orca-runtime-bind-pty
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { buildPtyTerminalWaitResult, buildTerminalWaitResult } from './terminal-wait-results'
 import type { AgentStatus } from '../../shared/agent-detection'
-import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import {
+  detectExplicitIdleStatusFromTitle,
+  isKnownReadyPromptPreview
+} from './terminal-wait-detection'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { isTuiIdleSatisfied } from './tui-idle-evidence'
+import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
 
 export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
@@ -43,6 +49,12 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     if (!waiters || waiters.size === 0) {
       return
     }
+    // Why re-rank rather than resolve outright: the transition that brought us here is
+    // only a title sample, and a name-only title arriving mid-turn is the weakest tier
+    // there is (#6011). Leave such a waiter on its poll to be corroborated instead.
+    if (!this.isTuiIdleSatisfiedForLeaf(leaf)) {
+      return
+    }
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
@@ -78,6 +90,10 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     if (!waiters || waiters.size === 0) {
       return
     }
+    // Why: same re-ranking as resolveTuiIdleWaiters above.
+    if (!this.isTuiIdleSatisfiedForPty(pty)) {
+      return
+    }
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
@@ -86,6 +102,105 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
   }
 
   // Why: the primary OSC-title signal can't fire for daemon-hosted terminals (no PTY data through the runtime), so this fallback polls the renderer-synced tab title + foreground-process quiescence; self-cancels when the OSC path fires.
+  protected isTuiIdleSatisfiedForLeaf(leaf: RuntimeLeafRecord): boolean {
+    return isTuiIdleSatisfied({
+      record: leaf,
+      rendererTitle: leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null,
+      readPositiveBodyEvidence: () =>
+        isKnownReadyPromptPreview(
+          buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+        ),
+      agent: this.getPaneAgentForTuiIdle(leaf.ptyId),
+      firstPartyStatus:
+        (leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.lastExplicitAgentStatus : null) ?? null,
+      quiescenceMs: TUI_IDLE_QUIESCENCE_MS
+    })
+  }
+
+  /**
+   * Settled-enough-to-type check that also arms a retry when it says no.
+   *
+   * Why the retry: the wait path POLLS, so weak evidence that only becomes valid with the
+   * passage of time (a pane going quiet) eventually satisfies it. Delivery is edge-driven —
+   * a title transition, a graph sync, a new message — with no poll behind it, so a refusal
+   * at an edge is final unless another edge happens to arrive. A hookless Codex pane never
+   * emits an explicit `X ready`, so the refusal below would strand the queued message
+   * permanently once the pane fell quiet. One-shot timer, armed only for a leaf that
+   * actually refused, cleared as soon as any path delivers.
+   */
+  protected checkDeliverySettledAndArmRecheck(leaf: { tabId: string; leafId: string }): boolean {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    if (this.isAgentSettledForDelivery(leaf)) {
+      this.clearDeliveryRecheck(leafKey)
+      return true
+    }
+    this.armDeliveryRecheck(leafKey)
+    return false
+  }
+
+  protected clearDeliveryRecheck(leafKey: string): void {
+    const timer = this.deliveryRecheckTimersByLeafKey.get(leafKey)
+    if (timer) {
+      clearTimeout(timer)
+      this.deliveryRecheckTimersByLeafKey.delete(leafKey)
+    }
+  }
+
+  private armDeliveryRecheck(leafKey: string): void {
+    if (this.deliveryRecheckTimersByLeafKey.has(leafKey)) {
+      return
+    }
+    const live = this.leaves.get(leafKey)
+    // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
+    // stream to go quiet, so wake just after the window could have elapsed. A pane that is
+    // still producing output re-arms from its own fresher timestamp rather than spinning.
+    const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
+    const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
+    const timer = setTimeout(() => {
+      this.deliveryRecheckTimersByLeafKey.delete(leafKey)
+      const current = this.leaves.get(leafKey)
+      if (!current) {
+        return
+      }
+      // Why the gate again here: delivery sites gate at the CALL, not inside
+      // deliverPendingMessagesForLeaf, so firing straight into it would hand the retry the
+      // very injection the gate exists to prevent. A pane that went busy again re-arms.
+      if (this.checkDeliverySettledAndArmRecheck(current)) {
+        this.deliverPendingMessagesForLeaf(current)
+      }
+    }, delay)
+    timer.unref?.()
+    this.deliveryRecheckTimersByLeafKey.set(leafKey, timer)
+  }
+
+  /**
+   * Whether this pane is settled enough to TYPE INTO.
+   *
+   * Why the same ranking as the wait path: mailbox delivery writes the pointer plus Enter
+   * into the pane, so acting on a name-only `Codex` title mid-turn injects keystrokes into
+   * a running agent's session. That is the #6011 mis-settlement in a path with a worse
+   * failure mode than a racing script. Liveness stays a separate requirement — callers
+   * keep their own `lastAgentStatusObservedLive` checks.
+   */
+  protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
+    const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+    return live ? this.isTuiIdleSatisfiedForLeaf(live) : false
+  }
+
+  protected isTuiIdleSatisfiedForPty(pty: RuntimePtyWorktreeRecord): boolean {
+    return isTuiIdleSatisfied({
+      record: pty,
+      readPositiveBodyEvidence: () =>
+        this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
+        isKnownReadyPromptPreview(
+          buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+        ),
+      agent: this.getPaneAgentForTuiIdle(pty.ptyId),
+      firstPartyStatus: pty.lastExplicitAgentStatus ?? null,
+      quiescenceMs: TUI_IDLE_QUIESCENCE_MS
+    })
+  }
+
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
     const title = this.getAdoptedPtyTitle(pty)
     return title ? detectExplicitIdleStatusFromTitle(title) : null

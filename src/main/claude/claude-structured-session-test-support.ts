@@ -14,6 +14,7 @@ import {
   type ClaudeStructuredLaunch,
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
@@ -198,7 +199,8 @@ export function adapterFor(
   initTimeoutMs?: number,
   readTranscriptLeaf?: ClaudeStructuredSessionAdapterDeps['readTranscriptLeaf'],
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
-  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
+  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged'],
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -216,13 +218,13 @@ export function adapterFor(
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
     ...(initTimeoutMs === undefined ? {} : { initTimeoutMs }),
-    dispatchAckTimeoutMs: 10,
     persistHandle:
       persistHandle ??
       (async (handle) => {
         persistedHandles.push(handle)
       }),
     ...(onBackgroundTasksChanged ? { onBackgroundTasksChanged } : {}),
+    ...(onDispatchSettledLate ? { onDispatchSettledLate } : {}),
     ...(readTranscriptLeaf ? { readTranscriptLeaf } : {})
   })
 }
@@ -230,11 +232,33 @@ export function adapterFor(
 export async function acquired(
   claude: ReturnType<typeof fakeClaude>,
   launch: Partial<ClaudeStructuredLaunch> = {},
-  events: ClaudeStructuredSessionEvent[] = []
+  events: ClaudeStructuredSessionEvent[] = [],
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): Promise<ClaudeStructuredSessionAdapter> {
-  const adapter = adapterFor(claude, launch, events)
-  await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+  const adapter = adapterFor(
+    claude,
+    launch,
+    events,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    onDispatchSettledLate
+  )
+  await adapter.acquire({
+    identity: identityFor(),
+    fence: 7,
+    spawnToken: 'spawn-9',
+    // Production acquires with a journal sink, and turn identity lives on the
+    // translator it builds; without one this fixture models no session that ships.
+    events: recordingJournalSink()
+  })
   return adapter
+}
+
+export function recordingJournalSink(): StructuredAgentSessionEventSink {
+  return { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
 }
 
 export function tick(): Promise<void> {

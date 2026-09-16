@@ -4,20 +4,11 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
-import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
-import {
-  guardPinnedTabClose,
-  isUnifiedTabPinned,
-  resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import {
   createFloatingWorkspaceTerminalTab,
-  isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
-  resolveFloatingWorkspaceBrowserWorkspaceId,
-  switchFloatingWorkspaceTab
+  resolveFloatingWorkspaceBrowserWorkspaceId
 } from '@/lib/floating-workspace-terminal-actions'
 import {
   dispatchFloatingWorkspaceGuestClose,
@@ -25,13 +16,6 @@ import {
 } from '@/lib/floating-workspace-guest-bridge'
 
 import { useAppStore } from '../../store'
-import { resolveBrowserWorkspaceOwner } from '../../lib/browser-workspace-source-resolution'
-import {
-  handleSwitchRecentTab,
-  handleSwitchTab,
-  handleSwitchTabAcrossAllTypes,
-  handleSwitchTerminalTab
-} from '../ipc-tab-switch'
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
@@ -88,73 +72,12 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onCloseActiveTab((payload) => {
-      // Why: the empty-panel toggle is the ambient fallback only. A guest-originated close names a
-      // main-workspace target, so an open-but-empty floating panel must not swallow it.
-      if (!payload?.sourceId && isEmptyFloatingWorkspacePanelVisible()) {
-        window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
-        return
-      }
-      const store = useAppStore.getState()
-      // Why: a guest-originated close names its own page; the activeTabType mirror goes stale in
-      // split layouts (guest focus never reaches the group's focus-capture), so trust the source id.
-      const explicitTarget = payload?.sourceId
-        ? resolveBrowserWorkspaceOwner(store, payload.sourceId)
-        : null
-      if (payload?.sourceId && !explicitTarget) {
-        // Stale id (guest closed between keydown and IPC) = no-op, never the ambient fallback.
-        return
-      }
-      if (explicitTarget || (store.activeTabType === 'browser' && store.activeBrowserTabId)) {
-        const tabId = explicitTarget?.workspaceId ?? store.activeBrowserTabId
-        const worktreeId = explicitTarget?.worktreeId ?? store.activeWorktreeId
-        if (!tabId) {
-          return
-        }
-        const closeActiveBrowserTab = (): void => {
-          const currentStore = useAppStore.getState()
-          if (!worktreeId) {
-            currentStore.closeBrowserTab(tabId)
-            return
-          }
-          // Why: the menu's Close Tab used to decide ownership itself — "runtime connected means
-          // the host owns it" — which fires an inert close at a local-only or still-staged tab.
-          // The shared plan is the one authority on who tears a browser workspace down.
-          const plan = closeBrowserWorkspaceTabOnHosts({
-            state: currentStore,
-            worktreeId,
-            workspaceId: tabId,
-            visibleTabId: tabId,
-            focusedEnvironmentId: getRuntimeEnvironmentIdForWorktree(currentStore, worktreeId)
-          })
-          if (plan.closesLocally) {
-            // Why before the teardown: closeBrowserTab announces the MRU page selection, and a
-            // guest torn down first leaves the fallback picking registration order (#16306).
-            currentStore.closeBrowserTab(
-              tabId,
-              plan.localCloseReason ? { reason: plan.localCloseReason } : undefined
-            )
-            destroyWorkspaceWebviews(currentStore.browserPagesByWorkspace, tabId)
-            return
-          }
-          if (plan.removesVisibleTab) {
-            const mirroredTab = (currentStore.unifiedTabsByWorktree[worktreeId] ?? []).find(
-              (candidate) => candidate.contentType === 'browser' && candidate.entityId === tabId
-            )
-            if (mirroredTab) {
-              currentStore.closeUnifiedTab(mirroredTab.id)
-            }
-          }
-        }
-        if (worktreeId && isUnifiedTabPinned(store, worktreeId, tabId)) {
-          guardPinnedTabClose({
-            isPinned: true,
-            tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
-            onClose: closeActiveBrowserTab
-          })
-          return
-        }
-        closeActiveBrowserTab()
-      }
+      dispatchWorkspaceTabCommand({
+        type: 'close',
+        ...(payload?.sourceId
+          ? { target: { kind: 'browser-source', sourceId: payload.sourceId } as const }
+          : {})
+      })
     })
   )
 
@@ -181,33 +104,16 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onSwitchTab((direction) => {
-      const store = useAppStore.getState()
-      if (isFloatingWorkspacePanelFocused()) {
-        switchFloatingWorkspaceTab(store, direction, 'same-type')
-        return
-      }
-      handleSwitchTab(direction)
-    })
-  )
-  unsubs.push(
+      dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'same-type' })
+    }),
     window.api.ui.onSwitchTabAcrossAllTypes((direction) => {
-      const store = useAppStore.getState()
-      if (isFloatingWorkspacePanelFocused()) {
-        switchFloatingWorkspaceTab(store, direction, 'all-types')
-        return
-      }
-      handleSwitchTabAcrossAllTypes(direction)
-    })
-  )
-  unsubs.push(window.api.ui.onSwitchRecentTab(handleSwitchRecentTab))
-  unsubs.push(
+      dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'all-types' })
+    }),
+    window.api.ui.onSwitchRecentTab(() => {
+      dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    }),
     window.api.ui.onSwitchTerminalTab((direction) => {
-      const store = useAppStore.getState()
-      if (isFloatingWorkspacePanelFocused()) {
-        switchFloatingWorkspaceTab(store, direction, 'terminal')
-        return
-      }
-      handleSwitchTerminalTab(direction)
+      dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'terminal' })
     })
   )
 }

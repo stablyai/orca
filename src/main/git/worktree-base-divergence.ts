@@ -1,8 +1,10 @@
 import { WSL_GIT_READ_ENVIRONMENT_WAIT_MS } from './wsl-git-read-environment'
 import { gitExecFileAsync } from './runner'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
 export type RetargetDivergenceOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
   /** The create's own cancellation signal. Without it a cancelled create leaves these probes
    *  running until the budget expires. */
   signal?: AbortSignal
@@ -61,7 +63,13 @@ function probeOptions(
   repoPath: string,
   options: RetargetDivergenceOptions,
   signal: AbortSignal
-): { cwd: string; wslDistro?: string; signal: AbortSignal; timeout: number } {
+): {
+  cwd: string
+  wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  signal: AbortSignal
+  timeout: number
+} {
   // Built field by field rather than spread: the caller's bag carries a test-only key that must
   // never reach git's exec options.
   // Both bounds: the signal covers the pre-spawn waits (admission queue, WSL environment) that a
@@ -69,6 +77,7 @@ function probeOptions(
   return {
     cwd: repoPath,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
     signal,
     timeout: RETARGET_DIVERGENCE_BUDGET_MS
   }

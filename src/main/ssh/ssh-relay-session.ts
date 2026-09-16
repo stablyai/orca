@@ -26,7 +26,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
   buildManagedHookDetectionCommands,
-  detectedManagedHookAgents
+  readManagedHookDetectionResult
 } from '../agent-hooks/managed-hook-detection-commands'
 import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
@@ -37,6 +37,7 @@ import {
   type AgentHookInstallManagedHooksResult
 } from '../../shared/agent-hook-relay'
 import type { RemoteAgentHookInstallReport } from '../../shared/agent-hook-types'
+import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
@@ -459,6 +460,14 @@ export class SshRelaySession {
    */
   getAgentHookInstallReport(): RemoteAgentHookInstallReport | null {
     return this.agentHookInstallReport
+  }
+
+  async requestSessionSearch(method: string, params: Record<string, unknown>): Promise<unknown> {
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    return mux.request(method, params, { timeoutMs: 15_000 })
   }
 
   async requestAiVaultSessionList(
@@ -1392,17 +1401,20 @@ export class SshRelaySession {
 
     try {
       const store = this.store as { getSettings?: Store['getSettings'] }
-      const detected = (await mux.request('preflight.detectAgents', {
-        commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
-      })) as { agents?: unknown }
-      const agents = detectedManagedHookAgents(detected?.agents)
+      const detected = readManagedHookDetectionResult(
+        await mux.request('preflight.detectAgents', {
+          commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
+        })
+      )
+      const agents = detected.agents
       if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
         return
       }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
       const params = {
         ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
-        agents
+        agents,
+        ...(detected.claudeVersion ? { claudeVersion: detected.claudeVersion } : {})
       }
       const result = (await mux.request(
         AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
@@ -1628,30 +1640,7 @@ export class SshRelaySession {
       if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
         return
       }
-      const envelope = params as {
-        paneKey?: unknown
-        launchToken?: unknown
-        tabId?: unknown
-        worktreeId?: unknown
-        env?: unknown
-        version?: unknown
-        hasExplicitPrompt?: unknown
-        promptInteractionKey?: unknown
-        hookEventName?: unknown
-        source?: unknown
-        providerPromptId?: unknown
-        compactTrigger?: unknown
-        toolUseId?: unknown
-        toolAgentId?: unknown
-        teammateName?: unknown
-        toolAgentType?: unknown
-        isReplay?: unknown
-        providerSession?: unknown
-        providerSessionOnly?: unknown
-        shedFields?: unknown
-        claudeRunningNonAgentTask?: unknown
-        payload?: unknown
-      }
+      const envelope = params
       if (typeof envelope.paneKey !== 'string') {
         return
       }
@@ -1673,6 +1662,7 @@ export class SshRelaySession {
             typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
           source: envelope.source,
           providerPromptId: envelope.providerPromptId,
+          grokPromptBoundary: envelope.grokPromptBoundary === true ? true : undefined,
           compactTrigger: envelope.compactTrigger,
           toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
           toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
@@ -1689,6 +1679,8 @@ export class SshRelaySession {
             typeof envelope.claudeRunningNonAgentTask === 'boolean'
               ? envelope.claudeRunningNonAgentTask
               : undefined,
+          // Why: the SSH relay protocol advertises no run-serving capability.
+          advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
           payload: envelope.payload
         },
         this.targetId
@@ -1751,10 +1743,9 @@ export class SshRelaySession {
 
     if (reason === 'shutdown') {
       clearPtyOwnershipForConnection(this.targetId)
-    } else {
-      // Why: handlers detached above, so no late event can re-stamp status between this clear and reconnect replay.
-      agentHookServer.clearStatusEntriesForConnection(this.targetId)
     }
+    // Connection loss makes remote status unverifiable, not exited. Keep the last observation;
+    // replay or certified process teardown will update or remove it on the execution host.
 
     const ptyProvider = getSshPtyProvider(this.targetId)
     if (ptyProvider && 'dispose' in ptyProvider) {
@@ -2849,7 +2840,8 @@ export class SshRelaySession {
         ptyId: appPtyId,
         incarnationId,
         ...(mayCreate ? {} : { mayCreate: false }),
-        mayReviveRetiredSurface: false
+        mayReviveRetiredSurface: false,
+        origin: 'relay_reattach'
       })
       if (bound === false) {
         // Topology absence alone is not authority to kill a process, but neither refusal may

@@ -11,7 +11,8 @@ import {
   createDocumentCommentMarkdownComponents,
   documentCommentMarkdownComponents,
   isTrustedCompactImageSrc,
-  type CommentMarkdownLinkClickHandler
+  type CommentMarkdownLinkClickHandler,
+  type DocumentCodeBlockRenderer
 } from './comment-markdown-element-renderers'
 import { remarkNativeChatFileLinks } from './comment-markdown-native-chat-file-links'
 
@@ -188,6 +189,7 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   allowFileUriLinks?: boolean
   linkifyFilePaths?: boolean
   expandImages?: boolean
+  renderCodeBlock?: DocumentCodeBlockRenderer
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -204,6 +206,7 @@ const CommentMarkdown = React.memo(
       allowFileUriLinks = false,
       linkifyFilePaths = false,
       expandImages = false,
+      renderCodeBlock,
       ...rest
     },
     ref
@@ -211,15 +214,17 @@ const CommentMarkdown = React.memo(
     const components = React.useMemo(() => {
       if (!onLinkClick) {
         return variant === 'document'
-          ? documentCommentMarkdownComponents
+          ? renderCodeBlock
+            ? createDocumentCommentMarkdownComponents(undefined, renderCodeBlock)
+            : documentCommentMarkdownComponents
           : expandImages
             ? createCompactCommentMarkdownComponents(undefined, true)
             : compactCommentMarkdownComponents
       }
       return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick)
+        ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
         : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
-    }, [expandImages, variant, onLinkClick])
+    }, [expandImages, renderCodeBlock, variant, onLinkClick])
     const activeRemarkPlugins = React.useMemo(() => {
       const plugins = linkifyFilePaths
         ? [...remarkPlugins, remarkNativeChatFileLinks]

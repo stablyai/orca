@@ -77,14 +77,14 @@ function rollPlan({ cellId, cap, protocol }) {
             metadata_startup_script: startupScript({
               cap,
               image: ROLLBACK_IMAGE,
-              trusted: protocol === 1
+              trusted: protocol >= 1
             })
           },
           after: {
             metadata_startup_script: startupScript({
               cap,
               image: TARGET_IMAGE,
-              trusted: protocol === 1
+              trusted: protocol >= 1
             }),
             self_link: null
           },
@@ -178,11 +178,9 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
   })
 
   it('validates a correct plan for every wave cell at that cell\'s rehome protocol', () => {
-    for (const cellId of SAME_CAP_CELLS) {
+    for (const [cellId, protocol] of SAME_CAP_CELLS.flatMap((cell) => [[cell, 1], [cell, 3]])) {
       const [, cap] = resolveCellShape(cellId).stdout.trim().split(' ')
-      const protocol = REHOME_SOURCE_CELLS.has(cellId) ? 1 : 0
-      // Every reviewed serving cell carries rehome trust now, in either region.
-      assert.equal(protocol, 1, cellId)
+      assert.equal(REHOME_SOURCE_CELLS.has(cellId), true, cellId)
       const config = {
         mode: 'same-cap-cell',
         cellId,
@@ -204,7 +202,7 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.throws(
         () => validateCapacityPlan(plan, {
           ...config,
-          regionalRehomeProtocol: String(1 - protocol)
+          regionalRehomeProtocol: '0'
         }),
         /reviewed image and capacity/,
         cellId
@@ -238,4 +236,12 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
   it('leaves the US-only capacity job on the default allowlist', () => {
     assert.doesNotMatch(capacityWorkflow, /--approved-cells/)
   })
+})
+
+// Both trusted versions must prove the same authenticated drain boundary.
+it('proves rehome trust for protocol 3 on forward and rollback rolls', () => {
+  const step = workflow.split('name: Prove exact per-host trust and idempotent no-neighbor behavior')[1].split('\n      - name:')[0]
+  assert.match(step, /inputs\.rollback-rehome-protocol != '0'/)
+  assert.match(step, /inputs\.target-rehome-protocol != '0'/)
+  assert.match(step, /probe-relay-rehome-trust\.mjs/)
 })

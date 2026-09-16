@@ -30,6 +30,7 @@ const CALLER = { callerKey: 'client-1' }
 const DEFAULT_MODEL = 'gpt-default'
 const PICKED_MODEL = 'gpt-picked'
 const PICKED_EFFORT = 'medium'
+const PICKED_FAST_MODE = true
 
 let root: string
 let store: AgentSessionRecordStore
@@ -37,6 +38,7 @@ let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let activeModel: string
 let activeEffort: string | null
+let activeFastMode: boolean | null
 let transcriptPath: string
 let optionFailure: Error | null
 const dispatchedModels: string[] = []
@@ -109,6 +111,7 @@ function adapter(): StructuredAgentSessionAdapter {
   acquire = vi.fn(async ({ fence, spawnToken, options }) => {
     activeModel = options?.model ?? DEFAULT_MODEL
     activeEffort = options?.effort ?? null
+    activeFastMode = options?.fastMode === undefined ? null : options.fastMode === 'true'
     return {
       process: {
         hostId: 'local',
@@ -146,14 +149,21 @@ function adapter(): StructuredAgentSessionAdapter {
         activeModel = value
       } else if (key === 'effort') {
         activeEffort = value
+      } else if (key === 'fastMode') {
+        activeFastMode = value === 'true'
       }
       return {
         model: activeModel,
-        ...(activeEffort ? { effort: activeEffort } : {})
+        ...(activeEffort ? { effort: activeEffort } : {}),
+        ...(activeFastMode !== null ? { fastMode: String(activeFastMode) } : {})
       }
     }),
     readOptions: vi.fn(async () => ({
-      current: { model: activeModel, ...(activeEffort ? { effort: activeEffort } : {}) },
+      current: {
+        model: activeModel,
+        ...(activeEffort ? { effort: activeEffort } : {}),
+        ...(activeFastMode !== null ? { fastMode: activeFastMode } : {})
+      },
       models: []
     })),
     closeSession: vi.fn(async () => {
@@ -168,6 +178,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   activeModel = DEFAULT_MODEL
   activeEffort = null
+  activeFastMode = null
   optionFailure = null
   dispatchedModels.length = 0
   launchedOptions.length = 0
@@ -255,24 +266,44 @@ describe('structured session handoff options', () => {
       effort: PICKED_EFFORT
     })
 
+    const fastModeFields = { key: 'fastMode', value: String(PICKED_FAST_MODE) }
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', fastModeFields),
+        ...fastModeFields
+      })
+    ).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.options).toEqual({
+      model: PICKED_MODEL,
+      effort: PICKED_EFFORT,
+      fastMode: 'true'
+    })
+
     expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' })
+    // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
+      { timeout: 5000 }
     )
     expect(await host.requestHandoff(CALLER, handoff('to-native'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' }),
+      { timeout: 5000 }
     )
 
-    expect(launchedOptions).toEqual([{ model: PICKED_MODEL, effort: PICKED_EFFORT }])
+    expect(launchedOptions).toEqual([
+      { model: PICKED_MODEL, effort: PICKED_EFFORT, fastMode: 'true' }
+    ])
     expect(closedTuiOwners).toHaveLength(1)
     expect(acquire.mock.calls[1]?.[0].options).toEqual({
       model: PICKED_MODEL,
-      effort: PICKED_EFFORT
+      effort: PICKED_EFFORT,
+      fastMode: 'true'
     })
     expect(store.getRecord(SESSION)?.options).toEqual({
       model: PICKED_MODEL,
-      effort: PICKED_EFFORT
+      effort: PICKED_EFFORT,
+      fastMode: 'true'
     })
     const body = hostTestMessage('use the selected model')
     expect(

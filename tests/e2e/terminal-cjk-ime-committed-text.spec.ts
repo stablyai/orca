@@ -73,7 +73,7 @@ const SUBSTITUTION_GROUPS = [
  * The two ways a substituted keystroke can reach the renderer. Both are real; only the second one
  * regressed, and only the second one can regress, which is why running both is the point.
  */
-const SUBSTITUTION_SHAPES: readonly {
+const SUBSTITUTION_ROUTES: readonly {
   name: string
   slug: string
   dispatch: (session: CDPSession, keystroke: SubstitutedKeystroke) => Promise<void>
@@ -165,9 +165,9 @@ test.describe('Terminal CJK IME committed text', () => {
     }
   })
 
-  for (const shape of SUBSTITUTION_SHAPES) {
+  for (const route of SUBSTITUTION_ROUTES) {
     for (const group of SUBSTITUTION_GROUPS) {
-      test(`sends full-width ${group.label} and never their ASCII form when ${shape.name}`, async ({
+      test(`sends full-width ${group.label} and never their ASCII form when ${route.name}`, async ({
         orcaPage,
         testRepoPath
       }, testInfo) => {
@@ -179,7 +179,7 @@ test.describe('Terminal CJK IME committed text', () => {
         try {
           await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
           for (const keystroke of group.keystrokes) {
-            await shape.dispatch(arena.session, keystroke)
+            await route.dispatch(arena.session, keystroke)
             await orcaPage.waitForTimeout(60)
           }
           await dispatchPlainEnter(arena.session)
@@ -200,7 +200,7 @@ test.describe('Terminal CJK IME committed text', () => {
           await closeTerminalImePaneArena(
             arena,
             testInfo,
-            `full-width-${group.label}-${shape.slug}`,
+            `full-width-${group.label}-${route.slug}`,
             !completed
           )
           removeTerminalImeByteReader(reader)

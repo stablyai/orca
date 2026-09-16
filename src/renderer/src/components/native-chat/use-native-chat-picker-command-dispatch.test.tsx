@@ -23,6 +23,7 @@ const COMMAND = {
   kind: 'command' as const,
   id: 'command:status',
   name: 'status',
+  token: '/status',
   description: 'Show status',
   skillCollision: false
 }

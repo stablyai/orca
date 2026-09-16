@@ -52,10 +52,28 @@ function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): boolean {
 // Array.sort's behavior implementation-defined and skips later tie-breaks.
 const UNKNOWN_INDEX_SENTINEL = Number.MAX_SAFE_INTEGER
 
+function createFieldOrderIndex(field: GitHubProjectField): ReadonlyMap<string, number> {
+  const entries =
+    field.kind === 'iteration'
+      ? (field.iterations ?? [])
+      : field.kind === 'single-select'
+        ? (field.options ?? [])
+        : []
+  const indices = new Map<string, number>()
+  entries.forEach((entry, index) => {
+    const id = entry.id
+    if (!indices.has(id)) {
+      indices.set(id, index)
+    }
+  })
+  return indices
+}
+
 // Preserve the mobile mirror's fallback for partial ordering metadata.
 function getFieldValueForGrouping(
   row: GitHubProjectRow,
-  field: GitHubProjectField
+  field: GitHubProjectField,
+  orderIndex: ReadonlyMap<string, number>
 ): { key: string; label: string; orderHint: number; iteration: ProjectGroup['iteration'] } {
   const value = row.fieldValuesByFieldId[field.id]
   if (!hasNonEmptyFieldValue(value)) {
@@ -68,8 +86,8 @@ function getFieldValueForGrouping(
   }
   if (field.kind === 'iteration' && value.kind === 'iteration') {
     const iterations = field.iterations ?? []
-    const idx = iterations.findIndex((iteration) => iteration.id === value.iterationId)
-    const meta = iterations.find((iteration) => iteration.id === value.iterationId)
+    const idx = orderIndex.get(value.iterationId) ?? -1
+    const meta = iterations[idx]
     return {
       key: value.iterationId,
       label: value.title || meta?.title || 'Iteration',
@@ -80,7 +98,7 @@ function getFieldValueForGrouping(
     }
   }
   if (field.kind === 'single-select' && value.kind === 'single-select') {
-    const idx = (field.options ?? []).findIndex((option) => option.id === value.optionId)
+    const idx = orderIndex.get(value.optionId) ?? -1
     return {
       key: value.optionId,
       label: value.name,
@@ -123,6 +141,7 @@ export function groupRows(
   if (!groupField) {
     return [{ key: 'all', label: '', iteration: null, rows: rowsInOrder }]
   }
+  const groupOrderIndex = createFieldOrderIndex(groupField)
   const buckets = new Map<
     string,
     {
@@ -133,7 +152,11 @@ export function groupRows(
     }
   >()
   for (const row of rowsInOrder) {
-    const { key, label, orderHint, iteration } = getFieldValueForGrouping(row, groupField)
+    const { key, label, orderHint, iteration } = getFieldValueForGrouping(
+      row,
+      groupField,
+      groupOrderIndex
+    )
     let bucket = buckets.get(key)
     if (!bucket) {
       bucket = { label, orderHint, iteration, rows: [] }
@@ -163,7 +186,12 @@ export function groupRows(
   }))
 }
 
-function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProjectSort): number {
+function compareSort(
+  a: GitHubProjectRow,
+  b: GitHubProjectRow,
+  sort: GitHubProjectSort,
+  orderIndex: ReadonlyMap<string, number>
+): number {
   const field = sort.field
   const aValue = a.fieldValuesByFieldId[field.id]
   const bValue = b.fieldValuesByFieldId[field.id]
@@ -180,9 +208,8 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
     aValue.kind === 'single-select' &&
     bValue.kind === 'single-select'
   ) {
-    const options = field.options ?? []
-    const aIdx = options.findIndex((option) => option.id === aValue.optionId)
-    const bIdx = options.findIndex((option) => option.id === bValue.optionId)
+    const aIdx = orderIndex.get(aValue.optionId) ?? -1
+    const bIdx = orderIndex.get(bValue.optionId) ?? -1
     cmp =
       (aIdx === -1 ? UNKNOWN_INDEX_SENTINEL : aIdx) - (bIdx === -1 ? UNKNOWN_INDEX_SENTINEL : bIdx)
   } else if (
@@ -190,9 +217,8 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
     aValue.kind === 'iteration' &&
     bValue.kind === 'iteration'
   ) {
-    const iterations = field.iterations ?? []
-    const aIdx = iterations.findIndex((iteration) => iteration.id === aValue.iterationId)
-    const bIdx = iterations.findIndex((iteration) => iteration.id === bValue.iterationId)
+    const aIdx = orderIndex.get(aValue.iterationId) ?? -1
+    const bIdx = orderIndex.get(bValue.iterationId) ?? -1
     cmp =
       (aIdx === -1 ? UNKNOWN_INDEX_SENTINEL : aIdx) - (bIdx === -1 ? UNKNOWN_INDEX_SENTINEL : bIdx)
   } else if (aValue.kind === 'number' && bValue.kind === 'number') {
@@ -214,11 +240,14 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
 }
 
 export function sortRows(table: GitHubProjectTable, rows: GitHubProjectRow[]): GitHubProjectRow[] {
-  const sorts = table.selectedView.sortByFields
+  const sorts = table.selectedView.sortByFields.map((sort) => ({
+    sort,
+    orderIndex: createFieldOrderIndex(sort.field)
+  }))
   const out = [...rows]
   out.sort((a, b) => {
-    for (const sort of sorts) {
-      const cmp = compareSort(a, b, sort)
+    for (const { sort, orderIndex } of sorts) {
+      const cmp = compareSort(a, b, sort, orderIndex)
       if (cmp !== 0) {
         return cmp
       }

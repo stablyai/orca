@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { dispatchWriteFailureReason } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
 const hostRef: { current: unknown } = { current: null }
 const createSpy = vi.fn()
@@ -255,11 +256,28 @@ describe('structured worker dispatch preamble', () => {
     }
   })
 
-  it('keeps a rejected preamble a proven failure rather than an unknown one', async () => {
+  it('keeps a rejected preamble a proven failure under a code of its own', async () => {
     const error = await send(
       hostWithSubmission({ dispatchState: 'rejected', reason: 'fence moved' })
     ).catch((thrown: unknown) => thrown)
-    expect((error as Error).message).toMatch(/rejected: fence moved/)
+    // A verdict, not prose. A coordinator must be able to tell "we could not send it"
+    // from `operation_unknown`'s "it may be running, go look" without parsing a message,
+    // which a bare `Error` forced it to do.
+    expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')
+    expect((error as Error).message).toMatch(/not delivered: fence moved/)
+    expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
+  })
+
+  it('reports a refused transport write as undelivered, never as unknown', async () => {
+    // The state a provably-unwritten frame now settles. Nothing reached the provider,
+    // so there is no running turn for a coordinator to go and look at.
+    const error = await send(
+      hostWithSubmission({
+        dispatchState: 'rejected',
+        reason: dispatchWriteFailureReason(new Error('broken pipe'))
+      })
+    ).catch((thrown: unknown) => thrown)
+    expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
   })
 })

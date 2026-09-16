@@ -93,8 +93,10 @@ describe('activity thread grouping', () => {
     const groups = buildActivityThreadGroups(threads, 'status')
 
     expect(groups).toHaveLength(2)
-    expect(groups[0].key).toBe('done:interrupted')
+    expect(groups[0].key).toBe('interrupted')
     expect(groups[0].label).toBe('Interrupted')
+    // Interrupted rows keep the done glyph (#2569); the header mirrors the row.
+    expect(groups[0].state).toBe('done')
     expect(groups[1].key).toBe('done')
     expect(groups[1].label).toBe('Done')
   })

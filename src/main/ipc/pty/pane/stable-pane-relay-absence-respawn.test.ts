@@ -81,6 +81,49 @@ function sessionStore(leaves: string[]): { store: Store; read: () => WorkspaceSe
 }
 
 describe('stable pane adoption after the relay reports the PTY absent', () => {
+  it.each([false, true])(
+    'reattaches a live pane without launching a provider process (settled worker: %s)',
+    async (settledWorker) => {
+      const { store, read } = sessionStore([LEAF])
+      const paneKey = `${OWNER.tabId}:${LEAF}`
+      const record = {
+        paneKey,
+        tabId: OWNER.tabId,
+        worktreeId: WORKTREE,
+        agent: 'claude' as const,
+        providerSession: { key: 'session_id' as const, id: 'provider-session' },
+        prompt: '',
+        state: 'done' as const,
+        capturedAt: 1,
+        updatedAt: 1,
+        ...(settledWorker ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' } : {})
+      }
+      store.setWorkspaceSession({
+        ...read(),
+        sleepingAgentSessionsByPaneKey: { [paneKey]: record }
+      })
+      const spawn = vi.fn().mockResolvedValue({ id: OWNER.ptyId, isReattach: true })
+      const onFreshSpawn = vi.fn()
+      const result = await spawnForStablePane({
+        runtime: undefined,
+        store,
+        worktreeId: WORKTREE,
+        provider: { spawn } as unknown as IPtyProvider,
+        spawnOptions: { cols: 80, rows: 24, command: 'claude --resume provider-session' },
+        owner: OWNER,
+        connectionId: 'conn-1',
+        resolveOwner: () => OWNER,
+        onFreshSpawn
+      })
+      expect(result.owner).toBe(OWNER)
+      expect(spawn).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ sessionId: OWNER.ptyId, attachOnly: true, command: undefined })
+      )
+      expect(onFreshSpawn).not.toHaveBeenCalled()
+      expect(read().tabsByWorktree[WORKTREE]).toHaveLength(1)
+    }
+  )
+
   it('spawns fresh once the relay has positively answered for that id', async () => {
     const { run, spawn } = spawnAfterAttachRejection(
       new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: pty-1`)

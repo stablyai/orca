@@ -149,13 +149,17 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
       ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
       ...(connectionId ? { includeLocalRegistry: false } : {})
     })
+    // Structured sessions are counted here too, mirroring the IPC path: closing a user's chat is
+    // now an ordinary outcome of this verb, and a removal that closed one but no PTY logged nothing.
+    const structuredStopped = teardownResult.structuredStopped ?? 0
     const total =
       teardownResult.runtimeStopped +
       teardownResult.providerStopped +
-      teardownResult.registryStopped
+      teardownResult.registryStopped +
+      structuredStopped
     if (total > 0) {
       console.info(
-        `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped}`
+        `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped} structured=${structuredStopped}`
       )
     }
   }

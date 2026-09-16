@@ -68,8 +68,54 @@ describe('AgentSessionSubscribers', () => {
           submissions: []
         },
         fence: 7,
+        hostNow: expect.any(Number),
         activity: null
       }
+    ])
+  })
+
+  it('stamps the host clock once per published frame', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'clock-journal')
+    })
+    let now = 1_000
+    const events: AgentSessionSubscribeEvent[] = []
+    const subscribers = new AgentSessionSubscribers({ now: () => (now += 1) })
+    const emit = (event: AgentSessionSubscribeEvent): void => {
+      events.push(event)
+    }
+    subscribers.open({ id: 'one', sessionId: SESSION, journal, fence: 1, emit })
+    subscribers.open({ id: 'two', sessionId: SESSION, journal, fence: 1, emit })
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'clocked' },
+      { kind: 'status', text: 'Clocked' },
+      { fence: 1 }
+    )
+    subscribers.publish(SESSION, journal)
+    subscribers.handoff(SESSION, 1, { owner: 'native' } as AgentSessionHandoffStatus)
+    subscribers.reset(SESSION, journal, 'epoch_changed', 1)
+
+    expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
+      1_001, 1_002,
+      // Both subscribers of one publication read the same clock sample.
+      1_003, 1_003, 1_004, 1_004, 1_005, 1_005
+    ])
+    expect(events.map((event) => event.type)).toEqual([
+      'snapshot',
+      'snapshot',
+      'batch',
+      'batch',
+      'batch',
+      'batch',
+      'reset',
+      'reset'
     ])
   })
 
@@ -101,6 +147,7 @@ describe('AgentSessionSubscribers', () => {
       type: 'batch',
       sessionId: SESSION,
       fence: 7,
+      hostNow: expect.any(Number),
       commands,
       batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
     })
@@ -245,6 +292,7 @@ describe('AgentSessionSubscribers', () => {
         submissions: []
       },
       fence: 2,
+      hostNow: expect.any(Number),
       handoff
     })
   })
@@ -284,6 +332,7 @@ describe('AgentSessionSubscribers', () => {
       sessionId: SESSION,
       batch: { cursor, items: [], removedItemIds: [], submissions: [] },
       fence: 2,
+      hostNow: expect.any(Number),
       backgroundTasks
     })
 
@@ -330,6 +379,7 @@ describe('AgentSessionSubscribers', () => {
       sessionId: SESSION,
       batch: { cursor, items: [], removedItemIds: [], submissions: [] },
       fence: 1,
+      hostNow: expect.any(Number),
       activity: { turnId: 'turn-1', text: 'Inspecting the session wire' }
     })
 

@@ -214,9 +214,7 @@ export function NativeChatSubagentRun({
       >
         <SubagentGlyph />
         <StatusDot state={alertState ?? verdictState} pulsing={working} />
-        <span className={cn('min-w-0 flex-1 truncate', working && 'text-foreground/85')}>
-          {headline}
-        </span>
+        <span className={cn('min-w-0 truncate', working && 'text-foreground/85')}>{headline}</span>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
           {verdict}
           {alert === null ? null : ` +${alert}`}

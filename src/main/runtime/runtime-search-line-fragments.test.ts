@@ -90,7 +90,9 @@ describe('RuntimeFileCommands', () => {
         submatches: [{ start: 0, end: 6 }]
       }
     })
-    const originalSplit = String.prototype.split
+    // Method-shaped type: a call-signature capture would reject `split`'s splitter-object overload.
+    const originalSplit: { split(separator: unknown, limit?: number): string[] }['split'] =
+      String.prototype.split
     let scanned = 0
     const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (
       this: string,
@@ -100,7 +102,7 @@ describe('RuntimeFileCommands', () => {
       if (separator === '\n') {
         scanned += this.length
       }
-      return Reflect.apply(originalSplit, this, [separator, limit])
+      return originalSplit.call(this, separator, limit)
     })
     try {
       for (let offset = 0; offset < line.length; offset += 1024) {

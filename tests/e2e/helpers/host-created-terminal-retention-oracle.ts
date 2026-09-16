@@ -48,7 +48,7 @@ const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 /** Daemon session id form. Deliberately excluded from id-shape classification,
  *  which is why a host-created tab needs its own binding to be preserved —
  *  a `serve-`/`ssh-` shaped id would take an already-correct path instead. */
-function isDaemonShapedPtyId(ptyId: string, worktreeId: string): boolean {
+function isDaemonPtyIdForm(ptyId: string, worktreeId: string): boolean {
   return (
     ptyId.startsWith(`${worktreeId}@@`) &&
     !ptyId.startsWith('serve-') &&
@@ -156,7 +156,7 @@ export async function createHostCliTerminal(
     throw new Error('Host did not report a leaf id for the CLI-created terminal')
   }
   expect(
-    isDaemonShapedPtyId(ptyId, worktreeId),
+    isDaemonPtyIdForm(ptyId, worktreeId),
     `CLI terminal ${ptyId} must carry the daemon id shape this seam excludes from classification`
   ).toBe(true)
   await expect

@@ -16,6 +16,7 @@ import {
   Palette,
   Rocket,
   Server,
+  // `Shapes` is lucide's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   Sparkles,
   SquareTerminal,

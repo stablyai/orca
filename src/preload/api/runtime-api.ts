@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
 import type {
   RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
@@ -77,6 +78,8 @@ export type RuntimeApi = {
     ) => () => void
   }
   runtimeEnvironments: {
+    getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
+    onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     list: () => Promise<PublicKnownRuntimeEnvironment[]>
     addFromPairingCode: (args: {
       name: string
@@ -120,6 +123,7 @@ export type RuntimeApi = {
       params?: unknown
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
+      expectedEnvironmentRuntimeId?: string
     }) => Promise<RuntimeRpcResponse<unknown>>
     subscribe: (
       args: {
@@ -128,6 +132,7 @@ export type RuntimeApi = {
         params?: unknown
         timeoutMs?: number
         expectedEnvironmentPairingRevision?: number
+        expectedEnvironmentRuntimeId?: string
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void

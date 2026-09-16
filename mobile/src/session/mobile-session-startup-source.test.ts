@@ -138,7 +138,7 @@ describe('mobile session startup', () => {
       'committedScope !== null && committedScope !== scopeKey'
     )
     expect(terminalListSource).toContain('return terminalInventoryRequest.activate()')
-    expect(terminalListSource).toContain('if (!isCurrent() || !response.ok)')
+    expect(terminalListSource).toContain('if (!isCurrent() || !response.accepted)')
     expect(terminalInventoryRecoverySource).toContain(
       'TERMINAL_INVENTORY_CONFIRMATION_DELAY_MS = 750'
     )

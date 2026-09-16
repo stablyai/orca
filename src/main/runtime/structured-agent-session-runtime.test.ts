@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionJournalCloseRetries } from '../native-chat/agent-session-journal/journal-close-retry'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import type {
   AgentSessionClaimStatus,
   AgentSessionExecutionLocation,
@@ -346,6 +345,7 @@ describe('a teardown that fails is retried by the next stop', () => {
     const flaky = new Proxy(real, {
       get(target, property, receiver) {
         if (property !== 'close') {
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, property, receiver)
         }
         return async () => {
@@ -356,7 +356,7 @@ describe('a teardown that fails is retried by the next stop', () => {
           await target.close()
         }
       }
-    }) as AgentSessionJournal
+    })
     await agentSessionJournalCloseRetries.closeOrRetain(flaky)
 
     // The host's teardown runs the registry retry, so this stop surfaces it.

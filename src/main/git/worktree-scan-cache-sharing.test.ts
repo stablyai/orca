@@ -1,3 +1,4 @@
+import { worktreeCreateGit } from './worktree-create-git-executor'
 // Worktree scan sharing: in-flight coalescing and mutation-generation retirement.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -118,6 +119,28 @@ describe('listWorktrees in-flight sharing', () => {
     }
     await Promise.all([graphScan, annotatedScan])
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  // The create's listing is promoted to `interactive` precisely to skip the queue a status scan
+  // is already sitting in; joining that scan would hand it the wait back.
+  it('does not let an interactive listing join a scan queued at another tier', async () => {
+    const resolvers: ((value: { stdout: string }) => void)[] = []
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve)
+        })
+    )
+
+    const statusScan = listWorktreeGraph('/repo', { admissionTier: 'status' })
+    const interactiveScan = worktreeCreateGit.run(() => listWorktreeGraph('/repo'))
+    expect(resolvers).toHaveLength(2)
+
+    for (const resolve of resolvers) {
+      resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
+    }
+    await Promise.all([statusScan, interactiveScan])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   // Order must not matter: whichever runs first owns the listing and the other joins it.

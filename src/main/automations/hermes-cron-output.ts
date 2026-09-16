@@ -65,16 +65,7 @@ export async function readHermesCronOutputRuns(jobId: string): Promise<unknown[]
 
 async function readHermesCronOutputRunRefs(jobId: string): Promise<HermesMergedRunRef[]> {
   const outputRuns = await readHermesOutputFileRunRefs(jobId)
-  return mergeHermesOutputAndSessionRunRefs(outputRuns, readHermesSessionDbRunRefs(jobId)).sort(
-    (a, b) => {
-      const aTime = getRawRunTime(a)
-      const bTime = getRawRunTime(b)
-      if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
-        return bTime - aTime
-      }
-      return getRawRunId(b).localeCompare(getRawRunId(a))
-    }
-  )
+  return mergeHermesOutputAndSessionRunRefs(outputRuns, readHermesSessionDbRunRefs(jobId))
 }
 
 // Why: opening the Automations page calls readHermesCronOutputRunsPage with
@@ -127,6 +118,14 @@ export async function readHermesCronOutputRunsPage(
     return { total: await readHermesCronOutputRunCount(jobId), runs: [] }
   }
   const runRefs = await readHermesCronOutputRunRefs(jobId)
+  runRefs.sort((a, b) => {
+    const aTime = getRawRunTime(a)
+    const bTime = getRawRunTime(b)
+    if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
+      return bTime - aTime
+    }
+    return getRawRunId(b).localeCompare(getRawRunId(a))
+  })
   const start = (safePage - 1) * safePageSize
   const pageRefs = runRefs.slice(start, start + safePageSize)
   return {

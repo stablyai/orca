@@ -6,18 +6,42 @@ type QueuedMessage = {
   reject: (error: Error) => void
 }
 
+type ClaudeUserMessageFailureDisposition = 'unwritten' | 'write-outcome-unknown'
+
+class ClaudeUserMessageFailure extends Error {
+  readonly disposition: ClaudeUserMessageFailureDisposition
+
+  constructor(disposition: ClaudeUserMessageFailureDisposition, cause: Error) {
+    super(cause.message, { cause })
+    this.name = 'ClaudeUserMessageFailure'
+    this.disposition = disposition
+  }
+}
+
+export function claudeUnwrittenUserMessageError(cause: Error): Error {
+  return new ClaudeUserMessageFailure('unwritten', cause)
+}
+
+export function claudeUserMessageWasProvablyUnwritten(error: unknown): boolean {
+  return error instanceof ClaudeUserMessageFailure && error.disposition === 'unwritten'
+}
+
+function claudeAmbiguousUserMessageError(cause: Error): Error {
+  return new ClaudeUserMessageFailure('write-outcome-unknown', cause)
+}
+
 export type ClaudeUserMessageQueue = {
   /** The SDK's streaming-input prompt; it stays open until `end`. */
   messages: AsyncIterable<SDKUserMessage>
   /** Resolves once the SDK has finished writing the frame to the child. */
   push: (message: SDKUserMessage) => Promise<void>
-  /** Reject every unwritten frame, in-flight included; a caller waiting on a send must not hang past the exit. */
+  /** Reject every unsettled frame; an in-flight frame carries an ambiguous write outcome. */
   fail: (error: Error) => void
   end: () => void
 }
 
 /** The rejection an abandoned frame carries when nothing else has named a cause yet. */
-const UNWRITTEN_FRAME_MESSAGE = 'claude stream-json input ended before the frame was written'
+const UNCONFIRMED_FRAME_MESSAGE = 'claude stream-json input ended before confirming the frame write'
 
 export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
   const queued: QueuedMessage[] = []
@@ -57,7 +81,9 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
             // is the same "the frame reached the child" proof the hand-rolled write gave.
             next.resolve()
           } else {
-            rejectInFlight(failure ?? new Error(UNWRITTEN_FRAME_MESSAGE))
+            rejectInFlight(
+              claudeAmbiguousUserMessageError(failure ?? new Error(UNCONFIRMED_FRAME_MESSAGE))
+            )
           }
         }
         continue
@@ -76,7 +102,7 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
     push: (message) =>
       new Promise<void>((resolve, reject) => {
         if (failure) {
-          reject(failure)
+          reject(claudeUnwrittenUserMessageError(failure))
           return
         }
         queued.push({ message, resolve, reject })
@@ -85,11 +111,11 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
     fail: (error) => {
       failure ??= error
       for (const entry of queued.splice(0)) {
-        entry.reject(error)
+        entry.reject(claudeUnwrittenUserMessageError(error))
       }
       // A pump that never resumes cannot run the generator's cleanup, so the
       // exit path has to reach the in-flight frame itself.
-      rejectInFlight(error)
+      rejectInFlight(claudeAmbiguousUserMessageError(error))
       notify()
     },
     end: () => {

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { formatTerminalClose, formatTerminalFocus, formatTerminalSend } from './terminal-format'
+import type {
+  RuntimeTerminalShow,
+  RuntimeTerminalWait,
+  RuntimeTerminalWaitBlockedReason
+} from '../shared/runtime-terminal-contracts'
+import {
+  formatTerminalClose,
+  formatTerminalFocus,
+  formatTerminalSend,
+  formatTerminalShow,
+  formatTerminalWait
+} from './terminal-format'
 
 describe('formatTerminalFocus', () => {
   it('distinguishes superseded navigation from a winning focus', () => {
@@ -169,5 +180,75 @@ describe('formatTerminalSend', () => {
 
     expect(output).toContain('no turn start was observed')
     expect(output).toContain('--retry-request prompt-swallowed --wait-submit <seconds>')
+  })
+})
+
+// Why: an older host still publishes the codex-* tokens for dialogs its matcher never proved were
+// Codex's, so a Gemini/Cursor/Antigravity user reads a Codex label unless the CLI names the neutral one.
+describe('blocked-reason rendering against a mixed-version host', () => {
+  function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
+    terminal: RuntimeTerminalShow
+  } {
+    return {
+      terminal: {
+        handle: 'term_agy',
+        ptyId: 'pty-1',
+        paneRuntimeId: 1,
+        rendererGraphEpoch: 1,
+        worktreeId: 'worktree-1',
+        worktreePath: '/tmp/w',
+        branch: 'main',
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        title: 'Antigravity',
+        connected: true,
+        writable: true,
+        lastOutputAt: null,
+        preview: 'Do you trust the files in this folder?',
+        agentWait: { source: 'prompt-text', reason }
+      }
+    }
+  }
+
+  function waitResult(blockedReason: RuntimeTerminalWaitBlockedReason): {
+    wait: RuntimeTerminalWait
+  } {
+    return {
+      wait: {
+        handle: 'term_agy',
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'running',
+        exitCode: null,
+        blockedReason
+      }
+    }
+  }
+
+  // Why one assertion over every reason: a test that only asserts the *absence* of an alias suffix
+  // passes when the aliasing code is deleted, so each case is paired with a legacy token that must
+  // gain one.
+  it.each([
+    ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
+    ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
+    ['codex-cwd-prompt', 'codex-cwd-prompt (agent-cwd-prompt)'],
+    ['codex-hooks-review-prompt', 'codex-hooks-review-prompt (agent-hooks-review-prompt)'],
+    ['codex-interactive-prompt', 'codex-interactive-prompt (agent-interactive-prompt)'],
+    // This build published these itself, so there is nothing to reinterpret.
+    ['agent-trust-workspace', 'agent-trust-workspace'],
+    ['codex-model-migration-prompt', 'codex-model-migration-prompt']
+  ] as const)('renders %s as %s on both wait and show', (reason, rendered) => {
+    expect(formatTerminalWait(waitResult(reason)).split('\n').at(-1)).toBe(
+      `blockedReason: ${rendered}`
+    )
+    expect(formatTerminalShow(showResult(reason))).toContain(
+      `agentWait: ${rendered} (via prompt-text)`
+    )
+  })
+
+  it('still describes a wait with no reason at all', () => {
+    expect(formatTerminalShow(showResult(undefined))).toContain(
+      'agentWait: interactive prompt (via prompt-text)'
+    )
   })
 })

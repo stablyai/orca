@@ -8,18 +8,22 @@ import { normalizeMobileDiffComments } from './mobile-diff-comments'
 import { buildMobileDiffHunks } from './mobile-diff-hunks'
 import { highlightMobileDiffLines, resolveMobileSyntaxLanguage } from './mobile-file-syntax'
 import {
-  readMobileBranchCompareResult,
-  readMobileGitStatusResult,
-  readMobileReviewGitDiffResult,
-  readMobileReviewWorktreeMetadata
-} from './mobile-diff-review-rpc'
+  reviewBranchCompareRead,
+  reviewBranchFileDiffRead,
+  reviewFileDiffRead,
+  reviewWorktreeMetadataRead
+} from './mobile-diff-review-operations'
+import type { MobileReviewGitDiffResult } from './mobile-diff-review-rpc'
 import {
   canOpenMobileBranchCompareDiff,
   type MobileGitBranchCompareResult
 } from '../source-control/mobile-branch-compare'
 import { resolveMobileBranchCompareBaseRef } from '../source-control/mobile-branch-base-ref'
+import { gitStatusProjectionRead } from '../source-control/mobile-git-read-operations'
 import { isMobileGitUnavailable } from '../source-control/mobile-git-status'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import { reviewDescriptorFromItem } from './mobile-diff-review-screen-model'
@@ -36,6 +40,12 @@ type DiffLoadInput = {
   branchCompare: MobileGitBranchCompareResult | null
 }
 
+/** One settled file diff and the operation that reads it; the two methods share a reader. */
+type PendingFileDiff = {
+  reply: RpcResponse
+  interpret: (reply: RpcResponse) => MobileReviewGitDiffResult | null
+}
+
 export async function loadMobileDiffReviewBranchCompare(
   client: RpcClient,
   worktreeId: string
@@ -45,21 +55,29 @@ export async function loadMobileDiffReviewBranchCompare(
     if (!baseRef) {
       return { result: null }
     }
-    const response = await client.sendRequest('git.branchCompare', {
+    const reply = await reviewBranchCompareRead.request(client, {
       worktree: `id:${worktreeId}`,
       baseRef
     })
-    if (!response.ok) {
-      if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
-        return { result: null }
-      }
-      return { result: null, error: response.error?.message || 'Committed changes unavailable' }
+    // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
+    // screen degrades on, and no acceptance policy carries the code and message through.
+    if (!reply.ok && isMobileGitUnavailable(reply.error?.code, reply.error?.message)) {
+      return { result: null }
     }
-    const parsed = readMobileBranchCompareResult(response.result)
+    let parsed: MobileGitBranchCompareResult | null
+    try {
+      parsed = reviewBranchCompareRead.interpret(reply)
+    } catch (error) {
+      return {
+        result: null,
+        error: refusedRpcMessageOrFallback(error, 'Committed changes unavailable')
+      }
+    }
     return parsed
       ? { result: parsed }
       : { result: null, error: 'Committed changes response was invalid' }
   } catch (err) {
+    // A transport drop surfaces its own message verbatim; only a refusal falls back above.
     return { result: null, error: err instanceof Error ? err.message : 'Committed changes failed' }
   }
 }
@@ -68,27 +86,38 @@ export async function loadMobileDiffReviewSnapshot(
   client: RpcClient,
   worktreeId: string
 ): Promise<ReviewScreenState> {
-  const statusResponse = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
-  if (!statusResponse.ok) {
-    if (isMobileGitUnavailable(statusResponse.error?.code, statusResponse.error?.message)) {
-      return { kind: 'unavailable', message: 'Update Orca desktop to review changes on mobile.' }
-    }
-    throw new Error(statusResponse.error?.message || 'Unable to load changes')
+  const statusReply = await gitStatusProjectionRead.request(client, {
+    worktree: `id:${worktreeId}`
+  })
+  if (
+    !statusReply.ok &&
+    isMobileGitUnavailable(statusReply.error?.code, statusReply.error?.message)
+  ) {
+    return { kind: 'unavailable', message: 'Update Orca desktop to review changes on mobile.' }
   }
-  const status = readMobileGitStatusResult(statusResponse.result)
+  let status
+  try {
+    status = gitStatusProjectionRead.interpret(statusReply)
+  } catch (error) {
+    throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load changes'))
+  }
   if (!status) {
     throw new Error('Source control response was invalid')
   }
 
-  const [branch, worktreeResponse] = await Promise.all([
+  // Both legs are interpreted after the barrier, not as each lands: a refused worktree.show must
+  // not decide the error before the compare leg has had its own chance to fail.
+  const [branch, worktreeReply] = await Promise.all([
     loadMobileDiffReviewBranchCompare(client, worktreeId),
-    client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` })
+    reviewWorktreeMetadataRead.request(client, { worktree: `id:${worktreeId}` })
   ])
-  if (!worktreeResponse.ok) {
-    throw new Error(worktreeResponse.error?.message || 'Unable to load review notes')
+  let metadata
+  try {
+    metadata = reviewWorktreeMetadataRead.interpret(worktreeReply)
+  } catch (error) {
+    throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load review notes'))
   }
 
-  const metadata = readMobileReviewWorktreeMetadata(worktreeResponse.result)
   const comments = normalizeMobileDiffComments(metadata.diffComments, worktreeId)
   const normalizedReviewState = normalizeMobileDiffReviewState(metadata.mobileDiffReview)
   const branchEntries =
@@ -121,24 +150,26 @@ export async function loadMobileDiffReviewSnapshot(
 
 export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<ReviewDiffState> {
   const { client, worktreeId, item, branchCompare } = input
-  const response =
+  const pending =
     item.scope === 'branch'
-      ? await loadBranchFileDiff(client, worktreeId, item, branchCompare)
-      : await client.sendRequest('git.diff', {
-          worktree: `id:${worktreeId}`,
-          filePath: item.filePath,
-          staged: item.scope === 'staged'
-        })
-  if (!response.ok) {
-    if (response.error?.code === 'diff_too_large') {
+      ? await requestBranchFileDiff(client, worktreeId, item, branchCompare)
+      : await requestWorktreeFileDiff(client, worktreeId, item)
+  if (!pending.reply.ok) {
+    // Why the raw refusal: `diff_too_large` is a render mode rather than a failure, and no
+    // acceptance policy carries the code through.
+    if (pending.reply.error?.code === 'diff_too_large') {
       return { kind: 'too-large', itemKey: item.key }
     }
     if (item.status === 'deleted') {
       return { kind: 'deleted', itemKey: item.key }
     }
-    throw new Error(response.error?.message || 'Unable to load diff')
   }
-  const result = readMobileReviewGitDiffResult(response.result)
+  let result: MobileReviewGitDiffResult | null
+  try {
+    result = pending.interpret(pending.reply)
+  } catch (error) {
+    throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load diff'))
+  }
   if (!result) {
     throw new Error('Diff response was invalid')
   }
@@ -159,17 +190,30 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
   }
 }
 
-async function loadBranchFileDiff(
+async function requestWorktreeFileDiff(
+  client: RpcClient,
+  worktreeId: string,
+  item: MobileDiffReviewQueueItem
+): Promise<PendingFileDiff> {
+  const reply = await reviewFileDiffRead.request(client, {
+    worktree: `id:${worktreeId}`,
+    filePath: item.filePath,
+    staged: item.scope === 'staged'
+  })
+  return { reply, interpret: (settled) => reviewFileDiffRead.interpret(settled) }
+}
+
+async function requestBranchFileDiff(
   client: RpcClient,
   worktreeId: string,
   item: MobileDiffReviewQueueItem,
   branchCompare: MobileGitBranchCompareResult | null
-) {
+): Promise<PendingFileDiff> {
   const summary = branchCompare?.summary
   if (!summary || !summary.headOid || !summary.mergeBase) {
     throw new Error('Committed diff is unavailable')
   }
-  return client.sendRequest('git.branchDiff', {
+  const reply = await reviewBranchFileDiffRead.request(client, {
     worktree: `id:${worktreeId}`,
     filePath: item.filePath,
     ...(item.oldPath ? { oldPath: item.oldPath } : {}),
@@ -180,4 +224,5 @@ async function loadBranchFileDiff(
       mergeBase: summary.mergeBase
     }
   })
+  return { reply, interpret: (settled) => reviewBranchFileDiffRead.interpret(settled) }
 }

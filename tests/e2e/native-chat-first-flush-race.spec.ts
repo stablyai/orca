@@ -141,10 +141,24 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
         path: path.join(screenshotDir, '01-loading-no-error.png')
       })
 
-      // Why: a short real delay proves the first readSession attempt already
-      // hit the not-yet-flushed file (returning notFound) and the renderer's
-      // backoff retry — not a lucky first read — is what picks it up below.
-      await orcaPage.waitForTimeout(1_500)
+      // Why observe, not sleep: 1_500ms is exactly UNFLUSHED_SETTLE_MS, so a fixed
+      // wait straddles the boundary where the host reports the transcript pending
+      // and the renderer cancels its own retry. Read through the same IPC instead,
+      // proving the miss directly. A notFound is never cached, so this cannot
+      // perturb the hydration the assertions below measure.
+      await expect
+        .poll(
+          () =>
+            orcaPage.evaluate(
+              ({ id, file }) =>
+                window.api.nativeChat
+                  .readSession('claude', id, 50, file)
+                  .then((result) => Boolean(result && 'error' in result && result.notFound)),
+              { id: sessionId, file: transcriptPath }
+            ),
+          { timeout: 10_000, message: 'transcript resolved before the first flush' }
+        )
+        .toBe(true)
       await expect(orcaPage.getByText(ERROR_TITLE)).toHaveCount(0)
 
       const userText = 'Explain the native chat first-flush race fix for #8401'

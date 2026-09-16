@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
@@ -58,7 +58,7 @@ function buildCommitMessageGenerationOverride(params: {
   }
 }
 
-export const GIT_COMMIT_MESSAGE_GENERATION_METHODS: RpcMethod[] = [
+export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.generateCommitMessage',
     params: GitGenerateCommitMessage,

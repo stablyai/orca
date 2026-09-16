@@ -1,0 +1,600 @@
+{
+  "operation": "components.setup-script",
+  "family": "components.setup-script",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
+  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
+  "scenarioSha256": "a844134d7bad3c7c12107d60dbd298f5cfba778703fb9dd0f7ad454615d26b07",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0a180dd2149f": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "170986cae6b4": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1e344a6b5da7": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "28e75475e9e0": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "33cfd55c1890": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3515a8adcd6d": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "hooks": {
+              "scripts": {
+                "setup": "pnpm install"
+              }
+            },
+            "setupRunPolicy": "ask",
+            "setupTrust": {
+              "$rpc": "null"
+            },
+            "source": "repo"
+          }
+        }
+      }
+    },
+    "3c9287ca1560": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3cdc23cf6f4a": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "5d1cf72f4e12": {
+      "advanced": true,
+      "command": "pnpm install",
+      "run": true,
+      "runPolicy": "ask",
+      "source": "repo",
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "64c03730d628": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "80cf8444e458": {
+      "advanced": false,
+      "command": {
+        "$rpc": "null"
+      },
+      "run": true,
+      "runPolicy": "run-by-default",
+      "source": {
+        "$rpc": "null"
+      },
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "941b6aeb0d6f": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d9f709e8100e": {
+      "name": "repo.hooks#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}",
+      "sent": 1
+    },
+    "daf213730e62": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "e6c72f695b50": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-components.setup-script-repo.hooks-1",
+    "checkpoints": [
+      {
+        "id": "components-setup-ask.prelude:hooks-pending",
+        "observation": {
+          "sender": ["28e75475e9e0"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.normal:settled",
+        "observation": {
+          "sender": ["3515a8adcd6d"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "5d1cf72f4e12",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.result-absent:settled",
+        "observation": {
+          "sender": ["daf213730e62"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.result-null:settled",
+        "observation": {
+          "sender": ["1e344a6b5da7"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["3cdc23cf6f4a"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["0a180dd2149f"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["170986cae6b4"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.outer-refused:settled",
+        "observation": {
+          "sender": ["64c03730d628"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["3c9287ca1560"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.method-not-found:settled",
+        "observation": {
+          "sender": ["e6c72f695b50"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.transport-rejection:settled",
+        "observation": {
+          "sender": ["941b6aeb0d6f"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["33cfd55c1890"],
+          "payloads": ["d9f709e8100e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

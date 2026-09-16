@@ -62,6 +62,7 @@ function createUpdateHarness(): Harness {
 
   const oldRuntimeDb = new OrchestrationDb(dbPath)
   const task = oldRuntimeDb.createTask({
+    runId: 'run_legacy_local',
     spec: 'finish work across an app update',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })

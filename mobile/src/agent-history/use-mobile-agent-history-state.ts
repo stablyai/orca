@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
-import type { RpcSuccess } from '../transport/types'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -9,6 +8,11 @@ import type {
 } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { deriveMobileAiVaultScopePaths } from './agent-history-scope-paths'
+import {
+  agentHistoryHostStatusRead,
+  agentHistorySessionScan
+} from './mobile-agent-history-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
@@ -88,14 +92,15 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       try {
         // Gate on the capability so older hosts lacking the method are detected
         // and we never call a missing RPC.
-        const statusResponse = await client.sendRequest('status.get')
+        const statusReply = await agentHistoryHostStatusRead.request(client)
         if (!isCurrent()) {
           return
         }
-        if (!statusResponse.ok) {
-          throw new Error(statusResponse.error?.message || 'Unable to reach host')
-        }
-        const status = (statusResponse as RpcSuccess).result as StatusWithCapabilities
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const status = interpretOrThrowRefusalMessage(
+          () => agentHistoryHostStatusRead.interpret(statusReply),
+          'Unable to reach host'
+        ) as StatusWithCapabilities
         setHostStatusResult(status)
         if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
           setScreenState({ kind: 'unsupported' })
@@ -114,7 +119,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
 
         const scopePaths = deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
-        const response = await client.sendRequest('aiVault.listSessions', {
+        const reply = await agentHistorySessionScan.request(client, {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,
           scopePaths
@@ -122,10 +127,11 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         if (!isCurrent()) {
           return
         }
-        if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to load agent sessions')
-        }
-        const result = (response as RpcSuccess).result as AiVaultListResult
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = interpretOrThrowRefusalMessage(
+          () => agentHistorySessionScan.interpret(reply),
+          'Unable to load agent sessions'
+        ) as AiVaultListResult
         setScreenState({ kind: 'ready', sessions: result.sessions, issues: result.issues })
       } catch (err) {
         if (!isCurrent()) {

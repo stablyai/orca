@@ -1,48 +1,38 @@
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import {
+  gitCancelGenerateCommitMessageRun,
+  gitGenerateCommitMessageRun,
+  type MobileGenerateCommitMessageResult
+} from './mobile-git-mutation-operations'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
-// Mirrors the host GenerateCommitMessageResult (src/main/text-generation/
-// commit-message-text-generation.ts) — a single resolved result, not a stream.
-export type MobileGenerateCommitMessageResult =
-  | { success: true; message: string }
-  | { success: false; error: string; canceled?: boolean }
+export type { MobileGenerateCommitMessageResult }
 
-// Normalizes the git.generateCommitMessage RPC into a discriminated result the
-// UI can switch on. RPC transport failures and malformed payloads collapse to
-// { success:false } so the caller never has to special-case them.
+// A refusal or a malformed payload collapses to { success:false } so the caller never has to
+// special-case either; the operation's reader owns the payload half of that.
 export async function requestMobileCommitMessage(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string
 ): Promise<MobileGenerateCommitMessageResult> {
-  const response = await client.sendRequest('git.generateCommitMessage', {
+  const reply = await gitGenerateCommitMessageRun.request(client, {
     worktree: `id:${worktreeId}`
   })
-  if (!response.ok) {
-    return { success: false, error: response.error?.message || 'Failed to generate commit message' }
-  }
-  const result = (response as RpcSuccess).result as MobileGenerateCommitMessageResult | undefined
-  if (!result || typeof result !== 'object') {
-    return { success: false, error: 'Failed to generate commit message' }
-  }
-  if (result.success === true && typeof result.message === 'string' && result.message.length > 0) {
-    return { success: true, message: result.message }
-  }
-  // Why: a malformed `{ success:false }` payload could leave error undefined,
-  // breaking the result contract — always coerce to a non-empty string.
-  const hostError =
-    result.success === false && typeof result.error === 'string' && result.error.length > 0
-      ? result.error
-      : 'No commit message generated'
-  return {
-    success: false,
-    error: hostError,
-    ...(result.success === false && result.canceled ? { canceled: true } : {})
+  try {
+    return gitGenerateCommitMessageRun.interpret(reply)
+  } catch (error) {
+    return {
+      success: false,
+      error: refusedRpcMessageOrFallback(error, 'Failed to generate commit message')
+    }
   }
 }
 
 export async function cancelMobileCommitMessage(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string
 ): Promise<void> {
-  await client.sendRequest('git.cancelGenerateCommitMessage', { worktree: `id:${worktreeId}` })
+  const reply = await gitCancelGenerateCommitMessageRun.request(client, {
+    worktree: `id:${worktreeId}`
+  })
+  gitCancelGenerateCommitMessageRun.interpret(reply)
 }

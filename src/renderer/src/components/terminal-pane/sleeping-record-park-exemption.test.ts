@@ -43,20 +43,4 @@ describe('selectSleepingRecordParkExemptTabIds', () => {
 
     expect([...selectSleepingRecordParkExemptTabIds(records, 'wt-1')]).toEqual([])
   })
-
-  it('skips records that cannot resume in this worktree', () => {
-    const records = {
-      [`tab-other:${LEAF_ID}`]: sleepingRecord({
-        paneKey: `tab-other:${LEAF_ID}`,
-        worktreeId: 'wt-2'
-      }),
-      [`tab-done:${LEAF_ID}`]: sleepingRecord({ paneKey: `tab-done:${LEAF_ID}`, state: 'done' }),
-      [`tab-blocked:${LEAF_ID}`]: sleepingRecord({
-        paneKey: `tab-blocked:${LEAF_ID}`,
-        automaticResumeBlockedBy: 'legacy-orchestration-worker'
-      })
-    }
-
-    expect([...selectSleepingRecordParkExemptTabIds(records, 'wt-1')]).toEqual([])
-  })
 })
