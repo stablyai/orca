@@ -11,6 +11,7 @@ import {
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
@@ -123,7 +124,12 @@ function getWorktreeAgentActivitySummaries(
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
       continue
     }
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    const presentation = entry.executionObservation
+      ? resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      : null
+    const effectiveState = presentation?.state ?? entry.state
+    const isUnverifiable = effectiveState === 'unverifiable'
+    if (!presentation && !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       // Why: staleness ends this row's authority but not the pane's identity — see
       // `stalePaneIdsByTabId`. Dropping both let Orca's self-authored permission title outlive
       // the row it came from and pin the card to a question nobody was asking.
@@ -131,10 +137,19 @@ function getWorktreeAgentActivitySummaries(
       continue
     }
     addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
-    if (entry.state === 'done') {
+    if (isUnverifiable) {
+      // Keep the pane covered by first-party evidence and suppress title
+      // heuristics; uncertainty is not an idle or completed state.
+      addStalePaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
+      continue
+    }
+    if (effectiveState === 'idle') {
+      continue
+    }
+    if (effectiveState === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
     }
-    applyLiveAgentState(summary, entry)
+    applyLiveAgentState(summary, { ...entry, state: effectiveState })
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {

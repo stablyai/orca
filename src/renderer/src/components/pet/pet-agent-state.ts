@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 
 export type PetAnimationName =
   | 'idle'
@@ -47,15 +48,19 @@ function agentStateAnimation(
   let hasDone = false
 
   for (const entry of entries) {
-    if (!isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
+    const presentation = entry.executionObservation
+      ? resolveAgentStatusPresentation(entry, now, staleAfterMs)
+      : null
+    if (!presentation && !isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
       continue
     }
-    if (entry.state === 'blocked' || entry.state === 'waiting') {
+    const state = presentation?.state ?? entry.state
+    if (state === 'blocked' || state === 'waiting') {
       return 'waiting'
     }
-    if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
+    if (state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
-    } else if (entry.state === 'done') {
+    } else if (state === 'done') {
       hasDone = true
     }
   }

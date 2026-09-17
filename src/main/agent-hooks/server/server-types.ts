@@ -5,6 +5,7 @@ import type {
   AgentStatusState
 } from '../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
+import type { AgentExecutionObservation } from '../../../shared/agent-execution-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 
@@ -19,6 +20,8 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   stateStartedAt: number
   /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
   observation?: AgentStatusObservation
+  /** Host-owned evidence for this exact attachment; omitted from persistence. */
+  executionObservation?: AgentExecutionObservation
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
@@ -36,6 +39,7 @@ export type PersistedAgentHookEventPayload = Omit<
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
   | 'observation'
+  | 'executionObservation'
   // Same: a terminal handle is issued by one runtime and means nothing to the next.
   | 'terminalHandle'
 > & {

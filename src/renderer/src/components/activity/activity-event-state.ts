@@ -4,6 +4,7 @@ import {
   type AgentStatusEntry,
   type AgentStatusState
 } from '../../../../shared/agent-status-types'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 import type {
   ActivityEventState,
   ActivityHookLiveAgentState,
@@ -20,6 +21,19 @@ export function freshActivityLiveAgentState(
   entry: AgentStatusEntry,
   now: number
 ): ActivityLiveAgentState | null {
+  if (entry.executionObservation) {
+    const presentation = resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    if (
+      presentation.state !== 'working' &&
+      presentation.state !== 'blocked' &&
+      presentation.state !== 'waiting'
+    ) {
+      return null
+    }
+    return presentation.state === 'working' && entry.workingMode === 'monitoring'
+      ? 'monitoring'
+      : presentation.state
+  }
   if (
     !isActivityHookLiveAgentState(entry.state) ||
     !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)

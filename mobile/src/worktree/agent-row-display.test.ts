@@ -26,6 +26,16 @@ function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeA
 }
 
 describe('agentDotState', () => {
+  const observedLive = {
+    executionId: 'exec-1',
+    hostId: 'local' as const,
+    hostEpoch: 'epoch-1',
+    captureRevision: 2,
+    observedAt: 0,
+    inventoryCoverage: 'complete' as const,
+    verdict: 'live' as const
+  }
+
   it('maps known states through and unknown to idle', () => {
     expect(agentDotState(row({ state: 'working', updatedAt: 0 }), 0)).toBe('working')
     expect(
@@ -56,6 +66,22 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'working', updatedAt: 0, interrupted: true }), stale)).toBe(
       'interrupted'
     )
+  })
+
+  it('retains stale pending attention and marks stale working as unverifiable with host evidence', () => {
+    const stale = AGENT_STATUS_STALE_AFTER_MS + 1
+    expect(
+      agentDotState(
+        row({ state: 'waiting', updatedAt: 0, executionObservation: observedLive }),
+        stale
+      )
+    ).toBe('waiting')
+    expect(
+      agentDotState(
+        row({ state: 'working', updatedAt: 0, executionObservation: observedLive }),
+        stale
+      )
+    ).toBe('unverifiable')
   })
 })
 

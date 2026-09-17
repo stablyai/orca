@@ -75,6 +75,72 @@ describe('title agent identity facets', () => {
 })
 
 describe('resolvePaneAgentActivity', () => {
+  const liveExecutionObservation = {
+    executionId: 'exec-1',
+    hostId: 'local' as const,
+    hostEpoch: 'epoch-1',
+    captureRevision: 4,
+    observedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+    inventoryCoverage: 'complete' as const,
+    verdict: 'live' as const
+  }
+
+  it('retains a pending interaction after the display window when the attachment is observed', () => {
+    const decision = resolvePaneAgentActivity({
+      explicitEntry: entry({
+        state: 'waiting',
+        updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+        executionObservation: liveExecutionObservation
+      }),
+      liveTitle: null,
+      hasLivePty: true,
+      now: NOW
+    })
+
+    expect(decision).toMatchObject({
+      hookState: 'waiting',
+      source: 'hook',
+      executionVerdict: 'live',
+      pendingInteraction: true,
+      executionConfidence: 'authoritative'
+    })
+  })
+
+  it('does not replace a stale observed working row with a title guess', () => {
+    const decision = resolvePaneAgentActivity({
+      explicitEntry: entry({
+        updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+        executionObservation: liveExecutionObservation
+      }),
+      liveTitle: '⠋ running the tests',
+      hasLivePty: true,
+      now: NOW
+    })
+
+    expect(decision).toMatchObject({
+      hookState: null,
+      source: 'none',
+      titleStatus: null,
+      executionVerdict: 'live',
+      executionConfidence: 'uncertain'
+    })
+  })
+
+  it('does not expose Working when host evidence says the attachment exited', () => {
+    const decision = resolvePaneAgentActivity({
+      explicitEntry: entry({
+        executionObservation: { ...liveExecutionObservation, verdict: 'exited' }
+      }),
+      liveTitle: null,
+      hasLivePty: true,
+      now: NOW
+    })
+
+    expect(decision.hookState).toBeNull()
+    expect(decision.source).toBe('none')
+    expect(decision.executionVerdict).toBe('exited')
+  })
+
   it('reports a fresh hook row as the authoritative source and keeps the title layer visible', () => {
     const decision = resolvePaneAgentActivity({
       explicitEntry: entry({ state: 'waiting' }),

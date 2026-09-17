@@ -6,6 +6,7 @@ import {
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentStatusExecutionBinding } from '../../shared/agent-status-run'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   registerPtyHandlers,
@@ -14,6 +15,14 @@ import {
   isCurrentPtyExit,
   restorePtyIncarnation
 } from './pty'
+
+function statusBinding(suffix: string): AgentStatusExecutionBinding {
+  return {
+    runId: `run-${suffix}`,
+    attachment: { executionId: `execution-${suffix}` },
+    role: 'root'
+  }
+}
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -306,7 +315,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-recovered',
       phase: 'live',
       ptyId: 'pty-recovered-owner',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('recovered')
     }
     const provider = createAgentClaimProvider({
       sessions: [
@@ -348,7 +358,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-adopted-exit',
       phase: 'live',
       ptyId: 'pty-adopted-exit',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('adopted-exit')
     }
     const runtime = new OrcaRuntimeService()
     const provider = createAgentClaimProvider({
@@ -416,7 +427,8 @@ describe('registerPtyHandlers', () => {
       generation: 'generation-no-incarnation',
       phase: 'live',
       ptyId: 'pty-owner-without-incarnation',
-      surface: recoveredAgentSurface
+      surface: recoveredAgentSurface,
+      statusBinding: statusBinding('without-incarnation')
     }
     const provider = createAgentClaimProvider({
       sessions: [

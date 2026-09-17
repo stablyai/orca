@@ -71,6 +71,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Why here and not in the window listener: `subscribeEnrichedStatus` also fires under headless
   // `orca serve`, which never opens one, and the fleet path runs there too.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
+  const agentStatusStorePublisher = agentHookServer.createStatusStorePublisher({
+    executionHostId: 'local'
+  })
   const runtime = new OrcaRuntimeService(store, stats, {
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
@@ -92,6 +95,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    agentStatusStorePublisher,
     // Why: structured chats have no hooks, so the host writes their projections here itself; the
     // snapshot above then lists them for the CLI and mobile without a second store.
     structuredAgentStatusSink: {

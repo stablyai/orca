@@ -18,6 +18,10 @@ import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/cod
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { finishPtyShutdown } from '../provider/liveness'
+import type {
+  AgentExecutionAttachment,
+  AgentExecutionObservation
+} from '../../../../shared/agent-execution-observation'
 
 export type PtyRuntimeControllerDeps = {
   runtime?: OrcaRuntimeService
@@ -84,6 +88,12 @@ export type PtyRuntimeControllerDeps = {
   retiredRejectedPtyIds: Map<string, NodeJS.Timeout>
   reversibleStopOwnersByPtyId: Map<string, number>
   mainWindow: BrowserWindow
+  /** Host-owned status sink; C6 never constructs replica frames itself. */
+  publishExecutionObservation?: (
+    paneKey: string,
+    observation: AgentExecutionObservation,
+    attachment?: AgentExecutionAttachment
+  ) => boolean
 }
 
 export type { StablePaneOwner }

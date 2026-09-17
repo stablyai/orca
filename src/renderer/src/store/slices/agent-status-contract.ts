@@ -8,6 +8,7 @@ import type {
   ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import type { AgentExecutionObservation } from '../../../../shared/agent-execution-observation'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
@@ -83,6 +84,8 @@ export type AgentLaunchConfigRegistryEntry = {
 }
 
 export type AgentStatusPayload = ParsedAgentStatusPayload & {
+  /** Host-owned evidence for the row's exact committed execution attachment. */
+  executionObservation?: AgentExecutionObservation
   subagentObservation?: AgentStatusEntry['subagentObservation']
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string

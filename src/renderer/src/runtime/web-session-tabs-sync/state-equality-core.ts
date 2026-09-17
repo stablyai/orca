@@ -4,6 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { agentExecutionObservationsEqual } from '../../../../shared/agent-execution-observation'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsBatchRecordKey,
@@ -59,6 +60,7 @@ export function agentStatusEntryEqual(
     a.interrupted === b.interrupted &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    agentExecutionObservationsEqual(a.executionObservation, b.executionObservation) &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )

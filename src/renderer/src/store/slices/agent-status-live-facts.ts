@@ -8,6 +8,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentExecutionObservationsEqual } from '../../../../shared/agent-execution-observation'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
@@ -71,6 +72,10 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     existing?.state === 'done' &&
     entry.state === 'done' &&
     agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
+  const executionObservationChanged = !agentExecutionObservationsEqual(
+    existing?.executionObservation,
+    entry.executionObservation
+  )
   const sortRelevantChange =
     !existing ||
     existing.state !== entry.state ||
@@ -78,7 +83,8 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     attributionChanged ||
     commandCodeNewTurn ||
     sameStateStateStartedAtChanged ||
-    sameStateDoneAttentionChanged
+    sameStateDoneAttentionChanged ||
+    executionObservationChanged
   const doneRetentionFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&

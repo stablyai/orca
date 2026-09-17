@@ -28,7 +28,8 @@ function serializeAgentStatusEntry(
     interactivePrompt: entry.interactivePrompt ?? null,
     lastAssistantMessage: entry.lastAssistantMessage ?? null,
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-    interrupted: entry.interrupted ?? null
+    interrupted: entry.interrupted ?? null,
+    executionObservation: entry.executionObservation ?? null
   })
 }
 

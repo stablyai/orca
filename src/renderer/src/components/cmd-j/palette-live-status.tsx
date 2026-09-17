@@ -32,6 +32,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -158,8 +159,16 @@ function buildLiveAgentStatusPaneIdsByTabId(
       if (!paneId) {
         continue
       }
+      const presentation = entry.executionObservation
+        ? resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        : null
+      if (presentation?.state === 'unverifiable') {
+        stalePaneIds.add(paneId)
+        continue
+      }
       if (
         entry.restoredUnconfirmed !== true &&
+        !presentation &&
         !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
       ) {
         stalePaneIds.add(paneId)

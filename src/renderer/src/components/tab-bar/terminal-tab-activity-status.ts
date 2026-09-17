@@ -8,6 +8,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
@@ -72,9 +73,17 @@ function getTerminalTabActivityFlags(
       flags.paneIds.add(identity.paneId)
       continue
     }
+    const presentation = entry.executionObservation
+      ? resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      : null
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
-    // must not keep a tab spinning. Same freshness gate as the sidebar.
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    // must not keep a tab spinning. Same freshness gate as the sidebar. Host
+    // evidence can retain pending attention, but never turns stale Working back
+    // into a spinner.
+    if (
+      (presentation && presentation.state === 'unverifiable') ||
+      (!presentation && !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS))
+    ) {
       // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
       getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
         identity.paneId
@@ -84,9 +93,10 @@ function getTerminalTabActivityFlags(
 
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
-    if (entry.state === 'blocked' || entry.state === 'waiting') {
+    const effectiveState = presentation?.state ?? entry.state
+    if (effectiveState === 'blocked' || effectiveState === 'waiting') {
       flags.hasPermission = true
-    } else if (entry.state === 'working') {
+    } else if (effectiveState === 'working') {
       if (entry.workingMode === 'monitoring') {
         flags.hasLiveMonitoring = true
       } else {
@@ -95,7 +105,7 @@ function getTerminalTabActivityFlags(
     } else if (entry.interrupted === true) {
       // Interrupted is encoded as done, so it must be checked first.
       flags.hasInterrupted = true
-    } else if (entry.state === 'done') {
+    } else if (effectiveState === 'done') {
       flags.hasLiveDone = true
     }
   }

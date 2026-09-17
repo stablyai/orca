@@ -3,11 +3,14 @@ import {
   type AgentStatusEntry,
   type AgentStatusState
 } from '../../../shared/agent-status-types'
+import type { AgentExecutionObservation } from '../../../shared/agent-execution-observation'
 
 /** Row states: the hook-reported statuses plus the two Orca derives when an entry goes stale. */
 export type AgentRowState = AgentStatusState | 'idle' | 'unverifiable'
 
-type DecayInput = Pick<AgentStatusEntry, 'state' | 'restoredUnconfirmed'>
+type DecayInput = Pick<AgentStatusEntry, 'state' | 'restoredUnconfirmed'> & {
+  executionObservation?: AgentExecutionObservation
+}
 
 /**
  * Where a stale non-`done` entry decays to.
@@ -25,7 +28,9 @@ export function resolveDecayedAgentRowState(
   entry: DecayInput,
   hasLivePty: boolean
 ): 'idle' | 'unverifiable' {
-  return hasLivePty && entry.state !== 'done' && entry.restoredUnconfirmed !== true
+  return (entry.executionObservation || hasLivePty) &&
+    entry.state !== 'done' &&
+    entry.restoredUnconfirmed !== true
     ? 'unverifiable'
     : 'idle'
 }

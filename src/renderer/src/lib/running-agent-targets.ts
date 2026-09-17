@@ -21,6 +21,8 @@ export type RunningAgentSendTarget = {
   ptyId: string | null
   status: 'eligible' | 'disabled'
   disabledReason?: string
+  /** The route remains usable, but host observation could not certify residency. */
+  executionCaveat?: string
 }
 
 export function deriveRunningAgentSendTargets(
@@ -54,6 +56,7 @@ export function deriveRunningAgentSendTargets(
         ? layoutPtyId
         : null
     let disabledReason: string | undefined
+    let executionCaveat: string | undefined
 
     // Why: the shared resolver gates hook freshness; a null hookState means the
     // entry is stale (entries here always exist), and otherwise carries the
@@ -71,11 +74,19 @@ export function deriveRunningAgentSendTargets(
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
-    if (entry.restoredUnconfirmed) {
+    const executionObservation = entry.executionObservation
+    if (executionObservation?.verdict === 'exited') {
+      disabledReason = 'Agent process exited'
+    } else if (entry.restoredUnconfirmed && !executionObservation) {
       disabledReason = 'Agent status is stale'
     } else if (decision.hookState === null) {
       if (liveTitleStatus === 'permission') {
         disabledReason = 'Agent needs permission'
+      } else if (executionObservation && ptyId) {
+        executionCaveat =
+          executionObservation.verdict === 'unverifiable'
+            ? 'Execution could not be verified'
+            : undefined
       } else if (liveTitleStatus === null) {
         disabledReason = 'Agent status is stale'
       }
@@ -95,7 +106,8 @@ export function deriveRunningAgentSendTargets(
       entry,
       ptyId,
       status: disabledReason ? 'disabled' : 'eligible',
-      ...(disabledReason ? { disabledReason } : {})
+      ...(disabledReason ? { disabledReason } : {}),
+      ...(executionCaveat ? { executionCaveat } : {})
     })
   }
 

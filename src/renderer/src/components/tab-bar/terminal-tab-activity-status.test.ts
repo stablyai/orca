@@ -86,6 +86,27 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('working')
   })
 
+  it('does not keep a Working glyph after exact host evidence says the attachment exited', () => {
+    const working = entry(FIRST_LEAF_ID, 'working', {
+      executionObservation: {
+        executionId: 'exec-1',
+        hostId: 'local',
+        hostEpoch: 'epoch-1',
+        captureRevision: 1,
+        observedAt: NOW,
+        inventoryCoverage: 'complete',
+        verdict: 'exited'
+      }
+    })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [working.paneKey]: working },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('active')
+  })
+
   it.each(['tab', 'pane'] as const)(
     'keeps native permission %s titles after hook freshness expires',
     (surface) => {

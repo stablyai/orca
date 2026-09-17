@@ -18,6 +18,11 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   if (!status || !pty) {
     return status
   }
+  // Host evidence is the exact attachment's execution fact. A local OSC title
+  // cannot replace it with a synthetic done row or a different owner.
+  if (status.executionObservation) {
+    return status
+  }
   // Same-class Claude title repaints can postdate a fresh permission hook without
   // contradicting it; only a working or released-pane title retires the question (#11761).
   if (
@@ -122,6 +127,7 @@ export function selectRuntimeHookAgentRowForPane(
   let live: AgentStatusIpcPayload | null = null
   const freshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
   for (const entry of rows) {
+    const hasExecutionObservation = entry.executionObservation !== undefined
     if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
       session = entry
     }
@@ -129,7 +135,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.agentType &&
       (entry.providerSessionOnly !== true ||
         (entry.agentType === 'pi' && entry.providerSession != null)) &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      (hasExecutionObservation || (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter) &&
       (!agent || entry.receivedAt > agent.receivedAt)
     ) {
       agent = entry
@@ -138,7 +144,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.providerSessionOnly !== true &&
       // Restored rows cannot prove liveness because the turn may have ended while offline (#12346).
       entry.restoredUnconfirmed !== true &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      (hasExecutionObservation || (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter) &&
       (!live || entry.receivedAt > live.receivedAt)
     ) {
       live = entry
@@ -157,6 +163,7 @@ export function selectRuntimeHookAgentRowForPane(
           ...(live.evidenceObservedAt !== undefined
             ? { evidenceObservedAt: live.evidenceObservedAt }
             : {}),
+          ...(live.executionObservation ? { executionObservation: live.executionObservation } : {}),
           stateStartedAt: live.stateStartedAt ?? live.receivedAt,
           ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
         }
@@ -173,6 +180,9 @@ export function resolveRuntimeHookLiveAgentRow(
     return null
   }
   if (live.payload.interactivePrompt != null) {
+    return live
+  }
+  if (live.executionObservation) {
     return live
   }
   // This is the pane's only wall-clock title timestamp comparable to when the hook evidence

@@ -1752,7 +1752,7 @@ export class PtyHandler {
       const result = await this.agentSessionOwners.ensure({
         claim,
         surface,
-        spawn: async ({ generation }) => {
+        spawn: async ({ generation, statusBinding }) => {
           const created = await this.spawnAfterAdmission(
             params,
             context,
@@ -1766,7 +1766,8 @@ export class PtyHandler {
                 generation,
                 phase: 'live',
                 ptyId: created.id,
-                surface
+                surface,
+                statusBinding
               }
             ]
           }

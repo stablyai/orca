@@ -63,7 +63,8 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     stateHistory: overrides.stateHistory ?? [],
     interrupted: overrides.interrupted,
     sessionBoundary: overrides.sessionBoundary,
-    restoredUnconfirmed: overrides.restoredUnconfirmed
+    restoredUnconfirmed: overrides.restoredUnconfirmed,
+    executionObservation: overrides.executionObservation
   }
 }
 
@@ -123,6 +124,48 @@ describe('mostRecentAttentionInHistory', () => {
         makeHistory('done', NOW - 5_000)
       ])
     ).toBe(NOW - 5_000)
+  })
+})
+
+describe('execution observation projection', () => {
+  it('ranks an observed exited Working attachment as uncertainty, not live work', () => {
+    const entry = makeEntry({
+      paneKey: paneKey('tab-1', LEAF_1),
+      executionObservation: {
+        executionId: 'exec-1',
+        hostId: 'local',
+        hostEpoch: 'epoch-1',
+        captureRevision: 1,
+        observedAt: NOW,
+        inventoryCoverage: 'complete',
+        verdict: 'exited'
+      }
+    })
+    expect(resolveAttention([hookPane(entry, true)], NOW)).toEqual({
+      cls: 4,
+      attentionTimestamp: NOW
+    })
+  })
+
+  it('keeps an old observed waiting attachment in the needs-input class', () => {
+    const entry = makeEntry({
+      paneKey: paneKey('tab-1', LEAF_1),
+      state: 'waiting',
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+      executionObservation: {
+        executionId: 'exec-1',
+        hostId: 'local',
+        hostEpoch: 'epoch-1',
+        captureRevision: 1,
+        observedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+        inventoryCoverage: 'partial',
+        verdict: 'unverifiable'
+      }
+    })
+    expect(resolveAttention([hookPane(entry, true)], NOW)).toMatchObject({
+      cls: 1,
+      cause: 'waiting'
+    })
   })
 })
 
@@ -317,14 +360,18 @@ describe('resolveAttention', () => {
     })
   })
 
-  it('skips stale entries (updatedAt older than the freshness window)', () => {
+  it('retains a pending question beyond the status freshness window', () => {
     const entry = makeEntry({
       paneKey: 't:1',
       state: 'blocked',
       stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000,
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000
     })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
+    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
+      cls: 1,
+      attentionTimestamp: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000,
+      cause: 'blocked'
+    })
   })
 
   it('takes the most attention-demanding class across multiple panes', () => {

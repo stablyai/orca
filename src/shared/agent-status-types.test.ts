@@ -40,6 +40,11 @@ describe('isFreshNonDoneAgentStatus', () => {
     expect(isFreshNonDoneAgentStatus({ state: 'done', updatedAt: 2_000 }, 2_000)).toBe(false)
     expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 0 }, 10_000, 5_000)).toBe(false)
   })
+
+  it('retains blocked and waiting questions beyond the report TTL', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'blocked', updatedAt: 0 }, 10_000, 5_000)).toBe(true)
+    expect(isFreshNonDoneAgentStatus({ state: 'waiting', updatedAt: 0 }, 10_000, 5_000)).toBe(true)
+  })
 })
 
 describe('parseAgentStatusPayload', () => {

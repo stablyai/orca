@@ -8,6 +8,7 @@ import {
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
+import type { AgentExecutionObservation } from '../../shared/agent-execution-observation'
 
 /** One hook-server row projected into the shape the runtime's own readers consume. */
 export type RuntimeAgentRowSnapshot = {
@@ -20,6 +21,7 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  executionObservation?: AgentExecutionObservation
 }
 
 function isLiveObservation(row: AgentStatusIpcPayload): boolean {
@@ -95,8 +97,12 @@ export function selectFreshAgentRowForMobileTab(args: {
   let match: AgentStatusIpcPayload | null = null
   const now = Date.now()
   for (const row of args.hookRows) {
+    if (!isLiveObservation(row)) {
+      continue
+    }
+    // Why: the shared projection, not hook age, demotes an observed row or retains its pending wait.
     if (
-      !isLiveObservation(row) ||
+      !row.executionObservation &&
       now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS
     ) {
       continue
@@ -130,6 +136,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }
-      : {})
+      : {}),
+    ...(match.executionObservation ? { executionObservation: match.executionObservation } : {})
   }
 }

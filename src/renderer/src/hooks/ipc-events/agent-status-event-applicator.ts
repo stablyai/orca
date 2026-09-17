@@ -187,6 +187,9 @@ export function createAgentStatusEventApplicator(args: {
     const statusPayloadWithObservation = data.observation
       ? { ...statusPayloadWithProvenance, observation: data.observation }
       : statusPayloadWithProvenance
+    const statusPayloadWithExecutionObservation = data.executionObservation
+      ? { ...statusPayloadWithObservation, executionObservation: data.executionObservation }
+      : statusPayloadWithObservation
     const identity = resolveAgentStatusIdentity({
       existing: existingStatus
         ? {
@@ -224,7 +227,7 @@ export function createAgentStatusEventApplicator(args: {
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
       paneKey,
-      payload: statusPayloadWithObservation,
+      payload: statusPayloadWithExecutionObservation,
       terminalTitle,
       timing: {
         updatedAt: data.receivedAt,

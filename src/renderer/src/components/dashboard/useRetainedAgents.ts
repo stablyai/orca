@@ -15,6 +15,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 
 import {
   createWorktreeTabBucketProjection,
@@ -119,13 +120,18 @@ export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshot
     const shouldDecay =
       !isFresh &&
       (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
+    const state = entry.executionObservation
+      ? resolveAgentStatusPresentation(entry, args.now, AGENT_STATUS_STALE_AFTER_MS).state
+      : shouldDecay
+        ? 'idle'
+        : entry.state
     currentAgents.set(paneKey, {
       row: {
         paneKey,
         entry,
         tab: owner.tab,
         agentType: entry.agentType ?? 'unknown',
-        state: shouldDecay ? 'idle' : entry.state,
+        state,
         startedAt: agentStartedAt(entry)
       },
       worktreeId: owner.worktreeId

@@ -30,15 +30,15 @@ export function agentStatusEvidenceObservedAt(
 
 export function isFreshNonDoneAgentStatus(
   entry:
-    | Pick<
+    | (Pick<
         AgentStatusEntry,
-        | 'state'
         | 'updatedAt'
         | 'evidenceObservedAt'
         | 'mirroredEvidenceReceivedAt'
         | 'restoredUnconfirmed'
         | 'structuredHostOwned'
-      >
+        | 'executionObservation'
+      > & { state?: AgentStatusEntry['state'] })
     | undefined,
   now = Date.now(),
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
@@ -48,7 +48,9 @@ export function isFreshNonDoneAgentStatus(
     entry &&
     entry.state !== 'done' &&
     entry.restoredUnconfirmed !== true &&
-    (entry.structuredHostOwned === true ||
+    (entry.state === 'blocked' ||
+      entry.state === 'waiting' ||
+      entry.structuredHostOwned === true ||
       now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
   )
 }

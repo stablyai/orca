@@ -28,6 +28,7 @@ import {
 } from './worktree-agent-row-fallback-tab'
 import { resolveRowAgentType } from './worktree-agent-row-type'
 import { entryWithRuntimeOrchestration } from './worktree-agent-row-orchestration'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -180,13 +181,18 @@ export function buildWorktreeAgentRows(args: {
           rowEntry.state === 'blocked' ||
           rowEntry.state === 'waiting')
       const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
+      const projectedState = rowEntry.executionObservation
+        ? resolveAgentStatusPresentation(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS).state
+        : shouldDecay
+          ? resolveDecayedAgentRowState(rowEntry, hasLivePty)
+          : rowEntry.state
       rows.push({
         paneKey: rowEntry.paneKey,
         entry: rowEntry,
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
         rowSource: 'live',
-        state: shouldDecay ? resolveDecayedAgentRowState(rowEntry, hasLivePty) : rowEntry.state,
+        state: projectedState,
         startedAt
       })
       rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
@@ -222,6 +228,11 @@ export function buildWorktreeAgentRows(args: {
     const shouldDecay =
       !isFresh &&
       (rowEntry.state === 'working' || rowEntry.state === 'blocked' || rowEntry.state === 'waiting')
+    const projectedState = rowEntry.executionObservation
+      ? resolveAgentStatusPresentation(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS).state
+      : shouldDecay
+        ? resolveDecayedAgentRowState(rowEntry, tabHasLivePty(ptyIdsByTabId, tab.id))
+        : rowEntry.state
     rows.push({
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
@@ -230,9 +241,7 @@ export function buildWorktreeAgentRows(args: {
       rowSource: 'live',
       // Why: this row's tab is synthesized because no tab for it exists in this renderer,
       // so there is no live-PTY evidence to hold — the decay destination is always `idle`.
-      state: shouldDecay
-        ? resolveDecayedAgentRowState(rowEntry, tabHasLivePty(ptyIdsByTabId, tab.id))
-        : rowEntry.state,
+      state: projectedState,
       startedAt
     })
     rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))

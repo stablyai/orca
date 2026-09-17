@@ -13,7 +13,8 @@ const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, strin
   blocked: '#ef4444',
   waiting: '#ef4444',
   interrupted: '#ef4444',
-  idle: 'rgba(115,115,115,0.4)'
+  idle: 'rgba(115,115,115,0.4)',
+  unverifiable: '#f59e0b'
 }
 const WORKING_COLOR = '#eab308'
 

@@ -74,6 +74,11 @@ describe('SshPtyProvider process listings and events', () => {
               tabId: 'tab',
               leafId: '11111111-1111-4111-8111-111111111111',
               terminalHandle: 'term_claimed'
+            },
+            statusBinding: {
+              runId: 'run-1',
+              attachment: { executionId: 'execution-1' },
+              role: 'root'
             }
           }
         ]
@@ -112,6 +117,11 @@ describe('SshPtyProvider process listings and events', () => {
               tabId: 'tab',
               leafId: '11111111-1111-4111-8111-111111111111',
               terminalHandle: 'term_claimed'
+            },
+            statusBinding: {
+              runId: 'run-1',
+              attachment: { executionId: 'execution-1' },
+              role: 'root'
             }
           }
         ]

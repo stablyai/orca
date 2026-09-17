@@ -46,6 +46,14 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
+      // Keep host evidence across ordinary hook updates only when the same
+      // concrete terminal handle owns both events. A pane-key reuse must not
+      // inherit the prior attachment's verdict.
+      ...(previous?.executionObservation &&
+      previous.terminalHandle &&
+      payload.terminalHandle === previous.terminalHandle
+        ? { executionObservation: previous.executionObservation }
+        : {}),
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt

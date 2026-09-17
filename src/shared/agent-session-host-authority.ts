@@ -8,6 +8,10 @@ import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runti
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
+import {
+  parseAgentStatusExecutionBinding,
+  type AgentStatusExecutionBinding
+} from './agent-status-run'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 
@@ -31,7 +35,7 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
 
 export const AGENT_SESSION_CLAIM_DIGEST_VERSION = 1 as const
 
-export const AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION = 2 as const
+export const AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION = 3 as const
 export const AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION = 1 as const
 
 export const AGENT_SESSION_OPERATION_FUTURE_SKEW_MS = 5 * 60 * 1000
@@ -84,6 +88,7 @@ export type AgentSessionOwnerBinding = {
   phase: 'reserved' | 'live'
   ptyId: string
   surface: AgentSessionSurfaceBinding
+  statusBinding: AgentStatusExecutionBinding
 }
 
 export type AgentSessionClaimedSpawnResult = {
@@ -195,7 +200,8 @@ export function isAgentSessionOwnerBinding(value: unknown): value is AgentSessio
     isBoundedWireString(owner.generation, 128) &&
     (owner.phase === 'reserved' || owner.phase === 'live') &&
     isBoundedWireString(owner.ptyId, 4096) &&
-    isAgentSessionSurfaceBinding(owner.surface)
+    isAgentSessionSurfaceBinding(owner.surface) &&
+    parseAgentStatusExecutionBinding(owner.statusBinding) !== null
   )
 }
 

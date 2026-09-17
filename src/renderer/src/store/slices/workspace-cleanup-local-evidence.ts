@@ -4,6 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 
@@ -123,6 +124,13 @@ export function hasFreshIndexedLiveAgent(
   const now = Date.now()
   for (const tabId of tabIds) {
     for (const entry of agentStatusesByTabId.get(tabId) ?? []) {
+      if (entry.executionObservation) {
+        const state = resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS).state
+        if (state === 'working' || state === 'blocked' || state === 'waiting') {
+          return true
+        }
+        continue
+      }
       if (
         isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) &&
         (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')

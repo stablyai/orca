@@ -1,4 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { AgentExecutionObservationService } from '../../../runtime/agent-execution-observation-service'
+import { buildAgentExecutionAttachments } from '../../../runtime/agent-execution-observation-attachments'
+import { agentSessionOwners } from '../pane/agent-session-owners'
+import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
+import { getSshPtyProvider } from '../provider/registry'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
@@ -37,7 +44,7 @@ import {
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 
-  runtime?.setPtyController({
+  const controller = {
     claimStablePaneCreate: (args) => {
       const paneKey = makePaneKey(args.tabId, args.leafId)
       const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
@@ -88,5 +95,50 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       waitForRendererSerializerFromRuntimeController(ptyId, afterGeneration, timeoutMs, signal),
     getSize: (ptyId) => getSizeFromRuntimeController(ptyId),
     resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows)
-  })
+  }
+  runtime?.setPtyController(controller)
+
+  if (runtime && deps.publishExecutionObservation) {
+    const hostEpochSeed = randomUUID()
+    const getHostEpoch = (hostId: ExecutionHostId): string => {
+      const parsed = parseExecutionHostId(hostId)
+      if (parsed?.kind === 'ssh') {
+        const provider = getSshPtyProvider(parsed.targetId)
+        const generation =
+          provider &&
+          'providerGeneration' in provider &&
+          typeof provider.providerGeneration === 'number'
+            ? provider.providerGeneration
+            : null
+        if (generation !== null && Number.isSafeInteger(generation) && generation > 0) {
+          return `${hostId}:${generation}`
+        }
+      }
+      return `${hostId}:${hostEpochSeed}`
+    }
+    const previous = observationServicesByRuntime.get(runtime)
+    previous?.stop()
+    const observationService = new AgentExecutionObservationService(
+      {
+        getController: (hostId) => (parseExecutionHostId(hostId) ? controller : null),
+        getHostEpoch,
+        getAttachments: () =>
+          buildAgentExecutionAttachments(agentSessionOwners.list(), {
+            ptyOwnership,
+            ptyIncarnationById,
+            getHostEpoch
+          }),
+        publish: (observation, attachment) => {
+          if (attachment?.paneKey) {
+            deps.publishExecutionObservation?.(attachment.paneKey, observation, attachment)
+          }
+        }
+      },
+      { maxConcurrentHostScans: 2 }
+    )
+    observationServicesByRuntime.set(runtime, observationService)
+    observationService.start()
+  }
 }
+
+const observationServicesByRuntime = new WeakMap<object, AgentExecutionObservationService>()

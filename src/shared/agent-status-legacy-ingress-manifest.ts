@@ -2,6 +2,7 @@ export type AgentStatusLegacyIngressDestination = '2B' | '6'
 
 export type AgentStatusLegacyIngressCaller =
   | 'main-status-update'
+  | 'main-execution-observation'
   | 'main-status-cleanup'
   | 'main-pane-alias-transfer'
   | 'main-status-hydration'
@@ -40,6 +41,16 @@ export const AGENT_STATUS_LEGACY_INGRESS_MANIFEST = Object.freeze([
     destination: '2B',
     gate: 'Trusted PTY scope plus owner-atomic producer handover',
     allowedModes: ['current-producer', 'older-peer']
+  }),
+  entry({
+    caller: 'main-execution-observation',
+    sourcePath: 'src/main/agent-hooks/server/server-execution-observation.ts',
+    reason:
+      'Exact host evidence updates a bound PTY row until run-owned status serving replaces it.',
+    owner: 'main-agent-hooks',
+    destination: '2B',
+    gate: 'Run-owned execution evidence publication with negotiated legacy projection',
+    allowedModes: ['current-producer']
   }),
   entry({
     caller: 'main-status-cleanup',

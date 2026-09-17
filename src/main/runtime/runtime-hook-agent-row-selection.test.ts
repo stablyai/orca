@@ -156,4 +156,31 @@ describe('selectFreshAgentRowForMobileTab', () => {
       })
     ).toBeNull()
   })
+
+  it('retains a stale pending row when its exact attachment has host evidence', () => {
+    const selected = selectFreshAgentRowForMobileTab({
+      paneKey: PANE_KEY,
+      terminalHandle: HANDLE,
+      hookRows: [
+        row({
+          state: 'waiting',
+          evidenceObservedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1,
+          executionObservation: {
+            executionId: 'exec-1',
+            hostId: 'local',
+            hostEpoch: 'epoch-1',
+            captureRevision: 1,
+            observedAt: Date.now(),
+            inventoryCoverage: 'partial',
+            verdict: 'unverifiable'
+          }
+        })
+      ]
+    })
+
+    expect(selected).toMatchObject({
+      payload: { state: 'waiting' },
+      executionObservation: { executionId: 'exec-1', verdict: 'unverifiable' }
+    })
+  })
 })

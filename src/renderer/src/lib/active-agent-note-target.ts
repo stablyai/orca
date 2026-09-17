@@ -19,6 +19,7 @@ import {
   resolveTitleActivityLabel
 } from '@/lib/pane-agent-evidence'
 import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
+import { resolveAgentStatusPresentation } from '../../../shared/agent-execution-observation'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
 const ACTIVE_AGENT_TERMINAL_LIST_LIMIT = 200
@@ -95,8 +96,15 @@ export function getActiveAgentNoteTarget(
   }
 
   const entry = state.agentStatusByPaneKey?.[makePaneKey(noteTarget.tabId, noteTarget.leafId)]
-  if (entry && isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-    return noteTarget
+  if (entry) {
+    if (entry.executionObservation) {
+      const presentation = resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      if (presentation.routeUsability === 'usable') {
+        return noteTarget
+      }
+    } else if (isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      return noteTarget
+    }
   }
   // Why: freshly opened agents can be idle before their first hook event. Use
   // renderer title/launch hints only to show the option; runtime still verifies

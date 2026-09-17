@@ -224,7 +224,9 @@ export function projectRuntimeMobileSessionTabs(
     // live status on every republication.
     const keepFullAgentStatus =
       normalizedTabAgentStatus &&
-      (!terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) || hasLiveAgentSignal)
+      (normalizedTabAgentStatus.executionObservation !== undefined ||
+        !terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) ||
+        hasLiveAgentSignal)
     const agentStatus = keepFullAgentStatus
       ? { agentStatus: normalizedTabAgentStatus }
       : // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.

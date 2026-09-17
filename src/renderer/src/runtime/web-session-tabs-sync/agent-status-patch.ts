@@ -47,9 +47,17 @@ function withMirroredEvidenceReceipt(
   existing: AgentStatusEntry | undefined,
   now: number
 ): AgentStatusEntry {
+  const sameExecutionObservation =
+    existing?.executionObservation !== undefined &&
+    entry.executionObservation !== undefined &&
+    existing.executionObservation.executionId === entry.executionObservation.executionId &&
+    existing.executionObservation.hostEpoch === entry.executionObservation.hostEpoch &&
+    existing.executionObservation.captureRevision === entry.executionObservation.captureRevision
   const receivedAt =
     existing?.mirroredEvidenceReceivedAt !== undefined &&
-    agentStatusAuthorityObservedAt(existing) === agentStatusAuthorityObservedAt(entry)
+    agentStatusAuthorityObservedAt(existing) === agentStatusAuthorityObservedAt(entry) &&
+    (sameExecutionObservation ||
+      (existing?.executionObservation === undefined && entry.executionObservation === undefined))
       ? existing.mirroredEvidenceReceivedAt
       : now
   return { ...entry, mirroredEvidenceReceivedAt: receivedAt }

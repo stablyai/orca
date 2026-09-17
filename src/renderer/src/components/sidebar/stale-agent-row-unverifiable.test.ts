@@ -103,6 +103,36 @@ describe('a stale entry on a pane Orca still holds', () => {
     expect(rows[0].state).toBe('unverifiable')
     expect(getCompactAgentSecondary(rows[0], NOW)).toBe('No update in 34m')
   })
+
+  it('uses exact host evidence instead of treating a recent exited row as Working', () => {
+    const observed = {
+      executionId: 'exec-1',
+      hostId: 'local' as const,
+      hostEpoch: 'epoch-1',
+      captureRevision: 1,
+      observedAt: NOW,
+      inventoryCoverage: 'complete' as const,
+      verdict: 'exited' as const
+    }
+    expect(rowState(entry({ updatedAt: NOW, executionObservation: observed }), LIVE)).toBe(
+      'unverifiable'
+    )
+  })
+
+  it('keeps an old waiting row visible when its exact attachment is uncertain', () => {
+    const observed = {
+      executionId: 'exec-1',
+      hostId: 'local' as const,
+      hostEpoch: 'epoch-1',
+      captureRevision: 1,
+      observedAt: NOW - SILENT_FOR_MS,
+      inventoryCoverage: 'partial' as const,
+      verdict: 'unverifiable' as const
+    }
+    expect(rowState(entry({ state: 'waiting', executionObservation: observed }), LIVE)).toBe(
+      'waiting'
+    )
+  })
 })
 
 describe('negative controls', () => {

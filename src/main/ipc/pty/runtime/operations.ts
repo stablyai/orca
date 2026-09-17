@@ -154,7 +154,7 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
 
 export async function inspectProcessFromRuntimeController(
   ptyId: string,
-  options?: { expectedIncarnationId?: string }
+  options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
 ) {
   return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }

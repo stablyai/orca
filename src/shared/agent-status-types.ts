@@ -5,6 +5,7 @@
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
+import type { AgentExecutionObservation } from './agent-execution-observation'
 import type { TuiAgent } from './tui-agent'
 import {
   normalizeInteractivePromptField,
@@ -152,6 +153,8 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
+  /** Exact host observation for this row's execution attachment. */
+  executionObservation?: AgentExecutionObservation
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:

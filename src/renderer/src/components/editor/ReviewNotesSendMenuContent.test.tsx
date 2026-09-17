@@ -11,6 +11,17 @@ type ReactElementLike = {
   props: Record<string, unknown>
 }
 
+type NoteTargetHarness = {
+  paneKey: string
+  tabId: string
+  leafId: string
+  agentType: TuiAgent
+  tabTitle: string
+  status: 'eligible' | 'disabled'
+  disabledReason?: string
+  executionCaveat?: string
+}
+
 const TAB_A = 'tab-a'
 const TAB_B = 'tab-b'
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
@@ -28,15 +39,7 @@ const harness = vi.hoisted(() => ({
   track: vi.fn(),
   toastMessage: vi.fn(),
   worktreeAgentRows: [] as DashboardAgentRowData[],
-  noteTargets: [] as {
-    paneKey: string
-    tabId: string
-    leafId: string
-    agentType: TuiAgent
-    tabTitle: string
-    status: 'eligible' | 'disabled'
-    disabledReason?: string
-  }[],
+  noteTargets: new Array<NoteTargetHarness>(),
   now: 600_000
 }))
 
@@ -390,6 +393,29 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(items.every((item) => item.props.disabled === false)).toBe(true)
     expect(collectText(items[0])).toContain('Claude')
     expect(collectText(items[1])).toContain('Codex')
+  })
+
+  it('shows an execution caveat while keeping an observed route eligible', () => {
+    harness.noteTargets = [
+      {
+        paneKey: makePaneKey(TAB_A, LEAF_A),
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Claude',
+        status: 'eligible',
+        executionCaveat: 'Execution could not be verified'
+      }
+    ]
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Claude' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
+    })
+
+    const item = findByType(render(), 'DropdownMenuItem')
+    expect(item.props.disabled).toBe(false)
+    expect(item.props.title).toBe('Execution could not be verified')
+    expect(collectText(item)).toContain('Execution could not be verified')
   })
 
   it('orders send targets by the current worktree agent rows and shows status timing', () => {

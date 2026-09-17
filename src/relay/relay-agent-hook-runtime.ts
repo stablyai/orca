@@ -17,9 +17,15 @@ import {
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { relayLogLine } from './relay-diagnostic-log'
 import { registerManagedHookInstaller } from './managed-hook-installer'
+import { RelayAgentStatusStore } from './relay-agent-status-store'
+import { AGENT_STATUS_STORE_FRAME_NOTIFICATION } from '../shared/agent-status-store-replication'
+import { AGENT_STATUS_STORE_REPLICA_CAPABILITY } from '../shared/protocol-version'
 
 export class RelayAgentHookRuntime {
   private readonly hookServer: RelayAgentHookServer
+  private readonly statusStore = new RelayAgentStatusStore()
+  private readonly statusStorePublisher
+  private stopStatusPublication: (() => void) | null = null
   private readonly pluginOverlay = new PluginOverlayManager()
 
   constructor(
@@ -30,10 +36,16 @@ export class RelayAgentHookRuntime {
   ) {
     this.hookServer = new RelayAgentHookServer({
       endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
-      forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
+      forward: (envelope) => {
+        this.statusStore.apply(envelope)
+        publishAgentHookEnvelope(dispatcher, envelope)
+      },
       // Why: the PTY handler is the only component that knows which panes still have a client
       // surface, so it — not the client — decides whether a hook post describes a live pane.
       isPaneSurfaceRetired: (paneKey) => ptyHandler.isPaneSurfaceRetired(paneKey)
+    })
+    this.statusStorePublisher = this.statusStore.createPublisher({
+      executionHostId: 'local'
     })
   }
 
@@ -47,6 +59,14 @@ export class RelayAgentHookRuntime {
     }
     this.registerPtyEnvironment()
     this.registerHandlers()
+    this.stopStatusPublication = this.statusStorePublisher.subscribe((frame) => {
+      if (typeof this.dispatcher.notify === 'function') {
+        this.dispatcher.notify(
+          AGENT_STATUS_STORE_FRAME_NOTIFICATION,
+          Object.fromEntries(Object.entries(frame))
+        )
+      }
+    })
   }
 
   publishEndpointFile(): void {
@@ -54,6 +74,9 @@ export class RelayAgentHookRuntime {
   }
 
   stop(): void {
+    this.stopStatusPublication?.()
+    this.stopStatusPublication = null
+    this.statusStorePublisher.dispose()
     this.hookServer.stop()
   }
 
@@ -63,6 +86,7 @@ export class RelayAgentHookRuntime {
     this.ptyHandler.setExitListener(({ paneKey, id }) => {
       if (paneKey) {
         this.hookServer.clearPaneState(paneKey)
+        this.statusStore.drop(paneKey)
       }
       this.pluginOverlay.clearOverlay(paneKey ?? id)
     })
@@ -71,6 +95,7 @@ export class RelayAgentHookRuntime {
     // reconnecting client cannot be handed a replay of an agent nobody owns.
     this.ptyHandler.setSurfaceRetiredListener(({ paneKey }) => {
       this.hookServer.clearPaneState(paneKey)
+      this.statusStore.drop(paneKey)
     })
   }
 
@@ -137,6 +162,13 @@ export class RelayAgentHookRuntime {
   }
 
   private registerHandlers(): void {
+    this.dispatcher.onRequest('agentStatus.getStoreSnapshot', async (params) => {
+      if (params.capability !== AGENT_STATUS_STORE_REPLICA_CAPABILITY) {
+        throw new Error('agent_status_store_capability_required')
+      }
+      const snapshot = this.statusStorePublisher.snapshot()
+      return snapshot
+    })
     this.dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
       replayed: this.hookServer.replayCachedPayloadsForPanes()
     }))

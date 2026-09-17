@@ -249,9 +249,11 @@ function AgentTargetMenuItem({
   const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
+  const executionCaveat = target.executionCaveat
   const secondaryParts = [
     agentStateLabel(state),
     ...(timeAgo ? [timeAgo] : []),
+    ...(executionCaveat ? [executionCaveat] : []),
     ...(tabTitle ? [tabTitle] : [])
   ]
   return (
@@ -261,7 +263,7 @@ function AgentTargetMenuItem({
       // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
       // hover tooltip rather than inline text, matching DashboardAgentRow's
       // title-attribute treatment of the same disabledReason.
-      title={disabledReason}
+      title={disabledReason ?? executionCaveat}
       className="min-w-[240px] gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
       {/* Why: the ancestor's actionable disabled reason must win on every hit area. */}
@@ -269,7 +271,7 @@ function AgentTargetMenuItem({
         state={state}
         size="sm"
         className="shrink-0"
-        title={disabledReason ? null : undefined}
+        title={disabledReason || executionCaveat ? null : undefined}
       />
       <AgentIcon agent={agentTypeToIconAgent(target.agentType ?? agent?.agentType)} size={14} />
       <span className="grid min-w-0 flex-1 text-left">

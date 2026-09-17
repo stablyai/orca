@@ -292,7 +292,12 @@ describe('SSH fresh agent-session create operations', () => {
                 generation: 'generation-old',
                 phase: 'live',
                 ptyId: 'pty-1',
-                surface
+                surface,
+                statusBinding: {
+                  runId: 'run-old',
+                  attachment: { executionId: 'execution-old' },
+                  role: 'root'
+                }
               }
             }
           },

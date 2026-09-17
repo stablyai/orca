@@ -7,6 +7,7 @@ import type {
   WorktreeLineageWarning
 } from './worktree/lineage-types'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
+import type { AgentExecutionObservation } from './agent-execution-observation'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
 
 export type RuntimeWorktreeAgentRow = {
@@ -28,6 +29,8 @@ export type RuntimeWorktreeAgentRow = {
   /** The structured session host still runs this row's provider child, so it is fresh regardless
    *  of age. Optional on the wire: old hosts never send it. */
   structuredHostOwned?: true
+  /** Exact host observation for this row's execution attachment. */
+  executionObservation?: AgentExecutionObservation
 }
 
 export type RuntimeWorktreePsSummary = {

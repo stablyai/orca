@@ -1,10 +1,6 @@
-import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { isSyntheticAgentPermissionTitle } from '../../../../shared/synthetic-agent-title'
-import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -16,6 +12,19 @@ import {
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
+import {
+  collectTabPaneInputs,
+  buildExplicitEntriesByTabId,
+  buildExplicitEntriesByWorktreeId,
+  type TabPaneInputSources
+} from './smart-attention-pane-inputs'
+export {
+  collectTabPaneInputs,
+  buildExplicitEntriesByTabId,
+  buildExplicitEntriesByWorktreeId
+} from './smart-attention-pane-inputs'
+export type { TabPaneInputSources } from './smart-attention-pane-inputs'
 
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
@@ -57,7 +66,6 @@ export type WorktreeAttention = {
 }
 
 export const IDLE: WorktreeAttention = { cls: 5, attentionTimestamp: 0 }
-
 export function hasFreshAttributedAgentStatus(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
   now: number,
@@ -66,7 +74,15 @@ export function hasFreshAttributedAgentStatus(
   const freshUnstampedTabIds = new Set<string>()
   for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
     const parsed = parsePaneKey(entry.paneKey)
-    if (parsed === null || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    const presentation = entry.executionObservation
+      ? resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      : null
+    if (
+      parsed === null ||
+      (presentation?.state === 'unverifiable'
+        ? true
+        : !presentation && !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS))
+    ) {
       continue
     }
     if (entry.worktreeId) {
@@ -82,7 +98,6 @@ export function hasFreshAttributedAgentStatus(
     tabs.some((tab) => freshUnstampedTabIds.has(tab.id))
   )
 }
-
 /**
  * Return the timestamp of the most recent `done`/`blocked`/`waiting` history row, ignoring
  * interrupted `done` rows (Ctrl+C). Returns `null` when no qualifying row exists.
@@ -106,7 +121,6 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
   }
   return max > 0 ? max : null
 }
-
 /**
  * One pane's contribution to a worktree's attention class. Fresh hook entries win; hookless
  * panes fall back to the title heuristic (design doc Edge case 9). Authority is per-pane, not per-worktree.
@@ -117,7 +131,6 @@ export type PaneInput =
   | { kind: 'hook'; entry: AgentStatusEntry; hasLivePty: boolean }
   // Why: TerminalTab has no per-tab lastActivityAt; the worktree-level value suffices for cross-worktree ordering.
   | { kind: 'title'; status: AgentStatus | null; worktreeLastActivityAt: number }
-
 /**
  * Resolve a worktree's class + attention timestamp from its panes' inputs.
  * A stale hook entry lands in Class 4 or 5 depending on live-PTY evidence; the worktree falls to
@@ -136,7 +149,23 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
 
     if (pane.kind === 'hook') {
       const entry = pane.entry
-      if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      const presentation = entry.executionObservation
+        ? resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        : null
+      if (presentation?.state === 'unverifiable') {
+        const observedAt =
+          entry.executionObservation?.observedAt ?? agentStatusEvidenceObservedAt(entry)
+        if (
+          Number.isFinite(observedAt) &&
+          (4 < bestCls || (bestCls === 4 && observedAt > bestTs))
+        ) {
+          bestCls = 4
+          bestTs = observedAt
+          bestCause = undefined
+        }
+        continue
+      }
+      if (!presentation && !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
         // Why: a pane Orca still holds a PTY for outranks a genuinely empty one — the user may
         // know why it went quiet (a long build), which Orca never can. It never outranks a
         // reporting pane, and it never claims the agent finished.
@@ -158,11 +187,12 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         continue
       }
 
-      if (entry.state === 'blocked' || entry.state === 'waiting') {
+      const effectiveState = presentation?.state ?? entry.state
+      if (effectiveState === 'blocked' || effectiveState === 'waiting') {
         cls = 1
         ts = entry.stateStartedAt
-        cause = entry.state
-      } else if (entry.state === 'done') {
+        cause = effectiveState
+      } else if (effectiveState === 'done') {
         // Why: null covers interrupted `done` (Ctrl+C — user is finished with it) and idle session
         // boundaries; neither is attention.
         const completedAt = agentEntryCompletionAt(entry)
@@ -176,7 +206,7 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         }
         cls = 2
         ts = completedAt
-      } else {
+      } else if (effectiveState === 'working') {
         // working
         cls = 3
         // Why: sort Class 3 by most recent prior attention so a just-started turn outranks one working for an hour.
@@ -189,6 +219,8 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         } else {
           ts = prior
         }
+      } else {
+        continue
       }
     } else {
       // Title-heuristic fallback: only fires for panes with no fresh hook entry.
@@ -217,147 +249,6 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
   return bestCls === 1 && bestCause
     ? { cls: bestCls, attentionTimestamp: bestTs, cause: bestCause }
     : { cls: bestCls, attentionTimestamp: bestTs }
-}
-
-/**
- * Build a `tabId → entries[]` index over `agentStatusByPaneKey`, keyed by the paneKey's
- * `tabId` prefix. Built once per sort so each worktree's resolution is O(T), not a full-map scan.
- */
-export function buildExplicitEntriesByTabId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
-): Map<string, AgentStatusEntry[]> {
-  const byTab = new Map<string, AgentStatusEntry[]>()
-  const pushEntry = (entry: AgentStatusEntry): void => {
-    const parsed = parsePaneKey(entry.paneKey)
-    // Why: skip malformed/legacy-numeric paneKeys rather than bucketing unroutable rows under a tab.
-    if (!parsed) {
-      return
-    }
-    const bucket = byTab.get(parsed.tabId)
-    if (bucket) {
-      bucket.push(entry)
-    } else {
-      byTab.set(parsed.tabId, [entry])
-    }
-  }
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
-    pushEntry(entry)
-  }
-  for (const entry of Object.values(migrationUnsupportedByPtyId ?? {})) {
-    const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
-    if (agentEntry) {
-      pushEntry(agentEntry)
-    }
-  }
-  return byTab
-}
-
-function buildExplicitEntriesByWorktreeId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
-): Map<string, AgentStatusEntry[]> {
-  const byWorktree = new Map<string, AgentStatusEntry[]>()
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
-    if (!entry.worktreeId || !parsePaneKey(entry.paneKey)) {
-      continue
-    }
-    const bucket = byWorktree.get(entry.worktreeId)
-    if (bucket) {
-      bucket.push(entry)
-    } else {
-      byWorktree.set(entry.worktreeId, [entry])
-    }
-  }
-  return byWorktree
-}
-
-/**
- * Extract the stable leaf id from a `${tabId}:${leafId}` paneKey.
- */
-function leafIdFromPaneKey(paneKey: string): string | null {
-  return parsePaneKey(paneKey)?.leafId ?? null
-}
-
-/** Renderer state a single tab's panes are resolved from. */
-export type TabPaneInputSources = {
-  entriesByTabId: ReadonlyMap<string, AgentStatusEntry[]>
-  ptyIdsByTabId: Record<string, string[]>
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
-}
-
-/**
- * One terminal tab's contribution to an attention resolution: its hook entries, plus the
- * title heuristic for panes no fresh hook covers. Gated on `tabHasLivePty` so a slept tab's
- * stale working-pattern title can't leak through.
- */
-export function collectTabPaneInputs(
-  tab: Pick<TerminalTab, 'id' | 'title'>,
-  worktreeLastActivityAt: number,
-  sources: TabPaneInputSources,
-  now: number
-): PaneInput[] {
-  const panes: PaneInput[] = []
-  const hasLivePty = tabHasLivePty(sources.ptyIdsByTabId, tab.id)
-  // Why: leaves covered by a hook entry skip the title fallback so we don't double-count them.
-  const hookLeafIds = new Set<string>()
-  // Stale hooks still suppress one-shot permission titles, matching worktree and tab status dots.
-  const permissionHookLeafIds = new Set<string>()
-  for (const entry of sources.entriesByTabId.get(tab.id) ?? []) {
-    panes.push({ kind: 'hook', entry, hasLivePty })
-    const leafId = leafIdFromPaneKey(entry.paneKey)
-    if (leafId !== null) {
-      permissionHookLeafIds.add(leafId)
-    }
-    // Why: restored rows own their co-restored title without asserting live state.
-    if (
-      !entry.restoredUnconfirmed &&
-      !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
-    ) {
-      continue
-    }
-    if (leafId !== null) {
-      hookLeafIds.add(leafId)
-    }
-  }
-
-  // Why: runtimePaneTitlesByTabId survives sleep, so a slept tab's stale working-pattern title would leak in without this gate.
-  if (!hasLivePty) {
-    return panes
-  }
-
-  const paneTitles = sources.runtimePaneTitlesByTabId[tab.id]
-  if (!paneTitles || Object.keys(paneTitles).length === 0) {
-    const coveredLeafIds = isSyntheticAgentPermissionTitle(tab.title)
-      ? permissionHookLeafIds
-      : hookLeafIds
-    if (coveredLeafIds.size === 0) {
-      // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
-      panes.push({
-        kind: 'title',
-        status: classifyTitleActivity(tab.title),
-        worktreeLastActivityAt
-      })
-    }
-    return panes
-  }
-
-  // Why: split-pane tabs host multiple agents, one title each; mirrors getWorkingAgentsPerWorktree precedence.
-  const tabLayout = sources.terminalLayoutsByTabId?.[tab.id]
-  const paneTitleEntries = Object.entries(paneTitles)
-  for (const [runtimePaneId, title] of paneTitleEntries) {
-    const coveredLeafIds = isSyntheticAgentPermissionTitle(title)
-      ? permissionHookLeafIds
-      : hookLeafIds
-    const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
-    const hasSingleUnmappedHook =
-      leafId === null && coveredLeafIds.size === 1 && paneTitleEntries.length === 1
-    if ((leafId !== null && coveredLeafIds.has(leafId)) || hasSingleUnmappedHook) {
-      continue
-    }
-    panes.push({ kind: 'title', status: classifyTitleActivity(title), worktreeLastActivityAt })
-  }
-  return panes
 }
 
 /**
@@ -390,7 +281,6 @@ export function buildAttentionByWorktree(
     terminalLayoutsByTabId
   }
   const result = new Map<string, WorktreeAttention>()
-
   for (const worktree of worktrees) {
     const tabs = tabsByWorktree?.[worktree.id] ?? []
     // Why: hook stamps can precede tab mirroring; once mirrored, live tab ownership wins so both worktrees aren't promoted.

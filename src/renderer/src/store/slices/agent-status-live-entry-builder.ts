@@ -264,6 +264,7 @@ export function buildAgentStatusLiveEntry(
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),
+    ...(payload.executionObservation ? { executionObservation: payload.executionObservation } : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,

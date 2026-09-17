@@ -20,6 +20,10 @@ import {
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
+import type {
+  AgentExecutionAttachment,
+  AgentExecutionObservation
+} from '../../../shared/agent-execution-observation'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-spool'
 import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
@@ -46,6 +50,7 @@ import type {
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
+import { publishExecutionObservationIntoStore } from './server-execution-observation'
 
 /** Shared mutable state for the layered hook-server implementation. */
 export abstract class AgentHookServerState {
@@ -158,7 +163,34 @@ export abstract class AgentHookServerState {
     createAgentStatusAuthorityId('main-agent-hooks')
   )
 
+  /**
+   * Publishes host evidence into the existing hook-store row. The evidence is
+   * deliberately not persisted: a restart must re-observe the attachment, and
+   * a newer capture is meaningful even when the reported state is unchanged.
+   */
+  publishExecutionObservation(
+    paneKey: string,
+    observation: AgentExecutionObservation,
+    attachment?: AgentExecutionAttachment
+  ): boolean {
+    return publishExecutionObservationIntoStore({
+      paneKey,
+      observation,
+      attachment,
+      state: this.state,
+      runtimeObservedStatusPaneKeys: this.runtimeObservedStatusPaneKeys,
+      commitStatusRowMutation: (before, after) => this.commitStatusRowMutation(before, after),
+      emitEnrichedStatus: (entry) => this.emitEnrichedStatus(entry),
+      emitStatusFreshnessObservation: (status) => this.emitStatusFreshnessObservation(status)
+    })
+  }
+
   protected abstract withdrawReplayObservation(paneKey: string): void
+  protected abstract commitStatusRowMutation(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    after: EnrichedAgentHookEventPayload | null | undefined,
+    emit?: boolean
+  ): boolean
   protected abstract ingestSpoolRecord(record: SpoolRecord): void
   protected abstract emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void
   protected abstract buildStatusChangeNotification(): {

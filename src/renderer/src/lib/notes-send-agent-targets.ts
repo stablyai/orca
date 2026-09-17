@@ -24,6 +24,7 @@ export type NotesSendAgentTarget = {
   tabTitle: string
   status: 'eligible' | 'disabled'
   disabledReason?: string
+  executionCaveat?: string
 }
 
 type AgentTitleEvidence = {
@@ -75,7 +76,8 @@ export function deriveNotesSendAgentTargets(
       agentType: resolveNotesTargetAgentType(target.entry.agentType, target.tab.launchAgent),
       tabTitle: target.tab.title,
       status: target.status,
-      ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
+      ...(target.disabledReason ? { disabledReason: target.disabledReason } : {}),
+      ...(target.executionCaveat ? { executionCaveat: target.executionCaveat } : {})
     })
   )
 

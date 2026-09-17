@@ -114,7 +114,10 @@ export function buildRuntimeMobileAgentStatus(
           : {}),
         tabId: tab.parentTabId,
         terminalTitle,
-        ...providerSession
+        ...providerSession,
+        ...(liveRow.executionObservation
+          ? { executionObservation: liveRow.executionObservation }
+          : {})
       },
       ownerAgent,
       ownerOptions

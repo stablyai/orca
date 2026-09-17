@@ -1,9 +1,16 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
+import type { AgentStatusExecutionBinding } from '../../shared/agent-status-run'
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { OrcaRuntimeService } from './orca-runtime'
+
+const statusBinding: AgentStatusExecutionBinding = {
+  runId: 'run-cold-owner',
+  attachment: { executionId: 'execution-cold-owner' },
+  role: 'root'
+}
 
 const {
   probeAgentSessionProcessIdentity,
@@ -95,7 +102,8 @@ describe('structured TUI launch tab binding', () => {
                 tabId: 'tab-cold-owner',
                 leafId,
                 terminalHandle
-              }
+              },
+              statusBinding
             }
           ]
         }

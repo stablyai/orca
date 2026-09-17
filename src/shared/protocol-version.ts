@@ -153,6 +153,7 @@ export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
+export const AGENT_STATUS_STORE_REPLICA_CAPABILITY = 'agent-status.store-replica.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Why: structured sessions are journal-backed, not PTY-backed, so an incapable client must not
@@ -267,6 +268,7 @@ export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
 export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
+  AGENT_STATUS_STORE_REPLICA_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
@@ -292,6 +294,7 @@ export const RUNTIME_CAPABILITIES = [
   'files.pathsExist',
   'runtime.status.compat.v1',
   'runtime.environments.v1',
+  AGENT_STATUS_STORE_REPLICA_CAPABILITY,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,

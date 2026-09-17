@@ -95,6 +95,39 @@ function deriveLivePtyIdsByTabId(
 }
 
 describe('running agent send targets', () => {
+  it('keeps a stale row targetable from an exact live attachment', () => {
+    const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
+    const targets = deriveRunningAgentSendTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: {
+            ...entry(paneKey, 'working', NOW - 31 * 60 * 1000),
+            executionObservation: {
+              executionId: 'exec-1',
+              hostId: 'local',
+              hostEpoch: 'epoch-1',
+              captureRevision: 1,
+              observedAt: NOW - 31 * 60 * 1000,
+              inventoryCoverage: 'complete',
+              verdict: 'live'
+            }
+          }
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: LEFT_LEAF_ID },
+            activeLeafId: LEFT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEFT_LEAF_ID]: 'pty-left' }
+          }
+        }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+    expect(targets[0]).toMatchObject({ status: 'eligible', ptyId: 'pty-left' })
+  })
+
   it('marks fresh done agents with a leaf PTY as eligible', () => {
     const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
     const targets = deriveRunningAgentSendTargets(
@@ -205,7 +238,7 @@ describe('running agent send targets', () => {
     ])
   })
 
-  it('keeps stale agent status rows disabled when no live title proves the agent is sendable', () => {
+  it('retains a stale pending question while keeping notes-send disabled', () => {
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const target = resolveRunningAgentSendTarget(
       state({
@@ -230,7 +263,7 @@ describe('running agent send targets', () => {
       paneKey: stalePaneKey,
       ptyId: 'pty-right',
       status: 'disabled',
-      disabledReason: 'Agent status is stale'
+      disabledReason: 'Agent needs permission'
     })
   })
 

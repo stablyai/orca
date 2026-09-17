@@ -1,4 +1,5 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { resolveAgentStatusPresentation } from '../../../src/shared/agent-execution-observation'
 
 // Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
 // 30 min). Defined locally rather than imported because a runtime-value import
@@ -16,14 +17,22 @@ export type AgentDotState =
   | 'waiting'
   | 'done'
   | 'idle'
+  | 'unverifiable'
   | 'interrupted'
 
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'workingMode' | 'interrupted' | 'updatedAt'>,
+  row: Pick<
+    RuntimeWorktreeAgentRow,
+    'state' | 'workingMode' | 'interrupted' | 'updatedAt' | 'executionObservation'
+  >,
   now: number
 ): AgentDotState {
   if (row.interrupted) {
     return 'interrupted'
+  }
+  if (row.executionObservation) {
+    const projected = resolveAgentStatusPresentation(row, now, AGENT_STATUS_STALE_AFTER_MS)
+    return projected.state
   }
   switch (row.state) {
     case 'blocked':
@@ -60,6 +69,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Done'
     case 'idle':
       return 'Idle'
+    case 'unverifiable':
+      return 'No recent update'
   }
 }
 

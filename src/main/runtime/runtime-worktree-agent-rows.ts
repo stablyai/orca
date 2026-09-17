@@ -1,9 +1,13 @@
-import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus
+} from '../../shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import { resolveAgentStatusPresentation } from '../../shared/agent-execution-observation'
 export type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
 
 type OrchestrationDisplay = {
@@ -62,7 +66,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       interrupted: source.interrupted,
       stateStartedAt: source.stateStartedAt,
       updatedAt: source.updatedAt,
-      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
+      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {}),
+      ...(source.executionObservation ? { executionObservation: source.executionObservation } : {})
     }
     const rows = rowsByWorktree.get(summary.worktreeId)
     if (rows) {
@@ -81,11 +86,23 @@ export function attachRuntimeWorktreeAgentRows(args: {
     let hasForegroundWorkingAgent = false
     const monitoringSources: RuntimeWorktreeAgentSource[] = []
     for (const row of rows) {
+      const effectiveState = row.executionObservation
+        ? resolveAgentStatusPresentation(row, now, AGENT_STATUS_STALE_AFTER_MS).state
+        : row.state
+      if (row.executionObservation) {
+        if (
+          effectiveState !== 'working' &&
+          effectiveState !== 'blocked' &&
+          effectiveState !== 'waiting'
+        ) {
+          continue
+        }
+      }
       if (!isFreshNonDoneAgentStatus(row, now)) {
         continue
       }
       summary.hasHostSidebarActivity = true
-      if (row.state === 'working') {
+      if (effectiveState === 'working') {
         if (row.workingMode === 'monitoring') {
           const source = rowSources.get(row.paneKey)
           if (source) {

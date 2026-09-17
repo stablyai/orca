@@ -9,6 +9,7 @@ import {
   type AgentStatusState,
   type AgentType
 } from '../../../shared/agent-status-types'
+import { resolveAgentStatusPresentation } from '../../../shared/agent-execution-observation'
 
 // Why: explicit agent status entries (from hook-based reports) can go stale if
 // the agent process exits without sending a final update. This helper lets
@@ -23,14 +24,17 @@ export function isExplicitAgentStatusFresh(
     | 'mirroredEvidenceReceivedAt'
     | 'restoredUnconfirmed'
     | 'structuredHostOwned'
-  >,
+    | 'executionObservation'
+  > & { state?: AgentStatusEntry['state'] },
   now: number,
   staleAfterMs: number
 ): boolean {
   // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
   return (
     entry.restoredUnconfirmed !== true &&
-    (entry.structuredHostOwned === true ||
+    (entry.state === 'blocked' ||
+      entry.state === 'waiting' ||
+      entry.structuredHostOwned === true ||
       now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
   )
 }
@@ -80,6 +84,9 @@ export type AgentActivityDecision = {
   confidence: 'authoritative' | 'fallback'
   /** True when the only claim is a title without live-PTY proof — liveness-gated consumers must treat it as absent. */
   livePtyRequired: boolean
+  executionVerdict?: 'live' | 'unverifiable' | 'exited'
+  pendingInteraction?: boolean
+  executionConfidence?: 'authoritative' | 'uncertain' | 'legacy'
 }
 
 export type ResolvePaneAgentActivityInput = {
@@ -92,9 +99,16 @@ export type ResolvePaneAgentActivityInput = {
 export function resolvePaneAgentActivity(
   input: ResolvePaneAgentActivityInput
 ): AgentActivityDecision {
+  const presentation = input.explicitEntry
+    ? resolveAgentStatusPresentation(input.explicitEntry, input.now, AGENT_STATUS_STALE_AFTER_MS)
+    : null
   const freshEntry =
     input.explicitEntry &&
-    isExplicitAgentStatusFresh(input.explicitEntry, input.now, AGENT_STATUS_STALE_AFTER_MS)
+    (input.explicitEntry.executionObservation
+      ? presentation?.pendingInteraction ||
+        (presentation?.state !== 'unverifiable' &&
+          isExplicitAgentStatusFresh(input.explicitEntry, input.now, AGENT_STATUS_STALE_AFTER_MS))
+      : isExplicitAgentStatusFresh(input.explicitEntry, input.now, AGENT_STATUS_STALE_AFTER_MS))
       ? input.explicitEntry
       : null
   const titleStatus = input.liveTitle !== null ? detectAgentStatusFromTitle(input.liveTitle) : null
@@ -105,7 +119,26 @@ export function resolvePaneAgentActivity(
       titleStatus,
       source: 'hook',
       confidence: 'authoritative',
-      livePtyRequired: false
+      livePtyRequired: false,
+      ...(presentation?.executionVerdict
+        ? { executionVerdict: presentation.executionVerdict }
+        : {}),
+      ...(presentation?.pendingInteraction ? { pendingInteraction: true } : {}),
+      ...(presentation?.confidence && presentation.confidence !== 'legacy'
+        ? { executionConfidence: presentation.confidence }
+        : {})
+    }
+  }
+  if (input.explicitEntry?.executionObservation) {
+    return {
+      hookState: null,
+      hookAgentType: undefined,
+      titleStatus: null,
+      source: 'none',
+      confidence: 'authoritative',
+      livePtyRequired: false,
+      executionVerdict: input.explicitEntry.executionObservation.verdict,
+      executionConfidence: 'uncertain'
     }
   }
   if (titleStatus !== null) {

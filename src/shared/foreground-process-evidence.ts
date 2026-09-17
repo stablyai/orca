@@ -79,6 +79,8 @@ export type RemoteForegroundEvidence =
       verdict: 'live'
       processName: string | null
       fence: PosixFence | WindowsFence
+      /** True when the host proved the PTY contains only its shell. */
+      shellOwnsEveryTtyProcessGroup?: boolean
     } & HostObservation)
   | ({ verdict: 'unverifiable'; reason: string } & HostObservation)
   | ({ verdict: 'exited'; reason: string } & HostObservation)
@@ -169,6 +171,8 @@ export function isRemoteForegroundEvidence(value: unknown): value is RemoteForeg
   if (input.verdict === 'live') {
     return (
       (input.processName === null || typeof input.processName === 'string') &&
+      (input.shellOwnsEveryTtyProcessGroup === undefined ||
+        typeof input.shellOwnsEveryTtyProcessGroup === 'boolean') &&
       (isPosixFence(input.fence) || isWindowsFence(input.fence))
     )
   }

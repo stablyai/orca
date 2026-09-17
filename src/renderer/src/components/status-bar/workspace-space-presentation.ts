@@ -13,6 +13,7 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
+import { resolveAgentStatusPresentation } from '../../../../shared/agent-execution-observation'
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'
 export type WorkspaceSpaceSortDirection = 'asc' | 'desc'
@@ -67,10 +68,6 @@ function getPaneKeyTabId(paneKey: string): string | null {
   return paneKey.slice(0, separatorIndex)
 }
 
-function isActiveAgentState(entry: Pick<AgentStatusEntry, 'state'>): boolean {
-  return entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting'
-}
-
 function countTitleActiveAgentsForTab(
   tab: Pick<TerminalTab, 'id' | 'title'>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
@@ -106,10 +103,20 @@ export function countWorkspaceSpaceActiveAgents({
   let count = 0
 
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-    if (!isActiveAgentState(entry)) {
+    const effectiveState = entry.executionObservation
+      ? resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS).state
+      : entry.state
+    if (
+      effectiveState !== 'working' &&
+      effectiveState !== 'blocked' &&
+      effectiveState !== 'waiting'
+    ) {
       continue
     }
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (
+      !entry.executionObservation &&
+      !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    ) {
       continue
     }
     const tabId = getPaneKeyTabId(entry.paneKey || paneKey)

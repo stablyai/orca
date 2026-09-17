@@ -1,10 +1,12 @@
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
+  AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
 import { resolveAgentStatusWorktreeId } from './agent-status-worktree-attribution'
+import { resolveAgentStatusPresentation } from '../../../shared/agent-execution-observation'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
 type BrowserLikeTab = { id: string }
@@ -34,9 +36,13 @@ export function getLiveAgentStatusByWorktreeId(
   tabsByWorktree: TabsByWorktree | null | undefined,
   now: number
 ): Map<string, LiveAgentWorktreeStatus> {
-  const entries = Object.values(agentStatusByPaneKey ?? {}).filter((entry) =>
-    isFreshNonDoneAgentStatus(entry, now)
-  )
+  const entries = Object.values(agentStatusByPaneKey ?? {}).filter((entry) => {
+    if (entry.executionObservation) {
+      const state = resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS).state
+      return state === 'working' || state === 'blocked' || state === 'waiting'
+    }
+    return isFreshNonDoneAgentStatus(entry, now)
+  })
   if (entries.length === 0) {
     return new Map()
   }
@@ -50,8 +56,11 @@ export function getLiveAgentStatusByWorktreeId(
   for (const entry of entries) {
     const worktreeId = resolveAgentStatusWorktreeId(entry, worktreeIdByTabId)
     if (worktreeId) {
+      const effectiveState = entry.executionObservation
+        ? resolveAgentStatusPresentation(entry, now, AGENT_STATUS_STALE_AFTER_MS).state
+        : entry.state
       const status =
-        entry.state === 'working'
+        effectiveState === 'working'
           ? entry.workingMode === 'monitoring'
             ? 'monitoring'
             : 'working'

@@ -187,6 +187,9 @@ async function startOrcadRuntime(
   const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
+  const agentStatusStorePublisher = agentHookServer.createStatusStorePublisher({
+    executionHostId: 'local'
+  })
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
   // and the read paths that use `this.store?.x ?? []` quietly answer "empty" instead —
   // a server that pairs and lists nothing looks healthy and is not.
@@ -237,6 +240,7 @@ async function startOrcadRuntime(
     // so without these a headless host publishes its structured chats nowhere and lists no agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    agentStatusStorePublisher,
     getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
     getAgentProviderSessionRowsForPane: (paneKey) =>
       agentHookServer.getStatusSnapshotForPane(paneKey),

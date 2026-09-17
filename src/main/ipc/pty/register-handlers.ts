@@ -60,6 +60,7 @@ import {
   stripSequencedStartupResumeArgv
 } from './host-env/codex-resume'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
+import { agentHookServer } from '../../agent-hooks/server'
 
 export function registerPtyHandlers(
   mainWindow: BrowserWindow,
@@ -232,7 +233,11 @@ export function registerPtyHandlers(
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
     retiredRejectedPtyIds: session.retiredRejectedPtyIds,
     reversibleStopOwnersByPtyId: session.reversibleStopOwnersByPtyId,
-    mainWindow
+    mainWindow,
+    // The host server remains the single status writer; C6 only supplies an
+    // attachment observation and never constructs replica frames.
+    publishExecutionObservation: (paneKey, observation, attachment) =>
+      agentHookServer.publishExecutionObservation(paneKey, observation, attachment)
   })
 
   installPtySnapshotIpcHandlers({ runtime, pendingData: session.pendingData })
