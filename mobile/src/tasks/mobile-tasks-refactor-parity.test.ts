@@ -76,9 +76,13 @@ const hash = (parts: string[] | string): string =>
 // from the schemas that landed instead of the fixtures round 1 deleted. Counts are unchanged at 350
 // hooks and 417 statements; the declaration, semantic, render and style hashes do not move, which
 // is the evidence that deleting the cast changed no type and no call.
-const SCREEN_RPC_SCREEN_HOOKS = '150d10bb727392fa0637edabb23147075e2079a33bb720dbb4abc96322c632ec'
+//
+// The pullfrog pass on the same round moved both once more, again by comment text alone: the
+// GitHub search `SAFETY:` line now separates the two members the schema requires (`items`,
+// `labels`) from the eight it only types. No statement, type or call changed; counts hold.
+const SCREEN_RPC_SCREEN_HOOKS = 'be9bb8e21c3a8c0912e8b9256a7c8e5c9ca08ebb776d57cf4fff1101fb060095'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = '65debbd9781017e537d950cbff45ccb4ae5d449df58db93303be6734ef2bc51a'
+const SCREEN_RPC_STATEMENTS = '5fb5ffb187b4b62bdd84e4ad49aaf0d481d943e09e8c4f37433a9eb2ca40c533'
 const MAIN_REBASED_DECLARATIONS = '920a1b66445d10e2a64fbdbe9d7138a4ebe21bbccde1b9ac9c89267cecc584b9'
 const SCREEN_RPC_SEMANTICS = '763f4ffc60b8b335eaab4a51820dc782be430ada879564888a5d28929c9e938b'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'

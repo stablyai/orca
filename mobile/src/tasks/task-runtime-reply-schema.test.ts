@@ -60,9 +60,14 @@ describe('the persisted UI state', () => {
     expect(parsed.success && parsed.data).toBeUndefined()
   })
 
-  it('names a null payload, where main threw a property read on it', () => {
-    expect(taskUiStateSchema.safeParse(null).success).toBe(false)
-  })
+  it.each([null, undefined, 'ok', 7, [], true])(
+    'answers undefined for %j, so the other hydration legs survive an unreadable ui reply',
+    (payload) => {
+      const parsed = taskUiStateSchema.safeParse(payload)
+      expect(parsed.success).toBe(true)
+      expect(parsed.success ? parsed.data : 'unparsed').toBeUndefined()
+    }
+  )
 })
 
 describe('the two advisory probes', () => {

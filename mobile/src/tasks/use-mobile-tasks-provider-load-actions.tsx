@@ -124,7 +124,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `before` is the undeclared key described above; every other field matches the schema.
               pageParams as RpcSendParams<'github.listWorkItems'>
             )
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and eight members of every row it keeps (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `labels`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
             const envelope = githubWorkItemSearchRead.interpret(reply) as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources

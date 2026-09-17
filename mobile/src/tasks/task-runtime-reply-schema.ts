@@ -34,11 +34,17 @@ export const taskRuntimeStatusSchema = z.looseObject({
 /**
  * Persisted client UI state, answered under a `ui` member.
  *
- * The reader yields `ui` itself, which is what the member reader it replaces did. Main's
- * `rpcPayloadMember` threw on a null or absent payload and read `undefined` off anything else, so
- * the container is the requirement and every member under it stays optional:
- * use-mobile-tasks-runtime-hydration.tsx:283 spells `uiState?.trustedOrcaHooks ?? {}` and :284
- * `uiState?.taskResumeState ?? {}`.
+ * The reader yields `ui` itself, which is what the member reader it replaces did, and it is total
+ * like the two probes below it. Main's `rpcPayloadMember` boxed the payload and read `undefined`
+ * off a string, a number or an array, so the Tasks screen hydrated on any of those; a refusal here
+ * would instead throw out of `hydrateTaskState` and leave the whole screen unhydrated (the outer
+ * `.catch` at use-mobile-tasks-runtime-hydration.tsx:349). Main did throw on a null or absent
+ * payload, and that is the one place this reader is deliberately kinder: persisted UI state is
+ * optional at every read (:283 spells `uiState?.trustedOrcaHooks ?? {}`, :284
+ * `uiState?.taskResumeState ?? {}`), so "no ui" hydrates with the defaults rather than failing the
+ * settings, preflight and Linear legs that arrived beside it. The
+ * `matrix-settings.task-hydration-ui.get-1` golden records that move on `result-absent` and
+ * `result-null`.
  *
  * Both members are `unknown`, and the call site keeps one narrowing cast over them. They are
  * opaque forwards: `trustedOrcaHooks` goes straight into state, and `taskResumeState` is the
@@ -56,7 +62,9 @@ export const taskUiStateSchema = z
       })
     )
   })
-  .transform((reply) => reply.ui)
+  .nullish()
+  .catch(undefined)
+  .transform((reply) => reply?.ui)
 
 /**
  * The provider preflight, read only for whether `glab` is installed.
