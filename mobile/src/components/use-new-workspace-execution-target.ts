@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   localAgentDetectionRead,
@@ -7,7 +6,11 @@ import {
   sshRepoConnectRun,
   sshRepoStateRead
 } from '../tasks/mobile-workspace-source-operations'
-import { deriveWorkspaceSshGate, type WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
+import {
+  deriveWorkspaceSshGate,
+  type WorkspaceSshGate,
+  type WorkspaceSshRecord
+} from '../tasks/workspace-ssh-gate'
 
 type DetectedAgentIdsState = {
   connectionId: string | null
@@ -16,9 +19,9 @@ type DetectedAgentIdsState = {
 
 function fallbackSshState(
   targetId: string,
-  status: SshConnectionState['status'],
+  status: WorkspaceSshRecord['status'],
   error: string | null
-): SshConnectionState {
+): WorkspaceSshRecord {
   return { targetId, status, error, reconnectAttempt: 0 }
 }
 
@@ -32,7 +35,7 @@ export function useNewWorkspaceExecutionTarget(args: {
   connect: () => Promise<void>
 } {
   const { client, connectionId, visible } = args
-  const [sshState, setSshState] = useState<SshConnectionState | null>(null)
+  const [sshState, setSshState] = useState<WorkspaceSshRecord | null>(null)
   const [connectingTargetId, setConnectingTargetId] = useState<string | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
     null

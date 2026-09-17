@@ -1,4 +1,5 @@
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
+import type { WorkspaceSshRecord } from './workspace-ssh-gate'
 import {
   type BaseRefSearchResult,
   type GitHubProjectPartialFailure,
@@ -8,7 +9,6 @@ import {
   type GitHubProjectViewSummary,
   type PersistedTrustedOrcaHooks,
   type SparsePreset,
-  type SshConnectionState,
   type WorkspaceAgentChoice,
   useState
 } from './mobile-tasks-dependencies'
@@ -66,7 +66,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [workspaceDetectedAgentIds, setWorkspaceDetectedAgentIds] = useState<Set<string> | null>(
     null
   )
-  const [workspaceSshState, setWorkspaceSshState] = useState<SshConnectionState | null>(null)
+  const [workspaceSshState, setWorkspaceSshState] = useState<WorkspaceSshRecord | null>(null)
   const [workspaceSshConnecting, setWorkspaceSshConnecting] = useState(false)
   const [showWorkspaceAgentPicker, setShowWorkspaceAgentPicker] = useState(false)
   const [showWorkspaceCreateRepoPicker, setShowWorkspaceCreateRepoPicker] = useState(false)

@@ -7,12 +7,9 @@ import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvag
 // declared invariant is that `items` always carries whatever succeeded), gitlab.ts:40-49 and
 // gitlab.ts:180-190, and linear.ts:50-60.
 //
-// Work-item rows are deliberately thin. `tw-smart-search-all-providers` records
-// `github.listWorkItems` answering `{ items: [{ number: 1, title: 'one' }] }` and
-// `gitlab.workItemByPath` answering `{ iid: 7, title: 'seven' }`, so the identity members the
-// shared types declare non-optional are not on the wire in this corpus. Requiring one would drop
-// the row out of a partition main renders — the schema types what is there and requires nothing
-// the recorded success does not carry.
+// Work-item rows stay thin on identity: `id`, `number`, `title`, `state` and `url` are all read
+// through a guard or rendered as text, so typing them is enough and requiring one would drop a row
+// for a member no reader can crash on. `labels` is the exception and is required — see below.
 
 const itemText = (name: string) => salvagedOptional(name, z.string())
 const itemCount = (name: string) => salvagedOptional(name, z.number())
@@ -27,7 +24,12 @@ const workItemRow = z.looseObject({
   state: itemText('state'),
   url: itemText('url'),
   updatedAt: itemText('updatedAt'),
-  labels: salvagedOptional('labels', salvagingArray(z.string())),
+  // Required: both label editors read `item.source.labels.filter(...)` with no guard
+  // (use-mobile-tasks-hosted-metadata-actions.tsx:160,
+  // use-mobile-tasks-gitlab-github-status-actions.tsx:110), and `labels: string[]` is non-optional
+  // on both host types (src/shared/github/work-item-types.ts:23, src/shared/gitlab-types.ts:172).
+  // A row missing it drops out of the list instead of throwing inside the editor's `onPress`.
+  labels: salvagingArray(z.string()),
   // Tri-state and preserved: GitHubWorkItem/GitLabWorkItem declare `author: string | null`, and
   // the row renderer shows an explicit null differently from a host that never reported one.
   author: salvagedOptional('author', z.string().nullable())
@@ -78,11 +80,22 @@ export const taskGitLabWorkItemListSchema = z.looseObject({
  * response')` reached the screen as its own copy; the same payloads are now named as an
  * incompatible `linear.searchIssues` / `linear.listIssues` reply.
  *
- * `id` is the only requirement, because it is the row key (mobile-tasks-item-mapping.ts:293) and
- * because it is the ONLY member the recorded smart-search success carries: that fixture's issues
- * are `{ id: 'issue-1' }`. `state` and `team` are read unguarded downstream
- * (mobile-tasks-item-mapping.ts:296-:297) but are left optional for exactly that reason — a
- * requirement here would drop every row out of a partition main renders.
+ * Required: `id`, `state.name`, `team.name` and `priority`. `createLinearTask` reads
+ * `issue.state.name` and `issue.team.name` with no guard (mobile-tasks-item-mapping.ts:296-297),
+ * so a row without either is a TypeError the moment the row is mapped, and
+ * `getLinearPriorityRank(issue.priority)` feeds `a.priority - b.priority`
+ * (mobile-tasks-reviewer-linear.ts:99-101), where an absent priority makes the whole comparator
+ * NaN and orders the reviewer list arbitrarily. All four are non-optional on the host's own type
+ * (src/shared/linear/issue-types.ts:3-33), which is what `linear.searchIssues` and
+ * `linear.listIssues` return (linear.ts:50-56, linear-issue-list-method.ts:5-16).
+ *
+ * The rest are typed and optional because none of them can throw: `identifier`, `title` and
+ * `updatedAt` are interpolated or handed to `Intl.Collator`, which coerce rather than crash.
+ *
+ * The earlier version of this schema required `id` alone, on the grounds that the recorded
+ * smart-search rows were `{ id: 'issue-1' }`. Those rows were a fixture defect, not evidence: no
+ * Linear issue the host can build lacks `state` or `team`. The fixtures now carry real rows and
+ * main's rendering of them is recorded before this requirement lands.
  */
 const linearIssueRow = z.looseObject({
   id: z.string(),
@@ -90,15 +103,9 @@ const linearIssueRow = z.looseObject({
   title: itemText('title'),
   url: itemText('url'),
   updatedAt: itemText('updatedAt'),
-  priority: itemCount('priority'),
-  state: salvagedOptional(
-    'state',
-    z.looseObject({ name: itemText('name'), color: itemText('color'), type: itemText('type') })
-  ),
-  team: salvagedOptional(
-    'team',
-    z.looseObject({ id: itemText('id'), name: itemText('name'), key: itemText('key') })
-  )
+  priority: z.number(),
+  state: z.looseObject({ name: z.string(), color: itemText('color'), type: itemText('type') }),
+  team: z.looseObject({ id: itemText('id'), name: z.string(), key: itemText('key') })
 })
 
 export const taskLinearIssueListSchema = z.union([
@@ -111,8 +118,11 @@ export const taskLinearIssueListSchema = z.union([
  *
  * Null is preserved rather than refused: both `github.workItem` and `gitlab.workItemByPath` answer
  * it for a number that does not resolve, and every consumer already spells `item ? … : null`
- * (smart-source-paste-intent.ts:151/:171/:188). Nothing inside is required, because the recorded
- * `tw-paste-lookup-resolved` items are `{ number: 12, title: 'twelve' }` and `{ iid: 7, title:
- * 'seven' }` — the GitLab one does not even carry `number`.
+ * (smart-source-paste-intent.ts:151/:171/:188).
+ *
+ * The row is the same `workItemRow`, with no `iid` extension: neither GitHubWorkItem nor
+ * GitLabWorkItem declares one, the GitLab consumers all build their `iid` param out of
+ * `item.source.number` (use-mobile-tasks-gitlab-github-status-actions.tsx:50 and four siblings),
+ * and the `{ iid: 7 }` the fixture used to record was the same defect as the Linear `{ id }` rows.
  */
-export const taskWorkItemLookupSchema = workItemRow.extend({ iid: itemCount('iid') }).nullable()
+export const taskWorkItemLookupSchema = workItemRow.nullable()

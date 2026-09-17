@@ -34,6 +34,16 @@ describe('project envelopes', () => {
     })
   })
 
+  it('drops a project row with no title, which the picker search lowercases unguarded', () => {
+    const row = { owner: 'owner', ownerType: 'organization', number: 3, title: 'Board' }
+    const { title: _title, ...noTitle } = row
+    const parsed = taskProjectAccessibleListSchema.safeParse({
+      ok: true,
+      projects: [row, noTitle]
+    })
+    expect(parsed.success && parsed.data).toMatchObject({ projects: [row] })
+  })
+
   it('requires the message the refusal arm is thrown with', () => {
     const parsed = taskProjectAccessibleListSchema.safeParse({
       ok: false,
@@ -76,12 +86,12 @@ describe('ownerType is a closed enum', () => {
     const parsed = taskProjectAccessibleListSchema.safeParse({
       ok: true,
       projects: [
-        { owner: 'a', ownerType: 'organization', number: 1 },
-        { owner: 'b', ownerType: 'enterprise', number: 2 }
+        { owner: 'a', ownerType: 'organization', number: 1, title: 'A' },
+        { owner: 'b', ownerType: 'enterprise', number: 2, title: 'B' }
       ]
     })
     expect(parsed.success && parsed.data).toMatchObject({
-      projects: [{ owner: 'a', ownerType: 'organization', number: 1 }]
+      projects: [{ owner: 'a', ownerType: 'organization', number: 1, title: 'A' }]
     })
   })
 })

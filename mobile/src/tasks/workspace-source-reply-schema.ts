@@ -24,11 +24,19 @@ const sourceText = (name: string) => salvagedOptional(name, z.string())
  * The SSH connection record, answered under a `state` member by both `ssh.connect` and
  * `ssh.getState`.
  *
- * All four members SshConnectionState declares are required, and every recorded reply carries
- * them (`tw-workspace-ssh-connected`, `tw-workspace-ssh-not-ready`, `tw-workspace-sparse-saved`,
- * `files-ownership-ssh`). They have to be: the drawer publishes the record into state and renders
- * it, and `error` is a tri-state the UI shows — `null` means "connected cleanly", a string is the
- * failure text, and the two are not interchangeable.
+ * Only `targetId` and `status` are required, and only those two are read: the gate matches
+ * `state.targetId` against the repo's connection id and tests `state.status`
+ * (workspace-ssh-gate.ts:44-46). `error` is read as `matchingState?.error ?? null` (:51), already
+ * guarded and null-collapsed, and nothing anywhere reads `reconnectAttempt`.
+ *
+ * They are optional rather than required BECAUSE nothing reads them. `state` is a
+ * `salvagedOptional`, so one bad member drops the whole record, and the connect path's fallback for
+ * a dropped record is `fallbackSshState(connectionId, 'connected', null)`
+ * (use-new-workspace-execution-target.ts:124) — a reply of
+ * `{ targetId, status: 'auth-failed', error: 'bad key' }` with `reconnectAttempt` omitted would
+ * show the drawer as CONNECTED. Requiring a member no reader touches converts a partial record into
+ * the most dangerous verdict this schema can reach, so the two unread members degrade individually
+ * and the record survives with the status it came with.
  *
  * `status` is an OPEN enum whose eight arms are SshConnectionStatus verbatim, arm for arm
  * (src/shared/ssh-types.ts:167-175), so nothing the current host can send degrades at all. It is a
@@ -61,8 +69,8 @@ export const sshConnectionStateSchema = z
         .looseObject({
           targetId: z.string(),
           status: openEnum(SSH_CONNECTION_STATUS, 'disconnected'),
-          error: z.string().nullable(),
-          reconnectAttempt: z.number(),
+          error: salvagedOptional('error', z.string().nullable()),
+          reconnectAttempt: salvagedOptional('reconnectAttempt', z.number()),
           connectionGeneration: salvagedOptional('connectionGeneration', z.number())
         })
         .nullable()
@@ -121,17 +129,27 @@ export const repoSetupHooksSchema = z.looseObject({
 /**
  * One saved sparse-checkout preset.
  *
- * `id` alone is required: it is what the picker selects by and what the save path dedupes on
- * (use-mobile-tasks-workspace-sparse-actions.tsx:93/:98). `repoId`, `createdAt` and `updatedAt`
- * are declared non-optional by SparsePreset but absent from the recorded preset
- * (`tw-workspace-source-presets`, `{ id: 'p1', name: 'docs', directories: ['docs'] }`), so they
- * are typed and optional — defaulting them would put numbers in the drawer's recorded state that
- * main never had.
+ * `id`, `name` and `directories` are required, and all three are read with no guard:
+ * `id` selects and dedupes (use-mobile-tasks-workspace-sparse-actions.tsx:93/:98), `name` is sorted
+ * with `left.name.localeCompare(right.name)` (mobile-tasks-project-workspace-types.ts:127) and
+ * lowercased in the drawer (use-mobile-tasks-workspace-create-projection.tsx:118), and
+ * `directories` is joined twice (mobile-tasks-workspace-option-pickers.tsx:171,
+ * use-mobile-tasks-workspace-sparse-actions.tsx:60). All three are non-optional on SparsePreset
+ * (src/shared/worktree/create-types.ts:82-89) and all three are in the recorded preset. A row
+ * missing one drops out of the list instead of throwing inside a `useMemo`.
+ *
+ * The sort is worth naming: `Array.prototype.sort` skips the comparator on a one-element array, so
+ * a single bad preset renders fine and two do not.
+ *
+ * `repoId`, `createdAt` and `updatedAt` are declared non-optional by SparsePreset but absent from
+ * the recorded preset (`tw-workspace-source-presets`,
+ * `{ id: 'p1', name: 'docs', directories: ['docs'] }`), so they are typed and optional —
+ * defaulting them would put numbers in the drawer's recorded state that main never had.
  */
 const sparsePreset = z.looseObject({
   id: z.string(),
-  name: sourceText('name'),
-  directories: salvagedOptional('directories', salvagingArray(z.string())),
+  name: z.string(),
+  directories: salvagingArray(z.string()),
   repoId: sourceText('repoId'),
   createdAt: salvagedOptional('createdAt', z.number()),
   updatedAt: salvagedOptional('updatedAt', z.number())

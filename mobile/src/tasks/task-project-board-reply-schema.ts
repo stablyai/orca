@@ -62,16 +62,22 @@ const optionalOk = salvagedOptional('ok', z.boolean())
  *
  * `owner` is required because githubProjectIdentityKey calls `.toLowerCase()` on it
  * (src/shared/github/project-identity.ts:13) for every row the picker stores or compares, and
- * `ownerType`/`number` are the rest of that key. A row without them is dropped rather than failing
- * the list, which keeps the banner and the remaining projects. Everything else is optional: the
- * recorded reply (`tk-project-board-load`, `github.project.listAccessible#1`) carries no `id`,
- * `url` or `source`, so requiring what the shared type declares would refuse main's own fixture.
+ * `ownerType`/`number` are the rest of that key. `title` is required for the same reason one step
+ * later: the picker's search spells `project.title.toLowerCase()` with no guard
+ * (use-mobile-tasks-provider-view-projection.tsx:213), it is non-optional on GitHubProjectSummary
+ * (src/shared/github/project-types.ts:200-209), and the recorded reply carries it. A row without
+ * any of the four is dropped rather than failing the list, which keeps the banner and the
+ * remaining projects.
+ *
+ * `id`, `url` and `source` stay undeclared: the recorded reply (`tk-project-board-load`,
+ * `github.project.listAccessible#1`) carries none of them, so requiring what the shared type
+ * declares would refuse main's own fixture.
  */
 const projectSummary = z.looseObject({
   owner: z.string(),
   ownerType: z.enum(PROJECT_OWNER_TYPE),
   number: z.number(),
-  title: projectMessage('title'),
+  title: z.string(),
   host: projectMessage('host')
 })
 

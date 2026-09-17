@@ -58,7 +58,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     if (!result.ok) {
       throw new Error(result.error.message)
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the owner/ownerType/number a project is keyed by and types the rest; `id`, `url` and `source` are declared non-optional by GitHubProjectSummary but absent from the reply main records, so defaulting them here would put bytes in the picker's state the host never sent.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the owner/ownerType/number a project is keyed by plus the `title` the picker search lowercases, and types the rest; `id`, `url` and `source` are declared non-optional by GitHubProjectSummary but absent from the reply main records, so defaulting them here would put bytes in the picker's state the host never sent.
     setGithubProjects(result.projects as GitHubProjectSummary[])
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same shape rule for the per-org banner rows.
     setGithubProjectPartialFailures((result.partialFailures ?? []) as GitHubProjectPartialFailure[])

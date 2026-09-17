@@ -146,11 +146,77 @@ describe('error is a tri-state the drawer renders', () => {
     expect(parsed.success && parsed.data).toMatchObject({ error: 'auth failed' })
   })
 
-  it('drops the record when error is absent, because the drawer renders it unguarded', () => {
+  it('keeps a record that omits error, because no reader needs it', () => {
     const parsed = sshConnectionStateSchema.safeParse({
-      state: { targetId: 'ssh-1', status: 'connected', reconnectAttempt: 0 }
+      state: { targetId: 'ssh-1', status: 'auth-failed', reconnectAttempt: 0 }
+    })
+    expect(parsed.success && parsed.data).toMatchObject({ status: 'auth-failed' })
+  })
+})
+
+// The record is a salvagedOptional, so any fatal member drops the WHOLE record, and the connect
+// path's fallback for a dropped record is `fallbackSshState(connectionId, 'connected', null)`.
+// Requiring a member nothing reads would therefore turn a partial reply into a connected drawer.
+describe('a partial record survives with the status it came with', () => {
+  it('keeps a record that omits reconnectAttempt, which nothing reads', () => {
+    const parsed = sshConnectionStateSchema.safeParse({
+      state: { targetId: 'ssh-1', status: 'auth-failed', error: 'bad key' }
+    })
+    expect(parsed.success && parsed.data).toMatchObject({
+      targetId: 'ssh-1',
+      status: 'auth-failed',
+      error: 'bad key'
+    })
+  })
+
+  it('never lets a partial record reach the gate as connected', () => {
+    const parsed = sshConnectionStateSchema.safeParse({
+      state: { targetId: 'ssh-1', status: 'auth-failed', error: 'bad key' }
+    })
+    const gate = deriveWorkspaceSshGate({
+      connectionId: 'ssh-1',
+      connecting: false,
+      state: parsed.success ? (parsed.data ?? null) : null
+    })
+    expect(gate.status).toBe('auth-failed')
+    expect(gate.requiresConnection).toBe(true)
+  })
+
+  it('still drops the record for a member the gate does read', () => {
+    const parsed = sshConnectionStateSchema.safeParse({
+      state: { status: 'connected', error: null, reconnectAttempt: 0 }
     })
     expect(parsed.success && parsed.data).toBeUndefined()
+  })
+})
+
+describe('a sparse preset requires what the drawer sorts and joins', () => {
+  const preset = { id: 'p1', name: 'docs', directories: ['docs'] }
+
+  it('reads the recorded preset whole', () => {
+    expect(repoSparsePresetListSchema.safeParse({ presets: [preset] })).toMatchObject({
+      success: true,
+      data: [preset]
+    })
+  })
+
+  it('drops a preset with no name, which the list sorts with localeCompare', () => {
+    const { name: _name, ...noName } = preset
+    const parsed = repoSparsePresetListSchema.safeParse({ presets: [preset, noName] })
+    expect(parsed.success && parsed.data).toEqual([preset])
+  })
+
+  it('drops a preset with no directories, which the picker joins', () => {
+    const { directories: _directories, ...noDirectories } = preset
+    const parsed = repoSparsePresetListSchema.safeParse({ presets: [preset, noDirectories] })
+    expect(parsed.success && parsed.data).toEqual([preset])
+  })
+
+  it('drops a non-string directory and keeps the preset', () => {
+    const parsed = repoSparsePresetListSchema.safeParse({
+      presets: [{ ...preset, directories: ['docs', 7] }]
+    })
+    expect(parsed.success && parsed.data).toEqual([preset])
   })
 })
 
