@@ -16,6 +16,26 @@ describe('rewind recovery of newer durable records', () => {
       blocks: [{ type: 'text', text: '{"type":"future-block"}' }]
     })
   })
+
+  it('preserves background-task blocks across rewind recovery', () => {
+    const body = {
+      kind: 'message' as const,
+      role: 'system',
+      blocks: [
+        { type: 'text' as const, text: 'Started background command "sleep 20"' },
+        {
+          type: 'background-task' as const,
+          taskId: 'task-1',
+          kind: 'command',
+          label: 'sleep 20',
+          state: 'working'
+        }
+      ]
+    }
+
+    expect(restoreRewindJournalBody(body)).toEqual(body)
+  })
+
   it('preserves unknown state as evidence rather than inventing success or pending work', () => {
     const body = {
       kind: 'tool-call' as const,

@@ -24,6 +24,7 @@ import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budg
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
+import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -54,6 +55,8 @@ export function errorResponse(
 // on — expanding or renaming entries without updating the CLI would silently
 // change user-visible error codes.
 const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  WORKTREE_CREATE_COLLISION_CODE,
+  'agent_launch_replay_unsupported',
   'runtime_unavailable',
   'selector_not_found',
   'selector_ambiguous',
@@ -80,6 +83,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  WORKTREE_CREATE_COLLISION_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',
   'run_required',

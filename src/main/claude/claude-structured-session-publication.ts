@@ -19,6 +19,7 @@ export function createClaudeSessionPublication(input: {
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
   events: ClaudeSession['events']
+  unbindReadingControl?: () => void
   process: AgentSessionAcquisition['process']
   linkId?: string
   observedAt: number
@@ -83,7 +84,8 @@ export function createClaudeSessionPublication(input: {
       ]),
       restoreSkippedOptions: new Set(),
       translator: input.translator,
-      events: input.events
+      events: input.events,
+      ...(input.unbindReadingControl ? { unbindReadingControl: input.unbindReadingControl } : {})
     }
   }
 }

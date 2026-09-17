@@ -7,6 +7,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.subscribe',
   'accounts.unsubscribe',
   'agent.launch',
+  'agent.launchReplay',
   'aiVault.listSessions',
   'aiVault.searchSessions',
   'aiVault.searchStatus',

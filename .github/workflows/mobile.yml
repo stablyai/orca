@@ -9,6 +9,18 @@ on:
       - ready_for_review
     paths:
       - 'mobile/**'
+      # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
+      - 'src/main/agent-launch/**'
+      - 'src/main/runtime/rpc/**'
+      - 'src/main/runtime/runtime-rpc/**'
+      - 'src/main/runtime/runtime-rpc.ts'
+      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/orca-runtime.ts'
+      - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/native-chat/agent-session-wire/**'
+      - 'src/shared/agent-launch-*.ts'
+      - 'src/shared/agent-session-*.ts'
+      - 'src/shared/new-workspace/worktree-create-collision.ts'
       # Why: the mobile terminal link parsers are conformance-tested against
       # these shared fixtures; desktop-side fixture edits must re-run this suite.
       - 'src/shared/terminal-file-link-conformance.ts'
@@ -21,11 +33,6 @@ on:
       # schema edit anywhere under here changes mobile's types, so a desktop-only
       # change can break mobile's typecheck with no other mobile signal.
       - 'src/shared/rpc-contract/**'
-      # Why: the catalog above holds params only. This file is the sole holder of
-      # the agent.launch RESULT shape, and mobile imports it as a value, not just
-      # a type. CROSS_VERSION_WIRE_PREFIXES already treats it as wire-critical, so
-      # without this one gate classes it that way while this one cannot see it.
-      - 'src/shared/agent-launch-intent.ts'
       # Why: this job holds the only checks that load the Fastfile, so edits to
       # it or to the release workflow it guards must re-run them.
       - '.github/workflows/mobile.yml'

@@ -1,3 +1,8 @@
+import { z } from 'zod'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult
+} from '../../../src/shared/agent-launch-intent'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
@@ -9,7 +14,9 @@ import { taskRuntimeStatusSchema } from './task-runtime-reply-schema'
 
 // Creating a workspace from a task. Checked against workspace-create-reply-schema.ts; the
 // create-time status probe reads through the Tasks screen's own status schema, because the two
-// operations differ in acceptance and not in what the host sends.
+// operations differ in acceptance and not in what the host sends. The replay-required launch keeps
+// the shared `isAgentLaunchResult` guard it shipped with rather than the receipt schema beside it:
+// a replayed receipt is the host's own record, so it is held to the full shared contract.
 
 /**
  * worktree.create. A lost reply is *unknown*, never failed — `worktree-create-retry.ts` replays on
@@ -39,6 +46,16 @@ export const agentLaunchRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('agent-launch-receipt', agentLaunchCreateReceiptSchema)
+  })
+)
+
+export const agentLaunchReplayRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch-replay',
+    method: 'agent.launchReplay',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-launch-receipt', z.custom<AgentLaunchResult>(isAgentLaunchResult))
   })
 )
 

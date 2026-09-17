@@ -24,7 +24,7 @@ export async function createBlankWorkspace(args: {
   nameWasGenerated: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   /** Whether the host can settle the surface itself; false keeps the agent-first create. */
-  agentLaunchSupported: boolean | Promise<boolean>
+  agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }): Promise<WorktreeCreateResult> {
   const agentLaunch: WorktreeCreateAgentLaunch | undefined = args.createdWithAgentId
     ? { agent: args.createdWithAgentId, supported: args.agentLaunchSupported }

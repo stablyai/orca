@@ -17236,6 +17236,7 @@
         "command": "Background command",
         "monitor": "Background monitor",
         "task": "Background task",
+        "outputFile": "Output: {{value0}}",
         "detailsUnavailable": "Task details are unavailable for this session.",
         "countAgentsOne": "1 agent",
         "countAgentsMany": "{{value0}} agents",

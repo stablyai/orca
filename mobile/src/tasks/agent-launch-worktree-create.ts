@@ -20,10 +20,17 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 
+/** What this host's `agent.launch` can do, in the `| false` shape `worktree.create`'s own
+ *  idempotency probe already uses: `false` is an older host with no `agent.launch` at all. */
+export type AgentLaunchSupport = {
+  /** The host deduplicates operationId durably and refuses unknown or expired outcomes. */
+  replay: boolean
+}
+
 export type WorktreeCreateAgentLaunch = {
   agent: TuiAgent
   /** Resolved before the first create: an older host has no `agent.launch` at all. */
-  supported: boolean | Promise<boolean>
+  supported: AgentLaunchSupport | false | Promise<AgentLaunchSupport | false>
 }
 
 /** `worktreeId` is tied to the shared contract so a change to it fails this reader's typecheck
@@ -35,10 +42,12 @@ export type AgentLaunchCreateOutcome = {
 
 export function agentLaunchCreateParams(
   agent: TuiAgent,
-  create: WorkspaceCreateParams
+  create: WorkspaceCreateParams,
+  operationId?: string | null
 ): RpcSendParams<'agent.launch'> {
   return {
     agent,
+    ...(operationId ? { operationId } : {}),
     target: { kind: 'create-worktree', create: withoutReservedAgentCreateFields(create) }
   }
 }

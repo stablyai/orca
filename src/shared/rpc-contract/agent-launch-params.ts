@@ -69,3 +69,6 @@ export const AgentLaunch = z.object({
 })
 
 export type AgentLaunchParams = z.infer<typeof AgentLaunch>
+
+// A distinct method prevents an older receiver from silently dropping the replay requirement.
+export const AgentLaunchReplay = AgentLaunch.required({ operationId: true })

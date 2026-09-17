@@ -257,18 +257,12 @@ export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remot
 // v2 makes prompt delivery an outcome union and top-level warnings the only supported shape.
 export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
 
-/**
- * The host admits `agent.launch` through the durable operation ledger, so a caller that names its
- * launch with `operationId` gets exactly one execution and a recorded answer on every retry.
- *
- * This one is negotiated host-to-client, unlike `agent.launch.v1`, because of how RPC params
- * degrade: an older host strips `operationId` as an unknown key and runs the launch anyway, with no
- * error. A client that retried on the strength of having sent an id would get a second agent and
- * never learn why. So `operationId` is optional on the wire — shipped mobile sends none and keeps
- * today's behaviour verbatim — and a client may only treat a retry as safe once the host has
- * advertised this.
- */
+// Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
 export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
+
+// agent.launchReplay requires the ledger; older replacement hosts must reject the method.
+export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
+  'agent.launch.replay-required.v1' as const
 
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
@@ -378,7 +372,8 @@ export const RUNTIME_CAPABILITIES = [
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

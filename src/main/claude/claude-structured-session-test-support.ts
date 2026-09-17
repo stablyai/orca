@@ -74,6 +74,7 @@ export function fakeClaude(
     const route = routes[subtype]
     return route ? route(params) : undefined
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake implements the complete connection contract below.
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
@@ -83,6 +84,8 @@ export function fakeClaude(
       closeCount: 0,
       pid: 4321,
       closed: false,
+      pauseReading: () => {},
+      resumeReading: () => {},
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (options.exitBeforeInit) {

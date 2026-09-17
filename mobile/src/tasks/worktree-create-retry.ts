@@ -2,7 +2,11 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { agentLaunchRun, worktreeCreateRun } from './mobile-workspace-create-operations'
+import {
+  agentLaunchRun,
+  agentLaunchReplayRun,
+  worktreeCreateRun
+} from './mobile-workspace-create-operations'
 import { waitForRpcClientReconnected } from '../transport/rpc-client-reconnect-wait'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
@@ -17,6 +21,7 @@ import {
   readAgentLaunchCreateOutcome,
   type WorktreeCreateAgentLaunch
 } from './agent-launch-worktree-create'
+import { structuredSessionOperationId } from '../session/structured-session-operation-id'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 import {
@@ -66,6 +71,8 @@ export type CreateWorktreeWithNameRetryArgs = {
   maxAttempts?: number
   // Injected in tests; production mints a fresh idempotency key per candidate.
   mintMutationId?: () => string
+  // Injected in tests; the replay-required launch keeps one identity across all deliveries.
+  mintLaunchOperationId?: () => string
 }
 
 // Creates a worktree, retrying with a numeric suffix on a name-collision error.
@@ -82,9 +89,10 @@ export async function createWorktreeWithNameRetry(
   const worktreeCreateIdempotency = await args.worktreeCreateIdempotency
   // Why: the route must settle before the first create, so a name-collision retry cannot land on
   // a different method than the attempt it replaces.
-  let launchAgent = await resolveAgentLaunchRoute(args.agentLaunch)
+  let launch = await resolveAgentLaunchRoute(args.agentLaunch)
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
+  const mintLaunchOperationId = args.mintLaunchOperationId ?? structuredSessionOperationId
   let lastError: string | null = null
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const candidateName = args.nameWasGenerated
@@ -97,22 +105,38 @@ export async function createWorktreeWithNameRetry(
     const params = worktreeCreateIdempotency
       ? { ...candidateParams, clientMutationId: mintMutationId() }
       : candidateParams
-    let response = await sendWorktreeCreateResilient(
+    // Replay-required launches own suffix selection on the host; this id names the entire create.
+    const launchOperationId = launch?.replay ? mintLaunchOperationId() : null
+    const sent = await sendWorktreeCreateResilient(
       client,
-      launchAgent,
+      launch?.agent ?? null,
+      launchOperationId,
       params,
       worktreeCreateIdempotency
     )
-    if (!response.ok && launchAgent && isAgentLaunchUnsupportedRefusal(response.error)) {
+    let response = sent.response
+    if (
+      !response.ok &&
+      !sent.replayed &&
+      launch &&
+      (launchOperationId
+        ? response.error.code === 'method_not_found' ||
+          response.error.code === 'forbidden' ||
+          response.error.code === 'agent_launch_replay_unsupported'
+        : isAgentLaunchUnsupportedRefusal(response.error))
+    ) {
       // The probe said the host knows `agent.launch` but it refused the call — most likely this
       // client's capability list had not landed yet. Downgrade for good rather than fail a create.
-      launchAgent = null
-      response = await sendWorktreeCreateResilient(client, null, params, worktreeCreateIdempotency)
+      launch = null
+      response = (
+        await sendWorktreeCreateResilient(client, null, null, params, worktreeCreateIdempotency)
+      ).response
     }
+    // Ledger refusals can follow workspace creation or an expired receipt; never retry unnamed.
     // Why the raw refusal: the retry decision below is `isRetryableWorktreeCreateConflict` over the
     // host's message, and no acceptance policy carries a refusal message through without throwing.
     if (response.ok) {
-      const created = readCreateResult(response, launchAgent !== null)
+      const created = readCreateResult(response, launch)
       if (created) {
         return {
           worktreeId: created.worktreeId,
@@ -124,7 +148,8 @@ export async function createWorktreeWithNameRetry(
       break
     }
     lastError = response.error.message
-    if (!isRetryableWorktreeCreateConflict(lastError ?? '')) {
+    // The replay-required host already exhausted its candidates; only legacy hosts need this loop.
+    if (launch?.replay || !isRetryableWorktreeCreateConflict(lastError ?? '')) {
       break
     }
   }
@@ -133,11 +158,12 @@ export async function createWorktreeWithNameRetry(
 
 async function resolveAgentLaunchRoute(
   launch: WorktreeCreateAgentLaunch | undefined
-): Promise<TuiAgent | null> {
+): Promise<{ agent: TuiAgent; replay: boolean } | null> {
   if (!launch) {
     return null
   }
-  return (await launch.supported) ? launch.agent : null
+  const support = await launch.supported
+  return support ? { agent: launch.agent, replay: support.replay } : null
 }
 
 // A launch receipt carries no display name, so the candidate stands in; the session route
@@ -145,10 +171,11 @@ async function resolveAgentLaunchRoute(
 // a create that seated the workspace but could not start the agent surface.
 function readCreateResult(
   response: RpcResponse,
-  launched: boolean
+  launch: { replay: boolean } | null
 ): { worktreeId: string; displayName?: string; warning?: string } | null {
-  if (launched) {
-    return readAgentLaunchCreateOutcome(agentLaunchRun.interpret(response))
+  if (launch) {
+    const operation = launch.replay ? agentLaunchReplayRun : agentLaunchRun
+    return readAgentLaunchCreateOutcome(operation.interpret(response))
   }
   const created = worktreeCreateRun.interpret(response)
   // The empty-id arm stays reachable: the schema types `worktree.id` as a string without a minimum
@@ -171,16 +198,24 @@ function readCreateResult(
 
 // Sends the create, re-issuing whenever the request went delivery-ambiguous —
 // the frame reached the wire but no response came back, so the host may already have
-// built the worktree. The shared clientMutationId keeps the retry idempotent host-side —
-// `agent.launch` carries it in the same create payload, so a replayed launch reconciles onto the
-// first worktree and can at worst add a second surface inside it, never a second workspace.
+// built the worktree. Every arm below re-sends the SAME two names: a new one would be a new
+// operation and would defeat both mechanisms.
+//
+// On the `worktree.create` route the shared clientMutationId keeps the retry idempotent host-side.
+// On the launch route it does NOT reach the ledger: `agent.launch` caches the whole launch — the
+// worktree AND the surface — under that id for 60s, so inside that window a replay adds neither,
+// and outside it adds both. `launchOperationId` is what makes the replay durably safe, and it is
+// only sent when the host advertised the ledger.
 // A definite failure (never sent, or a server error response) is returned to the caller untouched.
 async function sendWorktreeCreateResilient(
   client: RpcClient,
   launchAgent: TuiAgent | null,
+  launchOperationId: string | null,
   params: WorkspaceCreateParams,
   worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
-): Promise<RpcResponse> {
+): Promise<{ response: RpcResponse; replayed: boolean }> {
+  // Only the selected method's receipt can authorize replay after an ambiguous delivery.
+  const replaySupport = launchAgent ? launchOperationId : worktreeCreateIdempotency
   let migrationRetry = 0
   let ambiguousRetry = 0
   const firstSentAt = Date.now()
@@ -189,15 +224,28 @@ async function sendWorktreeCreateResilient(
     try {
       // `request` is the transport promise itself, so a delivery-unknown rejection reaches the
       // catch below as the object the transport marked — the WeakSet cannot see through a wrapper.
-      return await (launchAgent
-        ? agentLaunchRun.request(client, agentLaunchCreateParams(launchAgent, params), {
-            timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
-          })
+      const response = await (launchAgent
+        ? launchOperationId
+          ? agentLaunchReplayRun.request(
+              client,
+              {
+                ...agentLaunchCreateParams(launchAgent, params),
+                operationId: launchOperationId
+              },
+              { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+            )
+          : agentLaunchRun.request(
+              client,
+              agentLaunchCreateParams(launchAgent, params, launchOperationId),
+              { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+            )
         : worktreeCreateRun.request(client, params, {
             timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
           }))
+      // A refusal on the replacement connection says nothing about what the first call created.
+      return { response, replayed: migrationRetry > 0 || ambiguousRetry > 0 }
     } catch (error) {
-      if (!worktreeCreateIdempotency) {
+      if (!replaySupport) {
         throw error
       }
       if (isLogicalClientCutoverError(error)) {
@@ -212,29 +260,21 @@ async function sendWorktreeCreateResilient(
       if (!isRpcDeliveryUnknown(error) || ambiguousRetry >= WORKTREE_CREATE_AMBIGUOUS_MAX_RETRIES) {
         throw error
       }
-      // Why: every transport path that reports a *drop* leaves 'connected' before the
-      // rejection reaches us (rpc-client.ts:675/695/1213 set state first or reject via
-      // queueMicrotask; the relay's fail() publishes synchronously). So still being
-      // 'connected' here means the socket was healthy the whole time and only the
-      // response went missing — the request-timeout path, which surfaces after
-      // WORKTREE_CREATE_TIMEOUT_MS. That says nothing about when the host actually
-      // resolved, so the dedupe record may be long gone and a replay would build a
-      // second worktree instead of reconciling. Fail the create instead.
-      if (client.getState() === 'connected') {
+      // A legacy cache may expire before a request timeout; durable receipts refuse unsafe replay.
+      if (typeof replaySupport !== 'string' && client.getState() === 'connected') {
         throw error
       }
-      // Computed once: a later ambiguity reads a fresher lastInboundAt from the
-      // replacement session, which would push the deadline past the record it respects.
-      replayDeadlineAt ??= resolveReplayDeadline(client, firstSentAt, worktreeCreateIdempotency)
+      // Keep the legacy deadline fixed; the host itself refuses expired durable operation IDs.
+      replayDeadlineAt ??=
+        typeof replaySupport === 'string'
+          ? Infinity
+          : resolveReplayDeadline(client, firstSentAt, replaySupport)
       const remainingWindowMs = replayDeadlineAt - Date.now()
       if (remainingWindowMs <= 0) {
         throw error
       }
       ambiguousRetry += 1
-      // Why: unlike a cutover, no replacement session exists yet — resending now
-      // would just hit the dead one, so wait for the transport to come back and
-      // surface the original ambiguity if it does not. Clamped to the window so the
-      // wait itself cannot carry the replay past the host's record.
+      // Disconnected transports must reconnect before resend; bound the wait even for durable IDs.
       if (
         !(await waitForRpcClientReconnected(
           client,

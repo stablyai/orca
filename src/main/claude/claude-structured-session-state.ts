@@ -170,6 +170,7 @@ export type ClaudeSession = {
   closeEnded?: boolean
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
+  unbindReadingControl?: () => void
 }
 
 export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {

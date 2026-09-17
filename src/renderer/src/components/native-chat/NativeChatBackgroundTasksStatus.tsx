@@ -45,7 +45,9 @@ function useNarrowStrip(ref: React.RefObject<HTMLDivElement | null>): boolean {
   return narrow
 }
 
-const KIND_ICONS = {
+/** Shared with the transcript row so a task reads as the same thing in the
+ *  strip above the composer and in the row that outlives it. */
+export const KIND_ICONS = {
   agent: Bot,
   command: SquareTerminal,
   monitor: Activity,

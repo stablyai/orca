@@ -27,11 +27,15 @@ import type {
   AgentLaunchTarget
 } from '../../../../shared/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
+import {
+  WorktreeCreateCollisionError,
+  WORKTREE_CREATE_COLLISION_CODE
+} from '../../../../shared/new-workspace/worktree-create-collision'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
-import { AgentLaunch, type AgentLaunchParams } from './agent-launch-schemas'
+import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 
@@ -184,6 +188,12 @@ type ActiveAgentLaunch = {
   promise: Promise<AgentLaunchResult>
 }
 
+class AgentLaunchExecutionError extends Error {
+  constructor(cause: unknown) {
+    super('agent_session_operation_unknown', { cause })
+  }
+}
+
 const activeAgentLaunchesByRuntime = new WeakMap<
   OrcaRuntimeService,
   Map<string, ActiveAgentLaunch>
@@ -218,13 +228,16 @@ async function executeReplaySafeAgentLaunch(
     await settleQuietly(admission.fail(agentLaunchFailureCode(error)))
     throw error
   }
-  // Any later failure may follow a created surface, so the claimed row must stay `unknown`.
-  const result = await runAgentLaunch(
-    intent,
-    context,
-    admission.attachOperationId,
-    admission.callerKey
-  )
+  // Only a typed pre-creation collision proves that the claimed launch had no effects.
+  let result: AgentLaunchResult
+  try {
+    result = await runAgentLaunch(intent, context, admission.attachOperationId, admission.callerKey)
+  } catch (error) {
+    if (error instanceof WorktreeCreateCollisionError) {
+      await settleQuietly(admission.fail(WORKTREE_CREATE_COLLISION_CODE))
+    }
+    throw new AgentLaunchExecutionError(error)
+  }
   // Settlement is bookkeeping; failure leaves the truthful `unknown` refusal for later retries.
   await settleQuietly(admission.settle(result))
   return result
@@ -258,6 +271,29 @@ function runReplaySafeAgentLaunch(
 
 export const AGENT_LAUNCH_METHODS = [
   defineMethod({
+    name: 'agent.launchReplay',
+    params: AgentLaunchReplay,
+    handler: async (params, context): Promise<AgentLaunchResult> => {
+      if (!supportsAgentLaunch(context)) {
+        throw new Error('agent_launch_replay_unsupported')
+      }
+      try {
+        return await runReplaySafeAgentLaunch(params, context)
+      } catch (error) {
+        // Nested failures cannot authorize another workspace, regardless of their message or code.
+        if (error instanceof AgentLaunchExecutionError) {
+          if (error.cause instanceof WorktreeCreateCollisionError) {
+            throw Object.assign(new Error(error.cause.message, { cause: error.cause }), {
+              code: WORKTREE_CREATE_COLLISION_CODE
+            })
+          }
+          throw new Error('agent_session_operation_unknown', { cause: error.cause })
+        }
+        throw error
+      }
+    }
+  }),
+  defineMethod({
     name: 'agent.launch',
     params: AgentLaunch,
     handler: async (params, context): Promise<AgentLaunchResult> => {
@@ -273,7 +309,10 @@ export const AGENT_LAUNCH_METHODS = [
           operationId: params.operationId
         },
         context
-      )
+      ).catch((error: unknown) => {
+        // Preserve the original error contract for callers of the optional-identity method.
+        throw error instanceof AgentLaunchExecutionError ? error.cause : error
+      })
     }
   })
 ]

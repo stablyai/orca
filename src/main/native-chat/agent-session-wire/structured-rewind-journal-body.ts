@@ -21,7 +21,12 @@ export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody
           (block.type === 'text' && 'text' in block) ||
           (block.type === 'tool-call' && 'name' in block && !('state' in block)) ||
           (block.type === 'tool-result' && 'output' in block) ||
-          block.type === 'image-ref'
+          block.type === 'image-ref' ||
+          (block.type === 'background-task' &&
+            'taskId' in block &&
+            'kind' in block &&
+            'label' in block &&
+            'state' in block)
         ) {
           return block
         }

@@ -47,6 +47,10 @@ import { resolveClaudeAcquisitionError } from './claude-structured-session-close
 import { readClaudeTranscriptEntryUuid } from './claude-tui-exit'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
+import {
+  bindClaudeJournalReadingControl,
+  createClaudeJournalFailureHandler
+} from './claude-structured-session-journal-control'
 
 export const CLAUDE_STRUCTURED_INIT_TIMEOUT_MS = 10_000
 
@@ -72,12 +76,8 @@ export async function acquireClaudeSession({
   }
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
-  const translator = createClaudeSessionJournalTranslator(
-    input.events,
-    prompts,
-    String(input.fence)
-  )
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
+  let unbindReadingControl: (() => void) | undefined
   let liveSession: ClaudeSession | null = null
   let observedLeafUuid: string | null = null,
     expectedProviderSessionId: string | null = null
@@ -85,6 +85,12 @@ export async function acquireClaudeSession({
   // this acquisition owns. Keep the check ahead of every stateful consumer.
   const initTimeoutMs = deps.initTimeoutMs ?? CLAUDE_STRUCTURED_INIT_TIMEOUT_MS
   const initDeadline = createClaudeInitDeadline(sessionId, initTimeoutMs)
+  const translator = createClaudeSessionJournalTranslator(
+    input.events,
+    prompts,
+    String(input.fence),
+    createClaudeJournalFailureHandler({ attempt, initDeadline, callbacks, sessionId })
+  )
 
   const rewind = new ClaudeRewindAttempt(input.rewind, input.rewind?.onProved)
   const onMessage = (message: Record<string, unknown>): void => {
@@ -198,6 +204,7 @@ export async function acquireClaudeSession({
       )
     )
     attempt.connection = connection
+    unbindReadingControl = bindClaudeJournalReadingControl(input.events, connection, translator)
     acquisitions.assertCurrent(sessionId, attempt)
     initDeadline.start()
     const [initialization, init] = await withAgentSessionCreatePhase(
@@ -259,6 +266,7 @@ export async function acquireClaudeSession({
         prompts,
         translator,
         events: input.events,
+        ...(unbindReadingControl ? { unbindReadingControl } : {}),
         process,
         acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
         options: acquisitionOptions.options,
@@ -284,6 +292,7 @@ export async function acquireClaudeSession({
     return acquired
   } catch (error) {
     initDeadline.clear()
+    unbindReadingControl?.()
     const acquisitionError = await resolveClaudeAcquisitionError({
       error,
       sessionId,
