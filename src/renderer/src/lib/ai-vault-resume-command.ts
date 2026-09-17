@@ -21,6 +21,7 @@ import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -126,13 +127,20 @@ function buildAiVaultResumeForWorktree(
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
+  const sessionOptions = resolveNativeChatLaunchSessionOptions(
+    args.state.settings?.nativeChatSessionOptions,
+    args.session.agent
+  )
+  const isLocalSession =
+    !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&
     args.session.agent !== 'omp' &&
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
-    !args.commandOverride?.trim()
+    !args.commandOverride?.trim() &&
+    !sessionOptions
   ) {
     return {
       command: args.session.resumeCommand,
@@ -147,8 +155,6 @@ function buildAiVaultResumeForWorktree(
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
-  const isLocalSession =
-    !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
@@ -169,6 +175,7 @@ function buildAiVaultResumeForWorktree(
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
       },
       platform,
+      isRemote: !isLocalSession,
       shell: liveShell,
       agentArgs: resolveTuiAgentLaunchArgs(
         args.session.agent,
@@ -177,7 +184,8 @@ function buildAiVaultResumeForWorktree(
       agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
-        : {})
+        : {}),
+      ...(sessionOptions ? { sessionOptions, sessionOptionsOverrideAgentArgs: true } : {})
     })
     if (startupPlan) {
       return {
