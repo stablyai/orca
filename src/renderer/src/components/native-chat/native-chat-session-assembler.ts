@@ -12,7 +12,11 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from '../../../../shared/native-chat-image-transcript-markers'
-import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
+import {
+  isAnchoredPendingMessageId,
+  isLaunchPromptMessageId,
+  isPendingMessageId
+} from './native-chat-pending'
 
 /** Messages grouped by source. Higher-priority sources (transcript > hook >
  *  scrape) supersede lower ones when they describe the same turn. */
@@ -98,6 +102,10 @@ function messageSortRank(message: NativeChatMessage): number {
   if (message.id === NATIVE_CHAT_STREAMING_ID) {
     return 1
   }
+  // An anchored echo owns a position between real rows, so it sorts as content.
+  if (isAnchoredPendingMessageId(message.id)) {
+    return 0
+  }
   if (isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
     return 2
   }
@@ -117,6 +125,12 @@ export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): num
   const bt = b.timestamp ?? Number.NEGATIVE_INFINITY
   if (at !== bt) {
     return at - bt
+  }
+  // An anchored echo carries its anchor's timestamp so it stays beside it. Ties
+  // must then keep the order it was placed in — breaking on id would sort it
+  // away from the row it was sent against. `sort` is stable, so 0 is enough.
+  if (isAnchoredPendingMessageId(a.id) || isAnchoredPendingMessageId(b.id)) {
+    return 0
   }
   if (a.id < b.id) {
     return -1

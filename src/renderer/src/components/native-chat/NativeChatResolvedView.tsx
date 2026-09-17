@@ -27,6 +27,7 @@ import {
   writePendingSendCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import { nativeChatMessagesWithPending } from './native-chat-pending-anchor'
 import {
   appendCommandMarkerCache,
   applyCommandMarkerBoundaries,
@@ -283,12 +284,13 @@ export function NativeChatResolvedView({
     }
     return {
       ...sessionAfterCommandBoundaries,
-      messages: [
-        ...sessionAfterCommandBoundaries.messages,
-        ...commandMarkersAsMessages(commandMarkers),
-        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingMessages
-      ]
+      messages: nativeChatMessagesWithPending(
+        sessionAfterCommandBoundaries.messages,
+        pending,
+        pendingMessages,
+        commandMarkersAsMessages(commandMarkers),
+        streamingText ? [nativeChatStreamingMessage(streamingText)] : []
+      )
     }
   }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
