@@ -4,17 +4,15 @@
  * Every relay build installs to `~/.orca-remote/relay-<fullVersion>/` and binds its socket
  * inside it, so the socket path moves on every app update even though the filename component
  * is stable. After an update the new client binds a path the previous relay's PTYs were never
- * associated with, and the previous relay is never contacted again (#13614, #13852). Nothing
- * signals it and nothing reclaims it: with `--grace-time 0` it keeps its shells and agents
- * alive forever.
+ * associated with, and the previous relay is never contacted again (#13614, #13852). Ordinary
+ * disconnect still uses `--grace-time 0`; only this sweep SIGTERMs a superseded generation
+ * that is the sole socket holder.
  *
- * This sweep makes that population *visible and deliberate* rather than silent. It does not
- * make it recoverable — the daemon handshake compares the build's content hash exactly
- * (`relay-handshake.ts`), so a new client cannot speak to an old daemon at all. See the report
- * on this change for what a real cross-version handoff would require.
- *
- * The one thing it will terminate is a relay that provably holds nothing. Everything else is
- * retained, including everything it merely failed to reach.
+ * This sweep cannot make that generation recoverable — the daemon handshake compares the
+ * build's content hash exactly (`relay-handshake.ts`), so a new client cannot speak to an old
+ * daemon at all. After an app update it therefore SIGTERMs a superseded relay that still holds
+ * PTYs, as long as it is the sole socket holder (no other Orca attached). Unverifiable
+ * endpoints and relays with another client still connected are retained.
  */
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
@@ -23,11 +21,11 @@ import { SHORT_RELAY_SOCKET_DIR_PREFIX } from './relay-socket-path-limit'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import {
   describeRelayEndpointIncumbent,
-  isReapableRelayHusk,
+  isReapableSupersededRelay,
   probeRelayEndpointIncumbent,
   type RelayEndpointIncumbent
 } from './ssh-relay-endpoint-incumbent'
-import { reapEmptyRelayHusk } from './ssh-relay-endpoint-takeover'
+import { reapSupersededRelay } from './ssh-relay-endpoint-takeover'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
 /**
@@ -109,7 +107,7 @@ export function classifySupersededRelay(
   if (incumbent.verdict !== 'live') {
     return 'unverifiable'
   }
-  return isReapableRelayHusk(incumbent) ? 'reap-candidate' : 'retained-live-work'
+  return isReapableSupersededRelay(incumbent) ? 'reap-candidate' : 'retained-live-work'
 }
 
 export async function sweepSupersededRelayEndpoints(
@@ -175,7 +173,7 @@ async function applySupersededRelayDecision(
   if (decision !== 'reap-candidate') {
     return decision
   }
-  return reapEmptyRelayHusk(conn, incumbent, { signal: options.signal })
+  return reapSupersededRelay(conn, incumbent, { signal: options.signal })
 }
 
 function logSupersededRelayFindings(findings: SupersededRelayFinding[]): void {
@@ -183,7 +181,7 @@ function logSupersededRelayFindings(findings: SupersededRelayFinding[]): void {
     const detail = describeRelayEndpointIncumbent(finding.incumbent)
     if (finding.outcome === 'retained-live-work') {
       console.warn(
-        `[ssh-relay] Superseded relay retained (holds live work; not signalled): ${detail}`
+        `[ssh-relay] Superseded relay retained (another client still holds the socket; not signalled): ${detail}`
       )
       continue
     }

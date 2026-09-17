@@ -15,7 +15,10 @@ import {
   relayEndpointIncumbentProbeCommand,
   type RelayEndpointIncumbent
 } from './ssh-relay-endpoint-incumbent'
-import { reapEmptyRelayHuskCommand } from './ssh-relay-endpoint-takeover'
+import {
+  reapEmptyRelayHuskCommand,
+  reapSupersededRelayCommand
+} from './ssh-relay-endpoint-takeover'
 import { RELAY_DAEMON_SERVICE_ENTRY_FILENAMES } from '../../shared/relay-artifacts'
 
 const posixOnly = process.platform === 'win32' ? describe.skip : describe
@@ -237,6 +240,13 @@ posixOnly('empty relay husk reap against a real process', () => {
     const output = await sh(reapEmptyRelayHuskCommand(relay.pid!, sockPath))
     expect(output.trim()).toBe('BUSY')
     expect(relay.killed).toBe(false)
+  })
+
+  it('signals a superseded relay that still holds work', async () => {
+    const sockPath = join(workDir, 'superseded-work.sock')
+    const relay = await startFakeRelay(sockPath, { withChild: true })
+    const output = await sh(reapSupersededRelayCommand(relay.pid!, sockPath))
+    expect(output.trim()).toBe('GONE')
   })
 
   it('terminates a relay whose only children are its own service processes (#13614)', async () => {
