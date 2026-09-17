@@ -20,6 +20,9 @@ const SCAN_FAILURE_REASON_MAX_CHARS = 240
 /**
  * The cause a retained-but-unscannable repo shows the user. The first two lines carry the
  * classifier's summary plus its `Wsl/Service/WSL_E_*` code; everything after is the raw command.
+ *
+ * `classifyWorktreeScanFailure` in `shared/worktree-scan-failure` turns this reason into a known
+ * cause and its fix command for the sidebar.
  */
 export function describeWorktreeScanFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)

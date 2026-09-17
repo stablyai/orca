@@ -6315,7 +6315,15 @@
         "RepoScanUnavailableIndicator": {
           "title": "Worktree scan failed for {{value0}}",
           "retry": "Retry scan",
-          "retained": "Existing worktrees are kept until a scan succeeds. Click to retry."
+          "retained": "Existing worktrees are kept until a scan succeeds.",
+          "retryAll": "Retry all failed scans ({{value0}})",
+          "xcodeLicense": "Xcode license needs acceptance after a macOS upgrade. Run the fix command in a terminal, then retry.",
+          "xcodeTools": "Xcode command line tools are missing. Run the fix command in a terminal, then retry.",
+          "remoteFixHint": "This repo scans on another machine, so run the fix there.",
+          "openFixTerminal": "Open terminal with fix",
+          "fixTerminalTitle": "Scan fix",
+          "fixTerminalAria": "Scan fix terminal",
+          "fixTerminalHint": "Press Enter to run the fix, then retry the scan."
         }
       },
       "shared": {
