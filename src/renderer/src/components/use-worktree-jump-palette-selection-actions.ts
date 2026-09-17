@@ -16,6 +16,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
 import { translate } from '@/i18n/i18n'
+import { showClientCreationActionError } from '@/lib/client-creation-action-error'
 import type { PaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
@@ -37,6 +38,19 @@ type WorktreeJumpPaletteSelectionActionsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteLocalState &
   Pick<WorktreeJumpPaletteQuickActions, 'buildQuickActionContext'> &
   Pick<WorktreeJumpPaletteSelectionLifecycle, 'focusFallbackSurface' | 'requestBrowserFocus'>
+
+export function showQuickActionRunError(actionId: string, error: unknown): void {
+  if (!actionId.startsWith('plugin:')) {
+    showClientCreationActionError(error)
+    return
+  }
+  toast.error(
+    translate(
+      'auto.components.WorktreeJumpPalette.pluginCommandFailed',
+      'Could not run the plugin command.'
+    )
+  )
+}
 
 export function useWorktreeJumpPaletteSelectionActions({
   closeModal,
@@ -189,17 +203,7 @@ export function useWorktreeJumpPaletteSelectionActions({
           }
           recordFeatureInteraction('cmd-j-quick-action')
         })
-        .catch((error: unknown) => {
-          if (!action.id.startsWith('plugin:')) {
-            throw error
-          }
-          toast.error(
-            translate(
-              'auto.components.WorktreeJumpPalette.pluginCommandFailed',
-              'Could not run the plugin command.'
-            )
-          )
-        })
+        .catch((error: unknown) => showQuickActionRunError(action.id, error))
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
     [buildQuickActionContext, closeModal, recordFeatureInteraction]

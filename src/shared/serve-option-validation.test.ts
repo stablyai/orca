@@ -29,6 +29,20 @@ describe('getServeOptionValidationError', () => {
       getServeOptionValidationError({ ...validOptions, ...override } as typeof validOptions)
     ).toMatch(expected)
   })
+
+  it('refuses tailcat with mobile pairing, no pairing, or a dynamic port', () => {
+    const base = { noPairing: false, mobilePairing: false, recipeJson: false, projectRoot: null }
+    expect(getServeOptionValidationError({ ...base, tailcat: true, mobilePairing: true })).toMatch(
+      /Orca Mobile cannot dial a Tailcat tunnel/
+    )
+    expect(getServeOptionValidationError({ ...base, tailcat: true, noPairing: true })).toMatch(
+      /remove --no-pairing/
+    )
+    expect(getServeOptionValidationError({ ...base, tailcat: true, wsPort: 0 })).toMatch(
+      /stable port/
+    )
+    expect(getServeOptionValidationError({ ...base, tailcat: true, wsPort: 6768 })).toBeNull()
+  })
 })
 
 describe('getServeFlagTypoError', () => {

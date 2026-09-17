@@ -81,6 +81,10 @@ export async function launchHeadlessPairedRuntimeHost(
     executablePath?: string
     /** Bind a stable loopback port so `restartServeProcess` can reclaim it. */
     pinnedServePort?: boolean
+    /** Address embedded in the pairing offer; defaults to loopback. */
+    pairingAddress?: string
+    /** Extra `--serve-*` flags, e.g. `['--serve-tailcat']`. */
+    extraServeArgs?: readonly string[]
     userDataParent?: string
   } = {}
 ): Promise<HeadlessPairedRuntimeHost> {
@@ -124,7 +128,8 @@ export async function launchHeadlessPairedRuntimeHost(
           '--serve-port',
           String(servePort),
           '--serve-pairing-address',
-          '127.0.0.1'
+          options.pairingAddress ?? '127.0.0.1',
+          ...(options.extraServeArgs ?? [])
         ],
         env: isolation.env
       })

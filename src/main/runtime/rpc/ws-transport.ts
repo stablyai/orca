@@ -1,4 +1,5 @@
 // WebSocket transport letting mobile clients reach the Orca runtime over LAN (wss:// with TLS, else ws://); auth is per-device tokens, independent of transport encryption.
+import { describePinnedPortBindFailure, planWebSocketBindPorts } from './ws-transport-bind-plan'
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -41,6 +42,8 @@ export type WebSocketTransportOptions = {
   fallbackPort?: number
   // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
   preferPinnedPort?: boolean
+  // Why: a tunnel link carries this exact port, so moving to another one strands every paired client.
+  requirePinnedPort?: boolean
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -53,6 +56,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
+  private readonly requirePinnedPort: boolean
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
@@ -74,7 +78,8 @@ export class WebSocketTransport implements RpcTransport {
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
-    preferPinnedPort
+    preferPinnedPort,
+    requirePinnedPort
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -89,6 +94,7 @@ export class WebSocketTransport implements RpcTransport {
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
+    this.requirePinnedPort = requirePinnedPort === true
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -137,23 +143,22 @@ export class WebSocketTransport implements RpcTransport {
     if (this.wss) {
       return
     }
-
-    // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); on failure each candidate falls through to OS-assigned port 0.
-    const persistedFallbackPort =
-      this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
-        ? this.fallbackPort
-        : undefined
-    const candidatePorts =
-      persistedFallbackPort === undefined
-        ? [this.port]
-        : this.preferPinnedPort
-          ? [this.port, persistedFallbackPort]
-          : [persistedFallbackPort, this.port]
+    // Why: a Tailcat link embeds one exact port, so pinned mode has a single candidate and no fallback.
+    const { candidates: candidatePorts, persistedFallbackPort } = this.requirePinnedPort
+      ? { candidates: [this.port], persistedFallbackPort: undefined }
+      : planWebSocketBindPorts({
+          port: this.port,
+          fallbackPort: this.fallbackPort,
+          preferPinnedPort: this.preferPinnedPort
+        })
     for (const port of candidatePorts) {
       try {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
+        if (this.requirePinnedPort) {
+          throw new Error(describePinnedPortBindFailure(this.port, error))
+        }
         // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
         if (
           port !== persistedFallbackPort &&

@@ -3,6 +3,7 @@ import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-co
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { TailcatTunnelStatus } from '../../shared/tailcat-tunnel-status'
 
 export type MobileApi = {
   listNetworkInterfaces: () => Promise<{
@@ -53,10 +54,11 @@ export type MobileApi = {
     address?: string
     rotate?: boolean
     reach?: RuntimePairingReach
+    transport?: 'tailcat'
   }) => Promise<
     | {
         available: false
-        reason?: 'network_exposure_failed'
+        reason?: 'network_exposure_failed' | 'tunnel_unavailable'
         guidance?: string
       }
     | {
@@ -67,6 +69,7 @@ export type MobileApi = {
         deviceId: string
       }
   >
+  getTunnelStatus: () => Promise<TailcatTunnelStatus>
   listDevices: () => Promise<{
     devices: {
       deviceId: string

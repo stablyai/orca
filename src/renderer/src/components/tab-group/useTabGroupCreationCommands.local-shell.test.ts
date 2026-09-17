@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
   openNewTerminalTabInActiveWorkspace: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
-  runtimeCall: vi.fn()
+  runtimeCall: vi.fn(),
+  showClientCreationActionError: vi.fn()
 }))
 
 vi.mock('react', async () => await stubHeadlessReact())
@@ -26,6 +27,10 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 
 vi.mock('../../lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
+}))
+
+vi.mock('@/lib/client-creation-action-error', () => ({
+  showClientCreationActionError: mocks.showClientCreationActionError
 }))
 
 const WORKTREE_ID = 'repo::C:/Users/neil/orca/workspaces/orca/aug23-triage'
@@ -112,5 +117,23 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
     // Latching the workspace onto the focused runtime is what silently broke the next Ctrl+T.
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
     expect(storeState.activeWorkspaceExecutionHostId).toBe('local')
+  })
+
+  it('reports rejected plain terminal creation from the group menu', async () => {
+    mocks.openNewTerminalTabInActiveWorkspace.mockRejectedValue(new Error('runtime disconnected'))
+    const { useTabGroupCreationCommands } = await import('./useTabGroupCreationCommands')
+    const commands = useTabGroupCreationCommands({
+      groupId: GROUP_ID,
+      worktreeId: WORKTREE_ID,
+      worktreeState: { mobileEmulatorEnabled: false } as never
+    })
+
+    commands.newTerminalTab()
+
+    await vi.waitFor(() =>
+      expect(mocks.showClientCreationActionError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'runtime disconnected' })
+      )
+    )
   })
 })

@@ -1,7 +1,13 @@
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { isTailnetIPv4Address } from './tailnet-address'
 
-export type RemotePairingEndpointKind = 'loopback' | 'tailscale' | 'lan' | 'public' | 'custom'
+export type RemotePairingEndpointKind =
+  | 'tailcat'
+  | 'loopback'
+  | 'tailscale'
+  | 'lan'
+  | 'public'
+  | 'custom'
 
 export type ParsedHostAccessLink = {
   pairing: PairingOffer
@@ -140,8 +146,8 @@ export function parseHostAccessLink(input: string): ParseHostAccessLinkResult {
     ok: true,
     value: {
       pairing,
-      displayEndpoint: endpoint.host,
-      endpointKind: classifyRemotePairingHostname(endpoint.hostname)
+      displayEndpoint: pairing.tunnel ? 'Tailcat remote host' : endpoint.host,
+      endpointKind: pairing.tunnel ? 'tailcat' : classifyRemotePairingHostname(endpoint.hostname)
     }
   }
 }

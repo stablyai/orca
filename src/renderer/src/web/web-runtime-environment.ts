@@ -68,7 +68,7 @@ export function createStoredWebRuntimeEnvironment(args: {
   name: string
   offer: WebPairingOffer
   previousEnvironment?: StoredWebRuntimeEnvironment | null
-  connectionDependency?: 'ssh-tunnel'
+  connectionDependency?: 'ssh-tunnel' | 'tailcat'
 }): StoredWebRuntimeEnvironment {
   const id = `web-${createBrowserUuid()}`
   const now = Date.now()

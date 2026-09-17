@@ -394,7 +394,12 @@ describe('OrcaRuntimeService', () => {
 
     expect(webContents.send).toHaveBeenCalledWith(
       'terminal:requestTabCreate',
-      expect.objectContaining({ source: 'runtime-session', viewMode: 'chat' })
+      expect.objectContaining({
+        source: 'runtime-session',
+        viewMode: 'chat',
+        activate: false,
+        presentation: 'background'
+      })
     )
     expect(spawn).not.toHaveBeenCalled()
     expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]])

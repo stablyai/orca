@@ -34,10 +34,15 @@ export type DeviceEntry = {
   // Why: STA-2370 — a grant minted for "This computer only" proves nothing about off-host reach when its
   // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
   pairingReach?: RuntimePairingReach
+  // Why: a grant handed out with a tailcat address blob is only reachable while that tunnel runs, so the
+  // next launch must know to bring the tunnel up before its client reconnects.
+  pairingTransport?: RuntimePairingTransport
   // Why: survives a desktop restart so the host can keep pushing without the phone
   // re-registering. Absent on every registry written before background push existed.
   pushRegistration?: MobilePushRegistration
 }
+
+export type RuntimePairingTransport = 'tailcat'
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
   if (!value || typeof value !== 'object') {
@@ -221,6 +226,29 @@ export class DeviceRegistry {
     return true
   }
 
+  setPairingTransport(deviceId: string, transport: RuntimePairingTransport | null): boolean {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index === -1) {
+      return false
+    }
+    const current = this.devices[index]!
+    if ((current.pairingTransport ?? null) === transport) {
+      return true
+    }
+    const { pairingTransport: _previous, ...rest } = current
+    const updated: DeviceEntry = transport ? { ...rest, pairingTransport: transport } : rest
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? updated : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
+  }
+
+  hasPairingTransport(transport: RuntimePairingTransport): boolean {
+    return this.devices.some((device) => device.pairingTransport === transport)
+  }
+
   getMobilePairingConnectionMode(deviceId: string): MobilePairingConnectionMode | null {
     const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
     if (!device || device.scope !== 'mobile') {
@@ -325,6 +353,7 @@ export class DeviceRegistry {
         // Why: registries written before this field existed only ever held network-reach grants (phones and
         // LAN links), so a missing value must keep binding every interface on reconnect.
         pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
+        ...(device.pairingTransport === 'tailcat' ? { pairingTransport: 'tailcat' as const } : {}),
         // Why: a malformed row must degrade to "no background push", never fail the load
         // and strand every paired device.
         pushRegistration: parseMobilePushRegistration(device.pushRegistration)

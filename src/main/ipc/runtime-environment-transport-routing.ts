@@ -56,8 +56,9 @@ export async function getRuntimeEnvironmentStatus(
     timeoutMs,
     ...options
   })
+  const pairing = getPreferredPairingOffer(environment)
   return attachRemoteControlDiagnostics(
-    withTailscaleHintForResponse(response, getPreferredPairingOffer(environment).endpoint),
+    withTailscaleHintForResponse(response, pairing.tunnel ? null : pairing.endpoint),
     environment.id
   )
 }

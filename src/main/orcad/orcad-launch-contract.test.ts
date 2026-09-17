@@ -24,6 +24,16 @@ describe('parseArgs', () => {
     })
   })
 
+  it('parses and validates explicit tailcat serving', () => {
+    expect(parseArgs(['--tailcat', '--port', '6768'])).toEqual({ tailcat: true, port: 6768 })
+    expect(() => parseArgs(['--tailcat', '--port', '0'])).toThrow(
+      'A Tailcat tunnel needs a stable port'
+    )
+    expect(() => parseArgs(['--tailcat', '--no-pairing'])).toThrow(
+      'A tailcat tunnel is only reachable through a pairing offer'
+    )
+  })
+
   it('rejects --bind with no value rather than silently binding the default', () => {
     expect(() => parseArgs(['--bind'])).toThrow('--bind expects a value')
     expect(() => parseArgs(['--bind', '--json'])).not.toThrow()

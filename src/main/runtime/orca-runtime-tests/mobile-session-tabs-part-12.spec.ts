@@ -359,6 +359,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         worktreeId: TEST_WORKTREE_ID,
         activate: false,
+        presentation: 'background',
         source: 'runtime-session',
         viewMode: 'chat'
       })

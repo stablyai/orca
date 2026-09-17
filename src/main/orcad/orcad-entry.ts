@@ -15,6 +15,9 @@ import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
+import { decodePairingOffer } from '../../shared/pairing'
+import { attachTailcatTunnel, disposeTailcatTunnel } from '../tunnel/tailcat-tunnel-host'
+import { DEFAULT_WS_PORT } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
@@ -96,6 +99,8 @@ export type OrcadOptions = {
   pairingAddress?: string
   /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
   bind?: string
+  /** Share the runtime over a tailcat tunnel; the pairing offer embeds its address blob. */
+  tailcat?: boolean
 }
 
 export type OrcadHandle = {
@@ -169,13 +174,17 @@ async function startOrcadRuntime(
       await rpc?.stop()
     } finally {
       try {
-        // Why disconnect and not shut down: the daemon must outlive this process, or an
-        // orcad restart goes back to killing every running terminal.
-        await stopOrcadDaemon()
+        await disposeTailcatTunnel()
       } finally {
-        uninstallObservedStatusIdentity()
-        uninstallHookStatusRepublish()
-        agentHookServer.stop()
+        try {
+          // Why disconnect and not shut down: the daemon must outlive this process, or an
+          // orcad restart goes back to killing every running terminal.
+          await stopOrcadDaemon()
+        } finally {
+          uninstallObservedStatusIdentity()
+          uninstallHookStatusRepublish()
+          agentHookServer.stop()
+        }
       }
     }
   })
@@ -305,7 +314,15 @@ async function startOrcadRuntime(
     // once a device has connected, so a loopback deployment would silently go wide one
     // restart after its first client paired.
     pinnedBindHost: bindHost,
-    ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
+    ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {}),
+    // Why: every Tailcat link embeds the port, so a tunnel host binds exactly one port or fails.
+    ...(options.tailcat
+      ? {
+          wsPort: options.port ?? DEFAULT_WS_PORT,
+          preferPinnedWsPort: true,
+          requirePinnedWsPort: true
+        }
+      : {})
   })
   await rpc.start()
   const pushService = DesktopPushService.create({
@@ -321,6 +338,9 @@ async function startOrcadRuntime(
   const advertised = boundEndpoint
     ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
     : null
+  if (options.tailcat) {
+    await attachTailcatTunnel(rpc, runtimeUserDataPath, { startServer: true })
+  }
   const offer = options.noPairing
     ? ({
         available: false,
@@ -330,7 +350,8 @@ async function startOrcadRuntime(
     : rpc.createPairingOffer({
         address: options.pairingAddress,
         name: `CLI ${new Date().toLocaleDateString()}`,
-        scope: 'runtime'
+        scope: 'runtime',
+        tunnel: options.tailcat
       })
 
   const readiness: ServeReadiness = {
@@ -348,7 +369,8 @@ async function startOrcadRuntime(
           deviceId: offer.deviceId,
           webClientUrl: offer.webClientUrl,
           scope: 'runtime',
-          qr: null
+          qr: null,
+          ...orcadTunnelReadiness(offer.pairingUrl)
         }
       : offer,
     // Why in the readiness payload: this is the one message a supervisor and a deploy
@@ -362,6 +384,11 @@ async function startOrcadRuntime(
   })
 
   return { readiness }
+}
+
+function orcadTunnelReadiness(pairingUrl: string): { tunnel?: { kind: 'tailcat'; token: string } } {
+  const tunnel = decodePairingOffer(pairingUrl).tunnel
+  return tunnel ? { tunnel: { kind: 'tailcat', token: tunnel.token } } : {}
 }
 
 /**

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../../shared/pairing'
+import { PAIRING_OFFER_TUNNEL_VERSION } from '../../../../shared/mobile-relay-pairing-offer'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import { RemoteServerFields } from './AddRemoteHostFields'
 
@@ -34,5 +35,35 @@ describe('RemoteServerFields', () => {
     expect(markup).toContain('aria-invalid="true"')
     expect(markup).toContain('aria-describedby="add-server-loopback-blocked"')
     expect(markup).toContain('id="add-server-loopback-blocked"')
+  })
+
+  it('presents a Tailcat link as remote without an SSH override', () => {
+    const pairingCode = encodePairingOffer({
+      v: PAIRING_OFFER_TUNNEL_VERSION,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: 'key',
+      scope: 'runtime',
+      tunnel: { v: 1, kind: 'tailcat', token: 'tcRemoteHost', port: 6768 }
+    })
+    const markup = renderToStaticMarkup(
+      <RemoteServerFields
+        name="Remote workstation"
+        pairingCode={pairingCode}
+        parsedLink={parseHostAccessLink(pairingCode)}
+        disabled={false}
+        onNameChange={vi.fn()}
+        onPairingCodeChange={vi.fn()}
+        allowLoopback={false}
+        onAllowLoopbackChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('Tailcat tunnel')
+    expect(markup).toContain('Tailcat remote host')
+    expect(markup).not.toContain('127.0.0.1')
+    expect(markup).not.toContain('SSH tunnel')
+    expect(markup).not.toContain('aria-invalid="true"')
   })
 })

@@ -1,9 +1,11 @@
 import type { DeviceScope } from '../../../shared/runtime-types'
 
 const PAIRING_OFFER_VERSION = 2
+// Why: tunnel offers; the browser never dials them, but the shared offer type carries the version.
+const PAIRING_OFFER_TUNNEL_VERSION = 3
 
 export type WebPairingOffer = {
-  v: typeof PAIRING_OFFER_VERSION
+  v: typeof PAIRING_OFFER_VERSION | typeof PAIRING_OFFER_TUNNEL_VERSION
   endpoint: string
   deviceToken: string
   publicKeyB64: string
