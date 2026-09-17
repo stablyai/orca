@@ -3,7 +3,7 @@
   "family": "tasks.task-list-gitlab-todos",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
+  "baseline": "732ce53b564927e7d61511e406b4e6b407c4572e",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
   "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
@@ -260,6 +260,12 @@
         }
       }
     },
+    "6d1d0fdc038f": {
+      "error": "The host sent a reply this app could not read (gitlab.todos)",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
     "6d7869e6f6ea": {
       "name": "loading",
       "ordinal": 6,
@@ -427,6 +433,11 @@
         }
       }
     },
+    "bdb019c11efb": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "The host sent a reply this app could not read (gitlab.todos)"
+    },
     "d57ec76a49a3": {
       "error": "",
       "items": [
@@ -498,12 +509,6 @@
         }
       }
     },
-    "f0df2712eb78": {
-      "error": "(response.result ?? []).map is not a function",
-      "items": [],
-      "loading": false,
-      "refreshing": false
-    },
     "f11183466799": {
       "error": "Unknown method",
       "items": [],
@@ -519,11 +524,6 @@
       "name": "error",
       "ordinal": 6,
       "value": "outer refused"
-    },
-    "f56c22495539": {
-      "name": "error",
-      "ordinal": 6,
-      "value": "(response.result ?? []).map is not a function"
     },
     "fe6919657d3a": {
       "name": "gitlab.todos#1",
@@ -627,12 +627,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f0df2712eb78",
+          "state": "6d1d0fdc038f",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "f56c22495539",
+            "bdb019c11efb",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -647,12 +647,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f0df2712eb78",
+          "state": "6d1d0fdc038f",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "f56c22495539",
+            "bdb019c11efb",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
@@ -667,12 +667,12 @@
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a"
           },
-          "state": "f0df2712eb78",
+          "state": "6d1d0fdc038f",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "f56c22495539",
+            "bdb019c11efb",
             "5ac1816a09df",
             "411aee2eccd9"
           ]
