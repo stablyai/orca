@@ -1,6 +1,6 @@
 import { settingsRead } from '../transport/settings-read-operations'
 import { decodeAccountsSnapshot, type AccountsSnapshot } from '../components/AccountUsage'
-import type { HomeStatsSummary } from '../stats/home-stats-total'
+import type { HomeStatsRow } from '../stats/home-stats-total'
 import { taskLinearStatusRead, taskPreflightRead } from '../tasks/mobile-task-runtime-operations'
 import {
   filterAvailableTaskProviders,
@@ -15,7 +15,7 @@ type HomeTaskSettings = {
 }
 
 export type HomeStatsSetter = (
-  updater: (previous: Record<string, HomeStatsSummary>) => Record<string, HomeStatsSummary>
+  updater: (previous: Record<string, HomeStatsRow>) => Record<string, HomeStatsRow>
 ) => void
 
 export type HomeAccountsSetter = (
@@ -37,11 +37,7 @@ export function fetchMobileHomeStats(
     .then((reply) => {
       const summary = homeHostStatsRead.interpret(reply)
       if (!disposed() && summary.accepted) {
-        setStats((previous) => ({
-          ...previous,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          [hostId]: summary.value as HomeStatsSummary
-        }))
+        setStats((previous) => ({ ...previous, [hostId]: summary.value }))
       }
     })
     .catch(() => {})

@@ -102,7 +102,7 @@ durably marked consumed before mutation and cannot authorize another run.
 | Endpoint latency | over 2,000 ms |
 | Cloud SQL CPU | over 80% |
 | Cloud SQL memory | over 90% |
-| Cloud SQL backends | over 250 (62% of the verified 400-connection ceiling) |
+| Cloud SQL backends | over 320 (65% of the 490 usable of `max_connections` 500) |
 | Cloud SQL waiting backends | over 20 |
 | Cloud SQL deadlocks | over 0 |
 | Relay pool waiters | over 800 |
@@ -112,7 +112,7 @@ durably marked consumed before mutation and cannot authorize another run.
 | Director instances | outside 5–6 |
 | Director CPU or memory | over 80% |
 | Director concurrency | over 64 |
-| Unexpected director 5xx in five minutes (excludes 503) | over 3 |
+| Unexpected director 5xx in five minutes (excludes 503) | over 15 |
 | Auth 5xx in five minutes | over 0 |
 | Connections per cell process | over 500 |
 | Queued bytes per cell process | over 48 MiB |
@@ -121,6 +121,14 @@ durably marked consumed before mutation and cannot authorize another run.
 
 Expected enabled cells must also have a powered runtime, healthy and ready endpoints, fresh
 heartbeats, and matching live admission.
+
+A cell's endpoint readings are the one exception to the freeze-on-first-breach rule
+above. Health, ready and latency are a single HTTP round trip from one runner, so they
+must fail more than two consecutive samples before they freeze the run; the streak is
+keyed by cell, so one cell's three readings share it. Absorbed breaches are recorded in
+the state artifact under `toleratedProbeEvents`. The director and auth probes have no
+such tolerance and freeze on the first bad sample. The live preflight that runs before
+each mutating wave re-samples on the same tolerance.
 
 ## Region placement alert policies
 
@@ -197,6 +205,37 @@ without its segment is a compile error in relay-contract, not a silent gap.
 
 ## Implementation log
 
+- Recalibrated the Cloud SQL backends freeze from 250 to 320, the unexpected
+  director 5xx freeze from 3 to 15, and gave per-cell endpoint probes a
+  two-consecutive-sample tolerance (2026-09-17). Basis: the pre-roll dry-run had
+  frozen 39 times out of 39, every time on a chronic production condition
+  unrelated to the roll it gates, so it was adding delay rather than safety.
+  Measured over the 24 h to 2026-09-17 through the Cloud Monitoring API with the
+  monitor's own aggregation. `cloud_sql.backends` latest-sum per minute: p50 118 /
+  p90 165 / p95 212 / p99 262 / max 282, so the old bar of 250 sat under the
+  observed peak and tripped 1.95% of minutes and 21.8% of 15-minute gates; 320
+  clears every healthy minute with 13% headroom and still fires at 65% of the 490
+  usable connections, leaving 170 in hand for the runaway that exhaustion actually
+  is. `director.errors` non-503 5xx per rolling five minutes: p50 0 / p90 3 /
+  p95 5 / p99 9 / max 52, so the old bar of 3 sat on the p90 and froze 9.2% of
+  windows and 29.0% of gates on the chronic `/v1/assign`, `/v1/regions` and
+  `/v1/resolve` 500 bursts that accompany the recurring Cloud SQL stall; 15 clears
+  the chronic p99, drops the gate-freeze rate to 1.5%, and deliberately leaves the
+  exceptional 20-52 bursts detectable. The director serves roughly 50 requests a
+  minute in 503s alone, so a genuinely broken director lands in the hundreds per
+  window. For the cell probes, the asia-east2 cells run readiness as `SELECT 1`
+  against Cloud SQL in us-central1 over a 176 ms round trip behind a 2 s timeout,
+  so a saturated pool makes the load balancer answer "no healthy upstream" for
+  about 30 s; 7 of the last 14 freezes were that. It arrives as a real HTTP 503, so
+  provenance cannot separate it from a cell serving `health=0` and persistence has
+  to: at the 60 s interval it spans one sample and at worst two. The streak is
+  keyed by cell rather than by signal, because keyed per signal a cell that
+  alternates between slow and unanswered holds every streak at one and never
+  reaches the tolerance. The live preflight before each mutating wave re-samples on
+  the same tolerance, so a blip cannot fail a wave there either. Thresholds stay
+  code constants sealed into every checkpoint rather than workflow inputs, so a
+  green run stays auditable. Re-tighten the backends bar when the auth connection
+  model lands (#21165).
 - Recalibrated the relay pool freezes from 30 waiters / 1,000 ms to
   800 waiters / 2,500 ms (2026-08-27). Basis, measured from
   `orca_relay_runtime_metrics` (`databasePoolWaitersMax`,
@@ -212,9 +251,11 @@ without its segment is a compile error in relay-contract, not a silent gap.
   Basis, measured from `cloudsql.googleapis.com/database/postgresql/num_backends`
   latest-sum over 24 healthy hours: mean ~100, 1-minute spikes to 216, with
   10 minutes over the old bar of 160 — enough to freeze roughly one in ten
-  15-minute pre-drain gates on baseline noise. 250 clears measured healthy
-  peaks and still fires well before the verified 400-connection ceiling;
-  pool waiters and pool wait latency keep their strict thresholds.
+  15-minute pre-drain gates on baseline noise. 250 cleared the healthy peaks
+  measured then and still fired well before the verified 400-connection ceiling;
+  pool waiters and pool wait latency keep their strict thresholds. Superseded by
+  the 2026-09-17 entry above, which re-measured a grown baseline against the
+  490-connection budget.
 - Recalibrated the PostgreSQL-retry freeze from 20 to 300 per five minutes
   (2026-08-26). Basis, measured from
   `jsonPayload.event="orca_relay_postgres_transaction_retry"` in production
@@ -280,4 +321,4 @@ without its segment is a compile error in relay-contract, not a silent gap.
 
 ### Director error allowance (2026-09-12)
 
-The serving-cell rollout observed three unexpected director 500 responses among approximately 33,600 responses in an hour, all two-second PostgreSQL connection timeouts. CPU remained near 30–37% and the zero-error bar repeatedly prevented any cell mutation. The five-minute allowance is now three non-503 director 5xx; four freezes. Auth errors, data freshness, active probes, SQL/pool pressure and other limits are unchanged. This is a bounded operational allowance, not a calibrated SLO or proof that intermittent failures are resolved; persistent low-frequency errors below this limit still require diagnosis.
+The serving-cell rollout observed three unexpected director 500 responses among approximately 33,600 responses in an hour, all two-second PostgreSQL connection timeouts. CPU remained near 30–37% and the zero-error bar repeatedly prevented any cell mutation. The five-minute allowance was set to three non-503 director 5xx here, and was superseded by the 2026-09-17 recalibration to 15 recorded above. Auth errors, data freshness, active probes, SQL/pool pressure and other limits are unchanged. This is a bounded operational allowance, not a calibrated SLO or proof that intermittent failures are resolved; persistent low-frequency errors below this limit still require diagnosis.

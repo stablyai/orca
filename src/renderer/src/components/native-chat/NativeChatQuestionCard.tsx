@@ -159,7 +159,10 @@ export function NativeChatQuestionCard({
 
         <div className="overflow-hidden rounded-lg border border-input bg-card shadow-xs">
           <div className="flex items-start justify-between gap-2 px-3.5 py-2.5">
-            <p className="min-w-0 break-words text-sm font-semibold text-foreground">
+            <p
+              data-testid="native-chat-question-card-title"
+              className="min-w-0 break-words text-sm font-semibold text-foreground"
+            >
               {q.question}
             </p>
             <button

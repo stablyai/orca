@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { notificationUnreadReplySchema } from './notification-reply-schema'
 
 /**
  * Closing the desktop notification stream on the host.
@@ -19,6 +20,6 @@ export const desktopNotificationStreamUnsubscribe = bindDeferredRpcOperation(
     method: 'notifications.unsubscribe',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('notification-stream-closed')
+    read: rpcResultVariant('notification-stream-closed', notificationUnreadReplySchema)
   })
 )

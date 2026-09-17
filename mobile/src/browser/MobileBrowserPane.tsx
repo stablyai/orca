@@ -248,11 +248,9 @@ export function MobileBrowserPane({
         browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
       { showBusy: true, timeoutMs: 30_000 }
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const result = settled as { url?: string } | null
-    if (typeof result?.url === 'string') {
-      setAddressValue(displayBrowserUrl(result.url))
-      lastZoomResetUrlRef.current = result.url
+    if (settled?.url !== undefined) {
+      setAddressValue(displayBrowserUrl(settled.url))
+      lastZoomResetUrlRef.current = settled.url
       resetBrowserZoomState()
     }
   }, [addressValue, resetBrowserZoomState, sendBrowserRequest])

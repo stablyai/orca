@@ -1,4 +1,7 @@
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import {
+  isRuntimeHostContactRevoked,
+  type RuntimeHostStatusSnapshot
+} from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { isRuntimeWorkspaceWindowClosed } from '../../../shared/runtime-workspace-window-availability'
 
@@ -118,15 +121,15 @@ export function runtimeHostConnectionStateForEntry(
     | null
     | undefined
 ): RuntimeHostConnectionState {
-  if (entry?.snapshot) {
-    const snapshot = entry.snapshot
-    if (snapshot.retired || snapshot.verification === 'blocked') {
+  const snapshot = entry?.snapshot
+  if (snapshot) {
+    if (isRuntimeHostContactRevoked(entry)) {
       return 'disconnected'
     }
     if (snapshot.transport === 'disconnected') {
       return 'reconnecting'
     }
-    if (snapshot.verification === 'checking' && !entry.status) {
+    if (snapshot.verification === 'checking' && !entry?.status) {
       return 'checking'
     }
     if (snapshot.transport === 'ready' && snapshot.verification !== 'verified') {
@@ -136,6 +139,12 @@ export function runtimeHostConnectionStateForEntry(
   return runtimeHostConnectionState({
     hasStatusEntry: Boolean(entry),
     status: entry?.status ?? null,
+    // Why only 'connecting': a transport mid-handshake fell through to the default and
+    // reported a host still establishing contact as down. 'unknown' keeps that default on
+    // purpose — it means no transport was ever attempted, which for an unreachable paired
+    // host is the permanent state, and 'checking' there withdraws its Connect action and
+    // pins the status bar to "connecting" forever.
+    ...(snapshot?.transport === 'connecting' ? { transportStatus: 'checking' as const } : {}),
     remoteControl: entry?.remoteControl ?? entry?.status?.remoteControl ?? null
   })
 }

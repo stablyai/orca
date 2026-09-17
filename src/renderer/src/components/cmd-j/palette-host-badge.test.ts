@@ -88,6 +88,7 @@ describe('getPaletteHostBadge', () => {
         [
           'env-1',
           {
+            checkedAt: 0,
             status: {
               runtimeId: 'rt',
               rendererGraphEpoch: 0,

@@ -260,9 +260,11 @@ describe('relay incident live preflight', () => {
     slowCell.sources['active-probe']!.signals[
       'cell.production-gce-c1.latency_ms'
     ]!.value = 2_568
+    // A cell probe now re-samples before it fails a wave, so the wait is injected;
+    // this cell stays slow on every sample and still names what stopped it.
     await expect(runIncidentLivePreflight(
       ['--state-file', stateFile()],
-      { now: () => now, collect: async () => slowCell }
+      { now: () => now, collect: async () => slowCell, wait: async () => {} }
     )).rejects.toThrow(
       'relay live preflight failed: active-probe/threshold_max cell.production-gce-c1.latency_ms observed=2568 threshold=2000'
     )
@@ -276,6 +278,84 @@ describe('relay incident live preflight', () => {
     )).rejects.toThrow(
       'relay live preflight failed: active-probe/source_stale observed=60001 threshold=60000'
     )
+  })
+
+  // Why: this one sample decides a mutating wave, so an Asia cell's ~30 s
+  // "no healthy upstream" window could still fail a wave here even after the
+  // 15-minute gate learned to ride it out.
+  describe('cell probe tolerance', () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+
+    // Serves `badSamples` unhealthy cell readings, then healthy ones.
+    const downThen = (badSamples: number) => {
+      let index = 0
+      return async () => {
+        const next = sample()
+        if (index++ < badSamples) {
+          next.sources['active-probe']!.signals['cell.production-gce-c1.health']!
+            .value = 0
+          next.sources['active-probe']!.signals['cell.production-gce-c1.ready']!
+            .value = 0
+        }
+        return next
+      }
+    }
+
+    it('re-samples through a probe outage within the tolerance', async () => {
+      const waits: number[] = []
+      await expect(runIncidentLivePreflight(
+        ['--state-file', stateFile()],
+        {
+          now: () => now,
+          collect: downThen(tolerance),
+          wait: async (ms) => {
+            waits.push(ms)
+          }
+        }
+      )).resolves.toBeUndefined()
+      expect(waits).toHaveLength(tolerance)
+    })
+
+    it('fails the wave once the probe outage outlasts the tolerance', async () => {
+      await expect(runIncidentLivePreflight(
+        ['--state-file', stateFile()],
+        {
+          now: () => now,
+          collect: downThen(tolerance + 1),
+          wait: async () => {}
+        }
+      )).rejects.toThrow('active-probe/threshold_equal cell.production-gce-c1.health')
+    })
+
+    it('does not re-sample a director probe failure', async () => {
+      let samples = 0
+      const down = async () => {
+        samples++
+        const next = sample()
+        next.sources['active-probe']!.signals['director.health']!.value = 0
+        return next
+      }
+      await expect(runIncidentLivePreflight(
+        ['--state-file', stateFile()],
+        { now: () => now, collect: down, wait: async () => {} }
+      )).rejects.toThrow('active-probe/threshold_equal director.health')
+      expect(samples).toBe(1)
+    })
+
+    it('does not re-sample a non-probe threshold failure', async () => {
+      let samples = 0
+      const hot = async () => {
+        samples++
+        const next = sample()
+        next.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.value = 0.9
+        return next
+      }
+      await expect(runIncidentLivePreflight(
+        ['--state-file', stateFile()],
+        { now: () => now, collect: hot, wait: async () => {} }
+      )).rejects.toThrow('cloud-monitoring/threshold_max')
+      expect(samples).toBe(1)
+    })
   })
 
   it('enforces the signed migration policy', async () => {

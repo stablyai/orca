@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { pushDeliveryTestResultSchema } from './notification-reply-schema'
 
 /**
  * The settings screen's "send a test notification" probe.
@@ -15,6 +16,6 @@ export const pushDeliveryTest = bindDeferredRpcOperation(
     method: 'notifications.testPush',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('push-test-result')
+    read: rpcResultVariant('push-test-result', pushDeliveryTestResultSchema)
   })
 )

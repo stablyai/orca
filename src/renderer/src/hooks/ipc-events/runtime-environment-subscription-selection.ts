@@ -1,4 +1,8 @@
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import type { AppState } from '../../store/types'
@@ -21,19 +25,34 @@ export function getRuntimeClientEventEnvironmentIds(
     ids.add(activeEnvironmentId)
   }
   for (const environment of state.runtimeEnvironments ?? []) {
-    if (state.runtimeStatusByEnvironmentId?.get(environment.id)?.status) {
+    if (isRuntimeHostStillInContact(state, environment.id)) {
       ids.add(environment.id)
     }
   }
   return [...ids]
 }
 
+/**
+ * Why the shared verdict and not `entry.status`: an unverifiable probe nulls `entry.status`
+ * while the transport stays up and the host keeps delivering. Reading that as "gone" dropped
+ * the client-event subscription and fired the disconnect edge on a live host. Contact is lost
+ * only once the transport itself says so (docs/reference/ssh-execution-boundary.md).
+ */
+function isRuntimeHostStillInContact(
+  state: RuntimeEnvironmentStoreSyncState,
+  environmentId: string
+): boolean {
+  return isConnectedRuntimeHostState(
+    runtimeHostConnectionStateForEntry(state.runtimeStatusByEnvironmentId?.get(environmentId))
+  )
+}
+
 export function getReachableRuntimeEnvironmentIds(
   state: RuntimeEnvironmentStoreSyncState
 ): string[] {
   const ids: string[] = []
-  for (const [environmentId, status] of state.runtimeStatusByEnvironmentId ?? []) {
-    if (status?.status) {
+  for (const environmentId of state.runtimeStatusByEnvironmentId?.keys() ?? []) {
+    if (isRuntimeHostStillInContact(state, environmentId)) {
       ids.push(environmentId)
     }
   }

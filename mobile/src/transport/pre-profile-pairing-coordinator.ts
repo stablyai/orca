@@ -1,9 +1,7 @@
 import { Platform } from 'react-native'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+import type {
+  DeviceCredentialInstalled,
+  MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
@@ -235,15 +233,11 @@ async function runPairing(
     await dependencies.clearJournal(journal.metadata.journalId)
     return { hostId }
   }
-  const installed = DeviceCredentialInstalledSchema.parse(
-    relayCredentialProvision.interpret(provision)
-  )
+  const installed = relayCredentialProvision.interpret(provision)
   const endpointsReply = await relayPairingEndpointsRead.request(winner.client, {
     installReqId: journal.metadata.installReqId
   })
-  const endpoints = PairingGetEndpointsResultSchema.parse(
-    relayPairingEndpointsRead.interpret(endpointsReply)
-  )
+  const endpoints = relayPairingEndpointsRead.interpret(endpointsReply)
   assertCommittedInstall(endpoints.installStatus, installed)
   if (!endpoints.relay) {
     throw new Error('desktop returned no relay endpoint after credential install')

@@ -3,9 +3,9 @@
   "family": "aiVault.history-screen",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "b354d1338a1719fed0c90d7d6729b5d31126de23",
+  "baseline": "3e32b8352262d0038878f2c4937297c7b977e314",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
   "adapterSha256": "c78ab47eea594b7e1988403321ff9ba135ca60c513bb9d5848bdde26c0ffe3c3",
   "scenarioSha256": "5365449c24d789c6c01604b520b795502d0bec352032686efecd121fc4497f96",
   "platform": "darwin",
@@ -38,12 +38,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "08a62b87ca0b": {
-      "crash": "Cannot read properties of undefined (reading 'find')",
-      "elements": {},
-      "labels": [],
-      "text": []
     },
     "0c5e517bcdb4": {
       "name": "worktree.ps#1",
@@ -452,13 +446,6 @@
         }
       }
     },
-    "aa9c2d7270e3": {
-      "name": "screen.crash",
-      "ordinal": 5,
-      "value": {
-        "message": "Cannot read properties of undefined (reading 'find')"
-      }
-    },
     "acf501fa9958": {
       "name": "status.get#1",
       "ordinal": 2,
@@ -691,37 +678,37 @@
       {
         "id": "aivault-history-screen-worktrees.inner-ok-missing:worktrees-listed",
         "observation": {
-          "sender": ["a37b23294454", "acf501fa9958"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff"],
+          "sender": ["a37b23294454", "acf501fa9958", "4d676e55076c", "9efb4ec6ee5c"],
+          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "e72c29cf3f52"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "08a62b87ca0b",
-          "effects": ["aa9c2d7270e3"]
+          "state": "d22bb2f62cea",
+          "effects": []
         }
       },
       {
         "id": "aivault-history-screen-worktrees.inner-false-string-error:worktrees-listed",
         "observation": {
-          "sender": ["9ee642822405", "acf501fa9958"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff"],
+          "sender": ["9ee642822405", "acf501fa9958", "4d676e55076c", "9efb4ec6ee5c"],
+          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "e72c29cf3f52"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "08a62b87ca0b",
-          "effects": ["aa9c2d7270e3"]
+          "state": "d22bb2f62cea",
+          "effects": []
         }
       },
       {
         "id": "aivault-history-screen-worktrees.inner-false-object-error:worktrees-listed",
         "observation": {
-          "sender": ["2b2ff73e3290", "acf501fa9958"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff"],
+          "sender": ["2b2ff73e3290", "acf501fa9958", "4d676e55076c", "9efb4ec6ee5c"],
+          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "e72c29cf3f52"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "08a62b87ca0b",
-          "effects": ["aa9c2d7270e3"]
+          "state": "d22bb2f62cea",
+          "effects": []
         }
       },
       {

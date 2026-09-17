@@ -30,13 +30,6 @@ export type NewWorktreeModalProps = {
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 
-export type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: SetupHookTrust
-}
-
 export type SetupHookDetails = {
   repoId: string
   command: string | null

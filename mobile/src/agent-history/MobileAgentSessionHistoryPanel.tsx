@@ -94,9 +94,10 @@ export function MobileAgentSessionHistoryPanel({
         }
         const catalog = worktreeCatalogRead.interpret(worktreeReply)
         if (catalog.accepted) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          const result = catalog.value as { worktrees: Worktree[] }
-          setWorktrees(result.worktrees)
+          // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it
+          // absent, and `use-mobile-agent-history-state.ts:61` calls `.find` on it unguarded.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque in the reader because three screens project them differently; this panel reads only `path` off a row to seed `scopePaths`, and `matrix-aivault.history-screen-worktree.ps-1` records every partition of its own family rendering a list rather than a crash.
+          setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
         }
       } catch {
         // Why: worktree list is best-effort context; the session scan still runs

@@ -1,5 +1,5 @@
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
-import { hostStatusProbe } from './host-status-probe-operations'
+import { hostStatusProbe, readProbedHostCapabilities } from './host-status-probe-operations'
 import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 
 // Why: a relay→direct cutover or request timeout can reject an in-flight
@@ -25,22 +25,11 @@ export function startRuntimeCapabilityProbe(
         if (cancelled) {
           return
         }
-        const accepted = hostStatusProbe.interpret(reply)
-        if (!accepted.accepted) {
+        const capabilities = readProbedHostCapabilities(reply)
+        if (!capabilities) {
           scheduleRetry(false)
           return
         }
-        const result = accepted.value
-        const rawCapabilities =
-          result && typeof result === 'object'
-            ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-              (result as { capabilities?: unknown }).capabilities
-            : null
-        const capabilities =
-          Array.isArray(rawCapabilities) &&
-          rawCapabilities.every((value) => typeof value === 'string')
-            ? rawCapabilities
-            : []
         onCapabilities(capabilities)
       },
       (error: unknown) => {

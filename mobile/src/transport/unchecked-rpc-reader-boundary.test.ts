@@ -131,9 +131,10 @@ describe('unchecked RPC reader boundary', () => {
 
   it('scans a plausible number of files', () => {
     // A broken root or extension filter would make every check below vacuously pass. The file floor
-    // is safe to hold at a constant; the offender floor is not, because the list counts down to
-    // zero — it was 20 and this step reached it. Against the list instead, the check survives every
-    // step of the countdown: a filter that scanned nothing reports 0 against a list naming 20.
+    // is safe to hold at a constant; an offender-count floor is not, because the list counts down to
+    // zero. Main's batch took it from 29 files to 16 and its floor from 20 to 10; this batch reaches
+    // 8, below that floor. Against the list instead, the check survives every step of the countdown:
+    // a filter that scanned nothing reports 0 against a list naming 8.
     expect(scanned.length).toBeGreaterThan(400)
     expect(observed.size).toBe(inventory.length)
   })

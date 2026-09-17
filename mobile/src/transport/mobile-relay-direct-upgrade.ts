@@ -1,9 +1,7 @@
 import * as ExpoCrypto from 'expo-crypto'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type PairingGetEndpointsResult
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { MobileRelayUpgradeHostRemovedError, saveExistingHostRelayUpgrade } from './host-store'
 import { persistRelayHost } from './mobile-endpoint-supervisor-support'
@@ -88,9 +86,7 @@ export async function upgradeDirectMobileRelay(args: {
     await dependencies.clearJournal(args.host.id)
     return null
   }
-  const installed = DeviceCredentialInstalledSchema.parse(
-    relayCredentialProvision.interpret(provisionReply)
-  )
+  const installed = relayCredentialProvision.interpret(provisionReply)
   assertDirectInstall(journal, installed)
   const reconciled = await getEndpoints(args.client, journal.reqId)
   if (reconciled === 'relay-pairing-unavailable') {
@@ -146,7 +142,7 @@ async function getEndpoints(
   if (isPairingRelayRpcUnavailable(reply)) {
     return 'relay-pairing-unavailable'
   }
-  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 function assertDirectInstall(

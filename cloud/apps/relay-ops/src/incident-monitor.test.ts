@@ -273,16 +273,19 @@ describe('incident monitor evaluator', () => {
     )
   })
 
-  it('allows at most three unexpected director errors per five minutes without relaxing other gates', () => {
-    for (const errors of [1, 2, 3]) {
+  // Why: measured non-503 5xx per rolling five minutes over the 24 h to 2026-09-17
+  // was p90 3 / p95 5 / p99 9 / max 52, so the old bar of 3 sat on the p90 and froze
+  // 29% of 15-minute gates on chronic director 500 bursts.
+  it('tolerates the measured chronic director error rate without relaxing other gates', () => {
+    for (const errors of [1, 3, 5, 9, 15]) {
       const sample = healthySample()
       sample.sources['cloud-monitoring']!.signals['director.errors'] = signal(errors)
       expect(evaluateIncidentSample(sample, startedAt).status).toBe('green')
     }
     const excess = healthySample()
-    excess.sources['cloud-monitoring']!.signals['director.errors'] = signal(4)
+    excess.sources['cloud-monitoring']!.signals['director.errors'] = signal(16)
     expect(evaluateIncidentSample(excess, startedAt).failures).toContainEqual(
-      expect.objectContaining({ signal: 'director.errors', observed: 4, threshold: 3 })
+      expect.objectContaining({ signal: 'director.errors', observed: 16, threshold: 15 })
     )
     const auth = healthySample()
     auth.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
@@ -358,17 +361,20 @@ describe('incident monitor evaluator', () => {
     })
   })
 
+  // Why: measured latest-sum over the 24 h to 2026-09-17 was p95 212 / p99 262 /
+  // max 282, so the old bar of 250 sat under the observed peak and froze 21.8% of
+  // 15-minute gates. 320 still fires at 65% of the 490 usable connections.
   it('bounds Cloud SQL backends above measured healthy peaks', () => {
     const sample = healthySample()
-    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(250)
+    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(282)
     expect(evaluateIncidentSample(sample, startedAt).status).toBe('green')
-    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(251)
+    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(321)
     expect(evaluateIncidentSample(sample, startedAt).failures).toContainEqual({
       code: 'threshold_max',
       source: 'cloud-monitoring',
       signal: 'cloud_sql.backends',
-      observed: 251,
-      threshold: 250
+      observed: 321,
+      threshold: 320
     })
   })
 
@@ -1112,5 +1118,200 @@ describe('incident monitor lifecycle', () => {
       startedAt + 120_000
     ])
     expect(waits[0]).toBe(45_000)
+  })
+})
+
+// Why: the asia-east2 cells' readiness probe runs SELECT 1 against Cloud SQL in
+// us-central1 behind a 2 s timeout, so a saturated pool makes the load balancer
+// answer "no healthy upstream" for about 30 s. Every one of 39 pre-roll gates froze
+// on that, and 7 of the last 14 froze on this signal alone.
+describe('incident monitor cell probe tolerance', () => {
+  const dryRunState = () =>
+    initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+
+  // Returns the finished state of a 15-minute dry-run whose cell probe reads
+  // health=0 and ready=0 on the sample indexes in `badSamples`.
+  const runWithCellProbeGaps = async (badSamples: Set<number>) => {
+    let now = startedAt
+    let index = -1
+    return await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (badSamples.has(index)) {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+            signal(0, now)
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.ready'] =
+            signal(0, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+  }
+
+  it('passes a dry-run through a probe outage no longer than the tolerance', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    const result = await runWithCellProbeGaps(
+      new Set(Array.from({ length: tolerance }, (_, offset) => 3 + offset))
+    )
+    expect(result.frozenAt).toBeNull()
+    expect(result.failures).toEqual([])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+    // The blip is absorbed, not hidden: the sealed state still carries it.
+    expect(result.toleratedProbeEvents).toHaveLength(tolerance)
+    expect(result.toleratedProbeEvents[0]!.failures).toContainEqual(
+      expect.objectContaining({
+        source: 'active-probe',
+        signal: 'cell.production-gce-c1.health',
+        observed: 0,
+        threshold: 1
+      })
+    )
+    // A recovered probe hands back the full budget rather than a partial one.
+    expect(result.probeStreaks).toEqual({})
+  })
+
+  it('freezes once a cell probe fails past the tolerance', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    const result = await runWithCellProbeGaps(
+      new Set(Array.from({ length: tolerance + 1 }, (_, offset) => 3 + offset))
+    )
+    expect(result.frozenAt).not.toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(false)
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({
+        source: 'active-probe',
+        signal: 'cell.production-gce-c1.health',
+        observed: 0,
+        threshold: 1
+      })
+    )
+    // Only the samples past the tolerance freeze; the first two are still absorbed.
+    expect(result.toleratedProbeEvents).toHaveLength(tolerance)
+  })
+
+  it('does not accumulate a streak across a recovered sample', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    // Repeated single-sample outages, each separated by a healthy sample, never
+    // reach the tolerance however many times they recur.
+    const spaced = new Set([2, 4, 6, 8, 10])
+    expect(spaced.size).toBeGreaterThan(tolerance)
+    const result = await runWithCellProbeGaps(spaced)
+    expect(result.frozenAt).toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  // Why: health, ready and latency_ms all describe the same round trip, so the streak
+  // is keyed by cell. Keyed per signal, this cell holds every individual streak at one
+  // and never reaches the tolerance, yet it is unhealthy without a break from sample 2.
+  it('freezes on a cell that alternates between slow and unanswered', async () => {
+    let now = startedAt
+    let index = -1
+    const result = await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (index < 2) return sample
+        // Two samples slow, then two samples down, repeating: never the same signal
+        // twice in a row beyond the tolerance, but never healthy either.
+        if (Math.floor((index - 2) / 2) % 2 === 0) {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+            signal(9_000, now)
+        } else {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+            signal(0, now)
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.ready'] =
+            signal(0, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).not.toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(false)
+  })
+
+  // Why: the streak lives in the state file, so a resumed run must not hand a cell
+  // that was already failing a fresh budget.
+  it('freezes immediately when a resumed state carries a full streak', async () => {
+    let now = startedAt
+    const resumed = {
+      ...dryRunState(),
+      lastSampleAt: new Date(startedAt).toISOString(),
+      probeStreaks: {
+        'active-probe/cell.production-gce-c1':
+          INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+      }
+    }
+    const result = await runIncidentMonitor(resumed, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        const sample = healthySample(now)
+        sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+          signal(0, now)
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).toBe(new Date(startedAt).toISOString())
+    expect(result.toleratedProbeEvents).toEqual([])
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({
+        source: 'active-probe',
+        signal: 'cell.production-gce-c1.health'
+      })
+    )
+  })
+
+  it('gives the director and auth probes no tolerance', async () => {
+    let now = startedAt
+    let index = -1
+    const result = await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (index === 3) {
+          sample.sources['active-probe']!.signals['director.health'] = signal(0, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).not.toBeNull()
+    expect(result.toleratedProbeEvents).toEqual([])
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({ source: 'active-probe', signal: 'director.health' })
+    )
   })
 })

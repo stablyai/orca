@@ -223,7 +223,15 @@ export function createRelayApp(
   })
   app.get('/v1/regions', async (context) => {
     if (config.role === 'cell') return context.json({ error: 'director_only' }, 404)
-    return context.json({ v: 1, regions: await regionCatalog() })
+    try {
+      return context.json({ v: 1, regions: await regionCatalog() })
+    } catch (error) {
+      if (!isRelayDatabaseTransientError(error)) throw error
+      // Same contract as the assignment routes: a database that is briefly out
+      // of reach is a retry, not a director fault.
+      context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
+      return context.json({ error: 'region_catalog_temporarily_unavailable' }, 503)
+    }
   })
   app.post('/v1/assign', async (context) => {
     if (config.role === 'cell') return context.json({ error: 'director_only' }, 404)
@@ -1307,12 +1315,17 @@ export function createRelayApp(
     if (body.data.completeReady && (await verifyReadOnlyAdminToken(bearer))) {
       return context.json({ error: 'insufficient_permission' }, 403)
     }
-    const status = await operations.assignments.cellEvacuationStatus(
-      body.data.sourceCellId,
-      body.data.targetCellId,
-      body.data.completeReady
-    )
-    return context.json({ v: 1, ...status })
+    try {
+      const status = await operations.assignments.cellEvacuationStatus(
+        body.data.sourceCellId,
+        body.data.targetCellId,
+        body.data.completeReady
+      )
+      return context.json({ v: 1, ...status })
+    } catch (error) {
+      if (!isRelayDatabaseTransientError(error)) throw error
+      return context.json({ error: 'database_temporarily_unavailable' }, 503)
+    }
   })
   app.post('/v1/admin/cell-status', async (context) => {
     const bearer = readBearer(context.req.header('authorization'))

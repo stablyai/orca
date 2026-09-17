@@ -1,3 +1,5 @@
+import { isPostgresPoolConnectTimeout } from './postgres-pool-pressure.js'
+
 type QueryFailurePhase = 'acquire' | 'execute'
 
 const ERROR_CODES = new Set([
@@ -23,6 +25,8 @@ export function reportPostgresQueryFailure(input: {
   error: unknown
   phase: QueryFailurePhase
   sql: string
+  // The routing verdict, supplied by the caller that owns it.
+  transient: boolean
   elapsedMs: number
   pool: { totalCount: number; idleCount: number; waitingCount: number }
 }): void {
@@ -31,9 +35,7 @@ export function reportPostgresQueryFailure(input: {
     const error = input.error as { code?: unknown; message?: unknown } | null
     const code =
       typeof error?.code === 'string' && ERROR_CODES.has(error.code) ? error.code : 'unknown'
-    const connectionTimeout =
-      typeof error?.message === 'string' &&
-      error.message.includes('timeout exceeded when trying to connect')
+    const connectionTimeout = isPostgresPoolConnectTimeout(error)
     console.warn(
       JSON.stringify({
         event: 'orca_relay_postgres_query_failed',
@@ -43,6 +45,7 @@ export function reportPostgresQueryFailure(input: {
           : 'other',
         code,
         connectionTimeout,
+        transient: input.transient,
         elapsedMs: Math.max(0, Math.round(input.elapsedMs)),
         poolTotal: input.pool.totalCount,
         poolIdle: input.pool.idleCount,

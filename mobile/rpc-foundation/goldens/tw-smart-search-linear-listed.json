@@ -3,17 +3,17 @@
   "family": "tasks.smart-source-search",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "b354d1338a1719fed0c90d7d6729b5d31126de23",
+  "baseline": "3e32b8352262d0038878f2c4937297c7b977e314",
   "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "1d8cf6624653d15b5b32bd2871d4d93739d4092a06f10dab24a795702422bb31",
-  "adapterSha256": "500f6edf854d3852590803f9994c6f14c7f39821b58115c4973c7ade8a5189a5",
-  "scenarioSha256": "9681485eec93644a01dd6dff0d07f9629361a86989a900176c5aaff3d5805db3",
+  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "scenarioSha256": "34ab4edb621856980c8678629bd809c100d27dcd0747db5abbf4508c7231b7e5",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "15d6e85f9f78": {
+    "251733144c41": {
       "name": "linear.listIssues#1",
       "ordinal": 1,
       "args": [
@@ -47,77 +47,19 @@
           "ok": true,
           "result": [
             {
-              "id": "issue-2",
-              "identifier": "ENG-2",
-              "labels": [],
-              "priority": 0,
-              "state": {
-                "color": "#000",
-                "name": "Todo",
-                "type": "unstarted"
-              },
-              "team": {
-                "id": "team-1",
-                "key": "ENG",
-                "name": "Engineering"
-              },
-              "title": "An assigned issue",
-              "updatedAt": "2020-01-01T00:00:00.000Z",
-              "url": "",
-              "workspaceId": "linear-workspace"
+              "id": "issue-2"
             }
           ]
         }
       }
     },
-    "5ada0ba09955": {
+    "a95bdb94e589": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": [
         {
-          "id": "issue-2",
-          "identifier": "ENG-2",
-          "labels": [],
-          "priority": 0,
-          "state": {
-            "color": "#000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering"
-          },
-          "title": "An assigned issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace"
-        }
-      ]
-    },
-    "68e656392151": {
-      "linear": [
-        {
-          "id": "issue-2",
-          "identifier": "ENG-2",
-          "labels": [],
-          "priority": 0,
-          "state": {
-            "color": "#000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering"
-          },
-          "title": "An assigned issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace"
+          "id": "issue-2"
         }
       ]
     },
@@ -125,6 +67,13 @@
       "name": "linear.listIssues#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"assigned\",\"limit\":50}}"
+    },
+    "f2b981b0b281": {
+      "linear": [
+        {
+          "id": "issue-2"
+        }
+      ]
     }
   },
   "recording": {
@@ -133,12 +82,12 @@
       {
         "id": "linear-assigned",
         "observation": {
-          "sender": ["15d6e85f9f78"],
+          "sender": ["251733144c41"],
           "payloads": ["b272a4494870"],
           "settlements": {
-            "linear": "5ada0ba09955"
+            "linear": "a95bdb94e589"
           },
-          "state": "68e656392151",
+          "state": "f2b981b0b281",
           "effects": []
         }
       }

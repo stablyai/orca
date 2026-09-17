@@ -41,10 +41,7 @@ import {
   terminalQuickCommandsSchema,
   workspaceFilePathsSchema
 } from './session-read-reply-schema'
-import {
-  sessionCreatedTerminalTabSchema,
-  terminalSendAcceptedSchema
-} from './session-write-reply-schema'
+import { sessionCreatedTerminalTabSchema } from './session-write-reply-schema'
 
 // One suite per claim the session schemas make. The three kinds of case here are the three kinds of
 // decision the schemas encode: a member a consumer reads unguarded is required, an arm set a reader
@@ -489,10 +486,9 @@ describe('declared variants', () => {
     expect(refuses(githubPrRepoSlugSchema, { owner: 'o' })).toBe(true)
   })
 
-  it('reads a terminal send as delivered unless the runtime said otherwise', () => {
-    expect(reads(terminalSendAcceptedSchema, { send: { accepted: true } })).toBe(true)
-    expect(reads(terminalSendAcceptedSchema, { send: { accepted: false } })).toBe(false)
-    expect(reads(terminalSendAcceptedSchema, {})).toBe(false)
+  // The plain terminal-send envelope is pinned once, in terminal-reply-schema.test.ts; this is the
+  // review variant only, whose absent arm reads the other way.
+  it('reads a review terminal send as delivered unless the runtime said otherwise', () => {
     expect(reads(reviewTerminalSendAcceptedSchema, { send: { accepted: false } })).toBe(false)
     expect(reads(reviewTerminalSendAcceptedSchema, {})).toBe(true)
     expect(refuses(reviewTerminalSendAcceptedSchema, null)).toBe(true)
