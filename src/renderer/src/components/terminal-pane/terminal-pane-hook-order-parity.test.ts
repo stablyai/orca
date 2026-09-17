@@ -21,7 +21,7 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // Then search match count + Cmd+F focus parity (#9035) added a `useRef` and a `useCallback` in
 // foundation (search input ref, focus-search-input) (211 hooks, still 8 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  'f6de13ab7d6d130444c50fec2cfe097851ee1b7ecf0f3a2cbdc082c2e8e8838b'
+  'ed41829b57f0723c155af1b0339513f5191e4485cd2e7b3fa2c062039afdc4e3'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
