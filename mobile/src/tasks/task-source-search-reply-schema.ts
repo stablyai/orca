@@ -6,7 +6,7 @@ import { linearIssueRowSchema } from './task-item-detail-reply-schema'
 // a pasted link or number resolves to. Checked against
 // src/main/runtime/rpc/methods/github-repo-work-item-methods.ts:30-81 (ListWorkItemsResult, whose
 // declared invariant is that `items` always carries whatever succeeded), gitlab.ts:40-49 and
-// gitlab.ts:180-190, and linear.ts:50-60.
+// gitlab.ts:180-190, and src/main/runtime/rpc/methods/linear.ts:50-60.
 //
 // Work-item rows stay thin on identity: `id`, `number`, `title`, `state` and `url` are all read
 // through a guard or rendered as text, so typing them is enough and requiring one would drop a row
@@ -83,7 +83,8 @@ export const taskGitLabWorkItemListSchema = z.looseObject({
  *
  * The row is `linearIssueRowSchema`, imported rather than declared again: this and the item sheet
  * decode the same `LinearIssue` (src/shared/linear/issue-types.ts:3-35), which `linear.searchIssues`
- * and `linear.listIssues` return (linear.ts:50-56, linear-issue-list-method.ts:5-16). Its nine
+ * and `linear.listIssues` return (src/main/runtime/rpc/methods/linear.ts:50-56,
+ * linear-issue-list-method.ts:5-16). Its nine
  * requirements are all non-optional on that type, and two of them are reads that throw here:
  * `createLinearTask` reads `issue.state.name` and `issue.team.name` with no guard
  * (mobile-tasks-item-mapping.ts:296-297), and `getLinearPriorityRank(issue.priority)` feeds

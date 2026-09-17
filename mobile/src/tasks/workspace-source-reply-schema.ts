@@ -3,9 +3,9 @@ import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/
 
 // The repo and SSH reads the workspace-create drawer runs. Checked against
 // src/main/runtime/rpc/methods/ssh.ts:30-46 (getPublicSshState, SshConnectionState in
-// src/shared/ssh-types.ts:187), preflight.ts:22-30 (both agent probes answer a bare `string[]`),
-// and repo.ts:87-103/:184-192 (the sparse preset envelopes, the ref search and the orca.yaml
-// hooks).
+// src/shared/ssh-types.ts:187), src/main/runtime/rpc/methods/preflight.ts:22-30 (both agent probes
+// answer a bare `string[]`), and repo.ts:87-103/:184-192 (the sparse preset envelopes, the ref
+// search and the orca.yaml hooks).
 
 const SSH_CONNECTION_STATUS = [
   'disconnected',
@@ -46,7 +46,7 @@ const sourceText = (name: string) => salvagedOptional(name, z.string())
  * That degrade is allowed only because it is invisible to every reader of `status`. Main passed an
  * unknown arm through as a raw string, and the one function that turns it into text,
  * workspaceSshStatusLabel, falls through to `return 'Disconnected'` (workspace-ssh-gate.ts:50) —
- * the same label the degraded value produces. isWorkspaceSshConnectInProgress (:24-:31) answers false
+ * the same label the degraded value produces. isWorkspaceSshConnectInProgress (:24-:26) answers false
  * for both, the readiness gate is an equality test against `'connected'`
  * (use-mobile-tasks-workspace-ssh-state.tsx:88/:97, use-new-workspace-execution-target.ts:50)
  * which both fail, and `error` is read off the record untouched. The parity is pinned in
@@ -82,7 +82,7 @@ export const sshConnectionStateSchema = z
  * The agent ids a host reports, local or remote.
  *
  * A bare array of strings, which is what both handlers return. The drawer builds a `Set` from it
- * (use-mobile-tasks-workspace-ssh-state.tsx:131, use-new-workspace-execution-target.ts:96), so a
+ * (use-mobile-tasks-workspace-ssh-state.tsx:131, use-new-workspace-execution-target.ts:99), so a
  * non-iterable payload was a TypeError inside a `.then` and a number reply was a silent
  * `Set { 7 }` that matched no agent. A non-string element drops rather than failing the probe:
  * every reader compares the id to a known agent, so a dropped element and a kept non-string agree

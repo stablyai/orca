@@ -112,12 +112,12 @@ export const taskProjectAccessibleListSchema = z.union([
 /**
  * A project's views.
  *
- * `views` is required: :84 publishes it and :85 returns it, and :192/:197/:211/:221 run `find` and
+ * `views` is required: :84 publishes it and :85 returns it, and :191/:196/:210/:220 run `find` and
  * `filter` over the same array with no guard. A view needs the `id` the selection is committed
- * under (:226 → githubProjectSettings.lastViewByProject), so a row without one drops.
+ * under (:225 → githubProjectSettings.lastViewByProject), so a row without one drops.
  *
  * `layout` is a plain string, not an enum. Every reader is an equality test against
- * `'TABLE_LAYOUT'` (:197/:205/:211/:221), so a layout arm this build has not heard of already
+ * `'TABLE_LAYOUT'` (:196/:204/:210/:220), so a layout arm this build has not heard of already
  * reads as "not supported" — closing the set would instead drop the row and change the count the
  * "no supported views" copy is decided by. That is remote-wire-compatibility.md rule 4.
  */
@@ -174,15 +174,17 @@ export const taskProjectViewTableSchema = z.union([
 /**
  * A pasted project URL or `owner/number`, resolved.
  *
- * `owner`, `ownerType` and `number` are required: :267-:272 forward all three into
+ * `owner`, `ownerType` and `number` are required:
+ * use-mobile-tasks-project-loading-actions.tsx:267-:272 forward all three into
  * `selectGitHubProject`, which puts them in the key and in the next `github.project.listViews`
  * params. `ownerType` is therefore a CLOSED enum with no fallback — it is echoed into a param, and
  * remote-wire-compatibility.md rule 4 forbids a reply-schema fallback from shaping one. The arm
  * set is genuinely closed host-side: project-view-listing.ts:23 answers `validation_error` for any
  * other value, so degrading an unknown arm would only put a value the host refuses on the wire.
  *
- * `title` is optional because no mobile consumer reads it, and `viewNumber`/`host` because :271
- * and :273 both default them.
+ * `title` is optional because no mobile consumer reads it. `host` is optional because
+ * use-mobile-tasks-project-loading-actions.tsx:271 coalesces it (`result.host ?? parsed.host`),
+ * and `viewNumber` because :190 tests `typeof options.viewNumber === 'number'` before using it.
  */
 export const taskProjectRefSchema = z.union([
   z.looseObject({
@@ -202,7 +204,7 @@ export const taskProjectRefSchema = z.union([
  *
  * `details` is required: use-mobile-tasks-project-detail-loading.tsx:110-:121 reads eleven members
  * off it, each defaulted but the container itself never guarded. `error.message` is required
- * because :107 throws it.
+ * because :102 throws it.
  *
  * `item.reviewDecision` is nullable AND optional and stays that way. :121 forwards it verbatim
  * into `projectRowDetail`, where `null` ("reviewed, no decision") and absent ("this host does not
@@ -239,7 +241,7 @@ export const taskProjectRowDetailSchema = z.union([
  * The repo label list.
  *
  * Flat, not a union: use-mobile-tasks-project-metadata-loading.tsx:53 spells
- * `result.error?.message ?? 'Failed to load labels'` and :59 spells `result.labels ?? []`, so
+ * `result.error?.message ?? 'Failed to load labels'` and :55 spells `result.labels ?? []`, so
  * every member is already defaulted and an envelope with no `ok` still reads as refused. What the
  * schema adds is the container and the element type — a `labels` that is not an array of strings
  * reached the label picker as rendered garbage.
@@ -250,7 +252,7 @@ export const taskProjectLabelListSchema = z.looseObject({
   error: optionalProjectError
 })
 
-/** The assignable-user list, guarded the same way at :107-:110. The row is
+/** The assignable-user list, guarded the same way at :105-:110. The row is
  *  `assignableUserListSchema`, the same entity the item sheet's reviewer picker decodes: `login` is
  *  what both key on, and `name`/`avatarUrl` keep their explicit `null`. */
 export const taskProjectAssignableUserListSchema = z.looseObject({
@@ -259,7 +261,7 @@ export const taskProjectAssignableUserListSchema = z.looseObject({
   error: optionalProjectError
 })
 
-/** The repo issue types, guarded the same way at :161-:164. `id` is the mutation's own param
+/** The repo issue types, guarded the same way at :159-:164. `id` is the mutation's own param
  *  (use-mobile-tasks-project-metadata-actions.tsx:240), so a row without one cannot be applied. */
 export const taskProjectIssueTypeListSchema = z.looseObject({
   ok: optionalOk,

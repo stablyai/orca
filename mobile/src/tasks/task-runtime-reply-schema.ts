@@ -36,8 +36,9 @@ export const taskRuntimeStatusSchema = z.looseObject({
  *
  * The reader yields `ui` itself, which is what the member reader it replaces did. Main's
  * `rpcPayloadMember` threw on a null or absent payload and read `undefined` off anything else, so
- * the container is the requirement and every member under it stays optional: :283 spells
- * `uiState?.trustedOrcaHooks ?? {}` and :284 `uiState?.taskResumeState ?? {}`.
+ * the container is the requirement and every member under it stays optional:
+ * use-mobile-tasks-runtime-hydration.tsx:283 spells `uiState?.trustedOrcaHooks ?? {}` and :284
+ * `uiState?.taskResumeState ?? {}`.
  *
  * Both members are `unknown`, and the call site keeps one narrowing cast over them. They are
  * opaque forwards: `trustedOrcaHooks` goes straight into state, and `taskResumeState` is the
