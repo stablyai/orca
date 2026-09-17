@@ -1,13 +1,15 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { runProcess } from '../../src/shared/child-process/run-process'
 import {
+  assertReproductionSuitesExist,
   checkPinAncestry,
   corpusProvenanceChanged,
   removeScratchWorktree,
-  repinInstruction
+  repinInstruction,
+  REPRODUCTION_SUITES
 } from './rpc-recording-pin-guard.mts'
 
 const scratch: string[] = []
@@ -23,7 +25,9 @@ async function throwawayRepository(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'pin-guard-'))
   scratch.push(directory)
   const repository = join(directory, 'repo')
-  await git(directory, 'init', '--quiet', '--initial-branch=main', 'repo')
+  await git(directory, 'init', '--quiet', 'repo')
+  // `--initial-branch=main` needs git >= 2.28; symbolic-ref before the first commit works on any.
+  await git(repository, 'symbolic-ref', 'HEAD', 'refs/heads/main')
   await git(repository, 'config', 'user.email', 'pin-guard@example.invalid')
   await git(repository, 'config', 'user.name', 'Pin Guard')
   return repository
@@ -234,5 +238,25 @@ describe('scratch worktree teardown', () => {
     expect(registered).toContain('trees/kept')
     expect(registered).toContain('trees/unmounted')
     expect(registered).not.toContain('trees/scratch')
+  })
+})
+
+describe('the suites a reproduction runs', () => {
+  const overlay = 'mobile/src/test-support/rpc-recording'
+
+  it('every name resolves to a file in this repository', () => {
+    expect(() => assertReproductionSuitesExist(resolve(import.meta.dirname, '../..'))).not.toThrow()
+  })
+
+  it('throws for the one that drifted, rather than letting vitest pass over it', async () => {
+    for (const renamed of REPRODUCTION_SUITES) {
+      const root = await mkdtemp(join(tmpdir(), 'pin-guard-suites-'))
+      scratch.push(root)
+      await mkdir(join(root, overlay), { recursive: true })
+      for (const suite of REPRODUCTION_SUITES.filter((name) => name !== renamed)) {
+        await writeFile(join(root, overlay, suite), '')
+      }
+      expect(() => assertReproductionSuitesExist(root)).toThrow(renamed)
+    }
   })
 })

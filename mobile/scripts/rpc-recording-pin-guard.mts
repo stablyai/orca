@@ -9,6 +9,7 @@
  *               recording suites replay the corpus against the CURRENT tree on every run, which is
  *               the same claim only while the fenced tree still matches the pin.
  */
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { cp, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -41,9 +42,30 @@ const CORPUS_CENSUS_SUITES = [
   'derived-goldens.test.ts',
   'golden-recorder-failure-absence.test.ts'
 ] as const
+/** Every suite the reproduction runs against the pinned tree. */
+export const REPRODUCTION_SUITES = [...RECORDING_DRIVERS, ...CORPUS_CENSUS_SUITES] as const
 const RECORDING_TIMEOUT_MS = 900_000
+// Windows needs an explicit type for a directory link and a junction needs no privilege, where a
+// real symlink does; POSIX ignores the argument. Same rule as src/main/ipc/worktree-symlinks.ts.
+const DIRECTORY_LINK = process.platform === 'win32' ? 'junction' : 'dir'
 // A failing reproduction prints one diff per golden; 8 MB clips that mid-report.
 const RECORDING_OUTPUT_BYTES = 64 * 1024 * 1024
+
+/**
+ * These names reach vitest as positional filename filters, and vitest exits 0 when only some of
+ * them match. A renamed suite would drop out of the run silently and still report a reproduction,
+ * so resolve every one of them first.
+ */
+export function assertReproductionSuitesExist(root: string): void {
+  for (const suite of REPRODUCTION_SUITES) {
+    if (!existsSync(resolve(root, RECORDER_OVERLAY, suite))) {
+      throw new Error(
+        `${suite} is not in ${RECORDER_OVERLAY}. This list names the suites the reproduction runs ` +
+          'and has drifted from the files, which vitest would pass over without a word.'
+      )
+    }
+  }
+}
 
 export type PinAncestryFailure = 'shallow' | 'unreachable' | 'not-an-ancestor'
 export type PinAncestryVerdict =
@@ -180,6 +202,7 @@ export async function corpusProvenanceChanged(root: string, since: string): Prom
  * other run.
  */
 async function reproduceFromPin(root: string, baseline: string): Promise<boolean> {
+  assertReproductionSuitesExist(root)
   const scratch = await mkdtemp(join(tmpdir(), 'rpc-recording-pin-'))
   const tree = join(scratch, 'tree')
   try {
@@ -187,8 +210,12 @@ async function reproduceFromPin(root: string, baseline: string): Promise<boolean
     if (added.code !== 0) {
       throw new Error(`Could not check out the pinned tree ${baseline}: ${added.stderr.trim()}`)
     }
-    await symlink(resolve(root, 'node_modules'), join(tree, 'node_modules'))
-    await symlink(resolve(root, 'mobile/node_modules'), join(tree, 'mobile/node_modules'))
+    await symlink(resolve(root, 'node_modules'), join(tree, 'node_modules'), DIRECTORY_LINK)
+    await symlink(
+      resolve(root, 'mobile/node_modules'),
+      join(tree, 'mobile/node_modules'),
+      DIRECTORY_LINK
+    )
     await rm(join(tree, RECORDER_OVERLAY), { recursive: true, force: true })
     await cp(resolve(root, RECORDER_OVERLAY), join(tree, RECORDER_OVERLAY), { recursive: true })
     const require = createRequire(resolve(root, 'mobile/package.json'))
@@ -197,9 +224,7 @@ async function reproduceFromPin(root: string, baseline: string): Promise<boolean
       args: [
         resolve(require.resolve('vitest/package.json'), '../vitest.mjs'),
         'run',
-        ...[...RECORDING_DRIVERS, ...CORPUS_CENSUS_SUITES].map(
-          (suite) => `src/test-support/rpc-recording/${suite}`
-        )
+        ...REPRODUCTION_SUITES.map((suite) => `src/test-support/rpc-recording/${suite}`)
       ],
       cwd: join(tree, 'mobile'),
       timeoutMs: RECORDING_TIMEOUT_MS,
