@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAskAnswerKeys,
+  buildCodexAskAnswerKeys,
   extractPendingAsk,
   formatAskAnswer,
   parseAskFromStatus
@@ -154,6 +155,55 @@ describe('buildAskAnswerKeys', () => {
       { raw: '1' },
       { raw: '3' },
       { raw: '\x1b[C' },
+      { raw: '\r' }
+    ])
+  })
+})
+
+describe('buildCodexAskAnswerKeys skips', () => {
+  it('skips a single question with DEL then two confirms', () => {
+    const prompt = {
+      questions: [{ question: 'q', multiSelect: false, options: [{ label: 'A' }] }]
+    }
+    expect(buildCodexAskAnswerKeys(prompt, [{ indices: [] }])).toEqual([
+      { raw: '\x7f' },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('tabs past every skipped question and confirms once at the end', () => {
+    const prompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'B' }] }
+      ]
+    }
+    expect(buildCodexAskAnswerKeys(prompt, [{ indices: [] }, { indices: [] }])).toEqual([
+      { raw: '\x7f' },
+      { raw: '\x1b[C' },
+      { raw: '\x7f' },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('keeps answered option digits between skipped questions with one final confirm', () => {
+    const prompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'B' }] },
+        { question: 'q3', multiSelect: false, options: [{ label: 'C' }] }
+      ]
+    }
+    expect(
+      buildCodexAskAnswerKeys(prompt, [{ indices: [] }, { indices: [0] }, { indices: [] }])
+    ).toEqual([
+      { raw: '\x7f' },
+      { raw: '\x1b[C' },
+      { raw: '1' },
+      { raw: '\x7f' },
+      { raw: '\r' },
       { raw: '\r' }
     ])
   })

@@ -261,6 +261,44 @@ describe('useMobileNativeChatAnswerSend', () => {
     ])
   })
 
+  it('sends the Codex skip-all keystrokes only with allowEmpty', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'codex')
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'B' }] }
+      ]
+    }
+
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(prompt, [{ indices: [] }, { indices: [] }], {
+        allowEmpty: true
+      })
+    })
+    await act(async () => vi.runAllTimersAsync())
+
+    await expect(result).resolves.toBe(true)
+    expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
+      expect.objectContaining({ text: '\x7f', enter: false }),
+      expect.objectContaining({ text: '\x1b[C', enter: false }),
+      expect.objectContaining({ text: '\x7f', enter: false }),
+      expect.objectContaining({ text: '\r', enter: false }),
+      expect.objectContaining({ text: '\r', enter: false })
+    ])
+  })
+
+  it('never writes an empty answer for Claude, even with allowEmpty', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'claude')
+
+    await expect(
+      answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [] }], { allowEmpty: true })
+    ).resolves.toBe(false)
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
   it('submits a non-selector answer as pasted label text with a single Enter', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'grok')

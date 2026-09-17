@@ -28,8 +28,13 @@ import {
  *  Extracted from the session route to keep that file under its line cap and to
  *  own the pending-timer lifecycle in one place. */
 export type MobileNativeChatAnswerSend = {
-  /** Answer the current question(s) from the card's per-question selections. */
-  answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  /** Answer the current question(s) from the card's per-question selections.
+   *  `allowEmpty` delivers the all-skip keystrokes and is Codex-only. */
+  answerAsk: (
+    prompt: AskPrompt,
+    selections: AskAnswerSelection[],
+    options?: { allowEmpty?: boolean }
+  ) => Promise<boolean>
   /** Drop any in-flight per-keystroke writes (call on Stop). */
   cancelPending: () => void
 }
@@ -104,13 +109,23 @@ export function useMobileNativeChatAnswerSend(args: {
   }, [client, enabled, sessionId, streamIdentity, cancelPending])
 
   const answerAsk = useCallback(
-    async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
+    async (
+      prompt: AskPrompt,
+      selections: AskAnswerSelection[],
+      options?: { allowEmpty?: boolean }
+    ): Promise<boolean> => {
       const handle = handleRef.current
       if (!client || !handle || !enabled) {
         onSendError('Answer not sent (disconnected)')
         return false
       }
-      if (!hasAskAnswer(prompt, selections)) {
+      // Codex's overlay can skip every question (DEL + Proceed); Claude's bare
+      // Enter commits the highlighted default, so an all-empty answer is Codex-only.
+      if (
+        !hasAskAnswer(prompt, selections) &&
+        (options?.allowEmpty !== true ||
+          resolveNativeChatTranscriptAgent(agentRef.current) !== 'codex')
+      ) {
         return false
       }
       // One composed write sequence per terminal: an answer landing mid-flight

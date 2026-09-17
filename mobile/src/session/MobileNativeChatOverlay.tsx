@@ -82,6 +82,7 @@ export function MobileNativeChatOverlay({
         askKey={controller.nativeChatAskKey}
         onDismissAsk={controller.dismissNativeChatAsk}
         onAnswerAsk={controller.handleNativeChatAnswerAsk}
+        onSkipAsk={controller.handleNativeChatSkipAsk}
         onCancelAsk={controller.handleNativeChatCancelAsk}
         onCancelPrompt={controller.handleNativeChatCancelPrompt}
         question={controller.nativeChatQuestion}

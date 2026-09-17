@@ -1,4 +1,6 @@
-import type { MutableRefObject } from 'react'
+import { useCallback, type MutableRefObject } from 'react'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask'
+import { resolveNativeChatTranscriptAgent } from '../../../src/shared/native-chat-agent-support'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -6,7 +8,7 @@ import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-as
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 import type { MobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 
-/** The bridge lane's four prompt/interrupt write seams. They share one enable
+/** The bridge lane's prompt/interrupt write seams. They share one enable
  *  gate and chain through the answer seam's `cancelPending`, so a caller cannot
  *  wire one of them to a different lane or forget to drop in-flight answer
  *  writes before an Escape. The structured lane answers over RPC instead. */
@@ -22,6 +24,8 @@ export function useMobileBridgeChatPromptWrites(args: {
   onSendError: (message: string) => void
 }): {
   answerAsk: MobileNativeChatAnswerSend['answerAsk']
+  /** Codex-only: skip every question in the overlay (DEL + Proceed). */
+  skipAsk: (prompt: AskPrompt) => Promise<boolean>
   cancelAsk: () => Promise<boolean>
   respondPermission: (send: string) => Promise<boolean>
   stop: () => void
@@ -37,6 +41,19 @@ export function useMobileBridgeChatPromptWrites(args: {
     streamIdentity,
     onSendError
   })
+  const skipAsk = useCallback(
+    (prompt: AskPrompt): Promise<boolean> => {
+      if (resolveNativeChatTranscriptAgent(args.agentRef.current) !== 'codex') {
+        return Promise.resolve(false)
+      }
+      return answerAsk(
+        prompt,
+        prompt.questions.map(() => ({ indices: [] })),
+        { allowEmpty: true }
+      )
+    },
+    [answerAsk, args.agentRef]
+  )
   const cancelAsk = useMobileNativeChatCancelAsk({
     client,
     enabled,
@@ -61,5 +78,5 @@ export function useMobileBridgeChatPromptWrites(args: {
     cancelPending,
     onSendError
   })
-  return { answerAsk, cancelAsk, respondPermission, stop }
+  return { answerAsk, skipAsk, cancelAsk, respondPermission, stop }
 }

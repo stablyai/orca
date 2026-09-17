@@ -175,6 +175,7 @@ export function useMobileNativeChatController(args: {
 
   const {
     answerAsk: handleNativeChatAnswerAsk,
+    skipAsk: handleNativeChatSkipAskRaw,
     cancelAsk: handleNativeChatCancelAsk,
     respondPermission: legacyHandleNativeChatRespondPermission,
     stop: handleNativeChatStop
@@ -257,6 +258,7 @@ export function useMobileNativeChatController(args: {
   }, [recordNativeChatSessionOptionCommand])
   // Card actions retire the route's held failure banner too, not just sends.
   const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
+  const skipAsk = useNativeChatAcceptedAction(handleNativeChatSkipAskRaw, onSendResolved)
   const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
   const handleNativeChatRespondPermission = activeChatStructured
     ? structuredNativeChat.respondPermission
@@ -299,6 +301,8 @@ export function useMobileNativeChatController(args: {
     nativeChatAskKey,
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
+    /** Bridge-lane Codex: skip every question in the pending overlay. */
+    handleNativeChatSkipAsk: activeChatStructured ? undefined : skipAsk,
     handleNativeChatCancelAsk: cancelAsk,
     // Heuristic/legacy cards have no durable prompt identity, so keep their
     // cancel affordance absent instead of exposing a dead action.

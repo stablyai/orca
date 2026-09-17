@@ -56,6 +56,8 @@ export type MobileNativeChatController = {
     prompt: AskPrompt,
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
+  /** Bridge-lane Codex only: skip every question in the pending overlay. */
+  handleNativeChatSkipAsk?: (prompt: AskPrompt) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string

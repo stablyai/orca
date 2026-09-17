@@ -121,6 +121,8 @@ type Props = {
   /** Deliver the ask answer as per-question selections; the send hook turns them
    *  into selector keystrokes (Claude) or pasted label text (other agents). */
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  /** Codex bridge lane: skip every question in the overlay. */
+  onSkipAsk?: (prompt: AskPrompt) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
   /** Cancel a structured approval/question with exact item identity when supported. */
   onCancelPrompt?: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
@@ -179,6 +181,7 @@ export function MobileNativeChatView({
   askKey,
   onDismissAsk,
   onAnswerAsk,
+  onSkipAsk,
   onCancelAsk,
   onCancelPrompt,
   question,
@@ -373,6 +376,7 @@ export function MobileNativeChatView({
         askKey={askKey}
         onDismissAsk={onDismissAsk}
         onAnswerAsk={onAnswerAsk}
+        onSkipAsk={onSkipAsk}
         onCancelAsk={onCancelAsk}
         onCancelPrompt={onCancelPrompt}
         permission={permission}

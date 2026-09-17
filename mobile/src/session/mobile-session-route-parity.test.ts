@@ -46,6 +46,7 @@ const SURFACE_EXPANSION_NAMES = new Set([
   'MobileSessionContentRow',
   'MobileSessionActiveContent',
   'MobileSessionCommandDock',
+  'MobileCodexAskAccessoryKeys',
   'MobileSessionSheets'
 ])
 const CONTENT_COMPONENT_NAMES = ['MarkdownReader', 'DiffLineRow', 'FileReader'] as const
@@ -101,12 +102,15 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // first, then `worktree.activate` twice, `session.tabs.createTerminal` and
 // `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
 // spelled at the call site.
+// Refreshed for the terminal-dock Codex Answer/Skip quick keys (extracted into
+// MobileCodexAskAccessoryKeys, a new expanded surface in the route family) and
+// the ask wizard's Next/Skip/Submit accessibility labels.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'a5496f14589916b027334a236630720b39eb0360d91538d212b408c1f61bb523'
-const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
+  '0c7c47ab60bc9fd292579807bbd9cba5e5e72d0534bd837672b6260299e51938'
+const HEAD_HOST_JSX_SHA256 = '7149c58c6e5887200f5da0faf9e186032abfc652fb55232b5d32750c001a2dbe'
 const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
+  '815ef9559af6748abec4888bb7f83b4d1a642b28866b4eed422864ac43e35b5c'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
@@ -540,14 +544,14 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(531)
+    expect(strings).toHaveLength(536)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
-    expect(jsx.host).toHaveLength(124)
+    expect(jsx.host).toHaveLength(128)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     expect(jsx.leaf).toHaveLength(61)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(172)
+    expect(jsx.styleReferences).toHaveLength(181)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })

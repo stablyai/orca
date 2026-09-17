@@ -10,6 +10,8 @@ type Props = {
    *  index-based so Claude's arrow-navigate selector can be driven by the
    *  option's stable number instead of pasted label text (STA-1860). */
   onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
+  /** Skip every question and let the agent proceed (Codex overlay's DEL + Proceed). */
+  onSkip?: (prompt: AskPrompt) => Promise<boolean>
   onCancel?: () => Promise<boolean>
 }
 
@@ -17,10 +19,17 @@ type Props = {
 const OTHER = -1
 
 /** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
- *  question per step with tabs across the top, a Next button that advances (Send
- *  on the last step), and a Cancel that dismisses the prompt. Neutral styling
- *  with a subtle green accent on the active choice to match the rest of the app. */
-export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): React.JSX.Element {
+ *  question per step with tabs across the top. The trailing button advances
+ *  unanswered steps as "Skip" and becomes "Submit" once anything is answered;
+ *  a final Skip with no answer anywhere calls onSkip (Codex's skip-all) instead
+ *  of sending an empty answer. Neutral styling with a subtle green accent on the
+ *  active choice to match the rest of the app. */
+export function MobileNativeChatAsk({
+  prompt,
+  onAnswer,
+  onSkip,
+  onCancel
+}: Props): React.JSX.Element {
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -66,15 +75,17 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selections, otherText, index]
   )
-  const allAnswered = useMemo(
-    () => prompt.questions.every((_, i) => isAnswered(i)),
+  const anyAnswered = useMemo(
+    () => prompt.questions.some((_, i) => isAnswered(i)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [otherText, prompt.questions, selections]
   )
-  const canAdvance = !submitting && (isLast ? allAnswered : currentAnswered)
+  // Unanswered steps are skips (desktop parity); the final Skip with nothing
+  // answered anywhere needs the agent's skip-all seam, absent where unsupported.
+  const canAdvance = !submitting && (!isLast || anyAnswered || !!onSkip)
 
   const submit = async (): Promise<void> => {
-    if (!allAnswered || submittingRef.current) {
+    if (!anyAnswered || submittingRef.current) {
       return
     }
     submittingRef.current = true
@@ -87,11 +98,29 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
     }
   }
 
+  const skip = async (): Promise<void> => {
+    if (!onSkip || submittingRef.current) {
+      return
+    }
+    submittingRef.current = true
+    setSubmitting(true)
+    try {
+      await onSkip(prompt)
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
+    }
+  }
+
   const advance = async (): Promise<void> => {
-    if (isLast) {
+    if (!isLast) {
+      setIndex((i) => Math.min(i + 1, total - 1))
+      return
+    }
+    if (anyAnswered) {
       await submit()
     } else {
-      setIndex((i) => Math.min(i + 1, total - 1))
+      await skip()
     }
   }
 
@@ -185,9 +214,18 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
           style={[styles.next, !canAdvance && styles.nextDisabled]}
           onPress={advance}
           disabled={!canAdvance}
+          accessibilityLabel={
+            isLast
+              ? anyAnswered
+                ? 'Submit answer'
+                : 'Skip question'
+              : currentAnswered
+                ? 'Next question'
+                : 'Skip question'
+          }
         >
           <Text style={[styles.nextText, !canAdvance && styles.nextTextDisabled]}>
-            {isLast ? 'Submit' : 'Next'}
+            {isLast ? (anyAnswered ? 'Submit' : 'Skip') : currentAnswered ? 'Next' : 'Skip'}
           </Text>
         </Pressable>
       </View>

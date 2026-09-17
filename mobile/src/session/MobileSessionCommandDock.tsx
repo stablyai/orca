@@ -16,6 +16,7 @@ import {
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import { MobileCodexAskAccessoryKeys } from './MobileCodexAskAccessoryKeys'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
@@ -67,8 +68,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeMarkdownTab,
     activeFileTab,
     activeBrowserTab,
-    keyboardLift
+    keyboardLift,
+    activeSessionTabId,
+    toggleTabChatView,
+    nativeChatController
   } = controller
+  const { nativeChatAgent, nativeChatAsk, nativeChatAskKey, handleNativeChatSkipAsk } =
+    nativeChatController
   return (
     !activeMarkdownTab &&
     !activeFileTab &&
@@ -114,6 +120,18 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             contentContainerStyle={styles.accessoryContent}
             keyboardShouldPersistTaps="always"
           >
+            {nativeChatAsk !== null && nativeChatAgent === 'codex' ? (
+              <MobileCodexAskAccessoryKeys
+                ask={nativeChatAsk}
+                askKey={nativeChatAskKey}
+                onAnswer={() => {
+                  if (activeSessionTabId) {
+                    toggleTabChatView(activeSessionTabId)
+                  }
+                }}
+                onSkip={handleNativeChatSkipAsk}
+              />
+            ) : null}
             <Pressable
               style={({ pressed }) => [
                 styles.accessoryKey,
