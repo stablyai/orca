@@ -7,6 +7,7 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import type { DaemonFileLog } from './daemon-file-log'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
+import { waitForEndpointReachable } from './daemon-endpoint-reachability-test-harness'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -89,7 +90,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('dead-endpoint write respawn (STA-2373)', () => {
-    function restartServerOnRespawn(): void {
+    async function restartServerOnRespawn(): Promise<void> {
       server = new DaemonServer({
         socketPath,
         tokenPath,
@@ -99,6 +100,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           return lastSubprocess
         }
       })
+      await server.start()
+      if (process.platform === 'win32') {
+        await waitForEndpointReachable(socketPath)
+      }
     }
 
     it('rejects stale input until createOrAttach remounts the pane onto the new daemon', async () => {
@@ -237,8 +242,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await new Promise<void>((resolve) => {
           releaseRespawn = resolve
         })
-        restartServerOnRespawn()
-        await server.start()
+        await restartServerOnRespawn()
       })
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
       try {
@@ -265,8 +269,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('does not respawn when a dropped write targets no active session', async () => {
       const respawn = vi.fn(async () => {
-        restartServerOnRespawn()
-        await server.start()
+        await restartServerOnRespawn()
       })
       const idleAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
       try {
@@ -336,8 +339,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('re-arms recovery for a second daemon death when a background session never rebinds', async () => {
       const respawn = vi.fn(async () => {
-        restartServerOnRespawn()
-        await server.start()
+        await restartServerOnRespawn()
       })
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
       const recovered: string[] = []

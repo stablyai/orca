@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
+import type * as ShellStartupEnv from '../pty/shell-startup-env'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
 
 const testState = { userData: '', home: '' }
@@ -18,6 +19,10 @@ vi.mock('node:os', async () => {
 
 beforeEach(() => {
   vi.resetModules()
+  vi.doMock('../pty/shell-startup-env', async () => ({
+    ...(await vi.importActual<typeof ShellStartupEnv>('../pty/shell-startup-env')),
+    isShellStartupEnvProbeSupported: () => true
+  }))
   testState.userData = mkdtempSync(join(tmpdir(), 'orca-codex-e-migration-'))
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-e-home-'))
   for (const key of [
@@ -36,6 +41,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.doUnmock('../pty/shell-startup-env')
   rmSync(testState.userData, { recursive: true, force: true })
   rmSync(testState.home, { recursive: true, force: true })
   for (const [key, value] of Object.entries(previousEnv)) {

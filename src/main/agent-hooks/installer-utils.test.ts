@@ -41,6 +41,27 @@ import { findBareHookCommandVariables } from './managed-hook-command-env.test-fi
 let tmpDir: string
 let configPath: string
 
+function canCreateFileSymlinks(): boolean {
+  const probeDir = mkdtempSync(join(tmpdir(), 'orca-symlink-capability-'))
+  const targetPath = join(probeDir, 'target')
+  const linkPath = join(probeDir, 'link')
+  try {
+    writeFileSync(targetPath, '')
+    symlinkSync(targetPath, linkPath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+      return false
+    }
+    throw error
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+}
+
+const symlinkIt = it.skipIf(!canCreateFileSymlinks())
+
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'orca-installer-utils-test-'))
   configPath = join(tmpDir, 'settings.json')
@@ -98,7 +119,7 @@ describe('readHooksJsonWithRaw', () => {
 })
 
 describe('writeHooksJson', () => {
-  it('updates a symlink target without replacing the hook config link', () => {
+  symlinkIt('updates a symlink target without replacing the hook config link', () => {
     const targetPath = join(tmpDir, 'dotfiles-hooks.json')
     writeFileSync(targetPath, '{"hooks":{}}\n')
     symlinkSync(targetPath, configPath)
@@ -111,7 +132,7 @@ describe('writeHooksJson', () => {
     })
   })
 
-  it('does not replace a dangling hook config symlink', () => {
+  symlinkIt('does not replace a dangling hook config symlink', () => {
     const targetPath = join(tmpDir, 'missing-dotfiles-hooks.json')
     symlinkSync(targetPath, configPath)
 
@@ -151,7 +172,7 @@ describe('writeHooksJson', () => {
     expect(bak).toEqual(original)
   })
 
-  it('does not follow an existing .bak symlink', () => {
+  symlinkIt('does not follow an existing .bak symlink', () => {
     const original = '{"hooks":{}}\n'
     const backupTarget = join(tmpDir, 'dotfiles-backup.json')
     writeFileSync(configPath, original, 'utf-8')

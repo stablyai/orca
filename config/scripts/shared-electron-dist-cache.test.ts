@@ -39,6 +39,27 @@ function makeRoot(): string {
   return root
 }
 
+function canCreateFileSymlinks(): boolean {
+  const probeDir = mkdtempSync(path.join(tmpdir(), 'orca-symlink-capability-'))
+  const targetPath = path.join(probeDir, 'target')
+  const linkPath = path.join(probeDir, 'link')
+  try {
+    writeFileSync(targetPath, '')
+    symlinkSync(targetPath, linkPath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+      return false
+    }
+    throw error
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+}
+
+const symlinkIt = it.skipIf(!canCreateFileSymlinks())
+
 function writeDist(distPath: string, version = VERSION): string {
   mkdirSync(path.join(distPath, path.dirname(PLATFORM_PATH)), { recursive: true })
   writeFileSync(path.join(distPath, 'version'), `v${version}\n`)
@@ -63,15 +84,16 @@ const baseOptions = {
   targetArch: 'arm64',
   hostPlatform: 'darwin' as const,
   env: {} as NodeJS.ProcessEnv,
-  execFile: (() => '/repo/.git\n') as unknown as typeof execFileSync
+  execFile: (() => `${path.resolve('/repo/.git')}\n`) as unknown as typeof execFileSync
 }
 
 describe('resolveSharedElectronDistEntry', () => {
   it('keys the entry by version, platform, and arch under the git common dir', () => {
     const entry = resolveSharedElectronDistEntry(baseOptions)
-    expect(entry?.cacheRoot).toBe(path.join('/repo/.git', 'orca-cache', 'electron'))
+    const expectedGitCommonDir = path.resolve('/repo/.git')
+    expect(entry?.cacheRoot).toBe(path.join(expectedGitCommonDir, 'orca-cache', 'electron'))
     expect(entry?.entryPath).toBe(
-      path.join('/repo/.git', 'orca-cache', 'electron', '43.4.1-darwin-arm64')
+      path.join(expectedGitCommonDir, 'orca-cache', 'electron', '43.4.1-darwin-arm64')
     )
     expect(entry?.markerPath).toBe(path.join('/repo/node_modules/electron', '.orca-shared-dist'))
   })
@@ -122,7 +144,7 @@ describe('isUsableElectronDist', () => {
     expect(isUsableElectronDist(path.join(root, 'missing'), VERSION, PLATFORM_PATH)).toBe(false)
   })
 
-  it('rejects a symlink so a redirected entry is never treated as cache content', () => {
+  symlinkIt('rejects a symlink so a redirected entry is never treated as cache content', () => {
     const root = makeRoot()
     writeDist(path.join(root, 'real'))
     symlinkSync(path.join(root, 'real'), path.join(root, 'link'), 'dir')

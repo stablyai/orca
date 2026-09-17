@@ -26,7 +26,7 @@ const registeredHosts: string[] = []
 /** A remote host whose only readable file is a package.json naming a host-specific homepage. */
 function registerHomepageHost(connectionId: string, homepage: string) {
   const stat = vi.fn(async (filePath: string) => {
-    if (!filePath.endsWith('/package.json')) {
+    if (!filePath.replaceAll('\\', '/').endsWith('/package.json')) {
       throw new Error('ENOENT')
     }
     return { type: 'file', size: 64, mtime: 0 }

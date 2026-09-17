@@ -75,6 +75,10 @@ describe('CodexAccountService config sync', () => {
         return null
       }
     }))
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(() => `${wslLinuxHomePath}\n`),
+      spawn: vi.fn()
+    }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: (linuxPath: string) =>
         linuxPath === wslLinuxCanonicalHomePath ||

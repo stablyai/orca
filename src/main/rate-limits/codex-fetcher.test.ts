@@ -276,6 +276,9 @@ describe('fetchCodexRateLimits', () => {
 
   it('kills the RPC child and skips PTY fallback when the fetch signal aborts', async () => {
     const rpcChild = makeRpcChild()
+    // Why: keep the fake alive through graceful stdin shutdown so this test
+    // exercises the platform-specific force-termination path on every host.
+    rpcChild.stdin.end.mockImplementation(() => {})
     childSpawnMock.mockReturnValue(rpcChild)
     const controller = new AbortController()
 
@@ -283,6 +286,7 @@ describe('fetchCodexRateLimits', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     controller.abort()
+    await vi.advanceTimersByTimeAsync(5_000)
 
     await expect(resultPromise).resolves.toMatchObject({
       provider: 'codex',
@@ -377,11 +381,15 @@ describe('fetchCodexRateLimits', () => {
 
   it('removes RPC listeners when the app-server timeout settles', async () => {
     const rpcChild = makeRpcChild()
+    // Why: keep the fake alive through graceful stdin shutdown so timeout
+    // cleanup exercises force termination on Windows as well as POSIX hosts.
+    rpcChild.stdin.end.mockImplementation(() => {})
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
     // Why: without an initialize response only the 30s boot deadline fires.
     await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(5_000)
 
     await expect(resultPromise).resolves.toMatchObject({
       provider: 'codex',

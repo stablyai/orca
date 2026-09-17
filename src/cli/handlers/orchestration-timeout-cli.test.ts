@@ -8,6 +8,7 @@ vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
+import { renderCommand } from '../orchestration-mutation-recovery'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 describe('orchestration timeout flag validation', () => {
@@ -264,11 +265,21 @@ describe('orchestration timeout flag validation', () => {
       ])
     )
 
+    const expectedResumeCommand = renderCommand([
+      'orca-dev',
+      'orchestration',
+      'ask',
+      '--from',
+      'term_worker',
+      '--dispatch-capability',
+      'dcap_secret',
+      '--resume',
+      'msg_question',
+      '--timeout-ms',
+      '30000'
+    ])
     expect(errorSpy).toHaveBeenCalledWith(
-      'ask timeout after 30000ms; question is still pending (messageId: msg_question). ' +
-        'Resume waiting; do not ask again:\n' +
-        'orca-dev orchestration ask --from term_worker --dispatch-capability dcap_secret ' +
-        '--resume msg_question --timeout-ms 30000'
+      `ask timeout after 30000ms; question is still pending (messageId: msg_question). Resume waiting; do not ask again:\n${expectedResumeCommand}`
     )
     expect(process.exitCode).toBe(1)
   })

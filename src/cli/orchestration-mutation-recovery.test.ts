@@ -41,12 +41,12 @@ describe('orchestration mutation recovery', () => {
         workerDeathInferred: false
       }
     })
-    expect(result.message.indexOf('orca orchestration worker-show')).toBeLessThan(
-      result.message.indexOf('orca orchestration worker-start')
-    )
+    expect(
+      result.message.indexOf(renderCommand(['orca', 'orchestration', 'worker-show']))
+    ).toBeLessThan(result.message.indexOf(renderCommand(['orca', 'orchestration', 'worker-start'])))
     expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
-      'Run orca orchestration worker-show --dispatch dispatch_1 --json before retrying.',
-      'After inspecting the Dispatch, if keyed recovery is still needed, run orca orchestration worker-start --task task_1 --retry-request request_1. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.'
+      `Run ${renderCommand(['orca', 'orchestration', 'worker-show', '--dispatch', 'dispatch_1', '--json'])} before retrying.`,
+      `After inspecting the Dispatch, if keyed recovery is still needed, run ${renderCommand(['orca', 'orchestration', 'worker-start', '--task', 'task_1', '--retry-request', 'request_1'])}. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
     ])
   })
 
@@ -83,7 +83,7 @@ describe('orchestration mutation recovery', () => {
       }
     })
     expect((result.data as { nextSteps?: string[] }).nextSteps?.[0]).toBe(
-      'Run orca orchestration request-show --request request_4 --json before retrying.'
+      `Run ${renderCommand(['orca', 'orchestration', 'request-show', '--request', 'request_4', '--json'])} before retrying.`
     )
   })
 
@@ -120,11 +120,23 @@ describe('orchestration mutation recovery', () => {
       })
     ) as RuntimeClientError
 
+    const retryCommand = [
+      'orca-dev',
+      'orchestration',
+      'worker-start',
+      '--task',
+      'task 3',
+      '--comment',
+      'literal $(do-not-run)',
+      '--retry-request',
+      'request_3'
+    ]
+    const retryText = renderCommand(retryCommand)
     expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
-      'Run orca-dev orchestration worker-show --dispatch dispatch_3 --json before retrying.',
-      "After inspecting the Dispatch, if keyed recovery is still needed, run orca-dev orchestration worker-start --task 'task 3' --comment 'literal $(do-not-run)' --retry-request request_3. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate."
+      `Run ${renderCommand(['orca-dev', 'orchestration', 'worker-show', '--dispatch', 'dispatch_3', '--json'])} before retrying.`,
+      `After inspecting the Dispatch, if keyed recovery is still needed, run ${retryText}. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
     ])
-    expect(result.message).toContain("'literal $(do-not-run)'")
+    expect(result.message).toContain(retryText)
   })
 
   it('parses legacy command text without losing quoted arguments', () => {

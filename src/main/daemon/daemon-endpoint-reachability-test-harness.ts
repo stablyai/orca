@@ -4,12 +4,25 @@
 import { probeSocketConnect } from './daemon-endpoint-probe'
 
 const ENDPOINT_UNREACHABLE_TIMEOUT_MS = 2_000
+const ENDPOINT_REACHABLE_TIMEOUT_MS = 2_000
 const ENDPOINT_POLL_MS = 20
 
 /**
  * Why reuse the production probe: it is the same classifier the daemon publishes against, so a
  * test cannot drift from what the daemon itself treats as a reachable endpoint.
  */
+export async function waitForEndpointReachable(socketPath: string): Promise<void> {
+  const deadline = Date.now() + ENDPOINT_REACHABLE_TIMEOUT_MS
+  while ((await probeSocketConnect(socketPath)) !== 'connected') {
+    if (Date.now() >= deadline) {
+      throw new Error(`Endpoint did not become reachable: ${socketPath}`)
+    }
+    const delay = Promise.withResolvers<void>()
+    setTimeout(delay.resolve, ENDPOINT_POLL_MS)
+    await delay.promise
+  }
+}
+
 export async function waitForEndpointUnreachable(socketPath: string): Promise<boolean> {
   const deadline = Date.now() + ENDPOINT_UNREACHABLE_TIMEOUT_MS
   while ((await probeSocketConnect(socketPath)) === 'connected') {

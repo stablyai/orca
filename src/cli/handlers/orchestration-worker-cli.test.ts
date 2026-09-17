@@ -17,6 +17,7 @@ vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { renderResolvedOrchestrationCommand } from '../orchestration-mutation-recovery'
 import { printResult } from '../format'
 import { BOOLEAN_FLAGS, parseArgs } from '../args'
 import { formatCommandHelp } from '../help'
@@ -263,14 +264,19 @@ describe('orchestration worker-start CLI contract', () => {
         boolean,
         (result: RecoveryWorkerStartResult) => string
       ]
-      expect(response.result.nextCommands).toEqual([
-        `${executable} orchestration worker-show --dispatch ctx_unknown --json`,
-        `${executable} orchestration worker-abandon --dispatch ctx_unknown --json`
-      ])
-      if (!json) {
-        expect(formatter(response.result)).toContain(
-          `Next command: ${executable} orchestration worker-show --dispatch ctx_unknown --json`
+      const expectedNextCommands = [
+        renderResolvedOrchestrationCommand(
+          'orca orchestration worker-show --dispatch ctx_unknown --json',
+          executable
+        ),
+        renderResolvedOrchestrationCommand(
+          'orca orchestration worker-abandon --dispatch ctx_unknown --json',
+          executable
         )
+      ]
+      expect(response.result.nextCommands).toEqual(expectedNextCommands)
+      if (!json) {
+        expect(formatter(response.result)).toContain(`Next command: ${expectedNextCommands[0]}`)
       }
     }
   )
