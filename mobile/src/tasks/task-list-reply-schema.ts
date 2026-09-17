@@ -9,6 +9,8 @@ import { taskMutationEnvelopeSchema } from './task-provider-entity-reply-schema'
 // they return: LinearConnectionStatus in src/shared/linear/workspace-types.ts, GitLabTodo in
 // src/shared/gitlab-types.ts:219, and `getStatus()` in src/main/linear/client.ts:164.
 
+const GITLAB_TODO_STATE = ['pending', 'done'] as const
+
 /**
  * Linear account status for provider hydration.
  *
@@ -54,21 +56,46 @@ export const linearAccountStatusSchema = z.looseObject({
 export const githubWorkItemCountSchema = z.number().finite()
 
 /**
+ * One GitLab to-do.
+ *
+ * `id` keys the row, `actionName` is read as `actionName.replace(/_/g, ' ')`, `updatedAt` is
+ * forwarded to the sort and the timestamp, `projectPath` is interpolated into the subtitle and is
+ * the repository badge's key and label (mobile-tasks-repository-presentation.ts:56-58), and
+ * `targetUrl` is what tapping the row opens (mobile-tasks-provider-item-list.tsx:170) as well as
+ * the title's fallback. Those five are read with no guard, so they are the five required members;
+ * a row without one renders `undefined` in a label or opens nothing, which is the failure this
+ * reader exists to stop.
+ *
+ * Everything else is reached through a guard and stays optional: `targetTitle` behind
+ * `targetTitle || targetUrl`, `targetType` behind two `===` tests and `targetIid` behind
+ * `!todo.targetIid` (mobile-tasks-item-mapping.ts:237-258), and `authorUsername` and `state` are
+ * carried but unread on this screen.
+ */
+export const gitlabTodoSchema = z.looseObject({
+  id: z.number().finite(),
+  actionName: z.string(),
+  targetType: prText('targetType'),
+  targetIid: salvagedOptional('targetIid', z.number().finite().nullable()),
+  targetTitle: prText('targetTitle'),
+  targetUrl: z.string(),
+  projectPath: z.string(),
+  authorUsername: prText('authorUsername'),
+  updatedAt: z.string(),
+  state: salvagedOptional('state', z.enum(GITLAB_TODO_STATE))
+})
+
+/**
  * The GitLab to-do inbox.
  *
- * An array, or the nullish the call site already reads as an empty inbox — and nothing about a
- * row, which is the one place this domain's reader stays at the container on purpose. The host
- * returns `GitLabTodo[]` (src/shared/gitlab-types.ts:219) and `createGitLabTodoTask` reads
- * `actionName.replace` with no guard, so every member of that type has a claim to being required.
- * The corpus is what stops it: the recorded `normal` reply at this site is
- * `[{ id, targetType, target }]`, a shape `listTodos` cannot produce, and narrowing the row would
- * refuse this site's only success control. Tightening it needs that scenario corrected first.
+ * Nullish as well as an array, because the call site already read a nullish reply as an empty
+ * inbox (`todos ?? []`), and a row that does not decode drops rather than failing the whole
+ * inbox — one unreadable to-do is not a reason to show none.
  *
- * What the container alone already buys is the failure the call site names: a reply that is
- * neither an array nor nullish was `(response.result ?? []).map is not a function` on the screen,
- * and is now one error naming `gitlab.todos`.
+ * What the container alone buys is the failure the call site names: a reply that is neither an
+ * array nor nullish was `(response.result ?? []).map is not a function` on the screen, and is now
+ * one error naming `gitlab.todos`.
  */
-export const gitlabTodoListSchema = z.array(z.unknown()).nullish()
+export const gitlabTodoListSchema = salvagingArray(gitlabTodoSchema).nullish()
 
 /**
  * Connecting a Linear account with a pasted API key, and the repository issue-source write.

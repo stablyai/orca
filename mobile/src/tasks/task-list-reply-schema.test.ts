@@ -69,15 +69,22 @@ describe('the GitHub item count', () => {
 })
 
 describe('the GitLab to-do inbox', () => {
-  it('reads the recorded reply through untouched, row and all', () => {
-    const recorded = [
-      {
-        id: 1,
-        targetType: 'Issue',
-        target: { id: 'gid://1', iid: 4, title: 'A GitLab todo', webUrl: '' }
-      }
-    ]
-    expect(reads(gitlabTodoListSchema, recorded)).toEqual(recorded)
+  const RECORDED_TODO = {
+    id: 1,
+    actionName: 'review_requested',
+    targetType: 'Issue',
+    targetIid: 4,
+    targetTitle: 'A GitLab todo',
+    targetUrl: 'https://gitlab.example.com/group/project/-/issues/4',
+    projectPath: 'group/project',
+    authorUsername: 'octocat',
+    authorAvatarUrl: '',
+    updatedAt: '2020-01-01T00:00:00.000Z',
+    state: 'pending'
+  }
+
+  it('reads the recorded row through untouched, unread members included', () => {
+    expect(reads(gitlabTodoListSchema, [RECORDED_TODO])).toEqual([RECORDED_TODO])
   })
 
   it('reads nullish as the empty inbox the call site already read', () => {
@@ -88,6 +95,37 @@ describe('the GitLab to-do inbox', () => {
   it('names a reply that is neither, which the screen showed as ".map is not a function"', () => {
     expect(refuses(gitlabTodoListSchema, { todos: [] })).toBe(true)
     expect(refuses(gitlabTodoListSchema, 'none')).toBe(true)
+  })
+
+  it('drops a row missing a member the screen reads with no guard', () => {
+    for (const key of ['id', 'actionName', 'targetUrl', 'projectPath', 'updatedAt']) {
+      const partial: Record<string, unknown> = { ...RECORDED_TODO }
+      delete partial[key]
+      expect(reads(gitlabTodoListSchema, [partial, RECORDED_TODO])).toEqual([RECORDED_TODO])
+    }
+  })
+
+  it('keeps a row whose guarded members are absent, because each has a fallback', () => {
+    const guarded: Record<string, unknown> = { ...RECORDED_TODO }
+    for (const key of ['targetTitle', 'targetType', 'targetIid', 'authorUsername', 'state']) {
+      delete guarded[key]
+    }
+    expect(reads(gitlabTodoListSchema, [guarded])).toEqual([guarded])
+  })
+
+  it('drops a malformed guarded member to absent rather than the whole row', () => {
+    const row = reads(gitlabTodoListSchema, [
+      { ...RECORDED_TODO, targetIid: 'four', state: 'archived' }
+    ])?.[0]
+    expect(row).toMatchObject({ id: 1, actionName: 'review_requested' })
+    expect(row?.targetIid).toBeUndefined()
+    expect(row?.state).toBeUndefined()
+  })
+
+  it('keeps an explicit targetIid null, which gitLabTodoTargetRef reads as no ref', () => {
+    expect(
+      reads(gitlabTodoListSchema, [{ ...RECORDED_TODO, targetIid: null }])?.[0]?.targetIid
+    ).toBe(null)
   })
 })
 

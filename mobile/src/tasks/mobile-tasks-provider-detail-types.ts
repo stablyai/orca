@@ -104,17 +104,22 @@ export type GitLabWorkItem = {
   repoName: string
 }
 
+/**
+ * A to-do as the reader proves it, not as the host declares it: the five members the screen reads
+ * with no guard are required, and the rest are optional because a guard already stands in front of
+ * each one. See `gitlabTodoSchema` in task-list-reply-schema.ts.
+ */
 export type GitLabTodo = {
   id: number
   actionName: string
-  targetType: string
-  targetIid: number | null
-  targetTitle: string
+  targetType?: string
+  targetIid?: number | null
+  targetTitle?: string
   targetUrl: string
   projectPath: string
-  authorUsername: string
+  authorUsername?: string
   updatedAt: string
-  state: 'pending' | 'done'
+  state?: 'pending' | 'done'
 }
 
 export type GitPushTarget = {

@@ -33,10 +33,15 @@ const hash = (parts: string[] | string): string =>
 // `typeof count === 'number'` fallback on the item count. Hook, statement, declaration and render
 // counts are unchanged, and the render-token hash does not move at all — nothing this family sees
 // changed inside a JSX tree. `semantics` is a pure deletion of ten lines.
-const SCREEN_RPC_SCREEN_HOOKS = 'fd1c59e2b923dcc54218c2b4df5155fcf98b3dcd7894849d145999202402ad23'
+//
+// The `gitlab.todos` fixture correction moves the same three hashes once more and no others: the
+// to-do row is checked now, so the reader's cast is gone from the list-loading hook and the row
+// type it forwarded is declared by what the reader proves. Counts are unchanged again, and
+// `semantics` does not move, because no RPC call, runtime string or JSX host signature does.
+const SCREEN_RPC_SCREEN_HOOKS = '3d5371bc2db5a6959016293b8f071f55f37ffc914b5bc96fbaf1e7bd40ef47cd'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'ac507dc6871bb3ec8cb97f2c5af1a5ac9a24d6d327ad31bbf1e02caf455617f5'
-const MAIN_REBASED_DECLARATIONS = 'e0a402cdb6819dc685f5cc41c543bf5f1ac5366de064b90ad225a159bfcabfc5'
+const SCREEN_RPC_STATEMENTS = '206ba86923dea685ae7b22030c62ad1bd94466dc0dd1308ac78567ee358a86e2'
+const MAIN_REBASED_DECLARATIONS = 'e3617c37a4a28664ff4749dcdec4e31f1d657872b50dba5e27ae504e02cf9122'
 const SCREEN_RPC_SEMANTICS = '3e729bc760428e4701cdfa87c5e51c4301524d96a4e79bff7af9eb403153d76c'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
 const SCREEN_RPC_RENDER_TREE = '46d5a3ce9d71a8281a1e7b17411fb1dd963a4f392a5d095bc126b6a7cff4b92d'
