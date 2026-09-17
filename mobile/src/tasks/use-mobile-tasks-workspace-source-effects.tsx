@@ -54,7 +54,7 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires each preset's `id` and types the rest; see the save path for why the three members SparsePreset declares non-optional are not required here.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires every member read without a guard (`id`, `name`, `directories`) and drops a row missing one. The cast covers the other three SparsePreset declares non-optional (`repoId`, `createdAt`, `updatedAt`), which the recorded preset does not carry and nothing here reads.
         const presets = repoSparsePresetListRead.interpret(reply) as SparsePreset[]
         setWorkspaceSparsePresets(presets)
         setWorkspaceSparsePresetsLoaded(true)

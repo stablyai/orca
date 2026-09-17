@@ -89,7 +89,7 @@ export async function searchLinearIssues(
           workspaceId: linearWorkspaceId ?? undefined
         })
       )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires each row's `id` and nothing else, because the recorded smart-search success carries rows of `{ id }` alone; the row builder's own reads stay where they are.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: linearIssueRowSchema requires all nine members this row is read for (`id`, `identifier`, `title`, `url`, `updatedAt`, `priority`, `labels`, `state`, `team`), so the only gap left is `labelIds`: the schema salvages it to `string[] | undefined` while the shared LinearIssue declares it `string[]`. No mobile code reads it.
   return issues as LinearIssue[]
 }
 
