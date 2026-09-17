@@ -181,14 +181,12 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               },
               { timeoutMs: 30_000 }
             )
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-            const result = worktreePrBaseResolve.interpret(reply) as
-              | { baseBranch: string; pushTarget?: GitPushTarget }
-              | { error: string }
+            const result = worktreePrBaseResolve.interpret(reply)
             if ('error' in result) {
               throw new Error(result.error)
             }
-            prStartPoint = result
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolved arm requires `baseBranch` and passes the rest of the start point through, because the create params spread the record and the host reads what it recognises.
+            prStartPoint = result as { baseBranch: string; pushTarget?: GitPushTarget }
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -224,14 +222,12 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               },
               { timeoutMs: 30_000 }
             )
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-            const result = worktreeMrBaseResolve.interpret(reply) as
-              | { baseBranch: string; pushTarget?: GitPushTarget }
-              | { error: string }
+            const result = worktreeMrBaseResolve.interpret(reply)
             if ('error' in result) {
               throw new Error(result.error)
             }
-            mrStartPoint = result
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as the PR arm above.
+            mrStartPoint = result as { baseBranch: string; pushTarget?: GitPushTarget }
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -263,11 +259,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         const createReply = await worktreeCreateRun.request(client, params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = worktreeCreateRun.interpret(createReply) as {
-          worktree: { id: string; displayName?: string }
-          warning?: string
-        }
+        const result = worktreeCreateRun.interpret(createReply)
         setActionItem(null)
         setWorkspaceCreateDraft(null)
         setSetupPrompt(null)

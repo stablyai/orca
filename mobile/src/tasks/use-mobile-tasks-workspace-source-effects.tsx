@@ -1,5 +1,5 @@
 import type { WorkspaceCreateProjectionModel } from './use-mobile-tasks-workspace-create-projection'
-import { type BaseRefSearchResult, type SparsePreset, useEffect } from './mobile-tasks-dependencies'
+import { type SparsePreset, useEffect } from './mobile-tasks-dependencies'
 import {
   repoBaseRefSearchRead,
   repoSparsePresetListRead
@@ -54,9 +54,8 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
         if (stale) {
           return
         }
-        const presets =
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          (repoSparsePresetListRead.interpret(reply) as SparsePreset[] | undefined) ?? []
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires each preset's `id` and types the rest; see the save path for why the three members SparsePreset declares non-optional are not required here.
+        const presets = repoSparsePresetListRead.interpret(reply) as SparsePreset[]
         setWorkspaceSparsePresets(presets)
         setWorkspaceSparsePresetsLoaded(true)
         setWorkspaceSparsePresetId((current) =>
@@ -124,11 +123,7 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = repoBaseRefSearchRead.interpret(reply) as {
-          refDetails?: BaseRefSearchResult[]
-          refs?: string[]
-        }
+        const result = repoBaseRefSearchRead.interpret(reply)
         setWorkspaceBaseBranchResults(
           result.refDetails ??
             (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))

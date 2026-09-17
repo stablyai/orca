@@ -14,14 +14,6 @@ type HomeTaskSettings = {
   visibleTaskProviders?: unknown
 }
 
-type HomePreflightStatus = {
-  glab?: { installed?: boolean }
-}
-
-type HomeLinearStatus = {
-  connected?: boolean
-}
-
 export type HomeStatsSetter = (
   updater: (previous: Record<string, HomeStatsSummary>) => Record<string, HomeStatsSummary>
 ) => void
@@ -94,15 +86,9 @@ export function fetchMobileHomeTaskProviders(
           ((settingsResult.value ?? {}) as HomeTaskSettings)
         : {}
       const preflightResult = taskPreflightRead.interpret(preflightResponse)
-      const preflight = preflightResult.accepted
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          (preflightResult.value as HomePreflightStatus)
-        : null
+      const preflight = preflightResult.accepted ? preflightResult.value : null
       const linearResult = taskLinearStatusRead.interpret(linearResponse)
-      const linear = linearResult.accepted
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          (linearResult.value as HomeLinearStatus)
-        : null
+      const linear = linearResult.accepted ? linearResult.value : null
       const providers = filterAvailableTaskProviders(
         normalizeVisibleTaskProviders(settings.visibleTaskProviders),
         {

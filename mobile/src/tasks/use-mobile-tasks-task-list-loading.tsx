@@ -172,7 +172,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
                   perPage: GITLAB_PER_PAGE,
                   query: appliedQuery.trim() || undefined
                 })
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row without requiring a member, because the recorded GitLab row is `{ iid, title }`; the row builder's own reads are unchanged.
                 const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
                   items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
                   error?: { type?: string; message: string }
@@ -228,7 +228,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
                   workspaceId: selectedLinearWorkspaceId ?? undefined
                 })
               )
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires each row's `id` and nothing else, because the recorded smart-search success carries rows of `{ id }` alone; the team filter and sort below keep their own reads.
           const issues = found as LinearIssue[]
           const filtered =
             selectedLinearTeamIds.size > 0

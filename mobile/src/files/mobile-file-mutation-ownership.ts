@@ -1,6 +1,5 @@
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-mutation-ownership'
-import type { RuntimeStatus } from '../../../src/shared/runtime-types'
 import type { SshConnectionState, SshMutationExpectation } from '../../../src/shared/ssh-types'
 import {
   fileOwnershipRuntimeStatusRead,
@@ -45,11 +44,7 @@ export async function captureMobileFileMutationOwnership(
   const statusReply = await fileOwnershipRuntimeStatusRead.request(client, undefined, {
     timeoutMs: FILE_MUTATION_TIMEOUT_MS
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply) as Pick<
-    RuntimeStatus,
-    'capabilities'
-  >
+  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply)
   assertFileMutationOwnershipCapability(status)
 
   const worktreeReply = await fileOwnershipWorktreeRead.request(

@@ -124,8 +124,7 @@ export async function findRepoMatchingSlugForPaste(
           return null
         }
         const slug = githubRepoSlugRead.interpret(reply)
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        resolved = slug.accepted ? (slug.value as RepoSlug | null) : null
+        resolved = slug.accepted ? slug.value : null
       } catch {
         resolved = null
       }
@@ -147,7 +146,7 @@ export async function lookupGitHubItemByNumber(
     repo: `id:${repoId}`,
     number
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires nothing on the item, because the recorded lookup answers `{ number: 12, title: 'twelve' }`; what it adds is that a non-object payload is now a named reply rather than a spread over a string.
   const item = githubWorkItemByNumberRead.interpret(reply) as GitHubWorkItem | null
   return item ? { ...item, repoId } : null
 }
@@ -167,7 +166,7 @@ export async function lookupGitHubItemByOwnerRepo(
     number,
     type
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
   const item = githubWorkItemBySlugRead.interpret(reply) as GitHubWorkItem | null
   return item ? { ...item, repoId } : null
 }
@@ -184,7 +183,7 @@ export async function lookupGitLabItemByPath(
     iid: link.number,
     type: link.type
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above; the recorded GitLab lookup answers `{ iid: 7, title: 'seven' }`.
   const item = gitlabWorkItemByPathRead.interpret(reply) as GitLabWorkItem | null
   return item ? { ...item, repoId } : null
 }

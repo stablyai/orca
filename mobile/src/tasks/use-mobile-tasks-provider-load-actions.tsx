@@ -127,7 +127,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `before` is the undeclared key described above; every other field matches the schema.
               pageParams as RpcSendParams<'github.listWorkItems'>
             )
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row without requiring a member, because the recorded smart-search success carries rows of `{ number, title }`; `sources`/`errors` stay opaque because the two banner extractors below read them member by member with their own guards.
             const envelope = githubWorkItemSearchRead.interpret(reply) as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources

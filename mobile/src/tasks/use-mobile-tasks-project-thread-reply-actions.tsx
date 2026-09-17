@@ -56,11 +56,7 @@ export function useMobileTasksProjectThreadReplyActions(
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectCommentDelete.interpret(reply) as {
-          ok?: boolean
-          error?: string | { message?: string }
-        }
+        const result = githubProjectCommentDelete.interpret(reply)
         if (result.ok === false) {
           throw new Error(
             typeof result.error === 'string'

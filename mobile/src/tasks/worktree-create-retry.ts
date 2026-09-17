@@ -150,16 +150,15 @@ function readCreateResult(
   if (launched) {
     return readAgentLaunchCreateOutcome(agentLaunchRun.interpret(response))
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const created = worktreeCreateRun.interpret(response) as {
-    worktree?: { id?: unknown; displayName?: unknown }
-    warning?: unknown
-  } | null
-  const worktreeId = created?.worktree?.id
-  if (typeof worktreeId !== 'string' || !worktreeId) {
+  const created = worktreeCreateRun.interpret(response)
+  // The empty-id arm stays reachable: the schema types `worktree.id` as a string without a minimum
+  // length, so a host answering `''` still reports "Failed to create workspace" rather than
+  // reading as an unreadable reply.
+  const worktreeId = created.worktree.id
+  if (!worktreeId) {
     return null
   }
-  const displayName = created?.worktree?.displayName
+  const displayName = created.worktree.displayName
   // Why: a create can succeed with the startup terminal failing (pty exhaustion); dropping
   // `warning` here is what lands the phone on an unexplained empty session.
   const warning = typeof created?.warning === 'string' ? created.warning.trim() : ''

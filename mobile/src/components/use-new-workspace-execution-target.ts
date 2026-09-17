@@ -59,8 +59,7 @@ export function useNewWorkspaceExecutionTarget(args: {
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const state = sshRepoStateRead.interpret(reply) as SshConnectionState | null | undefined
+        const state = sshRepoStateRead.interpret(reply)
         setSshState(state ?? fallbackSshState(connectionId, 'disconnected', null))
       })
       .catch((error) => {
@@ -94,8 +93,7 @@ export function useNewWorkspaceExecutionTarget(args: {
         if (!stale) {
           setDetectedAgentIdsState({
             connectionId,
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-            ids: detected.accepted ? new Set(detected.value as string[]) : new Set()
+            ids: detected.accepted ? new Set(detected.value) : new Set()
           })
         }
       } catch {
@@ -121,8 +119,7 @@ export function useNewWorkspaceExecutionTarget(args: {
         { targetId: connectionId },
         { timeoutMs: 120_000 }
       )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const state = sshRepoConnectRun.interpret(reply) as SshConnectionState | null | undefined
+      const state = sshRepoConnectRun.interpret(reply)
       setSshState(state ?? fallbackSshState(connectionId, 'connected', null))
     } catch (error) {
       setSshState(

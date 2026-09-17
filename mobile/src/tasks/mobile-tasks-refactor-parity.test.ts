@@ -26,11 +26,20 @@ const hash = (parts: string[] | string): string =>
 // and style counts are all unchanged, and `semantics` is a pure deletion of four lines, none in:
 // two `rpc:` call signatures and the two method literals they carried. The render-token hash moves
 // because the picker's handler now names an operation instead of the client.
-const SCREEN_RPC_SCREEN_HOOKS = '1b455d87ed00a1e70a5b3cac0110272e818da9a0d245e9043fc9d2649587831f'
+//
+// Step 7 moves the hook, statement, declaration and semantic hashes and no count. Hooks stay at
+// 350 and 28 of them move, every one a body this migration edited; no dependency array changes,
+// which is what a hook signature is here to pin. Statements hold at 417 and declarations at 194:
+// checked readers delete type assertions, not statements. `semantics` loses exactly four lines,
+// and all four are string literals that lived INSIDE the one deleted inline cast type in
+// use-mobile-tasks-project-detail-loading.tsx — `'DISMISSED'`, `'VIEWED'`, `'UNVIEWED'` and the
+// `['status']` index into GitHubDetailFile. No method literal and no `rpc:` call signature moves,
+// which is the property this family exists to hold.
+const SCREEN_RPC_SCREEN_HOOKS = '0f015615e608e48f179566606c93b65758093c4a08e853d382eec888d95b79be'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = '67ea80f265e4a2e25b3d7e7d9b93664a150a27b93dcfbc39cbdd551de7b4a653'
-const MAIN_REBASED_DECLARATIONS = '6ad0397123e59fc1047a14049c86ff31d81723673a7a7f5c41677471aec58415'
-const SCREEN_RPC_SEMANTICS = '7e40c7efa07993071e57db0fe1d46099a56e3831033b512480dd195d7a1dc24c'
+const SCREEN_RPC_STATEMENTS = 'ebd1826ccf1737329ac7270fc71a624f56223ddb90ecde739a30fa25ef92e872'
+const MAIN_REBASED_DECLARATIONS = 'f6f5fe2cc09dfd91f8f7048ab0ce11579cd2618e234079d2ab403bea4fb7161d'
+const SCREEN_RPC_SEMANTICS = '9bea10a73a501bbb09b825ca62119f808640e40940b3a5f1dce0493aa5452314'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
 const SCREEN_RPC_RENDER_TREE = '46d5a3ce9d71a8281a1e7b17411fb1dd963a4f392a5d095bc126b6a7cff4b92d'
 
@@ -59,7 +68,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_300)
+    expect(semantics.split('\n')).toHaveLength(3_296)
     expect(hash(semantics)).toBe(SCREEN_RPC_SEMANTICS)
   })
 

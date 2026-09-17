@@ -343,39 +343,50 @@ describe('createBlankWorkspace', () => {
     expect(calls).toHaveLength(1)
   })
 
-  it.each([
-    { label: 'worktree.create', supported: false, agent: undefined, reply: { worktree: {} } },
-    {
-      label: 'agent.launch',
-      supported: true,
-      agent: 'codex' as const,
-      reply: { outcome: { kind: 'structured', sessionId: 's-1' } }
-    }
-  ])(
-    'fails without retrying when an accepted $label reply names no workspace',
-    async ({ supported, agent, reply }) => {
-      // The break branch. The host accepted the call but the reply carries no workspace, so there
-      // is nothing to navigate to and a retry cannot help — a malformed reply is not a name
-      // collision. Both routes reach it: worktree.create with no `worktree.id`, agent.launch with
-      // no `worktreeId`. Before the guard, the legacy route read `.worktree.displayName` straight
-      // off the reply and surfaced a TypeError instead of a message.
-      const calls: Call[] = []
-      const client = fakeClient(() => reply, calls)
+  // The break branch, and the two routes now answer it differently.
+  //
+  // `agent.launch` still reports it as a message: its reader guards `worktreeId` itself and answers
+  // null, which the retry loop turns into "Failed to create workspace". `worktree.create` does not:
+  // the create screen reads `result.worktree.id` unguarded into the session route, so the checked
+  // reader requires it and a reply without one is named as unreadable rather than reported as a
+  // create that failed. Both surface at the same catch; only the sentence changes.
+  it('names an accepted worktree.create reply that carries no workspace id', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: {} }), calls)
 
-      const result = await createBlankWorkspace({
+    await expect(
+      createBlankWorkspace({
         client,
         repoId: 'repo-1',
         baseName: 'octopus',
-        createdWithAgentId: agent,
+        createdWithAgentId: undefined,
         comment: undefined,
         setupDecision: 'inherit',
         nameWasGenerated: false,
         worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-        agentLaunchSupported: supported
+        agentLaunchSupported: false
       })
+    ).rejects.toThrow('worktree.create')
+    expect(calls).toHaveLength(1)
+  })
 
-      expect(result).toEqual({ error: 'Failed to create workspace' })
-      expect(calls).toHaveLength(1)
-    }
-  )
+  it('fails without retrying when an accepted agent.launch reply names no workspace', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ outcome: { kind: 'structured', sessionId: 's-1' } }), calls)
+
+    const result = await createBlankWorkspace({
+      client,
+      repoId: 'repo-1',
+      baseName: 'octopus',
+      createdWithAgentId: 'codex',
+      comment: undefined,
+      setupDecision: 'inherit',
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      agentLaunchSupported: true
+    })
+
+    expect(result).toEqual({ error: 'Failed to create workspace' })
+    expect(calls).toHaveLength(1)
+  })
 })

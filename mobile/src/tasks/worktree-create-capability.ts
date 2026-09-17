@@ -47,11 +47,7 @@ export async function readNewWorktreeRuntimeCapabilities(
       if (!status.accepted) {
         return UNSUPPORTED_CAPABILITIES
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const result = status.value as {
-        capabilities?: string[]
-        worktreeCreateIdempotency?: unknown
-      }
+      const result = status.value
       const capabilities = result.capabilities ?? []
       const supportsIdempotency = capabilities.includes(
         MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY

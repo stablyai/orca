@@ -102,53 +102,34 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectRowDetailRead.interpret(response) as
-          | {
-              ok: true
-              details: {
-                body?: string
-                comments?: DetailComment[]
-                item?: {
-                  labels?: string[]
-                  reviewDecision?: string | null
-                  reviewRequests?: GitHubAssignableUser[]
-                  latestReviews?: GitHubPRReviewSummary[]
-                }
-                assignees?: string[]
-                headSha?: string
-                baseSha?: string
-                pullRequestId?: string
-                checks?: GitHubDetailCheck[]
-                files?: Array<{
-                  path: string
-                  oldPath?: string
-                  status?: GitHubDetailFile['status']
-                  additions?: number
-                  deletions?: number
-                  isBinary?: boolean
-                  viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
-                }>
-              }
-            }
-          | { ok: false; error: { message: string } }
+        const result = githubProjectRowDetailRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error.message)
         }
+        // Why the casts and not a narrower schema: comments, reviews, checks and files are host
+        // records this pane renders whole, and the recorded detail carries every one of them empty
+        // — so a member requirement here has nothing behind it and would drop a row main showed.
+        // `reviewDecision` is forwarded with no coalesce: explicit null and absent are different
+        // answers to "has this been reviewed", and collapsing either is a product change.
         setProjectRowDetail({
           provider: 'github',
           body: result.details.body ?? '',
-          comments: result.details.comments ?? [],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the thread renderer owns the comment shape.
+          comments: (result.details.comments ?? []) as DetailComment[],
           labels: result.details.item?.labels ?? projectRowItem.content.labels.map((l) => l.name),
           assignees: result.details.assignees ?? [],
           reviewDecision: result.details.item?.reviewDecision,
-          reviewRequests: result.details.item?.reviewRequests ?? [],
-          latestReviews: result.details.item?.latestReviews ?? [],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the reviewer strip owns these two shapes.
+          reviewRequests: (result.details.item?.reviewRequests ?? []) as GitHubAssignableUser[],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above.
+          latestReviews: (result.details.item?.latestReviews ?? []) as GitHubPRReviewSummary[],
           headSha: result.details.headSha,
           baseSha: result.details.baseSha,
           pullRequestId: result.details.pullRequestId,
-          checks: result.details.checks ?? [],
-          files: result.details.files ?? []
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the checks panel owns this shape.
+          checks: (result.details.checks ?? []) as GitHubDetailCheck[],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above; the files list owns this shape.
+          files: (result.details.files ?? []) as GitHubDetailFile[]
         })
       })
       .catch((err) => {

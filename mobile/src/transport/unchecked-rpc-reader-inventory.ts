@@ -75,13 +75,6 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   { file: 'src/tasks/mobile-task-item-detail-operations.ts', readers: 8 },
   { file: 'src/tasks/mobile-task-item-state-operations.ts', readers: 17 },
   { file: 'src/tasks/mobile-task-list-operations.ts', readers: 6 },
-  { file: 'src/tasks/mobile-task-project-board-operations.ts', readers: 17 },
-  { file: 'src/tasks/mobile-task-runtime-operations.ts', readers: 7 },
-  { file: 'src/tasks/mobile-task-source-search-operations.ts', readers: 7 },
-  // #19850 brought the fifth (`agent-launch-receipt`): mobile's create routes through agent.launch
-  // when the host advertises it, and that reply is re-typed exactly as the four beside it are.
-  { file: 'src/tasks/mobile-workspace-create-operations.ts', readers: 5 },
-  { file: 'src/tasks/mobile-workspace-source-operations.ts', readers: 7 },
   // terminal
   { file: 'src/terminal/mobile-terminal-operations.ts', readers: 4 },
   // transport

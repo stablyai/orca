@@ -1,13 +1,19 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
-  rpcUncheckedMemberReader,
-  rpcUncheckedPayloadReader
-} from '../transport/rpc-reader-payload'
+  detectedAgentIdsSchema,
+  repoBaseRefSearchSchema,
+  repoSetupHooksSchema,
+  repoSparsePresetListSchema,
+  repoSparsePresetSaveSchema,
+  sshConnectionStateSchema
+} from './workspace-source-reply-schema'
 
 // The repo and SSH reads the workspace-create drawer runs: connection state, agent detection,
-// repo-owned setup hooks, sparse presets and base-branch search.
+// repo-owned setup hooks, sparse presets and base-branch search. Checked against
+// workspace-source-reply-schema.ts.
 
-const sshConnectionStateReader = rpcUncheckedMemberReader('ssh-connection-state', 'state')
+const sshConnectionStateReader = rpcResultVariant('ssh-connection-state', sshConnectionStateSchema)
 
 /** Connecting an SSH repo before create. The reply's only read field is `state`. */
 export const sshRepoConnectRun = bindDeferredRpcOperation(
@@ -39,7 +45,7 @@ export const remoteAgentDetectionRead = bindDeferredRpcOperation(
     method: 'preflight.detectRemoteAgents',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('detected-agent-ids')
+    read: rpcResultVariant('detected-agent-ids', detectedAgentIdsSchema)
   })
 )
 
@@ -50,7 +56,7 @@ export const localAgentDetectionRead = bindDeferredRpcOperation(
     method: 'preflight.detectAgents',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('detected-agent-ids')
+    read: rpcResultVariant('detected-agent-ids', detectedAgentIdsSchema)
   })
 )
 
@@ -61,7 +67,7 @@ export const repoSetupHooksRead = bindDeferredRpcOperation(
     method: 'repo.hooks',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('repo-hooks')
+    read: rpcResultVariant('repo-hooks', repoSetupHooksSchema)
   })
 )
 
@@ -71,7 +77,7 @@ export const repoSparsePresetListRead = bindDeferredRpcOperation(
     method: 'repo.sparsePresets',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('sparse-presets', 'presets')
+    read: rpcResultVariant('sparse-presets', repoSparsePresetListSchema)
   })
 )
 
@@ -81,14 +87,14 @@ export const repoSparsePresetSaveRun = bindDeferredRpcOperation(
     method: 'repo.saveSparsePreset',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('saved-sparse-preset', 'preset')
+    read: rpcResultVariant('saved-sparse-preset', repoSparsePresetSaveSchema)
   })
 )
 
 /**
- * Base-branch search. The payload is unchecked: both callers — the drawer's picker effect and the
- * Smart source picker — spell their own `refDetails ?? refs.map(...)` fallback, and reproducing
- * that in the reader would need a type assertion the operation fence rightly bans.
+ * Base-branch search. Both callers — the drawer's picker effect and the Smart source picker —
+ * spell their own `refDetails ?? refs.map(...)` fallback, and that stays where it is: the schema
+ * requires neither member, so the choice between them is still the call site's.
  */
 export const repoBaseRefSearchRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -96,6 +102,6 @@ export const repoBaseRefSearchRead = bindDeferredRpcOperation(
     method: 'repo.searchRefs',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('base-ref-search')
+    read: rpcResultVariant('base-ref-search', repoBaseRefSearchSchema)
   })
 )
