@@ -66,7 +66,11 @@ import {
 import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
-import { listRemoteRuntimeSessionTabsDeduped } from '@/runtime/remote-runtime-session-tabs-inflight'
+import {
+  listRemoteRuntimeSessionTabsAfterCurrentInFlight,
+  listRemoteRuntimeSessionTabsDeduped
+} from '@/runtime/remote-runtime-session-tabs-inflight'
+import { hasRetirementProofForSurface } from '../../../../shared/terminal-retirement-proof-ledger'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
 import { useAppStore } from '@/store'
@@ -627,6 +631,22 @@ export function createRemoteRuntimePtyTransport(
     let pollMs = HOST_SESSION_ATTACH_POLL_MS
     let nextRequest: 'activate' | 'list' = 'list'
     let activationOutcomeUnknown = false
+    let siblingOnlyAbsenceSeen = false
+    // Why: the deduped listing answers with whatever inventory RPC is already in flight for the
+    // worktree, which a sibling pane may have started before this leaf was published. Absence proof
+    // must come from a request that begins after the observation it confirms (#20917).
+    const listHostSessionTabs = (
+      timeoutMs: number,
+      requireFreshRequest: boolean
+    ): Promise<RuntimeMobileSessionTabsResult> =>
+      (requireFreshRequest
+        ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
+        : listRemoteRuntimeSessionTabsDeduped)({
+        environmentId: currentRuntimeEnvironmentId,
+        worktreeId,
+        load: () =>
+          callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', { worktree }, timeoutMs)
+      })
     while (isCurrent()) {
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
@@ -645,18 +665,7 @@ export function createRemoteRuntimePtyTransport(
       try {
         snapshot =
           request === 'list'
-            ? await listRemoteRuntimeSessionTabsDeduped({
-                environmentId: currentRuntimeEnvironmentId,
-                worktreeId,
-                load: () =>
-                  callRuntime<RuntimeMobileSessionTabsResult>(
-                    'session.tabs.list',
-                    {
-                      worktree
-                    },
-                    requestRemainingMs
-                  )
-              })
+            ? await listHostSessionTabs(requestRemainingMs, siblingOnlyAbsenceSeen)
             : await activateHostSessionSurface(hostTabId, worktree, 'user', requestRemainingMs)
       } catch (error) {
         if (request === 'list') {
@@ -678,12 +687,31 @@ export function createRemoteRuntimePtyTransport(
         continue
       }
       if (!hasHostSessionTerminalSurface(snapshot, hostTabId)) {
+        // Why: the host attesting it retired this surface outranks every inference below, including
+        // the one that reads an empty tab as a host still republishing.
+        if (
+          leafId &&
+          hasRetirementProofForSurface(snapshot.retiredTerminalSurfaces, {
+            parentTabId: hostTabId,
+            leafId
+          })
+        ) {
+          return false
+        }
         const siblingStillExists =
           getHostSessionTerminalSurfaces(snapshot, hostTabId, {
             matchRequestedLeaf: false
           }).length > 0
         if (siblingStillExists) {
-          return false
+          // Why: one sibling-only listing is not removal evidence — a split the host is still
+          // publishing looks exactly like one it retired. Absent the proof above, retire only on a
+          // second listing whose request began after the first saw the leaf missing (#20917).
+          if (siblingOnlyAbsenceSeen) {
+            return false
+          }
+          siblingOnlyAbsenceSeen = true
+          nextRequest = 'list'
+          continue
         }
         // Why: a populated surface list missing only this leaf is positive absence, but a list carrying no
         // surface at all for the tab is a client-side snapshot of a host that may still be republishing.
@@ -691,6 +719,8 @@ export function createRemoteRuntimePtyTransport(
         nextRequest = 'list'
         continue
       }
+      // Why: a live sighting retracts the pending absence proof, as it does for orphan reconciliation.
+      siblingOnlyAbsenceSeen = false
       // Why: a host relaunch republishes the surface unmaterialized, and only activation can mint its PTY — list-only polling waits forever.
       nextRequest = activationOutcomeUnknown ? 'list' : 'activate'
     }
