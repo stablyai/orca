@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { linearTeamListReader } from './mobile-task-item-detail-operations'
+import { linearTeamsSchema } from './task-item-detail-reply-schema'
 import {
   githubWorkItemCountSchema,
   gitlabTodoListSchema,
@@ -41,7 +41,7 @@ export const linearWorkspaceTeamListRead = bindDeferredRpcOperation(
     method: 'linear.listTeams',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: linearTeamListReader
+    read: rpcResultVariant('linear-teams', linearTeamsSchema)
   })
 )
 

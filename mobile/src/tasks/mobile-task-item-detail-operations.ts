@@ -102,18 +102,16 @@ export const linearTeamStateListRead = bindDeferredRpcOperation(
 /**
  * The composer's Linear team list, the first of two policies on this method. The composer empties
  * its picker on a refusal and stays open; hydration in mobile-task-list-operations.ts cannot
- * proceed without the list and surfaces the host's message. One reader serves both.
+ * proceed without the list and surfaces the host's message. Both build their reader from
+ * `linearTeamsSchema`, which is what keeps them agreeing about what a team row is; the reader
+ * itself is a pure factory and there is nothing to share.
  */
-/** Shared with hydration's leg in the list module: one team list, so the composer's picker and
- *  the saved-selection reconciler can never disagree about what a team row is. */
-export const linearTeamListReader = rpcResultVariant('linear-teams', linearTeamsSchema)
-
 export const linearComposerTeamListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.composer-team-list-or-skip',
     method: 'linear.listTeams',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: linearTeamListReader
+    read: rpcResultVariant('linear-teams', linearTeamsSchema)
   })
 )
