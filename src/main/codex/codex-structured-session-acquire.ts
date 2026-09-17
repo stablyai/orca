@@ -39,6 +39,8 @@ import {
 import type { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
+import { DISPATCH_DOUBT_TURN_SETTLED } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { CodexStructuredLateSettlementRecovery } from './codex-structured-late-settlement-recovery'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -82,7 +84,21 @@ export async function acquireCodexStructuredSession(input: {
       ? acquireInput.identity.providerHandle.threadId
       : null
   const subagentExecutions = new CodexSubagentExecutions()
-  const dispatchEchoes = createCodexDispatchEchoes()
+  const lateSettlementRecovery = new CodexStructuredLateSettlementRecovery({
+    settle: (settlement) => deps.onDispatchSettledLate?.(settlement),
+    generation: () => sessions.get(sessionId)?.acquisitionGeneration ?? null,
+    recover: (error) => sessions.get(sessionId)?.forceCloseUnexpected?.(error)
+  })
+  const dispatchEchoes = createCodexDispatchEchoes((clientMessageId, turnId) => {
+    return lateSettlementRecovery.settle({
+      sessionId,
+      clientMessageId,
+      state: 'unknown',
+      reason: DISPATCH_DOUBT_TURN_SETTLED,
+      recovered: true,
+      turnId
+    })
+  })
   const translator = acquireInput.events
     ? createCodexJournalTranslator({
         sink: acquireInput.events,
@@ -90,16 +106,15 @@ export async function acquireCodexStructuredSession(input: {
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: () => primaryThreadId,
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
+        dispatchEchoes,
         subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
           acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
         clearPromptTurn: (threadId, turnId) => acquisition.prompts.clearTurn(threadId, turnId),
         onUserMessageEcho: (clientMessageId, providerIdentity) => {
-          // Only a send THIS session admitted; an echo from history restore or
-          // another client names no submission of ours to settle.
-          if (dispatchEchoes.settle(clientMessageId)) {
-            deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
-          }
+          dispatchEchoes.settle(clientMessageId)
+          // The host validates this exact id against its same-fence durable submission.
+          void lateSettlementRecovery.settle({ sessionId, clientMessageId, providerIdentity })
         }
       })
     : null
@@ -138,14 +153,17 @@ export async function acquireCodexStructuredSession(input: {
           input.deliver(
             acquisition,
             sessionId,
-            () =>
-              notificationRetries.handle(
+            () => {
+              const admission = notificationRetries.handle(
                 sessionId,
                 method,
                 params,
                 observedAt,
                 dispatchSequenceAtReceipt
-              ),
+              )
+              lateSettlementRecovery.observeActivity()
+              return admission
+            },
             Buffer.byteLength(JSON.stringify(params ?? null), 'utf8')
           )
         },
@@ -176,6 +194,7 @@ export async function acquireCodexStructuredSession(input: {
             })
           } finally {
             notificationRetries.clear(sessionId, acquisition.connection)
+            lateSettlementRecovery.clear()
           }
         }
       }

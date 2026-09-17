@@ -111,6 +111,9 @@ export function settleCodexJournalTurn(input: {
   streams: CodexStructuredItemStreams
   activeItems: Map<string, CodexActiveJournalItem>
   pendingPrompts?: Map<string, CodexPendingJournalPrompt>
+  ownerEndedClientMessageIds?: readonly string[]
+  onOwnerSettlementCommitted?: () => void
+  onOwnerSettlementAbandoned?: () => void
   clearPromptTurn?: (threadId: string, turnId: string) => void
 }): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleMutationInput[] = []
@@ -155,7 +158,16 @@ export function settleCodexJournalTurn(input: {
   const admission = appendCodexLifecycleMutations(
     input.sink,
     `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,
-    mutations
+    mutations,
+    {
+      ...(input.ownerEndedClientMessageIds?.length
+        ? { ownerEndedClientMessageIds: input.ownerEndedClientMessageIds }
+        : {}),
+      ...(input.onOwnerSettlementCommitted
+        ? { onCommitted: input.onOwnerSettlementCommitted }
+        : {}),
+      ...(input.onOwnerSettlementAbandoned ? { onAbandoned: input.onOwnerSettlementAbandoned } : {})
+    }
   )
   if (!admission.accepted) {
     return admission

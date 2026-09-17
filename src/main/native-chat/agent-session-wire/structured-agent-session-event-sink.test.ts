@@ -27,12 +27,14 @@ type Recorded = {
   ordinal?: number
   settlementId?: string
   activity?: AgentSessionTurnActivity | null
+  ownerEndedClientMessageIds?: readonly string[]
 }
 
 function target(
   fence: number,
   log: Recorded[],
-  failOn?: number
+  failOn?: number,
+  failLifecycle = false
 ): StructuredAgentSessionEventTarget {
   const journal = {
     appendItem: vi.fn(async (id: AgentJournalItemIdentity, _body: AgentJournalItemBody) => {
@@ -51,14 +53,28 @@ function target(
       })
       return { epoch: 'e', sequence: 0 }
     }),
-    appendLifecycleBatch: vi.fn(async (input: { settlementId: string }) => {
-      log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
-      return { epoch: 'e', sequence: 0 }
-    }),
+    appendLifecycleBatch: vi.fn(
+      async (input: { settlementId: string; ownerEndedClientMessageIds?: readonly string[] }) => {
+        if (failLifecycle) {
+          throw new Error(`refused ${input.settlementId}`)
+        }
+        log.push({
+          call: 'appendLifecycleBatch',
+          fence,
+          settlementId: input.settlementId,
+          ...(input.ownerEndedClientMessageIds
+            ? { ownerEndedClientMessageIds: input.ownerEndedClientMessageIds }
+            : {})
+        })
+        return { epoch: 'e', sequence: 0 }
+      }
+    ),
     latestItemMatching: vi.fn(() => null)
-  } as unknown as AgentSessionJournal
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This focused sink fake implements only the journal methods the queued operations call.
+  const sinkJournal = journal as unknown as AgentSessionJournal
   return {
-    journal,
+    journal: sinkJournal,
     fence,
     publish: (activity) =>
       log.push({ call: 'publish', fence, ...(activity !== undefined ? { activity } : {}) })
@@ -301,7 +317,7 @@ describe('deferred structured agent-session event sink', () => {
     deferred.sink.appendLifecycleBatch?.(
       'settlement-1',
       [{ kind: 'item', identity: identity(0), body: BODY }],
-      { lifecycle: true }
+      { lifecycle: true, ownerEndedClientMessageIds: ['client-1'] }
     )
     expect(deferred.sink.tryPublish?.({ lifecycle: true })).toEqual({
       accepted: false,
@@ -313,7 +329,42 @@ describe('deferred structured agent-session event sink', () => {
     deferred.bind(target(8, log))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
-    expect(log).toEqual([{ call: 'appendLifecycleBatch', fence: 8, settlementId: 'settlement-1' }])
+    expect(log).toEqual([
+      {
+        call: 'appendLifecycleBatch',
+        fence: 8,
+        settlementId: 'settlement-1',
+        ownerEndedClientMessageIds: ['client-1']
+      }
+    ])
+  })
+
+  it('settles lifecycle callbacks only after durability and abandons failed or discarded work', async () => {
+    const committed = vi.fn()
+    const failed = vi.fn()
+    const discarded = vi.fn()
+    const successful = createDeferredStructuredAgentSessionEventSink()
+    const failing = createDeferredStructuredAgentSessionEventSink()
+    const closing = createDeferredStructuredAgentSessionEventSink()
+
+    expect(successful.sink.durableLifecycleCallbacks).toBe(true)
+    successful.sink.tryAppendLifecycleBatch?.('durable', [], {
+      onCommitted: committed,
+      onAbandoned: failed
+    })
+    failing.sink.tryAppendLifecycleBatch?.('failed', [], { onAbandoned: failed })
+    closing.sink.tryAppendLifecycleBatch?.('discarded', [], { onAbandoned: discarded })
+    expect(committed).not.toHaveBeenCalled()
+
+    successful.bind(target(8, []))
+    failing.bind(target(8, [], undefined, true))
+    closing.close()
+    await successful.drained()
+    await failing.drained()
+
+    expect(committed).toHaveBeenCalledOnce()
+    expect(failed).toHaveBeenCalledOnce()
+    expect(discarded).toHaveBeenCalledOnce()
   })
 
   it('ignores stale reading-control cleanup after a newer provider stream binds', async () => {

@@ -561,6 +561,29 @@ describe('openCodexAppServerConnection', () => {
     await connection.close()
   })
 
+  it('observes a response before a following notification in the same chunk', async () => {
+    const { child, spawnImpl } = stubChild()
+    answerInitialize(child)
+    const order: string[] = []
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      { onNotification: () => order.push('notification') },
+      spawnImpl
+    )
+
+    const response = connection.request('turn/start', undefined, {
+      onResult: () => order.push('response')
+    })
+    child.stdout.write(
+      '{"id":2,"result":{"turn":{"id":"turn-1"}}}\n' +
+        '{"method":"turn/completed","params":{"turn":{"id":"turn-1"}}}\n'
+    )
+
+    await expect(response).resolves.toEqual({ turn: { id: 'turn-1' } })
+    expect(order).toEqual(['response', 'notification'])
+    await connection.close()
+  })
+
   it('pauses between coalesced records and resumes the retained remainder', async () => {
     const { child, spawnImpl } = stubChild()
     answerInitialize(child)

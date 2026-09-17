@@ -1,9 +1,19 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  hasUnansweredStructuredAgentSessionDispatch
+} from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
+type ConversationCommandAdmissionContext = {
+  sessionId: AgentSessionTurnContext['sessionId']
+  fence: AgentSessionTurnContext['fence']
+  journal: Pick<AgentSessionTurnContext['journal'], 'snapshot' | 'submissions'>
+  adapter: Pick<AgentSessionTurnContext['adapter'], 'backgroundTaskState'>
+}
+
 export function conversationCommandBlocked(
-  ctx: AgentSessionTurnContext,
+  ctx: ConversationCommandAdmissionContext,
   record: AgentSessionRecord
 ): string | null {
   const items = ctx.journal.snapshot().items
@@ -47,11 +57,7 @@ export function conversationCommandBlocked(
       ? 'Stop background tasks before using this command.'
       : 'Wait for background tasks to finish before using this command.'
   }
-  if (
-    ctx.journal
-      .submissions()
-      .some((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
-  ) {
+  if (hasUnansweredStructuredAgentSessionDispatch(ctx.journal.submissions(), ctx.fence)) {
     return 'Resolve pending or unconfirmed messages before using this command.'
   }
   return null

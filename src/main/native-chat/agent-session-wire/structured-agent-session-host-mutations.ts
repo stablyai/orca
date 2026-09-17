@@ -6,10 +6,7 @@ import { rewindRefusal } from './structured-rewind-refusal'
 // they share one path here rather than five copies in the host. The host keeps attach, holds and
 // teardown; this is the surface that assumes those already happened.
 
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -32,6 +29,10 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionLateSettlement,
+  StructuredAgentSessionLateSettlementResult
+} from './structured-agent-session-late-settlement'
 
 export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
@@ -179,14 +180,24 @@ export function readStructuredAgentSessionOptions(
 /** Settle provider-proven delivery independently of an in-flight client mutation. */
 export async function settleStructuredAgentSessionLateDispatch(
   context: StructuredAgentSessionMutationContext,
-  input: {
-    sessionId: string
-    clientMessageId: string
-  } & ({ providerIdentity: AgentJournalItemIdentity } | { state: 'rejected'; reason: string })
-): Promise<void> {
-  const session = context.sessions.get(input.sessionId)
+  input: StructuredAgentSessionLateSettlement
+): Promise<StructuredAgentSessionLateSettlementResult> {
+  let session = context.sessions.get(input.sessionId)
   if (!session) {
-    return
+    return 'no-obligation'
+  }
+  if ('state' in input && input.state === 'unknown') {
+    await context.flushStreamedEvents(input.sessionId)
+    session = context.sessions.get(input.sessionId)
+    if (!session) {
+      return 'no-obligation'
+    }
+    if (!session.journal.hasTerminalTurn(input.turnId, session.fence)) {
+      return 'evidence-not-durable'
+    }
+  }
+  if (!session.journal.canResolveDispatch(input.clientMessageId, session.fence)) {
+    return 'no-obligation'
   }
   // The journal queue drains before close; the host queue would defer this past teardown.
   await session.journal.resolveDispatch(
@@ -197,14 +208,23 @@ export async function settleStructuredAgentSessionLateDispatch(
           providerIdentity: input.providerIdentity,
           fence: session.fence
         }
-      : {
-          clientMessageId: input.clientMessageId,
-          state: 'rejected',
-          reason: input.reason,
-          fence: session.fence
-        }
+      : input.state === 'rejected'
+        ? {
+            clientMessageId: input.clientMessageId,
+            state: 'rejected',
+            reason: input.reason,
+            fence: session.fence
+          }
+        : {
+            clientMessageId: input.clientMessageId,
+            state: 'unknown',
+            reason: input.reason,
+            recovered: input.recovered,
+            fence: session.fence
+          }
   )
   context.publish(input.sessionId, session.journal)
+  return 'settled'
 }
 
 /** The host's thin mutation surface. Each call re-reads the context, so a session

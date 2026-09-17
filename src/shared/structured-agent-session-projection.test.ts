@@ -225,6 +225,25 @@ describe('structured agent session status projection', () => {
     })
   })
 
+  it('reads a turn-settled unknown as retired work for every shared status projection', () => {
+    const asked = item('asked', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const retired = {
+      ...submission('m1', 'unknown'),
+      reason: 'turn_settled_before_acknowledgement',
+      recovered: true as const
+    }
+
+    expect(hasUnansweredStructuredAgentSessionDispatch([retired], 1)).toBe(false)
+    expect(projectStructuredAgentSessionStatus([asked], [retired], 1)).toBe('idle')
+    expect(projectStructuredAgentSessionStatusSummary([asked], [retired], 1)).toMatchObject({
+      status: 'idle'
+    })
+  })
+
   it('carries the running tool and the newest assistant prose the sidebar row shows', () => {
     const ask = item('ask', 1, {
       kind: 'message',

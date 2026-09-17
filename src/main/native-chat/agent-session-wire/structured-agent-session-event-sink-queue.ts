@@ -16,6 +16,7 @@ export type StructuredAgentSessionSinkOperation = {
   lifecycle?: boolean
   coalescingKey?: string
   run: (target: StructuredAgentSessionEventTarget) => Promise<unknown> | void
+  onDiscarded?: () => void
 }
 
 export type StructuredAgentSessionDrainWaiter = {
@@ -87,6 +88,7 @@ export class StructuredAgentSessionSinkQueue {
 
   close(): void {
     this.closed = true
+    this.discardQueuedOperations()
     this.queue.length = 0
     this.queuedBytes = 0
     this.queuedOperations = 0
@@ -206,6 +208,7 @@ export class StructuredAgentSessionSinkQueue {
       this.failure = { error }
       this.deps.onError?.(error)
     }
+    this.discardQueuedOperations()
     this.queue.length = 0
     this.queuedBytes = 0
     this.queuedOperations = 0
@@ -214,6 +217,12 @@ export class StructuredAgentSessionSinkQueue {
     this.settledSequence = this.acceptedSequence
     this.updateBackpressure()
     this.settleWaiters()
+  }
+
+  private discardQueuedOperations(): void {
+    for (const operation of this.queue) {
+      operation.onDiscarded?.()
+    }
   }
 
   private pump(): void {

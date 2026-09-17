@@ -11,6 +11,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { activeStructuredAgentSessionTurnIdBySequence } from '../../../shared/structured-agent-session-live-turn'
 import { agentSessionJournalCloseRetries } from './journal-close-retry'
 import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
@@ -41,6 +42,7 @@ import type {
   JournalTombstoneInput,
   ResolveDispatchInput
 } from './journal-store-contracts'
+import { MAX_OWNER_ENDED_DISPATCHES_PER_APPEND } from './journal-store-contracts'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
 import type { JournalRowWriter } from './journal-row-writer'
@@ -50,6 +52,7 @@ import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import { ensureJournalDir, journalStoreLoadedFields } from './journal-store-open'
 import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
+import { DISPATCH_DOUBT_TURN_SETTLED } from './journal-dispatch-doubt-reasons'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -108,7 +111,8 @@ export class AgentSessionJournal {
         this.malformedRows = count
       },
       journal: () => this,
-      enqueue: (build) => this.enqueue(build)
+      enqueue: (build) => this.enqueue(build),
+      enqueueMany: (build) => this.enqueueMany(build)
     })
     this.rowWriter = collaborators.rowWriter
     this.epochController = collaborators.epochController
@@ -185,6 +189,23 @@ export class AgentSessionJournal {
   pendingSubmissions = (): AgentJournalSubmission[] =>
     this.submissions().filter((entry) => entry.dispatchState === 'pending')
 
+  canResolveDispatch = (clientMessageId: string, fence: number): boolean => {
+    const submission = this.state.submissions.get(clientMessageId)
+    return (
+      submission?.fence === fence &&
+      (submission.dispatchState === 'pending' || submission.dispatchState === 'unknown')
+    )
+  }
+
+  hasTerminalTurn = (turnId: string, fence: number): boolean => {
+    for (const terminalFence of this.state.terminalTurnFences.get(turnId)?.values() ?? []) {
+      if (terminalFence === fence) {
+        return true
+      }
+    }
+    return false
+  }
+
   /** The durable answer to "did my send land?" — a reconnecting client asking
    *  again gets this instead of re-sending. */
   receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>
@@ -218,7 +239,13 @@ export class AgentSessionJournal {
     body: AgentJournalItemBody,
     options: JournalItemAppendOptions = { fence: 0 }
   ): Promise<JournalAppendResult> {
-    return this.itemAppender.append(identity, body, options)
+    return this.appendWithDispatchOwnerSettlement(
+      [body],
+      options.fence,
+      options.ownerEndedClientMessageIds ?? [],
+      (ownerEndedDispatches) =>
+        this.itemAppender.append(identity, body, options, ownerEndedDispatches)
+    )
   }
 
   appendTombstone(
@@ -232,7 +259,15 @@ export class AgentSessionJournal {
   }
 
   appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
-    return this.lifecycleBatchAppender.append(input)
+    const bodies = input.mutations.flatMap((mutation) =>
+      mutation.kind === 'item' ? [mutation.body] : []
+    )
+    return this.appendWithDispatchOwnerSettlement(
+      bodies,
+      input.fence,
+      input.ownerEndedClientMessageIds ?? [],
+      (ownerEndedDispatches) => this.lifecycleBatchAppender.append(input, ownerEndedDispatches)
+    )
   }
 
   /**
@@ -300,5 +335,55 @@ export class AgentSessionJournal {
    */
   private enqueue(build: (seq: number, ts: number) => JournalRow): Promise<JournalRow> {
     return this.rowWriter.enqueue(build)
+  }
+
+  private enqueueMany(
+    build: (seq: number, ts: number) => readonly JournalRow[]
+  ): Promise<JournalRow[]> {
+    return this.rowWriter.enqueueMany(build)
+  }
+
+  private appendWithDispatchOwnerSettlement<T>(
+    bodies: readonly AgentJournalItemBody[],
+    fence: number,
+    ownerEndedClientMessageIds: readonly string[],
+    append: (ownerEndedDispatches: () => ResolveDispatchInput[]) => Promise<T>
+  ): Promise<T> {
+    if (ownerEndedClientMessageIds.length > MAX_OWNER_ENDED_DISPATCHES_PER_APPEND) {
+      return Promise.reject(new Error('journal_owner_ended_dispatch_bound_exceeded'))
+    }
+    const hasTerminalTurn =
+      ownerEndedClientMessageIds.length > 0
+        ? bodies.some((body) => {
+            const turn = readAgentJournalTurn(body)
+            return turn !== null && turn.state !== 'running'
+          })
+        : false
+    const ownerEndedDispatches = (): ResolveDispatchInput[] => {
+      if (!hasTerminalTurn) {
+        return []
+      }
+      const exactClientMessageIds = new Set(ownerEndedClientMessageIds)
+      return [...exactClientMessageIds].flatMap((clientMessageId) => {
+        const submission = this.state.submissions.get(clientMessageId)
+        if (
+          !submission ||
+          submission.fence !== fence ||
+          (submission.dispatchState !== 'pending' && submission.dispatchState !== 'unknown')
+        ) {
+          return []
+        }
+        return [
+          {
+            clientMessageId,
+            state: 'unknown' as const,
+            reason: DISPATCH_DOUBT_TURN_SETTLED,
+            fence,
+            recovered: true as const
+          }
+        ]
+      })
+    }
+    return append(ownerEndedDispatches)
   }
 }

@@ -261,7 +261,7 @@ describe('codex turn lifecycle rows', () => {
     deferred.close()
   })
 
-  it('settles an echoed send only after its request-origin revision is admitted', () => {
+  it('settles an echoed send even when its request-origin revision is backpressured', () => {
     const tap = recorder()
     let rejectOrigin = true
     tap.sink.tryAppendItem = (identity, body, blobs) => {
@@ -290,15 +290,19 @@ describe('codex turn lifecycle rows', () => {
 
     translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
     expect(translator.handle(echo)).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(onUserMessageEcho).not.toHaveBeenCalled()
+    expect(onUserMessageEcho).toHaveBeenCalledOnce()
+    expect(onUserMessageEcho).toHaveBeenLastCalledWith(
+      'client-1',
+      expect.objectContaining({ provider: 'codex', threadId: THREAD_ID, turnId: TURN_ID })
+    )
     expect(tap.rows.map((row) => row.body)).toEqual([
       expect.objectContaining({ kind: 'turn', state: 'running', startedAt: 1_000 })
     ])
 
     rejectOrigin = false
     expect(translator.handle(echo)).toEqual({ accepted: true })
-    expect(onUserMessageEcho).toHaveBeenCalledOnce()
-    expect(onUserMessageEcho).toHaveBeenCalledWith(
+    expect(onUserMessageEcho).toHaveBeenCalledTimes(2)
+    expect(onUserMessageEcho).toHaveBeenLastCalledWith(
       'client-1',
       expect.objectContaining({ provider: 'codex', threadId: THREAD_ID, turnId: TURN_ID })
     )

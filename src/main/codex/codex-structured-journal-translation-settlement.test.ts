@@ -16,6 +16,7 @@ import {
 } from '../native-chat/agent-session-journal/journal-row-schema'
 import {
   createDeferredStructuredAgentSessionEventSink,
+  type StructuredAgentSessionAppendOptions,
   type StructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -25,6 +26,7 @@ import {
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -34,6 +36,7 @@ type Row = { key: string; body: AgentJournalItemBody }
 type LifecycleBatch = {
   settlementId: string
   mutations: JournalLifecycleMutationInput[]
+  options?: StructuredAgentSessionAppendOptions
 }
 
 function recorder() {
@@ -352,8 +355,12 @@ describe('codex journal translation', () => {
   it('bounds prompt cancellation and exit bodies before lifecycle batching', () => {
     const tap = recorder()
     const batches: LifecycleBatch[] = []
-    tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
-      batches.push({ settlementId, mutations: [...mutations] })
+    tap.sink.appendLifecycleBatch = (settlementId, mutations, options) => {
+      batches.push({
+        settlementId,
+        mutations: [...mutations],
+        ...(options ? { options } : {})
+      })
     }
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
@@ -500,13 +507,21 @@ describe('codex journal translation', () => {
 
   it('terminalizes an active tool when its turn completes', () => {
     const tap = recorder()
-    const batches: { settlementId: string; mutations: unknown[] }[] = []
-    tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
-      batches.push({ settlementId, mutations: [...mutations] })
+    const dispatchEchoes = createCodexDispatchEchoes()
+    dispatchEchoes.arm('client-2')
+    dispatchEchoes.bindSteerResponse('client-2', TURN_ID, TURN_ID)
+    const batches: LifecycleBatch[] = []
+    tap.sink.appendLifecycleBatch = (settlementId, mutations, options) => {
+      batches.push({
+        settlementId,
+        mutations: [...mutations],
+        ...(options ? { options } : {})
+      })
     }
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
-      primaryThreadId: () => THREAD_ID
+      primaryThreadId: () => THREAD_ID,
+      dispatchEchoes
     })
 
     translator.handle(TURN_STARTED)
@@ -526,6 +541,7 @@ describe('codex journal translation', () => {
     expect(batches).toEqual([
       {
         settlementId: `turn-completed:${SESSION_ID}:${THREAD_ID}:${TURN_ID}`,
+        options: { lifecycle: true, ownerEndedClientMessageIds: ['client-2'] },
         mutations: [
           expect.objectContaining({
             kind: 'item',

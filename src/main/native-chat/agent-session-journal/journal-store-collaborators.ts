@@ -37,6 +37,7 @@ export type JournalStoreHost = {
   setMalformedRows: (count: number) => void
   journal: () => AgentSessionJournal
   enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
+  enqueueMany: (build: (seq: number, ts: number) => readonly JournalRow[]) => Promise<JournalRow[]>
 }
 
 export type JournalStoreCollaborators = {
@@ -77,12 +78,12 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     }),
     itemAppender: new JournalItemAppender({
       state: host.state,
-      enqueue: host.enqueue
+      enqueueMany: host.enqueueMany
     }),
     lifecycleBatchAppender: new JournalLifecycleBatchAppender({
       state: host.state,
       cursor: host.cursor,
-      enqueue: host.enqueue
+      enqueueMany: host.enqueueMany
     })
   }
 }

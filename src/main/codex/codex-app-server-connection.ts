@@ -15,7 +15,8 @@ import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-
 import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers
+  CodexAppServerConnectionHandlers,
+  CodexAppServerRequestOptions
 } from './codex-app-server-connection-types'
 
 export type {
@@ -195,7 +196,7 @@ export async function openCodexAppServerConnection(
   function request(
     method: string,
     params?: Record<string, unknown>,
-    options: { timeoutMs?: number } = {}
+    options: CodexAppServerRequestOptions = {}
   ): Promise<unknown> {
     if (closing) {
       return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
@@ -215,7 +216,7 @@ export async function openCodexAppServerConnection(
         dispatcher.deletePending(id)
         reject(new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`))
       }, timeoutMs)
-      dispatcher.addPending(id, { method, resolve, reject, timer })
+      dispatcher.addPending(id, { method, onResult: options.onResult, resolve, reject, timer })
       try {
         sendLine(params === undefined ? { method, id } : { method, id, params })
       } catch (error) {

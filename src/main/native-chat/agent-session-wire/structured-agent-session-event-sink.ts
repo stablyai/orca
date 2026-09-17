@@ -24,6 +24,9 @@ export type StructuredAgentSessionSinkState = {
 export type StructuredAgentSessionSinkBarrier = { ok: true } | { ok: false; error: unknown }
 
 export type StructuredAgentSessionAppendOptions = {
+  ownerEndedClientMessageIds?: readonly string[]
+  onCommitted?: () => void
+  onAbandoned?: () => void
   /** Pending checkpoints with this key replace one another before they run. */
   coalescingKey?: string
   /** Marks a critical lifecycle operation for lifecycle barriers and diagnostics. */
@@ -45,6 +48,7 @@ export type StructuredAgentSessionIdentityResolver = (
 export type StructuredAgentSessionLifecycleIdentityResolver = StructuredAgentSessionIdentityResolver
 
 export type StructuredAgentSessionEventSink = {
+  durableLifecycleCallbacks?: true
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,

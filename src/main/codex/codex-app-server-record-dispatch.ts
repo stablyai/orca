@@ -13,6 +13,7 @@ const OVERSIZED_REQUEST_ERROR_CODE = -32001
 
 export type CodexPendingRequest = {
   method: string
+  onResult?: (result: unknown) => void
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
@@ -91,6 +92,12 @@ export function createCodexAppServerRecordDispatcher(input: {
               `codex app-server ${waiter.method} failed: ${detail}`
             )
       )
+      return
+    }
+    try {
+      waiter.onResult?.(message.result)
+    } catch (error) {
+      waiter.reject(error instanceof Error ? error : new Error(String(error)))
       return
     }
     waiter.resolve(message.result)

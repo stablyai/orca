@@ -199,7 +199,10 @@ export async function performSend(
             clientMessageId: input.clientMessageId,
             state: outcome.state,
             reason: outcome.reason,
-            fence: ctx.fence
+            fence: ctx.fence,
+            ...(outcome.state === 'unknown' && outcome.recovered
+              ? { recovered: outcome.recovered }
+              : {})
           }
     )
   } catch (error) {

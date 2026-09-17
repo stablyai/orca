@@ -9,6 +9,7 @@
 
 import type {
   AgentJournalAcceptanceReceipt,
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
@@ -21,6 +22,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
 import { dispatchRejectionWasTransportWriteFailure } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -33,6 +35,8 @@ export type JournalReducerState = {
   oldestSequence: number
   highestFence: number
   items: Map<string, AgentJournalRenderItem>
+  /** Replay-derived terminal turn index: turn id → item id → writer fence. */
+  terminalTurnFences: Map<string, Map<string, number>>
   /** Revision of a removed item, so a late lower revision cannot resurrect it. */
   tombstones: Map<string, number>
   submissions: Map<string, AgentJournalSubmission>
@@ -52,6 +56,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     oldestSequence: 1,
     highestFence: 0,
     items: new Map(),
+    terminalTurnFences: new Map(),
     tombstones: new Map(),
     submissions: new Map(),
     receipts: new Map(),
@@ -73,14 +78,20 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
-    upsertItem(state, itemId, row.revision, {
+    upsertItem(
+      state,
       itemId,
-      revision: row.revision,
-      body: row.body,
-      sequence: row.seq,
-      observedAt: row.ts,
-      ...(row.recovered ? { recovered: row.recovered } : {})
-    })
+      row.revision,
+      {
+        itemId,
+        revision: row.revision,
+        body: row.body,
+        sequence: row.seq,
+        observedAt: row.ts,
+        ...(row.recovered ? { recovered: row.recovered } : {})
+      },
+      row.fence
+    )
     return
   }
   if (row.kind === 'tombstone') {
@@ -98,14 +109,20 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
         }
         const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
-        upsertItem(state, itemId, mutation.revision, {
+        upsertItem(
+          state,
           itemId,
-          revision: mutation.revision,
-          body: mutation.body,
-          sequence: row.seq,
-          observedAt: row.ts,
-          ...(row.recovered ? { recovered: row.recovered } : {})
-        })
+          mutation.revision,
+          {
+            itemId,
+            revision: mutation.revision,
+            body: mutation.body,
+            sequence: row.seq,
+            observedAt: row.ts,
+            ...(row.recovered ? { recovered: row.recovered } : {})
+          },
+          row.fence
+        )
       } else {
         removeItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
       }
@@ -189,7 +206,8 @@ function upsertItem(
   state: JournalReducerState,
   itemId: string,
   revision: number,
-  next: AgentJournalRenderItem
+  next: AgentJournalRenderItem,
+  fence: number
 ): void {
   const tombstoned = state.tombstones.get(itemId)
   if (tombstoned !== undefined && revision <= tombstoned) {
@@ -201,6 +219,7 @@ function upsertItem(
   }
   if (!existing) {
     state.items.set(itemId, next)
+    rememberTerminalTurnFence(state, itemId, next.body, fence)
     state.tombstones.delete(itemId)
     return
   }
@@ -213,6 +232,7 @@ function upsertItem(
     existing.body.kind === 'message' &&
     existing.body.role === 'user' &&
     parseAgentJournalItemKey(itemId)?.provider === 'orca'
+  forgetTerminalTurnFence(state, itemId, existing.body)
   state.items.set(itemId, {
     ...next,
     // Provider history may normalize text or omit local attachments from the original send.
@@ -220,6 +240,7 @@ function upsertItem(
     sequence: existing.sequence,
     observedAt: existing.observedAt
   })
+  rememberTerminalTurnFence(state, itemId, next.body, fence)
   state.tombstones.delete(itemId)
 }
 
@@ -233,7 +254,41 @@ function removeItem(state: JournalReducerState, itemId: string, revision: number
     return
   }
   state.tombstones.set(itemId, revision)
+  if (existing) {
+    forgetTerminalTurnFence(state, itemId, existing.body)
+  }
   state.items.delete(itemId)
+}
+
+function rememberTerminalTurnFence(
+  state: JournalReducerState,
+  itemId: string,
+  body: AgentJournalItemBody,
+  fence: number
+): void {
+  const turn = readAgentJournalTurn(body)
+  if (!turn || turn.state === 'running') {
+    return
+  }
+  const fences = state.terminalTurnFences.get(turn.turnId) ?? new Map<string, number>()
+  fences.set(itemId, fence)
+  state.terminalTurnFences.set(turn.turnId, fences)
+}
+
+function forgetTerminalTurnFence(
+  state: JournalReducerState,
+  itemId: string,
+  body: AgentJournalItemBody
+): void {
+  const turn = readAgentJournalTurn(body)
+  if (!turn || turn.state === 'running') {
+    return
+  }
+  const fences = state.terminalTurnFences.get(turn.turnId)
+  fences?.delete(itemId)
+  if (fences?.size === 0) {
+    state.terminalTurnFences.delete(turn.turnId)
+  }
 }
 
 function applySubmission(
@@ -251,13 +306,19 @@ function applySubmission(
     resolvedAt: null
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
-  upsertItem(state, itemId, 0, {
+  upsertItem(
+    state,
     itemId,
-    revision: 0,
-    body: row.body,
-    sequence: row.seq,
-    observedAt: row.ts
-  })
+    0,
+    {
+      itemId,
+      revision: 0,
+      body: row.body,
+      sequence: row.seq,
+      observedAt: row.ts
+    },
+    row.fence
+  )
 }
 
 function applyDispatch(

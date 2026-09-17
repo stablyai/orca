@@ -188,8 +188,8 @@ export function hasPersistedStructuredAgentSessionTurn(
  * every session list, so the send itself is the evidence.
  *
  * A live `unknown` still counts because an ambiguous adapter reply does not prove the provider
- * stopped. A recovered `unknown` does not — it outlived the host generation that sent it, so
- * there is nothing still running to report.
+ * stopped. A recovered `unknown` does not — host lifecycle evidence retired its execution owner,
+ * so there is nothing still running to report.
  */
 export function hasUnansweredStructuredAgentSessionDispatch(
   submissions: readonly AgentJournalSubmission[],

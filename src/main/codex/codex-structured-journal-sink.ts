@@ -2,6 +2,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionLifecycleIdentityResolver,
@@ -15,28 +16,61 @@ import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
+function isTerminalTurnMutation(mutation: JournalLifecycleMutationInput): boolean {
+  if (mutation.kind !== 'item') {
+    return false
+  }
+  const turn = readAgentJournalTurn(mutation.body)
+  return turn !== null && turn.state !== 'running'
+}
+
 export function appendCodexLifecycleMutations(
   sink: StructuredAgentSessionEventSink,
   settlementId: string,
-  mutations: readonly JournalLifecycleMutationInput[]
+  mutations: readonly JournalLifecycleMutationInput[],
+  options: {
+    ownerEndedClientMessageIds?: readonly string[]
+    onCommitted?: () => void
+    onAbandoned?: () => void
+  } = {}
 ): StructuredAgentSessionSinkAdmission {
   const chunks = partitionJournalLifecycleMutations(settlementId, mutations)
   for (const { settlementId: id, mutations: chunk } of chunks) {
+    const containsTerminalTurn = chunk.some(isTerminalTurnMutation)
+    const ownerEndedClientMessageIds = containsTerminalTurn
+      ? options.ownerEndedClientMessageIds
+      : undefined
+    const appendOptions = {
+      lifecycle: true as const,
+      ...(ownerEndedClientMessageIds ? { ownerEndedClientMessageIds } : {}),
+      ...(containsTerminalTurn && options.onCommitted ? { onCommitted: options.onCommitted } : {}),
+      ...(containsTerminalTurn && options.onAbandoned ? { onAbandoned: options.onAbandoned } : {})
+    }
     let admission: StructuredAgentSessionSinkAdmission = ADMITTED
     if (sink.tryAppendLifecycleBatch) {
-      admission = sink.tryAppendLifecycleBatch(id, chunk, { lifecycle: true })
+      admission = sink.tryAppendLifecycleBatch(id, chunk, appendOptions)
     } else if (sink.appendLifecycleBatch) {
-      admission = sink.appendLifecycleBatch(id, chunk, { lifecycle: true }) ?? ADMITTED
+      admission = sink.appendLifecycleBatch(id, chunk, appendOptions) ?? ADMITTED
     } else {
       for (const mutation of chunk) {
         if (mutation.kind === 'item') {
           if (sink.tryAppendItem) {
-            admission = sink.tryAppendItem(mutation.identity, mutation.body, { lifecycle: true })
+            admission = sink.tryAppendItem(mutation.identity, mutation.body, {
+              lifecycle: true,
+              ...(isTerminalTurnMutation(mutation) && ownerEndedClientMessageIds
+                ? { ownerEndedClientMessageIds }
+                : {})
+            })
             if (!admission.accepted) {
               return admission
             }
           } else {
-            sink.appendItem(mutation.identity, mutation.body, { lifecycle: true })
+            sink.appendItem(mutation.identity, mutation.body, {
+              lifecycle: true,
+              ...(isTerminalTurnMutation(mutation) && ownerEndedClientMessageIds
+                ? { ownerEndedClientMessageIds }
+                : {})
+            })
           }
         } else {
           if (sink.tryAppendTombstone) {

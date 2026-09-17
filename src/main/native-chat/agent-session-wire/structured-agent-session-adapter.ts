@@ -111,7 +111,7 @@ export type AgentSessionDispatchOutcome =
   | { state: 'admitted' }
   | { state: 'rejected'; reason: string }
   /** The call did not settle. Never re-send on the user's behalf. */
-  | { state: 'unknown'; reason: string }
+  | { state: 'unknown'; reason: string; recovered?: true }
 
 export type StructuredAgentSessionLifecycleEvent = {
   type: 'ended'

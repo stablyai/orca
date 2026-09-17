@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_DOUBT_TURN_SETTLED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
@@ -14,6 +15,7 @@ import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
+import type { StructuredAgentSessionLateSettlementResult } from './structured-agent-session-late-settlement'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -65,10 +67,27 @@ function submissions(): unknown {
   return state.ok ? state.page.submissions : null
 }
 
-function journal(): AgentSessionJournal {
+function heldSession(): { fence: number; journal: AgentSessionJournal } {
   return (
-    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-  ).sessions.get(SESSION)!.journal
+    (
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test inspects the host's private, already-attached session fixture.
+      host as unknown as {
+        sessions: Map<string, { fence: number; journal: AgentSessionJournal }>
+      }
+    ).sessions.get(SESSION)!
+  )
+}
+
+function journal(): AgentSessionJournal {
+  return heldSession().journal
+}
+
+async function appendTerminalTurn(turnId: string): Promise<void> {
+  await journal().appendItem(
+    { provider: 'codex', threadId: THREAD, turnId, ordinal: 99 },
+    { kind: 'turn', turnId, state: 'completed', startedAt: NOW - 10, completedAt: NOW },
+    { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1 }
+  )
 }
 
 beforeEach(async () => {
@@ -167,7 +186,7 @@ describe('settling a send the provider proves it received after the ack window',
     dispatch.mockResolvedValueOnce({ state: 'unknown', reason: 'ack timeout' })
     const params = sendParams('received just before shutdown')
     await host.send(CALLER, params)
-    let settlement: Promise<void> | undefined
+    let settlement: Promise<StructuredAgentSessionLateSettlementResult> | undefined
     closeSession.mockImplementationOnce(async () => {
       settlement = host.settleLateDispatch({
         sessionId: SESSION,
@@ -179,7 +198,7 @@ describe('settling a send the provider proves it received after the ack window',
     })
 
     await host.close(SESSION)
-    await expect(settlement).resolves.toBeUndefined()
+    await expect(settlement).resolves.toBe('settled')
     await host.revealSession(SESSION)
     expect(submissions()).toMatchObject([{ dispatchState: 'accepted' }])
     expect(dispatch).toHaveBeenCalledTimes(1)
@@ -271,6 +290,108 @@ describe('settling a send the provider proves it received after the ack window',
     ])
   })
 
+  it('ignores a live echo with no exact durable submission', async () => {
+    const resolveDispatch = vi.spyOn(journal(), 'resolveDispatch')
+
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: 'foreign-client-id',
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 9 }
+    })
+
+    expect(resolveDispatch).not.toHaveBeenCalled()
+  })
+
+  it('ignores an echo for a submission from an older runtime fence', async () => {
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const params = sendParams('stale provider echo')
+    await host.send(CALLER, params)
+    const session = heldSession()
+    const originalFence = session.fence
+    session.fence += 1
+    const resolveDispatch = vi.spyOn(session.journal, 'resolveDispatch')
+    try {
+      await host.settleLateDispatch({
+        sessionId: SESSION,
+        clientMessageId: params.envelope.clientOperationId,
+        providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-old', ordinal: 1 }
+      })
+      expect(resolveDispatch).not.toHaveBeenCalled()
+      expect(submissions()).toMatchObject([{ dispatchState: 'pending' }])
+    } finally {
+      session.fence = originalFence
+    }
+  })
+
+  it('settles an exact send after its terminal lifecycle row becomes durable', async () => {
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const params = sendParams('owned by the completed turn')
+    await host.send(CALLER, params)
+    vi.spyOn(host, 'flushStreamedEvents').mockImplementationOnce(() => appendTerminalTurn('turn-1'))
+
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: params.envelope.clientOperationId,
+      state: 'unknown',
+      reason: DISPATCH_DOUBT_TURN_SETTLED,
+      recovered: true,
+      turnId: 'turn-1'
+    })
+
+    expect(submissions()).toMatchObject([
+      {
+        clientMessageId: params.envelope.clientOperationId,
+        dispatchState: 'unknown',
+        reason: DISPATCH_DOUBT_TURN_SETTLED,
+        recovered: true
+      }
+    ])
+  })
+
+  it('ignores owner-ended evidence until the exact terminal turn is durable', async () => {
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const params = sendParams('terminal row was not admitted')
+    await host.send(CALLER, params)
+    const resolveDispatch = vi.spyOn(journal(), 'resolveDispatch')
+
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: params.envelope.clientOperationId,
+      state: 'unknown',
+      reason: DISPATCH_DOUBT_TURN_SETTLED,
+      recovered: true,
+      turnId: 'turn-not-durable'
+    })
+
+    expect(resolveDispatch).not.toHaveBeenCalled()
+    expect(submissions()).toMatchObject([{ dispatchState: 'pending' }])
+  })
+
+  it('ignores a terminal turn from an older runtime fence', async () => {
+    await appendTerminalTurn('turn-reused')
+    const session = heldSession()
+    session.fence += 1
+    await session.journal.appendSubmission({
+      clientMessageId: 'new-fence-send',
+      payloadFingerprint: 'new-fence-fingerprint',
+      body: hostTestMessage('new fence send'),
+      fence: session.fence
+    })
+    await expect(
+      host.settleLateDispatch({
+        sessionId: SESSION,
+        clientMessageId: 'new-fence-send',
+        state: 'unknown',
+        reason: DISPATCH_DOUBT_TURN_SETTLED,
+        recovered: true,
+        turnId: 'turn-reused'
+      })
+    ).resolves.toBe('evidence-not-durable')
+    expect(submissions()).toMatchObject([
+      expect.objectContaining({ clientMessageId: 'new-fence-send', dispatchState: 'pending' })
+    ])
+  })
+
   it('ignores a session this host is not holding', async () => {
     await expect(
       host.settleLateDispatch({
@@ -278,6 +399,6 @@ describe('settling a send the provider proves it received after the ack window',
         clientMessageId: 'whatever',
         providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'x' }
       })
-    ).resolves.toBeUndefined()
+    ).resolves.toBe('no-obligation')
   })
 })

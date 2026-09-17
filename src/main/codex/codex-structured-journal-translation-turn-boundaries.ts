@@ -11,7 +11,6 @@ import {
   CodexJournalRecentTurns,
   type CodexJournalActiveTurns
 } from './codex-structured-journal-translation-turn-state'
-import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
 import {
   codexTurnLifecycleState,
   codexTurnUserItemId,
@@ -23,6 +22,10 @@ import {
   readCodexTurnId,
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
+import type {
+  CodexDispatchEchoes,
+  CodexDispatchRequestOrigin
+} from './codex-structured-dispatch-echo'
 
 type TurnBoundaryEvent = {
   sessionId: string
@@ -43,6 +46,10 @@ export class CodexJournalTurnBoundaries {
       activeTurns: CodexJournalActiveTurns
       items: Pick<CodexJournalItems, 'streams' | 'activeItems' | 'ordinals'>
       pendingPrompts: Map<string, CodexPendingJournalPrompt>
+      dispatchEchoes?: Pick<
+        CodexDispatchEchoes,
+        'observeTurnStarted' | 'terminalOwnerIds' | 'commitTerminal' | 'abandonTerminal'
+      >
       clearPromptTurn?: (threadId: string, turnId: string) => void
       flushSuppression: () => CodexJournalTranslationAdmission
       resetActivity: (threadId: string) => void
@@ -75,6 +82,9 @@ export class CodexJournalTurnBoundaries {
         startedAt,
         event.dispatchSequenceAtReceipt
       )
+      if (event.threadId === this.deps.primaryThreadId()) {
+        this.deps.dispatchEchoes?.observeTurnStarted(turnId)
+      }
       this.deps.resetActivity(event.threadId)
     }
     return admission
@@ -139,21 +149,26 @@ export class CodexJournalTurnBoundaries {
     // the turn that spawned them and go on reporting into the same group, so a
     // turn boundary is no evidence contact was lost. Only `settleSession` may
     // write `unverifiable`.
-    const turnLifecycle =
-      event.threadId === this.deps.primaryThreadId()
-        ? this.settled(
-            event.threadId,
-            turnId,
-            codexTurnLifecycleState(readCodexTurnStatus(event.params)),
-            this.receiptTime(event),
-            readCodexTurnDurationMs(event.params)
-          )
-        : null
+    const isPrimaryTurn = event.threadId === this.deps.primaryThreadId()
+    const turnLifecycle = isPrimaryTurn
+      ? this.settled(
+          event.threadId,
+          turnId,
+          codexTurnLifecycleState(readCodexTurnStatus(event.params)),
+          this.receiptTime(event),
+          readCodexTurnDurationMs(event.params)
+        )
+      : null
     const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
     const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
       event.threadId,
       turnId
     )
+    const ownerEndedClientMessageIds = isPrimaryTurn
+      ? (this.deps.dispatchEchoes?.terminalOwnerIds(turnId) ?? [])
+      : []
+    const waitsForDurableOwnerSettlement =
+      isPrimaryTurn && this.deps.sink.durableLifecycleCallbacks === true
     const admission = settleCodexJournalTurn({
       sink: this.deps.sink,
       sessionId: event.sessionId,
@@ -163,6 +178,13 @@ export class CodexJournalTurnBoundaries {
       streams: this.deps.items.streams,
       activeItems: this.deps.items.activeItems,
       pendingPrompts: this.deps.pendingPrompts,
+      ownerEndedClientMessageIds,
+      ...(waitsForDurableOwnerSettlement
+        ? {
+            onOwnerSettlementCommitted: () => this.deps.dispatchEchoes?.commitTerminal(turnId),
+            onOwnerSettlementAbandoned: () => this.deps.dispatchEchoes?.abandonTerminal(turnId)
+          }
+        : {}),
       ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {})
     })
     if (admission.accepted) {
@@ -174,9 +196,14 @@ export class CodexJournalTurnBoundaries {
           latestDispatchSequence
         )
       }
+      if (isPrimaryTurn && !waitsForDurableOwnerSettlement) {
+        this.deps.dispatchEchoes?.commitTerminal(turnId)
+      }
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
       this.deps.activeTurns.forget(event.threadId, turnId)
       this.deps.resetActivity(event.threadId)
+    } else if (isPrimaryTurn) {
+      this.deps.dispatchEchoes?.abandonTerminal(turnId)
     }
     return admission
   }
@@ -190,7 +217,6 @@ export class CodexJournalTurnBoundaries {
     durationMs: number | null = null
   ): AgentJournalTurnLifecycle {
     const startedAt = this.deps.activeTurns.startedAt(threadId, turnId)
-    // Carried forward from the exact echoed send that was attributed to this turn.
     const requestOrigin = this.deps.activeTurns.requestOrigin(threadId, turnId)
     return {
       turnId,

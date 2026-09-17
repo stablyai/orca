@@ -214,13 +214,18 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     let recoveryChain = Promise.resolve()
     const onDispatchSettledLate = (
       settlement: Parameters<StructuredAgentSessionHost['settleLateDispatch']>[0]
-    ): void => {
-      void host?.settleLateDispatch(settlement).catch((error) =>
+    ): Promise<Awaited<ReturnType<StructuredAgentSessionHost['settleLateDispatch']>>> => {
+      const activeHost = host
+      if (!activeHost) {
+        return Promise.resolve('no-obligation')
+      }
+      return activeHost.settleLateDispatch(settlement).catch((error) => {
         deps.onError?.({
           scope: `structured-agent-session-late-settlement:${settlement.sessionId}`,
           error
         })
-      )
+        throw error
+      })
     }
     const codex = new CodexStructuredSessionAdapter({
       resolveLaunch: createCodexStructuredLaunchResolver({

@@ -11,13 +11,19 @@ export type CodexAppServerConnectionHandlers = {
   onExit?: (error: Error) => void
 }
 
+export type CodexAppServerRequestOptions = {
+  timeoutMs?: number
+  /** Observes a successful response before the reader can dispatch its next record. */
+  onResult?: (result: unknown) => void
+}
+
 export type CodexAppServerConnection = {
   readonly pid: number | undefined
   readonly closed: boolean
   request: (
     method: string,
     params?: Record<string, unknown>,
-    options?: { timeoutMs?: number }
+    options?: CodexAppServerRequestOptions
   ) => Promise<unknown>
   notify: (method: string, params?: Record<string, unknown>) => void
   respond: (id: number | string, result: unknown) => void

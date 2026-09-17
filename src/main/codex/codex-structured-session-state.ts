@@ -1,7 +1,4 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import type {
@@ -16,6 +13,10 @@ import type { CodexJournalTranslator } from './codex-structured-journal-translat
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type {
+  StructuredAgentSessionLateSettlement,
+  StructuredAgentSessionLateSettlementResult
+} from '../native-chat/agent-session-wire/structured-agent-session-late-settlement'
 
 export type CodexStructuredLaunch = {
   command: string
@@ -66,12 +67,10 @@ export type CodexStructuredSessionAdapterDeps = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
-  /** Identity for a send admitted earlier, once Codex echoes the user message. */
-  onDispatchSettledLate?: (input: {
-    sessionId: string
-    clientMessageId: string
-    providerIdentity: AgentJournalItemIdentity
-  }) => void
+  /** Durable evidence that narrows a previously admitted send. */
+  onDispatchSettledLate?: (
+    input: StructuredAgentSessionLateSettlement
+  ) => void | Promise<StructuredAgentSessionLateSettlementResult>
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string

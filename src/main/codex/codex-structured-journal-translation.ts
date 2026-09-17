@@ -85,6 +85,7 @@ export function createCodexJournalTranslator(
     activeTurns,
     items,
     pendingPrompts: prompts.pending,
+    ...(deps.dispatchEchoes ? { dispatchEchoes: deps.dispatchEchoes } : {}),
     ...(deps.clearPromptTurn ? { clearPromptTurn: deps.clearPromptTurn } : {}),
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
@@ -269,6 +270,8 @@ export function createCodexJournalTranslator(
               requestOrigin
             })
             if (!attribution.accepted) {
+              // Origin revision backpressure must not gate exact delivery proof.
+              deps.onUserMessageEcho?.(clientMessageId, providerIdentity)
               return attribution
             }
           }

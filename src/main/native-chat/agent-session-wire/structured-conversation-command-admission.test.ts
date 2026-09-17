@@ -1,23 +1,54 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentJournalSnapshot,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session-wire'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
-function contextWith(
-  backgroundTasks: AgentSessionBackgroundTaskState | null
-): AgentSessionTurnContext {
+function snapshot(items: AgentJournalSnapshot['items'] = []): AgentJournalSnapshot {
   return {
     sessionId: 'session-1',
+    cursor: { epoch: 'epoch-1', sequence: 0 },
+    items,
+    submissions: []
+  }
+}
+
+function contextWith(
+  backgroundTasks: AgentSessionBackgroundTaskState | null,
+  submissions: AgentJournalSubmission[] = []
+): Parameters<typeof conversationCommandBlocked>[0] {
+  return {
+    sessionId: 'session-1',
+    fence: 1,
     journal: {
-      snapshot: () => ({ items: [] }),
-      submissions: () => []
+      snapshot: () => snapshot(),
+      submissions: () => submissions
     },
     adapter: { backgroundTaskState: () => backgroundTasks }
-  } as unknown as AgentSessionTurnContext
+  }
 }
 
 const RECORD = { lease: {} } as unknown as AgentSessionRecord
+
+function submission(
+  dispatchState: AgentJournalSubmission['dispatchState'],
+  overrides: Partial<AgentJournalSubmission> = {}
+): AgentJournalSubmission {
+  return {
+    clientMessageId: 'message-1',
+    fence: 1,
+    payloadFingerprint: 'fingerprint',
+    dispatchState,
+    providerItemId: null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: dispatchState === 'pending' ? null : 2,
+    ...overrides
+  }
+}
 
 describe('conversationCommandBlocked background tasks', () => {
   it('admits the command when nothing is being monitored', () => {
@@ -52,19 +83,44 @@ describe('conversationCommandBlocked background tasks', () => {
     // so a live fan-out never re-labels the reason or blocks anything new.
     const ctx = contextWith({ state: 'monitoring', supportsTaskStop: true })
     ctx.journal.snapshot = () =>
-      ({
-        items: [
-          {
-            id: 'turn-1',
-            body: {
-              kind: 'status',
-              turnLifecycle: { turnId: 'turn-1', state: 'running' }
-            }
+      snapshot([
+        {
+          itemId: 'turn-1',
+          revision: 1,
+          sequence: 1,
+          observedAt: 1,
+          body: {
+            kind: 'status',
+            text: 'Working',
+            turnLifecycle: { turnId: 'turn-1', state: 'running' }
           }
-        ]
-      }) as unknown as ReturnType<typeof ctx.journal.snapshot>
+        }
+      ])
     expect(conversationCommandBlocked(ctx, RECORD)).toBe(
       'Wait for the current turn to finish before using this command.'
     )
+  })
+})
+
+describe('conversationCommandBlocked dispatch ownership', () => {
+  it.each(['pending', 'unknown'] as const)('blocks a live %s dispatch', (dispatchState) => {
+    expect(conversationCommandBlocked(contextWith(null, [submission(dispatchState)]), RECORD)).toBe(
+      'Resolve pending or unconfirmed messages before using this command.'
+    )
+  })
+
+  it('admits a command after turn settlement retires an unconfirmed dispatch', () => {
+    const retired = submission('unknown', {
+      reason: 'turn_settled_before_acknowledgement',
+      recovered: true
+    })
+
+    expect(conversationCommandBlocked(contextWith(null, [retired]), RECORD)).toBeNull()
+  })
+
+  it('does not let an unanswered dispatch from an older owner block the current fence', () => {
+    expect(
+      conversationCommandBlocked(contextWith(null, [submission('pending', { fence: 0 })]), RECORD)
+    ).toBeNull()
   })
 })

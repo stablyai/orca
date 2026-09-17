@@ -26,7 +26,7 @@ type JournalRowBase = {
   fence: number
   /** Observed (provider or host) timestamp. Ordering is by `seq`, not by this. */
   ts: number
-  /** Set when crash reconciliation appended the row after the fact. */
+  /** Set when host lifecycle reconciliation appends a row instead of a live provider event. */
   recovered?: true
 }
 
