@@ -200,6 +200,10 @@ export type DetailComment = {
   isResolved?: boolean
 }
 
+/** `viewerViewedState` is `string`, not `GitHubPRFileViewedState`'s three arms: the reader forwards
+ *  whatever arrives so an arm this build predates reaches the `=== 'VIEWED'` tests as itself.
+ *  `status` keeps the host's seven arms because its only consumer sends it back as a
+ *  `github.prFileContents` param, which the host validates against that same set. */
 export type GitHubDetailFile = {
   path: string
   oldPath?: string
@@ -207,7 +211,7 @@ export type GitHubDetailFile = {
   additions?: number
   deletions?: number
   isBinary?: boolean
-  viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
+  viewerViewedState?: string
 }
 
 export type GitHubDetailCheck = {
@@ -217,9 +221,10 @@ export type GitHubDetailCheck = {
   url?: string | null
 }
 
-/** Optional throughout because that is what the checked reader can promise: the recorded reply at
- *  both call sites carries none of these, so requiring one would refuse this surface's own control.
- *  Every reader already reaches them through `?.` or through splitContentLines' falsy test. */
+/** Optional throughout because nothing reads a member unguarded: the review panels reach each flag
+ *  through `?.`, and `splitContentLines` (github-pr-file-diff.ts:21) takes `string | undefined`
+ *  behind a falsy guard. The host sets the two too-large flags only when it skipped a side for size
+ *  (pull-request-file-contents.ts:54), so they are absent on an ordinary reply. */
 export type GitHubPRFileContents = {
   original?: string
   modified?: string
