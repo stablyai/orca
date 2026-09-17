@@ -42,6 +42,49 @@ describe('mobile new-tab agent loading', () => {
     ])
   })
 
+  it('detects agents inside the distro of a WSL-hosted workspace', async () => {
+    const client = createClient(async (method, params) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'repo.list') {
+        return { ok: true, result: { repos: [{ id: 'repo-1', connectionId: null }] } }
+      }
+      if (method === 'preflight.detectAgents') {
+        expect(params).toEqual({ wslDistro: 'Ubuntu-24.04' })
+        return { ok: true, result: ['claude'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({
+        client,
+        worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu-24.04\\home\\dev\\project'
+      })
+    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+  })
+
+  it('leaves the detection target unset for a workspace on the host filesystem', async () => {
+    const client = createClient(async (method, params) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'repo.list') {
+        return { ok: true, result: { repos: [{ id: 'repo-1', connectionId: null }] } }
+      }
+      if (method === 'preflight.detectAgents') {
+        expect(params).toBeUndefined()
+        return { ok: true, result: ['codex'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::C:\\dev\\project' })
+    ).resolves.toEqual([{ agent: 'codex', label: 'Codex' }])
+  })
+
   it('detects agents through the worktree repo connection for SSH sessions', async () => {
     const client = createClient(async (method, params) => {
       if (method === 'settings.get') {

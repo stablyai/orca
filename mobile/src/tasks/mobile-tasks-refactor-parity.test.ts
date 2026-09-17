@@ -55,9 +55,12 @@ const hash = (parts: string[] | string): string =>
 // declaration hash and the three arm literals, `semantics` 3,281 -> 3,278. `status` keeps its arms
 // and moves nothing, because its only consumer sends it back as a param the host validates against
 // the same set. Hook, statement and render hashes do not move; nothing executable changed.
-const SCREEN_RPC_SCREEN_HOOKS = 'a550246eac444aea535ab18d50bc4db6204195ae812665a6beb40a3f5ab553d8'
+//
+// Naming the WSL distro on workspace-creation detection moves the hook and statement hashes and
+// nothing else: the local detection send gains a params argument. Counts stay at 350 and 417.
+const SCREEN_RPC_SCREEN_HOOKS = '18a2adeb3af017735836cad4ba781a4a3aa475c691a4d7c82d0b70a0106898fe'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'ffa60f57cb239bf02c4c7080847565711cb5c59e3b09d4850a6ce62e986624fa'
+const SCREEN_RPC_STATEMENTS = '81394cad9f24da2dfeb1b37c10c9dc9f9ab6c09458a7d4e957274afac0bc361f'
 const MAIN_REBASED_DECLARATIONS = 'da0a29f09d8a2178e1a937988484f95ffa2938aea94a50a56f797fd631df6072'
 const SCREEN_RPC_SEMANTICS = '8d5ea095e1cda2bce6921ac88e73ad09b95fd10b70ab3e44d2f49d4567cc9046'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
