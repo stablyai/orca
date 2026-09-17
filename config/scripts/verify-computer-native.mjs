@@ -196,14 +196,90 @@ function verifyWindowsProviderHandshake() {
   }
 }
 
+// Why: editable-text probes must not false-fail on explanatory comments or
+// false-pass when the required call only appears in a comment (#10569 CR).
+function stripPythonComments(source) {
+  let out = ''
+  let i = 0
+  const n = source.length
+  while (i < n) {
+    const ch = source[i]
+    const next = source[i + 1]
+    // Triple-quoted strings (keep contents so string literals still scan).
+    // Why: honor escaped delimiters so `\"\"\"` inside a triple-string does not
+    // end the string early and reclassify later code as comments (#10586 CR).
+    if ((ch === '"' || ch === "'") && next === ch && source[i + 2] === ch) {
+      const quote = ch.repeat(3)
+      out += quote
+      i += 3
+      while (i < n) {
+        if (source[i] === '\\' && i + 1 < n) {
+          out += source[i]
+          out += source[i + 1]
+          i += 2
+          continue
+        }
+        if (source.slice(i, i + 3) === quote) {
+          out += quote
+          i += 3
+          break
+        }
+        out += source[i]
+        i += 1
+      }
+      continue
+    }
+    // Single/double quoted strings.
+    if (ch === '"' || ch === "'") {
+      const quote = ch
+      out += quote
+      i += 1
+      while (i < n) {
+        const cur = source[i]
+        out += cur
+        i += 1
+        if (cur === '\\' && i < n) {
+          out += source[i]
+          i += 1
+          continue
+        }
+        if (cur === quote) {
+          break
+        }
+      }
+      continue
+    }
+    if (ch === '#') {
+      while (i < n && source[i] !== '\n') {
+        i += 1
+      }
+      continue
+    }
+    out += ch
+    i += 1
+  }
+  return out
+}
+
 function verifyNativeArgumentGuardrails() {
-  const linux = readFileSync(join(repoRoot, 'native/computer-use-linux/runtime.py'), 'utf8')
+  const linuxSource = readFileSync(join(repoRoot, 'native/computer-use-linux/runtime.py'), 'utf8')
+  // Why: comment-only mentions of forbidden/required probes must not drive the guard.
+  const linux = stripPythonComments(linuxSource)
   const macos = readFileSync(
     join(repoRoot, 'native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift'),
     'utf8'
   )
   const windows = readFileSync(join(repoRoot, 'native/computer-use-windows/runtime.ps1'), 'utf8')
   const failures = []
+  // Why: GI bindings do not expose the C-only editable-text predicate; looking
+  // it up as an attribute raises before attempt() can catch it (#10569).
+  // Match any attribute lookup form, not only `node.is_editable_text` (#10586 CR).
+  if (/(?:^|[^A-Za-z0-9_])is_editable_text(?:\s*[,(]|\s*$)/m.test(linux)) {
+    failures.push('Linux set_value must not look up is_editable_text (use get_editable_text_iface)')
+  }
+  if (!linux.includes('get_editable_text_iface')) {
+    failures.push('Linux set_value must probe editability via get_editable_text_iface')
+  }
   if (linux.includes('count or 1') || linux.includes('pages or 1')) {
     failures.push('Linux provider must not coerce explicit zero action values to defaults')
   }
