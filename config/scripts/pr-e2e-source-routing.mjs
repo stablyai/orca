@@ -12,7 +12,34 @@ const NATIVE_IME_PRODUCT_SOURCE =
 const NATIVE_IME_HARNESS =
   /^(?:config\/scripts\/focus-nested-wayland-terminal\.sh$|config\/scripts\/(?:run-terminal-ibus-hangul-e2e|terminal-ime-engagement-receipt)\.mjs$|tests\/e2e\/terminal-ime-(?:boundary-probe|byte-reader|engagement-receipt)\.ts$|tests\/e2e\/terminal-(?:ibus-hangul|hangul-terminating-digit|macos-2set-korean)-native\.spec\.ts$)/
 
+// Why the skill guides are authorities: the guide is the taught command surface, and #19542
+// changed it in the same commit that broke `orca orchestration send` between plain terminals.
+const ORCHESTRATION_PRODUCT_SOURCE =
+  /^(?:src\/main\/runtime\/(?:orchestration[/-]|rpc\/(?:methods\/orchestration\/|orchestration-))|src\/cli\/(?:handlers\/orchestration[./-]|specs\/orchestration)|src\/shared\/orchestration-|skill-guides\/orchestration(?:\.md$|\/))/
+
 export const PR_E2E_SOURCE_ROUTES = [
+  {
+    // Why this route exists: #19542 changed only orchestration source, matched no route, ran
+    // zero specs, and shipped a "Run is required" failure on the first command the
+    // orchestration skill guide teaches. The spec that catches it had existed since #12584.
+    id: 'orchestration.runtime-and-cli',
+    specs: [
+      'tests/e2e/completed-worker-retirement-resume.spec.ts',
+      'tests/e2e/orchestration-idle-mail-delivery.spec.ts',
+      'tests/e2e/orchestration-idle-mail-restore.spec.ts',
+      'tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts',
+      'tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts',
+      'tests/e2e/orchestration-low-level-dispatch-release.spec.ts',
+      'tests/e2e/orchestration-worker-settlement-release-cli.spec.ts',
+      'tests/e2e/orchestration-worker-terminal-visibility.spec.ts',
+      'tests/e2e/orchestration-worker-transcript-providers.spec.ts',
+      'tests/e2e/settled-worker-tab-survives-restart.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      !file.endsWith('-test-harness.ts') &&
+      ORCHESTRATION_PRODUCT_SOURCE.test(file)
+  },
   {
     id: 'ssh.localhost-agent-hooks',
     specs: ['tests/e2e/ssh-localhost.spec.ts'],
@@ -228,6 +255,32 @@ export function selectPrE2eSpecs(changedPaths, reportRoute = () => undefined) {
   return [...specs].sort((left, right) => left.localeCompare(right))
 }
 
+export const ORCHESTRATION_E2E_ROUTE_ID = 'orchestration.runtime-and-cli'
+
+const orchestrationOwnedSpecs = () =>
+  new Set(
+    PR_E2E_SOURCE_ROUTES.find((route) => route.id === ORCHESTRATION_E2E_ROUTE_ID)?.specs ?? []
+  )
+
+// Why partitioned by spec rather than by "did orchestration source change", the way
+// hasSshSourceChange is: editing one of these specs alone selects it through the changed-spec
+// rule, with no source match. Keying the blocking lane on source would drop that spec from the
+// advisory lane's list while never adding it to the blocking one, so it would run nowhere.
+export function selectOrchestrationPrE2eSpecs(changedPaths) {
+  const owned = orchestrationOwnedSpecs()
+  return selectPrE2eSpecs(changedPaths).filter((spec) => owned.has(spec))
+}
+
+/** Everything the advisory `e2e` job still owns: the full selection minus the blocking lane's. */
+export function selectAdvisoryPrE2eSpecs(changedPaths) {
+  const owned = orchestrationOwnedSpecs()
+  return selectPrE2eSpecs(changedPaths).filter((spec) => !owned.has(spec))
+}
+
+export function hasOrchestrationE2eChange(changedPaths) {
+  return selectOrchestrationPrE2eSpecs(changedPaths).length > 0
+}
+
 /** Routes whose authorities are SSH execution source, and so require the Docker-SSH lane. */
 export const SSH_SOURCE_ROUTE_IDS = ['ssh-terminal-source', 'ssh-workspace-session-restore']
 
@@ -252,10 +305,12 @@ export function hasNativeImeSourceChange(changedPaths) {
 }
 
 export function shouldRunReusablePrE2e(changedPaths) {
-  // Native IME has its own workflow; SSH still runs inside the reusable workflow.
+  // Native IME has its own workflow; SSH still runs inside the reusable workflow. The
+  // orchestration specs have their own blocking call of the same workflow, so an
+  // orchestration-only PR must not also start the advisory one with an empty list.
   return (
     hasSshSourceChange(changedPaths) ||
-    selectPrE2eSpecs(changedPaths).some(
+    selectAdvisoryPrE2eSpecs(changedPaths).some(
       (spec) => spec !== 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
     )
   )
@@ -277,6 +332,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const changedPaths = input.split(/\r?\n/).filter(Boolean)
   if (process.argv.includes('--ssh-source')) {
     process.stdout.write(`${hasSshSourceChange(changedPaths)}\n`)
+  } else if (process.argv.includes('--orchestration-source')) {
+    process.stdout.write(`${hasOrchestrationE2eChange(changedPaths)}\n`)
+  } else if (process.argv.includes('--orchestration-specs')) {
+    process.stdout.write(`${JSON.stringify(selectOrchestrationPrE2eSpecs(changedPaths))}\n`)
+  } else if (process.argv.includes('--advisory-specs')) {
+    process.stdout.write(`${JSON.stringify(selectAdvisoryPrE2eSpecs(changedPaths))}\n`)
   } else if (process.argv.includes('--reusable-workflow')) {
     process.stdout.write(`${shouldRunReusablePrE2e(changedPaths)}\n`)
   } else if (process.argv.includes('--wsl-source')) {
