@@ -313,6 +313,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
+        handleAddProjectToGroup={projectGroupDialogs.handleAddProjectToGroup}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}
         pendingRevealSidebarRow={pendingRevealSidebarRow}
