@@ -38,7 +38,7 @@ function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null 
         (limit) =>
           limit?.kind === 'weekly_scoped' &&
           Number.isFinite(limit.percent) &&
-          limit.scope?.model?.display_name?.trim().toLowerCase() === 'fable'
+          /^fable\b/i.test(limit.scope?.model?.display_name?.trim() ?? '')
       )
     : undefined
   return (
