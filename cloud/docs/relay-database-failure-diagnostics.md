@@ -15,12 +15,16 @@ queue or establishing a new connection; `connectionTimeout` covers both, and the
 pool counts separate them: a queue wait has waiters, a dial does not.
 Unknown error codes stay `unknown`.
 
-`transient` is the verdict the request routes acted on, not a second opinion. It
-is true when the failure became a 503 with retry semantics and false when it
-surfaced as a 500. It is the field to count when asking how much of a burst
-reached users as a hard failure. A pool that cannot hand out a client carries no
-error code at all, so `code` stays `unknown` for that whole class and only these
-two booleans separate it from a genuine fault such as a rejected password.
+`transient` is the classification the request routes act on, not a second
+opinion: true means retryable, false means terminal. It is not a count of HTTP
+responses. Every caller of `PostgresDatabase.query` emits this event, including
+background sweeps, startup reconciliation, and admin routes that map a failure
+to 409, and none of those produces a 503 or a 500. Counting `transient=false`
+therefore over-counts user-facing hard failures; narrow by operation, or join
+against the route's own rejection logs, before reading it that way. A pool that
+cannot hand out a client carries no error code at all, so `code` stays `unknown`
+for that whole class and only these two booleans separate it from a genuine
+fault such as a rejected password.
 
 Query text, parameters, error messages, and identifiers are never emitted.
 Successful queries emit no additional event.

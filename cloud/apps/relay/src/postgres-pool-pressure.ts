@@ -30,7 +30,7 @@ function errorMessage(error: unknown): string {
   return String((error as { message?: unknown } | null)?.message)
 }
 
-export function isPostgresPoolAcquireFailure(error: unknown): boolean {
+function isPostgresPoolAcquireFailure(error: unknown): boolean {
   return typeof error === 'object' && error !== null && poolAcquireFailures.has(error)
 }
 

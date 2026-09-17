@@ -925,7 +925,9 @@ function retryablePostgresTransactionError(error: unknown): boolean {
 }
 
 export function isRelayDatabaseTransientError(error: unknown): boolean {
-  const code = String((error as { code?: unknown }).code)
+  // Runs inside the query catch, where a thrown null or undefined would turn a
+  // database failure into a TypeError that buries it.
+  const code = String((error as { code?: unknown } | null)?.code)
   if (['40P01', '40001', '55P03', '57014', '53300', '57P03', '08001', '08006'].includes(code)) {
     return true
   }

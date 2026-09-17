@@ -51,6 +51,13 @@ describe('relay database transient errors', () => {
     ).toBe(false)
   })
 
+  it.each([null, undefined, 'a thrown string'])(
+    'survives %s reaching it instead of an error object',
+    (thrown) => {
+      expect(isRelayDatabaseTransientError(thrown)).toBe(false)
+    }
+  )
+
   it('keeps a failed acquire that is not transient out of the retry path', async () => {
     expect(
       isRelayDatabaseTransientError(
