@@ -3,6 +3,7 @@ import { subscribeToDesktopNotifications } from './mobile-notifications'
 import { dismissHostPushNotification } from './push-socket-dismissal'
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 import { RpcClientStreamRegistry } from '../transport/rpc-client-stream-registry'
+import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 
 vi.mock('./push-socket-dismissal', () => ({
@@ -15,7 +16,26 @@ vi.mock('./notification-permissions', () => ({}))
 
 type Handler = (data: unknown) => void
 
-type SentFrame = { id: string; method: string; params?: unknown }
+type SentFrame = { id: string; method: string; params: unknown }
+
+/** The registry sends through an `unknown` port, so name the shape the assertions read. */
+function readSentFrame(request: unknown): SentFrame {
+  if (
+    typeof request !== 'object' ||
+    request === null ||
+    !('id' in request) ||
+    typeof request.id !== 'string' ||
+    !('method' in request) ||
+    typeof request.method !== 'string'
+  ) {
+    throw new Error('The stream registry sent a frame without a string id and method')
+  }
+  return {
+    id: request.id,
+    method: request.method,
+    params: 'params' in request ? request.params : undefined
+  }
+}
 
 /** The real stream registry, so dispose-before-ready is answered by the transport, not by a fake. */
 function registryClient() {
@@ -27,24 +47,26 @@ function registryClient() {
     deviceToken: 'device-token',
     getState: () => 'connected',
     sendEncrypted: (request) => {
-      sent.push(request as SentFrame)
+      sent.push(readSentFrame(request))
       return true
     }
   })
-  return {
-    registry,
-    sent,
-    requests,
-    client: {
-      getState: () => 'connected',
-      sendRequest: async (method: string, params: unknown) => {
-        requests.push({ method, params })
-        return { id: 'reply-1', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
-      },
-      subscribe: (method: string, params: unknown, onData: Handler) =>
-        registry.subscribe(method, params, onData)
-    }
+  const client: RpcClient = {
+    sendRequest: async (method, params) => {
+      requests.push({ method, params })
+      return { id: 'reply-1', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
+    },
+    subscribe: (method, params, onData, options) =>
+      registry.subscribe(method, params, onData, options),
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
   }
+  return { registry, sent, requests, client }
 }
 
 function readyReply(id: string, subscriptionId: string): RpcResponse {
@@ -103,7 +125,7 @@ describe('subscribeToDesktopNotifications', () => {
 
   it('never runs the ready arm when the disposer ran before the reply landed', () => {
     const rpc = registryClient()
-    const stop = subscribeToDesktopNotifications(rpc.client as never, 'host-1')
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
     const subscribeFrame = rpc.sent[0]!
     expect(subscribeFrame.method).toBe('notifications.subscribe')
 
@@ -118,7 +140,7 @@ describe('subscribeToDesktopNotifications', () => {
 
   it('closes the host stream when the disposer runs after the ready reply', async () => {
     const rpc = registryClient()
-    const stop = subscribeToDesktopNotifications(rpc.client as never, 'host-1')
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
     rpc.registry.handleResponse(readyReply(rpc.sent[0]!.id, 'sub-1'))
 
     stop()
