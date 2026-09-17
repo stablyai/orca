@@ -1,6 +1,6 @@
-import { createElement, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { Pin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename, normalizeRelativePath } from '@/lib/path'
@@ -8,7 +8,6 @@ import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
@@ -28,14 +27,22 @@ import {
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import {
+  TAB_CONTAINER_WIDTH_CLASSES,
+  TAB_ICON_ONLY_CONTAINER_WIDTH_CLASSES,
+  TAB_ICON_ONLY_ROOT_CLASSES,
+  TAB_LABEL_WIDTH_CLASSES
+} from './tab-width-rules'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { EditorFileTabLeadingIcon } from './EditorFileTabLeadingIcon'
+import { getCollapsedEditorTabState } from './collapsed-editor-tab-state'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 export default function EditorFileTab({
   file,
   isActive,
   isPinned,
+  pinnedIconOnly,
   hasTabsToRight,
   hasTabsToLeft,
   tabCount,
@@ -55,6 +62,7 @@ export default function EditorFileTab({
   file: OpenFile & { tabId?: string }
   isActive: boolean
   isPinned: boolean
+  pinnedIconOnly: boolean
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   tabCount: number
@@ -73,7 +81,6 @@ export default function EditorFileTab({
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
-  const FileIcon = getFileTypeIcon(file.filePath)
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
@@ -84,10 +91,7 @@ export default function EditorFileTab({
     data: dragData
   })
 
-  const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
-  const isCheckDetails = file.mode === 'check-details'
-  const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
@@ -197,6 +201,7 @@ export default function EditorFileTab({
       : (statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null)
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
   const tabLabel = getEditorDisplayLabel(file)
+  const collapsed = getCollapsedEditorTabState({ file, tabStatus, tabLabel })
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -218,6 +223,11 @@ export default function EditorFileTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
+  // Why: an open rename editor needs the label slot back, so it outranks the collapse.
+  const iconOnly = isPinned && pinnedIconOnly && !isRenaming
+  // Collapsed, the dot is the only state indicator left, so it covers status and external mutation
+  // too — expanded, those keep their own text badges and the dot stays purely unsaved-changes.
+  const showStateDot = iconOnly ? collapsed.stateLabel !== null : file.isDirty
   const dragListeners = isRenaming ? undefined : listeners
   // Why: defer activation to pointer-up so dragging the tab (reorder / move into
   // another pane / split) does not switch the active tab mid-gesture.
@@ -234,7 +244,9 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      // Why: collapsed to an icon there is no text to name the tab, and dnd-kit's role="button" needs one.
+      aria-label={iconOnly ? collapsed.title : undefined}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)} ${iconOnly ? TAB_ICON_ONLY_ROOT_CLASSES : ''}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -244,6 +256,12 @@ export default function EditorFileTab({
       onDoubleClick={() => {
         if (file.isPreview && onMakePermanent) {
           onMakePermanent()
+          return
+        }
+        // Collapsed there is no label span to carry the rename gesture, so the root takes it —
+        // matching SortableTab, whose root has always owned double-click-to-rename.
+        if (iconOnly) {
+          openRenameInput()
         }
       }}
       onMouseDown={(e) => {
@@ -264,125 +282,121 @@ export default function EditorFileTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-      {isConflictReview ? (
-        <ShieldAlert
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
-        />
-      ) : isCheckDetails ? (
-        <ListChecks
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isDiff ? (
-        <GitCompareArrows
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isMarkdownPreviewTab ? (
-        <Eye
-          className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : (
-        createElement(FileIcon, {
-          className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
-        })
+      <EditorFileTabLeadingIcon file={file} isActive={isActive} />
+      {isPinned && !iconOnly && (
+        <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
-        {isRenaming ? (
-          <Input
-            ref={setRenameInputElement}
-            data-tab-rename-input="true"
-            aria-label={translate(
-              'auto.components.tab.bar.EditorFileTab.3da7445c84',
-              'Rename file {{value0}}',
-              { value0: basename(file.filePath) }
-            )}
-            defaultValue={basename(file.filePath)}
-            // Why: keep the inline field compact enough for the titlebar while
-            // giving filenames a little more room than the static tab label.
-            className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
-            spellCheck={false}
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              // Why: an Enter that only confirms a CJK IME candidate must not
-              // commit the rename; wait for a non-composition Enter.
-              if (isImeCompositionKeyDown(e)) {
-                return
-              }
-              if (e.key === 'Enter') {
-                e.preventDefault()
+      {iconOnly ? null : (
+        <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
+          {isRenaming ? (
+            <Input
+              ref={setRenameInputElement}
+              data-tab-rename-input="true"
+              aria-label={translate(
+                'auto.components.tab.bar.EditorFileTab.3da7445c84',
+                'Rename file {{value0}}',
+                { value0: basename(file.filePath) }
+              )}
+              defaultValue={basename(file.filePath)}
+              // Why: keep the inline field compact enough for the titlebar while
+              // giving filenames a little more room than the static tab label.
+              className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
+              spellCheck={false}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // Why: an Enter that only confirms a CJK IME candidate must not
+                // commit the rename; wait for a non-composition Enter.
+                if (isImeCompositionKeyDown(e)) {
+                  return
+                }
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  commitRename()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  renameCancelledRef.current = true
+                  setIsRenaming(false)
+                }
+              }}
+              onBlur={commitRename}
+            />
+          ) : (
+            <span
+              className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
+              style={tabStatusColor ? { color: tabStatusColor } : undefined}
+              onDoubleClick={(e) => {
+                if (file.isPreview && onMakePermanent) {
+                  e.stopPropagation()
+                  onMakePermanent()
+                  return
+                }
+                // Why: preview tabs use double-click to become permanent. Scope
+                // rename to non-preview filename text so preview promotion wins on
+                // the tab label as well as the surrounding tab chrome.
+                if (!canRename) {
+                  return
+                }
                 e.stopPropagation()
-                commitRename()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                e.stopPropagation()
-                renameCancelledRef.current = true
-                setIsRenaming(false)
-              }
-            }}
-            onBlur={commitRename}
-          />
-        ) : (
-          <span
-            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
-            style={tabStatusColor ? { color: tabStatusColor } : undefined}
-            onDoubleClick={(e) => {
-              if (file.isPreview && onMakePermanent) {
-                e.stopPropagation()
-                onMakePermanent()
-                return
-              }
-              // Why: preview tabs use double-click to become permanent. Scope
-              // rename to non-preview filename text so preview promotion wins on
-              // the tab label as well as the surrounding tab chrome.
-              if (!canRename) {
-                return
-              }
-              e.stopPropagation()
-              openRenameInput()
-            }}
-          >
-            {tabLabel}
-          </span>
-        )}
-        {isMissingFileMutation && !isRenaming && (
-          <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
-            {file.externalMutation}
-          </span>
-        )}
-        {tabStatus && !isRenaming && !isMissingFileMutation && (
-          <span
-            className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
-            style={{ color: tabStatusColor }}
-          >
-            {STATUS_LABELS[tabStatus]}
-          </span>
-        )}
-      </span>
+                openRenameInput()
+              }}
+            >
+              {tabLabel}
+            </span>
+          )}
+          {isMissingFileMutation && !isRenaming && (
+            <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
+              {file.externalMutation}
+            </span>
+          )}
+          {tabStatus && !isRenaming && !isMissingFileMutation && (
+            <span
+              className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
+              style={{ color: tabStatusColor }}
+            >
+              {STATUS_LABELS[tabStatus]}
+            </span>
+          )}
+        </span>
+      )}
       {/* Dirty dot and close button share the same slot to prevent tab width shift during auto-save.
          When dirty: dot is shown, close button appears on hover (replacing the dot).
-         When clean: close button is shown normally (visible on active tab, on hover for others). */}
-      <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
-        {file.isDirty && (
-          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
-        )}
-        {!isPinned && (
-          <EditorFileTabCloseButton
-            fileIsDirty={file.isDirty}
-            showsSelectionChrome={isActive}
-            onClose={onClose}
-          />
-        )}
-      </div>
+         When clean: close button is shown normally (visible on active tab, on hover for others).
+         Collapsed and clean it holds neither, so the node goes away rather than padding the chip. */}
+      {(!iconOnly || showStateDot) && (
+        <div
+          className={`relative flex items-center justify-center shrink-0 ${iconOnly ? 'size-1.5' : 'w-4 h-4'}`}
+        >
+          {showStateDot && (
+            // A pinned tab renders no close button, so hiding the dot on hover would blank the slot
+            // and drop the only state signal the tab has left.
+            <span
+              className={`absolute size-1.5 rounded-full ${collapsed.dotColor && iconOnly ? '' : 'bg-foreground/60'} ${isPinned ? '' : 'group-hover:hidden group-focus-within:hidden'}`}
+              style={
+                collapsed.dotColor && iconOnly ? { backgroundColor: collapsed.dotColor } : undefined
+              }
+            />
+          )}
+          {!isPinned && (
+            <EditorFileTabCloseButton
+              fileIsDirty={file.isDirty}
+              showsSelectionChrome={isActive}
+              onClose={onClose}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 
   return (
     <>
       <div
-        className={TAB_CONTAINER_WIDTH_CLASSES}
+        className={iconOnly ? TAB_ICON_ONLY_CONTAINER_WIDTH_CLASSES : TAB_CONTAINER_WIDTH_CLASSES}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -400,7 +414,7 @@ export default function EditorFileTab({
               sideOffset={6}
               className="max-w-80 whitespace-normal break-words text-left"
             >
-              {tabLabel}
+              {iconOnly ? collapsed.title : tabLabel}
             </TooltipContent>
           </Tooltip>
         )}

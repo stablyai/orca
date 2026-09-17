@@ -66,6 +66,7 @@ export type TabBarRuntimeModel = {
   newFileShortcut: string
   openMarkdownShortcut: string | null
   generatedTabTitlesEnabled: boolean
+  pinnedTabsIconOnly: boolean
   mobileEmulatorEnabled: boolean
   showMobileEmulatorIntroCallout: boolean
   unifiedTabs: readonly Tab[]
@@ -102,6 +103,7 @@ export function useTabBarRuntimeModel({
   const newFileShortcut = useShortcutLabel('tab.newMarkdown')
   const openMarkdownShortcut = useOptionalShortcutLabel('tab.openMarkdown')
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
+  const pinnedTabsIconOnly = useAppStore((s) => s.settings?.pinnedTabsIconOnly === true)
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const mobileEmulatorTabIntroDismissed = useAppStore((s) => s.mobileEmulatorTabIntroDismissed)
@@ -263,6 +265,7 @@ export function useTabBarRuntimeModel({
     newFileShortcut,
     openMarkdownShortcut,
     generatedTabTitlesEnabled,
+    pinnedTabsIconOnly,
     mobileEmulatorEnabled,
     showMobileEmulatorIntroCallout,
     unifiedTabs,

@@ -203,6 +203,17 @@
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
       }
+    },
+    "general": {
+      "pinnedTabsIconOnly": {
+        "title": "Show pinned tabs as icons only",
+        "description": "Hide the title on pinned tabs so they shrink to their icon and leave more room in the tab strip.",
+        "keyword": {
+          "icon": "icon",
+          "compact": "compact",
+          "space": "space"
+        }
+      }
     }
   },
   "menu": {
