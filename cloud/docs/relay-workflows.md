@@ -397,7 +397,9 @@ during an incident with the director healthy. It is not a way to move faster on 
 wave.
 
 The live per-wave preflight still runs, against the same thresholds, with the expected
-selector taken from the dispatch inputs and the migration policy pinned to `strict`.
+selector taken from the dispatch inputs and the migration policy pinned to `strict`. That
+membership is canonicalised the same way the monitor canonicalises its own, so it must name
+every configured cell exactly once and its order does not matter.
 Durable rehome disabled, the exact selector generation and membership, the reviewed
 Terraform plan, the predecessor and new-incarnation checks, the rollout lease, the
 failed-wave failsafe, and single-dispatch mutation are all unchanged. The actor, reason,

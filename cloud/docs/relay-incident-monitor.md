@@ -76,7 +76,9 @@ control still runs, unchanged:
 
 - The live per-wave preflight, against the same thresholds this document lists. With no
   sealed state to read, the expected selector comes from the dispatch inputs instead, and
-  the migration policy is pinned to `strict`. A live threshold breach or selector
+  the migration policy is pinned to `strict`. That membership is canonicalised exactly as
+  the monitor canonicalises its own, so it must still name every configured cell exactly
+  once and the order you type it in does not matter. A live threshold breach or selector
   mismatch still fails the wave before any mutation.
 - Durable regional rehome disabled, and the exact selector generation and membership,
   verified against the live director.

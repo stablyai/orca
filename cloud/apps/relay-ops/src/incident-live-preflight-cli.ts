@@ -2,10 +2,12 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
+import { relayOpsEnvironment } from './environment-config.js'
 import { createGcloudClient } from './gcloud-client.js'
 import { suppliedIdentityToken } from './incident-monitor-cli.js'
 import {
   AdmissionSelectorSchema,
+  normalizeSelectorMembership,
   SelectorMembershipSchema,
   type AdmissionSelector
 } from './incident-selector.js'
@@ -202,8 +204,16 @@ async function overridePreflightPlan(
   if (!generation || !membershipFile || options.has('--state-file')) {
     throw new Error(PREFLIGHT_USAGE)
   }
-  const membership = SelectorMembershipSchema.parse(
-    JSON.parse(await readFile(resolve(membershipFile), 'utf8'))
+  // Canonicalise exactly as the monitor CLI does when it seals evidence. The live
+  // selector read from the director is normalised too and the comparison is an
+  // ordered stringify, so unsorted operator input would read as selector drift on
+  // a healthy fleet; normalising is also what enforces every configured cell
+  // exactly once.
+  const membership = normalizeSelectorMembership(
+    SelectorMembershipSchema.parse(
+      JSON.parse(await readFile(resolve(membershipFile), 'utf8'))
+    ),
+    new Set(relayOpsEnvironment('production').cells.map((cell) => cell.cellId))
   )
   return {
     environment: 'production',
