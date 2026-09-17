@@ -87,8 +87,9 @@ function recordEntryKeys(raw: unknown): string[] | null {
  * also accepting the wrong type. Not `.catch()`, which would swallow absence too.
  */
 // `readonly string[]` rather than a non-empty tuple so a hostUnionArms list can feed it; z.enum
-// takes the same, so the tuple constraint only excluded callers zod itself accepts.
-export function openEnum<T extends readonly string[], F extends T[number] | undefined>(
+// takes the same, so the tuple constraint only excluded callers zod itself accepts. `const` keeps a
+// bare literal's arms, which the parsed type is built from.
+export function openEnum<const T extends readonly string[], F extends T[number] | undefined>(
   values: T,
   fallback: F
 ): z.ZodType<T[number] | F, unknown> {
@@ -98,11 +99,14 @@ export function openEnum<T extends readonly string[], F extends T[number] | unde
 /**
  * The arms of a closed enum, spelled as a coverage record over the host's own union so tsc holds
  * the schema to that union both ways: an arm the host adds is a missing property here, one it drops
- * is an excess property. Call it with the host union as the explicit type argument, or the record
- * only pins itself. It has to sit in the schema module, not its test: mobile's tsc excludes test
- * files, so a `Record<Union, true>` there checks nothing.
+ * is an excess property. `NoInfer` keeps U from being read off the record, so omitting the type
+ * argument leaves it at its `never` default and the parameter becomes `never` — the call fails to
+ * compile rather than pinning the record only to itself. It has to sit in the schema module, not its test: mobile's tsc excludes test files, so
+ * a `Record<Union, true>` there checks nothing.
  */
-export function hostUnionArms<U extends string>(coverage: Readonly<Record<U, true>>): readonly U[] {
+export function hostUnionArms<U extends string = never>(
+  coverage: [U] extends [never] ? never : Readonly<Record<NoInfer<U>, true>>
+): readonly U[] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mapped parameter type makes every key exactly a U; Object.keys only loses that at the type level.
   return Object.keys(coverage) as U[]
 }
