@@ -146,7 +146,11 @@ export function resolveClaudePaneStatus(
 }
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
-  state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
+  state.claudeLeadStateByPaneKey.set(paneKey, {
+    state: 'done',
+    interrupted: true,
+    interruptedInferred: true
+  })
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
 }

@@ -599,6 +599,63 @@ describe('shared agent-hook-listener', () => {
       expect(idled?.payload.interrupted).toBe(true)
     })
 
+    it('clears an inference-only interrupt when the turn completes with a clean Stop', () => {
+      // Why: the renderer infers an interrupt from a bare Escape keystroke, which cannot
+      // be told apart from an Escape that only dismisses a /model or /btw overlay. When
+      // the turn was never really interrupted, its own clean completion Stop (no
+      // is_interrupt) must clear the optimistic red, not inherit it.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'keep working' })
+      claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 5' }
+      })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const done = claudeEvent({ hook_event_name: 'Stop' })
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.interrupted).toBeUndefined()
+    })
+
+    it('keeps a hook-confirmed interrupt terminal even though the inference also fired', () => {
+      // Why: a real single-Escape interrupt trips the same inference, but Claude also
+      // emits Stop with is_interrupt. That confirmed interrupt must survive.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'cancel this' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const done = claudeEvent({ hook_event_name: 'Stop', is_interrupt: true })
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.interrupted).toBe(true)
+    })
+
+    it('keeps an inference-only interrupt on a StopFailure error boundary', () => {
+      // Why: only a clean Stop proves clean completion. A StopFailure is an error boundary,
+      // so it must not clear a provisional interrupt.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'cancel this' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const failed = claudeEvent({ hook_event_name: 'StopFailure' })
+      expect(failed?.payload.state).toBe('done')
+      expect(failed?.payload.interrupted).toBe(true)
+    })
+
+    it('clears an inference-only interrupt even while a subagent still holds the pane working', () => {
+      // Why: a subagent spawned between the Escape and the clean Stop keeps the pane 'working'
+      // (that gate ignores interrupt), so the clean lead Stop must still drop the provisional
+      // flag — otherwise the false red returns once the child drains.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'keep working' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+      claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'achild-1', agent_type: 'probe' })
+
+      const stillWorking = claudeEvent({ hook_event_name: 'Stop' })
+      expect(stillWorking?.payload.state).toBe('working')
+      expect(stillWorking?.payload.interrupted).toBeUndefined()
+
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'achild-1' })
+      expect(drained?.payload.state).toBe('done')
+      expect(drained?.payload.interrupted).toBeUndefined()
+    })
+
     it('does not resurrect persisted idle child rows after a restart', () => {
       // Why: the roster tracks only working children now. A persisted idle
       // snapshot (from a build that kept idle rows) is a finished child, so
