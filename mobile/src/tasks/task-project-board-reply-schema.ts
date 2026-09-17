@@ -200,7 +200,7 @@ export const taskProjectRefSchema = z.union([
 /**
  * A board row's detail pane.
  *
- * `details` is required: use-mobile-tasks-project-detail-loading.tsx:116-:128 reads eleven members
+ * `details` is required: use-mobile-tasks-project-detail-loading.tsx:110-:121 reads eleven members
  * off it, each defaulted but the container itself never guarded. `error.message` is required
  * because :107 throws it.
  *
@@ -238,7 +238,7 @@ export const taskProjectRowDetailSchema = z.union([
 /**
  * The repo label list.
  *
- * Flat, not a union: use-mobile-tasks-project-metadata-loading.tsx:57 spells
+ * Flat, not a union: use-mobile-tasks-project-metadata-loading.tsx:53 spells
  * `result.error?.message ?? 'Failed to load labels'` and :59 spells `result.labels ?? []`, so
  * every member is already defaulted and an envelope with no `ok` still reads as refused. What the
  * schema adds is the container and the element type — a `labels` that is not an array of strings

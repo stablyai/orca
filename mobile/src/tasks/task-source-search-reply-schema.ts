@@ -26,8 +26,8 @@ const workItemRow = z.looseObject({
   url: itemText('url'),
   updatedAt: itemText('updatedAt'),
   // Required: both label editors read `item.source.labels.filter(...)` with no guard
-  // (use-mobile-tasks-hosted-metadata-actions.tsx:160,
-  // use-mobile-tasks-gitlab-github-status-actions.tsx:110), and `labels: string[]` is non-optional
+  // (use-mobile-tasks-hosted-metadata-actions.tsx:154,
+  // use-mobile-tasks-gitlab-github-status-actions.tsx:107), and `labels: string[]` is non-optional
   // on both host types (src/shared/github/work-item-types.ts:23, src/shared/gitlab-types.ts:172).
   // A row missing it drops out of the list instead of throwing inside the editor's `onPress`.
   labels: salvagingArray(z.string()),
@@ -59,7 +59,7 @@ export const taskGitHubWorkItemListSchema = z.looseObject({
 /**
  * The GitLab work-item list.
  *
- * `items` is required for the same reason: use-mobile-tasks-task-list-loading.tsx:183 maps it
+ * `items` is required for the same reason: use-mobile-tasks-task-list-loading.tsx:180 maps it
  * unguarded. `error` is the provider's in-band failure and stays optional — both consumers test
  * `envelope.error?.type` before reading `.message`, and `tw-smart-search-all-providers` records a
  * reply carrying items AND a `not_found` error at once, which the list renders rather than raises.
@@ -87,7 +87,7 @@ export const taskGitLabWorkItemListSchema = z.looseObject({
  * requirements are all non-optional on that type, and two of them are reads that throw here:
  * `createLinearTask` reads `issue.state.name` and `issue.team.name` with no guard
  * (mobile-tasks-item-mapping.ts:296-297), and `getLinearPriorityRank(issue.priority)` feeds
- * `a.priority - b.priority` (mobile-tasks-reviewer-linear.ts:99-101), where an absent priority makes
+ * `a.priority - b.priority` (mobile-tasks-reviewer-linear.ts:100/:102), where an absent priority makes
  * the whole comparator NaN and orders the reviewer list arbitrarily.
  *
  * An earlier version of this file declared its own row requiring `id` alone, on the grounds that

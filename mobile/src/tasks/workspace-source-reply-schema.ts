@@ -26,13 +26,13 @@ const sourceText = (name: string) => salvagedOptional(name, z.string())
  *
  * Only `targetId` and `status` are required, and only those two are read: the gate matches
  * `state.targetId` against the repo's connection id and tests `state.status`
- * (workspace-ssh-gate.ts:44-46). `error` is read as `matchingState?.error ?? null` (:51), already
+ * (workspace-ssh-gate.ts:58-60). `error` is read as `matchingState?.error ?? null` (:65), already
  * guarded and null-collapsed, and nothing anywhere reads `reconnectAttempt`.
  *
  * They are optional rather than required BECAUSE nothing reads them. `state` is a
  * `salvagedOptional`, so one bad member drops the whole record, and the connect path's fallback for
  * a dropped record is `fallbackSshState(connectionId, 'connected', null)`
- * (use-new-workspace-execution-target.ts:124) — a reply of
+ * (use-new-workspace-execution-target.ts:126) — a reply of
  * `{ targetId, status: 'auth-failed', error: 'bad key' }` with `reconnectAttempt` omitted would
  * show the drawer as CONNECTED. Requiring a member no reader touches converts a partial record into
  * the most dangerous verdict this schema can reach, so the two unread members degrade individually
@@ -45,15 +45,15 @@ const sourceText = (name: string) => salvagedOptional(name, z.string())
  *
  * That degrade is allowed only because it is invisible to every reader of `status`. Main passed an
  * unknown arm through as a raw string, and the one function that turns it into text,
- * workspaceSshStatusLabel, falls through to `return 'Disconnected'` (workspace-ssh-gate.ts:36) —
- * the same label the degraded value produces. isWorkspaceSshConnectInProgress (:10) answers false
+ * workspaceSshStatusLabel, falls through to `return 'Disconnected'` (workspace-ssh-gate.ts:50) —
+ * the same label the degraded value produces. isWorkspaceSshConnectInProgress (:24-:31) answers false
  * for both, the readiness gate is an equality test against `'connected'`
- * (use-mobile-tasks-workspace-ssh-state.tsx:88/:97, use-new-workspace-execution-target.ts:47/:82)
+ * (use-mobile-tasks-workspace-ssh-state.tsx:88/:97, use-new-workspace-execution-target.ts:50)
  * which both fail, and `error` is read off the record untouched. The parity is pinned in
  * workspace-source-reply-schema.test.ts rather than argued here.
  *
  * The whole member stays nullable and optional because that is what the two call sites read:
- * `state ?? fallback…` at use-mobile-tasks-workspace-ssh-state.tsx:62 and :96.
+ * `state ?? fallback…` at use-new-workspace-execution-target.ts:66 and :126.
  *
  * `providerEpoch`, `supportsFolderDownload` and `remotePlatform` are NOT declared. No mobile code
  * reads any of the three; the file-mutation owner check asks ssh.getState through a reader of its

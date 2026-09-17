@@ -89,7 +89,7 @@ export const taskLinearStatusSchema = z.looseObject({
  * The three writes whose reply body no call site reads.
  *
  * `ui.set` is interpreted for its verdict alone and the value discarded
- * (use-mobile-tasks-client-settings-actions.tsx:201, setup-hook-trust.ts:52); `settings.update` is
+ * (use-mobile-tasks-client-settings-actions.tsx:201, setup-hook-trust.ts:49-51); `settings.update` is
  * fire-and-forget at five sites and never interpreted; `linear.selectWorkspace` chains the context
  * reload off the send without interpreting it. Declaring a member on any of them would be a
  * requirement with no reader, and would make a refusal visible for the first time at a site whose
