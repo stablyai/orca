@@ -12,6 +12,7 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'hideWorkspacesFromOtherDevices',
   'manualRepoOrder',
   'workspaceHostOrder',
+  'hideSleepingProjectKeys',
   // Agent View filters and presentation belong to each client's host catalog and viewport.
   'agentsVisibleHostIds',
   'agentsFilterRepoIds',

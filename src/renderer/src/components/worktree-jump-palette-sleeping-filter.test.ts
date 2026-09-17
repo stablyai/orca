@@ -3,7 +3,9 @@ import { isSleepingSweepExemptWorkspace } from './sidebar/visible-worktrees'
 import type { Worktree } from '../../../shared/worktree/types'
 import { readWorktreeJumpPaletteSource } from './worktree-jump-palette-source.test-support'
 
-const worktreeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-worktrees.ts')
+const worktreeSource = readWorktreeJumpPaletteSource(
+  'use-worktree-jump-palette-visible-worktrees.ts'
+)
 const storeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-store-state.ts')
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -37,7 +39,7 @@ describe('Cmd+J empty-query "Hide sleeping" pass (#8873)', () => {
   it('routes the sleeping sweep through the shared exemption predicate', () => {
     const start = worktreeSource.indexOf('const emptyQueryVisibleWorktrees = useMemo(')
     expect(start).toBeGreaterThanOrEqual(0)
-    const end = worktreeSource.indexOf('const { visibleWorktreesForState', start)
+    const end = worktreeSource.indexOf('return emptyQueryVisibleWorktrees', start)
     const filterPass = worktreeSource.slice(start, end)
 
     expect(filterPass).toContain(

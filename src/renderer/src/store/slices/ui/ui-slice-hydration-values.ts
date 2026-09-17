@@ -1,11 +1,17 @@
+import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/constants'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { TaskResumeState, TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
+import type {
+  StatusBarItem,
+  TaskResumeState,
+  TaskViewPresetId
+} from '../../../../../shared/ui-chrome-types'
 import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
 import {
+  migrateStatusBarItems,
   sanitizeAcknowledgedAgentsByPaneKey,
   sanitizeActivityClearedAtByPaneKey,
   sanitizePaneKeyTimestampRecord
@@ -153,4 +159,41 @@ export function hydrateAgentReadState(
     activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
   }
+}
+
+export function hydrateSleepingFilters(ui: PersistedUIState) {
+  return {
+    showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
+    hideSleepingProjectKeys: Array.isArray(ui.hideSleepingProjectKeys)
+      ? ui.hideSleepingProjectKeys.filter((key) => typeof key === 'string')
+      : []
+  }
+}
+
+const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
+const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
+const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
+const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
+const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
+
+export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
+  let items = migrateStatusBarItems(ui.statusBarItems)
+  const defaults = [
+    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
+    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
+    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
+    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
+    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+  ] as const
+  for (const [flag, item] of defaults) {
+    if (!ui[flag] && !items.includes(item)) {
+      items = [...items, item]
+    }
+  }
+  if (typeof window !== 'undefined' && defaults.some(([flag]) => !ui[flag])) {
+    window.api.ui
+      .set({ statusBarItems: items, ...Object.fromEntries(defaults.map(([flag]) => [flag, true])) })
+      .catch(console.error)
+  }
+  return items
 }

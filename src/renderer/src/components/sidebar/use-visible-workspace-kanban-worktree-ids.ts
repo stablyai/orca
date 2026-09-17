@@ -28,6 +28,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
 }: UseVisibleWorkspaceKanbanWorktreeIdsParams): ReadonlySet<string> {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const hideSleepingProjectKeys = useAppStore((s) => s.hideSleepingProjectKeys)
+  const filterSleeping = !showSleepingWorkspaces || (hideSleepingProjectKeys?.length ?? 0) > 0
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
@@ -46,29 +48,29 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const settings = useAppStore((s) => s.settings)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
-  const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
-  const ptyIdsByTabId = useAppStore((s) => (!showSleepingWorkspaces ? s.ptyIdsByTabId : null))
+  const tabsByWorktree = useAppStore((s) => (filterSleeping ? s.tabsByWorktree : null))
+  const ptyIdsByTabId = useAppStore((s) => (filterSleeping ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? s.browserTabsByWorktree : null
+    filterSleeping ? s.browserTabsByWorktree : null
   )
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const agentStatusEpoch = useAppStore((s) => (filterSleeping ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
   // sleeping-workspaces board cannot evict the sample the live boards share.
-  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
+  const agentStatusNow = !filterSleeping ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   // Why snapshot on the epoch: the always-mounted drawer must not scan every
   // agent on unrelated store writes; membership changes advance this tick. Keep
   // the epoch itself in the deps — two bumps in one millisecond share a sample,
   // so `agentStatusNow` alone would not re-key the memo.
   const worktreeIdsWithLiveAgent = useMemo(() => {
     void agentStatusEpoch
-    return !showSleepingWorkspaces
+    return filterSleeping
       ? getWorktreeIdsWithLiveAgent(
           useAppStore.getState().agentStatusByPaneKey,
           tabsByWorktree,
           agentStatusNow
         )
       : EMPTY_WORKTREE_ID_SET
-  }, [agentStatusEpoch, agentStatusNow, showSleepingWorkspaces, tabsByWorktree])
+  }, [agentStatusEpoch, agentStatusNow, filterSleeping, tabsByWorktree])
 
   return useMemo(() => {
     // Why: the board has its own status ordering, but visibility must match
@@ -78,6 +80,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
       computeVisibleWorktrees(worktreesByRepo, sortedIds, {
         filterRepoIds,
         showSleepingWorkspaces,
+        hideSleepingProjectKeys,
         tabsByWorktree,
         ptyIdsByTabId,
         browserTabsByWorktree,
@@ -119,6 +122,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     runtimeEnvironments,
     runtimeStatusByEnvironmentId,
     showSleepingWorkspaces,
+    hideSleepingProjectKeys,
     tabsByWorktree,
     worktreeIdsWithLiveAgent,
     worktreesByRepo

@@ -44,6 +44,7 @@ describe('client UI RPC pairing-local field seams', () => {
     manualRepoOrder: [
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-a' }
     ],
+    hideSleepingProjectKeys: ['local\0repo-a'],
     workspaceHostOrder: ['runtime:web-11111111-2222-3333-4444-555555555555', 'local'],
     agentsVisibleHostIds: ['runtime:web-11111111-2222-3333-4444-555555555555'],
     agentsFilterRepoIds: ['repo-a'],
