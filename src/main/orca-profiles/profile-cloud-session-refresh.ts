@@ -32,6 +32,12 @@ const CLOUD_SESSION_REFRESH_SKEW_MS = 60_000
 export type FreshCloudSessionResult =
   | { status: 'found'; session: OrcaCloudSession }
   | { status: 'reconnect-required' }
+  /**
+   * The session file is there and this process could not read it (EACCES/EBUSY/EMFILE/…). Distinct
+   * from `reconnect-required`, which means the session is genuinely gone: the store refuses to
+   * delete an unreadable session for the same reason a caller must not report one as a sign-out.
+   */
+  | { status: 'unreadable' }
 
 export type CloudSessionOperationResult<T> =
   | { status: 'ok'; value: T }
@@ -226,6 +232,9 @@ export async function readFreshOrcaCloudSession(
   userDataPath: string
 ): Promise<FreshCloudSessionResult> {
   const session = readOrcaCloudSession(active.profile.id, userDataPath)
+  if (session.status === 'unreadable') {
+    return { status: 'unreadable' }
+  }
   if (session.status !== 'found') {
     return { status: 'reconnect-required' }
   }

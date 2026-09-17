@@ -12,6 +12,12 @@ export async function readRelayAuthContext(
     return null
   }
   const session = await readFreshOrcaCloudSession(authConfig, active, userDataPath)
+  // Why throw rather than return null: the coordinator reads null as "the cloud session is gone"
+  // and closes every paired phone's relay with signed-out, arming no retry. A session file this
+  // process could not read is intact, so the retryable auth_unavailable path is the honest word.
+  if (session.status === 'unreadable') {
+    throw new Error('orca_cloud_session_unreadable')
+  }
   if (session.status !== 'found') {
     return null
   }
