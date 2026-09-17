@@ -3,19 +3,20 @@ import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   GenerationScopedRequestOwner,
-  type RequestCurrency,
   type RequestScope
 } from '../transport/generation-scoped-request-owner'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { ConnectionState } from '../transport/types'
-import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
-import { gitBranchCompareRead, gitStatusHostPayloadRead } from './mobile-git-read-operations'
+import {
+  nextBranchCompareState,
+  readBranchCompareOutcome,
+  type BranchCompareOutcome
+} from './mobile-branch-compare-outcome'
+import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
 import {
   isMobileGitTransientRefreshError,
   isMobileGitUnavailableReply,
   readMobileGitRefusal
 } from './mobile-git-status'
-import type { MobileGitBranchCompareReply } from './git-compare-reply-schema'
 import {
   SELECTOR_RETRY_COUNT,
   SELECTOR_RETRY_DELAY_MS,
@@ -38,79 +39,6 @@ type Params = {
 /** The compare is the whole worktree against its base, so its request carries no further parameters. */
 type BranchCompareParameters = Readonly<Record<string, never>>
 const WHOLE_WORKTREE: BranchCompareParameters = {}
-
-/**
- * Every end one compare attempt can reach, its failures included. The attempt returns its outcome
- * instead of writing it, so the screen is written in exactly one place: past the owner's `commit`.
- */
-type BranchCompareOutcome =
-  | { readonly kind: 'ready'; readonly result: MobileGitBranchCompareReply }
-  | { readonly kind: 'unavailable' }
-  | { readonly kind: 'failed'; readonly message: string }
-
-/**
- * Total by construction: a throw here would reach a caller that only ever voids this load. Null is
- * the superseded answer, which the owner reads as no value at all.
- */
-async function readBranchCompareOutcome(
-  client: RpcClient,
-  worktreeId: string,
-  currency: RequestCurrency
-): Promise<BranchCompareOutcome | null> {
-  try {
-    const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
-    // Resolving the base ref is itself a round trip, so the scope may have moved while it was out.
-    // Stopping here is what keeps a superseded attempt's compare off the wire: refusing it at commit
-    // would be just as safe on screen but would have sent the request.
-    if (!currency.isCurrent()) {
-      return null
-    }
-    if (!baseRef) {
-      return { kind: 'failed', message: 'Unable to resolve the base branch for comparison.' }
-    }
-    const reply = await gitBranchCompareRead.request(client, {
-      worktree: `id:${worktreeId}`,
-      baseRef
-    })
-    // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
-    // screen degrades on, and no acceptance policy carries the code and message through.
-    if (isMobileGitUnavailableReply(reply)) {
-      return { kind: 'unavailable' }
-    }
-    try {
-      return { kind: 'ready', result: gitBranchCompareRead.interpret(reply) }
-    } catch (error) {
-      return {
-        kind: 'failed',
-        message: refusedRpcMessageOrFallback(error, 'Unable to load committed changes')
-      }
-    }
-  } catch (err) {
-    return {
-      kind: 'failed',
-      message: err instanceof Error ? err.message : 'Unable to load committed changes'
-    }
-  }
-}
-
-/** What an outcome leaves on screen, given what this caller wants kept when the attempt fails. */
-function nextBranchCompareState(
-  outcome: BranchCompareOutcome,
-  previous: MobileBranchCompareState,
-  preserveReadyOnFailure: boolean
-): MobileBranchCompareState {
-  if (outcome.kind === 'ready') {
-    return { kind: 'ready', result: outcome.result }
-  }
-  // Why: wiping a prior ready compare to idle makes Changes say "No Changes" even when commits
-  // still exist (e.g. after abort-merge refresh).
-  if (preserveReadyOnFailure && previous.kind === 'ready') {
-    return previous
-  }
-  return outcome.kind === 'unavailable'
-    ? { kind: 'idle' }
-    : { kind: 'error', message: outcome.message }
-}
 
 export type MobileSourceControlLoaders = {
   screenState: ScreenState
