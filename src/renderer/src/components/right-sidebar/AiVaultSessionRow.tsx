@@ -55,7 +55,8 @@ export function VaultSessionRow({
   onRevealLog,
   onOpenCwd,
   onRequestDelete,
-  searchHit
+  searchHit,
+  displayTitle
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
@@ -85,7 +86,9 @@ export function VaultSessionRow({
   onOpenCwd?: () => void
   onRequestDelete?: (session: AiVaultSession) => void
   searchHit?: AiVaultSearchHit
+  displayTitle?: string
 }) {
+  const listTitle = displayTitle ?? session.title
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
@@ -111,7 +114,7 @@ export function VaultSessionRow({
         agent: session.agent,
         sessionId: session.sessionId,
         ...(session.structuredSession ? { structuredSession: session.structuredSession } : {}),
-        title: session.title,
+        title: listTitle,
         command: resumeStartup.command,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
@@ -126,7 +129,7 @@ export function VaultSessionRow({
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [realHomeResumeStartup, resumeDisabled, session, resumeStartup]
+    [listTitle, realHomeResumeStartup, resumeDisabled, session, resumeStartup]
   )
 
   return (
@@ -171,7 +174,7 @@ export function VaultSessionRow({
                 window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
               }}
             >
-              {session.title}
+              {listTitle}
             </div>
             <SessionRowTrailingActions
               session={session}

@@ -1,5 +1,10 @@
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import {
+  aiVaultProviderSessionKey,
+  resolveAiVaultSessionDisplayTitle
+} from '../../../../shared/ai-vault-session-display-title'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   promptsMatchSession,
   resolveOriginalPaneTarget,
@@ -21,12 +26,15 @@ export type AiVaultOriginalPaneIndex = {
   retainedByProvider: ProviderIndex<RetainedEntry>
   retainedWithoutProviderByAgent: AgentIndex<RetainedEntry>
   sleepingByProvider: ProviderIndex<SleepingEntry>
+  customTitleByProvider: Map<string, string>
 }
 
 function providerKey(agent: string, sessionId: string): string {
-  // Why: unlike punctuation delimiters, NUL cannot collide with agent or
-  // provider-session text, so distinct identity pairs stay distinct keys.
-  return `${agent}\u0000${sessionId}`
+  return aiVaultProviderSessionKey(agent, sessionId)
+}
+
+function paneTabId(tabId: string | undefined, paneKey: string): string | undefined {
+  return tabId?.trim() || parsePaneKey(paneKey)?.tabId
 }
 
 function appendToIndex<T>(index: Map<string, T[]>, key: string, value: T): void {
@@ -44,13 +52,31 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
   const retainedByProvider: ProviderIndex<RetainedEntry> = new Map()
   const retainedWithoutProviderByAgent: AgentIndex<RetainedEntry> = new Map()
   const sleepingByProvider: ProviderIndex<SleepingEntry> = new Map()
+  const customTitleByProvider = new Map<string, string>()
+  const liveClaimed = new Set<string>()
+  const retainedClaimed = new Set<string>()
+  const tabsById = new Map(
+    Object.values(state.tabsByWorktree).flatMap((tabs) =>
+      (tabs ?? []).map((tab) => [tab.id, tab] as const)
+    )
+  )
 
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
     if (!entry?.agentType) {
       continue
     }
     if (entry.providerSession) {
-      appendToIndex(liveByProvider, providerKey(entry.agentType, entry.providerSession.id), entry)
+      const key = providerKey(entry.agentType, entry.providerSession.id)
+      appendToIndex(liveByProvider, key, entry)
+      const tabId = paneTabId(entry.tabId, entry.paneKey)
+      const tab = tabId ? tabsById.get(tabId) : undefined
+      if (tab) {
+        liveClaimed.add(key)
+        const title = tab.customTitle?.trim()
+        if (title && !customTitleByProvider.has(key)) {
+          customTitleByProvider.set(key, title)
+        }
+      }
     } else if (entry.providerSession === undefined) {
       appendToIndex(liveWithoutProviderByAgent, entry.agentType, entry)
     }
@@ -60,22 +86,31 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
       continue
     }
     if (retained.entry.providerSession) {
-      appendToIndex(
-        retainedByProvider,
-        providerKey(retained.agentType, retained.entry.providerSession.id),
-        retained
-      )
+      const key = providerKey(retained.agentType, retained.entry.providerSession.id)
+      appendToIndex(retainedByProvider, key, retained)
+      if (!liveClaimed.has(key)) {
+        retainedClaimed.add(key)
+        const title = retained.tab.customTitle?.trim()
+        if (title && !customTitleByProvider.has(key)) {
+          customTitleByProvider.set(key, title)
+        }
+      }
     } else if (retained.entry.providerSession === undefined) {
       appendToIndex(retainedWithoutProviderByAgent, retained.agentType, retained)
     }
   }
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
     if (record) {
-      appendToIndex(
-        sleepingByProvider,
-        providerKey(record.agent, record.providerSession.id),
-        record
-      )
+      const key = providerKey(record.agent, record.providerSession.id)
+      appendToIndex(sleepingByProvider, key, record)
+      if (liveClaimed.has(key) || retainedClaimed.has(key)) {
+        continue
+      }
+      const tabId = paneTabId(record.tabId, record.paneKey)
+      const title = (tabId ? tabsById.get(tabId)?.customTitle : null)?.trim()
+      if (title && !customTitleByProvider.has(key)) {
+        customTitleByProvider.set(key, title)
+      }
     }
   }
 
@@ -85,18 +120,35 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
     liveWithoutProviderByAgent,
     retainedByProvider,
     retainedWithoutProviderByAgent,
-    sleepingByProvider
+    sleepingByProvider,
+    customTitleByProvider
   }
+}
+
+let sharedIndex: { state: OriginalPaneState; index: AiVaultOriginalPaneIndex } | null = null
+
+export function getSharedAiVaultOriginalPaneIndex(
+  state: OriginalPaneState
+): AiVaultOriginalPaneIndex {
+  if (
+    sharedIndex &&
+    sharedIndex.state.agentStatusByPaneKey === state.agentStatusByPaneKey &&
+    sharedIndex.state.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
+    sharedIndex.state.sleepingAgentSessionsByPaneKey === state.sleepingAgentSessionsByPaneKey &&
+    sharedIndex.state.tabsByWorktree === state.tabsByWorktree &&
+    sharedIndex.state.terminalLayoutsByTabId === state.terminalLayoutsByTabId
+  ) {
+    return sharedIndex.index
+  }
+  const index = buildAiVaultOriginalPaneIndex(state)
+  sharedIndex = { state, index }
+  return index
 }
 
 export function createLazyAiVaultOriginalPaneIndex(
   state: OriginalPaneState
 ): () => AiVaultOriginalPaneIndex {
-  let index: AiVaultOriginalPaneIndex | null = null
-  return () => {
-    index ??= buildAiVaultOriginalPaneIndex(state)
-    return index
-  }
+  return () => getSharedAiVaultOriginalPaneIndex(state)
 }
 
 export function findOriginalAiVaultSessionPaneInIndex(
@@ -186,4 +238,21 @@ export function findAiVaultSessionLiveStateInIndex(
     }
   }
   return promptMatchedStates.length === 1 ? promptMatchedStates[0] : null
+}
+
+export function findAiVaultSessionCustomTitle(
+  index: AiVaultOriginalPaneIndex,
+  session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'subagent'>
+): string | null {
+  if (session.subagent) {
+    return null
+  }
+  return index.customTitleByProvider.get(providerKey(session.agent, session.sessionId)) ?? null
+}
+
+export function resolveAiVaultSessionListTitle(
+  index: AiVaultOriginalPaneIndex,
+  session: AiVaultSession
+): string {
+  return resolveAiVaultSessionDisplayTitle(session, findAiVaultSessionCustomTitle(index, session))
 }

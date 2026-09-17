@@ -6,6 +6,7 @@ import {
   groupAiVaultSessions,
   type AiVaultSessionFilterState
 } from '../../../../shared/ai-vault-session-filters'
+import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 // Why: the pure filter/group/query core now lives in /shared so the mobile
 // package can reuse it (Metro can't import renderer). Re-export for renderer
 // import parity. Not a byte-for-byte move: tokenizeQuery gained quoted
@@ -42,6 +43,18 @@ export function useAiVaultPanelSessions(
     hideEmptySessions
   }: AiVaultSessionFilterState
 ) {
+  const { getSessionDisplayTitle } = useAiVaultOriginalPaneActions()
+  const sessionDisplayTitleById = useMemo(() => {
+    const titles = new Map<string, string>()
+    for (const session of sessions) {
+      const title = getSessionDisplayTitle(session)
+      if (title !== session.title) {
+        titles.set(session.id, title)
+      }
+    }
+    return titles
+  }, [getSessionDisplayTitle, sessions])
+
   const filteredSessions = useMemo(
     () =>
       searching
@@ -55,7 +68,8 @@ export function useAiVaultPanelSessions(
             activeProjectKey,
             sessionProjectById,
             projectLabelByKey,
-            hideEmptySessions
+            hideEmptySessions,
+            sessionDisplayTitleById
           }),
     [
       searching,
@@ -68,7 +82,8 @@ export function useAiVaultPanelSessions(
       activeProjectKey,
       sessionProjectById,
       projectLabelByKey,
-      hideEmptySessions
+      hideEmptySessions,
+      sessionDisplayTitleById
     ]
   )
   const groups = useMemo(

@@ -15,13 +15,14 @@ export function prepareAiVaultSessionContinuation(args: {
   session: AiVaultSession
   targetWorktreeId: string
   targetWorkspacePath: string
+  displayTitle?: string
 }): AgentSessionContinuationRequest {
   const { session, targetWorktreeId, targetWorkspacePath } = args
   return {
     source: {
       capturedText: previewTranscript(session),
       sourceAgent: session.agent,
-      sourceTitle: session.title,
+      sourceTitle: args.displayTitle?.trim() || session.title,
       sourceWorkingDirectory: session.cwd,
       transcriptPath: session.filePath.trim() || null,
       // Why: preview user entries can be tool results or injected skill text; only provider-authenticated prompts are safe hints.

@@ -47,6 +47,8 @@ export type AiVaultSessionFilterState = {
   sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
   projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
+  /** Orca tab renames keyed by vault session id; searched without mutating session.title. */
+  sessionDisplayTitleById?: ReadonlyMap<string, string>
 }
 
 export type AiVaultSessionGroup = {
@@ -240,11 +242,15 @@ export function matchesAiVaultQueryOperators(
 function matchesQuery(
   session: AiVaultSession,
   parsed: ParsedQuery,
-  filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
+  filters: Pick<
+    AiVaultSessionFilterState,
+    'sessionProjectById' | 'projectLabelByKey' | 'sessionDisplayTitleById'
+  >
 ): boolean {
   if (parsed.terms.length > 0) {
     const searchable = [
       session.title,
+      filters.sessionDisplayTitleById?.get(session.id),
       session.sessionId,
       session.agent,
       session.branch,

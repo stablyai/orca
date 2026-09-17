@@ -11,7 +11,8 @@ import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 import {
   createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
-  findOriginalAiVaultSessionPaneInIndex
+  findOriginalAiVaultSessionPaneInIndex,
+  resolveAiVaultSessionListTitle
 } from './ai-vault-original-pane-index'
 
 export function useAiVaultOriginalPaneActions(): {
@@ -19,6 +20,7 @@ export function useAiVaultOriginalPaneActions(): {
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionDisplayTitle: (session: AiVaultSession) => string
   jumpToOriginalPane: (session: AiVaultSession) => void
   jumpToWorktree: (worktreeId: string) => void
 } {
@@ -47,6 +49,11 @@ export function useAiVaultOriginalPaneActions(): {
   const getSessionLiveState = useCallback(
     (session: AiVaultSession) =>
       findAiVaultSessionLiveStateInIndex(getOriginalPaneIndex(), session),
+    [getOriginalPaneIndex]
+  )
+
+  const getSessionDisplayTitle = useCallback(
+    (session: AiVaultSession) => resolveAiVaultSessionListTitle(getOriginalPaneIndex(), session),
     [getOriginalPaneIndex]
   )
 
@@ -90,5 +97,11 @@ export function useAiVaultOriginalPaneActions(): {
     }
   }, [])
 
-  return { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree }
+  return {
+    getOriginalPaneTarget,
+    getSessionLiveState,
+    getSessionDisplayTitle,
+    jumpToOriginalPane,
+    jumpToWorktree
+  }
 }

@@ -51,6 +51,21 @@ const otherSession: AiVaultSession = {
 }
 
 describe('/shared ai-vault-session-filters (lifted core)', () => {
+  it('matches an Orca tab rename without replacing the scanner title', () => {
+    const matched = filterAiVaultSessions([baseSession, otherSession], {
+      query: 'payments spike',
+      agents: ['claude', 'codex'],
+      scope: 'all',
+      sort: 'updated',
+      activeWorktreePaths: [],
+      hideEmptySessions: false,
+      sessionDisplayTitleById: new Map([[baseSession.id, 'Payments spike']])
+    })
+
+    expect(matched.map((session) => session.id)).toEqual(['claude:1'])
+    expect(matched[0]?.title).toBe('Implement vault filters')
+  })
+
   it('filters by agent, workspace scope, and plain/repo/path query terms', () => {
     expect(
       filterAiVaultSessions([baseSession, otherSession], {
