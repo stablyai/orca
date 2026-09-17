@@ -88,12 +88,7 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
                 { timeoutMs: 30_000 }
               )
             )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const envelope = replyResult as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
+        const envelope = replyResult
         if (envelope.ok === false) {
           throw new Error(envelope.error ?? 'Failed to reply')
         }
@@ -171,8 +166,7 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
                   { timeoutMs: 60_000 }
                 )
               )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = merged as { ok?: boolean; error?: string }
+        const result = merged
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to merge')
         }

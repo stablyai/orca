@@ -8,7 +8,6 @@ import {
 import {
   type DetailComment,
   type GitHubAssignableUser,
-  type GitHubDetailCheck,
   type TaskItem,
   splitReviewerList
 } from './mobile-tasks-legacy-foundation'
@@ -94,12 +93,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
                     { timeoutMs: 30_000 }
                   )
                 )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = written as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
+        const result = written
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add comment')
         }
@@ -167,8 +161,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubReviewerRequest.interpret(reply) as { ok?: boolean; error?: string }
+        const result = githubReviewerRequest.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
         }
@@ -247,12 +240,9 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        const payload = githubPullRequestChecksRead.interpret(reply)
-        if (!Array.isArray(payload)) {
-          throw new Error('Invalid checks response')
-        }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const checks = payload as GitHubDetailCheck[]
+        // The reader answers an array of readable rows, so the hand-rolled shape test this call
+        // site kept is gone: a reply that is not one now names the method it came from.
+        const checks = githubPullRequestChecksRead.interpret(reply)
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>
           current?.provider === 'github' ? { ...current, checks } : current

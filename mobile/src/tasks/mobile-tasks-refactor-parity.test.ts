@@ -26,11 +26,18 @@ const hash = (parts: string[] | string): string =>
 // and style counts are all unchanged, and `semantics` is a pure deletion of four lines, none in:
 // two `rpc:` call signatures and the two method literals they carried. The render-token hash moves
 // because the picker's handler now names an operation instead of the client.
-const SCREEN_RPC_SCREEN_HOOKS = '1b455d87ed00a1e70a5b3cac0110272e818da9a0d245e9043fc9d2649587831f'
+//
+// Step 7's first half moves four of the six again, and moves nothing else. Checked readers on the
+// item and list operations delete the reply casts these consumers carried, plus the three shape
+// tests the reader now answers for: both `Array.isArray(payload)` guards on the checks read and the
+// `typeof count === 'number'` fallback on the item count. Hook, statement, declaration and render
+// counts are unchanged, and the render-token hash does not move at all — nothing this family sees
+// changed inside a JSX tree. `semantics` is a pure deletion of ten lines.
+const SCREEN_RPC_SCREEN_HOOKS = 'fd1c59e2b923dcc54218c2b4df5155fcf98b3dcd7894849d145999202402ad23'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = '67ea80f265e4a2e25b3d7e7d9b93664a150a27b93dcfbc39cbdd551de7b4a653'
-const MAIN_REBASED_DECLARATIONS = '6ad0397123e59fc1047a14049c86ff31d81723673a7a7f5c41677471aec58415'
-const SCREEN_RPC_SEMANTICS = '7e40c7efa07993071e57db0fe1d46099a56e3831033b512480dd195d7a1dc24c'
+const SCREEN_RPC_STATEMENTS = 'ac507dc6871bb3ec8cb97f2c5af1a5ac9a24d6d327ad31bbf1e02caf455617f5'
+const MAIN_REBASED_DECLARATIONS = 'e0a402cdb6819dc685f5cc41c543bf5f1ac5366de064b90ad225a159bfcabfc5'
+const SCREEN_RPC_SEMANTICS = '3e729bc760428e4701cdfa87c5e51c4301524d96a4e79bff7af9eb403153d76c'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
 const SCREEN_RPC_RENDER_TREE = '46d5a3ce9d71a8281a1e7b17411fb1dd963a4f392a5d095bc126b6a7cff4b92d'
 
@@ -59,7 +66,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_300)
+    expect(semantics.split('\n')).toHaveLength(3_290)
     expect(hash(semantics)).toBe(SCREEN_RPC_SEMANTICS)
   })
 

@@ -13,7 +13,6 @@ import type {
   DetailComment,
   DetailPayload,
   GitHubDetailFile,
-  GitHubPRFileContents,
   TaskItem
 } from './mobile-tasks-legacy-foundation'
 
@@ -52,11 +51,7 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
           },
           { timeoutMs: 60_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubPullRequestChecksRerun.interpret(reply) as {
-          ok?: boolean
-          error?: string
-        }
+        const result = githubPullRequestChecksRerun.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to rerun checks')
         }
@@ -204,8 +199,7 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const contents = githubPullRequestFileContentsRead.interpret(reply) as GitHubPRFileContents
+        const contents = githubPullRequestFileContentsRead.interpret(reply)
         setPrFileContents((current) => ({ ...current, [file.path]: contents }))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load file contents')
@@ -249,12 +243,7 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubReviewCommentWrite.interpret(reply) as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
+        const result = githubReviewCommentWrite.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add review comment')
         }

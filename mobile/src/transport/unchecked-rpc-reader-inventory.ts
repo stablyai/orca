@@ -71,10 +71,6 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   { file: 'src/notifications/mobile-push-registration-operations.ts', readers: 2 },
   { file: 'src/notifications/push-dismissal-operations.ts', readers: 1 },
   // tasks
-  { file: 'src/tasks/mobile-task-item-comment-operations.ts', readers: 7 },
-  { file: 'src/tasks/mobile-task-item-detail-operations.ts', readers: 8 },
-  { file: 'src/tasks/mobile-task-item-state-operations.ts', readers: 17 },
-  { file: 'src/tasks/mobile-task-list-operations.ts', readers: 6 },
   { file: 'src/tasks/mobile-task-project-board-operations.ts', readers: 17 },
   { file: 'src/tasks/mobile-task-runtime-operations.ts', readers: 7 },
   { file: 'src/tasks/mobile-task-source-search-operations.ts', readers: 7 },

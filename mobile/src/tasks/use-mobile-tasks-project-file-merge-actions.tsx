@@ -3,7 +3,6 @@ import { useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
   type GitHubDetailFile,
-  type GitHubPRFileContents,
   type GitHubProjectRow,
   type HostedReviewMergeMethod,
   type TaskItem,
@@ -82,8 +81,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const contents = githubPullRequestFileContentsRead.interpret(reply) as GitHubPRFileContents
+        const contents = githubPullRequestFileContentsRead.interpret(reply)
         setPrFileContents((current) => ({ ...current, [file.path]: contents }))
       } catch (err) {
         setProjectRowDetailError(
@@ -140,12 +138,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubReviewCommentWrite.interpret(reply) as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
+        const result = githubReviewCommentWrite.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add review comment')
         }
@@ -213,8 +206,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 60_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubPullRequestMerge.interpret(reply) as { ok?: boolean; error?: string }
+        const result = githubPullRequestMerge.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to merge pull request')
         }
@@ -273,8 +265,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
                   updates: { state: nextState }
                 })
               )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = updated as { ok?: boolean; error?: string }
+        const result = updated
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub status')
         }

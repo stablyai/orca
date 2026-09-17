@@ -213,11 +213,16 @@ export type GitHubDetailCheck = {
   url?: string | null
 }
 
+/** Optional throughout because that is what the checked reader can promise: the recorded reply at
+ *  both call sites carries none of these, so requiring one would refuse this surface's own control.
+ *  Every reader already reaches them through `?.` or through splitContentLines' falsy test. */
 export type GitHubPRFileContents = {
-  original: string
-  modified: string
-  originalIsBinary: boolean
-  modifiedIsBinary: boolean
+  original?: string
+  modified?: string
+  originalIsBinary?: boolean
+  modifiedIsBinary?: boolean
+  originalTooLarge?: boolean
+  modifiedTooLarge?: boolean
 }
 
 export type DetailPayload =

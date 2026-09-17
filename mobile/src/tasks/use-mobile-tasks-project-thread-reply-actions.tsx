@@ -196,12 +196,7 @@ export function useMobileTasksProjectThreadReplyActions(
                 { timeoutMs: 30_000 }
               )
             )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = written as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
+        const result = written
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to reply')
         }

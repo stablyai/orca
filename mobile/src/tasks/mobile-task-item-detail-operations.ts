@@ -1,9 +1,19 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  githubAssignableUsersSchema,
+  githubRepoLabelsSchema,
+  githubWorkItemDetailSchema,
+  gitlabWorkItemDetailSchema,
+  linearIssueCommentsSchema,
+  linearIssueSchema,
+  linearTeamStatesSchema,
+  linearTeamsSchema
+} from './task-item-detail-reply-schema'
 
 // What one task item's detail sheet reads: the provider's own detail payload, the Linear comment
-// list beside it, and the label, assignee and workflow-state pickers the sheet opens. Every reply
-// here is one the call site only re-typed, so the readers are unchecked.
+// list beside it, and the label, assignee and workflow-state pickers the sheet opens. Each schema
+// lives in task-item-detail-reply-schema.ts with the consumer line behind every requirement.
 
 export const githubItemDetailRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -11,7 +21,7 @@ export const githubItemDetailRead = bindDeferredRpcOperation(
     method: 'github.workItemDetails',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-work-item-details')
+    read: rpcResultVariant('github-work-item-details', githubWorkItemDetailSchema)
   })
 )
 
@@ -21,7 +31,7 @@ export const gitlabItemDetailRead = bindDeferredRpcOperation(
     method: 'gitlab.workItemDetails',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-work-item-details')
+    read: rpcResultVariant('gitlab-work-item-details', gitlabWorkItemDetailSchema)
   })
 )
 
@@ -36,7 +46,7 @@ export const linearIssueRead = bindDeferredRpcOperation(
     method: 'linear.getIssue',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-issue')
+    read: rpcResultVariant('linear-issue', linearIssueSchema)
   })
 )
 
@@ -51,7 +61,7 @@ export const linearIssueCommentsRead = bindDeferredRpcOperation(
     method: 'linear.issueComments',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-issue-comments')
+    read: rpcResultVariant('linear-issue-comments', linearIssueCommentsSchema)
   })
 )
 
@@ -61,7 +71,7 @@ export const githubRepoLabelListRead = bindDeferredRpcOperation(
     method: 'github.listLabels',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-labels')
+    read: rpcResultVariant('github-labels', githubRepoLabelsSchema)
   })
 )
 
@@ -71,7 +81,7 @@ export const githubAssignableUserListRead = bindDeferredRpcOperation(
     method: 'github.listAssignableUsers',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-assignable-users')
+    read: rpcResultVariant('github-assignable-users', githubAssignableUsersSchema)
   })
 )
 
@@ -85,7 +95,7 @@ export const linearTeamStateListRead = bindDeferredRpcOperation(
     method: 'linear.teamStates',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-team-states')
+    read: rpcResultVariant('linear-team-states', linearTeamStatesSchema)
   })
 )
 
@@ -94,12 +104,16 @@ export const linearTeamStateListRead = bindDeferredRpcOperation(
  * its picker on a refusal and stays open; hydration in mobile-task-list-operations.ts cannot
  * proceed without the list and surfaces the host's message. One reader serves both.
  */
+/** Shared with hydration's leg in the list module: one team list, so the composer's picker and
+ *  the saved-selection reconciler can never disagree about what a team row is. */
+export const linearTeamListReader = rpcResultVariant('linear-teams', linearTeamsSchema)
+
 export const linearComposerTeamListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.composer-team-list-or-skip',
     method: 'linear.listTeams',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-teams')
+    read: linearTeamListReader
   })
 )
