@@ -31,6 +31,16 @@ describe('the failing-file parser', () => {
     expect(parseFailingFiles(output)).toEqual(['src/a.test.ts'])
   })
 
+  // tsc prints the host separator. Left as-is, a Windows run would read every baseline entry as
+  // both stale and added, and the gate would be unpassable rather than wrong in one direction.
+  it("normalises the Windows separators tsc prints to the baseline's POSIX ones", () => {
+    const output = [
+      'src\\session\\a.test.ts(12,5): error TS2345: Argument of type x.',
+      'scripts\\b.test.tsx(3,3): error TS18047: z is possibly null.'
+    ].join('\n')
+    expect(parseFailingFiles(output)).toEqual(['scripts/b.test.tsx', 'src/session/a.test.ts'])
+  })
+
   it('answers nothing for a clean run', () => {
     expect(parseFailingFiles('')).toEqual([])
   })

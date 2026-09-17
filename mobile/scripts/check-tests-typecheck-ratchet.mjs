@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -39,12 +40,16 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   ]
 ])
 
+// tsc prints the host's own separator; the baseline stores POSIX, so a Windows run would otherwise
+// read every entry as both stale and added.
+const toPosix = (filePath) => filePath.replaceAll('\\', '/')
+
 export function parseFailingFiles(tscOutput) {
   const files = new Set()
   for (const line of tscOutput.split('\n')) {
     const matched = ERROR_LINE.exec(line)
     if (matched) {
-      files.add(matched[1])
+      files.add(toPosix(matched[1]))
     }
   }
   return [...files].sort()
@@ -71,21 +76,13 @@ export function collectTestFilesOnDisk(root = process.cwd()) {
 
 // tsc prints absolute real paths, so the root is realpath'd before stripping it.
 export function collectProgramTestFiles(root = process.cwd()) {
-  const tsc = path.join(root, 'node_modules', '.bin', 'tsc')
-  const result = spawnSync(tsc, ['--listFilesOnly', '-p', PROJECT], {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024
-  })
-  if (result.error) {
-    throw result.error
-  }
-  const prefix = `${fs.realpathSync(root)}${path.sep}`
+  const result = runTsc(root, ['--listFilesOnly', '-p', PROJECT])
+  const prefix = toPosix(`${fs.realpathSync(root)}${path.sep}`)
   return `${result.stdout ?? ''}`
     .split('\n')
-    .map((line) => line.trim())
+    .map((line) => toPosix(line.trim()))
     .filter((line) => /\.test\.tsx?$/.test(line) && line.startsWith(prefix))
-    .map((line) => line.slice(prefix.length).split(path.sep).join('/'))
+    .map((line) => line.slice(prefix.length))
     .sort()
 }
 
@@ -119,17 +116,25 @@ export function diffBaseline(current, baseline) {
   }
 }
 
-// tsc exits non-zero on type errors, which is the expected state here, so only a crash is fatal.
-function runTypecheck(root) {
-  const tsc = path.join(root, 'node_modules', '.bin', 'tsc')
-  const result = spawnSync(tsc, ['--noEmit', '-p', PROJECT], {
+// Run tsc's JS entry on this Node rather than the node_modules/.bin shim, which is a POSIX shell
+// script: on Windows the shim is tsc.CMD and an extensionless path gets .exe appended.
+function runTsc(root, args) {
+  const entry = createRequire(import.meta.url).resolve('typescript/lib/tsc.js')
+  const result = spawnSync(process.execPath, [entry, ...args], {
     cwd: root,
     encoding: 'utf8',
+    shell: false,
     maxBuffer: 64 * 1024 * 1024
   })
   if (result.error) {
     throw result.error
   }
+  return result
+}
+
+// tsc exits non-zero on type errors, which is the expected state here, so only a crash is fatal.
+function runTypecheck(root) {
+  const result = runTsc(root, ['--noEmit', '-p', PROJECT])
   return `${result.stdout ?? ''}${result.stderr ?? ''}`
 }
 
